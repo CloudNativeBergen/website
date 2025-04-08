@@ -6,46 +6,37 @@ import {
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
-import getConfig from 'next/config'
-
-const { publicRuntimeConfig } = getConfig()
-const { cocLink, dates } = publicRuntimeConfig
-
-function formatDate(dateString: string): string {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-}
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { formatDate } from '@/lib/time'
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
 }
 
-const datesToRemember = [
-  {
-    name: 'CFP Close',
-    date: formatDate(dates.cfpEnd),
-    icon: LockClosedIcon,
-    bgColor: 'bg-pink-600',
-  },
-  {
-    name: 'Speaker Notify',
-    date: formatDate(dates.cfpNotify),
-    icon: BellAlertIcon,
-    bgColor: 'bg-purple-600',
-  },
-  {
-    name: 'Program Final',
-    date: formatDate(dates.program),
-    icon: CalendarDaysIcon,
-    bgColor: 'bg-yellow-500',
-  },
-]
-
 export default async function CFP() {
+  const { conference } = await getConferenceForCurrentDomain();
+
+  const datesToRemember = [
+    {
+      name: 'CFP Close',
+      date: formatDate(conference.cfp_end_date),
+      icon: LockClosedIcon,
+      bgColor: 'bg-pink-600',
+    },
+    {
+      name: 'Speaker Notify',
+      date: formatDate(conference.cfp_notify_date),
+      icon: BellAlertIcon,
+      bgColor: 'bg-purple-600',
+    },
+    {
+      name: 'Program Final',
+      date: formatDate(conference.program_date),
+      icon: CalendarDaysIcon,
+      bgColor: 'bg-yellow-500',
+    },
+  ]
+
   return (
     <>
       <div className="relative py-20 sm:pb-24 sm:pt-36">
@@ -118,11 +109,11 @@ export default async function CFP() {
                 <li>Best practices and case studies</li>
               </ul>
               <p>
-                The deadline for submissions is {formatDate(dates.cfpEnd)}, but{' '}
+                The deadline for submissions is {formatDate(conference.cfp_end_date)}, but{' '}
                 <strong>we are reviewing proposals on a rolling basis</strong>,
                 so we encourage you to submit early to increase your chances of
                 being selected. We will review all remaining proposals and
-                notify selected speakers by {formatDate(dates.cfpNotify)}.
+                notify selected speakers by {formatDate(conference.cfp_notify_date)}.
               </p>
             </div>
 
@@ -175,7 +166,7 @@ export default async function CFP() {
                 kind, and we will take appropriate action against anyone who
                 violates our{' '}
                 <a
-                  href={cocLink}
+                  href={conference.coc_link}
                   className="text-indigo-500 underline hover:text-indigo-700"
                   target="_blank"
                 >
