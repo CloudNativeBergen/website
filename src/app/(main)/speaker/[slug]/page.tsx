@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: Props) {
   if (err || !speaker || !talks || talks.length === 0) {
     return {
       title: 'Speaker not found',
-      description: 'Sorry, we couldn’t find the speaker you’re looking for.',
+      description: 'Sorry, we could not find the speaker you are looking for.',
       image: 'https://via.placeholder.com/1200',
     };
   }
@@ -48,7 +48,7 @@ export default async function Profile({ params }: Props) {
               Speaker not found
             </h1>
             <p className="mt-4 text-lg tracking-tight text-blue-900">
-              Sorry, we couldn’t find the speaker you’re looking for.
+              Sorry, we could not find the speaker you are looking for.
             </p>
             <Button href="/" className="mt-8">
               Go back home
@@ -111,14 +111,14 @@ export default async function Profile({ params }: Props) {
 
             <div className="shrink-0 px-4 py-6 sm:px-6 lg:w-96 lg:pr-8 xl:pr-6">
               {/* speaker details */}
-              <div className="flex flex-col items-center">
-                <div className="w-150 h-150 overflow-hidden rounded-full">
+              <div className="flex flex-col items-center text-center">
+                <div className="relative w-40 h-40 overflow-hidden rounded-full">
                   <Image
                     src={speaker.image || 'https://via.placeholder.com/150'}
                     alt={speaker.name}
                     width={150}
                     height={150}
-                    className="object-cover"
+                    className="object-cover w-full h-full"
                   />
                 </div>
                 <h2 className="mt-4 text-2xl font-bold">{speaker.name}</h2>
