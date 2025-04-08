@@ -129,6 +129,12 @@ export default defineType({
         ],
       },
     }),
+    defineField({
+      name: 'shedules',
+      title: 'Shedules',
+      type: 'array',
+      of: [{ type: 'reference', to: { type: 'schedule' } }],
+    }),
   ],
 
   preview: {
