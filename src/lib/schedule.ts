@@ -49,6 +49,10 @@ export function scheduleToTracks(schedule: Schedule[]): ScheduleTrack[] {
   const tracks: ScheduleTrack[] = []
 
   for (const scheduleItem of schedule) {
+    if (!scheduleItem.track) {
+      continue
+    }
+
     let track = tracks.find(
       (track) => track.number === scheduleItem.track.number,
     )
