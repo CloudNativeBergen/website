@@ -3,7 +3,6 @@ import GitHub from 'next-auth/providers/github'
 import LinkedIn from 'next-auth/providers/linkedin'
 import type { NextAuthConfig, Session, User } from 'next-auth'
 import { NextRequest } from 'next/server'
-import { AppRouteHandlerFn } from 'next/dist/server/future/route-modules/app-route/module.js'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
 
 export interface NextAuthRequest extends NextRequest {
@@ -131,8 +130,8 @@ export const auth = _auth as typeof _auth &
       ) => HandlerResponse,
     ]
   ) => (
-    req: Parameters<AppRouteHandlerFn>[0],
-    context: Parameters<AppRouteHandlerFn>[1],
+    req: NextRequest,
+    context: { params: Record<string, string | string[] | undefined> },
   ) => HandlerResponse)
 
 export function isAtuh(req: NextAuthRequest): boolean {

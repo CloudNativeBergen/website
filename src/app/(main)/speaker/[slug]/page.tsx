@@ -9,31 +9,31 @@ import { Button } from '@/components/Button'
 import { CalendarIcon } from '@heroicons/react/24/solid'
 
 type Props = {
-  params: {
-    slug: string
-  }
+  params: Promise<{ slug: string }>
 }
 
 export async function generateMetadata({ params }: Props) {
-  const { speaker, talks, err } = await getPublicSpeaker(params.slug)
+  const resolvedParams = await params;
+  const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug);
 
   if (err || !speaker || !talks || talks.length === 0) {
     return {
       title: 'Speaker not found',
       description: 'Sorry, we couldn’t find the speaker you’re looking for.',
       image: 'https://via.placeholder.com/1200',
-    }
+    };
   }
 
   return {
     title: `${speaker.name} - ${talks[0].title}`,
     description: talks[0].description.slice(0, 200),
     image: speaker.image || 'https://via.placeholder.com/1200',
-  }
+  };
 }
 
 export default async function Profile({ params }: Props) {
-  const { speaker, talks, err } = await getPublicSpeaker(params.slug)
+  const resolvedParams = await params;
+  const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug);
 
   if (err || !speaker || !talks || talks.length === 0) {
     return (
@@ -56,7 +56,7 @@ export default async function Profile({ params }: Props) {
           </Container>
         </div>
       </>
-    )
+    );
   }
 
   return (
@@ -157,5 +157,5 @@ export default async function Profile({ params }: Props) {
         </Container>
       </div>
     </>
-  )
+  );
 }
