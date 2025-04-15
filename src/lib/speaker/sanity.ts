@@ -160,10 +160,14 @@ export async function getPublicSpeaker(speakerSlug: string) {
       "talks": *[_type == "talk" && references(^._id) && status == "confirmed"]{
         _id, title, description, tags, language, level, format,
         "schedule": *[_type == "schedule" && references(^._id)]{
-          date, time_start, time_end, track->{
-            number, title
+          date, tracks[]{
+            trackTitle, trackDescription, talks[]{
+              startTime, endTime, talk -> {
+                _id
+              }
+            }
           }
-        }[0]
+        }
       }
     }`,
       { speakerSlug },

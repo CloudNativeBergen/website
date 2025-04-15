@@ -1,14 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { ScheduleTrack, ScheduleTalk } from '@/lib/schedule'
+import { ConferenceSchedule, ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 
-function ScheduleTabbed({ tracks }: { tracks: ScheduleTrack[] }) {
+interface ScheduleTrackSummary extends ScheduleTrack {
+  name: React.ReactNode
+}
+
+function ScheduleTabbed({ tracks, date }: { tracks: ScheduleTrack[]; date: string }) {
   const [tabOrientation, setTabOrientation] = useState('horizontal')
 
   useEffect(() => {
@@ -37,7 +41,7 @@ function ScheduleTabbed({ tracks }: { tracks: ScheduleTrack[] }) {
           <>
             {tracks.map((track, trackIndex) => (
               <div
-                key={track.number}
+                key={`track-${trackIndex}`}
                 className={clsx(
                   'relative w-3/4 flex-none pr-4 sm:w-auto sm:pr-0',
                   trackIndex !== selectedIndex && 'opacity-70',
@@ -49,23 +53,22 @@ function ScheduleTabbed({ tracks }: { tracks: ScheduleTrack[] }) {
                     name: (
                       <Tab className="ui-not-focus-visible:outline-none">
                         <span className="absolute inset-0" />
-                        {track.name}
+                        {`Track ${trackIndex + 1}`}
                       </Tab>
                     ),
-                  }}
-                />
+                  }} date={date} />
               </div>
             ))}
           </>
         )}
       </Tab.List>
       <Tab.Panels>
-        {tracks.map((track) => (
+        {tracks.map((track, trackIndex) => (
           <Tab.Panel
-            key={track.number}
+            key={`track-${trackIndex}`}
             className="ui-not-focus-visible:outline-none"
           >
-            <TimeSlots track={track} />
+            <TimeSlots track={track} date={date} trackIndex={trackIndex} />
           </Tab.Panel>
         ))}
       </Tab.Panels>
@@ -73,25 +76,25 @@ function ScheduleTabbed({ tracks }: { tracks: ScheduleTrack[] }) {
   )
 }
 
-function TrackSummary({ track }: { track: ScheduleTrack }) {
+function TrackSummary({ track, date }: { track: ScheduleTrackSummary; date: string }) {
   return (
     <>
       <h3 className="text-2xl font-semibold tracking-tight text-blue-900">
-        <time dateTime={track.date}>{track.name}</time>
+        <time dateTime={date}>{track.name}</time>
       </h3>
       <p className="mt-1.5 text-base tracking-tight text-blue-900">
-        {track.title}: {track.description}
+        {track.trackTitle}: {track.trackDescription}
       </p>
     </>
   )
 }
 
 function PlaceholderTimeSlot({
-  track,
-  talk,
+  date,
+  talk
 }: {
-  track: ScheduleTrack
-  talk: ScheduleTalk
+  date: string
+  talk: TrackTalk
 }) {
   return (
     <a
@@ -100,33 +103,33 @@ function PlaceholderTimeSlot({
       className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 py-3 pb-4 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
     >
       <p className="mt-1 font-mono text-sm text-slate-500">Submit to speak</p>
-      <TimeSlotTime date={track.date} start={talk.start} end={talk.end} />
+      <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
     </a>
   )
 }
 
 function TalkTimeSlot({
-  track,
+  date,
   talk,
 }: {
-  track: ScheduleTrack
-  talk: ScheduleTalk
+  date: string
+  talk: TrackTalk
 }) {
   return (
     <div className="relative block">
-      {!talk.speaker ? (
+      {!talk.talk || !talk.talk.speaker || !(talk.talk.speaker && 'slug' in talk.talk.speaker) ? (
         <h4 className="text-lg font-semibold tracking-tight text-blue-900">
-          {talk.title}
+          {talk.talk?.title || 'TBD'}
         </h4>
       ) : (
-        <a href={`/speaker/${talk.speaker.slug}`} className="block">
+        <a href={`/speaker/${talk.talk.speaker.slug}`} className="block">
           <h4 className="text-lg font-semibold tracking-tight text-blue-900">
-            {talk.speaker.name}
+            {talk.talk.speaker.name}
           </h4>
-          <p className="mt-1 tracking-tight text-blue-900">{talk.title}</p>
+          <p className="mt-1 tracking-tight text-blue-900">{talk.talk.title}</p>
         </a>
       )}
-      <TimeSlotTime date={track.date} start={talk.start} end={talk.end} />
+      <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
     </div>
   )
 }
@@ -150,9 +153,13 @@ function TimeSlotTime({
 
 function TimeSlots({
   track,
+  date,
+  trackIndex,
   className,
 }: {
   track: ScheduleTrack
+  date: string
+  trackIndex: number
   className?: string
 }) {
   return (
@@ -165,16 +172,16 @@ function TimeSlots({
     >
       {track.talks.map((talk, talkIndex) => (
         <li
-          key={`${track.number}-${talk.start}`}
-          aria-label={`${talk.title} talking about ${talk.description} at ${talk.start} - ${talk.end}`}
+          key={`${trackIndex}-${talk.startTime}`}
+          aria-label={`${talk.talk?.title || 'TBD'} talking about ${talk.talk?.description || ''} at ${talk.startTime} - ${talk.endTime}`}
         >
           {talkIndex > 0 && (
             <div className="mx-auto mb-8 h-px w-48 bg-indigo-500/10" />
           )}
-          {talk.title === 'TBD' ? (
-            <PlaceholderTimeSlot track={track} talk={talk} />
+          {!talk.talk || talk.talk.title === 'TBD' ? (
+            <PlaceholderTimeSlot date={date} talk={talk} />
           ) : (
-            <TalkTimeSlot track={track} talk={talk} />
+            <TalkTimeSlot date={date} talk={talk} />
           )}
         </li>
       ))}
@@ -182,20 +189,23 @@ function TimeSlots({
   )
 }
 
-function ScheduleStatic({ tracks }: { tracks: ScheduleTrack[] }) {
+function ScheduleStatic({ tracks, date }: { tracks: ScheduleTrack[]; date: string }) {
   return (
     <div className="hidden lg:grid lg:grid-cols-3 lg:gap-x-8">
-      {tracks.map((track) => (
-        <section key={track.number}>
-          <TrackSummary track={track} />
-          <TimeSlots track={track} className="mt-10" />
+      {tracks.map((track, trackIndex) => (
+        <section key={`track-${trackIndex}`}>
+          <TrackSummary track={{
+            ...track,
+            name: `Track ${trackIndex + 1}`,
+          }} date={date} />
+          <TimeSlots track={track} date={date} trackIndex={trackIndex} className="mt-10" />
         </section>
       ))}
     </div>
   )
 }
 
-export function Schedule({ tracks }: { tracks: ScheduleTrack[] }) {
+export function Schedule({ schedule }: { schedule: ConferenceSchedule }) {
   return (
     <section id="schedule" aria-label="Schedule" className="py-20 sm:py-32">
       <Container className="relative z-10">
@@ -213,8 +223,8 @@ export function Schedule({ tracks }: { tracks: ScheduleTrack[] }) {
       <div className="relative mt-14 sm:mt-24">
         <BackgroundImage position="right" className="-bottom-32 -top-40" />
         <Container className="relative">
-          <ScheduleTabbed tracks={tracks} />
-          <ScheduleStatic tracks={tracks} />
+          <ScheduleTabbed tracks={schedule.tracks} date={schedule.date} />
+          <ScheduleStatic tracks={schedule.tracks} date={schedule.date} />
         </Container>
       </div>
     </section>

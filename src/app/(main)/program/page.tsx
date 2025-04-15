@@ -1,7 +1,7 @@
-import { clientReadUncached as clientRead } from '@/lib/sanity/client'
-import { Schedule as ScheduleType } from '@/lib/schedule'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -9,30 +9,22 @@ function classNames(...classes: string[]) {
 
 export const revalidate = 3600
 
-async function getData() {
-  return await clientRead.fetch<ScheduleType[]>(
-    `*[_type == "schedule"]{date, time_start, time_end, track->{number, title, description}, talk->{title, speaker->{name, "slug": slug.current, title, "image": image.asset->url}}} | order(track.number asc, time_start asc)`,
-    {},
-    {
-      next: {
-        revalidate: revalidate,
-      },
-    },
-  )
-}
-
-type Track = {
-  number: number
-  title: string
-  description: string
-  talks: ScheduleType[]
-}
-
-type Slot = {
+interface Slot {
+  // title, start_time and end_time is only set for service slots (e.g. breaks)
   title?: string
   start_time?: string
   end_time?: string
-  tracks: Track[]
+  tracks: SlotTrack[]
+}
+
+interface SlotTrack {
+  title: string
+  talks: SlotItem[]
+}
+
+interface SlotItem extends TrackTalk {
+  trackIndex: number
+  trackTitle: string
 }
 
 function timeDiff(start: string, end: string) {
@@ -49,71 +41,90 @@ function timeDiff(start: string, end: string) {
   return timeDifference
 }
 
-function scheduleToSlots(items: ScheduleType[]) {
+function scheduleToSlots(schedule: ConferenceSchedule) {
   const slots: Slot[] = []
 
   let previousItem
   let currentSlotIndex = 0
 
-  for (const item of items) {
-    if (!item.talk) {
-      continue
-    }
+  for (const [trackIndex, track] of schedule.tracks.entries()) {
+    for (const [itemIndex, item] of track.talks.entries()) {
+      if (!item.talk) {
+        continue
+      }
 
-    item.track.number--
-
-    if (previousItem) {
-      if (item.track.number !== previousItem.track.number) {
-        currentSlotIndex = 0
-      } else if (!item.talk?.speaker || !previousItem.talk?.speaker) {
-        currentSlotIndex++
-      } else if (item.time_start !== previousItem.time_end) {
-        const timeDifference = timeDiff(previousItem.time_end, item.time_start)
-        if (timeDifference > 10 * 60 * 1000) {
+      if (previousItem) {
+        if (itemIndex === 0) {
+          currentSlotIndex = 0
+        } else if (!item.talk?.speaker || !previousItem.talk?.speaker) {
           currentSlotIndex++
-          slots[currentSlotIndex] = {
-            title: 'Break',
-            start_time: previousItem.time_end,
-            end_time: item.time_start,
-            tracks: [],
+        } else if (item.startTime !== previousItem.endTime) {
+          const timeDifference = timeDiff(previousItem.endTime, item.startTime)
+          if (timeDifference > 10 * 60 * 1000) {
+            currentSlotIndex++
+            slots[currentSlotIndex] = {
+              title: 'Break',
+              start_time: previousItem.endTime,
+              end_time: item.startTime,
+              tracks: [],
+            }
+            currentSlotIndex++
           }
-          currentSlotIndex++
         }
       }
-    }
 
-    if (!slots[currentSlotIndex]) {
-      slots[currentSlotIndex] = {
-        tracks: [],
+      if (!slots[currentSlotIndex]) {
+        slots[currentSlotIndex] = {
+          tracks: [],
+        }
+
+        if (!item.talk?.speaker) {
+          slots[currentSlotIndex].title = item.talk?.title
+          slots[currentSlotIndex].start_time = item.startTime
+          slots[currentSlotIndex].end_time = item.endTime
+        }
       }
 
-      if (!item.talk?.speaker) {
-        slots[currentSlotIndex].title = item.talk?.title
-        slots[currentSlotIndex].start_time = item.time_start
-        slots[currentSlotIndex].end_time = item.time_end
+      if (!slots[currentSlotIndex].tracks[trackIndex]) {
+        slots[currentSlotIndex].tracks[trackIndex] = {
+          //number: item.trackIndex,
+          title: track.trackTitle,
+          talks: [],
+        }
       }
+
+      slots[currentSlotIndex].tracks[trackIndex].talks.push({
+        ...item,
+        trackIndex: trackIndex,
+        trackTitle: track.trackTitle,
+      })
+
+      previousItem = item
     }
-
-    if (!slots[currentSlotIndex].tracks[item.track.number]) {
-      slots[currentSlotIndex].tracks[item.track.number] = {
-        number: item.track.number,
-        title: item.track.title,
-        description: item.track.description || '',
-        talks: [],
-      }
-    }
-
-    slots[currentSlotIndex].tracks[item.track.number].talks.push(item)
-
-    previousItem = item
   }
 
   return slots
 }
 
 export default async function Info() {
-  const schedule = await getData()
-  const slots = scheduleToSlots(schedule)
+  const { conference, error } = await getConferenceForCurrentDomain({
+    organizers: false,
+    schedule: true,
+  })
+
+  if (error) {
+    console.error('Error fetching conference data:', error)
+    return (
+      <div className="container mx-auto mt-10">
+        <h2 className="text-lg font-bold text-red-600">Error loading conference data</h2>
+        <p className="text-gray-600">Please try again later.</p>
+      </div>
+    )
+  }
+
+  const slots = conference.schedules && conference.schedules.length > 0
+    ? scheduleToSlots(conference.schedules[0])
+    : []
 
   return (
     <>
@@ -171,10 +182,10 @@ export default async function Info() {
                       </h3>
                       {track.talks.map((talk, talkIndex) => (
                         <div key={talkIndex} className="mt-4">
-                          <p>{talk.time_start}</p>
+                          <p>{talk.startTime}</p>
                           <p>
                             <a
-                              href={`/speaker/${talk.talk!.speaker?.slug}`}
+                              href={`/speaker/${talk.talk!.speaker && 'slug' in talk.talk!.speaker ? talk.talk!.speaker.slug : ''}`}
                               className="hover:underline"
                             >
                               <span className="font-semibold">
@@ -182,14 +193,14 @@ export default async function Info() {
                                 {talk.talk!.title}{' '}
                               </span>
                               (
-                              {timeDiff(talk.time_start, talk.time_end) /
+                              {timeDiff(talk.startTime, talk.endTime) /
                                 1000 /
                                 60}{' '}
                               minutes)
                             </a>
                           </p>
                           <p className="text-gray-500">
-                            by {talk.talk!.speaker?.name}
+                            by {talk.talk!.speaker && 'name' in talk.talk!.speaker ? talk.talk!.speaker.name : ''}
                           </p>
                         </div>
                       ))}

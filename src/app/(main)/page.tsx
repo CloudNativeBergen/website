@@ -1,34 +1,34 @@
+import { FeaturedSpeakers } from '@/components/FeaturedSpeakers'
 import { Hero } from '@/components/Hero'
 import { Schedule } from '@/components/Schedule'
 import { Speakers } from '@/components/Speakers'
 import { Sponsors } from '@/components/Sponsors'
-import { clientReadUncached as clientRead } from '@/lib/sanity/client'
-import { Schedule as ScheduleType, scheduleToTracks } from '@/lib/schedule'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const revalidate = 3600
 
-async function getData() {
-  return await clientRead.fetch<ScheduleType[]>(
-    `*[_type == "schedule"]{date, time_start, time_end, track->{number, title, description}, talk->{title, speaker->{name, "slug": slug.current, title, "image": image.asset->url}}} | order(track.number asc, time_start asc)`,
-    {},
-    {
-      next: {
-        revalidate: revalidate,
-      },
-    },
-  )
-}
-
 export default async function Home() {
-  const schedule = await getData()
-  const tracks = scheduleToTracks(schedule)
+  const { conference, error } = await getConferenceForCurrentDomain({
+    organizers: false,
+    schedule: true,
+  })
+
+  if (error) {
+    console.error('Error fetching conference data:', error)
+    return <div>Error loading conference data</div>
+  }
 
   return (
     <>
       <Hero />
-      {/*<FeaturedSpeakers />*/}
-      <Speakers tracks={tracks} />
-      <Schedule tracks={tracks} />
+      {!conference?.schedules || conference.schedules.length === 0 ? (
+        <FeaturedSpeakers />
+      ) : (
+        <>
+          <Speakers tracks={conference.schedules[0].tracks} />
+          <Schedule schedule={conference.schedules[0]} />
+        </>
+      )}
       <Sponsors />
       {/*<Newsletter />*/}
     </>

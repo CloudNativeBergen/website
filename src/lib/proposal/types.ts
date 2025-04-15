@@ -1,5 +1,5 @@
 import { Speaker, SpeakerRef } from '@/lib/speaker/types'
-import { Schedule } from '@/lib/schedule'
+import { ConferenceSchedule } from '../conference/types'
 
 export enum Language {
   norwegian = 'norwegian',
@@ -54,7 +54,6 @@ interface Proposal {
   outline: string
   tags?: string[]
   tos: boolean
-  schedule?: Schedule
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -68,6 +67,7 @@ export interface ProposalExisting extends Proposal {
   _updatedAt: string
   status: Status
   speaker?: Speaker | SpeakerRef
+  schedule?: ConferenceSchedule[]
 }
 
 export interface ProposalBaseResponse {

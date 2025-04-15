@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from 'react'
 import Image from 'next/image'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
-import { ScheduleTrack } from '@/lib/schedule'
+import { ScheduleTrack } from '@/lib/conference/types'
 
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
@@ -55,7 +55,9 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
   const [tabOrientation, setTabOrientation] = useState('horizontal')
   const [selectedTabIndex, setSelectedTabIndex] = useState(0)
 
-  const hasSpeakers = tracks.some((track) => track.speakers.length > 0)
+
+  // @TODO check if there are actually speakers
+  const hasSpeakers = tracks.some((track) => track.talks.length > 0)
 
   useEffect(() => {
     const lgMediaQuery = window.matchMedia('(min-width: 1024px)')
@@ -135,12 +137,12 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
               <Tab.List className="grid auto-cols-auto grid-flow-col justify-start gap-x-8 gap-y-10 whitespace-nowrap px-4 sm:mx-auto sm:max-w-2xl sm:grid-cols-3 sm:px-0 sm:text-center lg:grid-flow-row lg:grid-cols-1 lg:text-left">
                 {({ selectedIndex }) => (
                   <>
-                    {tracks.map((track, dayIndex) => (
-                      <div key={track.number} className="relative lg:pl-8">
+                    {tracks.map((track, trackNumber) => (
+                      <div key={`track-${trackNumber}`} className="relative lg:pl-8">
                         <DiamondIcon
                           className={clsx(
                             'absolute left-[-0.5px] top-[0.5625rem] hidden h-1.5 w-1.5 overflow-visible lg:block',
-                            dayIndex === selectedIndex
+                            trackNumber === selectedIndex
                               ? 'fill-blue-600 stroke-blue-600'
                               : 'fill-transparent stroke-slate-400',
                           )}
@@ -149,21 +151,22 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                           <div
                             className={clsx(
                               'font-mono text-sm',
-                              dayIndex === selectedIndex
+                              trackNumber === selectedIndex
                                 ? 'text-blue-600'
                                 : 'text-slate-500',
                             )}
                           >
                             <Tab className="ui-not-focus-visible:outline-none">
                               <span className="absolute inset-0" />
-                              {track.title}
+                              {track.trackTitle}
                             </Tab>
                           </div>
                           <time
-                            dateTime={track.date}
+                            // @TODO get the date of the track
+                            dateTime={""}
                             className="mt-1.5 block text-2xl font-semibold tracking-tight text-blue-900"
                           >
-                            {track.name}
+                            {`Track ${trackNumber + 1}`}
                           </time>
                         </div>
                       </div>
@@ -173,61 +176,70 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
               </Tab.List>
             </div>
             <Tab.Panels className="lg:col-span-3">
-              {tracks.map((track) => (
-                <Tab.Panel
-                  key={track.number}
-                  className="grid grid-cols-1 gap-x-8 gap-y-10 ui-not-focus-visible:outline-none sm:grid-cols-2 sm:gap-y-16 md:grid-cols-3"
-                  unmount={false}
-                >
-                  {track.speakers.map((speaker, speakerIndex) => (
-                    <div key={speakerIndex}>
-                      <div className="group relative h-[17.5rem] transform overflow-hidden rounded-4xl">
-                        <div
-                          className={clsx(
-                            'absolute bottom-6 left-0 right-4 top-0 rounded-4xl border transition duration-300 group-hover:scale-95 xl:right-6',
-                            [
-                              'border-blue-300',
-                              'border-indigo-300',
-                              'border-sky-300',
-                            ][speakerIndex % 3],
-                          )}
-                        />
-                        <div
-                          className="absolute inset-0 bg-indigo-50"
-                          style={{
-                            clipPath: `url(#${id}-${speakerIndex % 3})`,
-                          }}
-                        >
-                          <a
-                            href={`/speaker/${speaker.slug}`}
-                            className="absolute inset-0"
+              {tracks.map((track, trackNumber) => {
+                const uniqueSpeakers = Array.from(track.talks.reduce((acc, talk) => {
+                  if (talk.talk && talk.talk.speaker && 'slug' in talk.talk.speaker) {
+                    acc.set(talk.talk.speaker.slug, talk.talk.speaker)
+                  }
+                  return acc
+                }, new Map()).values())
+
+                return (
+                  <Tab.Panel
+                    key={trackNumber}
+                    className="grid grid-cols-1 gap-x-8 gap-y-10 ui-not-focus-visible:outline-none sm:grid-cols-2 sm:gap-y-16 md:grid-cols-3"
+                    unmount={false}
+                  >
+                    {uniqueSpeakers.map((speaker, speakerIndex) => (
+                      <div key={speakerIndex}>
+                        <div className="group relative h-[17.5rem] transform overflow-hidden rounded-4xl">
+                          <div
+                            className={clsx(
+                              'absolute bottom-6 left-0 right-4 top-0 rounded-4xl border transition duration-300 group-hover:scale-95 xl:right-6',
+                              [
+                                'border-blue-300',
+                                'border-indigo-300',
+                                'border-sky-300',
+                              ][speakerIndex % 3],
+                            )}
+                          />
+                          <div
+                            className="absolute inset-0 bg-indigo-50"
+                            style={{
+                              clipPath: `url(#${id}-${speakerIndex % 3})`,
+                            }}
                           >
-                            <Image
-                              className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-110"
-                              src={
-                                speaker.image
-                                  ? `${speaker.image}?h=300`
-                                  : 'https://via.placeholder.com/300'
-                              }
-                              width={300}
-                              height={300}
-                              alt=""
-                              priority
-                              sizes="(min-width: 1280px) 17.5rem, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
-                            />
-                          </a>
+                            <a
+                              href={`/speaker/${speaker.slug}`}
+                              className="absolute inset-0"
+                            >
+                              <Image
+                                className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-110"
+                                src={
+                                  speaker.image
+                                    ? `${speaker.image}?h=300`
+                                    : 'https://via.placeholder.com/300'
+                                }
+                                width={300}
+                                height={300}
+                                alt=""
+                                priority
+                                sizes="(min-width: 1280px) 17.5rem, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
+                              />
+                            </a>
+                          </div>
                         </div>
+                        <h3 className="mt-8 font-display text-xl font-bold tracking-tight text-slate-900">
+                          {speaker.name}
+                        </h3>
+                        <p className="mt-1 text-base tracking-tight text-slate-500">
+                          {speaker.title}
+                        </p>
                       </div>
-                      <h3 className="mt-8 font-display text-xl font-bold tracking-tight text-slate-900">
-                        {speaker.name}
-                      </h3>
-                      <p className="mt-1 text-base tracking-tight text-slate-500">
-                        {speaker.title}
-                      </p>
-                    </div>
-                  ))}
-                </Tab.Panel>
-              ))}
+                    ))}
+                  </Tab.Panel>
+                )
+              })}
             </Tab.Panels>
           </Tab.Group>
         )}
