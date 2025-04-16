@@ -17,6 +17,11 @@ export interface ConferenceSchedule {
   tracks: Array<ScheduleTrack>
 }
 
+export interface ConferenceVanityMetric {
+  label: string
+  value: string
+}
+
 export interface Conference {
   title: string
   organizer: string
@@ -40,5 +45,6 @@ export interface Conference {
   organizers?: Speaker[]
   domains?: string[]
   schedules?: Array<ConferenceSchedule>
+  vanity_metrics?: Array<ConferenceVanityMetric>
   features?: string[]
 }

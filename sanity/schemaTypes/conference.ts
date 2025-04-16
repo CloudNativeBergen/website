@@ -50,6 +50,29 @@ export default defineType({
       type: 'text',
     }),
     defineField({
+      name: 'vanity_metrics',
+      title: 'Vanity Metrics',
+      description: 'Metrics to show on the conference landing page',
+      type: 'array',
+      of: [{
+        type: 'object',
+        fields: [
+          { name: 'label', title: 'Label', type: 'string' },
+          { name: 'value', title: 'Value', type: 'string' },
+        ],
+        options: {
+          collapsible: true,
+          collapsed: true
+        },
+        preview: {
+          select: {
+            title: 'label',
+            subtitle: 'value',
+          },
+        },
+      }],
+    }),
+    defineField({
       name: 'start_date',
       title: 'Start Date',
       type: 'date',
@@ -119,8 +142,15 @@ export default defineType({
       of: [{ type: 'string' }],
     }),
     defineField({
+      name: 'schedules',
+      title: 'Schedules',
+      type: 'array',
+      of: [{ type: 'reference', to: { type: 'schedule' } }],
+    }),
+    defineField({
       name: 'features',
       title: 'Features',
+      description: 'Experimental features for the conference site',
       type: 'array',
       of: [{ type: 'string' }],
       options: {
@@ -128,12 +158,6 @@ export default defineType({
           { title: 'Test Feature', value: 'test_feature' },
         ],
       },
-    }),
-    defineField({
-      name: 'schedules',
-      title: 'Schedules',
-      type: 'array',
-      of: [{ type: 'reference', to: { type: 'schedule' } }],
     }),
   ],
 

@@ -20,7 +20,8 @@ export default async function Home() {
 
   return (
     <>
-      <Hero />
+      <Hero conference={conference} />
+
       {!conference?.schedules || conference.schedules.length === 0 ? (
         <FeaturedSpeakers />
       ) : (

@@ -8,10 +8,11 @@ import {
   TwitterIcon,
 } from '@/components/SocialIcons'
 import config from '@/../next.config'
+import { Conference } from '@/lib/conference/types'
 
 const { publicRuntimeConfig: c } = config
 
-export function Hero() {
+export function Hero({ conference }: { conference: Conference }) {
   return (
     <div className="relative py-20 sm:pb-24 sm:pt-36">
       <BackgroundImage className="-bottom-14 -top-36" />
@@ -67,16 +68,13 @@ export function Hero() {
             )}
           </div>
           <dl className="mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 sm:gap-x-16 sm:gap-y-10 sm:text-center lg:auto-cols-auto lg:grid-flow-col lg:grid-cols-none lg:justify-start lg:text-left">
-            {[
-              ['Tracks', '3'],
-              ['Speakers', '35'],
-              ['Attendees', '300'],
-              ['Location', 'Bergen, Norway'],
-            ].map(([name, value]) => (
-              <div key={name}>
-                <dt className="font-mono text-sm text-blue-600">{name}</dt>
+            {conference.vanity_metrics?.map((metric) => (
+              <div key={metric.label}>
+                <dt className="font-mono text-sm text-blue-600">
+                  {metric.label}
+                </dt>
                 <dd className="mt-0.5 text-2xl font-semibold tracking-tight text-blue-900">
-                  {value}
+                  {metric.value}
                 </dd>
               </div>
             ))}
