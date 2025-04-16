@@ -7,10 +7,49 @@ import {
   LinkedInIcon,
   TwitterIcon,
 } from '@/components/SocialIcons'
-import config from '@/../next.config'
 import { Conference } from '@/lib/conference/types'
 
-const { publicRuntimeConfig: c } = config
+function ActionButtons({ conference }: { conference: Conference }) {
+  const buttons = [
+    { label: 'Practical Info', href: '/info', color: 'bg-teal-600', hoverColor: 'hover:bg-teal-500' },
+  ]
+
+  const cfpIsOpen =
+    conference.cfp_start_date &&
+    conference.cfp_end_date &&
+    new Date() >= new Date(conference.cfp_start_date) &&
+    new Date() <= new Date(conference.cfp_end_date)
+
+  if (cfpIsOpen) {
+    buttons.push({ label: 'Submit to Speak', href: '/cfp', color: 'bg-teal-600', hoverColor: 'hover:bg-teal-500' })
+  }
+
+  if (conference.program_date && new Date() >= new Date(conference.program_date)) {
+    buttons.push({ label: 'Program', href: '/program', color: 'bg-purple-600', hoverColor: 'hover:bg-purple-500' })
+  }
+
+  if (conference.registration_enabled && conference.registration_link) {
+    buttons.push({ label: 'Tickets', href: conference.registration_link, color: '', hoverColor: '' })
+  }
+
+  // Reverse the order of buttons to show the most important ones first
+  // and slice to show only the first two buttons
+  const displayButtons = buttons.reverse().slice(0, 2);
+
+  return (
+    <div className="flex flex-col justify-between md:flex-row mt-10">
+      {displayButtons.map((button) => (
+        <Button
+          key={button.label}
+          href={button.href}
+          className={`mt-2 w-full md:w-1/2 ${button.color} ${button.hoverColor} md:ml-2 md:mr-2`}
+        >
+          {button.label}
+        </Button>
+      ))}
+    </div>
+  )
+}
 
 export function Hero({ conference }: { conference: Conference }) {
   return (
@@ -36,37 +75,9 @@ export function Hero({ conference }: { conference: Conference }) {
               there&apos;s something for everyone at Cloud Native Day Bergen.
             </p>
           </div>
-          <div className="flex flex-col justify-between md:flex-row mt-10">
-            {c?.registrationLink && (
-              <Button
-                href={c.registrationLink}
-                className="mt-2 w-full md:w-1/2"
-              >
-                Tickets
-              </Button>
-            )}
-            <Button
-              href="/program"
-              className="mt-2 w-full bg-purple-600 hover:bg-purple-500 md:ml-2 md:mr-2 md:w-1/2"
-            >
-              Program
-            </Button>
-            {c?.cfpOpen ? (
-              <Button
-                href="/cfp"
-                className="mt-2 w-full bg-teal-600 hover:bg-teal-500 md:w-1/2"
-              >
-                Submit to Speak
-              </Button>
-            ) : (
-              <Button
-                href={'/info'}
-                className="mt-2 w-full bg-teal-600 hover:bg-teal-500 md:w-1/2"
-              >
-                Practical Info
-              </Button>
-            )}
-          </div>
+
+          <ActionButtons conference={conference} />
+
           <dl className="mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 sm:gap-x-16 sm:gap-y-10 sm:text-center lg:auto-cols-auto lg:grid-flow-col lg:grid-cols-none lg:justify-start lg:text-left">
             {conference.vanity_metrics?.map((metric) => (
               <div key={metric.label}>
