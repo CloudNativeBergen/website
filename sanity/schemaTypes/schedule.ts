@@ -9,22 +9,7 @@ export default defineType({
       name: 'date',
       title: 'Date',
       type: 'date',
-    }),
-    defineField({
-      name: 'time_start',
-      title: 'Start Time',
-      type: 'string',
-      deprecated: {
-        reason: 'This field is no longer used',
-      },
-    }),
-    defineField({
-      name: 'time_end',
-      title: 'End Time',
-      type: 'string',
-      deprecated: {
-        reason: 'This field is no longer used',
-      },
+      validation: Rule => Rule.required(),
     }),
     defineField({
       name: 'tracks',
@@ -39,6 +24,7 @@ export default defineType({
               name: 'trackTitle',
               title: 'Track Title',
               type: 'string',
+              validation: Rule => Rule.required(),
             },
             {
               name: 'trackDescription',
@@ -62,11 +48,17 @@ export default defineType({
                       to: { type: 'talk' },
                     },
                     {
+                      name: 'placeholder',
+                      title: 'Title Placeholder',
+                      type: 'string',
+                      description: 'Displayed when no talk is selected',
+                    },
+                    {
                       name: 'startTime',
                       title: 'Start Time',
                       type: 'string',
                       validation: (Rule) =>
-                        Rule.regex(
+                        Rule.required().regex(
                           /^([01]\d|2[0-3]):([0-5]\d)$/,
                           {
                             name: 'time',
@@ -79,7 +71,7 @@ export default defineType({
                       title: 'End Time',
                       type: 'string',
                       validation: (Rule) =>
-                        Rule.regex(
+                        Rule.required().regex(
                           /^([01]\d|2[0-3]):([0-5]\d)$/,
                           {
                             name: 'time',
@@ -122,24 +114,6 @@ export default defineType({
           }
         }
       ],
-    }),
-    defineField({
-      name: 'track',
-      title: 'Track',
-      type: 'reference',
-      to: { type: 'track' },
-      deprecated: {
-        reason: 'Use scheduledTracks instead',
-      },
-    }),
-    defineField({
-      name: 'talk',
-      title: 'Talk',
-      type: 'reference',
-      to: { type: 'talk' },
-      deprecated: {
-        reason: 'This field is no longer used',
-      },
     }),
   ],
 
