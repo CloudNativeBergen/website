@@ -1,12 +1,13 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { formats, languages, levels } from '@/lib/proposal/types'
+import { formats, languages, levels, ProposalExisting } from '@/lib/proposal/types'
 import { flags, Flags } from '@/lib/speaker/types'
 import Image from 'next/image'
 import * as social from '@/components/SocialIcons'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { Button } from '@/components/Button'
 import { CalendarIcon } from '@heroicons/react/24/solid'
+import { TrackTalk } from '@/lib/conference/types'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -31,9 +32,70 @@ export async function generateMetadata({ params }: Props) {
   };
 }
 
+function getSchedulesForTalk(talk: ProposalExisting) {
+  if (!talk.schedule || talk.schedule.length === 0) {
+    return [];
+  }
+
+  const schedules = [];
+
+  // Loop through all schedule days
+  for (const day of talk.schedule) {
+    if (!day.tracks || day.tracks.length === 0) {
+      continue;
+    }
+
+    // Loop through all tracks for each day
+    for (const [trackIndex, track] of day.tracks.entries()) {
+      if (!track.talks || track.talks.length === 0) {
+        continue;
+      }
+
+      // Find any talks that match the current talk ID
+      const matchingTalks = track.talks.filter((t: TrackTalk) => t.talk?._id === talk._id);
+
+      // Add each matching talk to the schedules array
+      for (const matchedTalk of matchingTalks) {
+        schedules.push({
+          date: day.date,
+          startTime: matchedTalk.startTime,
+          endTime: matchedTalk.endTime,
+          trackTitle: track.trackTitle,
+          trackNumber: trackIndex + 1,
+        });
+      }
+    }
+  }
+
+  return schedules;
+}
+
+function ScheduleDisplay({ talk }: { talk: ProposalExisting }) {
+  const schedules = getSchedulesForTalk(talk);
+  if (schedules.length === 0) {
+    return <p>No schedule available</p>;
+  }
+  return (
+    <div>
+      {schedules.map((schedule, index) => (
+        <div key={index} className="mt-2">
+          <p className="text-lg">
+            <CalendarIcon className="inline-block h-6 w-6 mr-2" />
+            Scheduled: {schedule.startTime} - {schedule.endTime},{' '}
+            {schedule.trackTitle}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function Profile({ params }: Props) {
   const resolvedParams = await params;
   const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug);
+
+  const schedule = getSchedulesForTalk(talks[0]);
+  console.log('schedule', schedule);
 
   if (err || !speaker || !talks || talks.length === 0) {
     return (
@@ -83,12 +145,7 @@ export default async function Profile({ params }: Props) {
                     ))}
                   {talk.schedule && (
                     <div className="mt-2 py-1">
-                      <p className="text-lg">
-                        <CalendarIcon className="mr-2 inline-block h-6 w-6" />
-                        Scheduled: {talk.schedule.time_start} -{' '}
-                        {talk.schedule.time_end}, Track{' '}
-                        {talk.schedule.track.number}
-                      </p>
+                      <ScheduleDisplay talk={talk} />
                     </div>
                   )}
                   {talk.description.split('\n\n').map((paragraph, index) => (
