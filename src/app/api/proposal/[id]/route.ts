@@ -12,8 +12,9 @@ export const dynamic = 'force-dynamic'
 export const GET = auth(
   async (
     req: NextAuthRequest,
-    { params }: { params: Record<string, string | string[] | undefined> },
+    context: { params: Record<string, string | string[] | undefined> },
   ) => {
+    const params = await context.params
     const id = params.id as string
 
     if (
