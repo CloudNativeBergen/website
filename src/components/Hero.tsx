@@ -14,6 +14,14 @@ function ActionButtons({ conference }: { conference: Conference }) {
     { label: 'Practical Info', href: '/info', color: 'bg-teal-600', hoverColor: 'hover:bg-teal-500' },
   ]
 
+  const seekingSponsors =
+    conference.start_date &&
+    (new Date(conference.start_date).getTime() - new Date().getTime()) > (4 * 7 * 24 * 60 * 60 * 1000);
+
+  if (seekingSponsors) {
+    buttons.push({ label: 'Become a Sponsor', href: '/sponsor', color: 'bg-teal-600', hoverColor: 'hover:bg-teal-500' })
+  }
+
   const cfpIsOpen =
     conference.cfp_start_date &&
     conference.cfp_end_date &&

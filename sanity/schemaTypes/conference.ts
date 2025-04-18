@@ -116,6 +116,11 @@ export default defineType({
       name: 'registration_enabled',
       title: 'Registration Enabled',
       type: 'boolean',
+      description: 'Whether the conference registration is enabled or not',
+      initialValue: false,
+      options: {
+        layout: 'checkbox',
+      },
     }),
     defineField({
       name: 'contact_email',
