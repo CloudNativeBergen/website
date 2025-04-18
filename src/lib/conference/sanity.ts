@@ -62,6 +62,7 @@ export async function getConferenceForDomain(
           talks[]{
             startTime,
             endTime,
+            placeholder,
             talk->{
               _id,
               title,

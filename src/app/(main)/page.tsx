@@ -11,6 +11,7 @@ export default async function Home() {
   const { conference, error } = await getConferenceForCurrentDomain({
     organizers: false,
     schedule: true,
+    sponsors: true,
   })
 
   if (error) {

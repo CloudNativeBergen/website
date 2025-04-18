@@ -119,7 +119,7 @@ function TalkTimeSlot({
     <div className="relative block">
       {!talk.talk || !talk.talk.speaker || !(talk.talk.speaker && 'slug' in talk.talk.speaker) ? (
         <h4 className="text-lg font-semibold tracking-tight text-blue-900">
-          {talk.talk?.title || 'TBD'}
+          {talk.talk?.title || talk.placeholder || 'TBD'}
         </h4>
       ) : (
         <a href={`/speaker/${talk.talk.speaker.slug}`} className="block">
@@ -178,7 +178,7 @@ function TimeSlots({
           {talkIndex > 0 && (
             <div className="mx-auto mb-8 h-px w-48 bg-indigo-500/10" />
           )}
-          {!talk.talk || talk.talk.title === 'TBD' ? (
+          {!talk.talk && !talk.placeholder ? (
             <PlaceholderTimeSlot date={date} talk={talk} />
           ) : (
             <TalkTimeSlot date={date} talk={talk} />

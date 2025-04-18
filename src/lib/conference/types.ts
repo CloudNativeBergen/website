@@ -2,9 +2,10 @@ import { ProposalExisting } from "../proposal/types"
 import { Speaker } from "../speaker/types"
 
 export interface TrackTalk {
+  talk?: ProposalExisting
+  placeholder?: string
   startTime: string
   endTime: string
-  talk?: ProposalExisting
 }
 export interface ScheduleTrack {
   trackTitle: string

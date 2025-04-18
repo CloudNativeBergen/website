@@ -84,14 +84,15 @@ export default defineType({
                     select: {
                       title: 'talk.title',
                       speaker: 'talk.speaker.name',
+                      placeholder: 'placeholder',
                       startTime: 'startTime',
                       endTime: 'endTime',
                       format: 'talk.format',
                     },
-                    prepare({ title, speaker, startTime, endTime, format }) {
+                    prepare({ title, speaker, placeholder, startTime, endTime, format }) {
                       return {
                         title: `${startTime} - ${endTime} (${format})`,
-                        subtitle: `${title} (${speaker})`,
+                        subtitle: `${title || placeholder} (${speaker})`,
                       }
                     }
                   }
