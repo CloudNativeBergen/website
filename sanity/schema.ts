@@ -4,7 +4,6 @@ import conference from './schemaTypes/conference'
 import speaker from './schemaTypes/speaker'
 import schedule from './schemaTypes/schedule'
 import talk from './schemaTypes/talk'
-import faq from './schemaTypes/faq'
 import sponsor from './schemaTypes/sponsor'
 import sponsorTier from './schemaTypes/sponsorTier'
 
@@ -14,7 +13,6 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     speaker,
     schedule,
     talk,
-    faq,
     sponsor,
     sponsorTier,
   ],
