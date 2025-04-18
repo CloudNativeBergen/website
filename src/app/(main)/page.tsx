@@ -5,7 +5,7 @@ import { Speakers } from '@/components/Speakers'
 import { Sponsors } from '@/components/Sponsors'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
-export const revalidate = 60 * 5
+export const revalidate = 300 // 5 minutes
 
 export default async function Home() {
   const { conference, error } = await getConferenceForCurrentDomain({
