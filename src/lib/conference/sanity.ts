@@ -1,9 +1,6 @@
-import { revalidate } from '@/app/(main)/page';
-import sponsor from '../../../sanity/schemaTypes/sponsor';
 import { clientWrite } from '../sanity/client'
 import { Conference } from './types'
 import { headers } from 'next/headers';
-import sponsorTier from '../../../sanity/schemaTypes/sponsorTier';
 
 export async function getConferenceForCurrentDomain({
   organizers = false,

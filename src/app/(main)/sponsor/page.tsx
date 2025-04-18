@@ -23,7 +23,7 @@ export default async function Sponsor() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
         <h2 className="text-2xl font-bold text-red-600 mb-4">Unable to load sponsor information</h2>
-        <p className="text-gray-700 mb-6">We're experiencing technical difficulties. Please try again later.</p>
+        <p className="text-gray-700 mb-6">We&apos;re experiencing technical difficulties. Please try again later.</p>
         <Button href="/" className="bg-blue-600 text-white hover:bg-blue-500">
           Return to Home
         </Button>
@@ -49,7 +49,7 @@ export default async function Sponsor() {
             </h1>
             <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
               <p>
-                Showcase your brand to {conference.city}'s cloud-native community by sponsoring {conference.title}. We've designed flexible sponsorship packages to match your specific marketing goals and budget constraints.
+                Showcase your brand to {conference.city}&apos;s cloud-native community by sponsoring {conference.title}. We&apos;ve designed flexible sponsorship packages to match your specific marketing goals and budget constraints.
               </p>
               <p>
                 Your sponsorship is vital—it enables us to deliver a world-class conference while keeping tickets affordable for attendees. Partner with us and gain valuable exposure while supporting the local tech ecosystem.
