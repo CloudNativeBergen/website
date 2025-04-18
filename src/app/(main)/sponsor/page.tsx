@@ -2,60 +2,42 @@ import { CheckIcon } from '@heroicons/react/20/solid'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
-
-const packages = [
-  {
-    name: 'Pod',
-    id: 'sponsor-pod',
-    href: 'mailto:hans@flaatten.org?subject=Sponsorship Inquiry - Pod',
-    price: '5.000 NOK',
-    description:
-      "It is the basic unit of Kubernetes, and the 'Pod' sponsorship level gives you the basic benefits that just works.",
-    features: ['2 tickets', 'Logo on website', 'Logo on event materials'],
-    mostPopular: false,
-    soldOut: false,
-  },
-  {
-    name: 'Service',
-    id: 'sponsor-service',
-    href: 'mailto:hans@flaatten.org?subject=Sponsorship Inquiry - Service',
-    price: '15.000 NOK',
-    description:
-      "It enables traffic to your application, and the 'Service' sponsorship level offers more benefits and reach a larger audience.",
-    features: [
-      'Roll-up banner at event',
-      'Social media mentions',
-      '3 tickets',
-      'Logo on website and materials',
-      'Logo on conference badges',
-    ],
-    mostPopular: true,
-    soldOut: false,
-  },
-  {
-    name: 'Ingress',
-    id: 'sponsor-ingress',
-    href: 'mailto:hans@flaatten.org?subject=Sponsorship Inquiry - Ingress',
-    price: '30.000 NOK',
-    description:
-      "It is the entry point for your application, and the 'Ingress' sponsorship level is for sponsors who want to make a big impact.",
-    features: [
-      'Pitch slot in program',
-      'Roll-up banner at event',
-      'Social media mentions',
-      '5 tickets',
-      'Logo on all the things',
-    ],
-    mostPopular: false,
-    soldOut: true,
-  },
-]
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity';
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
 }
 
-export default function Example() {
+function PriceFormat({ price }: { price: { amount: number; currency: string }[] }) {
+  return (
+    <span className="text-3xl font-bold tracking-tight text-gray-900">
+      {price[0].amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")} {price[0].currency}
+    </span>
+  )
+}
+
+export default async function Sponsor() {
+  const { conference, error } = await getConferenceForCurrentDomain({ sponsorTiers: true });
+  if (error) {
+    console.error("Failed to load conference data:", error);
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <h2 className="text-2xl font-bold text-red-600 mb-4">Unable to load sponsor information</h2>
+        <p className="text-gray-700 mb-6">We're experiencing technical difficulties. Please try again later.</p>
+        <Button href="/" className="bg-blue-600 text-white hover:bg-blue-500">
+          Return to Home
+        </Button>
+      </div>
+    );
+  }
+
+  const sponsorTiers = conference?.sponsor_tiers || [];
+  sponsorTiers.sort((a, b) => {
+    const amountA = a.price[0].amount;
+    const amountB = b.price[0].amount;
+    return amountA - amountB;
+  });
+
   return (
     <>
       <div className="relative py-20 sm:pb-24 sm:pt-36">
@@ -67,14 +49,10 @@ export default function Example() {
             </h1>
             <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
               <p>
-                Sponsor of Cloud Native Day Bergen will get your name in front of
-                the local cloud-native community. We offer a range of
-                sponsorship packages to suit your needs and budget.
+                Showcase your brand to {conference.city}'s cloud-native community by sponsoring {conference.title}. We've designed flexible sponsorship packages to match your specific marketing goals and budget constraints.
               </p>
               <p>
-                Sponsors make it possible for us to host the conference and keep
-                ticket prices low. We could not have done it without the support
-                of our sponsors.
+                Your sponsorship is vital—it enables us to deliver a world-class conference while keeping tickets affordable for attendees. Partner with us and gain valuable exposure while supporting the local tech ecosystem.
               </p>
             </div>
           </div>
@@ -82,44 +60,44 @@ export default function Example() {
 
         <Container>
           <div className="isolate mx-auto mt-16 grid max-w-md grid-cols-1 gap-y-8 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
-            {packages.map((sponsorPackage, index) => (
+            {sponsorTiers.map((tier, index) => (
               <div
-                key={sponsorPackage.id}
+                key={index}
                 className={classNames(
-                  sponsorPackage.mostPopular
+                  tier.most_popular
                     ? 'lg:z-10 lg:rounded-b-none'
                     : 'lg:mt-8',
-                  sponsorPackage.soldOut ? 'lg:opacity-50' : '',
+                  tier.sold_out ? 'lg:opacity-50' : '',
                   index === 0 ? 'lg:rounded-r-none' : '',
-                  index === packages.length - 1 ? 'lg:rounded-l-none' : '',
+                  index === sponsorTiers.length - 1 ? 'lg:rounded-l-none' : '',
                   'flex flex-col justify-between rounded-3xl bg-white p-8 ring-1 ring-gray-200 xl:p-10',
                 )}
               >
                 <div>
                   <div className="flex items-center justify-between gap-x-4">
                     <h3
-                      id={sponsorPackage.id}
+                      id={`tier-${index}`}
                       className={classNames(
-                        sponsorPackage.mostPopular
+                        tier.most_popular
                           ? 'text-blue-600'
                           : 'text-gray-900',
                         'text-xl font-semibold leading-8',
                       )}
                     >
-                      {sponsorPackage.name}
+                      {tier.title}
                     </h3>
-                    {sponsorPackage.mostPopular ? (
+                    {tier.most_popular ? (
                       <p className="rounded-full bg-blue-600/10 px-2.5 py-1 text-sm font-semibold leading-5 text-blue-600">
                         Most popular
                       </p>
                     ) : null}
                   </div>
                   <p className="text-md mt-4 leading-6 text-gray-600">
-                    {sponsorPackage.description}
+                    {tier.tagline}
                   </p>
                   <p className="mt-6 flex items-baseline gap-x-1">
                     <span className="text-3xl font-bold tracking-tight text-gray-900">
-                      {sponsorPackage.price}
+                      <PriceFormat price={tier.price} />
                     </span>
                     <span className="text-sm font-semibold leading-6 text-gray-600"></span>
                   </p>
@@ -127,29 +105,29 @@ export default function Example() {
                     role="list"
                     className="text-md mt-8 space-y-3 leading-6 text-gray-600"
                   >
-                    {sponsorPackage.features.map((feature) => (
-                      <li key={feature} className="flex gap-x-3">
+                    {tier.perks.map((perk, perkIndex) => (
+                      <li key={`perk-${perkIndex}`} className="flex gap-x-3">
                         <CheckIcon
                           className="h-6 w-5 flex-none text-blue-600"
                           aria-hidden="true"
                         />
-                        {feature}
+                        {perk.description}
                       </li>
                     ))}
                   </ul>
                 </div>
-                {!sponsorPackage.soldOut ? (
+                {!tier.sold_out ? (
                   <Button
-                    href={sponsorPackage.href}
-                    aria-describedby={sponsorPackage.id}
+                    href={"mailto:foo@bar.com"}
+                    aria-describedby={`tier-${index}`}
                     className={classNames(
-                      sponsorPackage.mostPopular
+                      tier.most_popular
                         ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-500'
                         : 'text-blue-600 ring-1 ring-inset ring-blue-200 hover:ring-blue-300',
                       'mt-8 block rounded-md px-3 py-2 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600',
                     )}
                   >
-                    Become a &apos;{sponsorPackage.name}&apos; sponsor
+                    Become a &apos;{tier.title}&apos; sponsor
                   </Button>
                 ) : (
                   <p className="mt-8 text-center text-sm font-semibold leading-6 text-gray-600">

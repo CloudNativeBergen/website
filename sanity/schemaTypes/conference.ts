@@ -1,4 +1,4 @@
-import { defineField, defineType } from 'sanity'
+import { defineField, defineType, ValidationContext } from 'sanity'
 
 export default defineType({
   name: 'conference',
@@ -140,6 +140,55 @@ export default defineType({
       title: 'Domains',
       type: 'array',
       of: [{ type: 'string' }],
+    }),
+    defineField({
+      name: 'sponsors',
+      title: 'Sponsors',
+      type: 'array',
+      of: [{
+        type: 'object',
+        fields: [
+          defineField({
+            name: 'sponsor',
+            type: 'reference',
+            to: { type: 'sponsor' },
+            validation: (Rule) => Rule.required()
+          }),
+          defineField({
+            name: 'tier',
+            type: 'reference',
+            to: { type: 'sponsorTier' },
+            //validation: (Rule) => Rule.required().custom((tier: any, context: ValidationContext) => {
+            //  console.log('tier', tier)
+            //  console.log('context', context)
+            //  if (context.document && tier && 'conference' in tier && tier.conference &&
+            //    tier.conference._ref !== context.document._id) {
+            //    return 'Sponsor tier must belong to the same conference'
+            //  }
+            //  return true
+            //})
+          }),
+        ],
+        //validation: (Rule) => Rule.required().custom((sponsors: any[], context: ValidationContext) => {
+        //  const uniqueSponsors = new Set()
+        //  for (const sponsor of sponsors) {
+        //    if (uniqueSponsors && Array.isArray(uniqueSponsors) && uniqueSponsors.has(sponsor.sponsor._ref)) {
+        //      return 'Duplicate sponsors are not allowed'
+        //    }
+        //    uniqueSponsors.add(sponsor.sponsor._ref)
+        //  }
+        //  return true
+        //}),
+        preview: {
+          select: {
+            title: 'sponsor.name',
+            subtitle: 'tier.title',
+          },
+        },
+      }],
+      options: {
+        layout: 'tags',
+      },
     }),
     defineField({
       name: 'schedules',

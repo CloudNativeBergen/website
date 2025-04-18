@@ -22,6 +22,27 @@ export interface ConferenceVanityMetric {
   value: string
 }
 
+export interface ConferenceSponsor {
+  name: string
+  url: string
+  logo: string
+}
+
+export interface SponsorTier {
+  title: string
+  tagline: string
+  price: Array<{
+    amount: number
+    currency: string
+  }>
+  perks: Array<{
+    label: string
+    description: string
+  }>
+  sold_out: boolean
+  most_popular: boolean
+}
+
 export interface Conference {
   title: string
   organizer: string
@@ -44,6 +65,8 @@ export interface Conference {
   social_links?: string[]
   organizers?: Speaker[]
   domains?: string[]
+  sponsors?: Array<ConferenceSponsor>
+  sponsor_tiers?: Array<SponsorTier>
   schedules?: Array<ConferenceSchedule>
   vanity_metrics?: Array<ConferenceVanityMetric>
   features?: string[]
