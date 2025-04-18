@@ -9,7 +9,7 @@ export interface NextAuthRequest extends NextRequest {
   auth: Session | null
 }
 
-let config = {
+const config = {
   providers: [
     GitHub({
       clientId: process.env.AUTH_GITHUB_ID,
