@@ -7,13 +7,17 @@ import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg
 
 export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
   // @TODO make this more dynamic
-  sponsors.push({
-    sponsor: {
-      name: 'TBD',
-      logo: '',
-      website: '/sponsor',
+  const sponsorsWithTBD = [
+    ...sponsors,
+    {
+      sponsor: {
+        name: 'TBD',
+        logo: '',
+        website: '/sponsor',
+      },
     },
-  })
+  ]
+
   return (
     <section id="sponsors" aria-label="Sponsors" className="py-20 sm:py-32">
       <Container>
@@ -21,7 +25,7 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
           Fueling the cluster: Our sponsors keep the pods running!
         </h2>
         <div className="mx-auto mt-20 grid max-w-max grid-cols-1 place-content-center gap-x-32 gap-y-12 sm:grid-cols-4 md:gap-x-16 lg:gap-x-32">
-          {sponsors.map((sponsor, i) => (
+          {sponsorsWithTBD.map((sponsor, i) => (
             <div
               key={`${sponsor.sponsor.name}-${i}`}
               className="flex items-center justify-center"
@@ -37,7 +41,7 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                   </p>
                 </a>
               ) : (
-                <a href={sponsor.sponsor.website} className="hover:opacity-80 foo bvar">
+                <a href={sponsor.sponsor.website} className="hover:opacity-80">
                   <InlineSvgPreviewComponent
                     className="h-20"
                     value={sponsor.sponsor.logo}
