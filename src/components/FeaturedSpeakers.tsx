@@ -1,10 +1,14 @@
-import { getFeatured } from '@/lib/speaker/sanity'
 import { Container } from '@/components/Container'
 import { iconForLink } from '@/components/SocialIcons'
 
-export async function FeaturedSpeakers() {
-  const data = await getFeatured()
+import { Speaker } from '@/lib/speaker/types'
 
+interface FeaturedSpeakersProps {
+  speakers: Speaker[]
+  isOrganizers?: boolean
+}
+
+export function FeaturedSpeakers({ speakers, isOrganizers }: FeaturedSpeakersProps) {
   return (
     <section
       id="speakers"
@@ -18,11 +22,12 @@ export async function FeaturedSpeakers() {
               id="speakers-title"
               className="font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl"
             >
-              Some of our speakers
+              {isOrganizers ? 'Conference Controllers' : 'Masters of the Kube'}
             </h2>
             <p className="mt-4 font-display text-2xl tracking-tight text-blue-900">
-              Meet some of our amazing speakers that will be joining us at the
-              conference and sharing their knowledge with you.
+              {isOrganizers
+                ? 'Meet the control plane ensuring a smooth conference deployment.'
+                : 'Brace yourselves for wisdom deployed directly from the masters of the Cloud Native ecosystem.'}
             </p>
           </div>
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -30,9 +35,9 @@ export async function FeaturedSpeakers() {
               role="list"
               className="mx-auto mt-20 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-16 text-center sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3"
             >
-              {data.speakers.map((person) => (
+              {speakers.map((person) => (
                 <li key={person.name}>
-                  <a href={`/speaker/${person.slug}`}>
+                  <a href={isOrganizers ? '#' : `/speaker/${person.slug}`}>
                     <img
                       className="mx-auto h-56 w-56 rounded-full"
                       src={person.image}
@@ -46,8 +51,8 @@ export async function FeaturedSpeakers() {
                     {person.title}
                   </p>
                   <ul role="list" className="mt-6 flex justify-center gap-x-6">
-                    {person.links?.map((link) => (
-                      <li key={person.name}>
+                    {person.links?.map((link, index) => (
+                      <li key={`${person.name}-${index}`}>
                         <a
                           href={link}
                           className="text-gray-400 hover:text-gray-500"

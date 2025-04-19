@@ -52,6 +52,7 @@ export async function getConferenceForDomain(
       ...,
       ${organizers ? `organizers[]->{
       ...,
+      "slug": slug.current,
       "image": image.asset->url
       },` : ''}
       ${schedule ? `schedules[]-> {
