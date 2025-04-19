@@ -6,17 +6,24 @@ import { ConferenceSponsor } from '@/lib/conference/types'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
 
 export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
-  // @TODO make this more dynamic
-  const sponsorsWithTBD = [
-    ...sponsors,
-    {
-      sponsor: {
-        name: 'TBD',
-        logo: '',
-        website: '/sponsor',
-      },
+  const numberOfSponsors = sponsors.length
+  // Ensure there are at least 4 slots total, and always add at least one TBD slot
+  const numberOfTBDs = Math.max(1, 4 - numberOfSponsors)
+
+  const tbdSponsorTemplate = {
+    sponsor: {
+      name: 'TBD',
+      logo: '',
+      website: '/sponsor',
     },
-  ]
+  }
+
+  const tbdSponsors = Array.from(
+    { length: numberOfTBDs },
+    () => tbdSponsorTemplate,
+  )
+
+  const sponsorsWithTBD = [...sponsors, ...tbdSponsors]
 
   return (
     <section id="sponsors" aria-label="Sponsors" className="py-20 sm:py-32">
