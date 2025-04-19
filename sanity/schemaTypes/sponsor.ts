@@ -1,5 +1,6 @@
 import { defineField, defineType } from 'sanity'
 
+
 export default defineType({
   name: 'sponsor',
   title: 'Sponsor',
@@ -20,21 +21,9 @@ export default defineType({
     defineField({
       name: 'logo',
       title: 'Logo',
-      description: 'Sponsor logo in SVG format',
-      type: 'file',
-      fields: [
-        {
-          name: 'description',
-          type: 'string',
-          title: 'Description'
-        },
-      ],
-      options: {
-        accept: 'image/*',
-        storeOriginalFilename: false,
-      },
+      type: 'inlineSvg',
       validation: (Rule) => Rule.required(),
-    })
-  ]
+    }),
+  ],
 })
 

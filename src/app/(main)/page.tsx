@@ -32,7 +32,7 @@ export default async function Home() {
           <Schedule schedule={conference.schedules[0]} />
         </>
       )}
-      <Sponsors />
+      <Sponsors sponsors={conference.sponsors || []} />
       {/*<Newsletter />*/}
     </>
   )

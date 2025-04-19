@@ -24,9 +24,11 @@ export interface ConferenceVanityMetric {
 }
 
 export interface ConferenceSponsor {
-  name: string
-  url: string
-  logo: string
+  sponsor: {
+    name: string
+    website: string
+    logo: string
+  }
 }
 
 export interface SponsorTier {
