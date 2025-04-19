@@ -82,7 +82,7 @@ export async function getConferenceForDomain(
         sponsor->{
           name,
           website,
-          "logo": logo.asset->url
+          logo,
         },
       },` : ''}
       ${sponsorTiers ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id]{
