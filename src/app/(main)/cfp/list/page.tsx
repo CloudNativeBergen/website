@@ -6,17 +6,17 @@ import {
 import { auth } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/sanity'
 import { ProposalList } from '@/components/ProposalList'
+import { redirect } from 'next/navigation'
 
 export default async function SpeakerDashboard() {
   const cfpIsOpen = true // TODO: Fetch this from the API
 
   const session = await auth()
   if (!session?.speaker) {
-    window.location.href = '/auth/login'
-    return <></>
+    return redirect('/api/auth/signin?callbackUrl=/cfp/list')
   }
 
-  const { proposals: initialProposals, err: error } = await getProposals(session?.speaker._id, false)
+  const { proposals: initialProposals, err: error } = await getProposals(session.speaker._id, false)
 
   if (error) {
     console.error('Error fetching proposals:', error)
