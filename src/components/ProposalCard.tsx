@@ -42,7 +42,7 @@ function ProposalActionButton({
     <button
       disabled={isLoading}
       onClick={action.onClick}
-      className="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-gray-900"
+      className="relative inline-flex w-0 flex-1 cursor-pointer items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-gray-900"
     >
       {isLoading ? (
         <SpinnerIcon className="text-grey-400 h-5 w-5 animate-spin" />
