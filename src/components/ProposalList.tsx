@@ -7,46 +7,37 @@ import { useState, useEffect } from "react"
 import { ProposalActionModal } from "./ProposalActionModal"
 import { ProposalCard } from "./ProposalCard"
 
-function ProposalSuccessMessage() {
-  const [showMessage, setShowMessage] = useState(true)
-
-  const dismissMessage = () => {
-    window.history.replaceState({}, document.title, window.location.pathname)
-    setShowMessage(false)
-  }
-
-  return (
-    <>
-      {showMessage && (
-        <div className="mx-auto mt-6 flex max-w-2xl flex-col rounded-md bg-green-50 p-4 lg:max-w-4xl lg:px-12">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <CheckCircleIcon
-                className="h-5 w-5 text-green-400"
-                aria-hidden="true"
-              />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-green-800">
-                Proposal submitted successfully.
-              </p>
-            </div>
-            <div className="ml-auto pl-3">
-              <div className="-mx-1.5 -my-1.5">
-                <button
-                  type="button"
-                  className="inline-flex rounded-md bg-green-50 p-1.5 text-green-500 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 focus:ring-offset-green-50"
-                  onClick={dismissMessage}
-                >
-                  <span className="sr-only">Dismiss</span>
-                  <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
+function ProposalSuccessMessage({ showMessage, onDismiss }: { showMessage: boolean, onDismiss: () => void }) {
+  return showMessage ? (
+    <div className="mx-auto mt-6 flex max-w-2xl flex-col rounded-md bg-green-50 p-4 lg:max-w-4xl lg:px-12">
+      <div className="flex">
+        <div className="flex-shrink-0">
+          <CheckCircleIcon
+            className="h-5 w-5 text-green-400"
+            aria-hidden="true"
+          />
+        </div>
+        <div className="ml-3">
+          <p className="text-sm font-medium text-green-800">
+            Proposal submitted successfully.
+          </p>
+        </div>
+        <div className="ml-auto pl-3">
+          <div className="-mx-1.5 -my-1.5">
+            <button
+              type="button"
+              className="inline-flex rounded-md bg-green-50 p-1.5 text-green-500 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 focus:ring-offset-green-50"
+              onClick={onDismiss}
+            >
+              <span className="sr-only">Dismiss</span>
+              <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+            </button>
           </div>
         </div>
-      )}
-    </>
+      </div>
+    </div>
+  ) : (
+    null
   )
 }
 
@@ -55,6 +46,7 @@ export function ProposalList({ initialProposals, cfpIsOpen }: { initialProposals
   const success = searchParams.get('success') ?? undefined
   const confirm = searchParams.get('confirm') ?? ''
 
+  const [showSuccessMessage, setShowSuccessMessage] = useState<boolean>(!!success)
   const [actionOpen, setActionOpen] = useState<boolean>(false)
   const [actionProposal, setActionProposal] = useState<ProposalExisting>(
     {} as ProposalExisting,
@@ -62,6 +54,11 @@ export function ProposalList({ initialProposals, cfpIsOpen }: { initialProposals
   const [actionAction, setActionAction] = useState<Action>(Action.submit)
 
   const [proposals, setProposals] = useState<ProposalExisting[]>(initialProposals)
+
+  const dismissSuccessMessage = () => {
+    window.history.replaceState({}, document.title, window.location.pathname)
+    setShowSuccessMessage(false)
+  }
 
   function actionCloseHandler() {
     setActionOpen(false)
@@ -103,7 +100,7 @@ export function ProposalList({ initialProposals, cfpIsOpen }: { initialProposals
 
   return (
     <>
-      {success && <ProposalSuccessMessage />}
+      <ProposalSuccessMessage showMessage={showSuccessMessage} onDismiss={dismissSuccessMessage} />
       {
         proposals.length === 0 ? (
           <div className="mx-auto mt-12 flex max-w-2xl flex-col items-center rounded-lg border-2 border-dashed border-blue-600 bg-white p-6 lg:max-w-4xl lg:px-12">
