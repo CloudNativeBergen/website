@@ -18,7 +18,7 @@ export const POST = auth(
     req: NextAuthRequest,
     { params }: { params: Record<string, string | string[] | undefined> },
   ) => {
-    const id = params.id as string
+    const { id } = await params as { id: string }
     const { action, notify, comment } = (await req.json()) as ActionInput
 
     if (
