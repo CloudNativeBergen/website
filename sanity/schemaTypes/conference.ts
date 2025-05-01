@@ -50,6 +50,13 @@ export default defineType({
       type: 'text',
     }),
     defineField({
+      name: 'announcement',
+      title: 'Announcement',
+      type: 'array',
+      of: [{ type: 'block' }],
+      description: 'Announcement to show on the conference landing page',
+    }),
+    defineField({
       name: 'vanity_metrics',
       title: 'Vanity Metrics',
       description: 'Metrics to show on the conference landing page',

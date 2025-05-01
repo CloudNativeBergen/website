@@ -1,3 +1,4 @@
+import { TypedObject } from "sanity"
 import { ProposalExisting } from "../proposal/types"
 import { Speaker } from "../speaker/types"
 
@@ -55,6 +56,7 @@ export interface Conference {
   venue_address?: string
   tagline?: string
   description?: string
+  announcement?: TypedObject[]
   start_date?: string
   end_date?: string
   cfp_start_date?: string

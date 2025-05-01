@@ -8,6 +8,7 @@ import {
   TwitterIcon,
 } from '@/components/SocialIcons'
 import { Conference } from '@/lib/conference/types'
+import { PortableText } from '@portabletext/react'
 
 function ActionButtons({ conference }: { conference: Conference }) {
   const buttons = [
@@ -65,9 +66,13 @@ export function Hero({ conference }: { conference: Conference }) {
       <BackgroundImage className="-bottom-14 -top-36" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
+          {conference.announcement && (
+            <div className="mb-8 rounded-lg bg-blue-100 p-6 text-center text-blue-900 shadow-md">
+              <PortableText value={conference.announcement} />
+            </div>
+          )}
           <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
-            <span className="sr-only">Cloud Native Day Bergen - </span>A day with
-            Cloud & Kubernetes in Bergen.
+            <span className="sr-only">{conference.title} - </span>{conference.tagline}
           </h1>
           <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
             <p>
