@@ -8,7 +8,7 @@ import { useSession } from 'next-auth/react'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { Conference } from '@/lib/conference/types'
-import { formatDate } from '@/lib/time'
+import { formatDates } from '@/lib/time'
 
 export function Header({ c }: { c: Conference }) {
   const { data: session } = useSession()
@@ -29,7 +29,7 @@ export function Header({ c }: { c: Conference }) {
             return (
               <div className={`mx-auto flex items-center gap-4 px-4 ${textColor}`}>
                 <p>
-                  <time dateTime={c.start_date}>{formatDate(c.start_date)}</time>
+                  <time dateTime={c.start_date}>{formatDates(c.start_date, c.end_date)}</time>
                 </p>
                 <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
                 <p>{c.city}, {c.country}</p>
