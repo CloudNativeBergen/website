@@ -21,17 +21,31 @@ export function Header({ c }: { c: Conference }) {
             <Logo className="h-12 w-auto text-slate-900" />
           </Link>
         </div>
-        <div className="order-first -mx-4 flex flex-auto basis-full overflow-x-auto whitespace-nowrap border-b border-blue-600/10 py-4 font-mono text-sm text-blue-600 sm:-mx-6 lg:order-none lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
-          <div className="mx-auto flex items-center gap-4 px-4">
-            <p>
-              <time dateTime={c.start_date}>{formatDate(c.start_date)}</time>
-            </p>
-            <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
-            <p>{c.city}, {c.country}</p>
-          </div>
+        <div className="order-first -mx-4 flex flex-auto basis-full overflow-x-auto whitespace-nowrap border-b border-blue-600/10 py-4 font-mono text-sm sm:-mx-6 lg:order-none lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
+          {(() => {
+            const isPast = new Date(c.start_date) < new Date();
+            const textColor = isPast ? 'text-slate-400' : 'text-blue-600';
+
+            return (
+              <div className={`mx-auto flex items-center gap-4 px-4 ${textColor}`}>
+                <p>
+                  <time dateTime={c.start_date}>{formatDate(c.start_date)}</time>
+                </p>
+                <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
+                <p>{c.city}, {c.country}</p>
+                {isPast && (
+                  <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-sm font-semibold text-slate-600">
+                    Past Event
+                  </span>
+                )}
+              </div>
+            );
+          })()}
         </div>
         <div className="hidden whitespace-nowrap sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end">
-          <Button href={c.registration_link ?? '#'}>Get your ticket</Button>
+          {c.registration_enabled && (
+            <Button href={c.registration_link ?? '#'}>Get your ticket</Button>
+          )}
         </div>
         <div className="ml-10 mt-10 sm:flex lg:ml-4 lg:mt-0">
           <a href="/cfp/list">

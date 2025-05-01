@@ -83,36 +83,43 @@ export default defineType({
       name: 'start_date',
       title: 'Start Date',
       type: 'date',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'end_date',
       title: 'End Date',
       type: 'date',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'cfp_start_date',
       title: 'CFP Start Date',
       type: 'date',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'cfp_end_date',
       title: 'CFP End Date',
       type: 'date',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'cfp_notify_date',
       title: 'CFP Notify Date',
       type: 'date',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'program_date',
       title: 'Program Date',
       type: 'date',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'coc_link',
       title: 'Code of Conduct Link',
       type: 'string',
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'registration_link',

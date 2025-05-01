@@ -57,13 +57,13 @@ export interface Conference {
   tagline?: string
   description?: string
   announcement?: TypedObject[]
-  start_date?: string
-  end_date?: string
-  cfp_start_date?: string
-  cfp_end_date?: string
-  cfp_notify_date?: string
-  program_date?: string
-  coc_link?: string
+  start_date: string
+  end_date: string
+  cfp_start_date: string
+  cfp_end_date: string
+  cfp_notify_date: string
+  program_date: string
+  coc_link: string
   registration_link?: string
   registration_enabled: boolean
   contact_email: string
