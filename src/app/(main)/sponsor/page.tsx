@@ -118,7 +118,7 @@ export default async function Sponsor() {
                 </div>
                 {!tier.sold_out ? (
                   <Button
-                    href={"mailto:foo@bar.com"}
+                    href={`mailto:${conference.contact_email}?subject=Interested in sponsoring ${conference.title}&body=We are interested in the ${tier.title} sponsorship tier.`}
                     aria-describedby={`tier-${index}`}
                     className={classNames(
                       tier.most_popular
