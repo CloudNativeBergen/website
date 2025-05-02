@@ -78,6 +78,8 @@ export const PUT = auth(
     const data = (await req.json()) as ProposalInput
     const proposal = convertJsonToProposal(data)
 
+    // @TODO check if conference is closed for modifications
+
     const validationErrors = validateProposal(proposal)
     if (validationErrors.length > 0) {
       return proposalResponseError({

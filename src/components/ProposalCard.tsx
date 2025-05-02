@@ -55,10 +55,13 @@ function ProposalActionButton({
 }
 export function ProposalCard({
   proposal,
+  readOnly = false,
   actionCallback,
 }: {
   proposal: ProposalExisting
+  readOnly?: boolean
   actionCallback: (proposal: ProposalExisting, action: Action) => void
+
 }) {
   const actions: ProposalButtonAction[] = []
 
@@ -161,7 +164,7 @@ export function ProposalCard({
           />
         )}
       </div>
-      {actions.length > 0 && (
+      {!readOnly && actions.length > 0 && (
         <div>
           <div className="-mt-px flex divide-x divide-gray-200">
             {actions.map((action, i) => (

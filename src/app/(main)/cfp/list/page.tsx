@@ -42,7 +42,7 @@ export default async function SpeakerDashboard() {
           </h1>
           <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
             <p>
-              Than you for your interest in submitting a presentation to our
+              Thank you for your interest in submitting a presentation to our
               conference.
             </p>
           </div>

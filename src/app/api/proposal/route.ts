@@ -11,6 +11,7 @@ import {
   proposalResponseError,
 } from '@/lib/proposal/server'
 import { createProposal, getProposals } from '@/lib/proposal/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,6 +58,18 @@ export const POST = auth(async (req: NextAuthRequest) => {
   const data = (await req.json()) as ProposalInput
   const proposal = convertJsonToProposal(data)
 
+  const { conference, error } = await getConferenceForCurrentDomain()
+  if (error || !conference) {
+    return proposalResponseError({
+      error,
+      message: 'Failed to fetch conference',
+      type: 'precondition',
+      status: 500,
+    })
+  }
+
+  // @TODO check if conference is open for proposals
+
   const validationErrors = validateProposal(proposal)
   if (validationErrors.length > 0) {
     return proposalResponseError({
@@ -70,6 +83,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
   const { proposal: created, err } = await createProposal(
     proposal,
     req.auth.speaker._id,
+    conference._id,
   )
   if (err) {
     return proposalResponseError({

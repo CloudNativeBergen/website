@@ -1,6 +1,11 @@
-import { TypedObject } from "sanity"
+import { Reference, TypedObject } from "sanity"
 import { ProposalExisting } from "../proposal/types"
 import { Speaker } from "../speaker/types"
+
+export interface ConferenceProposals {
+  conference: Conference | Reference
+  proposals: ProposalExisting[]
+}
 
 export interface TrackTalk {
   talk?: ProposalExisting
@@ -48,6 +53,7 @@ export interface SponsorTier {
 }
 
 export interface Conference {
+  _id: string
   title: string
   organizer: string
   city: string

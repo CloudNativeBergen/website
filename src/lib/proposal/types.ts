@@ -1,5 +1,6 @@
-import { Speaker, SpeakerRef } from '@/lib/speaker/types'
-import { ConferenceSchedule } from '../conference/types'
+import { Speaker } from '@/lib/speaker/types'
+import { Conference, ConferenceSchedule } from '../conference/types'
+import { Reference } from 'sanity'
 
 export enum Language {
   norwegian = 'norwegian',
@@ -66,8 +67,9 @@ export interface ProposalExisting extends Proposal {
   _createdAt: string
   _updatedAt: string
   status: Status
-  speaker?: Speaker | SpeakerRef
+  speaker?: Speaker | Reference
   schedule?: ConferenceSchedule[]
+  conference: Conference | Reference
 }
 
 export interface ProposalBaseResponse {

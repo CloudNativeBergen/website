@@ -94,9 +94,6 @@ export default async function Profile({ params }: Props) {
   const resolvedParams = await params;
   const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug);
 
-  const schedule = getSchedulesForTalk(talks[0]);
-  console.log('schedule', schedule);
-
   if (err || !speaker || !talks || talks.length === 0) {
     return (
       <>

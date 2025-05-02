@@ -77,6 +77,13 @@ export default defineType({
       type: 'reference',
       to: [{ type: 'speaker' }],
     }),
+    defineField({
+      name: 'conference',
+      title: 'Conference',
+      type: 'reference',
+      to: [{ type: 'conference' }],
+      validation: (Rule) => Rule.required(),
+    }),
   ],
 
   preview: {

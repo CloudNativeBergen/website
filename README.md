@@ -36,6 +36,62 @@ cd studio && sanity deploy
 
 Models are defined in `lib/<type>/types.ts` and in `sanity/schemaTypes/<type>.ts` for the representation in Sanity Studio.
 
+## Sanity Migrations
+
+The project includes migration scripts based on Sanity's migration framework that help update content data when schemas change. Migrations are stored in `migrations/`.
+
+### Creating a Migration
+
+To create a new migration, use the Sanity CLI command:
+
+```bash
+npx sanity@latest migration create "Replace event type with event format"
+```
+
+Replace the text in quotes with a descriptive title for your migration. This will create a new migration folder with a boilerplate script that you can modify.
+
+### Running a Migration
+
+#### Important: Always Backup Your Data First
+
+Before running any migration, export your dataset as a backup:
+
+```bash
+# Create a backup of your dataset
+npx sanity@latest dataset export production my-backup-filename.tar.gz
+```
+
+This gives you a safety net in case anything goes wrong during the migration.
+
+#### Validate Documents Against Schema Changes
+
+After making schema changes, validate your documents against the new schema:
+
+```bash
+# Validate documents against schema changes
+npx sanity@latest documents validate -y
+```
+
+This helps identify any potential issues before running the migration.
+
+After creating a backup and validating documents, run the migration:
+
+```bash
+# Run a migration with Sanity CLI
+npx sanity@latest migration run add-required-conference-reference-to-talks
+```
+
+When prompted, provide your Sanity auth token. The migration will process the documents and report the changes made.
+
+For more details about available migrations and creating new ones, see [Sanity Migrations Documentation](./sanity/migrations/README.md).
+
+### Learning Resources
+
+To learn more about Sanity migrations, check out these resources:
+
+- [Running a Content Migration](https://www.sanity.io/learn/course/handling-schema-changes-confidently/running-a-content-migration)
+- [Writing a Content Migration](https://www.sanity.io/learn/course/handling-schema-changes-confidently/writing-a-content-migration)
+
 ## Authentication
 
 Authentication is handled by [next-auth](https://next-auth.js.org/). To enable authentication, you need to create a `.env.local` file in the root of the project and add the following environment variables:

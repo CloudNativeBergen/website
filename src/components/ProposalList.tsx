@@ -130,18 +130,51 @@ export function ProposalList({ initialProposals, cfpIsOpen }: { initialProposals
               proposal={actionProposal}
               onAction={actionUpdateHandler}
             />
-            <ul
-              role="list"
-              className="mx-auto mt-6 grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2 lg:max-w-4xl"
-            >
-              {proposals.map((proposal) => (
-                <ProposalCard
-                  key={proposal._id}
-                  proposal={proposal}
-                  actionCallback={actionHandler}
-                />
+            <div className="mx-auto mt-6 max-w-2xl lg:max-w-4xl">
+              {/* Group proposals by conference */}
+              {Object.entries(
+                proposals.reduce((groups, proposal) => {
+                  // Get conference name safely
+                  const conferenceName =
+                    (typeof proposal.conference === 'object' && 'title' in proposal.conference)
+                      ? proposal.conference.title
+                      : 'Unknown Conference';
+
+                  // Initialize array if it doesn't exist
+                  if (!groups[conferenceName]) {
+                    groups[conferenceName] = [];
+                  }
+
+                  // Add proposal to appropriate group
+                  groups[conferenceName].push(proposal);
+                  return groups;
+                }, {} as Record<string, ProposalExisting[]>)
+              ).map(([conferenceName, conferenceProposals]) => (
+                <div key={conferenceName} className="mb-8">
+                  <h2 className="mb-4 text-xl font-bold text-gray-900">{conferenceName}</h2>
+                  <ul role="list" className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    {conferenceProposals.map((proposal) => {
+                      const isConferenceEnded = Boolean(
+                        typeof proposal.conference === 'object' &&
+                        proposal.conference !== null &&
+                        'end_date' in proposal.conference &&
+                        proposal.conference.end_date &&
+                        new Date(proposal.conference.end_date as string) < new Date()
+                      );
+
+                      return (
+                        <ProposalCard
+                          key={proposal._id}
+                          proposal={proposal}
+                          actionCallback={actionHandler}
+                          readOnly={isConferenceEnded}
+                        />
+                      );
+                    })}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           </>
         )
       }

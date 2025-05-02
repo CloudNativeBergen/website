@@ -5,6 +5,7 @@ import {
 } from '@/lib/sanity/client'
 import { v4 as randomUUID } from 'uuid'
 import { groq } from 'next-sanity'
+import { Reference } from 'sanity';
 
 export async function getProposal(
   id: string,
@@ -23,6 +24,9 @@ export async function getProposal(
       speaker-> {
         ...,
         "image": image.asset->url
+      },
+      conference-> {
+        _id, title, start_date, end_date
       }
     }${speakerFilter}[0]`,
       { id, speakerId },
@@ -53,8 +57,11 @@ export async function getProposals(
       ...,
       speaker-> {
         _id, name, email, providers, "image": image.asset->url, flags
+      },
+      conference-> {
+        _id, title, start_date, end_date
       }
-    }${speakerFilter} | order(_createdAt desc)`,
+    }${speakerFilter} | order(conference->start_date desc, _updatedAt desc)`,
       { speakerId },
       { cache: 'no-store' },
     )
@@ -108,6 +115,7 @@ export async function updateProposalStatus(
 export async function createProposal(
   proposal: ProposalInput,
   speakerId: string,
+  conferenceId: string,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let createdProposal: ProposalExisting = {} as ProposalExisting
@@ -115,7 +123,8 @@ export async function createProposal(
   const _type = 'talk'
   const _id = randomUUID().toString()
   const status = Status.submitted
-  const speaker = { _type: 'reference', _ref: speakerId }
+  const speaker: Reference = { _type: 'reference', _ref: speakerId }
+  const conference: Reference = { _type: 'reference', _ref: conferenceId }
 
   try {
     createdProposal = (await clientWrite.create({
@@ -124,6 +133,7 @@ export async function createProposal(
       _id,
       status,
       speaker,
+      conference,
     })) as ProposalExisting
   } catch (error) {
     err = error as Error
