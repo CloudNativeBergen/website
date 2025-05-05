@@ -161,6 +161,18 @@ export default defineType({
       of: [{ type: 'string' }],
     }),
     defineField({
+      name: 'topics',
+      title: 'Topics',
+      description: 'Topics for CFP submissions and agenda categorization',
+      type: 'array',
+      of: [
+        {
+          type: 'reference',
+          to: [{ type: 'topic' }]
+        }
+      ],
+    }),
+    defineField({
       name: 'sponsors',
       title: 'Sponsors',
       type: 'array',

@@ -1,5 +1,6 @@
 import { Speaker } from '@/lib/speaker/types'
 import { Conference, ConferenceSchedule } from '../conference/types'
+import { Topic } from '../topic/types'
 import { Reference } from 'sanity'
 
 export enum Language {
@@ -70,6 +71,7 @@ export interface ProposalExisting extends Proposal {
   speaker?: Speaker | Reference
   schedule?: ConferenceSchedule[]
   conference: Conference | Reference
+  topics?: Topic[] | Reference[]
 }
 
 export interface ProposalBaseResponse {

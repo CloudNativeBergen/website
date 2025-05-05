@@ -6,6 +6,7 @@ import schedule from './schemaTypes/schedule'
 import talk from './schemaTypes/talk'
 import sponsor from './schemaTypes/sponsor'
 import sponsorTier from './schemaTypes/sponsorTier'
+import topic from './schemaTypes/topic'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -15,5 +16,6 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     talk,
     sponsor,
     sponsorTier,
+    topic,
   ],
 }

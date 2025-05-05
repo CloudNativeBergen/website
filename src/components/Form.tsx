@@ -14,8 +14,7 @@ export function Input({
   name: string
   label: string
   value?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue?: any
+  setValue?: (val: string) => void
   type?: string
 }) {
   return (
@@ -34,7 +33,7 @@ export function Input({
           value={value}
           readOnly={setValue === undefined}
           disabled={setValue === undefined}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => setValue && setValue(e.target.value)}
           autoComplete={name}
           className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
         />
@@ -54,12 +53,9 @@ export function LinkInput({
   index: number
   name: string
   value?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  add?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  remove?: any
+  update: (i: number, val: string) => void
+  add: (i: number) => void
+  remove: (i: number) => void
 }) {
   return (
     <div key={name} className="mt-2 flex rounded-md shadow-sm">
@@ -113,8 +109,7 @@ export function Textarea({
   label: string
   rows?: number
   value?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue?: any
+  setValue: (val: string) => void
 }) {
   return (
     <>
@@ -150,7 +145,7 @@ export function Dropdown({
   options: Map<string, string>
   value?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue?: any
+  setValue: (val: any) => void
 }) {
   return (
     <>
@@ -190,8 +185,7 @@ export function Checkbox({
   name: string
   label: string
   value?: boolean
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue?: any
+  setValue: (val: boolean) => void
   children?: React.ReactNode
 }) {
   return (
