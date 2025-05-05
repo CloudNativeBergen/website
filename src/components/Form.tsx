@@ -22,7 +22,7 @@ export function Input({
     <>
       <label
         htmlFor={name}
-        className="block text-sm font-medium leading-6 text-gray-900"
+        className="block text-sm/6 font-medium text-gray-900"
       >
         {label}
       </label>
@@ -36,7 +36,7 @@ export function Input({
           disabled={setValue === undefined}
           onChange={(e) => setValue(e.target.value)}
           autoComplete={name}
-          className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
         />
       </div>
     </>
@@ -71,41 +71,35 @@ export function LinkInput({
           type="url"
           name={name}
           id={name}
-          className="block w-full rounded-none rounded-l-md border-0 py-1.5 pl-10 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+          className="block w-full rounded-none rounded-l-md bg-white py-1.5 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
           value={value}
           onChange={(e) => update(index, e.target.value)}
         />
       </div>
       <button
         type="button"
-        className="relative -ml-px inline-flex items-center gap-x-1.5 px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+        className="relative -ml-px inline-flex items-center gap-x-1.5 px-3 py-2 text-sm font-semibold text-gray-900 outline-1 outline-gray-300 hover:bg-gray-50"
+        onClick={() => remove(index)}
       >
-        <MinusCircleIcon
-          className="-ml-0.5 h-5 w-5 text-gray-400"
-          aria-hidden="true"
-          onClick={() => remove(index)}
-        />
+        <MinusCircleIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
       </button>
       <button
         type="button"
-        className="relative -ml-px inline-flex items-center gap-x-1.5 rounded-r-md px-3 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+        className="relative -ml-px inline-flex items-center gap-x-1.5 rounded-r-md px-3 py-2 text-sm font-semibold text-gray-900 outline-1 outline-gray-300 hover:bg-gray-50"
+        onClick={() => add(index)}
       >
-        <PlusCircleIcon
-          className="-ml-0.5 h-5 w-5 text-gray-400"
-          aria-hidden="true"
-          onClick={() => add(index)}
-        />
+        <PlusCircleIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
       </button>
     </div>
   )
 }
 
 export function ErrorText({ children }: { children: React.ReactNode }) {
-  return <p className="mt-2 text-sm leading-6 text-red-600">{children}</p>
+  return <p className="mt-2 text-sm/6 text-red-600">{children}</p>
 }
 
 export function HelpText({ children }: { children: React.ReactNode }) {
-  return <p className="mt-2 text-sm leading-6 text-gray-600">{children}</p>
+  return <p className="mt-2 text-sm/6 text-gray-600">{children}</p>
 }
 
 export function Textarea({
@@ -119,14 +113,13 @@ export function Textarea({
   label: string
   rows?: number
   value?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setValue?: any
 }) {
   return (
     <>
       <label
         htmlFor={name}
-        className="block text-sm font-medium leading-6 text-gray-900"
+        className="block text-sm/6 font-medium text-gray-900"
       >
         {label}
       </label>
@@ -137,7 +130,7 @@ export function Textarea({
           rows={rows}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
         />
       </div>
     </>
@@ -162,7 +155,7 @@ export function Dropdown({
     <>
       <label
         htmlFor={name}
-        className="block text-sm font-medium leading-6 text-gray-900"
+        className="block text-sm/6 font-medium text-gray-900"
       >
         {label}
       </label>
@@ -173,7 +166,7 @@ export function Dropdown({
           autoComplete={name}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:max-w-xs sm:text-sm sm:leading-6"
+          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
         >
           {Array.from(options).map(([key, value]) => (
             <option key={key} value={key}>
@@ -212,7 +205,7 @@ export function Checkbox({
           className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
         />
       </div>
-      <div className="text-sm leading-6">
+      <div className="text-sm/6">
         <label htmlFor={name} className="font-medium text-gray-900">
           {label}
         </label>
