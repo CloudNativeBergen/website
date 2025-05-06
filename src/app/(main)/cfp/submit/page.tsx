@@ -60,8 +60,9 @@ export default async function Submit({ searchParams }: { searchParams: Promise<{
     if (proposalId) {
       const { proposal: fetchedProposal, err } = await getProposal(proposalId, session.speaker._id)
       if (err) {
+        console.error('Error loading proposal:', err)
         loadingError = { type: 'Server Error', message: 'Failed to load proposal.' }
-      } else if (!proposal) {
+      } else if (!fetchedProposal) {
         loadingError = { type: 'Not Found', message: 'Proposal not found.' }
       } else {
         proposal = fetchedProposal
@@ -72,6 +73,7 @@ export default async function Submit({ searchParams }: { searchParams: Promise<{
     } else {
       const { speaker: fetchedSpeaker, err } = await getSpeaker(session.speaker._id)
       if (err) {
+        console.error('Error loading speaker:', err)
         loadingError = { type: 'Server Error', message: 'Failed to load speaker.' }
       } else if (!fetchedSpeaker) {
         loadingError = { type: 'Not Found', message: 'Speaker not found.' }

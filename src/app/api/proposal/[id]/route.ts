@@ -14,7 +14,7 @@ export const GET = auth(
     req: NextAuthRequest,
     context: { params: Record<string, string | string[] | undefined> },
   ) => {
-    const params = await context.params
+    const params = context.params
     const id = params.id as string
 
     if (
@@ -57,9 +57,9 @@ export const GET = auth(
 export const PUT = auth(
   async (
     req: NextAuthRequest,
-    { params }: { params: Record<string, string | string[] | undefined> },
+    context: { params: Record<string, string | string[] | undefined> },
   ) => {
-    const id = params.id as string
+    const { id } = context.params
 
     if (
       !req.auth ||
@@ -91,7 +91,7 @@ export const PUT = auth(
     }
 
     const { proposal: existingProposal, err: checkErr } = await getProposal(
-      id,
+      id as string,
       req.auth.speaker._id,
     )
     if (checkErr) {
@@ -112,7 +112,7 @@ export const PUT = auth(
     }
 
     const { proposal: updatedProposal, err: updateErr } = await updateProposal(
-      id,
+      id as string,
       proposal,
       req.auth.speaker._id,
     )

@@ -5,6 +5,7 @@ import {
   FormValidationError,
   ProposalInput,
 } from '@/lib/proposal/types'
+import { Reference } from 'sanity'
 
 // This function converts a JSON object to a Proposal object. This is useful when we receive a Proposal object from the API and we want to convert it to a Proposal object that we can use in our application.
 // This function omits fields that should not be set by the user, such as the ID of the Proposal and the status of the Proposal.
@@ -19,7 +20,19 @@ export function convertJsonToProposal(json: any): ProposalInput {
     tags: json.tags || [],
     tos: json.tos as boolean,
     outline: json.outline as string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    topics: json.topics?.map((topic: any) => convertTopicJsonToReference(topic)).filter((topic: any) => topic !== null) || [],
   } as ProposalInput
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertTopicJsonToReference(topic: any): Reference | null {
+  if (topic._type === 'reference' && topic._ref) {
+    return { _type: 'reference', _ref: topic._ref }
+  } else if (topic._id) {
+    return { _type: 'reference', _ref: topic._id }
+  }
+  return null
 }
 
 export function validateProposal(
