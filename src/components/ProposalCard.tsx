@@ -1,5 +1,6 @@
 import { FormatStatus } from "@/lib/proposal/format"
 import { ProposalExisting, Status, Action } from "@/lib/proposal/types"
+import Image from 'next/image'
 import { PencilIcon, BookOpenIcon, EnvelopeIcon, XMarkIcon, CheckCircleIcon, UserCircleIcon } from "@heroicons/react/24/solid"
 import { SpinnerIcon } from "./SocialIcons"
 
@@ -152,10 +153,12 @@ export function ProposalCard({
           </p>
         </div>
         {proposal.speaker && 'image' in proposal.speaker ? (
-          <img
+          <Image
             className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-300"
-            src={proposal.speaker.image}
-            alt=""
+            src={proposal.speaker.image || '/images/default-avatar.png'}
+            alt="Speaker Image"
+            width={40}
+            height={40}
           />
         ) : (
           <UserCircleIcon

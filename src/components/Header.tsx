@@ -5,6 +5,7 @@ import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
 import { Logo } from '@/components/Logo'
 import { useSession } from 'next-auth/react'
+import Image from 'next/image'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { Conference } from '@/lib/conference/types'
@@ -50,9 +51,11 @@ export function Header({ c }: { c: Conference }) {
         <div className="ml-10 mt-10 sm:flex lg:ml-4 lg:mt-0">
           <a href="/cfp/list">
             {session ? (
-              <img
-                src={session.user.picture}
-                alt={session.user.name}
+              <Image
+                src={session.user.picture || '/images/default-avatar.png'}
+                alt={session.user.name || 'User'}
+                width={48}
+                height={48}
                 className="h-12 w-12 rounded-full"
               />
             ) : (

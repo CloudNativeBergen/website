@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { putProfile, postImage, putEmail, getEmails } from "@/lib/profile/client"
 import { ProfileEmail } from "@/lib/profile/types"
 import { postProposal } from "@/lib/proposal/client"
@@ -179,7 +180,7 @@ function ProposalDetailsForm({
 
   useEffect(() => {
     setProposal({ title, language, description, format, level, topics, outline, tos })
-  }, [title, language, description, format, level, topics, outline, tos])
+  }, [title, language, description, format, level, topics, outline, tos, setProposal])
 
   return (
     <div className="border-b border-gray-900/10 pb-12">
@@ -386,7 +387,7 @@ function SpeakerDetailsForm({
       flags: speakerFlags,
       links,
     })
-  }, [speakerName, speakerTitle, speakerBio, speakerFlags, speakerLinks])
+  }, [speakerName, speakerTitle, speakerBio, speakerFlags, speakerLinks, setSpeaker])
 
   return (
     <div className="border-b border-gray-900/10 pb-12">
@@ -454,9 +455,11 @@ function SpeakerDetailsForm({
           </label>
           <div className="mt-2 flex items-center gap-x-3">
             {speakerImage ? (
-              <img
+              <Image
                 src={`${speakerImage}?w=96&h=96&fit=crop`}
                 alt="Speaker Image"
+                width={48}
+                height={48}
                 className="h-12 w-12 rounded-full"
               />
             ) : (
