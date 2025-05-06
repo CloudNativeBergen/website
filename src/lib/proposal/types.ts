@@ -1,5 +1,6 @@
 import { Speaker } from '@/lib/speaker/types'
 import { Conference, ConferenceSchedule } from '../conference/types'
+import { Topic } from '../topic/types'
 import { Reference } from 'sanity'
 
 export enum Language {
@@ -54,6 +55,7 @@ interface Proposal {
   level: Level
   outline: string
   tags?: string[]
+  topics?: Topic[] | Reference[]
   tos: boolean
 }
 

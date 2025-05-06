@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { Container } from '@/components/Container'
 import { iconForLink } from '@/components/SocialIcons'
 
@@ -38,10 +39,12 @@ export function FeaturedSpeakers({ speakers, isOrganizers }: FeaturedSpeakersPro
               {speakers.map((person) => (
                 <li key={person.name}>
                   <a href={isOrganizers ? '#' : `/speaker/${person.slug}`}>
-                    <img
+                    <Image
                       className="mx-auto h-56 w-56 rounded-full"
-                      src={person.image}
-                      alt=""
+                      src={person.image || '/images/default-avatar.png'}
+                      alt={person.name}
+                      width={224}
+                      height={224}
                     />
                     <h3 className="mt-6 text-2xl font-semibold leading-7 tracking-tight text-gray-900">
                       {person.name}

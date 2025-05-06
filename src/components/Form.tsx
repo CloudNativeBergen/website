@@ -1,3 +1,4 @@
+import { ChevronDownIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import {
   LinkIcon,
   MinusCircleIcon,
@@ -14,8 +15,7 @@ export function Input({
   name: string
   label: string
   value?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue?: any
+  setValue?: (val: string) => void
   type?: string
 }) {
   return (
@@ -34,7 +34,7 @@ export function Input({
           value={value}
           readOnly={setValue === undefined}
           disabled={setValue === undefined}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => setValue && setValue(e.target.value)}
           autoComplete={name}
           className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
         />
@@ -54,38 +54,36 @@ export function LinkInput({
   index: number
   name: string
   value?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  update?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  add?: any
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  remove?: any
+  update: (i: number, val: string) => void
+  add: (i: number) => void
+  remove: (i: number) => void
 }) {
   return (
-    <div key={name} className="mt-2 flex rounded-md shadow-sm">
-      <div className="relative flex flex-grow items-stretch focus-within:z-10">
-        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-          <LinkIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
-        </div>
+    <div key={name} className="mt-2 flex">
+      <div className="-mr-px grid grow grid-cols-1 focus-within:relative">
         <input
           type="url"
           name={name}
           id={name}
-          className="block w-full rounded-none rounded-l-md bg-white py-1.5 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+          className="col-start-1 row-start-1 block w-full rounded-l-md bg-white py-1.5 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
           value={value}
           onChange={(e) => update(index, e.target.value)}
+        />
+        <LinkIcon
+          aria-hidden="true"
+          className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4"
         />
       </div>
       <button
         type="button"
-        className="relative -ml-px inline-flex items-center gap-x-1.5 px-3 py-2 text-sm font-semibold text-gray-900 outline-1 outline-gray-300 hover:bg-gray-50"
+        className="flex shrink-0 items-center gap-x-1.5 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
         onClick={() => remove(index)}
       >
         <MinusCircleIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
       </button>
       <button
         type="button"
-        className="relative -ml-px inline-flex items-center gap-x-1.5 rounded-r-md px-3 py-2 text-sm font-semibold text-gray-900 outline-1 outline-gray-300 hover:bg-gray-50"
+        className="flex shrink-0 items-center gap-x-1.5 rounded-r-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
         onClick={() => add(index)}
       >
         <PlusCircleIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
@@ -113,8 +111,7 @@ export function Textarea({
   label: string
   rows?: number
   value?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue?: any
+  setValue: (val: string) => void
 }) {
   return (
     <>
@@ -150,7 +147,7 @@ export function Dropdown({
   options: Map<string, string>
   value?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue?: any
+  setValue: (val: any) => void
 }) {
   return (
     <>
@@ -160,14 +157,14 @@ export function Dropdown({
       >
         {label}
       </label>
-      <div className="mt-2">
+      <div className="mt-2 grid grid-cols-1">
         <select
           id={name}
           name={name}
           autoComplete={name}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+          className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
         >
           {Array.from(options).map(([key, value]) => (
             <option key={key} value={key}>
@@ -175,6 +172,10 @@ export function Dropdown({
             </option>
           ))}
         </select>
+        <ChevronDownIcon
+          aria-hidden="true"
+          className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+        />
       </div>
     </>
   )
@@ -190,8 +191,7 @@ export function Checkbox({
   name: string
   label: string
   value?: boolean
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue?: any
+  setValue: (val: boolean) => void
   children?: React.ReactNode
 }) {
   return (
@@ -213,5 +213,85 @@ export function Checkbox({
         {children}
       </div>
     </div>
+  )
+}
+
+export function Multiselect({
+  name,
+  label,
+  options,
+  value,
+  setValue,
+  maxItems = 2,
+}: {
+  name: string
+  label: string
+  options: { id: string; title: string; color?: string }[]
+  value: string[]
+  setValue: (val: string[]) => void
+  maxItems?: number
+}) {
+  return (
+    <>
+      <label
+        htmlFor={name}
+        className="block text-sm font-medium text-gray-900"
+      >
+        {label}
+      </label>
+      <div className="mt-2">
+        <div className="relative">
+          <div className="flex flex-wrap gap-2 rounded-md bg-white p-2 border border-gray-300 focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2">
+            {value.map((selectedId) => {
+              const option = options.find((opt) => opt.id === selectedId)
+              if (!option) return null
+              return (
+                <span
+                  key={selectedId}
+                  className="inline-flex items-center gap-x-1 rounded-full px-2 py-1 text-sm font-medium"
+                  style={{
+                    backgroundColor: option.color ? `#${option.color}20` : '#F3F4F6',
+                    color: option.color ? `#${option.color}` : '#374151',
+                  }}
+                >
+                  {option.title}
+                  <button
+                    type="button"
+                    onClick={() => setValue(value.filter((id) => id !== selectedId))}
+                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  >
+                    <span className="sr-only">Remove {option.title}</span>
+                    <XMarkIcon className="h-3 w-3" aria-hidden="true" />
+                  </button>
+                </span>
+              )
+            })}
+            <select
+              id={name}
+              name={name}
+              value=""
+              onChange={(e) => {
+                const newValue = e.target.value
+                if (newValue && !value.includes(newValue) && value.length < maxItems) {
+                  setValue([...value, newValue])
+                }
+              }}
+              disabled={value.length >= maxItems}
+              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 ${value.length >= maxItems ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+            >
+              <option value="">{value.length >= maxItems ? `Maximum ${maxItems} topics selected` : 'Select a topic...'}</option>
+              {options
+                .filter((option) => !value.includes(option.id))
+                .map((option, index) => (
+                  <option key={`${option.id}-${index}`} value={option.id}>
+                    {option.title}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }

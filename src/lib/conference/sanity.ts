@@ -7,12 +7,14 @@ export async function getConferenceForCurrentDomain({
   schedule = false,
   sponsors = false,
   sponsorTiers = false,
+  topics = false,
   revalidate = 3600,
 }: {
   organizers?: boolean;
   schedule?: boolean;
   sponsors?: boolean;
   sponsorTiers?: boolean;
+  topics?: boolean;
   revalidate?: number;
 } = {}): Promise<{
   conference: Conference
@@ -27,6 +29,7 @@ export async function getConferenceForCurrentDomain({
       schedule,
       sponsors,
       sponsorTiers,
+      topics,
       revalidate,
     );
   } catch (err) {
@@ -42,6 +45,7 @@ export async function getConferenceForDomain(
   schedule: boolean = false,
   sponsors: boolean = false,
   sponsorTiers: boolean = false,
+  topics: boolean = false,
   revalidate: number = 3600,
 ): Promise<{ conference: Conference; error: Error | null }> {
   let conference = {} as Conference
@@ -99,6 +103,13 @@ export async function getConferenceForDomain(
         },
         sold_out,
         most_popular
+      },` : ''}
+      ${topics ? `topics[]->{
+        _id,
+        title,
+        description,
+        color,
+        "slug": slug.current
       },` : ''}
     }`
 

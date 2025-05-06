@@ -27,12 +27,16 @@ export async function getProposal(
       },
       conference-> {
         _id, title, start_date, end_date
+      },
+      topics[]-> {
+        _id, title, color, slug, description
       }
     }${speakerFilter}[0]`,
       { id, speakerId },
       { cache: 'no-store' },
     )
   } catch (error) {
+    console.error('Error fetching proposal:', error)
     err = error as Error
   }
 
@@ -60,12 +64,16 @@ export async function getProposals(
       },
       conference-> {
         _id, title, start_date, end_date
+      },
+      topics[]-> {
+        _id, title, color, slug, description
       }
     }${speakerFilter} | order(conference->start_date desc, _updatedAt desc)`,
       { speakerId },
       { cache: 'no-store' },
     )
   } catch (error) {
+    console.error('Error fetching proposals:', error)
     err = error as Error
   }
 
@@ -136,6 +144,7 @@ export async function createProposal(
       conference,
     })) as ProposalExisting
   } catch (error) {
+    console.error('Error creating proposal:', error)
     err = error as Error
   }
 

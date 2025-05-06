@@ -1,6 +1,7 @@
 import { Reference, TypedObject } from "sanity"
 import { ProposalExisting } from "../proposal/types"
 import { Speaker } from "../speaker/types"
+import { Topic } from "../topic/types"
 
 export interface ConferenceProposals {
   conference: Conference | Reference
@@ -76,9 +77,10 @@ export interface Conference {
   social_links?: string[]
   organizers?: Speaker[]
   domains?: string[]
-  sponsors?: Array<ConferenceSponsor>
-  sponsor_tiers?: Array<SponsorTier>
-  schedules?: Array<ConferenceSchedule>
-  vanity_metrics?: Array<ConferenceVanityMetric>
+  topics?: Topic[]
+  sponsors?: ConferenceSponsor[]
+  sponsor_tiers?: SponsorTier[]
+  schedules?: ConferenceSchedule[]
+  vanity_metrics?: ConferenceVanityMetric[]
   features?: string[]
 }

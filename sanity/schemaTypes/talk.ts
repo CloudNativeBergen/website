@@ -58,6 +58,18 @@ export default defineType({
       of: [{ type: 'string' }],
     }),
     defineField({
+      name: 'topics',
+      title: 'Topics',
+      description: 'Topics associated with this talk',
+      type: 'array',
+      of: [
+        {
+          type: 'reference',
+          to: [{ type: 'topic' }]
+        }
+      ],
+    }),
+    defineField({
       name: 'tos',
       title: 'Terms of Service',
       type: 'boolean',
