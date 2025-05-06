@@ -59,7 +59,7 @@ export const PUT = auth(
     req: NextAuthRequest,
     context: { params: Record<string, string | string[] | undefined> },
   ) => {
-    const { id } = context.params
+    const { id } = await context.params
 
     if (
       !req.auth ||

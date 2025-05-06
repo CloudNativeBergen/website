@@ -7,7 +7,7 @@ import { ProposalInput, FormError, Language, Format, Level, languages, formats, 
 import { SpeakerInput, Flags } from "@/lib/speaker/types"
 import { XCircleIcon, UserCircleIcon } from "@heroicons/react/24/solid"
 import { useState, useEffect } from "react"
-import { Dropdown, HelpText, ErrorText, LinkInput, Input, Textarea, Checkbox } from "./Form"
+import { Dropdown, HelpText, ErrorText, LinkInput, Input, Textarea, Checkbox, Multiselect } from "./Form"
 import { redirect } from "next/navigation"
 import { Conference } from "@/lib/conference/types"
 import { Topic } from "@/lib/topic/types"
@@ -239,18 +239,22 @@ function ProposalDetailsForm({
           />
         </div>
 
-        <div className="sm:col-span-3">
-          <Dropdown
+        <div className="sm:col-span-full">
+          <Multiselect
             name="topics"
             label="Topics"
-            value={topics[0]?._id ?? ''}
-            setValue={(val: string) => {
-              const selectedTopic = conference.topics?.find((topic) => topic._id === val) as Topic;
-              setTopics(selectedTopic ? [selectedTopic] : []);
+            options={(conference.topics ?? []).map((topic) => ({
+              id: topic._id,
+              title: topic.title,
+              color: topic.color,
+            }))}
+            value={topics.map((topic) => topic._id)}
+            setValue={(val: string[]) => {
+              const selectedTopics = val
+                .map((id) => conference.topics?.find((topic) => topic._id === id))
+                .filter((topic): topic is Topic => !!topic);
+              setTopics(selectedTopics);
             }}
-            options={new Map<string, string>(
-              (conference.topics ?? []).map((topic) => [topic._id, topic.title])
-            )}
           />
         </div>
 
