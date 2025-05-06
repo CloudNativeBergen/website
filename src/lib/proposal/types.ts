@@ -57,6 +57,7 @@ interface Proposal {
   tags?: string[]
   topics?: Topic[] | Reference[]
   tos: boolean
+  video?: string
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
