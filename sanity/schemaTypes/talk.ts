@@ -105,14 +105,7 @@ export default defineType({
         Rule.uri({
           scheme: ['http', 'https'],
           allowRelative: false,
-        }).regex(
-          /^https:\/\/(www\.)?youtube\.com\/watch\?v=.+|^https:\/\/youtu\.be\/.+/,
-          {
-            name: 'YouTube URL',
-            invert: false,
-            message: 'Must be a valid YouTube video URL',
-          }
-        ),
+        }),
     }),
   ],
 
