@@ -131,13 +131,19 @@ export default async function Profile({ params }: Props) {
                   <h2 className="text-3xl font-bold text-blue-900">
                     {talk.title} - {formats.get(talk.format)}
                   </h2>
-                  {talk.tags &&
-                    talk.tags.map((tag) => (
+                  {talk.topics &&
+                    talk.topics.map((topic, index) => (
                       <span
-                        key={tag}
+                        key={index}
                         className="mr-2 mt-2 inline-block rounded-full bg-blue-900 px-3 py-1 text-sm font-semibold text-blue-100"
                       >
-                        {tag}
+                        {typeof topic === 'string'
+                          ? topic
+                          : 'label' in topic
+                            ? topic.label
+                            : // fallback for reference objects or other shapes
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            (topic as any).title ?? ''}
                       </span>
                     ))}
                   {talk.schedule && (

@@ -62,12 +62,6 @@ export default defineType({
       type: 'text',
     }),
     defineField({
-      name: 'tags',
-      title: 'Tags',
-      type: 'array',
-      of: [{ type: 'string' }],
-    }),
-    defineField({
       name: 'topics',
       title: 'Topics',
       description: 'Topics associated with this talk',
