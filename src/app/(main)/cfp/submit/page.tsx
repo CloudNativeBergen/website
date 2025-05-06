@@ -18,8 +18,8 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const dynamic = 'force-dynamic'
 
-export default async function Submit({ searchParams }: { searchParams: { id?: string } }) {
-  const proposalId = searchParams.id
+export default async function Submit({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
+  const { id: proposalId } = (await searchParams) || {}
 
   const session = await auth()
   if (!session?.speaker) {
