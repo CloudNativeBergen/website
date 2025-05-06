@@ -29,6 +29,8 @@ export enum Format {
   lightning_10 = 'lightning_10',
   presentation_25 = 'presentation_25',
   presentation_45 = 'presentation_45',
+  workshop_120 = 'workshop_120',
+  workshop_240 = 'workshop_240',
 }
 
 export enum Status {
@@ -151,4 +153,6 @@ export const formats = new Map([
   [Format.lightning_10, 'Lightning Talk (10 min)'],
   [Format.presentation_25, 'Presentation (25 min)'],
   [Format.presentation_45, 'Presentation (45 min)'],
+  [Format.workshop_120, 'Workshop (2 hours)'],
+  [Format.workshop_240, 'Workshop (4 hours)'],
 ])
