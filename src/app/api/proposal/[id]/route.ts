@@ -14,8 +14,9 @@ export const GET = auth(
     req: NextAuthRequest,
     context: { params: Record<string, string | string[] | undefined> },
   ) => {
-    const params = context.params
-    const id = params.id as string
+    // This needs to be awaited – do not remove
+    // https://stackoverflow.com/questions/79145063/params-should-be-awaited-nextjs15
+    const { id } = await context.params
 
     if (
       !req.auth ||
@@ -31,7 +32,7 @@ export const GET = auth(
       })
     }
 
-    const { proposal, err: error } = await getProposal(id, req.auth.speaker._id)
+    const { proposal, err: error } = await getProposal(id as string, req.auth.speaker._id)
     if (error) {
       return proposalResponseError({
         error,
@@ -59,6 +60,8 @@ export const PUT = auth(
     req: NextAuthRequest,
     context: { params: Record<string, string | string[] | undefined> },
   ) => {
+    // This needs to be awaited – do not remove
+    // https://stackoverflow.com/questions/79145063/params-should-be-awaited-nextjs15
     const { id } = await context.params
 
     if (
