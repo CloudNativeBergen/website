@@ -223,6 +223,7 @@ export function Multiselect({
   value,
   setValue,
   maxItems = 2,
+  placeholder = 'Select...',
 }: {
   name: string
   label: string
@@ -230,6 +231,7 @@ export function Multiselect({
   value: string[]
   setValue: (val: string[]) => void
   maxItems?: number
+  placeholder?: string
 }) {
   return (
     <>
@@ -280,7 +282,10 @@ export function Multiselect({
               className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 ${value.length >= maxItems ? 'opacity-50 cursor-not-allowed' : ''
                 }`}
             >
-              <option value="">{value.length >= maxItems ? `Maximum ${maxItems} topics selected` : 'Select a topic...'}</option>
+              <option value="">
+                {value.length >= maxItems ? `Max ${maxItems} selected` : placeholder}
+              </option>
+
               {options
                 .filter((option) => !value.includes(option.id))
                 .map((option, index) => (
