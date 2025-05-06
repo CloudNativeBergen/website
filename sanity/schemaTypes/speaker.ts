@@ -84,22 +84,7 @@ export default defineType({
           if (!links) return true;
           for (const link of links as string[]) {
             try {
-              const url = new URL(link);
-              const validDomains = [
-                'twitter.com',
-                'www.twitter.com',
-                'linkedin.com',
-                'www.linkedin.com',
-                'github.com',
-                'www.github.com',
-                'instagram.com',
-                'www.instagram.com',
-                'bsky.app',
-                'www.bsky.app'
-              ];
-              if (!validDomains.includes(url.hostname)) {
-                return `Invalid domain: ${url.hostname}. Only Twitter, LinkedIn, GitHub, Instagram, and Bluesky links are allowed.`;
-              }
+              new URL(link);
             } catch (error) {
               return 'Invalid URL format';
             }
