@@ -108,6 +108,25 @@ function PlaceholderTimeSlot({
   )
 }
 
+function YouTubeEmbed({ url }: { url: string }) {
+  // Extract video ID from YouTube URL
+  const videoId = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/)?.[1]
+  
+  if (!videoId) return null
+
+  return (
+    <div className="mt-4 aspect-video w-full overflow-hidden rounded-lg">
+      <iframe
+        src={`https://www.youtube.com/embed/${videoId}`}
+        title="YouTube video player"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="h-full w-full"
+      />
+    </div>
+  )
+}
+
 function TalkTimeSlot({
   date,
   talk,
@@ -130,6 +149,9 @@ function TalkTimeSlot({
         </a>
       )}
       <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
+      {talk.talk?.video && (
+        <YouTubeEmbed url={talk.talk.video} />
+      )}
     </div>
   )
 }
