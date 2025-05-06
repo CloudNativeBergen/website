@@ -158,7 +158,10 @@ export async function getPublicSpeaker(speakerSlug: string) {
       `*[ _type == "speaker" && slug.current == $speakerSlug][0]{
       name, title, bio, links, flags, "image": image.asset->url,
       "talks": *[_type == "talk" && references(^._id) && status == "confirmed"]{
-        _id, title, description, tags, language, level, format,
+        _id, title, description, language, level, format, audiences,
+        topics -> {
+          _id, title, "slug": slug.current
+        },
         "schedule": *[_type == "schedule" && references(^._id)]{
           date, tracks[]{
             trackTitle, trackDescription, talks[]{

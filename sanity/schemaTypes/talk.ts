@@ -4,6 +4,7 @@ import {
   languages,
   levels,
   formats,
+  audiences,
 } from '../../src/lib/proposal/types'
 import { defineField, defineType } from 'sanity'
 
@@ -44,6 +45,15 @@ export default defineType({
       type: 'string',
       options: {
         list: Array.from(levels).map(([value, title]) => ({ value, title })),
+      },
+    }),
+    defineField({
+      name: 'audiences',
+      title: 'Audience',
+      type: 'array',
+      of: [{ type: 'string' }],
+      options: {
+        list: Array.from(audiences).map(([value, title]) => ({ value, title })),
       },
     }),
     defineField({

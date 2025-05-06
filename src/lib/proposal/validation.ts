@@ -4,6 +4,7 @@ import {
   Level,
   FormValidationError,
   ProposalInput,
+  Audience,
 } from '@/lib/proposal/types'
 import { Reference } from 'sanity'
 
@@ -17,7 +18,7 @@ export function convertJsonToProposal(json: any): ProposalInput {
     format: Format[json.format as keyof typeof Format],
     language: Language[json.language as keyof typeof Language],
     level: Level[json.level as keyof typeof Level],
-    tags: json.tags || [],
+    audiences: json.audiences as Audience[],
     tos: json.tos as boolean,
     outline: json.outline as string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -84,6 +85,29 @@ export function validateProposal(
     validationErrors.push({
       message: `Invalid level ${proposal.level}`,
       field: 'level',
+    })
+  }
+
+  if (!proposal.audiences || proposal.audiences.length === 0) {
+    validationErrors.push({
+      message: 'Audience must be specified',
+      field: 'audiences',
+    })
+  } else if (
+    !proposal.audiences.every((audience) =>
+      Object.values(Audience).includes(audience),
+    )
+  ) {
+    validationErrors.push({
+      message: 'One or more audiences are invalid',
+      field: 'audiences',
+    })
+  }
+
+  if (!proposal.topics || proposal.topics.length === 0) {
+    validationErrors.push({
+      message: 'Topics must be specified',
+      field: 'topics',
     })
   }
 

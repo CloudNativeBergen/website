@@ -6,13 +6,13 @@ import {
   Language,
   Level,
   FormError,
+  ProposalInput,
 } from '@/lib/proposal/types'
 import { getProposal } from '@/lib/proposal/sanity'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalForm } from '@/components/ProposalForm'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { Reference } from 'sanity'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
@@ -26,21 +26,14 @@ export default async function Submit({ searchParams }: { searchParams: Promise<{
     return redirect('/api/auth/signin?callbackUrl=/cfp/submit?id=' + proposalId)
   }
 
-  let proposal: {
-    title: string;
-    language: Language;
-    description: string;
-    format: Format;
-    level: Level;
-    outline: string;
-    tos: boolean;
-    speaker?: Speaker | Reference;
-  } = {
+  let proposal: ProposalInput = {
     title: '',
     language: Language.norwegian,
     description: '',
     format: Format.lightning_10,
     level: Level.beginner,
+    audiences: [],
+    topics: [],
     outline: '',
     tos: false,
   }
@@ -66,8 +59,8 @@ export default async function Submit({ searchParams }: { searchParams: Promise<{
         loadingError = { type: 'Not Found', message: 'Proposal not found.' }
       } else {
         proposal = fetchedProposal
-        if (proposal.speaker && 'name' in proposal.speaker) {
-          speaker = proposal.speaker as Speaker
+        if (fetchedProposal.speaker && 'name' in fetchedProposal.speaker) {
+          speaker = fetchedProposal.speaker as Speaker
         }
       }
     } else {

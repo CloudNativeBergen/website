@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { putProfile, postImage, putEmail, getEmails } from "@/lib/profile/client"
 import { ProfileEmail } from "@/lib/profile/types"
 import { postProposal } from "@/lib/proposal/client"
-import { ProposalInput, FormError, Language, Format, Level, languages, formats, levels } from "@/lib/proposal/types"
+import { ProposalInput, FormError, Language, Format, Level, languages, formats, levels, audiences as audiencesMap, Audience } from "@/lib/proposal/types"
 import { SpeakerInput, Flags } from "@/lib/speaker/types"
 import { XCircleIcon, UserCircleIcon } from "@heroicons/react/24/solid"
 import { useState, useEffect } from "react"
@@ -170,6 +170,7 @@ function ProposalDetailsForm({
   const [description, setDescription] = useState(proposal?.description ?? '')
   const [format, setFormat] = useState(proposal?.format ?? Format.lightning_10)
   const [level, setLevel] = useState(proposal?.level ?? Level.beginner)
+  const [audiences, setAudiences] = useState<Audience[]>(proposal?.audiences ?? [])
   const [topics, setTopics] = useState<Topic[]>(
     Array.isArray(proposal?.topics)
       ? proposal.topics.filter((topic): topic is Topic => '_id' in topic)
@@ -179,8 +180,10 @@ function ProposalDetailsForm({
   const [tos, setTos] = useState(proposal?.tos ?? false)
 
   useEffect(() => {
-    setProposal({ title, language, description, format, level, topics, outline, tos })
-  }, [title, language, description, format, level, topics, outline, tos, setProposal])
+    setProposal({
+      title, language, description, format, level, audiences, topics, outline, tos,
+    })
+  }, [title, language, description, format, level, audiences, topics, outline, tos, setProposal])
 
   return (
     <div className="border-b border-gray-900/10 pb-12">
@@ -242,8 +245,22 @@ function ProposalDetailsForm({
 
         <div className="sm:col-span-full">
           <Multiselect
+            name="audiences"
+            label="Audience"
+            maxItems={5}
+            placeholder="Select audience"
+            options={Array.from(audiencesMap, ([id, title]) => ({ id, title }))}
+            value={audiences as string[]}
+            setValue={(val: string[]) => setAudiences(val as Audience[])}
+          />
+        </div>
+
+        <div className="sm:col-span-full">
+          <Multiselect
             name="topics"
             label="Topics"
+            maxItems={2}
+            placeholder="Select topics"
             options={(conference.topics ?? []).map((topic) => ({
               id: topic._id,
               title: topic.title,

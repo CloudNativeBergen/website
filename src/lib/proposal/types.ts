@@ -14,6 +14,17 @@ export enum Level {
   advanced = 'advanced',
 }
 
+export enum Audience {
+  developer = 'developer',
+  architect = 'architect',
+  operator = 'operator',
+  manager = 'manager',
+  dataEngineer = 'dataEngineer',
+  securityEngineer = 'securityEngineer',
+  qaEngineer = 'qaEngineer',
+  devopsEngineer = 'devopsEngineer',
+}
+
 export enum Format {
   lightning_10 = 'lightning_10',
   presentation_25 = 'presentation_25',
@@ -53,8 +64,8 @@ interface Proposal {
   language: Language
   format: Format
   level: Level
+  audiences: Audience[]
   outline: string
-  tags?: string[]
   topics?: Topic[] | Reference[]
   tos: boolean
   video?: string
@@ -123,6 +134,17 @@ export const levels = new Map([
   [Level.beginner, 'Beginner'],
   [Level.intermediate, 'Intermediate'],
   [Level.advanced, 'Advanced'],
+])
+
+export const audiences = new Map([
+  [Audience.developer, 'Developer'],
+  [Audience.architect, 'Architect'],
+  [Audience.operator, 'Operator'],
+  [Audience.manager, 'Manager'],
+  [Audience.dataEngineer, 'Data Engineer'],
+  [Audience.securityEngineer, 'Security Engineer'],
+  [Audience.qaEngineer, 'QA Engineer'],
+  [Audience.devopsEngineer, 'DevOps Engineer'],
 ])
 
 export const formats = new Map([
