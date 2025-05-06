@@ -29,7 +29,7 @@ npm install --global sanity@latest
 Deploy Sanity Studio to Sanity.io
 
 ```bash
-cd studio && sanity deploy
+sanity deploy
 ```
 
 ## Models
