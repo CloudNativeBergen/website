@@ -10,6 +10,7 @@ import { useState, useEffect } from "react"
 import { Dropdown, HelpText, ErrorText, LinkInput, Input, Textarea, Checkbox } from "./Form"
 import { redirect } from "next/navigation"
 import { Conference } from "@/lib/conference/types"
+import { Topic } from "@/lib/topic/types"
 
 export function ProposalForm({
   initialProposal,
@@ -168,15 +169,17 @@ function ProposalDetailsForm({
   const [description, setDescription] = useState(proposal?.description ?? '')
   const [format, setFormat] = useState(proposal?.format ?? Format.lightning_10)
   const [level, setLevel] = useState(proposal?.level ?? Level.beginner)
+  const [topics, setTopics] = useState<Topic[]>(
+    Array.isArray(proposal?.topics)
+      ? proposal.topics.filter((topic): topic is Topic => '_id' in topic)
+      : []
+  )
   const [outline, setOutline] = useState(proposal?.outline ?? '')
   const [tos, setTos] = useState(proposal?.tos ?? false)
 
-  const cocLink = conference.coc_link
-  console.log('Coc link', cocLink)
-
   useEffect(() => {
-    setProposal({ title, language, description, format, level, outline, tos })
-  }, [title, language, description, format, level, outline, tos])
+    setProposal({ title, language, description, format, level, topics, outline, tos })
+  }, [title, language, description, format, level, topics, outline, tos])
 
   return (
     <div className="border-b border-gray-900/10 pb-12">
@@ -236,6 +239,21 @@ function ProposalDetailsForm({
           />
         </div>
 
+        <div className="sm:col-span-3">
+          <Dropdown
+            name="topics"
+            label="Topics"
+            value={topics[0]?._id ?? ''}
+            setValue={(val: string) => {
+              const selectedTopic = conference.topics?.find((topic) => topic._id === val) as Topic;
+              setTopics(selectedTopic ? [selectedTopic] : []);
+            }}
+            options={new Map<string, string>(
+              (conference.topics ?? []).map((topic) => [topic._id, topic.title])
+            )}
+          />
+        </div>
+
         <div className="col-span-full">
           <Textarea
             name="outline"
@@ -262,7 +280,7 @@ function ProposalDetailsForm({
             <HelpText>
               You must agree to the{' '}
               <a
-                href={cocLink}
+                href={conference.coc_link}
                 className="text-indigo-500 underline hover:text-indigo-700"
               >
                 CNCF Code of Conduct

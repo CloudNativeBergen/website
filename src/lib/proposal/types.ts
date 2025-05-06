@@ -55,6 +55,7 @@ interface Proposal {
   level: Level
   outline: string
   tags?: string[]
+  topics?: Topic[] | Reference[]
   tos: boolean
 }
 
@@ -71,7 +72,6 @@ export interface ProposalExisting extends Proposal {
   speaker?: Speaker | Reference
   schedule?: ConferenceSchedule[]
   conference: Conference | Reference
-  topics?: Topic[] | Reference[]
 }
 
 export interface ProposalBaseResponse {

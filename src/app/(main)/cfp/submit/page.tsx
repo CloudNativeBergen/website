@@ -23,7 +23,7 @@ export default async function Submit({ searchParams }: { searchParams: { id?: st
 
   const session = await auth()
   if (!session?.speaker) {
-    return redirect('/api/auth/signin?callbackUrl=/cfp/list')
+    return redirect('/api/auth/signin?callbackUrl=/cfp/submit?id=' + proposalId)
   }
 
   let proposal: {
@@ -47,7 +47,10 @@ export default async function Submit({ searchParams }: { searchParams: { id?: st
   let speaker = { name: '', email: '' }
   let loadingError: FormError | null = null
 
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference, error } = await getConferenceForCurrentDomain({
+    topics: true,
+  })
+
   if (!conference || error) {
     console.error('Error loading conference:', error)
     loadingError = { type: 'Server Error', message: 'Failed to load conference.' }
