@@ -13,6 +13,12 @@ import { formatDates } from '@/lib/time'
 
 export function Header({ c }: { c: Conference }) {
   const { data: session } = useSession()
+  
+  // Get the current year's domain and extract the year
+  const currentDomain = c.domains?.[0] ?? 'cloudnativebergen.dev'
+  const currentYear = parseInt(currentDomain.split('.')[0])
+  const previousYear = currentYear - 1
+  const previousDomain = `${previousYear}.cloudnativebergen.dev`
 
   return (
     <header className="relative z-50 flex-none lg:pt-11">
@@ -39,6 +45,13 @@ export function Header({ c }: { c: Conference }) {
                     Past Event
                   </span>
                 )}
+                <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
+                <a 
+                  href={`https://${previousDomain}`}
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  {previousYear} Conference
+                </a>
               </div>
             );
           })()}
