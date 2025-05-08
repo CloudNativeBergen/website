@@ -1,17 +1,53 @@
 'use client'
 
 import Image from 'next/image'
-import { putProfile, postImage, putEmail, getEmails } from "@/lib/profile/client"
-import { ProfileEmail } from "@/lib/profile/types"
-import { postProposal } from "@/lib/proposal/client"
-import { ProposalInput, FormError, Language, Format, Level, languages, formats, levels, audiences as audiencesMap, Audience } from "@/lib/proposal/types"
-import { SpeakerInput, Flags } from "@/lib/speaker/types"
-import { XCircleIcon, UserCircleIcon } from "@heroicons/react/24/solid"
-import { useState, useEffect } from "react"
-import { Dropdown, HelpText, ErrorText, LinkInput, Input, Textarea, Checkbox, Multiselect } from "./Form"
-import { redirect } from "next/navigation"
-import { Conference } from "@/lib/conference/types"
-import { Topic } from "@/lib/topic/types"
+import {
+  putProfile,
+  postImage,
+  putEmail,
+  getEmails,
+} from '@/lib/profile/client'
+import { ProfileEmail } from '@/lib/profile/types'
+import { postProposal } from '@/lib/proposal/client'
+import {
+  ProposalInput,
+  FormError,
+  Language,
+  Format,
+  Level,
+  languages,
+  formats,
+  levels,
+  audiences as audiencesMap,
+  Audience,
+} from '@/lib/proposal/types'
+import { SpeakerInput, Flags } from '@/lib/speaker/types'
+import { XCircleIcon, UserCircleIcon } from '@heroicons/react/24/solid'
+import { useState, useEffect, useId } from 'react'
+import {
+  Dropdown,
+  HelpText,
+  ErrorText,
+  LinkInput,
+  Input,
+  Textarea,
+  Checkbox,
+  Multiselect,
+} from './Form'
+import { redirect } from 'next/navigation'
+import { Conference } from '@/lib/conference/types'
+import { Topic } from '@/lib/topic/types'
+import {
+  defineSchema,
+  EditorProvider,
+  PortableTextBlock,
+  PortableTextEditable,
+  RenderDecoratorFunction,
+  RenderStyleFunction,
+  SchemaDefinition,
+  useEditor,
+} from '@portabletext/editor'
+import { EventListenerPlugin } from '@portabletext/editor/plugins'
 
 export function ProposalForm({
   initialProposal,
@@ -138,7 +174,7 @@ export function ProposalForm({
         <a
           href="/cfp/list"
           type="button"
-          className="text-sm font-semibold leading-6 text-gray-900"
+          className="text-sm leading-6 font-semibold text-gray-900"
         >
           Cancel
         </a>
@@ -170,24 +206,45 @@ function ProposalDetailsForm({
   const [description, setDescription] = useState(proposal?.description ?? '')
   const [format, setFormat] = useState(proposal?.format ?? Format.lightning_10)
   const [level, setLevel] = useState(proposal?.level ?? Level.beginner)
-  const [audiences, setAudiences] = useState<Audience[]>(proposal?.audiences ?? [])
+  const [audiences, setAudiences] = useState<Audience[]>(
+    proposal?.audiences ?? [],
+  )
   const [topics, setTopics] = useState<Topic[]>(
     Array.isArray(proposal?.topics)
       ? proposal.topics.filter((topic): topic is Topic => '_id' in topic)
-      : []
+      : [],
   )
   const [outline, setOutline] = useState(proposal?.outline ?? '')
   const [tos, setTos] = useState(proposal?.tos ?? false)
 
   useEffect(() => {
     setProposal({
-      title, language, description, format, level, audiences, topics, outline, tos,
+      title,
+      language,
+      description,
+      format,
+      level,
+      audiences,
+      topics,
+      outline,
+      tos,
     })
-  }, [title, language, description, format, level, audiences, topics, outline, tos, setProposal])
+  }, [
+    title,
+    language,
+    description,
+    format,
+    level,
+    audiences,
+    topics,
+    outline,
+    tos,
+    setProposal,
+  ])
 
   return (
     <div className="border-b border-gray-900/10 pb-12">
-      <h2 className="text-base font-semibold leading-7 text-gray-900">
+      <h2 className="text-base leading-7 font-semibold text-gray-900">
         Presentation Details
       </h2>
       <p className="mt-1 text-sm leading-6 text-gray-600">
@@ -210,17 +267,10 @@ function ProposalDetailsForm({
         </div>
 
         <div className="col-span-full">
-          <Textarea
-            name="description"
-            label="Abstract"
-            rows={5}
-            value={description}
-            setValue={setDescription}
+          <DescriptionField
+            description={description}
+            setDescription={setDescription}
           />
-          <HelpText>
-            This is what will be displayed to the audience on the conference
-            website. It should make the reader want to attend your presentation.
-          </HelpText>
         </div>
 
         <div className="sm:col-span-3">
@@ -273,9 +323,11 @@ function ProposalDetailsForm({
             value={topics.map((topic) => topic._id)}
             setValue={(val: string[]) => {
               const selectedTopics = val
-                .map((id) => conference.topics?.find((topic) => topic._id === id))
-                .filter((topic): topic is Topic => !!topic);
-              setTopics(selectedTopics);
+                .map((id) =>
+                  conference.topics?.find((topic) => topic._id === id),
+                )
+                .filter((topic): topic is Topic => !!topic)
+              setTopics(selectedTopics)
             }}
           />
         </div>
@@ -408,11 +460,18 @@ function SpeakerDetailsForm({
       flags: speakerFlags,
       links,
     })
-  }, [speakerName, speakerTitle, speakerBio, speakerFlags, speakerLinks, setSpeaker])
+  }, [
+    speakerName,
+    speakerTitle,
+    speakerBio,
+    speakerFlags,
+    speakerLinks,
+    setSpeaker,
+  ])
 
   return (
     <div className="border-b border-gray-900/10 pb-12">
-      <h2 className="text-base font-semibold leading-7 text-gray-900">
+      <h2 className="text-base leading-7 font-semibold text-gray-900">
         Speaker Information
       </h2>
       <p className="mt-1 text-sm leading-6 text-gray-600">
@@ -470,7 +529,7 @@ function SpeakerDetailsForm({
         <div className="col-span-full">
           <label
             htmlFor="photo"
-            className="block text-sm font-medium leading-6 text-gray-900"
+            className="block text-sm leading-6 font-medium text-gray-900"
           >
             Photo
           </label>
@@ -498,14 +557,14 @@ function SpeakerDetailsForm({
             />
             {isUploading ? (
               <div className="flex items-center gap-x-2">
-                <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-t-2 border-gray-500"></div>
-                <p className="text-sm font-medium leading-6 text-gray-900">
+                <div className="h-5 w-5 animate-spin rounded-full border-t-2 border-b-2 border-gray-500"></div>
+                <p className="text-sm leading-6 font-medium text-gray-900">
                   Uploading...
                 </p>
               </div>
             ) : (
               <label htmlFor="photo" className="cursor-pointer">
-                <span className="text-sm font-medium leading-6 text-gray-900">
+                <span className="text-sm leading-6 font-medium text-gray-900">
                   Upload Photo
                 </span>
               </label>
@@ -522,7 +581,7 @@ function SpeakerDetailsForm({
 
         <div className="sm:col-span-4">
           <fieldset>
-            <legend className="text-sm font-semibold leading-6 text-gray-900">
+            <legend className="text-sm leading-6 font-semibold text-gray-900">
               Social profiles and links
             </legend>
             <HelpText>
@@ -547,7 +606,7 @@ function SpeakerDetailsForm({
 
         <div className="col-span-full">
           <fieldset>
-            <legend className="text-sm font-semibold leading-6 text-gray-900">
+            <legend className="text-sm leading-6 font-semibold text-gray-900">
               Speaker Details
             </legend>
             <div className="mt-6 space-y-6">
@@ -611,5 +670,178 @@ function SpeakerDetailsForm({
         </div>
       </div>
     </div>
+  )
+}
+
+const descriptionSchemaDefinition = defineSchema({
+  // Decorators are simple marks that don't hold any data
+  decorators: [{ name: 'strong' }, { name: 'em' }, { name: 'underline' }],
+  // Styles apply to entire text blocks
+  // There's always a 'normal' style that can be considered the paragraph style
+  styles: [
+    { name: 'normal' },
+    { name: 'h1' },
+    { name: 'h2' },
+    { name: 'h3' },
+    { name: 'blockquote' },
+  ],
+
+  // The types below are left empty for this example.
+  // See the rendering guide to learn more about each type.
+
+  // Annotations are more complex marks that can hold data (for example, hyperlinks).
+  annotations: [],
+  // Lists apply to entire text blocks as well (for example, bullet, numbered).
+  lists: [],
+  // Inline objects hold arbitrary data that can be inserted into the text (for example, custom emoji).
+  inlineObjects: [],
+  // Block objects hold arbitrary data that live side-by-side with text blocks (for example, images, code blocks, and tables).
+  blockObjects: [],
+})
+
+const renderStyle: RenderStyleFunction = (props) => {
+  if (props.schemaType.value === 'h1') {
+    return (
+      <h1 className="text-3xl leading-9 font-bold text-gray-900 sm:text-4xl">
+        {props.children}
+      </h1>
+    )
+  }
+  if (props.schemaType.value === 'h2') {
+    return (
+      <h2 className="text-2xl leading-8 text-gray-900 sm:text-3xl">
+        {props.children}
+      </h2>
+    )
+  }
+  if (props.schemaType.value === 'h3') {
+    return (
+      <h3 className="text-1xl leading-7 text-gray-900 sm:text-2xl">
+        {props.children}
+      </h3>
+    )
+  }
+  if (props.schemaType.value === 'blockquote') {
+    return <blockquote>{props.children}</blockquote>
+  }
+  return <>{props.children}</>
+}
+
+const renderDecorator: RenderDecoratorFunction = (props) => {
+  if (props.value === 'strong') {
+    return <strong>{props.children}</strong>
+  }
+  if (props.value === 'em') {
+    return <em>{props.children}</em>
+  }
+  if (props.value === 'underline') {
+    return <u>{props.children}</u>
+  }
+  return <>{props.children}</>
+}
+
+function Toolbar() {
+  // useEditor provides access to the PTE
+  const editor = useEditor()
+
+  // Iterate over the schema (defined earlier), or manually create buttons.
+  const styleButtons = descriptionSchemaDefinition.styles.map((style) => (
+    <button
+      key={style.name}
+      onClick={() => {
+        // Send style toggle event
+        editor.send({
+          type: 'style.toggle',
+          style: style.name,
+        })
+        editor.send({
+          type: 'focus',
+        })
+      }}
+    >
+      {style.name}
+    </button>
+  ))
+
+  const decoratorButtons = descriptionSchemaDefinition.decorators.map(
+    (decorator) => (
+      <button
+        key={decorator.name}
+        className="focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground inline-flex h-9 w-9 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
+        onClick={() => {
+          // Send decorator toggle event
+          editor.send({
+            type: 'decorator.toggle',
+            decorator: decorator.name,
+          })
+          editor.send({
+            type: 'focus',
+          })
+        }}
+      >
+        {decorator.name}
+      </button>
+    ),
+  )
+  return (
+    <>
+      {styleButtons}
+      {decoratorButtons}
+    </>
+  )
+}
+
+function DescriptionField({
+  description,
+  setDescription,
+}: {
+  description: PortableTextBlock[] | undefined
+  setDescription: (value: PortableTextBlock[] | undefined) => void
+}) {
+  const id = useId()
+
+  return (
+    <>
+      <EditorProvider
+        initialConfig={{
+          schemaDefinition: descriptionSchemaDefinition,
+          initialValue: description,
+        }}
+      >
+        <EventListenerPlugin
+          on={(event) => {
+            if (event.type === 'mutation') {
+              setDescription(event.value)
+            }
+          }}
+        />
+
+        <Toolbar />
+        <PortableTextEditable
+          // Add an optional style to see it more easily on the page
+          style={{ border: '1px solid black', padding: '0.5em' }}
+          renderStyle={renderStyle}
+          renderDecorator={renderDecorator}
+          renderBlock={(props) => <div>{props.children}</div>}
+          renderListItem={(props) => <>{props.children}</>}
+        />
+      </EditorProvider>
+
+      <pre style={{ border: '1px dashed black', padding: '0.5em' }}>
+        {JSON.stringify(description, null, 2)}
+      </pre>
+
+      {/* <Textarea
+        name="description"
+        label="Abstract"
+        rows={5}
+        value={description}
+        setValue={setDescription}
+      /> */}
+      <HelpText>
+        This is what will be displayed to the audience on the conference
+        website. It should make the reader want to attend your presentation.
+      </HelpText>
+    </>
   )
 }
