@@ -1,7 +1,7 @@
 import { Speaker } from '@/lib/speaker/types'
 import { Conference, ConferenceSchedule } from '../conference/types'
 import { Topic } from '../topic/types'
-import { Reference } from 'sanity'
+import { PortableTextBlock, Reference } from 'sanity'
 
 export enum Language {
   norwegian = 'norwegian',
@@ -64,7 +64,7 @@ export interface ActionInput {
 
 interface Proposal {
   title: string
-  description: string
+  description: PortableTextBlock[]
   language: Language
   format: Format
   level: Level

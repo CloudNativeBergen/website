@@ -44,7 +44,6 @@ import {
   PortableTextEditable,
   RenderDecoratorFunction,
   RenderStyleFunction,
-  SchemaDefinition,
   useEditor,
 } from '@portabletext/editor'
 import { EventListenerPlugin } from '@portabletext/editor/plugins'
@@ -203,7 +202,7 @@ function ProposalDetailsForm({
   const [language, setLanguage] = useState(
     proposal?.language ?? Language.norwegian,
   )
-  const [description, setDescription] = useState(proposal?.description ?? '')
+  const [description, setDescription] = useState(proposal?.description)
   const [format, setFormat] = useState(proposal?.format ?? Format.lightning_10)
   const [level, setLevel] = useState(proposal?.level ?? Level.beginner)
   const [audiences, setAudiences] = useState<Audience[]>(
@@ -796,7 +795,7 @@ function DescriptionField({
   setDescription,
 }: {
   description: PortableTextBlock[] | undefined
-  setDescription: (value: PortableTextBlock[] | undefined) => void
+  setDescription: (value: PortableTextBlock[]) => void
 }) {
   const id = useId()
 
@@ -811,7 +810,7 @@ function DescriptionField({
         <EventListenerPlugin
           on={(event) => {
             if (event.type === 'mutation') {
-              setDescription(event.value)
+              setDescription(event.value ?? [])
             }
           }}
         />
