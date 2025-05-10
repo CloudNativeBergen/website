@@ -7,15 +7,13 @@ import {
   languages,
   Format,
   formats,
+  Audience,
+  audiences,
 } from './types'
 
 export function FormatFormat({ format }: { format?: string }) {
   let text: string
   let color: string
-
-  // Format.lightning_10
-  // Format.presentation_25
-  // Format.presentation_45
 
   switch (format) {
     case Format.lightning_10:
@@ -28,6 +26,14 @@ export function FormatFormat({ format }: { format?: string }) {
       break
     case Format.presentation_45:
       text = formats.get(Format.presentation_45) ?? format
+      color = 'bg-gray-100 text-gray-800'
+      break
+    case Format.workshop_120:
+      text = formats.get(Format.workshop_120) ?? format
+      color = 'bg-gray-100 text-gray-800'
+      break
+    case Format.workshop_240:
+      text = formats.get(Format.workshop_240) ?? format
       color = 'bg-gray-100 text-gray-800'
       break
     default:
@@ -70,6 +76,69 @@ export function FormatLanguage({ language }: { language?: string }) {
     >
       {text}
     </span>
+  )
+}
+
+export function FormatAudiences({
+  audiences: audienceValues = [],
+}: {
+  audiences?: Audience[]
+}) {
+  return (
+    <>
+      {audienceValues.map((audience, index) => {
+        let text: string
+        let color: string
+
+        switch (audience) {
+          case Audience.developer:
+            text = audiences.get(Audience.developer) ?? 'Developer'
+            color = 'bg-blue-100 text-blue-800'
+            break
+          case Audience.architect:
+            text = audiences.get(Audience.architect) ?? 'Architect'
+            color = 'bg-indigo-100 text-indigo-800'
+            break
+          case Audience.operator:
+            text = audiences.get(Audience.operator) ?? 'Operator'
+            color = 'bg-red-100 text-red-800'
+            break
+          case Audience.manager:
+            text = audiences.get(Audience.manager) ?? 'Manager'
+            color = 'bg-green-100 text-green-800'
+            break
+          case Audience.dataEngineer:
+            text = audiences.get(Audience.dataEngineer) ?? 'Data Engineer'
+            color = 'bg-purple-100 text-purple-800'
+            break
+          case Audience.securityEngineer:
+            text = audiences.get(Audience.securityEngineer) ?? 'Security Engineer'
+            color = 'bg-pink-100 text-pink-800'
+            break
+          case Audience.qaEngineer:
+            text = audiences.get(Audience.qaEngineer) ?? 'QA Engineer'
+            color = 'bg-yellow-100 text-yellow-800'
+            break
+          case Audience.devopsEngineer:
+            text = audiences.get(Audience.devopsEngineer) ?? 'DevOps Engineer'
+            color = 'bg-gray-100 text-gray-800'
+            break
+          default:
+            text = 'Unknown'
+            color = 'bg-gray-100 text-gray-800'
+            break
+        }
+
+        return (
+          <span
+            key={index}
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${color} mr-2 last:mr-0`}
+          >
+            {text}
+          </span>
+        )
+      })}
+    </>
   )
 }
 
