@@ -8,6 +8,7 @@ import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
+import { Topic } from '@/lib/topic/types'
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -102,21 +103,36 @@ export default async function CFP() {
               </p>
               <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
                 {(() => {
-                  const defaultTopics = [
+                  const defaultTopics: Topic[] = [
                     {
                       _id: 'default-topic-1',
                       title: 'Cloud-native technologies',
                       description: 'General topics related to cloud-native architecture, Kubernetes, and associated technologies.',
+                      _type: 'topic',
+                      color: '',
+                      slug: {
+                        current: ''
+                      }
                     },
                     {
                       _id: 'default-topic-2',
                       title: 'DevOps and Automation',
                       description: 'Practices, tools, and culture for automating software development and IT operations.',
+                      _type: 'topic',
+                      color: '',
+                      slug: {
+                        current: ''
+                      }
                     },
                     {
                       _id: 'default-topic-3',
                       title: 'Security in the Cloud',
                       description: 'Best practices and tools for securing cloud-native applications and infrastructure.',
+                      _type: 'topic',
+                      color: '',
+                      slug: {
+                        current: ''
+                      }
                     },
                   ];
                   const topicsToDisplay = (conference.topics && conference.topics.length > 0) ? conference.topics : defaultTopics;
@@ -127,7 +143,7 @@ export default async function CFP() {
                     { gradient: 'from-indigo-300 to-blue-400', shadow: 'hover:shadow-blue-300/50', descriptionColor: 'text-indigo-100/90' },
                     { gradient: 'from-purple-300 to-violet-400', shadow: 'hover:shadow-violet-300/50', descriptionColor: 'text-purple-100/90' },
                   ];
-                  return topicsToDisplay.map((topic: any, index: number) => {
+                  return topicsToDisplay.map((topic: Topic, index: number) => {
                     const style = topicCardStyles[index % topicCardStyles.length];
                     const rotationClass = index % 2 === 0 ? 'rotate-1' : '-rotate-1';
                     // Special handling for the default topic to match its previous styling
