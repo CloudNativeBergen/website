@@ -14,7 +14,7 @@ function classNames(...classes: string[]) {
 }
 
 export default async function CFP() {
-  const { conference } = await getConferenceForCurrentDomain();
+  const { conference } = await getConferenceForCurrentDomain({ topics: true });
 
   const datesToRemember = [
     {
@@ -98,16 +98,69 @@ export default async function CFP() {
                 environment for everyone.
               </p>
               <p>
-                We are especially interested in talks that cover the following
-                topics:
+                We are especially interested in talks that cover the following topics:
               </p>
-              <ul className="mt-4 list-disc pl-8">
-                <li>Cloud-native technologies</li>
-                <li>Observability</li>
-                <li>Security</li>
-                <li>Modern application development</li>
-                <li>Best practices and case studies</li>
-              </ul>
+              <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                {(() => {
+                  const defaultTopics = [
+                    {
+                      _id: 'default-topic-1',
+                      title: 'Cloud-native technologies',
+                      description: 'General topics related to cloud-native architecture, Kubernetes, and associated technologies.',
+                    },
+                    {
+                      _id: 'default-topic-2',
+                      title: 'DevOps and Automation',
+                      description: 'Practices, tools, and culture for automating software development and IT operations.',
+                    },
+                    {
+                      _id: 'default-topic-3',
+                      title: 'Security in the Cloud',
+                      description: 'Best practices and tools for securing cloud-native applications and infrastructure.',
+                    },
+                  ];
+                  const topicsToDisplay = (conference.topics && conference.topics.length > 0) ? conference.topics : defaultTopics;
+
+                  const topicCardStyles = [
+                    { gradient: 'from-sky-300 to-cyan-400', shadow: 'hover:shadow-cyan-300/50', descriptionColor: 'text-sky-100/90' },
+                    { gradient: 'from-teal-300 to-emerald-400', shadow: 'hover:shadow-emerald-300/50', descriptionColor: 'text-teal-100/90' },
+                    { gradient: 'from-indigo-300 to-blue-400', shadow: 'hover:shadow-blue-300/50', descriptionColor: 'text-indigo-100/90' },
+                    { gradient: 'from-purple-300 to-violet-400', shadow: 'hover:shadow-violet-300/50', descriptionColor: 'text-purple-100/90' },
+                  ];
+                  return topicsToDisplay.map((topic: any, index: number) => {
+                    const style = topicCardStyles[index % topicCardStyles.length];
+                    const rotationClass = index % 2 === 0 ? 'rotate-1' : '-rotate-1';
+                    // Special handling for the default topic to match its previous styling
+                    const isDefaultTopic = topic._id.startsWith('default-topic-');
+                    const cardGradient = isDefaultTopic ? 'from-gray-500 to-slate-600' : style.gradient;
+                    const cardShadow = isDefaultTopic ? '' : style.shadow;
+                    const descColor = isDefaultTopic ? 'text-slate-200/90' : style.descriptionColor;
+
+                    return (
+                      <div
+                        key={topic._id}
+                        className={`group overflow-hidden rounded-xl border border-transparent bg-gradient-to-br ${cardGradient} p-1 shadow-2xl transition-all duration-300 ease-in-out ${cardShadow} ${rotationClass}`}
+                      >
+                        <div className="rounded-lg bg-slate-800/70 backdrop-blur-sm h-full px-4 py-5 sm:p-6">
+                          <h3 className="text-lg font-semibold text-white flex items-center">
+                            {isDefaultTopic && (
+                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-400/20 text-slate-300 mr-3">
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v11.494m0 0a8.485 8.485 0 001.242-5.015M12 17.747a8.485 8.485 0 01-1.242-5.015M3.75 12.75h16.5M12 3.75L12 3.75M12 20.25L12 20.25" />
+                                </svg>
+                              </span>
+                            )}
+                            {topic.title}
+                          </h3>
+                          {topic.description && (
+                            <p className={`mt-3 text-sm ${descColor} leading-relaxed`}>{topic.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
               <p>
                 The deadline for submissions is {formatDate(conference.cfp_end_date)}, but{' '}
                 <strong>we are reviewing proposals on a rolling basis</strong>,
