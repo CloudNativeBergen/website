@@ -202,7 +202,7 @@ function ProposalDetailsForm({
   const [language, setLanguage] = useState(
     proposal?.language ?? Language.norwegian,
   )
-  const [description, setDescription] = useState(proposal?.description)
+  const [description, setDescription] = useState(proposal?.description ?? [])
   const [format, setFormat] = useState(proposal?.format ?? Format.lightning_10)
   const [level, setLevel] = useState(proposal?.level ?? Level.beginner)
   const [audiences, setAudiences] = useState<Audience[]>(
