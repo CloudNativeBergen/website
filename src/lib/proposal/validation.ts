@@ -6,6 +6,7 @@ import {
   ProposalInput,
   Audience,
 } from '@/lib/proposal/types'
+import { PortableTextBlock } from '@portabletext/editor'
 import { Reference } from 'sanity'
 
 // This function converts a JSON object to a Proposal object. This is useful when we receive a Proposal object from the API and we want to convert it to a Proposal object that we can use in our application.
@@ -14,15 +15,19 @@ import { Reference } from 'sanity'
 export function convertJsonToProposal(json: any): ProposalInput {
   return {
     title: json.title as string,
-    description: json.description as string,
+    description: json.description as PortableTextBlock[],
     format: Format[json.format as keyof typeof Format],
     language: Language[json.language as keyof typeof Language],
     level: Level[json.level as keyof typeof Level],
     audiences: json.audiences as Audience[],
     tos: json.tos as boolean,
     outline: json.outline as string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    topics: json.topics?.map((topic: any) => convertTopicJsonToReference(topic)).filter((topic: any) => topic !== null) || [],
+    topics:
+      json.topics
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ?.map((topic: any) => convertTopicJsonToReference(topic))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .filter((topic: any) => topic !== null) || [],
   } as ProposalInput
 }
 
@@ -45,7 +50,10 @@ export function validateProposal(
     validationErrors.push({ message: 'Title can not be empty', field: 'title' })
   }
 
-  if (!proposal.description) {
+  const descriptionIsMissing =
+    !proposal.description || proposal.description.length === 0
+
+  if (descriptionIsMissing) {
     validationErrors.push({
       message: 'Abstract can not be empty',
       field: 'description',
