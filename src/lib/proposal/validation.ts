@@ -22,10 +22,11 @@ export function convertJsonToProposal(json: any): ProposalInput {
     audiences: json.audiences as Audience[],
     tos: json.tos as boolean,
     outline: json.outline as string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     topics:
       json.topics
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ?.map((topic: any) => convertTopicJsonToReference(topic))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((topic: any) => topic !== null) || [],
   } as ProposalInput
 }
