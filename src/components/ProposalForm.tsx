@@ -1,42 +1,29 @@
 'use client'
 
-import Image from 'next/image'
+import { Conference } from '@/lib/conference/types'
 import {
-  putProfile,
+  getEmails,
   postImage,
   putEmail,
-  getEmails,
+  putProfile,
 } from '@/lib/profile/client'
 import { ProfileEmail } from '@/lib/profile/types'
 import { postProposal } from '@/lib/proposal/client'
 import {
-  ProposalInput,
+  Audience,
+  audiences as audiencesMap,
+  Format,
+  formats,
   FormError,
   Language,
-  Format,
-  Level,
   languages,
-  formats,
+  Level,
   levels,
-  audiences as audiencesMap,
-  Audience,
+  ProposalInput,
 } from '@/lib/proposal/types'
-import { SpeakerInput, Flags } from '@/lib/speaker/types'
-import { XCircleIcon, UserCircleIcon } from '@heroicons/react/24/solid'
-import { useState, useEffect, useId } from 'react'
-import {
-  Dropdown,
-  HelpText,
-  ErrorText,
-  LinkInput,
-  Input,
-  Textarea,
-  Checkbox,
-  Multiselect,
-} from './Form'
-import { redirect } from 'next/navigation'
-import { Conference } from '@/lib/conference/types'
+import { Flags, SpeakerInput } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
+import { UserCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import {
   defineSchema,
   EditorProvider,
@@ -47,6 +34,19 @@ import {
   useEditor,
 } from '@portabletext/editor'
 import { EventListenerPlugin } from '@portabletext/editor/plugins'
+import Image from 'next/image'
+import { redirect } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import {
+  Checkbox,
+  Dropdown,
+  ErrorText,
+  HelpText,
+  Input,
+  LinkInput,
+  Multiselect,
+  Textarea,
+} from './Form'
 
 export function ProposalForm({
   initialProposal,
