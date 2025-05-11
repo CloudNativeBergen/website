@@ -672,6 +672,7 @@ function SpeakerDetailsForm({
   )
 }
 
+// TODO: Generalize portable text editor
 const descriptionSchemaDefinition = defineSchema({
   // Decorators are simple marks that don't hold any data
   decorators: [{ name: 'strong' }, { name: 'em' }, { name: 'underline' }],
@@ -797,8 +798,6 @@ function DescriptionField({
   description: PortableTextBlock[] | undefined
   setDescription: (value: PortableTextBlock[]) => void
 }) {
-  const id = useId()
-
   return (
     <>
       <EditorProvider
@@ -826,17 +825,6 @@ function DescriptionField({
         />
       </EditorProvider>
 
-      <pre style={{ border: '1px dashed black', padding: '0.5em' }}>
-        {JSON.stringify(description, null, 2)}
-      </pre>
-
-      {/* <Textarea
-        name="description"
-        label="Abstract"
-        rows={5}
-        value={description}
-        setValue={setDescription}
-      /> */}
       <HelpText>
         This is what will be displayed to the audience on the conference
         website. It should make the reader want to attend your presentation.
