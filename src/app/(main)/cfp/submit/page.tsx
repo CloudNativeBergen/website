@@ -25,23 +25,15 @@ export default async function Submit({
 }) {
   const { id: proposalId } = (await searchParams) || {}
 
-  // const session = await auth()
-  // if (!session?.speaker) {
-  //   return redirect('/api/auth/signin?callbackUrl=/cfp/submit?id=' + proposalId)
-  // }
-
-  const session = {
-    speaker: {
-      _id: '8b218e70-0af5-4485-b7bf-a1ac8ecd0a19',
-      email: 'sindre.boyum@gmail.com',
-      name: 'Sindre Bøyum',
-    },
+  const session = await auth()
+  if (!session?.speaker) {
+    return redirect('/api/auth/signin?callbackUrl=/cfp/submit?id=' + proposalId)
   }
 
   let proposal: ProposalInput = {
     title: '',
     language: Language.norwegian,
-    description: '',
+    description: [],
     format: Format.lightning_10,
     level: Level.beginner,
     audiences: [],
