@@ -1,6 +1,6 @@
 import { NextConfig } from 'next'
 
-export default {
+const config: NextConfig = {
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
   publicRuntimeConfig: {},
   experimental: {
@@ -37,4 +37,6 @@ export default {
       },
     ]
   },
-} satisfies NextConfig
+}
+
+export default config
