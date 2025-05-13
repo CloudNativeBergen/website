@@ -1,5 +1,6 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import { NextConfig } from 'next'
+
+export default {
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
   publicRuntimeConfig: {},
   experimental: {
@@ -21,6 +22,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'media.licdn.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'avatars.githubusercontent.com',
+      },
     ],
   },
   async redirects() {
@@ -31,7 +36,5 @@ const nextConfig = {
         permanent: true,
       },
     ]
-  }
-}
-
-module.exports = nextConfig
+  },
+} satisfies NextConfig
