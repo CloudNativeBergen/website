@@ -24,16 +24,7 @@ import {
 import { Flags, SpeakerInput } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { UserCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
-import {
-  defineSchema,
-  EditorProvider,
-  PortableTextBlock,
-  PortableTextEditable,
-  RenderDecoratorFunction,
-  RenderStyleFunction,
-  useEditor,
-} from '@portabletext/editor'
-import { EventListenerPlugin } from '@portabletext/editor/plugins'
+import { PortableTextBlock } from '@portabletext/editor'
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -47,6 +38,7 @@ import {
   Multiselect,
   Textarea,
 } from './Form'
+import { PortableTextEditor } from './PortableTextEditor'
 
 export function ProposalForm({
   initialProposal,
@@ -672,125 +664,6 @@ function SpeakerDetailsForm({
   )
 }
 
-// TODO: Generalize portable text editor
-const descriptionSchemaDefinition = defineSchema({
-  // Decorators are simple marks that don't hold any data
-  decorators: [{ name: 'strong' }, { name: 'em' }, { name: 'underline' }],
-  // Styles apply to entire text blocks
-  // There's always a 'normal' style that can be considered the paragraph style
-  styles: [
-    { name: 'normal' },
-    { name: 'h1' },
-    { name: 'h2' },
-    { name: 'h3' },
-    { name: 'blockquote' },
-  ],
-
-  // The types below are left empty for this example.
-  // See the rendering guide to learn more about each type.
-
-  // Annotations are more complex marks that can hold data (for example, hyperlinks).
-  annotations: [],
-  // Lists apply to entire text blocks as well (for example, bullet, numbered).
-  lists: [],
-  // Inline objects hold arbitrary data that can be inserted into the text (for example, custom emoji).
-  inlineObjects: [],
-  // Block objects hold arbitrary data that live side-by-side with text blocks (for example, images, code blocks, and tables).
-  blockObjects: [],
-})
-
-const renderStyle: RenderStyleFunction = (props) => {
-  if (props.schemaType.value === 'h1') {
-    return (
-      <h1 className="text-3xl leading-9 font-bold text-gray-900 sm:text-4xl">
-        {props.children}
-      </h1>
-    )
-  }
-  if (props.schemaType.value === 'h2') {
-    return (
-      <h2 className="text-2xl leading-8 text-gray-900 sm:text-3xl">
-        {props.children}
-      </h2>
-    )
-  }
-  if (props.schemaType.value === 'h3') {
-    return (
-      <h3 className="text-1xl leading-7 text-gray-900 sm:text-2xl">
-        {props.children}
-      </h3>
-    )
-  }
-  if (props.schemaType.value === 'blockquote') {
-    return <blockquote>{props.children}</blockquote>
-  }
-  return <>{props.children}</>
-}
-
-const renderDecorator: RenderDecoratorFunction = (props) => {
-  if (props.value === 'strong') {
-    return <strong>{props.children}</strong>
-  }
-  if (props.value === 'em') {
-    return <em>{props.children}</em>
-  }
-  if (props.value === 'underline') {
-    return <u>{props.children}</u>
-  }
-  return <>{props.children}</>
-}
-
-function Toolbar() {
-  // useEditor provides access to the PTE
-  const editor = useEditor()
-
-  // Iterate over the schema (defined earlier), or manually create buttons.
-  const styleButtons = descriptionSchemaDefinition.styles.map((style) => (
-    <button
-      key={style.name}
-      onClick={() => {
-        // Send style toggle event
-        editor.send({
-          type: 'style.toggle',
-          style: style.name,
-        })
-        editor.send({
-          type: 'focus',
-        })
-      }}
-    >
-      {style.name}
-    </button>
-  ))
-
-  const decoratorButtons = descriptionSchemaDefinition.decorators.map(
-    (decorator) => (
-      <button
-        key={decorator.name}
-        className="focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground inline-flex h-9 w-9 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
-        onClick={() => {
-          // Send decorator toggle event
-          editor.send({
-            type: 'decorator.toggle',
-            decorator: decorator.name,
-          })
-          editor.send({
-            type: 'focus',
-          })
-        }}
-      >
-        {decorator.name}
-      </button>
-    ),
-  )
-  return (
-    <>
-      {styleButtons}
-      {decoratorButtons}
-    </>
-  )
-}
-
 function DescriptionField({
   description,
   setDescription,
@@ -799,36 +672,16 @@ function DescriptionField({
   setDescription: (value: PortableTextBlock[]) => void
 }) {
   return (
-    <>
-      <EditorProvider
-        initialConfig={{
-          schemaDefinition: descriptionSchemaDefinition,
-          initialValue: description,
-        }}
-      >
-        <EventListenerPlugin
-          on={(event) => {
-            if (event.type === 'mutation') {
-              setDescription(event.value ?? [])
-            }
-          }}
-        />
-
-        <Toolbar />
-        <PortableTextEditable
-          // Add an optional style to see it more easily on the page
-          style={{ border: '1px solid black', padding: '0.5em' }}
-          renderStyle={renderStyle}
-          renderDecorator={renderDecorator}
-          renderBlock={(props) => <div>{props.children}</div>}
-          renderListItem={(props) => <>{props.children}</>}
-        />
-      </EditorProvider>
-
-      <HelpText>
-        This is what will be displayed to the audience on the conference
-        website. It should make the reader want to attend your presentation.
-      </HelpText>
-    </>
+    <PortableTextEditor
+      label="Abstract"
+      value={description}
+      onChange={setDescription}
+      helpText={
+        <>
+          This is what will be displayed to the audience on the conference
+          website. It should make the reader want to attend your presentation.
+        </>
+      }
+    />
   )
 }
