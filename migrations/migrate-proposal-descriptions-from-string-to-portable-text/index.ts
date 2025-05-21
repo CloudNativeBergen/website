@@ -33,20 +33,18 @@ export default defineMigration({
 
       const blocks = (doc.description as string)
         .split('\n\n')
-        .map((paragraph) => [
-          {
-            style: 'normal',
-            _type: 'block',
-            children: [
-              {
-                _type: 'span',
-                marks: [],
-                text: paragraph,
-              },
-            ],
-            markDefs: [],
-          },
-        ])
+        .map((paragraph) => ({
+          style: 'normal',
+          _type: 'block',
+          children: [
+            {
+              _type: 'span',
+              marks: [],
+              text: paragraph,
+            },
+          ],
+          markDefs: [],
+        }))
 
       return at('description', set(blocks))
     },
