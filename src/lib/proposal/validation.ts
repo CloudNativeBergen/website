@@ -15,7 +15,9 @@ import { Reference } from 'sanity'
 export function convertJsonToProposal(json: any): ProposalInput {
   return {
     title: json.title as string,
-    description: json.description as PortableTextBlock[],
+    description: convertStringToPortableTextBlocks(
+      json.description as PortableTextBlock[] | string | undefined,
+    ),
     format: Format[json.format as keyof typeof Format],
     language: Language[json.language as keyof typeof Language],
     level: Level[json.level as keyof typeof Level],
@@ -28,7 +30,37 @@ export function convertJsonToProposal(json: any): ProposalInput {
         ?.map((topic: any) => convertTopicJsonToReference(topic))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((topic: any) => topic !== null) || [],
-  } as ProposalInput
+  } satisfies ProposalInput
+}
+
+export function convertStringToPortableTextBlocks(
+  input: PortableTextBlock[] | string | undefined,
+): PortableTextBlock[] {
+  if (!input) {
+    return []
+  }
+
+  const inputIsAlreadyAPortableTextBlock = typeof input !== 'string'
+  if (inputIsAlreadyAPortableTextBlock) {
+    return input
+  }
+
+  return input.split('\n\n').map(
+    (paragraph) =>
+      // @ts-expect-error `_key` is missing, but it shouldn't be there in this case https://www.sanity.io/schemas/migrate-plain-text-field-to-portable-text-a05f0300
+      ({
+        _type: 'block',
+        style: 'normal',
+        children: [
+          {
+            _type: 'span',
+            marks: [],
+            text: paragraph,
+          },
+        ],
+        markDefs: [],
+      }) as PortableTextBlock,
+  )
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -7,6 +7,8 @@
  *    npx sanity@latest documents validate -y
  */
 
+import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { PortableTextBlock } from '@portabletext/editor'
 import { at, defineMigration, set } from '@sanity/migrate'
 
 export default defineMigration({
@@ -16,7 +18,7 @@ export default defineMigration({
   documentTypes: ['talk'],
 
   migrate: {
-    document(doc, context) {
+    document(doc) {
       // Skip documents where the description is not string
       const shouldSkip = typeof doc.description !== 'string'
       if (shouldSkip) {
@@ -31,21 +33,9 @@ export default defineMigration({
         `Mapping "${doc.title}" (${doc._id})'s description from string to PortableTextBlock[]`,
       )
 
-      const blocks = (doc.description as string)
-        .split('\n\n')
-        .map((paragraph) => ({
-          style: 'normal',
-          _type: 'block',
-          children: [
-            {
-              _type: 'span',
-              marks: [],
-              text: paragraph,
-            },
-          ],
-          markDefs: [],
-        }))
-
+      const blocks = convertStringToPortableTextBlocks(
+        doc.description as PortableTextBlock[] | string | undefined,
+      )
       return at('description', set(blocks))
     },
     // No need for other migration handlers as we're only adding a reference at the document level

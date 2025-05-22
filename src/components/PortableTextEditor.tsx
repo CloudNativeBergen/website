@@ -1,5 +1,4 @@
 import * as selectors from '@portabletext/editor/selectors'
-import * as Icons from '@heroicons/react/20/solid'
 import {
   defineSchema,
   EditorProvider,
@@ -14,19 +13,22 @@ import {
 } from '@portabletext/editor'
 import { EventListenerPlugin } from '@portabletext/editor/plugins'
 import { HelpText } from './Form'
-import { ElementType, HTMLAttributes, ReactNode, useId } from 'react'
+import { ReactNode, useId } from 'react'
 import './PortableTextEditor.css'
+import {
+  BoldIcon,
+  H1Icon,
+  H2Icon,
+  H3Icon,
+  ItalicIcon,
+  ListBulletIcon,
+  NumberedListIcon,
+  UnderlineIcon,
+} from '@heroicons/react/20/solid'
 
 const schemaDefinition = defineSchema({
   decorators: [{ name: 'strong' }, { name: 'em' }, { name: 'underline' }],
-
-  styles: [
-    // { name: 'normal' },
-    { name: 'h1' },
-    { name: 'h2' },
-    { name: 'h3' },
-  ],
-
+  styles: [{ name: 'h1' }, { name: 'h2' }, { name: 'h3' }],
   lists: [{ name: 'bullet' }, { name: 'number' }],
 })
 
@@ -41,7 +43,7 @@ type DecoratorName = Decorator[keyof Decorator]
 type List = Schema['lists'][number]
 type ListName = List[keyof List]
 
-const renderStyle: RenderStyleFunction = ({ schemaType, children, block }) => {
+const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
   const elementType = schemaType.value as StyleName | 'normal'
 
   switch (elementType) {
@@ -87,25 +89,25 @@ const renderDecorator: RenderDecoratorFunction = ({ schemaType, children }) => {
   }
 }
 
-const renderListItem: RenderListItemFunction = ({ schemaType, children }) => {
+const renderListItem: RenderListItemFunction = ({ children }) => {
   return <p className="text-md mb-0.75">{children}</p>
 }
 
 const styleIcons = {
-  h1: <Icons.H1Icon />,
-  h2: <Icons.H2Icon />,
-  h3: <Icons.H3Icon />,
+  h1: <H1Icon />,
+  h2: <H2Icon />,
+  h3: <H3Icon />,
 } as const satisfies Record<StyleName, ReactNode>
 
 const decoratorIcons = {
-  em: <Icons.ItalicIcon />,
-  strong: <Icons.BoldIcon />,
-  underline: <Icons.UnderlineIcon />,
+  em: <ItalicIcon />,
+  strong: <BoldIcon />,
+  underline: <UnderlineIcon />,
 } as const satisfies Record<DecoratorName, ReactNode>
 
 const listIcons = {
-  bullet: <Icons.ListBulletIcon />,
-  number: <Icons.NumberedListIcon />,
+  bullet: <ListBulletIcon />,
+  number: <NumberedListIcon />,
 } as const satisfies Record<ListName, ReactNode>
 
 function ToolbarButton({
@@ -233,6 +235,7 @@ export function PortableTextEditor({
   helpText?: ReactNode
 }) {
   const id = useId()
+
   return (
     <>
       <EditorProvider
@@ -263,7 +266,7 @@ export function PortableTextEditor({
           className="block min-h-60 w-full rounded-md bg-white p-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
           renderStyle={renderStyle}
           renderDecorator={renderDecorator}
-          renderBlock={({ listItem, children }) => {
+          renderBlock={({ children }) => {
             return <>{children}</>
           }}
           renderListItem={renderListItem}
