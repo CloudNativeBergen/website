@@ -7,24 +7,42 @@ import { auth } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/sanity'
 import { ProposalList } from '@/components/ProposalList'
 import { redirect } from 'next/navigation'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+
+function ErrorDisplay({ message }: { message: string }) {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <p className="text-red-500">{message}</p>
+    </div>
+  )
+}
 
 export default async function SpeakerDashboard() {
-  const cfpIsOpen = true // TODO: Fetch this from the API
-
   const session = await auth()
   if (!session?.speaker) {
     return redirect('/api/auth/signin?callbackUrl=/cfp/list')
   }
 
-  const { proposals: initialProposals, err: error } = await getProposals(session.speaker._id, false)
+  const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
 
-  if (error) {
-    console.error('Error fetching proposals:', error)
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-red-500">Error fetching proposals</p>
-      </div>
-    )
+  if (conferenceError || !conference) {
+    console.error('Error loading conference:', conferenceError)
+    return <ErrorDisplay message="Error loading conference" />
+  }
+
+  const cfpIsOpen =
+    new Date() >= new Date(conference.cfp_start_date) &&
+    new Date() <= new Date(conference.cfp_end_date)
+
+  const { proposals: initialProposals, error: proposalsError } = await getProposals({
+    speakerId: session.speaker._id,
+    conferenceId: conference?._id,
+    returnAll: false,
+  })
+
+  if (proposalsError) {
+    console.error('Error fetching proposals:', proposalsError)
+    return <ErrorDisplay message="Error fetching proposals" />
   }
 
   return (

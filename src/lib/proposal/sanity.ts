@@ -15,7 +15,7 @@ export async function getProposal(
   let err = null
   let proposal: ProposalExisting = {} as ProposalExisting
 
-  const speakerFilter = isOrganizer ? '' : '[ speaker._id == $speakerId ]'
+  const speakerFilter = isOrganizer ? '' : '[ speaker._ref == $speakerId ]'
 
   try {
     proposal = await clientRead.fetch(
@@ -44,40 +44,51 @@ export async function getProposal(
   return { proposal, err }
 }
 
-export async function getProposals(
-  speakerId: string,
-  returnAll: boolean = false,
-): Promise<{ proposals: ProposalExisting[]; err: Error | null }> {
-  let err = null
+export async function getProposals({
+  speakerId,
+  conferenceId,
+  returnAll = false,
+}: {
+  speakerId?: string
+  conferenceId?: string
+  returnAll?: boolean
+}): Promise<{ proposals: ProposalExisting[]; error: Error | null }> {
+  let error = null
   let proposals: ProposalExisting[] = []
 
-  const speakerFilter = returnAll
-    ? `[ defined(status) && status != "${Status.draft}" ]`
-    : '[ speaker._id == $speakerId ]'
+  const filters = [
+    `_type == "talk"`,
+    returnAll ? `status != "${Status.draft}"` : speakerId ? `speaker._ref == $speakerId` : null,
+    conferenceId ? `conference._ref == $conferenceId` : null,
+  ]
+    .filter(Boolean)
+    .join(' && ')
+
+  const query = groq`*[${filters}]{
+    ...,
+    speaker-> {
+      _id, name, email, providers, "image": image.asset->url, flags
+    },
+    conference-> {
+      _id, title, start_date, end_date
+    },
+    topics[]-> {
+      _id, title, color, slug, description
+    }
+  } | order(conference->start_date desc, _updatedAt desc)`
 
   try {
     proposals = await clientRead.fetch(
-      groq`*[ _type == "talk" ]{
-      ...,
-      speaker-> {
-        _id, name, email, providers, "image": image.asset->url, flags
-      },
-      conference-> {
-        _id, title, start_date, end_date
-      },
-      topics[]-> {
-        _id, title, color, slug, description
-      }
-    }${speakerFilter} | order(conference->start_date desc, _updatedAt desc)`,
-      { speakerId },
+      query,
+      { ...(speakerId && { speakerId }), ...(conferenceId && { conferenceId }) },
       { cache: 'no-store' },
     )
-  } catch (error) {
-    console.error('Error fetching proposals:', error)
-    err = error as Error
+  } catch (e) {
+    console.error('Error fetching proposals:', e)
+    error = e as Error
   }
 
-  return { proposals, err }
+  return { proposals, error }
 }
 
 export async function updateProposal(

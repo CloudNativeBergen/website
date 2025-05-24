@@ -1,6 +1,7 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { proposalListResponse, proposalListResponseError } from '@/lib/proposal/server'
 import { getProposals } from '@/lib/proposal/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,12 +22,30 @@ export const GET = auth(async (req: NextAuthRequest) => {
     )
   }
 
-  const { proposals, err } = await getProposals(
-    req.auth.speaker._id,
-    req.auth.speaker.is_organizer,
-  )
-  if (err) {
-    return proposalListResponseError(err, 'Failed to fetch proposals')
+  const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
+
+  if (conferenceError || !conference) {
+    return proposalListResponseError(
+      conferenceError,
+      'Failed to fetch conference',
+      'server',
+      500,
+    )
+  }
+
+  const { proposals, error: proposalsError } = await getProposals({
+    speakerId: req.auth.speaker._id,
+    conferenceId: conference?._id,
+    returnAll: req.auth.speaker.is_organizer,
+  })
+
+  if (proposalsError) {
+    return proposalListResponseError(
+      proposalsError,
+      'Failed to fetch proposals',
+      'server',
+      500
+    )
   }
 
   return proposalListResponse(proposals)
