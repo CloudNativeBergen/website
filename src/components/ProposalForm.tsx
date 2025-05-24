@@ -229,7 +229,11 @@ function ProposalDetailsForm({
             label="Presentation Format"
             value={format}
             setValue={setFormat}
-            options={formats}
+            options={new Map(
+              Array.from(formats).filter(
+                ([key]) => key !== Format.presentation_25 && key !== Format.presentation_45
+              )
+            )}
           />
         </div>
 
