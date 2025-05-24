@@ -47,8 +47,8 @@ export function convertStringToPortableTextBlocks(
 
   return input.split('\n\n').map(
     (paragraph) =>
-      // @ts-expect-error `_key` is missing, but it shouldn't be there in this case https://www.sanity.io/schemas/migrate-plain-text-field-to-portable-text-a05f0300
       ({
+        _key: crypto.randomUUID(),
         _type: 'block',
         style: 'normal',
         children: [
