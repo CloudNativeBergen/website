@@ -69,7 +69,7 @@ const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
       )
 
     case 'normal': {
-      return <p className="text-md mb-0.75">{children}</p>
+      return <p className="text-md mb-3">{children}</p>
     }
   }
 }

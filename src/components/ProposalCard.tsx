@@ -1,15 +1,17 @@
 import { FormatStatus } from '@/lib/proposal/format'
-import { ProposalExisting, Status, Action } from '@/lib/proposal/types'
-import Image from 'next/image'
+import { Action, ProposalExisting, Status } from '@/lib/proposal/types'
 import {
-  PencilIcon,
   BookOpenIcon,
-  EnvelopeIcon,
-  XMarkIcon,
   CheckCircleIcon,
+  EnvelopeIcon,
+  PencilIcon,
   UserCircleIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/solid'
+import Image from 'next/image'
 import { SpinnerIcon } from './SocialIcons'
+import { PortableTextBlock } from '@portabletext/editor'
+import { PortableTextTextBlock, PortableTextObject } from 'sanity'
 
 interface ProposalButtonAction {
   label: Action
@@ -154,7 +156,8 @@ export function ProposalCard({
             {proposal.status === Status.accepted ? (
               <>Your proposal has been accepted.</>
             ) : (
-              <>{proposal.description}</>
+              // <PortableText value={proposal.description} />
+              <>{portableTextToString(proposal.description)}</>
             )}
           </p>
         </div>
@@ -196,4 +199,14 @@ export function ProposalCard({
       )}
     </li>
   )
+}
+
+function portableTextToString(value: PortableTextBlock[]): string {
+  return value
+    .map((block) =>
+      (block as PortableTextTextBlock<PortableTextObject>).children
+        .map((child) => child.text)
+        .join(''),
+    )
+    .join(' ')
 }

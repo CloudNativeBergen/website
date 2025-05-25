@@ -6,6 +6,7 @@ import {
   Status,
 } from '@/lib/proposal/types'
 import speakers from './speakers'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
 
 const proposals: ProposalExisting[] = [
   {
@@ -15,7 +16,7 @@ const proposals: ProposalExisting[] = [
     _createdAt: '2021-06-01T00:00:00.000Z',
     _updatedAt: '2021-06-01T00:00:00.000Z',
     title: 'Draft Proposal',
-    description: 'Description 1',
+    description: convertStringToPortableTextBlocks('Description 1'),
     language: Language.english,
     format: Format.lightning_10,
     level: Level.beginner,
@@ -31,7 +32,7 @@ const proposals: ProposalExisting[] = [
     _createdAt: '2021-06-01T00:00:00.000Z',
     _updatedAt: '2021-06-01T00:00:00.000Z',
     title: 'Submitted Proposal',
-    description: 'Description 2',
+    description: convertStringToPortableTextBlocks('Description 2'),
     language: Language.english,
     format: Format.lightning_10,
     level: Level.beginner,
@@ -47,7 +48,7 @@ const proposals: ProposalExisting[] = [
     _createdAt: '2021-06-01T00:00:00.000Z',
     _updatedAt: '2021-06-01T00:00:00.000Z',
     title: 'Proposal 3',
-    description: 'Description 3',
+    description: convertStringToPortableTextBlocks('Description 3'),
     language: Language.english,
     format: Format.lightning_10,
     level: Level.beginner,
@@ -62,7 +63,7 @@ const proposals: ProposalExisting[] = [
     _createdAt: '2021-06-01T00:00:00.000Z',
     _updatedAt: '2021-06-01T00:00:00.000Z',
     title: 'Proposal 4',
-    description: 'Description 4',
+    description: convertStringToPortableTextBlocks('Description 4'),
     language: Language.english,
     format: Format.lightning_10,
     level: Level.beginner,
@@ -77,7 +78,7 @@ const proposals: ProposalExisting[] = [
     _createdAt: '',
     _updatedAt: '',
     title: 'Proposal 5',
-    description: 'Description 5',
+    description: convertStringToPortableTextBlocks('Description 5'),
     language: Language.english,
     format: Format.lightning_10,
     level: Level.beginner,
@@ -92,7 +93,7 @@ const proposals: ProposalExisting[] = [
     _createdAt: '',
     _updatedAt: '',
     title: 'Proposal 6',
-    description: 'Description 6',
+    description: convertStringToPortableTextBlocks('Description 6'),
     language: Language.english,
     format: Format.lightning_10,
     level: Level.beginner,
@@ -107,7 +108,7 @@ const proposals: ProposalExisting[] = [
     _createdAt: '',
     _updatedAt: '',
     title: 'Proposal 7',
-    description: 'Description 7',
+    description: convertStringToPortableTextBlocks('Description 7'),
     language: Language.english,
     format: Format.lightning_10,
     level: Level.beginner,
