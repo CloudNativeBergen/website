@@ -3,9 +3,10 @@ import {
   clientReadUncached as clientRead,
   clientWrite,
 } from '@/lib/sanity/client'
-import { v4 as randomUUID } from 'uuid'
 import { groq } from 'next-sanity'
-import { Reference } from 'sanity';
+import { Reference } from 'sanity'
+import { v4 as randomUUID } from 'uuid'
+import { convertStringToPortableTextBlocks } from './validation'
 
 export async function getProposal(
   id: string,
@@ -40,6 +41,12 @@ export async function getProposal(
     err = error as Error
   }
 
+  if (proposal?.description) {
+    proposal.description = convertStringToPortableTextBlocks(
+      proposal.description,
+    )
+  }
+
   // @TODO - Check if the proposal is not found and return an error
   return { proposal, err }
 }
@@ -58,7 +65,11 @@ export async function getProposals({
 
   const filters = [
     `_type == "talk"`,
-    returnAll ? `status != "${Status.draft}"` : speakerId ? `speaker._ref == $speakerId` : null,
+    returnAll
+      ? `status != "${Status.draft}"`
+      : speakerId
+        ? `speaker._ref == $speakerId`
+        : null,
     conferenceId ? `conference._ref == $conferenceId` : null,
   ]
     .filter(Boolean)
@@ -80,13 +91,25 @@ export async function getProposals({
   try {
     proposals = await clientRead.fetch(
       query,
-      { ...(speakerId && { speakerId }), ...(conferenceId && { conferenceId }) },
+      {
+        ...(speakerId && { speakerId }),
+        ...(conferenceId && { conferenceId }),
+      },
       { cache: 'no-store' },
     )
   } catch (e) {
     console.error('Error fetching proposals:', e)
     error = e as Error
   }
+
+  proposals = proposals.map((proposal) => {
+    if (proposal.description) {
+      proposal.description = convertStringToPortableTextBlocks(
+        proposal.description,
+      )
+    }
+    return proposal
+  })
 
   return { proposals, error }
 }
