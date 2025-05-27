@@ -20,8 +20,16 @@ export function FormatFormat({ format }: { format?: string }) {
       text = formats.get(Format.lightning_10) ?? format
       color = 'bg-gray-100 text-gray-800'
       break
+    case Format.presentation_20:
+      text = formats.get(Format.presentation_20) ?? format
+      color = 'bg-gray-100 text-gray-800'
+      break
     case Format.presentation_25:
       text = formats.get(Format.presentation_25) ?? format
+      color = 'bg-gray-100 text-gray-800'
+      break
+    case Format.presentation_40:
+      text = formats.get(Format.presentation_40) ?? format
       color = 'bg-gray-100 text-gray-800'
       break
     case Format.presentation_45:
