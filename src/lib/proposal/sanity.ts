@@ -16,23 +16,23 @@ export async function getProposal(
   let err = null
   let proposal: ProposalExisting = {} as ProposalExisting
 
-  const speakerFilter = isOrganizer ? '' : '[ speaker._ref == $speakerId ]'
+  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId'
 
   try {
     proposal = await clientRead.fetch(
-      groq`*[ _type == "talk" && _id==$id ]{
+      groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
       ...,
       speaker-> {
-        ...,
-        "image": image.asset->url
+      ...,
+      "image": image.asset->url
       },
       conference-> {
-        _id, title, start_date, end_date
+      _id, title, start_date, end_date
       },
       topics[]-> {
-        _id, title, color, slug, description
+      _id, title, color, slug, description
       }
-    }${speakerFilter}[0]`,
+    }[0]`,
       { id, speakerId },
       { cache: 'no-store' },
     )
