@@ -18,7 +18,11 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const dynamic = 'force-dynamic'
 
-export default async function Submit({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
+export default async function Submit({
+  searchParams,
+}: {
+  searchParams: Promise<{ id?: string }>
+}) {
   const { id: proposalId } = (await searchParams) || {}
 
   const session = await auth()
@@ -29,7 +33,7 @@ export default async function Submit({ searchParams }: { searchParams: Promise<{
   let proposal: ProposalInput = {
     title: '',
     language: Language.norwegian,
-    description: '',
+    description: [],
     format: Format.lightning_10,
     level: Level.beginner,
     audiences: [],
@@ -46,15 +50,24 @@ export default async function Submit({ searchParams }: { searchParams: Promise<{
 
   if (!conference || error) {
     console.error('Error loading conference:', error)
-    loadingError = { type: 'Server Error', message: 'Failed to load conference.' }
+    loadingError = {
+      type: 'Server Error',
+      message: 'Failed to load conference.',
+    }
   }
 
   try {
     if (proposalId) {
-      const { proposal: fetchedProposal, err } = await getProposal(proposalId, session.speaker._id)
+      const { proposal: fetchedProposal, err } = await getProposal(
+        proposalId,
+        session.speaker._id,
+      )
       if (err) {
         console.error('Error loading proposal:', err)
-        loadingError = { type: 'Server Error', message: 'Failed to load proposal.' }
+        loadingError = {
+          type: 'Server Error',
+          message: 'Failed to load proposal.',
+        }
       } else if (!fetchedProposal) {
         loadingError = { type: 'Not Found', message: 'Proposal not found.' }
       } else {
@@ -64,10 +77,15 @@ export default async function Submit({ searchParams }: { searchParams: Promise<{
         }
       }
     } else {
-      const { speaker: fetchedSpeaker, err } = await getSpeaker(session.speaker._id)
+      const { speaker: fetchedSpeaker, err } = await getSpeaker(
+        session.speaker._id,
+      )
       if (err) {
         console.error('Error loading speaker:', err)
-        loadingError = { type: 'Server Error', message: 'Failed to load speaker.' }
+        loadingError = {
+          type: 'Server Error',
+          message: 'Failed to load speaker.',
+        }
       } else if (!fetchedSpeaker) {
         loadingError = { type: 'Not Found', message: 'Speaker not found.' }
       } else {
@@ -81,8 +99,8 @@ export default async function Submit({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
-      <div className="relative py-20 sm:pb-24 sm:pt-36">
-        <BackgroundImage className="-bottom-14 -top-36" />
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
+        <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
             <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">

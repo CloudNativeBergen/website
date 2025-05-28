@@ -1,6 +1,11 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { formats, languages, levels, ProposalExisting } from '@/lib/proposal/types'
+import {
+  formats,
+  languages,
+  levels,
+  ProposalExisting,
+} from '@/lib/proposal/types'
 import { flags, Flags } from '@/lib/speaker/types'
 import Image from 'next/image'
 import * as social from '@/components/SocialIcons'
@@ -8,51 +13,54 @@ import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { Button } from '@/components/Button'
 import { CalendarIcon } from '@heroicons/react/24/solid'
 import { TrackTalk } from '@/lib/conference/types'
+import { PortableText } from '@portabletext/react'
 
 type Props = {
   params: Promise<{ slug: string }>
 }
 
 export async function generateMetadata({ params }: Props) {
-  const resolvedParams = await params;
-  const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug);
+  const resolvedParams = await params
+  const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug)
 
   if (err || !speaker || !talks || talks.length === 0) {
     return {
       title: 'Speaker not found',
       description: 'Sorry, we could not find the speaker you are looking for.',
       image: 'https://via.placeholder.com/1200',
-    };
+    }
   }
 
   return {
     title: `${speaker.name} - ${talks[0].title}`,
     description: talks[0].description.slice(0, 200),
     image: speaker.image || 'https://via.placeholder.com/1200',
-  };
+  }
 }
 
 function getSchedulesForTalk(talk: ProposalExisting) {
   if (!talk.schedule || talk.schedule.length === 0) {
-    return [];
+    return []
   }
 
-  const schedules = [];
+  const schedules = []
 
   // Loop through all schedule days
   for (const day of talk.schedule) {
     if (!day.tracks || day.tracks.length === 0) {
-      continue;
+      continue
     }
 
     // Loop through all tracks for each day
     for (const [trackIndex, track] of day.tracks.entries()) {
       if (!track.talks || track.talks.length === 0) {
-        continue;
+        continue
       }
 
       // Find any talks that match the current talk ID
-      const matchingTalks = track.talks.filter((t: TrackTalk) => t.talk?._id === talk._id);
+      const matchingTalks = track.talks.filter(
+        (t: TrackTalk) => t.talk?._id === talk._id,
+      )
 
       // Add each matching talk to the schedules array
       for (const matchedTalk of matchingTalks) {
@@ -62,37 +70,37 @@ function getSchedulesForTalk(talk: ProposalExisting) {
           endTime: matchedTalk.endTime,
           trackTitle: track.trackTitle,
           trackNumber: trackIndex + 1,
-        });
+        })
       }
     }
   }
 
-  return schedules;
+  return schedules
 }
 
 function ScheduleDisplay({ talk }: { talk: ProposalExisting }) {
-  const schedules = getSchedulesForTalk(talk);
+  const schedules = getSchedulesForTalk(talk)
   if (schedules.length === 0) {
-    return <p>No schedule available</p>;
+    return <p>No schedule available</p>
   }
   return (
     <div>
       {schedules.map((schedule, index) => (
         <div key={index} className="mt-2">
           <p className="text-lg">
-            <CalendarIcon className="inline-block h-6 w-6 mr-2" />
+            <CalendarIcon className="mr-2 inline-block h-6 w-6" />
             Scheduled: {schedule.startTime} - {schedule.endTime},{' '}
             {schedule.trackTitle}
           </p>
         </div>
       ))}
     </div>
-  );
+  )
 }
 
 export default async function Profile({ params }: Props) {
-  const resolvedParams = await params;
-  const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug);
+  const resolvedParams = await params
+  const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug)
 
   if (err || !speaker || !talks || talks.length === 0) {
     return (
@@ -115,13 +123,13 @@ export default async function Profile({ params }: Props) {
           </Container>
         </div>
       </>
-    );
+    )
   }
 
   return (
     <>
-      <div className="relative py-20 sm:pb-24 sm:pt-36">
-        <BackgroundImage className="-bottom-14 -top-36" />
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
+        <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto w-full max-w-7xl grow lg:flex xl:px-2">
             <div className="flex-1 px-4 py-6 sm:px-6 lg:pl-8 xl:flex xl:pl-6">
@@ -135,15 +143,15 @@ export default async function Profile({ params }: Props) {
                     talk.topics.map((topic, index) => (
                       <span
                         key={index}
-                        className="mr-2 mt-2 inline-block rounded-full bg-blue-900 px-3 py-1 text-sm font-semibold text-blue-100"
+                        className="mt-2 mr-2 inline-block rounded-full bg-blue-900 px-3 py-1 text-sm font-semibold text-blue-100"
                       >
                         {typeof topic === 'string'
                           ? topic
                           : 'label' in topic
                             ? topic.label
                             : // fallback for reference objects or other shapes
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            (topic as any).title ?? ''}
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              ((topic as any).title ?? '')}
                       </span>
                     ))}
                   {talk.schedule && (
@@ -151,14 +159,9 @@ export default async function Profile({ params }: Props) {
                       <ScheduleDisplay talk={talk} />
                     </div>
                   )}
-                  {talk.description.split('\n\n').map((paragraph, index) => (
-                    <p
-                      key={`desc-${index}`}
-                      className="mt-4 text-xl text-blue-900"
-                    >
-                      {paragraph}
-                    </p>
-                  ))}
+
+                  <PortableText value={talk.description} />
+
                   <p className="mt-4 text-lg">
                     Language: {languages.get(talk.language)}
                   </p>
@@ -172,13 +175,13 @@ export default async function Profile({ params }: Props) {
             <div className="shrink-0 px-4 py-6 sm:px-6 lg:w-96 lg:pr-8 xl:pr-6">
               {/* speaker details */}
               <div className="flex flex-col items-center text-center">
-                <div className="relative w-40 h-40 overflow-hidden rounded-full">
+                <div className="relative h-40 w-40 overflow-hidden rounded-full">
                   <Image
                     src={speaker.image || 'https://via.placeholder.com/150'}
                     alt={speaker.name}
                     width={150}
                     height={150}
-                    className="object-cover w-full h-full"
+                    className="h-full w-full object-cover"
                   />
                 </div>
                 <h2 className="mt-4 text-2xl font-bold">{speaker.name}</h2>
@@ -186,7 +189,7 @@ export default async function Profile({ params }: Props) {
                 <div className="mt-2">
                   {speaker.flags &&
                     speaker.flags.includes(Flags.localSpeaker) && (
-                      <span className="mr-2 mt-2 inline-block rounded-full bg-blue-900 px-3 py-1 text-sm font-semibold text-blue-100">
+                      <span className="mt-2 mr-2 inline-block rounded-full bg-blue-900 px-3 py-1 text-sm font-semibold text-blue-100">
                         {flags.get(Flags.localSpeaker)}
                       </span>
                     )}
@@ -217,5 +220,5 @@ export default async function Profile({ params }: Props) {
         </Container>
       </div>
     </>
-  );
+  )
 }

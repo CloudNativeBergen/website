@@ -21,7 +21,8 @@ export default defineType({
     defineField({
       name: 'description',
       title: 'Description',
-      type: 'text',
+      type: 'array',
+      of: [{ type: 'block' }],
     }),
     defineField({
       name: 'language',
@@ -69,8 +70,8 @@ export default defineType({
       of: [
         {
           type: 'reference',
-          to: [{ type: 'topic' }]
-        }
+          to: [{ type: 'topic' }],
+        },
       ],
     }),
     defineField({

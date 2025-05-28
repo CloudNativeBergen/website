@@ -1,8 +1,17 @@
-import { FormatStatus } from "@/lib/proposal/format"
-import { ProposalExisting, Status, Action } from "@/lib/proposal/types"
+import { FormatStatus } from '@/lib/proposal/format'
+import { Action, ProposalExisting, Status } from '@/lib/proposal/types'
+import {
+  BookOpenIcon,
+  CheckCircleIcon,
+  EnvelopeIcon,
+  PencilIcon,
+  UserCircleIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/solid'
 import Image from 'next/image'
-import { PencilIcon, BookOpenIcon, EnvelopeIcon, XMarkIcon, CheckCircleIcon, UserCircleIcon } from "@heroicons/react/24/solid"
-import { SpinnerIcon } from "./SocialIcons"
+import { SpinnerIcon } from './SocialIcons'
+import { PortableTextBlock } from '@portabletext/editor'
+import { PortableTextTextBlock, PortableTextObject } from 'sanity'
 
 interface ProposalButtonAction {
   label: Action
@@ -62,7 +71,6 @@ export function ProposalCard({
   proposal: ProposalExisting
   readOnly?: boolean
   actionCallback: (proposal: ProposalExisting, action: Action) => void
-
 }) {
   const actions: ProposalButtonAction[] = []
 
@@ -148,7 +156,8 @@ export function ProposalCard({
             {proposal.status === Status.accepted ? (
               <>Your proposal has been accepted.</>
             ) : (
-              <>{proposal.description}</>
+              // <PortableText value={proposal.description} />
+              <>{portableTextToString(proposal.description)}</>
             )}
           </p>
         </div>
@@ -175,7 +184,7 @@ export function ProposalCard({
                 key={`${proposal._id}-${action.label}`}
                 className={classNames(
                   i > 0 ? '-ml-px' : '',
-                  'relative flex inline-flex w-0 flex-1',
+                  'relative inline-flex w-0 flex-1',
                 )}
               >
                 {action.link ? (
@@ -190,4 +199,14 @@ export function ProposalCard({
       )}
     </li>
   )
+}
+
+function portableTextToString(value: PortableTextBlock[]): string {
+  return value
+    .map((block) =>
+      (block as PortableTextTextBlock<PortableTextObject>).children
+        .map((child) => child.text)
+        .join(''),
+    )
+    .join(' ')
 }
