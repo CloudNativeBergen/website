@@ -1,6 +1,6 @@
 import { Container } from '@/components/Container'
 import { Logo } from '@/components/Logo'
-import { GitHubIcon, LinkedInIcon } from '@/components/SocialIcons'
+import { GitHubIcon, LinkedInIcon, BlueskyIcon } from '@/components/SocialIcons'
 import { Conference } from '@/lib/conference/types'
 
 export function Footer({ c }: { c: Conference }) {
@@ -20,6 +20,12 @@ export function Footer({ c }: { c: Conference }) {
             className="text-blue-600"
           >
             <LinkedInIcon className="h-12 w-12 fill-current" />
+          </a>
+          <a
+            href="https://bsky.app/profile/cloudnativebergen.dev"
+            className="text-blue-600"
+          >
+            <BlueskyIcon className="h-12 w-12 fill-current" />
           </a>
         </div>
         <p className="mt-6 text-base text-slate-500 md:mt-0">
