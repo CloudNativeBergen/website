@@ -4,15 +4,19 @@ import { Schedule } from '@/components/Schedule'
 import { Speakers } from '@/components/Speakers'
 import { Sponsors } from '@/components/Sponsors'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { ConferenceSchedule, ScheduleTrack, TrackTalk } from '@/lib/conference/types'
+import {
+  ConferenceSchedule,
+  ScheduleTrack,
+  TrackTalk,
+} from '@/lib/conference/types'
 
 export const revalidate = 300 // 5 minutes
 
 function schedulesHasSpeakers(schedules: ConferenceSchedule[]) {
   return schedules.some((schedule) =>
     schedule.tracks.some((track: ScheduleTrack) =>
-      track.talks.some((talk: TrackTalk) => !!talk.talk?.speaker)
-    )
+      track.talks.some((talk: TrackTalk) => !!talk.talk?.speaker),
+    ),
   )
 }
 
@@ -21,7 +25,7 @@ export default async function Home() {
     organizers: true,
     schedule: true,
     sponsors: true,
-    revalidate
+    revalidate,
   })
 
   if (error) {
@@ -34,11 +38,17 @@ export default async function Home() {
       <Hero conference={conference} />
 
       {!conference?.schedules || conference.schedules.length === 0 ? (
-        <FeaturedSpeakers speakers={conference.organizers || []} isOrganizers={true} />
+        <FeaturedSpeakers
+          speakers={conference.organizers || []}
+          isOrganizers={true}
+        />
       ) : (
         <>
           {!schedulesHasSpeakers(conference.schedules) ? (
-            <FeaturedSpeakers speakers={conference.organizers || []} isOrganizers={true} />
+            <FeaturedSpeakers
+              speakers={conference.organizers || []}
+              isOrganizers={true}
+            />
           ) : (
             <Speakers tracks={conference.schedules[0].tracks} />
           )}

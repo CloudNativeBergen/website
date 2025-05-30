@@ -1,12 +1,31 @@
 'use client'
 
-import { FormatFormat, FormatLanguage, FormatLevel, FormatStatus } from "@/lib/proposal/format"
-import { ProposalExisting, Status, Action } from "@/lib/proposal/types"
-import { Speaker, Flags } from "@/lib/speaker/types"
-import { ArchiveBoxXMarkIcon, ChevronDownIcon, ExclamationTriangleIcon, HeartIcon, MagnifyingGlassIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/24/solid"
-import { useState } from "react"
-import { Menu, MenuButton, Transition, MenuItems, MenuItem } from "@headlessui/react"
-import { ProposalActionModal } from "./ProposalActionModal"
+import {
+  FormatFormat,
+  FormatLanguage,
+  FormatLevel,
+  FormatStatus,
+} from '@/lib/proposal/format'
+import { ProposalExisting, Status, Action } from '@/lib/proposal/types'
+import { Speaker, Flags } from '@/lib/speaker/types'
+import {
+  ArchiveBoxXMarkIcon,
+  ChevronDownIcon,
+  ExclamationTriangleIcon,
+  HeartIcon,
+  MagnifyingGlassIcon,
+  PencilSquareIcon,
+  TrashIcon,
+} from '@heroicons/react/24/solid'
+import { useState } from 'react'
+import {
+  Menu,
+  MenuButton,
+  Transition,
+  MenuItems,
+  MenuItem,
+} from '@headlessui/react'
+import { ProposalActionModal } from './ProposalActionModal'
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -22,7 +41,7 @@ function Dropdown({
   return (
     <Menu as="div" className="relative inline-block text-left">
       <div>
-        <MenuButton className="inline-flex w-full justify-center gap-x-1.5 rounded-md bg-white px-2 py-1 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+        <MenuButton className="inline-flex w-full justify-center gap-x-1.5 rounded-md bg-white px-2 py-1 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50">
           Options
           <ChevronDownIcon
             className="-mr-1 h-5 w-5 text-gray-400"
@@ -39,7 +58,7 @@ function Dropdown({
         leaveFrom="transform opacity-100 scale-100"
         leaveTo="transform opacity-0 scale-95"
       >
-        <MenuItems className="absolute right-0 z-10 mt-2 w-56 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+        <MenuItems className="ring-opacity-5 absolute right-0 z-10 mt-2 w-56 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black focus:outline-none">
           <div className="py-1">
             <MenuItem disabled>
               {({ focus }) => (
@@ -215,11 +234,12 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h1 className="text-base font-semibold leading-6 text-gray-900">
+            <h1 className="text-base leading-6 font-semibold text-gray-900">
               Proposals
             </h1>
             <p className="mt-2 text-sm text-gray-700">
-              A list of all proposals submitted by speakers (drafts are not shown)
+              A list of all proposals submitted by speakers (drafts are not
+              shown)
             </p>
           </div>
           <div className="flex gap-4">
@@ -240,14 +260,18 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
               className="flex cursor-pointer flex-col items-center"
               onClick={filterClickHandler.bind(null, Status.accepted)}
             >
-              <p className="text-3xl font-semibold text-green-500">{accepted}</p>
+              <p className="text-3xl font-semibold text-green-500">
+                {accepted}
+              </p>
               <p className="text-sm text-gray-500">Accepted</p>
             </div>
             <div
               className="flex cursor-pointer flex-col items-center"
               onClick={filterClickHandler.bind(null, Status.confirmed)}
             >
-              <p className="text-3xl font-semibold text-blue-500">{confirmed}</p>
+              <p className="text-3xl font-semibold text-blue-500">
+                {confirmed}
+              </p>
               <p className="text-sm text-gray-500">Confirmed</p>
             </div>
             <div
@@ -275,7 +299,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                   <tr>
                     <th
                       scope="col"
-                      className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0"
+                      className="py-3.5 pr-3 pl-4 text-left text-sm font-semibold text-gray-900 sm:pl-0"
                     >
                       Title
                     </th>
@@ -309,7 +333,10 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                     >
                       Status
                     </th>
-                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-0">
+                    <th
+                      scope="col"
+                      className="relative py-3.5 pr-4 pl-3 sm:pr-0"
+                    >
                       <span className="sr-only">Edit</span>
                     </th>
                   </tr>
@@ -317,10 +344,10 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                 <tbody className="divide-y divide-gray-200">
                   {filteredProposals.map((proposal) => (
                     <tr key={proposal._id}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-0 md:whitespace-normal">
+                      <td className="py-4 pr-3 pl-4 text-sm font-medium whitespace-nowrap text-gray-900 sm:pl-0 md:whitespace-normal">
                         {proposal.title}
                       </td>
-                      <td className="whitespace-normal px-3 py-4 text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm whitespace-normal text-gray-500">
                         {proposal.speaker && 'name' in proposal.speaker
                           ? (proposal.speaker as Speaker).name
                           : 'Unknown author'}
@@ -339,19 +366,19 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                             </span>
                           )}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
                         <FormatFormat format={proposal.format} />
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
                         <FormatLanguage language={proposal.language} />
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
                         <FormatLevel level={proposal.level} />
                       </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                      <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
                         <FormatStatus status={proposal.status} />
                       </td>
-                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
+                      <td className="relative py-4 pr-4 pl-3 text-right text-sm font-medium whitespace-nowrap sm:pr-0">
                         <Dropdown
                           proposal={proposal}
                           acceptRejectHandler={acceptRejectClickHandler}

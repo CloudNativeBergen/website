@@ -235,15 +235,12 @@ export function Multiselect({
 }) {
   return (
     <>
-      <label
-        htmlFor={name}
-        className="block text-sm font-medium text-gray-900"
-      >
+      <label htmlFor={name} className="block text-sm font-medium text-gray-900">
         {label}
       </label>
       <div className="mt-2">
         <div className="relative">
-          <div className="flex flex-wrap gap-2 rounded-md bg-white p-2 border border-gray-300 focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2">
+          <div className="flex flex-wrap gap-2 rounded-md border border-gray-300 bg-white p-2 focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2">
             {value.map((selectedId) => {
               const option = options.find((opt) => opt.id === selectedId)
               if (!option) return null
@@ -252,15 +249,19 @@ export function Multiselect({
                   key={selectedId}
                   className="inline-flex items-center gap-x-1 rounded-full px-2 py-1 text-sm font-medium"
                   style={{
-                    backgroundColor: option.color ? `#${option.color}20` : '#F3F4F6',
+                    backgroundColor: option.color
+                      ? `#${option.color}20`
+                      : '#F3F4F6',
                     color: option.color ? `#${option.color}` : '#374151',
                   }}
                 >
                   {option.title}
                   <button
                     type="button"
-                    onClick={() => setValue(value.filter((id) => id !== selectedId))}
-                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                    onClick={() =>
+                      setValue(value.filter((id) => id !== selectedId))
+                    }
+                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-gray-200 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
                   >
                     <span className="sr-only">Remove {option.title}</span>
                     <XMarkIcon className="h-3 w-3" aria-hidden="true" />
@@ -274,16 +275,23 @@ export function Multiselect({
               value=""
               onChange={(e) => {
                 const newValue = e.target.value
-                if (newValue && !value.includes(newValue) && value.length < maxItems) {
+                if (
+                  newValue &&
+                  !value.includes(newValue) &&
+                  value.length < maxItems
+                ) {
                   setValue([...value, newValue])
                 }
               }}
               disabled={value.length >= maxItems}
-              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 ${value.length >= maxItems ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 ${
+                value.length >= maxItems ? 'cursor-not-allowed opacity-50' : ''
+              }`}
             >
               <option value="">
-                {value.length >= maxItems ? `Max ${maxItems} selected` : placeholder}
+                {value.length >= maxItems
+                  ? `Max ${maxItems} selected`
+                  : placeholder}
               </option>
 
               {options

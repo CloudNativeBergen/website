@@ -190,17 +190,17 @@ export async function getPublicSpeakers(revalidate: number = 3600) {
   let err = null
 
   try {
-    speakers =
-      await clientReadCached.fetch(`*[ _type == "speaker" && count(*[_type == "talk" && references(^._id) && status == "confirmed"]) > 0]{
+    speakers = await clientReadCached.fetch(
+      `*[ _type == "speaker" && count(*[_type == "talk" && references(^._id) && status == "confirmed"]) > 0]{
           _id, name, "slug": slug.current, title, bio, links, flags, "image": image.asset->url
         }`,
-        {},
-        {
-          next: {
-            revalidate: revalidate,
-          },
+      {},
+      {
+        next: {
+          revalidate: revalidate,
         },
-      )
+      },
+    )
   } catch (error) {
     err = error as Error
   }

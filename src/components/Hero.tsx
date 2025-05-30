@@ -12,15 +12,26 @@ import { PortableText } from '@portabletext/react'
 
 function ActionButtons({ conference }: { conference: Conference }) {
   const buttons = [
-    { label: 'Practical Info', href: '/info', color: 'bg-teal-600', hoverColor: 'hover:bg-teal-500' },
+    {
+      label: 'Practical Info',
+      href: '/info',
+      color: 'bg-teal-600',
+      hoverColor: 'hover:bg-teal-500',
+    },
   ]
 
   const seekingSponsors =
     conference.start_date &&
-    (new Date(conference.start_date).getTime() - new Date().getTime()) > (4 * 7 * 24 * 60 * 60 * 1000);
+    new Date(conference.start_date).getTime() - new Date().getTime() >
+      4 * 7 * 24 * 60 * 60 * 1000
 
   if (seekingSponsors) {
-    buttons.push({ label: 'Become a Sponsor', href: '/sponsor', color: 'bg-teal-600', hoverColor: 'hover:bg-teal-500' })
+    buttons.push({
+      label: 'Become a Sponsor',
+      href: '/sponsor',
+      color: 'bg-teal-600',
+      hoverColor: 'hover:bg-teal-500',
+    })
   }
 
   const cfpIsOpen =
@@ -30,28 +41,46 @@ function ActionButtons({ conference }: { conference: Conference }) {
     new Date() <= new Date(conference.cfp_end_date)
 
   if (cfpIsOpen) {
-    buttons.push({ label: 'Submit to Speak', href: '/cfp', color: 'bg-teal-600', hoverColor: 'hover:bg-teal-500' })
+    buttons.push({
+      label: 'Submit to Speak',
+      href: '/cfp',
+      color: 'bg-teal-600',
+      hoverColor: 'hover:bg-teal-500',
+    })
   }
 
-  if (conference.program_date && new Date() >= new Date(conference.program_date)) {
-    buttons.push({ label: 'Program', href: '/program', color: 'bg-purple-600', hoverColor: 'hover:bg-purple-500' })
+  if (
+    conference.program_date &&
+    new Date() >= new Date(conference.program_date)
+  ) {
+    buttons.push({
+      label: 'Program',
+      href: '/program',
+      color: 'bg-purple-600',
+      hoverColor: 'hover:bg-purple-500',
+    })
   }
 
   if (conference.registration_enabled && conference.registration_link) {
-    buttons.push({ label: 'Tickets', href: conference.registration_link, color: '', hoverColor: '' })
+    buttons.push({
+      label: 'Tickets',
+      href: conference.registration_link,
+      color: '',
+      hoverColor: '',
+    })
   }
 
   // Reverse the order of buttons to show the most important ones first
   // and slice to show only the first two buttons
-  const displayButtons = buttons.reverse().slice(0, 2);
+  const displayButtons = buttons.reverse().slice(0, 2)
 
   return (
-    <div className="flex flex-col justify-between md:flex-row mt-10">
+    <div className="mt-10 flex flex-col justify-between md:flex-row">
       {displayButtons.map((button) => (
         <Button
           key={button.label}
           href={button.href}
-          className={`mt-2 w-full md:w-1/2 ${button.color} ${button.hoverColor} md:ml-2 md:mr-2`}
+          className={`mt-2 w-full md:w-1/2 ${button.color} ${button.hoverColor} md:mr-2 md:ml-2`}
         >
           {button.label}
         </Button>
@@ -62,8 +91,8 @@ function ActionButtons({ conference }: { conference: Conference }) {
 
 export function Hero({ conference }: { conference: Conference }) {
   return (
-    <div className="relative py-20 sm:pb-24 sm:pt-36">
-      <BackgroundImage className="-bottom-14 -top-36" />
+    <div className="relative py-20 sm:pt-36 sm:pb-24">
+      <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
           {conference.announcement && (
@@ -72,7 +101,8 @@ export function Hero({ conference }: { conference: Conference }) {
             </div>
           )}
           <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
-            <span className="sr-only">{conference.title} - </span>{conference.tagline}
+            <span className="sr-only">{conference.title} - </span>
+            {conference.tagline}
           </h1>
           <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
             <p>
@@ -124,7 +154,7 @@ export function Hero({ conference }: { conference: Conference }) {
             </a>
           </div>
         </div>
-      </Container >
-    </div >
+      </Container>
+    </div>
   )
 }

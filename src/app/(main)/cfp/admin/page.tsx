@@ -6,8 +6,8 @@ import { getProposals } from '@/lib/proposal/sanity'
 
 function ErrorDisplay({ title, message }: { title: string; message: string }) {
   return (
-    <div className="relative py-20 sm:pb-24 sm:pt-36">
-      <BackgroundImage className="-bottom-14 -top-36" />
+    <div className="relative py-20 sm:pt-36 sm:pb-24">
+      <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
           <h1 className="font-display text-5xl font-bold tracking-tighter text-red-600 sm:text-7xl">
@@ -23,21 +23,35 @@ function ErrorDisplay({ title, message }: { title: string; message: string }) {
 }
 
 export default async function AllProposals() {
-  const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
+  const { conference, error: conferenceError } =
+    await getConferenceForCurrentDomain()
 
   if (conferenceError) {
-    return <ErrorDisplay title="Error Loading Conference" message={conferenceError.message} />
+    return (
+      <ErrorDisplay
+        title="Error Loading Conference"
+        message={conferenceError.message}
+      />
+    )
   }
 
-  const { proposals, error: proposalsError } = await getProposals({ conferenceId: conference._id, returnAll: true })
+  const { proposals, error: proposalsError } = await getProposals({
+    conferenceId: conference._id,
+    returnAll: true,
+  })
 
   if (proposalsError) {
-    return <ErrorDisplay title="Error Loading Proposals" message={proposalsError.message} />
+    return (
+      <ErrorDisplay
+        title="Error Loading Proposals"
+        message={proposalsError.message}
+      />
+    )
   }
 
   return (
-    <div className="relative py-20 sm:pb-24 sm:pt-36">
-      <BackgroundImage className="-bottom-14 -top-36" />
+    <div className="relative py-20 sm:pt-36 sm:pb-24">
+      <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
           <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">

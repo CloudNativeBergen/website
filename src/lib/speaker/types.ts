@@ -30,7 +30,7 @@ interface SpeakerBase {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface SpeakerInput extends SpeakerBase { }
+export interface SpeakerInput extends SpeakerBase {}
 
 export interface Speaker extends SpeakerBase {
   _id: string
