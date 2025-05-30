@@ -8,11 +8,7 @@ import {
   Transition,
   TransitionChild,
 } from '@headlessui/react'
-import {
-  ProposalExisting,
-  Action,
-  Status,
-} from '@/lib/proposal/types'
+import { ProposalExisting, Action, Status } from '@/lib/proposal/types'
 import {
   ArchiveBoxXMarkIcon,
   EnvelopeIcon,
@@ -117,7 +113,7 @@ export function ProposalActionModal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
+          <div className="bg-opacity-75 fixed inset-0 bg-gray-500 transition-opacity" />
         </TransitionChild>
 
         <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
@@ -130,11 +126,11 @@ export function ProposalActionModal({
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <DialogPanel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-                <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
+              <DialogPanel className="relative transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                <div className="absolute top-0 right-0 hidden pt-4 pr-4 sm:block">
                   <button
                     type="button"
-                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
                     onClick={() => close()}
                   >
                     <span className="sr-only">Close</span>
@@ -153,10 +149,10 @@ export function ProposalActionModal({
                       aria-hidden="true"
                     />
                   </div>
-                  <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <DialogTitle
                       as="h3"
-                      className="text-base font-semibold leading-6 text-gray-900"
+                      className="text-base leading-6 font-semibold text-gray-900"
                     >
                       {capitalizeFirstLetter(action)} proposal
                     </DialogTitle>
@@ -241,7 +237,7 @@ export function ProposalActionModal({
                   </button>
                   <button
                     type="button"
-                    className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                    className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 sm:mt-0 sm:w-auto"
                     onClick={() => close()}
                   >
                     Cancel

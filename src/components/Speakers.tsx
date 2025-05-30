@@ -41,7 +41,7 @@ function SubmitToSpeakLi() {
       <a
         type="button"
         href="/cfp"
-        className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 p-10 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:gap-y-16"
+        className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 p-10 text-center hover:border-gray-400 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none sm:gap-y-16"
       >
         <p className="mt-1 font-mono text-sm text-slate-500">
           Become a speaker
@@ -54,7 +54,6 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
   const id = useId()
   const [tabOrientation, setTabOrientation] = useState('horizontal')
   const [selectedTabIndex, setSelectedTabIndex] = useState(0)
-
 
   // @TODO check if there are actually speakers
   const hasSpeakers = tracks.some((track) => track.talks.length > 0)
@@ -133,15 +132,18 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
             onChange={handleChangeTab}
           >
             <div className="relative -mx-4 flex overflow-x-auto pb-4 sm:mx-0 sm:block sm:overflow-visible sm:pb-0">
-              <div className="absolute bottom-0 left-0.5 top-2 hidden w-px bg-slate-200 lg:block" />
-              <Tab.List className="grid auto-cols-auto grid-flow-col justify-start gap-x-8 gap-y-10 whitespace-nowrap px-4 sm:mx-auto sm:max-w-2xl sm:grid-cols-3 sm:px-0 sm:text-center lg:grid-flow-row lg:grid-cols-1 lg:text-left">
+              <div className="absolute top-2 bottom-0 left-0.5 hidden w-px bg-slate-200 lg:block" />
+              <Tab.List className="grid auto-cols-auto grid-flow-col justify-start gap-x-8 gap-y-10 px-4 whitespace-nowrap sm:mx-auto sm:max-w-2xl sm:grid-cols-3 sm:px-0 sm:text-center lg:grid-flow-row lg:grid-cols-1 lg:text-left">
                 {({ selectedIndex }) => (
                   <>
                     {tracks.map((track, trackNumber) => (
-                      <div key={`track-${trackNumber}`} className="relative lg:pl-8">
+                      <div
+                        key={`track-${trackNumber}`}
+                        className="relative lg:pl-8"
+                      >
                         <DiamondIcon
                           className={clsx(
-                            'absolute left-[-0.5px] top-[0.5625rem] hidden h-1.5 w-1.5 overflow-visible lg:block',
+                            'absolute top-[0.5625rem] left-[-0.5px] hidden h-1.5 w-1.5 overflow-visible lg:block',
                             trackNumber === selectedIndex
                               ? 'fill-blue-600 stroke-blue-600'
                               : 'fill-transparent stroke-slate-400',
@@ -163,7 +165,7 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                           </div>
                           <time
                             // @TODO get the date of the track
-                            dateTime={""}
+                            dateTime={''}
                             className="mt-1.5 block text-2xl font-semibold tracking-tight text-blue-900"
                           >
                             {`Track ${trackNumber + 1}`}
@@ -177,17 +179,25 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
             </div>
             <Tab.Panels className="lg:col-span-3">
               {tracks.map((track, trackNumber) => {
-                const uniqueSpeakers = Array.from(track.talks.reduce((acc, talk) => {
-                  if (talk.talk && talk.talk.speaker && 'slug' in talk.talk.speaker) {
-                    acc.set(talk.talk.speaker.slug, talk.talk.speaker)
-                  }
-                  return acc
-                }, new Map()).values())
+                const uniqueSpeakers = Array.from(
+                  track.talks
+                    .reduce((acc, talk) => {
+                      if (
+                        talk.talk &&
+                        talk.talk.speaker &&
+                        'slug' in talk.talk.speaker
+                      ) {
+                        acc.set(talk.talk.speaker.slug, talk.talk.speaker)
+                      }
+                      return acc
+                    }, new Map())
+                    .values(),
+                )
 
                 return (
                   <Tab.Panel
                     key={trackNumber}
-                    className="grid grid-cols-1 gap-x-8 gap-y-10 ui-not-focus-visible:outline-none sm:grid-cols-2 sm:gap-y-16 md:grid-cols-3"
+                    className="ui-not-focus-visible:outline-none grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 sm:gap-y-16 md:grid-cols-3"
                     unmount={false}
                   >
                     {uniqueSpeakers.map((speaker, speakerIndex) => (
@@ -195,7 +205,7 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                         <div className="group relative h-[17.5rem] transform overflow-hidden rounded-4xl">
                           <div
                             className={clsx(
-                              'absolute bottom-6 left-0 right-4 top-0 rounded-4xl border transition duration-300 group-hover:scale-95 xl:right-6',
+                              'absolute top-0 right-4 bottom-6 left-0 rounded-4xl border transition duration-300 group-hover:scale-95 xl:right-6',
                               [
                                 'border-blue-300',
                                 'border-indigo-300',

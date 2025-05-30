@@ -9,10 +9,7 @@ export function formatDate(dateString: string): string {
   })
 }
 
-export function formatDates(
-  dateString1: string,
-  dateString2: string,
-): string {
+export function formatDates(dateString1: string, dateString2: string): string {
   if (!dateString1 || !dateString2) return 'TBD'
 
   try {

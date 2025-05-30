@@ -1,6 +1,6 @@
 import { Footer } from '@/components/Footer'
 import { Header } from '@/components/Header'
-import { Conference } from '@/lib/conference/types';
+import { Conference } from '@/lib/conference/types'
 
 export async function Layout({
   children,

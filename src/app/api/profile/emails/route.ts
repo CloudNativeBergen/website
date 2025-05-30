@@ -104,4 +104,4 @@ export const PUT = auth(async (req: NextAuthRequest): Promise<Response> => {
   return profileEmailResponse([])
   // https://github.com/nextauthjs/next-auth/issues/12224#issuecomment-2506852177
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-}) as any;
+}) as any

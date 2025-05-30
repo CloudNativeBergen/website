@@ -9,7 +9,7 @@ export default defineType({
       name: 'date',
       title: 'Date',
       type: 'date',
-      validation: Rule => Rule.required(),
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'tracks',
@@ -24,7 +24,7 @@ export default defineType({
               name: 'trackTitle',
               title: 'Track Title',
               type: 'string',
-              validation: Rule => Rule.required(),
+              validation: (Rule) => Rule.required(),
             },
             {
               name: 'trackDescription',
@@ -58,27 +58,29 @@ export default defineType({
                       title: 'Start Time',
                       type: 'string',
                       validation: (Rule) =>
-                        Rule.required().regex(
-                          /^([01]\d|2[0-3]):([0-5]\d)$/,
-                          {
+                        Rule.required()
+                          .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, {
                             name: 'time',
                             invert: false,
-                          }
-                        ).error('Time must be in the format HH:mm (e.g., 14:30)'),
+                          })
+                          .error(
+                            'Time must be in the format HH:mm (e.g., 14:30)',
+                          ),
                     },
                     {
                       name: 'endTime',
                       title: 'End Time',
                       type: 'string',
                       validation: (Rule) =>
-                        Rule.required().regex(
-                          /^([01]\d|2[0-3]):([0-5]\d)$/,
-                          {
+                        Rule.required()
+                          .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, {
                             name: 'time',
                             invert: false,
-                          }
-                        ).error('Time must be in the format HH:mm (e.g., 14:30)'),
-                    }
+                          })
+                          .error(
+                            'Time must be in the format HH:mm (e.g., 14:30)',
+                          ),
+                    },
                   ],
                   preview: {
                     select: {
@@ -89,16 +91,23 @@ export default defineType({
                       endTime: 'endTime',
                       format: 'talk.format',
                     },
-                    prepare({ title, speaker, placeholder, startTime, endTime, format }) {
+                    prepare({
+                      title,
+                      speaker,
+                      placeholder,
+                      startTime,
+                      endTime,
+                      format,
+                    }) {
                       return {
                         title: `${startTime} - ${endTime} (${format})`,
                         subtitle: `${title || placeholder} (${speaker})`,
                       }
-                    }
-                  }
-                }
+                    },
+                  },
+                },
               ],
-            }
+            },
           ],
           preview: {
             select: {
@@ -106,14 +115,16 @@ export default defineType({
               talks: 'talks',
             },
             prepare({ title, talks }) {
-              const talkStarTimes = talks?.map((item: { startTime: string }) => item.startTime).join(', ');
+              const talkStarTimes = talks
+                ?.map((item: { startTime: string }) => item.startTime)
+                .join(', ')
               return {
                 title: title,
                 subtitle: `${talks.length} talk(s) - ${talkStarTimes}`,
               }
-            }
-          }
-        }
+            },
+          },
+        },
       ],
     }),
   ],
@@ -124,8 +135,8 @@ export default defineType({
       tracks: 'tracks',
     },
     prepare(selection) {
-      const { date, tracks } = selection;
-      const trackCount = tracks?.length || 0;
+      const { date, tracks } = selection
+      const trackCount = tracks?.length || 0
       return {
         title: `${date} - ${trackCount} track(s)`,
         subtitle: `Schedule with embedded tracks and talks`,

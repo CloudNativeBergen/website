@@ -2,14 +2,14 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { Layout } from '@/components/Layout'
-import { headers } from 'next/headers';
-import { getConferenceForDomain } from '@/lib/conference/sanity';
+import { headers } from 'next/headers'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 
 export default async function NotFound() {
-  const headersList = await headers();
-  const domain = headersList.get('host') || '';
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { conference, error } = await getConferenceForDomain(domain);
+  const { conference, error } = await getConferenceForDomain(domain)
 
   return (
     <Layout conference={conference} showFooter={false}>

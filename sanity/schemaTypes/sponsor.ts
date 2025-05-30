@@ -1,6 +1,5 @@
 import { defineField, defineType } from 'sanity'
 
-
 export default defineType({
   name: 'sponsor',
   title: 'Sponsor',
@@ -26,4 +25,3 @@ export default defineType({
     }),
   ],
 })
-

@@ -76,7 +76,7 @@ interface Proposal {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface ProposalInput extends Proposal { }
+export interface ProposalInput extends Proposal {}
 
 export interface ProposalExisting extends Proposal {
   _id: string

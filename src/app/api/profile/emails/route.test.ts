@@ -151,7 +151,7 @@ describe('GET /api/profile/emails', () => {
     nock('https://api.github.com').get('/user/emails').reply(500)
 
     // Suppress console.error output for this test since we expect an error to be logged
-    jest.spyOn(console, 'error').mockImplementation(() => { })
+    jest.spyOn(console, 'error').mockImplementation(() => {})
 
     await testApiHandler({
       appHandler,

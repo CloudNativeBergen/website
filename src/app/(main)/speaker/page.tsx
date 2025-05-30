@@ -13,8 +13,8 @@ export default async function Speakers() {
 
   return (
     <>
-      <div className="relative py-20 sm:pb-24 sm:pt-36">
-        <BackgroundImage className="-bottom-14 -top-36" />
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
+        <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="mx-auto max-w-2xl lg:mx-0">
@@ -39,9 +39,9 @@ export default async function Speakers() {
                       src={`${speaker.image || 'https://via.placeholder.com/300'}?h=300&w=300&auto=format&fit=crop`}
                       width={300}
                       height={300}
-                      className="h-30 w-30 mx-auto rounded-full"
+                      className="mx-auto h-30 w-30 rounded-full"
                     />
-                    <h3 className="mt-6 text-base font-semibold leading-7 tracking-tight text-gray-900">
+                    <h3 className="mt-6 text-base leading-7 font-semibold tracking-tight text-gray-900">
                       {speaker.name}
                     </h3>
                     <p className="text-sm leading-6 text-gray-600">

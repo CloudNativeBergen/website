@@ -19,10 +19,10 @@ It's designed as a **multi-tenant** application. This means the same codebase ca
 All conference-specific content (details, schedule, sponsors, etc.) is stored in Sanity.io. The website automatically fetches the correct content based on the domain name it's accessed from. This logic is encapsulated within the `getConferenceForCurrentDomain` function found in `@/lib/conference/sanity.ts`.
 
 ```typescript
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity';
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 // Example usage in a Server Component or Route Handler
-const { conference, error } = await getConferenceForCurrentDomain();
+const { conference, error } = await getConferenceForCurrentDomain()
 ```
 
 By default `getConferenceForCurrentDomain` will only return the conference details without any subdocuments (like speakers, schedules, etc.). This is configurable with configuration properties.
@@ -33,7 +33,7 @@ const { conference, error } = await getConferenceForCurrentDomain({
   schedule: true, // Include schedule
   sponsors: true, // Include sponsors
   sponsorTiers: true, // Include sponsor tiers
-});
+})
 ```
 
 This setup allows for easy management and deployment of new conference sites without requiring code changes for each event.
@@ -117,7 +117,7 @@ Sponsors are managed through two main schema types:
 To link sponsors to a specific event, the `conference` document has a `sponsors` field. This field is an array where each item is an object containing two references:
 
 - A reference to a `sponsor` document.
-- A reference to a `sponsorTier` document that belongs to the *same* conference.
+- A reference to a `sponsorTier` document that belongs to the _same_ conference.
 
 This structure allows:
 

@@ -6,13 +6,23 @@ import clsx from 'clsx'
 
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { ConferenceSchedule, ScheduleTrack, TrackTalk } from '@/lib/conference/types'
+import {
+  ConferenceSchedule,
+  ScheduleTrack,
+  TrackTalk,
+} from '@/lib/conference/types'
 
 interface ScheduleTrackSummary extends ScheduleTrack {
   name: React.ReactNode
 }
 
-function ScheduleTabbed({ tracks, date }: { tracks: ScheduleTrack[]; date: string }) {
+function ScheduleTabbed({
+  tracks,
+  date,
+}: {
+  tracks: ScheduleTrack[]
+  date: string
+}) {
   const [tabOrientation, setTabOrientation] = useState('horizontal')
 
   useEffect(() => {
@@ -36,7 +46,7 @@ function ScheduleTabbed({ tracks, date }: { tracks: ScheduleTrack[]; date: strin
       className="mx-auto grid max-w-2xl grid-cols-1 gap-y-6 sm:grid-cols-2 lg:hidden"
       vertical={tabOrientation === 'vertical'}
     >
-      <Tab.List className="-mx-4 flex gap-x-4 gap-y-10 overflow-x-auto pb-4 pl-4 sm:mx-0 sm:flex-col sm:pb-0 sm:pl-0 sm:pr-8">
+      <Tab.List className="-mx-4 flex gap-x-4 gap-y-10 overflow-x-auto pb-4 pl-4 sm:mx-0 sm:flex-col sm:pr-8 sm:pb-0 sm:pl-0">
         {({ selectedIndex }) => (
           <>
             {tracks.map((track, trackIndex) => (
@@ -56,7 +66,9 @@ function ScheduleTabbed({ tracks, date }: { tracks: ScheduleTrack[]; date: strin
                         {`Track ${trackIndex + 1}`}
                       </Tab>
                     ),
-                  }} date={date} />
+                  }}
+                  date={date}
+                />
               </div>
             ))}
           </>
@@ -76,7 +88,13 @@ function ScheduleTabbed({ tracks, date }: { tracks: ScheduleTrack[]; date: strin
   )
 }
 
-function TrackSummary({ track, date }: { track: ScheduleTrackSummary; date: string }) {
+function TrackSummary({
+  track,
+  date,
+}: {
+  track: ScheduleTrackSummary
+  date: string
+}) {
   return (
     <>
       <h3 className="text-2xl font-semibold tracking-tight text-blue-900">
@@ -91,7 +109,7 @@ function TrackSummary({ track, date }: { track: ScheduleTrackSummary; date: stri
 
 function PlaceholderTimeSlot({
   date,
-  talk
+  talk,
 }: {
   date: string
   talk: TrackTalk
@@ -100,7 +118,7 @@ function PlaceholderTimeSlot({
     <a
       type="button"
       href="/cfp"
-      className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 py-3 pb-4 hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+      className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 py-3 pb-4 hover:border-gray-400 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
     >
       <p className="mt-1 font-mono text-sm text-slate-500">Submit to speak</p>
       <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
@@ -110,8 +128,10 @@ function PlaceholderTimeSlot({
 
 function YouTubeEmbed({ url }: { url: string }) {
   // Extract video ID from YouTube URL
-  const videoId = url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/)?.[1]
-  
+  const videoId = url.match(
+    /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/,
+  )?.[1]
+
   if (!videoId) return null
 
   return (
@@ -127,16 +147,12 @@ function YouTubeEmbed({ url }: { url: string }) {
   )
 }
 
-function TalkTimeSlot({
-  date,
-  talk,
-}: {
-  date: string
-  talk: TrackTalk
-}) {
+function TalkTimeSlot({ date, talk }: { date: string; talk: TrackTalk }) {
   return (
     <div className="relative block">
-      {!talk.talk || !talk.talk.speaker || !(talk.talk.speaker && 'slug' in talk.talk.speaker) ? (
+      {!talk.talk ||
+      !talk.talk.speaker ||
+      !(talk.talk.speaker && 'slug' in talk.talk.speaker) ? (
         <h4 className="text-lg font-semibold tracking-tight text-blue-900">
           {talk.talk?.title || talk.placeholder || 'TBD'}
         </h4>
@@ -149,9 +165,7 @@ function TalkTimeSlot({
         </a>
       )}
       <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
-      {talk.talk?.video && (
-        <YouTubeEmbed url={talk.talk.video} />
-      )}
+      {talk.talk?.video && <YouTubeEmbed url={talk.talk.video} />}
     </div>
   )
 }
@@ -211,16 +225,30 @@ function TimeSlots({
   )
 }
 
-function ScheduleStatic({ tracks, date }: { tracks: ScheduleTrack[]; date: string }) {
+function ScheduleStatic({
+  tracks,
+  date,
+}: {
+  tracks: ScheduleTrack[]
+  date: string
+}) {
   return (
     <div className="hidden lg:grid lg:grid-cols-3 lg:gap-x-8">
       {tracks.map((track, trackIndex) => (
         <section key={`track-${trackIndex}`}>
-          <TrackSummary track={{
-            ...track,
-            name: `Track ${trackIndex + 1}`,
-          }} date={date} />
-          <TimeSlots track={track} date={date} trackIndex={trackIndex} className="mt-10" />
+          <TrackSummary
+            track={{
+              ...track,
+              name: `Track ${trackIndex + 1}`,
+            }}
+            date={date}
+          />
+          <TimeSlots
+            track={track}
+            date={date}
+            trackIndex={trackIndex}
+            className="mt-10"
+          />
         </section>
       ))}
     </div>
@@ -233,15 +261,18 @@ export function Schedule({ schedule }: { schedule: ConferenceSchedule }) {
       <Container className="relative z-10">
         <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">
           <h2 className="font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
-            Our three-track schedule: Expertly configured and deployed with brilliant sessions from the cloud-native ecosystem.
+            Our three-track schedule: Expertly configured and deployed with
+            brilliant sessions from the cloud-native ecosystem.
           </h2>
           <p className="mt-4 font-display text-2xl tracking-tight text-blue-900">
-            Dive into our multi-cluster mesh of cloud-native knowledge. Orchestrate your conference experience by selecting the sessions that best scale your expertise.
+            Dive into our multi-cluster mesh of cloud-native knowledge.
+            Orchestrate your conference experience by selecting the sessions
+            that best scale your expertise.
           </p>
         </div>
       </Container>
       <div className="relative mt-14 sm:mt-24">
-        <BackgroundImage position="right" className="-bottom-32 -top-40" />
+        <BackgroundImage position="right" className="-top-40 -bottom-32" />
         <Container className="relative">
           <ScheduleTabbed tracks={schedule.tracks} date={schedule.date} />
           <ScheduleStatic tracks={schedule.tracks} date={schedule.date} />
