@@ -41,18 +41,34 @@ export function FeaturedSpeakers({
             >
               {speakers.map((person) => (
                 <li key={person.name}>
-                  <a href={isOrganizers ? '#' : `/speaker/${person.slug}`}>
-                    <Image
-                      className="mx-auto h-56 w-56 rounded-full object-contain"
-                      src={person.image || '/images/default-avatar.png'}
-                      alt={person.name}
-                      width={224}
-                      height={224}
-                    />
-                    <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
-                      {person.name}
-                    </h3>
-                  </a>
+                  {isOrganizers ? (
+                    <>
+                      <Image
+                        className="mx-auto h-56 w-56 rounded-full object-contain"
+                        src={person.image || '/images/default-avatar.png'}
+                        alt={person.name}
+                        width={224}
+                        height={224}
+                      />
+                      <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
+                        {person.name}
+                      </h3>
+                    </>
+                  ) : (
+                    <a href={`/speaker/${person.slug}`}>
+                      <Image
+                        className="mx-auto h-56 w-56 rounded-full object-contain"
+                        src={person.image || '/images/default-avatar.png'}
+                        alt={person.name}
+                        width={224}
+                        height={224}
+                      />
+                      <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
+                        {person.name}
+                      </h3>
+                    </a>
+                  )}
+
                   <p className="text-l leading-6 text-gray-600">
                     {person.title}
                   </p>
