@@ -270,11 +270,15 @@ function ProposalDetailsForm({
             label="Presentation Format"
             value={format}
             setValue={setFormat}
-            options={new Map(
-              Array.from(formats).filter(
-                ([key]) => key !== Format.presentation_25 && key !== Format.presentation_45
+            options={
+              new Map(
+                Array.from(formats).filter(
+                  ([key]) =>
+                    key !== Format.presentation_25 &&
+                    key !== Format.presentation_45,
+                ),
               )
-            )}
+            }
           />
         </div>
 
@@ -380,7 +384,9 @@ function SpeakerDetailsForm({
   const [speakerEmail, setSpeakerEmail] = useState(email)
   const [speakerImage, setSpeakerImage] = useState(speaker?.image ?? '')
   const [speakerFlags, setSpeakerFlags] = useState(speaker?.flags ?? [])
-  const [speakerLinks, setSpeakerLinks] = useState(speaker?.links ?? [''])
+  const [speakerLinks, setSpeakerLinks] = useState(
+    speaker?.links?.length ? speaker.links : [''],
+  )
 
   const [imageError, setImageError] = useState('')
   const [isUploading, setIsUploading] = useState(false)

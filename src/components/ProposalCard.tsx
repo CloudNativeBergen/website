@@ -156,7 +156,6 @@ export function ProposalCard({
             {proposal.status === Status.accepted ? (
               <>Your proposal has been accepted.</>
             ) : (
-              // <PortableText value={proposal.description} />
               <>{portableTextToString(proposal.description)}</>
             )}
           </p>
