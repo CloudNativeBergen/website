@@ -11,6 +11,7 @@ import { actionStateMachine } from '@/lib/proposal/states'
 import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { formatDate } from '@/lib/time'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,7 +97,7 @@ export const POST = auth(
         comment: comment || '',
         event: {
           location: conference.city,
-          date: conference.start_date,
+          date: formatDate(conference.start_date),
           name: conference.title,
           url: (conference.domains?.[0] ?? ''),
         }
