@@ -1,6 +1,5 @@
 import { Container } from '@/components/Container'
 import { Logo } from '@/components/Logo'
-import { GitHubIcon, LinkedInIcon, BlueskyIcon } from '@/components/SocialIcons'
 import { Conference } from '@/lib/conference/types'
 import { iconForLink } from '@/components/SocialIcons'
 

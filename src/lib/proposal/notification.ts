@@ -1,7 +1,5 @@
 import sgMail from '@sendgrid/mail'
 import assert from 'assert'
-import config from '@/../next.config'
-import { formatDate } from '@/lib/time'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 
