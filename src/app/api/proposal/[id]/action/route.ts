@@ -10,6 +10,7 @@ import { getProposal, updateProposalStatus } from '@/lib/proposal/sanity'
 import { actionStateMachine } from '@/lib/proposal/states'
 import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,14 +36,23 @@ export const POST = auth(
       })
     }
 
+    const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
+    if (conferenceError || !conference) {
+      console.error(conferenceError || 'Conference not found')
+      return proposalResponseError({
+        message: 'Conference not found',
+        type: 'not_found',
+        status: 404,
+      })
+    }
+
     const { proposal, err: error } = await getProposal(
       id,
       req.auth.speaker._id,
       req.auth.speaker.is_organizer,
     )
     if (error || !proposal || proposal._id !== id) {
-      if (error) console.error(error)
-      if (!proposal) console.error('Proposal not found')
+      console.error(error || 'Proposal not found')
 
       return proposalResponseError({
         message: 'Unauthorized',
@@ -84,6 +94,12 @@ export const POST = auth(
         speaker: proposal.speaker as Speaker,
         proposal: proposal,
         comment: comment || '',
+        event: {
+          location: conference.city,
+          date: conference.start_date,
+          name: conference.title,
+          url: (conference.domains?.[0] ?? ''),
+        }
       })
     }
 

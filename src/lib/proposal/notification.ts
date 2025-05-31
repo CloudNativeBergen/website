@@ -5,8 +5,6 @@ import { formatDate } from '@/lib/time'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 
-const { publicRuntimeConfig: c } = config
-
 assert(process.env.SENDGRID_API_KEY, 'SENDGRID_API_KEY is not set')
 assert(process.env.SENDGRID_FROM_EMAIL, 'SENDGRID_FROM_EMAIL is not set')
 assert(
@@ -39,11 +37,13 @@ export async function sendAcceptRejectNotification({
   action,
   speaker,
   proposal,
+  event,
   comment = '',
 }: {
   action: Action
   speaker: Speaker
   proposal: ProposalExisting
+  event: { location: string; date: string; name: string, url: string }
   comment: string
 }): Promise<[sgMail.ClientResponse, object]> {
   const templateId = getTemplate(action)
@@ -65,11 +65,7 @@ export async function sendAcceptRejectNotification({
         confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${proposal._id}`,
         comment,
       },
-      event: {
-        location: c?.event.location,
-        date: formatDate(c?.dates.conference),
-        name: c?.event.name,
-      },
+      event
     },
   }
 
