@@ -66,9 +66,17 @@ export function convertStringToPortableTextBlocks(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function convertTopicJsonToReference(topic: any): Reference | null {
   if (topic._type === 'reference' && topic._ref) {
-    return { _type: 'reference', _ref: topic._ref, _key: topic._key || generateUniqueKey() }
+    return {
+      _type: 'reference',
+      _ref: topic._ref,
+      _key: topic._key || generateUniqueKey(),
+    }
   } else if (topic._id) {
-    return { _type: 'reference', _ref: topic._id, _key: topic._key || generateUniqueKey() }
+    return {
+      _type: 'reference',
+      _ref: topic._id,
+      _key: topic._key || generateUniqueKey(),
+    }
   }
   return null
 }

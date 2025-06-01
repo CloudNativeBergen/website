@@ -20,8 +20,8 @@ export function Footer({ c }: { c: Conference }) {
           ))}
         </div>
         <p className="mt-6 text-base text-slate-500 md:mt-0">
-          Copyright &copy; {new Date().getFullYear()} {c.organizer}. All
-          rights reserved.
+          Copyright &copy; {new Date().getFullYear()} {c.organizer}. All rights
+          reserved.
         </p>
       </Container>
     </footer>

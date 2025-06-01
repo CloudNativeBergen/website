@@ -116,24 +116,27 @@ export default async function Info() {
     console.error('Error fetching conference data:', error)
     return (
       <div className="container mx-auto mt-10">
-        <h2 className="text-lg font-bold text-red-600">Error loading conference data</h2>
+        <h2 className="text-lg font-bold text-red-600">
+          Error loading conference data
+        </h2>
         <p className="text-gray-600">Please try again later.</p>
       </div>
     )
   }
 
-  const slots = conference.schedules && conference.schedules.length > 0
-    ? scheduleToSlots(conference.schedules[0])
-    : []
+  const slots =
+    conference.schedules && conference.schedules.length > 0
+      ? scheduleToSlots(conference.schedules[0])
+      : []
 
   return (
     <>
-      <div className="relative py-20 sm:pb-24 sm:pt-36">
-        <BackgroundImage className="-bottom-14 -top-36" />
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
+        <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="container mx-auto">
             <div className="text-left">
-              <h1 className="text-3xl font-bold leading-9 tracking-tight text-gray-900 sm:text-4xl">
+              <h1 className="text-3xl leading-9 font-bold tracking-tight text-gray-900 sm:text-4xl">
                 Conference Program
               </h1>
               <p className="mt-4 text-lg leading-7 text-gray-600">
@@ -200,7 +203,10 @@ export default async function Info() {
                             </a>
                           </p>
                           <p className="text-gray-500">
-                            by {talk.talk!.speaker && 'name' in talk.talk!.speaker ? talk.talk!.speaker.name : ''}
+                            by{' '}
+                            {talk.talk!.speaker && 'name' in talk.talk!.speaker
+                              ? talk.talk!.speaker.name
+                              : ''}
                           </p>
                         </div>
                       ))}

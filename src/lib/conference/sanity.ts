@@ -1,6 +1,6 @@
 import { clientWrite } from '../sanity/client'
 import { Conference } from './types'
-import { headers } from 'next/headers';
+import { headers } from 'next/headers'
 
 export async function getConferenceForCurrentDomain({
   organizers = false,
@@ -10,19 +10,19 @@ export async function getConferenceForCurrentDomain({
   topics = false,
   revalidate = 3600,
 }: {
-  organizers?: boolean;
-  schedule?: boolean;
-  sponsors?: boolean;
-  sponsorTiers?: boolean;
-  topics?: boolean;
-  revalidate?: number;
+  organizers?: boolean
+  schedule?: boolean
+  sponsors?: boolean
+  sponsorTiers?: boolean
+  topics?: boolean
+  revalidate?: number
 } = {}): Promise<{
   conference: Conference
   error: Error | null
 }> {
   try {
-    const headersList = await headers();
-    const domain = headersList.get('host') || '';
+    const headersList = await headers()
+    const domain = headersList.get('host') || ''
     return await getConferenceForDomain(
       domain,
       organizers,
@@ -31,11 +31,11 @@ export async function getConferenceForCurrentDomain({
       sponsorTiers,
       topics,
       revalidate,
-    );
+    )
   } catch (err) {
-    const error = err as Error;
-    const conference = {} as Conference;
-    return { conference, error };
+    const error = err as Error
+    const conference = {} as Conference
+    return { conference, error }
   }
 }
 
@@ -56,12 +56,18 @@ export async function getConferenceForDomain(
   try {
     const query = `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{
       ...,
-      ${organizers ? `organizers[]->{
+      ${
+        organizers
+          ? `organizers[]->{
       ...,
       "slug": slug.current,
       "image": image.asset->url
-      },` : ''}
-      ${schedule ? `schedules[]-> {
+      },`
+          : ''
+      }
+      ${
+        schedule
+          ? `schedules[]-> {
         ...,
         tracks[]{
           trackTitle,
@@ -84,15 +90,23 @@ export async function getConferenceForDomain(
             }
           }
         }
-      },` : ''}
-      ${sponsors ? `sponsors[]{
+      },`
+          : ''
+      }
+      ${
+        sponsors
+          ? `sponsors[]{
         sponsor->{
           name,
           website,
           logo,
         },
-      },` : ''}
-      ${sponsorTiers ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id]{
+      },`
+          : ''
+      }
+      ${
+        sponsorTiers
+          ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id]{
         title,
         tagline,
         price[]{
@@ -105,14 +119,20 @@ export async function getConferenceForDomain(
         },
         sold_out,
         most_popular
-      },` : ''}
-      ${topics ? `topics[]->{
+      },`
+          : ''
+      }
+      ${
+        topics
+          ? `topics[]->{
         _id,
         title,
         description,
         color,
         "slug": slug.current
-      },` : ''}
+      },`
+          : ''
+      }
     }`
 
     conference = await clientWrite.fetch(

@@ -41,9 +41,9 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                 <a
                   type="button"
                   href="/sponsor"
-                  className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 p-10 text-center hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:gap-y-16"
+                  className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 p-10 text-center hover:border-gray-400 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none sm:gap-y-16"
                 >
-                  <p className="mt-1 font-mono text-md text-slate-500">
+                  <p className="text-md mt-1 font-mono text-slate-500">
                     Become our sponsor
                   </p>
                 </a>

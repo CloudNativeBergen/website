@@ -40,11 +40,11 @@ export default defineType({
       color: 'color',
     },
     prepare(selection) {
-      const { title, color } = selection;
+      const { title, color } = selection
       return {
         title,
         subtitle: color,
-      };
+      }
     },
   },
 })

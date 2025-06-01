@@ -2,46 +2,58 @@ import { CheckIcon } from '@heroicons/react/20/solid'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity';
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
 }
 
-function PriceFormat({ price }: { price: { amount: number; currency: string }[] }) {
+function PriceFormat({
+  price,
+}: {
+  price: { amount: number; currency: string }[]
+}) {
   return (
     <span className="text-3xl font-bold tracking-tight text-gray-900">
-      {price[0].amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")} {price[0].currency}
+      {price[0].amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}{' '}
+      {price[0].currency}
     </span>
   )
 }
 
 export default async function Sponsor() {
-  const { conference, error } = await getConferenceForCurrentDomain({ sponsorTiers: true });
+  const { conference, error } = await getConferenceForCurrentDomain({
+    sponsorTiers: true,
+  })
   if (error) {
-    console.error("Failed to load conference data:", error);
+    console.error('Failed to load conference data:', error)
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <h2 className="text-2xl font-bold text-red-600 mb-4">Unable to load sponsor information</h2>
-        <p className="text-gray-700 mb-6">We&apos;re experiencing technical difficulties. Please try again later.</p>
+      <div className="flex min-h-screen flex-col items-center justify-center p-4">
+        <h2 className="mb-4 text-2xl font-bold text-red-600">
+          Unable to load sponsor information
+        </h2>
+        <p className="mb-6 text-gray-700">
+          We&apos;re experiencing technical difficulties. Please try again
+          later.
+        </p>
         <Button href="/" className="bg-blue-600 text-white hover:bg-blue-500">
           Return to Home
         </Button>
       </div>
-    );
+    )
   }
 
-  const sponsorTiers = conference?.sponsor_tiers || [];
+  const sponsorTiers = conference?.sponsor_tiers || []
   sponsorTiers.sort((a, b) => {
-    const amountA = a.price[0].amount;
-    const amountB = b.price[0].amount;
-    return amountA - amountB;
-  });
+    const amountA = a.price[0].amount
+    const amountB = b.price[0].amount
+    return amountA - amountB
+  })
 
   return (
     <>
-      <div className="relative py-20 sm:pb-24 sm:pt-36">
-        <BackgroundImage className="-bottom-14 -top-36" />
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
+        <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-xl lg:max-w-4xl lg:px-12">
             <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
@@ -49,10 +61,16 @@ export default async function Sponsor() {
             </h1>
             <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
               <p>
-                Showcase your brand to {conference.city}&apos;s cloud-native community by sponsoring {conference.title}. We&apos;ve designed flexible sponsorship packages to match your specific marketing goals and budget constraints.
+                Showcase your brand to {conference.city}&apos;s cloud-native
+                community by sponsoring {conference.title}. We&apos;ve designed
+                flexible sponsorship packages to match your specific marketing
+                goals and budget constraints.
               </p>
               <p>
-                Your sponsorship is vital—it enables us to deliver a world-class conference while keeping tickets affordable for attendees. Partner with us and gain valuable exposure while supporting the local tech ecosystem.
+                Your sponsorship is vital—it enables us to deliver a world-class
+                conference while keeping tickets affordable for attendees.
+                Partner with us and gain valuable exposure while supporting the
+                local tech ecosystem.
               </p>
             </div>
           </div>
@@ -64,9 +82,7 @@ export default async function Sponsor() {
               <div
                 key={index}
                 className={classNames(
-                  tier.most_popular
-                    ? 'lg:z-10 lg:rounded-b-none'
-                    : 'lg:mt-8',
+                  tier.most_popular ? 'lg:z-10 lg:rounded-b-none' : 'lg:mt-8',
                   tier.sold_out ? 'lg:opacity-50' : '',
                   index === 0 ? 'lg:rounded-r-none' : '',
                   index === sponsorTiers.length - 1 ? 'lg:rounded-l-none' : '',
@@ -78,16 +94,14 @@ export default async function Sponsor() {
                     <h3
                       id={`tier-${index}`}
                       className={classNames(
-                        tier.most_popular
-                          ? 'text-blue-600'
-                          : 'text-gray-900',
-                        'text-xl font-semibold leading-8',
+                        tier.most_popular ? 'text-blue-600' : 'text-gray-900',
+                        'text-xl leading-8 font-semibold',
                       )}
                     >
                       {tier.title}
                     </h3>
                     {tier.most_popular ? (
-                      <p className="rounded-full bg-blue-600/10 px-2.5 py-1 text-sm font-semibold leading-5 text-blue-600">
+                      <p className="rounded-full bg-blue-600/10 px-2.5 py-1 text-sm leading-5 font-semibold text-blue-600">
                         Most popular
                       </p>
                     ) : null}
@@ -99,7 +113,7 @@ export default async function Sponsor() {
                     <span className="text-3xl font-bold tracking-tight text-gray-900">
                       <PriceFormat price={tier.price} />
                     </span>
-                    <span className="text-sm font-semibold leading-6 text-gray-600"></span>
+                    <span className="text-sm leading-6 font-semibold text-gray-600"></span>
                   </p>
                   <ul
                     role="list"
@@ -123,14 +137,14 @@ export default async function Sponsor() {
                     className={classNames(
                       tier.most_popular
                         ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-500'
-                        : 'text-blue-600 ring-1 ring-inset ring-blue-200 hover:ring-blue-300',
-                      'mt-8 block rounded-md px-3 py-2 text-center text-sm font-semibold leading-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600',
+                        : 'text-blue-600 ring-1 ring-blue-200 ring-inset hover:ring-blue-300',
+                      'mt-8 block rounded-md px-3 py-2 text-center text-sm leading-6 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600',
                     )}
                   >
                     Become a &apos;{tier.title}&apos; sponsor
                   </Button>
                 ) : (
-                  <p className="mt-8 text-center text-sm font-semibold leading-6 text-gray-600">
+                  <p className="mt-8 text-center text-sm leading-6 font-semibold text-gray-600">
                     Sold out
                   </p>
                 )}
