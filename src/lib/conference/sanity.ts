@@ -51,8 +51,10 @@ export async function getConferenceForDomain(
   let conference = {} as Conference
   let error = null
 
+  const wildcardSubdomain = domain.split('.').length > 2 ? domain.replace(/^[^.]+/, '*') : domain;
+
   try {
-    const query = `*[ _type == "conference" && $domain in domains][0]{
+    const query = `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{
       ...,
       ${organizers ? `organizers[]->{
       ...,
@@ -115,7 +117,7 @@ export async function getConferenceForDomain(
 
     conference = await clientWrite.fetch(
       query,
-      { domain },
+      { domain, wildcardSubdomain },
       {
         next: {
           revalidate: revalidate,
