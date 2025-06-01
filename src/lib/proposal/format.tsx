@@ -211,6 +211,10 @@ export function FormatStatus({ status }: { status?: string }) {
       text = statuses.get(Status.withdrawn) ?? status
       color = 'bg-red-100 text-red-800'
       break
+    case Status.deleted:
+      text = statuses.get(Status.deleted) ?? status
+      color = 'bg-gray-100 text-gray-800'
+      break
     default:
       text = 'Unknown'
       color = 'bg-gray-100 text-gray-800'

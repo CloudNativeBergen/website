@@ -21,6 +21,7 @@ import {
 } from '@heroicons/react/20/solid'
 import { Speaker } from '@/lib/speaker/types'
 import { postProposalAction } from '@/lib/proposal/client'
+import { TrashIcon } from '@heroicons/react/24/solid'
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -43,6 +44,7 @@ function colorForAction(action: Action): [string, string, string] {
       ]
     case Action.reject:
     case Action.withdraw:
+    case Action.delete:
       return ['bg-red-100', 'text-red-600', 'bg-red-600 hover:bg-red-500']
   }
 
@@ -62,6 +64,8 @@ function iconForAction(
       return ArchiveBoxXMarkIcon
     case Action.withdraw:
       return XMarkIcon
+    case Action.delete:
+      return TrashIcon
   }
 
   return XMarkIcon
@@ -163,7 +167,7 @@ export function ProposalActionModal({
                     {error && (
                       <div className="mt-2">
                         <p className="text-sm text-red-500">
-                          Server error: &quote;{error}&quote;
+                          Server error: &quot;{error}&quot;
                         </p>
                       </div>
                     )}

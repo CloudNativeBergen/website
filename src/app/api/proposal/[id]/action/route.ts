@@ -2,11 +2,12 @@ import {
   Action,
   ActionInput,
   ProposalActionResponse,
+  Status,
 } from '@/lib/proposal/types'
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { proposalResponseError } from '@/lib/proposal/server'
 import { NextResponse } from 'next/server'
-import { getProposal, updateProposalStatus } from '@/lib/proposal/sanity'
+import { deleteProposal, getProposal, updateProposalStatus } from '@/lib/proposal/sanity'
 import { actionStateMachine } from '@/lib/proposal/states'
 import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
@@ -71,10 +72,29 @@ export const POST = auth(
     if (!isValidAction) {
       console.error(`Invalid action ${action} for status ${proposal.status}`)
       return proposalResponseError({
-        message: 'Invalid action',
+        message: `Invalid action ${action} for status ${proposal.status}`,
         type: 'invalid_action',
         status: 400,
       })
+    }
+
+    if (status === Status.deleted) {
+      const { err: deleteError } = await deleteProposal(id)
+      if (deleteError) {
+        console.error(deleteError)
+        return proposalResponseError({
+          message: deleteError.message,
+          type: 'delete_error',
+          status: 500,
+        })
+      }
+      return new NextResponse(
+        JSON.stringify({
+          proposalStatus: Status.deleted,
+          status: 200,
+        } as ProposalActionResponse),
+        { status: 200 },
+      )
     }
 
     // Update the proposal status in the database

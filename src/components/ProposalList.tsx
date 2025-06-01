@@ -72,14 +72,18 @@ export function ProposalList({ initialProposals, cfpIsOpen }: { initialProposals
   // actionUpdateHandler updates the status of a proposal in the list
   // of proposals without making a request to the server.
   function actionUpdateHandler(id: string, status: Status) {
-    setProposals(
-      proposals.map((p) => {
-        if (p._id === id) {
-          p.status = status
-        }
-        return p
-      }),
-    )
+    if (status === Status.deleted) {
+      setProposals(proposals.filter((p) => p._id !== id))
+    } else {
+      setProposals(
+        proposals.map((p) => {
+          if (p._id === id) {
+            p.status = status
+          }
+          return p
+        }),
+      )
+    }
     window.history.replaceState({}, document.title, window.location.pathname)
   }
 

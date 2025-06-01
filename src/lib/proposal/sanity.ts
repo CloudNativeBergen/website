@@ -135,6 +135,19 @@ export async function updateProposal(
   return { proposal: updatedProposal, err }
 }
 
+export async function deleteProposal(
+  proposalId: string,
+): Promise<{ err: Error | null }> {
+  let err = null
+  try {
+    await clientWrite.delete(proposalId)
+  } catch (error) {
+    console.error('Error deleting proposal:', error)
+    err = error as Error
+  }
+  return { err }
+}
+
 export async function updateProposalStatus(
   proposalId: string,
   status: Status,
