@@ -2,14 +2,17 @@ import {
   Action,
   ActionInput,
   ProposalActionResponse,
+  Status,
 } from '@/lib/proposal/types'
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { proposalResponseError } from '@/lib/proposal/server'
 import { NextResponse } from 'next/server'
-import { getProposal, updateProposalStatus } from '@/lib/proposal/sanity'
+import { deleteProposal, getProposal, updateProposalStatus } from '@/lib/proposal/sanity'
 import { actionStateMachine } from '@/lib/proposal/states'
 import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { formatDate } from '@/lib/time'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,14 +38,23 @@ export const POST = auth(
       })
     }
 
+    const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
+    if (conferenceError || !conference) {
+      console.error(conferenceError || 'Conference not found')
+      return proposalResponseError({
+        message: 'Conference not found',
+        type: 'not_found',
+        status: 404,
+      })
+    }
+
     const { proposal, err: error } = await getProposal(
       id,
       req.auth.speaker._id,
       req.auth.speaker.is_organizer,
     )
     if (error || !proposal || proposal._id !== id) {
-      if (error) console.error(error)
-      if (!proposal) console.error('Proposal not found')
+      console.error(error || 'Proposal not found')
 
       return proposalResponseError({
         message: 'Unauthorized',
@@ -60,10 +72,29 @@ export const POST = auth(
     if (!isValidAction) {
       console.error(`Invalid action ${action} for status ${proposal.status}`)
       return proposalResponseError({
-        message: 'Invalid action',
+        message: `Invalid action ${action} for status ${proposal.status}`,
         type: 'invalid_action',
         status: 400,
       })
+    }
+
+    if (status === Status.deleted) {
+      const { err: deleteError } = await deleteProposal(id)
+      if (deleteError) {
+        console.error(deleteError)
+        return proposalResponseError({
+          message: deleteError.message,
+          type: 'delete_error',
+          status: 500,
+        })
+      }
+      return new NextResponse(
+        JSON.stringify({
+          proposalStatus: Status.deleted,
+          status: 200,
+        } as ProposalActionResponse),
+        { status: 200 },
+      )
     }
 
     // Update the proposal status in the database
@@ -84,6 +115,12 @@ export const POST = auth(
         speaker: proposal.speaker as Speaker,
         proposal: proposal,
         comment: comment || '',
+        event: {
+          location: conference.city,
+          date: formatDate(conference.start_date),
+          name: conference.title,
+          url: (conference.domains?.[0] ?? ''),
+        }
       })
     }
 

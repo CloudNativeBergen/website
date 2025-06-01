@@ -42,6 +42,7 @@ export enum Status {
   confirmed = 'confirmed', // confirmed by the speaker
   rejected = 'rejected', // rejected by the organizers
   withdrawn = 'withdrawn', // withdrawn by the speaker
+  deleted = 'deleted', // deleted by the speaker
 }
 
 // Action is an enum that represents the possible actions that can be taken on a proposal.
@@ -54,6 +55,7 @@ export enum Action {
   confirm = 'confirm',
   reject = 'reject',
   withdraw = 'withdraw',
+  delete = 'delete',
 }
 
 export interface ActionInput {
@@ -127,6 +129,7 @@ export const statuses = new Map([
   [Status.rejected, 'Rejected'],
   [Status.confirmed, 'Confirmed'],
   [Status.withdrawn, 'Withdrawn'],
+  [Status.deleted, 'Deleted'],
 ])
 
 export const languages = new Map([

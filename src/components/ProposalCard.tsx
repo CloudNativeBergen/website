@@ -5,6 +5,7 @@ import {
   CheckCircleIcon,
   EnvelopeIcon,
   PencilIcon,
+  TrashIcon,
   UserCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/solid'
@@ -92,6 +93,13 @@ export function ProposalCard({
   }
 
   if (proposal.status === Status.draft) {
+    actions.push({
+      label: Action.delete,
+      icon: TrashIcon,
+      onClick: () => {
+        actionCallback(proposal, Action.delete)
+      },
+    })
     actions.push({
       label: Action.submit,
       icon: EnvelopeIcon,

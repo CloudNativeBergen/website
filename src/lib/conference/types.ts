@@ -1,7 +1,7 @@
-import { Reference, TypedObject } from 'sanity'
-import { ProposalExisting } from '../proposal/types'
-import { Speaker } from '../speaker/types'
-import { Topic } from '../topic/types'
+import { Reference, TypedObject } from "sanity"
+import { Format, ProposalExisting } from "@/lib/proposal/types"
+import { Speaker } from "@/lib/speaker/types"
+import { Topic } from "@/lib/topic/types"
 
 export interface ConferenceProposals {
   conference: Conference | Reference
@@ -75,9 +75,10 @@ export interface Conference {
   registration_enabled: boolean
   contact_email: string
   social_links?: string[]
-  organizers?: Speaker[]
-  domains?: string[]
-  topics?: Topic[]
+  organizers: Speaker[]
+  domains: string[]
+  formats: Format[]
+  topics: Topic[]
   sponsors?: ConferenceSponsor[]
   sponsor_tiers?: SponsorTier[]
   schedules?: ConferenceSchedule[]

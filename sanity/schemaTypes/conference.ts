@@ -1,3 +1,4 @@
+import { formats } from '../../src/lib/proposal/types'
 import { defineField, defineType, ValidationContext } from 'sanity'
 
 export default defineType({
@@ -155,12 +156,29 @@ export default defineType({
       title: 'Organizers',
       type: 'array',
       of: [{ type: 'reference', to: { type: 'speaker' } }],
+      validation: (Rule) => Rule.required().min(1).unique(),
     }),
     defineField({
       name: 'domains',
       title: 'Domains',
       type: 'array',
       of: [{ type: 'string' }],
+      validation: (Rule) => Rule.required().min(1).unique(),
+    }),
+    defineField({
+      name: 'formats',
+      title: 'Formats',
+      description: 'Formats for CFP submissions and agenda categorization',
+      type: 'array',
+      of: [
+        {
+          type: 'string',
+          options: {
+            list: Array.from(formats).map(([value, title]) => ({ value, title })),
+          }
+        },
+      ],
+      validation: (Rule) => Rule.required().min(1).unique(),
     }),
     defineField({
       name: 'topics',
@@ -173,6 +191,7 @@ export default defineType({
           to: [{ type: 'topic' }],
         },
       ],
+      validation: (Rule) => Rule.required().min(1).unique(),
     }),
     defineField({
       name: 'sponsors',

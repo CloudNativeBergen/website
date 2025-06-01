@@ -2,6 +2,7 @@ import {
   LockClosedIcon,
   BellAlertIcon,
   CalendarDaysIcon,
+  ClipboardDocumentCheckIcon,
 } from '@heroicons/react/20/solid'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
@@ -9,6 +10,7 @@ import { Container } from '@/components/Container'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
+import { formats } from '@/lib/proposal/types'
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
@@ -16,6 +18,13 @@ function classNames(...classes: string[]) {
 
 export default async function CFP() {
   const { conference } = await getConferenceForCurrentDomain({ topics: true })
+  const talkFormats = conference.formats
+    .filter((formatId) => !formatId.startsWith('workshop_'))
+    .map((formatId) => formats.get(formatId))
+  const workshopFormats = conference.formats
+    .filter((formatId) => formatId.startsWith('workshop_'))
+    .map((formatId) => formats.get(formatId))
+  const hasWorkshops = Array.isArray(workshopFormats) && workshopFormats.length > 0;
 
   const datesToRemember = [
     {
@@ -70,24 +79,53 @@ export default async function CFP() {
 
             <dl className="mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 sm:gap-x-16 sm:gap-y-10 sm:text-center lg:auto-cols-auto lg:grid-flow-col lg:grid-cols-none lg:justify-start lg:text-left">
               {[
-                ['Presentation languages', 'Norwegian / English'],
-                ['Presentation format', '10 minutes / 20 minutes / 40 minutes'],
+                ['Languages', ['Norwegian', 'English']],
+                ['Presentation formats', talkFormats],
+                ['Workshop formats', workshopFormats],
               ].map(([name, value]) => (
-                <div key={name}>
+                <div key={String(name)}>
                   <dt className="font-mono text-sm text-blue-600">{name}</dt>
                   <dd className="mt-0.5 text-2xl font-semibold tracking-tight text-blue-900">
-                    {value}
+                    {Array.isArray(value) ? (
+                      <ul className="space-y-1">
+                        {value.map((item, index) => (
+                          <li key={index}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      value
+                    )}
                   </dd>
                 </div>
               ))}
             </dl>
+            {hasWorkshops && (
+              <div className="mt-10 rounded-xl bg-gradient-to-br from-blue-100/80 to-blue-200/80 p-1 shadow-lg">
+                <div className="rounded-lg bg-white px-6 py-6 sm:p-8">
+                  <h2 className="font-display text-3xl font-semibold tracking-tight text-blue-700 sm:text-4xl mb-2 flex items-center gap-2">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-blue-600">
+                      <ClipboardDocumentCheckIcon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    Hands-on Workshops
+                  </h2>
+                  <p className="mt-2 text-lg text-blue-900">
+                    This conference also includes hands-on workshops led by experienced instructors. These sessions are designed to provide practical, in-depth learning opportunities. If you have a workshop idea, we encourage you to submit a proposal.
+                  </p>
+                  <ul className="mt-4 list-disc pl-6 text-base text-blue-900">
+                    {workshopFormats.map((format, idx) => (
+                      <li key={idx}>{format}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
 
             <h2 className="mt-10 font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
               Process and Details
             </h2>
             <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
               <p>
-                We are looking for talks that are relevant to the community and
+                We are looking for content that is relevant to the community and
                 that provide valuable insights. We welcome speakers of all
                 levels of experience, from first-time presenters to seasoned
                 experts.
@@ -99,7 +137,7 @@ export default async function CFP() {
                 environment for everyone.
               </p>
               <p>
-                We are especially interested in talks that cover the following
+                We are especially interested in content that covers the following
                 topics:
               </p>
               <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">

@@ -193,8 +193,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
     setProposals(updatedProposals)
   }
 
-  const [filteredProposals, setFilteredProposals] =
-    useState<ProposalExisting[]>(proposals)
+  const [proposalStatusFilter, setProposalStatusFilter] = useState<Status | undefined>(undefined)
 
   const total = proposals.length
   const speakers = Array.from(
@@ -214,12 +213,6 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
   const withdrawn = proposals.filter(
     (p) => p.status === Status.withdrawn,
   ).length
-
-  function filterClickHandler(status?: Status) {
-    if (status === undefined) return setFilteredProposals(proposals)
-
-    setFilteredProposals(proposals.filter((p) => p.status === status))
-  }
 
   return (
     <>
@@ -245,7 +238,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
           <div className="flex gap-4">
             <div
               className="flex cursor-pointer flex-col items-center"
-              onClick={filterClickHandler.bind(null, undefined)}
+              onClick={setProposalStatusFilter.bind(null, undefined)}
             >
               <p className="text-3xl font-semibold text-gray-900">{total}</p>
               <p className="text-sm text-gray-500">Total</p>
@@ -258,7 +251,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
             </div>
             <div
               className="flex cursor-pointer flex-col items-center"
-              onClick={filterClickHandler.bind(null, Status.accepted)}
+              onClick={setProposalStatusFilter.bind(null, Status.accepted)}
             >
               <p className="text-3xl font-semibold text-green-500">
                 {accepted}
@@ -267,7 +260,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
             </div>
             <div
               className="flex cursor-pointer flex-col items-center"
-              onClick={filterClickHandler.bind(null, Status.confirmed)}
+              onClick={setProposalStatusFilter.bind(null, Status.confirmed)}
             >
               <p className="text-3xl font-semibold text-blue-500">
                 {confirmed}
@@ -276,14 +269,14 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
             </div>
             <div
               className="flex cursor-pointer flex-col items-center"
-              onClick={filterClickHandler.bind(null, Status.rejected)}
+              onClick={setProposalStatusFilter.bind(null, Status.rejected)}
             >
               <p className="text-3xl font-semibold text-red-500">{rejected}</p>
               <p className="text-sm text-gray-500">Rejected</p>
             </div>
             <div
               className="flex cursor-pointer flex-col items-center"
-              onClick={filterClickHandler.bind(null, Status.withdrawn)}
+              onClick={setProposalStatusFilter.bind(null, Status.withdrawn)}
             >
               <p className="text-3xl font-semibold text-red-500">{withdrawn}</p>
               <p className="text-sm text-gray-500">Withdrawn</p>
@@ -342,7 +335,10 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredProposals.map((proposal) => (
+                  {proposals.filter((p) => {
+                    if (!proposalStatusFilter) return true
+                    return p.status === proposalStatusFilter
+                  }).map((proposal) => (
                     <tr key={proposal._id}>
                       <td className="py-4 pr-3 pl-4 text-sm font-medium whitespace-nowrap text-gray-900 sm:pl-0 md:whitespace-normal">
                         {proposal.title}

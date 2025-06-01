@@ -46,12 +46,14 @@ export function ProposalForm({
   proposalId,
   userEmail,
   conference,
+  allowedFormats,
 }: {
   initialProposal: ProposalInput
   initialSpeaker: SpeakerInput
   proposalId?: string
   userEmail: string
   conference: Conference
+  allowedFormats: Format[]
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
@@ -136,6 +138,7 @@ export function ProposalForm({
           proposal={proposal}
           setProposal={setProposal}
           conference={conference}
+          allowedFormats={allowedFormats}
         />
         <SpeakerDetailsForm
           speaker={speaker}
@@ -185,10 +188,12 @@ function ProposalDetailsForm({
   proposal,
   setProposal,
   conference,
+  allowedFormats,
 }: {
   proposal: ProposalInput
   setProposal: (proposal: ProposalInput) => void
   conference: Conference
+  allowedFormats: Format[]
 }) {
   const [title, setTitle] = useState(proposal?.title ?? '')
   const [language, setLanguage] = useState(
@@ -272,10 +277,8 @@ function ProposalDetailsForm({
             setValue={setFormat}
             options={
               new Map(
-                Array.from(formats).filter(
-                  ([key]) =>
-                    key !== Format.presentation_25 &&
-                    key !== Format.presentation_45,
+                Array.from(formats).filter(([key]) =>
+                  allowedFormats.includes(key as Format),
                 ),
               )
             }

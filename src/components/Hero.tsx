@@ -121,9 +121,11 @@ export function Hero({ conference }: { conference: Conference }) {
 
           <ActionButtons conference={conference} />
 
-          <dl className="mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 sm:gap-x-16 sm:gap-y-10 sm:text-center lg:auto-cols-auto lg:grid-flow-col lg:grid-cols-none lg:justify-start lg:text-left">
-            {conference.vanity_metrics?.map((metric) => (
-              <div key={metric.label}>
+          <dl
+            className={`mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 lg:grid-cols-${Math.min(conference.vanity_metrics?.length || 0, 6)} lg:justify-start lg:text-left`}
+          >
+            {conference.vanity_metrics?.slice(0, 6).map((metric) => (
+              <div key={metric.label} className="text-center sm:text-center lg:text-left">
                 <dt className="font-mono text-sm text-blue-600">
                   {metric.label}
                 </dt>

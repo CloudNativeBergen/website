@@ -12,6 +12,8 @@ export function actionStateMachine(
     case Status.draft:
       if (action === Action.submit) {
         status = Status.submitted
+      } else if (action === Action.delete) {
+        status = Status.deleted
       }
       break
     case Status.submitted:
