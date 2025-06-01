@@ -141,6 +141,7 @@ export default async function Submit({
               proposalId={proposalId}
               userEmail={session.speaker.email}
               conference={conference}
+              allowedFormats={conference.formats}
             />
           </div>
         </Container>
