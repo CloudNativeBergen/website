@@ -79,7 +79,7 @@ function Dropdown({
             <MenuItem>
               {({ focus }) => (
                 <a
-                  href={`https://cloudnativebergen.sanity.studio/studio/structure/talk;${proposal._id}`}
+                  href={`/cfp/admin/${proposal._id}/view`}
                   className={classNames(
                     focus ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
                     'group flex items-center px-4 py-2 text-sm',
@@ -89,7 +89,7 @@ function Dropdown({
                     className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500"
                     aria-hidden="true"
                   />
-                  Open in Sanity
+                  View
                 </a>
               )}
             </MenuItem>
