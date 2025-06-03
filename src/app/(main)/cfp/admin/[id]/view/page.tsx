@@ -67,17 +67,17 @@ export default async function AdminViewProposal({ params }: Props) {
               </div>
               <div>
                 <h2 className="text-lg font-medium text-gray-700">Outline</h2>
-                <p className="text-gray-900">
+                <div className="text-gray-900">
                   {proposal.outline && proposal.outline.trim() !== '' ? (
                     proposal.outline.split('\n').map((line, index) => (
-                      <p key={index} className="mb-2">
+                      <div key={index} className="mb-2">
                         {line}
-                      </p>
+                      </div>
                     ))
                   ) : (
                     'No outline available'
                   )}
-                </p>
+                </div>
               </div>
               <div>
                 <h2 className="text-lg font-medium text-gray-700">Topics</h2>
