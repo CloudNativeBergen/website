@@ -32,10 +32,10 @@ export const GET = auth(
       })
     }
 
-    const { proposal, err: error } = await getProposal(
-      id as string,
-      req.auth.speaker._id,
-    )
+    const { proposal: existingProposal, proposalError: error } = await getProposal({
+      id: id as string,
+      speakerId: req.auth.speaker._id,
+    })
     if (error) {
       return proposalResponseError({
         error,
@@ -45,8 +45,8 @@ export const GET = auth(
       })
     }
 
-    if (proposal) {
-      return proposalResponse(proposal)
+    if (existingProposal) {
+      return proposalResponse(existingProposal)
     } else {
       return proposalResponseError({
         message: 'Document not found',
@@ -96,13 +96,13 @@ export const PUT = auth(
       })
     }
 
-    const { proposal: existingProposal, err: checkErr } = await getProposal(
-      id as string,
-      req.auth.speaker._id,
-    )
-    if (checkErr) {
+    const { proposal: existingProposal, proposalError } = await getProposal({
+      id: id as string,
+      speakerId: req.auth.speaker._id,
+    })
+    if (proposalError) {
       return proposalResponseError({
-        error: checkErr,
+        error: proposalError,
         message: 'Error fetching proposal from database',
         type: 'server',
         status: 500,

@@ -7,48 +7,57 @@ import { groq } from 'next-sanity'
 import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
 import { convertStringToPortableTextBlocks } from './validation'
+import { Review } from '@/lib/review/types'
 
-export async function getProposal(
-  id: string,
-  speakerId: string,
+export async function getProposal({
+  id,
+  speakerId,
   isOrganizer = false,
-): Promise<{ proposal: ProposalExisting; err: Error | null }> {
-  let err = null
-  let proposal: ProposalExisting = {} as ProposalExisting
+  includeReviews = false,
+}: {
+  id: string;
+  speakerId: string;
+  isOrganizer?: boolean;
+  includeReviews?: boolean;
+}): Promise<{ proposal: ProposalExisting; reviews?: Review[]; proposalError: Error | null }> {
+  let proposalError = null;
+  let proposal: ProposalExisting = {} as ProposalExisting;
 
-  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId'
+  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId';
 
   try {
-    proposal = await clientRead.fetch(
-      groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
+    const query = groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
       ...,
       speaker-> {
-      ...,
-      "image": image.asset->url
+        ...,
+        "image": image.asset->url
       },
       conference-> {
-      _id, title, start_date, end_date
+        _id, title, start_date, end_date
       },
       topics[]-> {
-      _id, title, color, slug, description
-      }
-    }[0]`,
-      { id, speakerId },
-      { cache: 'no-store' },
-    )
+        _id, title, color, slug, description
+      },
+      ${includeReviews && isOrganizer ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+        ...,
+        reviewer-> {
+          _id, name, email, image
+        }
+      }` : ''}
+    }[0]`;
+
+    proposal = await clientRead.fetch(query, { id, speakerId }, { cache: 'no-store' });
   } catch (error) {
-    console.error('Error fetching proposal:', error)
-    err = error as Error
+    console.error('Error fetching proposal:', error);
+    proposalError = error as Error;
   }
 
   if (proposal?.description) {
-    proposal.description = convertStringToPortableTextBlocks(
-      proposal.description,
-    )
+    proposal.description = convertStringToPortableTextBlocks(proposal.description);
   }
 
   // @TODO - Check if the proposal is not found and return an error
-  return { proposal, err }
+  return { proposal, proposalError };
 }
 
 export async function getProposals({
