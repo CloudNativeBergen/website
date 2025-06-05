@@ -10,7 +10,7 @@ import { defineField, defineType } from 'sanity'
 
 export default defineType({
   name: 'talk',
-  title: 'Talk',
+  title: 'Talk Proposal',
   type: 'document',
   fields: [
     defineField({
