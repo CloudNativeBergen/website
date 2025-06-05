@@ -231,7 +231,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
             <h1 className="text-base leading-6 font-semibold text-gray-900">
-              Proposals
+              Proposals admin overview
             </h1>
             <p className="mt-2 text-sm text-gray-700">
               A list of all proposals submitted by speakers (drafts are not

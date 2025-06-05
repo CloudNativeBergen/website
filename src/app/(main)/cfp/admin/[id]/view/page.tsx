@@ -41,10 +41,10 @@ export default async function AdminViewProposal({ params }: Props) {
   }
 
   return (
-    <div className="relative py-20 sm:pt-36 sm:pb-24">
+    <div className="relative py-6 sm:pt-12 sm:pb-20">
       <BackgroundImage className="absolute inset-x-0 -top-36 -bottom-14" />
-      <Container className="relative">
-        <div className="mx-auto max-w-7xl lg:px-12">
+      <Container className="relative max-w-screen-2xl">
+        <div className="mx-auto max-w-screen-2xl lg:px-16">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Proposal Details */}
             <div className="lg:col-span-2 rounded-lg bg-white shadow-lg p-6">
