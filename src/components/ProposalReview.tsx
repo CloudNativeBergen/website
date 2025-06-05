@@ -71,7 +71,11 @@ export function ProposalReview({ user, proposal, initialReviews }: { user: Speak
       {/* Add New Review */}
       <div className="space-y-4 border-t border-gray-300 py-6">
         <h3 className="text-lg font-semibold text-gray-800">My Review</h3>
-        <ProposalReviewForm proposalId={proposal._id} review={userReview} onReviewSubmit={handleReviewUpdate} />
+        <ProposalReviewForm
+          proposalId={proposal._id}
+          review={userReview}
+          onReviewSubmit={handleReviewUpdate}
+        />
       </div>
 
       {/* Average Score */}

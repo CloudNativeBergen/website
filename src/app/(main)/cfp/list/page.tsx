@@ -33,7 +33,7 @@ export default async function SpeakerDashboard() {
     new Date() >= new Date(conference.cfp_start_date) &&
     new Date() <= new Date(conference.cfp_end_date)
 
-  const { proposals: initialProposals, error: proposalsError } =
+  const { proposals: initialProposals, proposalsError } =
     await getProposals({
       speakerId: session.speaker._id,
       conferenceId: conference?._id,

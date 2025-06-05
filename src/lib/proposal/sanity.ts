@@ -214,3 +214,58 @@ export async function createProposal(
 
   return { proposal: createdProposal, err }
 }
+
+export async function fetchNextUnreviewedProposal({
+  conferenceId,
+  reviewerId,
+  currentProposalId,
+}: {
+  conferenceId: string;
+  reviewerId: string;
+  currentProposalId?: string;
+}): Promise<{
+  nextProposal: {
+    _id: string;
+    title: string;
+    status: string;
+    speaker?: { _id: string; name: string };
+  } | null;
+  error: Error | null;
+}> {
+  let error = null;
+  let nextProposal = null;
+
+  const query = groq`
+    *[
+      _type == "talk" &&
+      conference._ref == $conferenceId &&
+      status == "${Status.submitted}" &&
+      !(_id in *[_type == "review" && reviewer._ref == $reviewerId].proposal._ref) &&
+      _id != $currentProposalId
+    ] {
+      _id,
+      title,
+      status,
+      speaker->{ _id, name }
+    } | order(_createdAt asc)[0...1]
+  `;
+
+  try {
+    const proposals = await clientRead.fetch(
+      query,
+      { conferenceId, reviewerId, currentProposalId },
+      { cache: 'no-store' }
+    );
+
+    if (!proposals || proposals.length === 0) {
+      return { nextProposal: null, error: null };
+    }
+
+    nextProposal = proposals[0];
+  } catch (err) {
+    console.error('Error finding next unreviewed proposal:', err);
+    error = err as Error;
+  }
+
+  return { nextProposal, error };
+}

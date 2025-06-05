@@ -79,3 +79,35 @@ export async function postProposalAction(
 
   return (await res.json()) as ProposalActionResponse
 }
+
+export interface NextUnreviewedProposalResponse {
+  nextProposal: {
+    _id: string
+    title: string
+    status: string
+    speaker?: {
+      _id: string
+      name: string
+    }
+  } | null
+  error?: string
+}
+
+export async function fetchNextUnreviewedProposal(
+  currentProposalId?: string,
+): Promise<NextUnreviewedProposalResponse> {
+  const url = new URL(
+    `${process.env.NEXT_PUBLIC_URL || ''}/api/proposal/next-unreviewed`,
+  )
+
+  if (currentProposalId) {
+    url.searchParams.set('currentProposalId', currentProposalId)
+  }
+
+  const res = await fetch(url.toString(), {
+    cache: 'no-store',
+    next: { revalidate: 0 },
+  })
+
+  return (await res.json()) as NextUnreviewedProposalResponse
+}
