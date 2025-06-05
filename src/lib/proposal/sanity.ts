@@ -64,12 +64,14 @@ export async function getProposals({
   speakerId,
   conferenceId,
   returnAll = false,
+  includeReviews = false,
 }: {
   speakerId?: string
   conferenceId?: string
   returnAll?: boolean
-}): Promise<{ proposals: ProposalExisting[]; error: Error | null }> {
-  let error = null
+  includeReviews?: boolean
+}): Promise<{ proposals: ProposalExisting[]; proposalsError: Error | null }> {
+  let proposalsError = null
   let proposals: ProposalExisting[] = []
 
   const filters = [
@@ -94,7 +96,13 @@ export async function getProposals({
     },
     topics[]-> {
       _id, title, color, slug, description
-    }
+    },
+    ${includeReviews ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+      ...,
+      reviewer-> {
+        _id, name, email, image
+      }
+    }` : ''}
   } | order(conference->start_date desc, _updatedAt desc)`
 
   try {
@@ -106,9 +114,9 @@ export async function getProposals({
       },
       { cache: 'no-store' },
     )
-  } catch (e) {
-    console.error('Error fetching proposals:', e)
-    error = e as Error
+  } catch (error) {
+    console.error('Error fetching proposals:', error)
+    proposalsError = error as Error
   }
 
   proposals = proposals.map((proposal) => {
@@ -120,7 +128,7 @@ export async function getProposals({
     return proposal
   })
 
-  return { proposals, error }
+  return { proposals, proposalsError }
 }
 
 export async function updateProposal(

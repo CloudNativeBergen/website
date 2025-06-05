@@ -35,9 +35,10 @@ export default async function AllProposals() {
     )
   }
 
-  const { proposals, error: proposalsError } = await getProposals({
+  const { proposals, proposalsError } = await getProposals({
     conferenceId: conference._id,
     returnAll: true,
+    includeReviews: true,
   })
 
   if (proposalsError) {
