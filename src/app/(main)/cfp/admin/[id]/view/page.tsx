@@ -6,7 +6,9 @@ import { auth } from '@/lib/auth'
 import { getProposal } from '@/lib/proposal/sanity'
 import { audiences, formats, languages, levels, statuses } from '@/lib/proposal/types'
 import { flags } from '@/lib/speaker/types'
+import { ArrowLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid'
 import { PortableText } from '@portabletext/react'
+import Link from 'next/link'
 import React from 'react'
 
 type Props = {
@@ -18,10 +20,15 @@ export default async function AdminViewProposal({ params }: Props) {
   const session = await auth()
   if (!session || !session.speaker || !session.speaker.is_organizer) {
     return (
-      <Container className="py-10">
-        <h1 className="text-2xl font-bold text-red-500">Access Denied</h1>
-        <p className="mt-4 text-gray-700">You do not have permission to view this page.</p>
-      </Container>
+      <div className="relative py-6 sm:pt-12 sm:pb-20">
+        <BackgroundImage className="absolute inset-x-0 -top-36 -bottom-14" />
+        <Container className="relative max-w-screen-2xl">
+          <div className="mx-auto max-w-screen-2xl lg:px-16">
+            <h1 className="text-2xl font-bold text-red-500">Access Denied</h1>
+            <p className="mt-4 text-gray-700">You do not have permission to view this page.</p>
+          </div>
+        </Container>
+      </div>
     )
   }
 
@@ -34,9 +41,14 @@ export default async function AdminViewProposal({ params }: Props) {
 
   if (!proposal || proposalError) {
     return (
-      <Container className="py-10">
-        <h1 className="text-2xl font-bold text-red-500">Proposal not found</h1>
-      </Container>
+      <div className="relative py-6 sm:pt-12 sm:pb-20">
+        <BackgroundImage className="absolute inset-x-0 -top-36 -bottom-14" />
+        <Container className="relative max-w-screen-2xl">
+          <div className="mx-auto max-w-screen-2xl lg:px-16">
+            <h1 className="text-2xl font-bold text-red-500">Proposal not found</h1>
+          </div>
+        </Container>
+      </div>
     )
   }
 
@@ -45,6 +57,43 @@ export default async function AdminViewProposal({ params }: Props) {
       <BackgroundImage className="absolute inset-x-0 -top-36 -bottom-14" />
       <Container className="relative max-w-screen-2xl">
         <div className="mx-auto max-w-screen-2xl lg:px-16">
+          {/* Navigation Breadcrumb and Back Button */}
+          <div className="mb-6 flex items-center justify-between">
+            <nav aria-label="Breadcrumb">
+              <ol className="flex items-center space-x-2 text-sm text-gray-500">
+                <li>
+                  <Link href="/" className="hover:text-indigo-600 transition-colors">
+                    Home
+                  </Link>
+                </li>
+                <ChevronRightIcon className="h-4 w-4 flex-none text-gray-400" aria-hidden="true" />
+                <li>
+                  <Link href="/cfp" className="hover:text-indigo-600 transition-colors">
+                    CFP
+                  </Link>
+                </li>
+                <ChevronRightIcon className="h-4 w-4 flex-none text-gray-400" aria-hidden="true" />
+                <li>
+                  <Link href="/cfp/admin" className="hover:text-indigo-600 transition-colors">
+                    Admin
+                  </Link>
+                </li>
+                <ChevronRightIcon className="h-4 w-4 flex-none text-gray-400" aria-hidden="true" />
+                <li className="truncate max-w-[180px] sm:max-w-xs font-medium text-indigo-600">
+                  {proposal.title}
+                </li>
+              </ol>
+            </nav>
+
+            <Link
+              href="/cfp/admin"
+              className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-colors"
+            >
+              <ArrowLeftIcon className="-ml-0.5 mr-1.5 h-5 w-5 text-gray-400" aria-hidden="true" />
+              Back to List
+            </Link>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Proposal Details */}
             <div className="lg:col-span-2 rounded-lg bg-white shadow-lg p-6">
@@ -210,7 +259,7 @@ export default async function AdminViewProposal({ params }: Props) {
             </div>
           </div>
         </div>
-      </Container >
-    </div >
+      </Container>
+    </div>
   )
 }
