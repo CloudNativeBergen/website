@@ -89,7 +89,7 @@ function Dropdown({
                     className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500"
                     aria-hidden="true"
                   />
-                  View
+                  Review
                 </a>
               )}
             </MenuItem>
@@ -194,6 +194,9 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
   }
 
   const [proposalStatusFilter, setProposalStatusFilter] = useState<Status | undefined>(undefined)
+  const [showLanguageColumn, setShowLanguageColumn] = useState<boolean>(false)
+  const [showLevelColumn, setShowLevelColumn] = useState<boolean>(true)
+  const [showReviewColumn, setShowReviewColumn] = useState<boolean>(true)
 
   const total = proposals.length
   const speakers = Array.from(
@@ -228,7 +231,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
             <h1 className="text-base leading-6 font-semibold text-gray-900">
-              Proposals
+              Proposals admin overview
             </h1>
             <p className="mt-2 text-sm text-gray-700">
               A list of all proposals submitted by speakers (drafts are not
@@ -283,6 +286,47 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
             </div>
           </div>
         </div>
+        <div className="mt-4 flex space-x-3 items-center">
+          <div className="flex items-center">
+            <input
+              id="show-language"
+              name="show-language"
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+              checked={showLanguageColumn}
+              onChange={() => setShowLanguageColumn(!showLanguageColumn)}
+            />
+            <label htmlFor="show-language" className="ml-2 text-sm text-gray-700">
+              Show Language
+            </label>
+          </div>
+          <div className="flex items-center">
+            <input
+              id="show-level"
+              name="show-level"
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+              checked={showLevelColumn}
+              onChange={() => setShowLevelColumn(!showLevelColumn)}
+            />
+            <label htmlFor="show-level" className="ml-2 text-sm text-gray-700">
+              Show Level
+            </label>
+          </div>
+          <div className="flex items-center">
+            <input
+              id="show-review"
+              name="show-review"
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+              checked={showReviewColumn}
+              onChange={() => setShowReviewColumn(!showReviewColumn)}
+            />
+            <label htmlFor="show-review" className="ml-2 text-sm text-gray-700">
+              Show Review Score
+            </label>
+          </div>
+        </div>
         <div className="mt-8 flow-root">
           {/* @TODO make overflow play nice with the dropdown on smaller screens */}
           <div className="-mx-4 -my-2 overflow-x-auto overflow-y-visible sm:-mx-6 md:overflow-x-visible lg:-mx-8">
@@ -308,24 +352,36 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                     >
                       Format
                     </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-                    >
-                      Language
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-                    >
-                      Level
-                    </th>
+                    {showLanguageColumn && (
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                      >
+                        Language
+                      </th>
+                    )}
+                    {showLevelColumn && (
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                      >
+                        Level
+                      </th>
+                    )}
                     <th
                       scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
                     >
                       Status
                     </th>
+                    {showReviewColumn && (
+                      <th
+                        scope="col"
+                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
+                      >
+                        Score
+                      </th>
+                    )}
                     <th
                       scope="col"
                       className="relative py-3.5 pr-4 pl-3 sm:pr-0"
@@ -365,15 +421,53 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                       <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
                         <FormatFormat format={proposal.format} />
                       </td>
-                      <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
-                        <FormatLanguage language={proposal.language} />
-                      </td>
-                      <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
-                        <FormatLevel level={proposal.level} />
-                      </td>
+                      {showLanguageColumn && (
+                        <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
+                          <FormatLanguage language={proposal.language} />
+                        </td>
+                      )}
+                      {showLevelColumn && (
+                        <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
+                          <FormatLevel level={proposal.level} />
+                        </td>
+                      )}
                       <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
                         <FormatStatus status={proposal.status} />
                       </td>
+                      {showReviewColumn && (
+                        <td className="px-3 py-4 text-sm whitespace-nowrap text-gray-500">
+                          {proposal.reviews && proposal.reviews.length > 0 ? (
+                            (() => {
+                              const numReviews = proposal.reviews.length;
+                              const totalScore =
+                                proposal.reviews.reduce(
+                                  (acc, review) =>
+                                    acc +
+                                    review.score.content +
+                                    review.score.relevance +
+                                    review.score.speaker,
+                                  0,
+                                ) / numReviews;
+                              const averageScore = totalScore / 3;
+                              let scoreColor = 'text-gray-500'; // Default color
+                              if (averageScore < 3) {
+                                scoreColor = 'text-red-500';
+                              } else if (averageScore >= 3 && averageScore < 4) {
+                                scoreColor = 'text-orange-500';
+                              } else if (averageScore >= 4) {
+                                scoreColor = 'text-green-500';
+                              }
+                              return (
+                                <span className={scoreColor}>
+                                  {averageScore.toFixed(1)} ({numReviews})
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            'N/A'
+                          )}
+                        </td>
+                      )}
                       <td className="relative py-4 pr-4 pl-3 text-right text-sm font-medium whitespace-nowrap sm:pr-0">
                         <Dropdown
                           proposal={proposal}

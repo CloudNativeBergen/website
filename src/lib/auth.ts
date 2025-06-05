@@ -91,7 +91,13 @@ const config = {
         }
 
         token.account = account
-        token.speaker = { _id: speaker._id, is_organizer: speaker.is_organizer }
+        token.speaker = {
+          _id: speaker._id,
+          name: speaker.name,
+          email: speaker.email,
+          image: speaker.image,
+          is_organizer: speaker.is_organizer
+        }
       }
 
       return token

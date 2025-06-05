@@ -48,13 +48,13 @@ export const POST = auth(
       })
     }
 
-    const { proposal, err: error } = await getProposal(
+    const { proposal, proposalError } = await getProposal({
       id,
-      req.auth.speaker._id,
-      req.auth.speaker.is_organizer,
-    )
-    if (error || !proposal || proposal._id !== id) {
-      console.error(error || 'Proposal not found')
+      speakerId: req.auth.speaker._id,
+      isOrganizer: req.auth.speaker.is_organizer,
+    })
+    if (proposalError || !proposal || proposal._id !== id) {
+      console.error(proposalError || 'Proposal not found')
 
       return proposalResponseError({
         message: 'Unauthorized',

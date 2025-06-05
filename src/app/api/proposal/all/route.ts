@@ -37,7 +37,7 @@ export const GET = auth(async (req: NextAuthRequest) => {
     )
   }
 
-  const { proposals, error: proposalsError } = await getProposals({
+  const { proposals, proposalsError } = await getProposals({
     speakerId: req.auth.speaker._id,
     conferenceId: conference?._id,
     returnAll: req.auth.speaker.is_organizer,

@@ -1,7 +1,8 @@
 import { Speaker } from '@/lib/speaker/types'
-import { Conference, ConferenceSchedule } from '../conference/types'
-import { Topic } from '../topic/types'
+import { Conference, ConferenceSchedule } from '@/lib/conference/types'
+import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock, Reference } from 'sanity'
+import { Review } from '@/lib/review/types'
 
 export enum Language {
   norwegian = 'norwegian',
@@ -78,7 +79,7 @@ interface Proposal {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface ProposalInput extends Proposal {}
+export interface ProposalInput extends Proposal { }
 
 export interface ProposalExisting extends Proposal {
   _id: string
@@ -90,6 +91,7 @@ export interface ProposalExisting extends Proposal {
   speaker?: Speaker | Reference
   schedule?: ConferenceSchedule[]
   conference: Conference | Reference
+  reviews?: Review[]
 }
 
 export interface ProposalBaseResponse {
