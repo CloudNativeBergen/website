@@ -13,6 +13,7 @@ import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
+import { notifyProposalStatusChange } from '@/lib/slack/notify'
 
 export const dynamic = 'force-dynamic'
 
@@ -122,6 +123,11 @@ export const POST = auth(
           url: (conference.domains?.[0] ?? ''),
         }
       })
+    }
+
+    // Send Slack notification for confirm/withdraw actions
+    if (action === Action.confirm || action === Action.withdraw) {
+      await notifyProposalStatusChange(updatedProposal, action)
     }
 
     return new NextResponse(
