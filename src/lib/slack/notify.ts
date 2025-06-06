@@ -57,13 +57,8 @@ export async function notifyNewProposal(proposal: ProposalExisting) {
   let speakerName = 'Unknown'
   
   if (proposal.speaker && '_ref' in proposal.speaker) {
-    console.log('Speaker ID:', proposal.speaker._ref)
     const { speaker, err } = await getSpeaker(proposal.speaker._ref)
-    console.log('Fetched speaker:', speaker)
-    console.log('Error:', err)
-    
     if (!err && speaker && speaker.name) {
-      console.log('Setting speaker name to:', speaker.name)
       speakerName = speaker.name
     } else {
       console.log('Could not set speaker name. Conditions:', {
