@@ -11,6 +11,8 @@ import { Speaker, Flags } from '@/lib/speaker/types'
 import {
   ArchiveBoxXMarkIcon,
   ChevronDownIcon,
+  ChevronUpDownIcon,
+  ChevronUpIcon,
   ExclamationTriangleIcon,
   HeartIcon,
   MagnifyingGlassIcon,
@@ -161,6 +163,49 @@ function Dropdown({
   )
 }
 
+// Define the sort fields and their types
+type SortField = 'title' | 'speaker' | 'format' | 'language' | 'level' | 'status' | 'score';
+type SortDirection = 'asc' | 'desc';
+type SortConfig = {
+  field: SortField;
+  direction: SortDirection;
+} | null;
+
+function SortableHeader({
+  title,
+  field,
+  sortConfig,
+  onSort
+}: {
+  title: string;
+  field: SortField;
+  sortConfig: SortConfig;
+  onSort: (field: SortField) => void
+}) {
+  return (
+    <th
+      scope="col"
+      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 cursor-pointer group"
+      onClick={() => onSort(field)}
+    >
+      <div className="flex items-center">
+        {title}
+        <span className="ml-2 flex-none rounded text-gray-400 group-hover:visible group-focus:visible">
+          {sortConfig?.field === field ? (
+            sortConfig.direction === 'asc' ? (
+              <ChevronUpIcon className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <ChevronDownIcon className="h-4 w-4" aria-hidden="true" />
+            )
+          ) : (
+            <ChevronUpDownIcon className="h-4 w-4" aria-hidden="true" />
+          )}
+        </span>
+      </div>
+    </th>
+  );
+}
+
 export function ProposalTable({ p }: { p: ProposalExisting[] }) {
   const [actionOpen, setActionOpen] = useState(false)
   const [actionProposal, setActionProposal] = useState<ProposalExisting>(
@@ -168,6 +213,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
   )
   const [actionAction, setActionAction] = useState<Action>(Action.accept)
   const [proposals, setProposals] = useState<ProposalExisting[]>(p)
+  const [sortConfig, setSortConfig] = useState<SortConfig>(null)
 
   function acceptRejectClickHandler(
     proposal: ProposalExisting,
@@ -193,6 +239,67 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
     })
     setProposals(updatedProposals)
   }
+
+  // Sort handler function
+  const handleSort = (field: SortField) => {
+    let direction: SortDirection = 'asc';
+
+    // If we're already sorting by this field, toggle the direction
+    if (sortConfig && sortConfig.field === field && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+
+    setSortConfig({ field, direction });
+  };
+
+  // Get sorted proposals based on current sort config
+  const getSortedProposals = () => {
+    if (!sortConfig) return proposals;
+
+    return [...proposals].sort((a, b) => {
+      // Special case for speaker field which needs to extract the name
+      if (sortConfig.field === 'speaker') {
+        const speakerA = a.speaker && 'name' in a.speaker ? a.speaker.name : 'Unknown';
+        const speakerB = b.speaker && 'name' in b.speaker ? b.speaker.name : 'Unknown';
+        return sortConfig.direction === 'asc'
+          ? speakerA.localeCompare(speakerB)
+          : speakerB.localeCompare(speakerA);
+      }
+
+      // Special case for score field which needs numerical comparison
+      if (sortConfig.field === 'score') {
+        const scoreA = getAverageScore(a.reviews || []);
+        const scoreB = getAverageScore(b.reviews || []);
+        return sortConfig.direction === 'asc'
+          ? scoreA - scoreB
+          : scoreB - scoreA;
+      }
+
+      // For all other string fields, use localeCompare directly
+      const valueA = a[sortConfig.field] as string;
+      const valueB = b[sortConfig.field] as string;
+
+      return sortConfig.direction === 'asc'
+        ? valueA.localeCompare(valueB)
+        : valueB.localeCompare(valueA);
+    });
+  };
+
+  // Helper function to calculate average score
+  const getAverageScore = (reviews: any[]) => {
+    if (!reviews || reviews.length === 0) return 0;
+
+    const totalScore = reviews.reduce(
+      (acc, review) =>
+        acc +
+        review.score.content +
+        review.score.relevance +
+        review.score.speaker,
+      0,
+    );
+
+    return (totalScore / reviews.length) / 3;
+  };
 
   const [proposalStatusFilter, setProposalStatusFilter] = useState<Status | undefined>(undefined)
   const [showLanguageColumn, setShowLanguageColumn] = useState<boolean>(false)
@@ -337,51 +444,65 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                   <tr>
                     <th
                       scope="col"
-                      className="py-3.5 pr-3 pl-4 text-left text-sm font-semibold text-gray-900 sm:pl-0"
+                      className="py-3.5 pr-3 pl-4 text-left text-sm font-semibold text-gray-900 sm:pl-0 cursor-pointer group"
+                      onClick={() => handleSort('title')}
                     >
-                      Title
+                      <div className="flex items-center">
+                        Title
+                        <span className="ml-2 flex-none rounded text-gray-400 group-hover:visible group-focus:visible">
+                          {sortConfig?.field === 'title' ? (
+                            sortConfig.direction === 'asc' ? (
+                              <ChevronUpIcon className="h-4 w-4" aria-hidden="true" />
+                            ) : (
+                              <ChevronDownIcon className="h-4 w-4" aria-hidden="true" />
+                            )
+                          ) : (
+                            <ChevronUpDownIcon className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </span>
+                      </div>
                     </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-                    >
-                      Speaker
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-                    >
-                      Format
-                    </th>
+                    <SortableHeader
+                      title="Speaker"
+                      field="speaker"
+                      sortConfig={sortConfig}
+                      onSort={handleSort}
+                    />
+                    <SortableHeader
+                      title="Format"
+                      field="format"
+                      sortConfig={sortConfig}
+                      onSort={handleSort}
+                    />
                     {showLanguageColumn && (
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-                      >
-                        Language
-                      </th>
+                      <SortableHeader
+                        title="Language"
+                        field="language"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                      />
                     )}
                     {showLevelColumn && (
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-                      >
-                        Level
-                      </th>
+                      <SortableHeader
+                        title="Level"
+                        field="level"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                      />
                     )}
-                    <th
-                      scope="col"
-                      className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-                    >
-                      Status
-                    </th>
+                    <SortableHeader
+                      title="Status"
+                      field="status"
+                      sortConfig={sortConfig}
+                      onSort={handleSort}
+                    />
                     {showReviewColumn && (
-                      <th
-                        scope="col"
-                        className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
-                      >
-                        Score
-                      </th>
+                      <SortableHeader
+                        title="Score"
+                        field="score"
+                        sortConfig={sortConfig}
+                        onSort={handleSort}
+                      />
                     )}
                     <th
                       scope="col"
@@ -392,7 +513,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {proposals.filter((p) => {
+                  {getSortedProposals().filter((p) => {
                     if (!proposalStatusFilter) return true
                     return p.status === proposalStatusFilter
                   }).map((proposal) => (
