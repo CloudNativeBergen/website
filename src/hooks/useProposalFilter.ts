@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 export interface FilterStats {
   total: number;
   speakerCount: number;
+  submitted: number;
   accepted: number;
   confirmed: number;
   rejected: number;
@@ -36,6 +37,7 @@ export function useProposalFilter(proposals: ProposalExisting[]) {
     return {
       total: proposals.length,
       speakerCount: speakerSet.size,
+      submitted: proposals.filter((p) => p.status === Status.submitted).length,
       accepted: proposals.filter((p) => p.status === Status.accepted).length,
       confirmed: proposals.filter((p) => p.status === Status.confirmed).length,
       rejected: proposals.filter((p) => p.status === Status.rejected).length,

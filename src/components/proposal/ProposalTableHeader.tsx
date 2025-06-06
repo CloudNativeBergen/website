@@ -2,6 +2,7 @@
 
 import { FilterStats } from '@/hooks/useProposalFilter';
 import { Status } from '@/lib/proposal/types';
+import { memo } from 'react';
 
 interface ProposalTableHeaderProps {
   stats: FilterStats;
@@ -9,13 +10,118 @@ interface ProposalTableHeaderProps {
   onFilterChange: (filter: Status | undefined) => void;
 }
 
-export function ProposalTableHeader({
+interface StatItemProps {
+  label: string;
+  value: number;
+  color?: 'default' | 'green' | 'blue' | 'red';
+  onClick?: () => void;
+  isActive?: boolean;
+  dataTestId?: string;
+}
+
+const StatItem = memo(({
+  label,
+  value,
+  color = 'default',
+  onClick,
+  isActive = false,
+  dataTestId
+}: StatItemProps) => {
+  const textColorClass = {
+    default: 'text-gray-900',
+    green: 'text-green-500',
+    blue: 'text-blue-500',
+    red: 'text-red-500',
+  }[color];
+
+  const isClickable = Boolean(onClick);
+
+  return (
+    <div
+      className={`flex flex-col items-center ${isClickable ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''} ${isActive && isClickable ? 'relative font-bold' : ''}`}
+      onClick={onClick}
+      onKeyDown={(e) => isClickable && e.key === 'Enter' && onClick?.()}
+      role={isClickable ? 'tab' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      aria-selected={isClickable ? isActive : undefined}
+      aria-label={isClickable ? `Filter by ${label.toLowerCase()}` : `${label}: ${value}`}
+      data-testid={dataTestId}
+    >
+      <p className={`text-3xl font-semibold ${textColorClass} transition-colors`}>
+        {value.toLocaleString()}
+      </p>
+      <p className={`text-sm ${isActive && isClickable ? 'text-indigo-600 font-medium' : 'text-gray-500'}`}>{label}</p>
+      {isActive && isClickable && (
+        <div className="absolute -bottom-2 h-1 w-12 bg-indigo-500 rounded-full"></div>
+      )}
+    </div>
+  );
+});
+
+StatItem.displayName = 'StatItem';
+
+export const ProposalTableHeader = memo(({
   stats,
   currentFilter,
   onFilterChange
-}: ProposalTableHeaderProps) {
+}: ProposalTableHeaderProps) => {
+  type StatConfig = {
+    label: string;
+    value: number;
+    status?: Status;
+    color?: 'default' | 'green' | 'blue' | 'red';
+    testId: string;
+  };
+  const statItems: StatConfig[] = [
+    {
+      label: "Total",
+      value: stats.total,
+      testId: "stat-total"
+    },
+    {
+      label: "Speakers",
+      value: stats.speakerCount,
+      testId: "stat-speakers"
+    },
+    {
+      label: "Submitted",
+      value: stats.submitted,
+      status: Status.submitted,
+      color: "blue",
+      testId: "stat-submitted"
+    },
+    {
+      label: "Accepted",
+      value: stats.accepted,
+      status: Status.accepted,
+      color: "green",
+      testId: "stat-accepted"
+    },
+    {
+      label: "Confirmed",
+      value: stats.confirmed,
+      status: Status.confirmed,
+      color: "green",
+      testId: "stat-confirmed"
+    },
+    {
+      label: "Rejected",
+      value: stats.rejected,
+      status: Status.rejected,
+      color: "red",
+      testId: "stat-rejected"
+    },
+    {
+      label: "Withdrawn",
+      value: stats.withdrawn,
+      status: Status.withdrawn,
+      color: "red",
+      testId: "stat-withdrawn"
+    },
+  ];
+
   return (
-    <div className="sm:flex sm:items-center">
+    <div className="sm:flex sm:items-center" data-testid="proposal-table-header">
       <div className="sm:flex-auto">
         <h1 className="text-base leading-6 font-semibold text-gray-900">
           Proposals admin overview
@@ -24,53 +130,35 @@ export function ProposalTableHeader({
           A list of all proposals submitted by speakers (drafts are not shown)
         </p>
       </div>
-      <div className="flex gap-4">
-        <div
-          className="flex cursor-pointer flex-col items-center"
-          onClick={() => onFilterChange(undefined)}
-        >
-          <p className="text-3xl font-semibold text-gray-900">{stats.total}</p>
-          <p className="text-sm text-gray-500">Total</p>
-        </div>
-        <div className="flex flex-col items-center">
-          <p className="text-3xl font-semibold text-gray-900">
-            {stats.speakerCount}
-          </p>
-          <p className="text-sm text-gray-500">Speakers</p>
-        </div>
-        <div
-          className="flex cursor-pointer flex-col items-center"
-          onClick={() => onFilterChange(Status.accepted)}
-        >
-          <p className="text-3xl font-semibold text-green-500">
-            {stats.accepted}
-          </p>
-          <p className="text-sm text-gray-500">Accepted</p>
-        </div>
-        <div
-          className="flex cursor-pointer flex-col items-center"
-          onClick={() => onFilterChange(Status.confirmed)}
-        >
-          <p className="text-3xl font-semibold text-blue-500">
-            {stats.confirmed}
-          </p>
-          <p className="text-sm text-gray-500">Confirmed</p>
-        </div>
-        <div
-          className="flex cursor-pointer flex-col items-center"
-          onClick={() => onFilterChange(Status.rejected)}
-        >
-          <p className="text-3xl font-semibold text-red-500">{stats.rejected}</p>
-          <p className="text-sm text-gray-500">Rejected</p>
-        </div>
-        <div
-          className="flex cursor-pointer flex-col items-center"
-          onClick={() => onFilterChange(Status.withdrawn)}
-        >
-          <p className="text-3xl font-semibold text-red-500">{stats.withdrawn}</p>
-          <p className="text-sm text-gray-500">Withdrawn</p>
-        </div>
+      <div
+        className="flex gap-4"
+        role="tablist"
+        aria-label="Filter proposals by status"
+      >
+        {statItems.map((item) => (
+          <StatItem
+            key={item.testId}
+            label={item.label}
+            value={item.value}
+            color={item.color}
+            onClick={item.status !== undefined || item.label === "Total"
+              ? () => onFilterChange(item.status)
+              : undefined}
+            isActive={
+              // Only consider an item active if it's clickable (has status or is Total)
+              (item.status !== undefined || item.label === "Total") &&
+              (
+                (item.status === currentFilter) ||
+                (item.label === "Total" && currentFilter === undefined) ||
+                (item.testId === "stat-total" && currentFilter === undefined)
+              )
+            }
+            dataTestId={item.testId}
+          />
+        ))}
       </div>
     </div>
   );
-}
+});
+
+ProposalTableHeader.displayName = 'ProposalTableHeader';

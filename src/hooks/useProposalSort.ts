@@ -1,6 +1,7 @@
 'use client';
 
 import { ProposalExisting } from '@/lib/proposal/types';
+import { Review } from '@/lib/review/types';
 import { useMemo, useState } from 'react';
 
 // Define the sort fields and their types
@@ -24,7 +25,7 @@ export function useProposalSort(initialProposals: ProposalExisting[]) {
   };
 
   // Helper function to calculate average score
-  const getAverageScore = (reviews: any[]) => {
+  const getAverageScore = (reviews: Review[]) => {
     if (!reviews || reviews.length === 0) return 0;
 
     const totalScore = reviews.reduce(

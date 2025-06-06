@@ -4,6 +4,7 @@ import { Action, ProposalExisting } from '@/lib/proposal/types';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid';
 import { FormatFormat, FormatLanguage, FormatLevel, FormatStatus } from '@/lib/proposal/format';
 import { Flags, Speaker } from '@/lib/speaker/types';
+import { Review } from '@/lib/review/types';
 import { ProposalActionMenu } from './ProposalActionMenu';
 
 interface ProposalTableRowProps {
@@ -22,7 +23,7 @@ export function ProposalTableRow({
   onAction
 }: ProposalTableRowProps) {
   // Helper function to calculate average score
-  const getAverageScore = (reviews: any[]) => {
+  const getAverageScore = (reviews: Review[]) => {
     if (!reviews || reviews.length === 0) return 0;
 
     const totalScore = reviews.reduce(
