@@ -10,7 +10,7 @@ import {
   TrashIcon
 } from '@heroicons/react/24/solid';
 import { Menu, MenuButton, MenuItem as HeadlessMenuItem, MenuItems, Transition } from '@headlessui/react';
-import React, { ForwardRefExoticComponent, SVGProps, ElementType, memo, useState } from 'react';
+import React, { ForwardRefExoticComponent, SVGProps, ElementType, memo } from 'react';
 
 interface ProposalActionMenuProps {
   proposal: ProposalExisting;
@@ -49,9 +49,9 @@ const ActionMenuItem = memo(({
 
   return (
     <HeadlessMenuItem disabled={disabled}>
-      {({ focus }) => {
+      {({ active }) => {
         const baseClassName = classNames(
-          focus ? 'bg-gray-100 text-gray-900' : disabled ? 'text-gray-300' : 'text-gray-700',
+          active ? 'bg-gray-100 text-gray-900' : disabled ? 'text-gray-300' : 'text-gray-700',
           'group flex w-full items-center px-4 py-2 text-sm',
           !disabled && !isLink ? 'cursor-pointer' : ''
         );
@@ -71,7 +71,6 @@ const ActionMenuItem = memo(({
         };
 
         // JSX doesn't play well with ElementType when using dynamic components
-        // We need to create the element differently
         return React.createElement(
           Component,
           commonProps,
@@ -94,8 +93,6 @@ const ActionMenuItem = memo(({
 ActionMenuItem.displayName = 'ActionMenuItem';
 
 export const ProposalActionMenu = memo(({ proposal, onAcceptReject }: ProposalActionMenuProps) => {
-  const [isOpen, setIsOpen] = useState(false);
-
   const handleAccept = () => {
     onAcceptReject(proposal, Action.accept);
   };
@@ -106,66 +103,71 @@ export const ProposalActionMenu = memo(({ proposal, onAcceptReject }: ProposalAc
 
   return (
     <Menu as="div" className="relative inline-block text-left">
-      <MenuButton
-        className="inline-flex w-full justify-center gap-x-1.5 rounded-md bg-white px-2 py-1 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        aria-label={`Actions for proposal: ${proposal.title}`}
-      >
-        Options
-        <ChevronDownIcon
-          className="-mr-1 h-5 w-5 text-gray-400"
-          aria-hidden="true"
-        />
-      </MenuButton>
+      {({ open }) => (
+        <>
+          <div>
+            <MenuButton
+              className="inline-flex w-full justify-center gap-x-1.5 rounded-md bg-white px-2 py-1 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              aria-label={`Actions for proposal: ${proposal.title}`}
+            >
+              Options
+              <ChevronDownIcon
+                className="-mr-1 h-5 w-5 text-gray-400"
+                aria-hidden="true"
+              />
+            </MenuButton>
+          </div>
 
-      <Transition
-        show={open}
-        enter="transition ease-out duration-100"
-        enterFrom="transform opacity-0 scale-95"
-        enterTo="transform opacity-100 scale-100"
-        leave="transition ease-in duration-75"
-        leaveFrom="transform opacity-100 scale-100"
-        leaveTo="transform opacity-0 scale-95"
-      >
-        <MenuItems
-          className="ring-opacity-5 absolute right-0 z-10 mt-2 w-56 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black focus:outline-none"
-          static
-        >
-          <div className="py-1">
-            <ActionMenuItem
-              icon={MagnifyingGlassIcon}
-              label="Review"
-              href={`/cfp/admin/${proposal._id}/view`}
-            />
-            <ActionMenuItem
-              icon={PencilSquareIcon}
-              label="Open in Sanity"
-              href={`https://cloudnativebergen.sanity.studio/studio/structure/talk;${proposal._id}`}
-              iconColorClass="text-gray-300"
-            />
-          </div>
-          <div className="py-1">
-            <ActionMenuItem
-              icon={HeartIcon}
-              label="Accept"
-              onClick={handleAccept}
-              iconColorClass="text-green-500"
-            />
-            <ActionMenuItem
-              icon={ArchiveBoxXMarkIcon}
-              label="Reject"
-              onClick={handleReject}
-              iconColorClass="text-red-500"
-            />
-          </div>
-          <div className="py-1">
-            <ActionMenuItem
-              icon={TrashIcon}
-              label="Delete"
-              disabled
-            />
-          </div>
-        </MenuItems>
-      </Transition>
+          <Transition
+            show={open}
+            enter="transition ease-out duration-100"
+            enterFrom="transform opacity-0 scale-95"
+            enterTo="transform opacity-100 scale-100"
+            leave="transition ease-in duration-75"
+            leaveFrom="transform opacity-100 scale-100"
+            leaveTo="transform opacity-0 scale-95"
+          >
+            <MenuItems
+              className="ring-opacity-5 absolute right-0 z-10 mt-2 w-56 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black focus:outline-none"
+            >
+              <div className="py-1">
+                <ActionMenuItem
+                  icon={MagnifyingGlassIcon}
+                  label="Review"
+                  href={`/cfp/admin/${proposal._id}/view`}
+                />
+                <ActionMenuItem
+                  icon={PencilSquareIcon}
+                  label="Open in Sanity"
+                  href={`https://cloudnativebergen.sanity.studio/studio/structure/talk;${proposal._id}`}
+                  iconColorClass="text-gray-300"
+                />
+              </div>
+              <div className="py-1">
+                <ActionMenuItem
+                  icon={HeartIcon}
+                  label="Accept"
+                  onClick={handleAccept}
+                  iconColorClass="text-green-500"
+                />
+                <ActionMenuItem
+                  icon={ArchiveBoxXMarkIcon}
+                  label="Reject"
+                  onClick={handleReject}
+                  iconColorClass="text-red-500"
+                />
+              </div>
+              <div className="py-1">
+                <ActionMenuItem
+                  icon={TrashIcon}
+                  label="Delete"
+                  disabled
+                />
+              </div>
+            </MenuItems>
+          </Transition>
+        </>
+      )}
     </Menu>
   );
 });

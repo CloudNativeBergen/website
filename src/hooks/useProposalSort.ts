@@ -1,8 +1,8 @@
 'use client';
 
 import { ProposalExisting } from '@/lib/proposal/types';
-import { Review } from '@/lib/review/types';
 import { useMemo, useState } from 'react';
+import { getAverageScore } from '@/utils/reviewUtils';
 
 // Define the sort fields and their types
 export type SortField = 'title' | 'speaker' | 'format' | 'language' | 'level' | 'status' | 'score';
@@ -24,8 +24,6 @@ export function useProposalSort(initialProposals: ProposalExisting[]) {
     setSortConfig({ field, direction });
   };
 
-  // Helper function to calculate average score
-  import { getAverageScore } from '@/utils/reviewUtils';
   // Calculate and return sorted proposals
   const sortedProposals = useMemo(() => {
     if (!sortConfig) return initialProposals;

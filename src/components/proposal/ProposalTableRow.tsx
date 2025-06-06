@@ -4,9 +4,9 @@ import { Action, ProposalExisting } from '@/lib/proposal/types';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid';
 import { FormatFormat, FormatLanguage, FormatLevel, FormatStatus } from '@/lib/proposal/format';
 import { Flags, Speaker } from '@/lib/speaker/types';
-import { Review } from '@/lib/review/types';
 import { ProposalActionMenu } from './ProposalActionMenu';
 import { memo } from 'react';
+import { getAverageScore, getScoreColorClass } from '@/utils/reviewUtils';
 
 interface ProposalTableRowProps {
   proposal: ProposalExisting;
@@ -23,22 +23,6 @@ export const ProposalTableRow = memo(({
   showReview,
   onAction
 }: ProposalTableRowProps) => {
-  // Helper function to calculate average score
-  const getAverageScore = (reviews: Review[]) => {
-    if (!reviews || reviews.length === 0) return 0;
-
-    const totalScore = reviews.reduce(
-      (acc, review) =>
-        acc +
-        review.score.content +
-        review.score.relevance +
-        review.score.speaker,
-      0,
-    );
-
-    return (totalScore / reviews.length) / 3;
-  };
-
   return (
     <tr key={proposal._id}>
       <td className="py-4 pr-3 pl-4 text-sm font-medium whitespace-nowrap text-gray-900 sm:pl-0 md:whitespace-normal">
@@ -85,14 +69,8 @@ export const ProposalTableRow = memo(({
             (() => {
               const numReviews = proposal.reviews.length;
               const averageScore = getAverageScore(proposal.reviews);
-              let scoreColor = 'text-gray-500'; // Default color
-              if (averageScore < 3) {
-                scoreColor = 'text-red-500';
-              } else if (averageScore >= 3 && averageScore < 4) {
-                scoreColor = 'text-orange-500';
-              } else if (averageScore >= 4) {
-                scoreColor = 'text-green-500';
-              }
+              const scoreColor = getScoreColorClass(averageScore);
+
               return (
                 <span className={scoreColor}>
                   {averageScore.toFixed(1)} ({numReviews})
