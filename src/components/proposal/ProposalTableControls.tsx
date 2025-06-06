@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 interface ProposalTableControlsProps {
   showLanguage: boolean;
   showLevel: boolean;
@@ -9,14 +11,14 @@ interface ProposalTableControlsProps {
   onToggleReview: () => void;
 }
 
-export function ProposalTableControls({
+export const ProposalTableControls = memo(({
   showLanguage,
   showLevel,
   showReview,
   onToggleLanguage,
   onToggleLevel,
   onToggleReview
-}: ProposalTableControlsProps) {
+}: ProposalTableControlsProps) => {
   return (
     <div className="mt-4 flex space-x-3 items-center">
       <div className="flex items-center">
@@ -60,4 +62,6 @@ export function ProposalTableControls({
       </div>
     </div>
   );
-}
+});
+
+ProposalTableControls.displayName = 'ProposalTableControls';

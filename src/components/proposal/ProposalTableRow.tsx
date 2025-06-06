@@ -6,6 +6,7 @@ import { FormatFormat, FormatLanguage, FormatLevel, FormatStatus } from '@/lib/p
 import { Flags, Speaker } from '@/lib/speaker/types';
 import { Review } from '@/lib/review/types';
 import { ProposalActionMenu } from './ProposalActionMenu';
+import { memo } from 'react';
 
 interface ProposalTableRowProps {
   proposal: ProposalExisting;
@@ -15,13 +16,13 @@ interface ProposalTableRowProps {
   onAction: (proposal: ProposalExisting, action: Action) => void;
 }
 
-export function ProposalTableRow({
+export const ProposalTableRow = memo(({
   proposal,
   showLanguage,
   showLevel,
   showReview,
   onAction
-}: ProposalTableRowProps) {
+}: ProposalTableRowProps) => {
   // Helper function to calculate average score
   const getAverageScore = (reviews: Review[]) => {
     if (!reviews || reviews.length === 0) return 0;
@@ -111,4 +112,6 @@ export function ProposalTableRow({
       </td>
     </tr>
   );
-}
+});
+
+ProposalTableRow.displayName = 'ProposalTableRow';

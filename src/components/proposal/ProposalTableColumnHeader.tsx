@@ -2,6 +2,7 @@
 
 import { ChevronDownIcon, ChevronUpDownIcon, ChevronUpIcon } from '@heroicons/react/24/solid';
 import { SortConfig, SortField } from '@/hooks/useProposalSort';
+import { memo } from 'react';
 
 interface ProposalTableColumnHeaderProps {
   title: string;
@@ -11,13 +12,13 @@ interface ProposalTableColumnHeaderProps {
   isFirstColumn?: boolean;
 }
 
-export function ProposalTableColumnHeader({
+export const ProposalTableColumnHeader = memo(({
   title,
   field,
   sortConfig,
   onSort,
   isFirstColumn = false,
-}: ProposalTableColumnHeaderProps) {
+}: ProposalTableColumnHeaderProps) => {
   const baseClass = "text-left text-sm font-semibold text-gray-900 cursor-pointer group";
   const className = isFirstColumn
     ? `py-3.5 pr-3 pl-4 sm:pl-0 ${baseClass}`
@@ -45,4 +46,6 @@ export function ProposalTableColumnHeader({
       </div>
     </th>
   );
-}
+});
+
+ProposalTableColumnHeader.displayName = 'ProposalTableColumnHeader';
