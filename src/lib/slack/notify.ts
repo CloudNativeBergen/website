@@ -1,9 +1,26 @@
 import { ProposalExisting } from '@/lib/proposal/types'
 import { PortableTextBlock } from 'sanity'
 import { getSpeaker } from '@/lib/speaker/sanity'
-import { Action, Status } from '@/lib/proposal/types'
+import { Action} from '@/lib/proposal/types'
 
-async function sendSlackMessage(message: any) {
+type SlackBlock = {
+  type: string
+  text?: {
+    type: string
+    text: string
+    emoji?: boolean
+  }
+  fields?: Array<{
+    type: string
+    text: string
+  }>
+}
+
+type SlackMessage = {
+  blocks: SlackBlock[]
+}
+
+async function sendSlackMessage(message: SlackMessage) {
   const webhookUrl = process.env.CFP_BOT
   
   // In development, just print the message to console
@@ -14,7 +31,7 @@ async function sendSlackMessage(message: any) {
   }
 
   if (!webhookUrl) {
-    console.warn('SLACK_WEBHOOK_URL is not configured')
+    console.warn('CFP_BOT is not configured')
     return
   }
 
