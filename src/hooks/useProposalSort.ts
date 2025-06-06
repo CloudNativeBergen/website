@@ -25,21 +25,7 @@ export function useProposalSort(initialProposals: ProposalExisting[]) {
   };
 
   // Helper function to calculate average score
-  const getAverageScore = (reviews: Review[]) => {
-    if (!reviews || reviews.length === 0) return 0;
-
-    const totalScore = reviews.reduce(
-      (acc, review) =>
-        acc +
-        review.score.content +
-        review.score.relevance +
-        review.score.speaker,
-      0,
-    );
-
-    return (totalScore / reviews.length) / 3;
-  };
-
+  import { getAverageScore } from '@/utils/reviewUtils';
   // Calculate and return sorted proposals
   const sortedProposals = useMemo(() => {
     if (!sortConfig) return initialProposals;
