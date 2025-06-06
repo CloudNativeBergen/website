@@ -130,7 +130,7 @@ export function ProposalActionModal({
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <DialogPanel className="relative transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+              <DialogPanel className="relative transform overflow-hidden rounded-lg bg-white px-6 py-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-8">
                 <div className="absolute top-0 right-0 hidden pt-4 pr-4 sm:block">
                   <button
                     type="button"
@@ -156,20 +156,20 @@ export function ProposalActionModal({
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <DialogTitle
                       as="h3"
-                      className="text-base leading-6 font-semibold text-gray-900"
+                      className="text-base/7 leading-6 font-semibold text-gray-900"
                     >
                       {capitalizeFirstLetter(action)} proposal
                     </DialogTitle>
                     {error && (
                       <div className="mt-2">
-                        <p className="text-sm text-red-500">
+                        <p className="text-sm/6 text-red-500">
                           Server error: &quot;{error}&quot;
                         </p>
                       </div>
                     )}
                     {adminUI ? (
                       <div className="mt-2">
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm/6 text-gray-600">
                           Are you sure you want to {action} the proposal{' '}
                           <span className="font-semibold">
                             {proposal.title}
@@ -190,22 +190,22 @@ export function ProposalActionModal({
                               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
                               onChange={() => setNotify(!notify)}
                             />
-                            <span className="ml-2 text-sm text-gray-700">
+                            <span className="ml-2 text-sm/6 text-gray-700">
                               Notify the speaker via email
                             </span>
                           </label>
                         </div>
                         <div className="mt-4">
-                          <label className="block text-sm font-medium text-gray-700">
+                          <label className="block text-sm/6 font-medium text-gray-900">
                             Comment
                           </label>
                           <textarea
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
                             rows={3}
                             placeholder="Add a comment..."
                             onChange={(e) => setComment(e.target.value)}
                           ></textarea>
-                          <p className="mt-2 text-sm text-gray-500">
+                          <p className="mt-2 text-sm/6 text-gray-600">
                             Your comment will be included in the email to the
                             speaker.
                           </p>
@@ -213,7 +213,7 @@ export function ProposalActionModal({
                       </div>
                     ) : (
                       <div className="mt-2">
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm/6 text-gray-600">
                           Are you sure you want to {action} the proposal{' '}
                           <span className="font-semibold">
                             {proposal.title}
@@ -231,7 +231,7 @@ export function ProposalActionModal({
                     className={classNames(
                       buttonColor,
                       isSubmitting ? 'cursor-not-allowed' : 'cursor-pointer',
-                      'inline-flex w-full justify-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm sm:ml-3 sm:w-auto',
+                      'inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-white shadow-sm sm:ml-3 sm:w-auto',
                     )}
                     onClick={() => submitHandler()}
                   >
@@ -241,7 +241,7 @@ export function ProposalActionModal({
                   </button>
                   <button
                     type="button"
-                    className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                    className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm/6 font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 sm:mt-0 sm:w-auto"
                     onClick={() => close()}
                   >
                     Cancel
