@@ -32,9 +32,9 @@ export const GET = auth(async (req: NextAuthRequest) => {
     )
   }
 
-  const { proposals, error } = await getProposals(req.auth.speaker._id)
-  if (error) {
-    return proposalListResponseError(error, 'Failed to fetch proposals')
+  const { proposals, proposalsError } = await getProposals(req.auth.speaker._id)
+  if (proposalsError) {
+    return proposalListResponseError(proposalsError, 'Failed to fetch proposals')
   }
 
   return proposalListResponse(proposals)

@@ -7,60 +7,71 @@ import { groq } from 'next-sanity'
 import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
 import { convertStringToPortableTextBlocks } from './validation'
+import { Review } from '@/lib/review/types'
 
-export async function getProposal(
-  id: string,
-  speakerId: string,
+export async function getProposal({
+  id,
+  speakerId,
   isOrganizer = false,
-): Promise<{ proposal: ProposalExisting; err: Error | null }> {
-  let err = null
-  let proposal: ProposalExisting = {} as ProposalExisting
+  includeReviews = false,
+}: {
+  id: string;
+  speakerId: string;
+  isOrganizer?: boolean;
+  includeReviews?: boolean;
+}): Promise<{ proposal: ProposalExisting; reviews?: Review[]; proposalError: Error | null }> {
+  let proposalError = null;
+  let proposal: ProposalExisting = {} as ProposalExisting;
 
-  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId'
+  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId';
 
   try {
-    proposal = await clientRead.fetch(
-      groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
+    const query = groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
       ...,
       speaker-> {
-      ...,
-      "image": image.asset->url
+        ...,
+        "image": image.asset->url
       },
       conference-> {
-      _id, title, start_date, end_date
+        _id, title, start_date, end_date
       },
       topics[]-> {
-      _id, title, color, slug, description
-      }
-    }[0]`,
-      { id, speakerId },
-      { cache: 'no-store' },
-    )
+        _id, title, color, slug, description
+      },
+      ${includeReviews && isOrganizer ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+        ...,
+        reviewer-> {
+          _id, name, email, image
+        }
+      }` : ''}
+    }[0]`;
+
+    proposal = await clientRead.fetch(query, { id, speakerId }, { cache: 'no-store' });
   } catch (error) {
-    console.error('Error fetching proposal:', error)
-    err = error as Error
+    console.error('Error fetching proposal:', error);
+    proposalError = error as Error;
   }
 
   if (proposal?.description) {
-    proposal.description = convertStringToPortableTextBlocks(
-      proposal.description,
-    )
+    proposal.description = convertStringToPortableTextBlocks(proposal.description);
   }
 
   // @TODO - Check if the proposal is not found and return an error
-  return { proposal, err }
+  return { proposal, proposalError };
 }
 
 export async function getProposals({
   speakerId,
   conferenceId,
   returnAll = false,
+  includeReviews = false,
 }: {
   speakerId?: string
   conferenceId?: string
   returnAll?: boolean
-}): Promise<{ proposals: ProposalExisting[]; error: Error | null }> {
-  let error = null
+  includeReviews?: boolean
+}): Promise<{ proposals: ProposalExisting[]; proposalsError: Error | null }> {
+  let proposalsError = null
   let proposals: ProposalExisting[] = []
 
   const filters = [
@@ -85,7 +96,13 @@ export async function getProposals({
     },
     topics[]-> {
       _id, title, color, slug, description
-    }
+    },
+    ${includeReviews ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+      ...,
+      reviewer-> {
+        _id, name, email, image
+      }
+    }` : ''}
   } | order(conference->start_date desc, _updatedAt desc)`
 
   try {
@@ -97,9 +114,9 @@ export async function getProposals({
       },
       { cache: 'no-store' },
     )
-  } catch (e) {
-    console.error('Error fetching proposals:', e)
-    error = e as Error
+  } catch (error) {
+    console.error('Error fetching proposals:', error)
+    proposalsError = error as Error
   }
 
   proposals = proposals.map((proposal) => {
@@ -111,7 +128,7 @@ export async function getProposals({
     return proposal
   })
 
-  return { proposals, error }
+  return { proposals, proposalsError }
 }
 
 export async function updateProposal(
@@ -133,6 +150,19 @@ export async function updateProposal(
   }
 
   return { proposal: updatedProposal, err }
+}
+
+export async function deleteProposal(
+  proposalId: string,
+): Promise<{ err: Error | null }> {
+  let err = null
+  try {
+    await clientWrite.delete(proposalId)
+  } catch (error) {
+    console.error('Error deleting proposal:', error)
+    err = error as Error
+  }
+  return { err }
 }
 
 export async function updateProposalStatus(
@@ -183,4 +213,59 @@ export async function createProposal(
   }
 
   return { proposal: createdProposal, err }
+}
+
+export async function fetchNextUnreviewedProposal({
+  conferenceId,
+  reviewerId,
+  currentProposalId,
+}: {
+  conferenceId: string;
+  reviewerId: string;
+  currentProposalId?: string;
+}): Promise<{
+  nextProposal: {
+    _id: string;
+    title: string;
+    status: string;
+    speaker?: { _id: string; name: string };
+  } | null;
+  error: Error | null;
+}> {
+  let error = null;
+  let nextProposal = null;
+
+  const query = groq`
+    *[
+      _type == "talk" &&
+      conference._ref == $conferenceId &&
+      status == "${Status.submitted}" &&
+      !(_id in *[_type == "review" && reviewer._ref == $reviewerId].proposal._ref) &&
+      _id != $currentProposalId
+    ] {
+      _id,
+      title,
+      status,
+      speaker->{ _id, name }
+    } | order(_createdAt asc)[0...1]
+  `;
+
+  try {
+    const proposals = await clientRead.fetch(
+      query,
+      { conferenceId, reviewerId, currentProposalId },
+      { cache: 'no-store' }
+    );
+
+    if (!proposals || proposals.length === 0) {
+      return { nextProposal: null, error: null };
+    }
+
+    nextProposal = proposals[0];
+  } catch (err) {
+    console.error('Error finding next unreviewed proposal:', err);
+    error = err as Error;
+  }
+
+  return { nextProposal, error };
 }

@@ -28,7 +28,12 @@ export default defineType({
           type: 'object',
           fields: [
             { name: 'amount', title: 'Amount', type: 'number' },
-            { name: 'currency', title: 'Currency', type: 'string', options: { list: ['NOK', 'USD', 'EUR'] } },
+            {
+              name: 'currency',
+              title: 'Currency',
+              type: 'string',
+              options: { list: ['NOK', 'USD', 'EUR'] },
+            },
           ],
           preview: {
             select: {
@@ -107,7 +112,7 @@ export default defineType({
         title: `${title} (${price} ${currency})`,
         subtitle: `${subtitle}`,
       }
-    }
+    },
   },
   orderings: [
     {
@@ -120,4 +125,3 @@ export default defineType({
     },
   ],
 })
-

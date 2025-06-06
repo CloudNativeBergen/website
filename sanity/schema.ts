@@ -7,15 +7,8 @@ import talk from './schemaTypes/talk'
 import sponsor from './schemaTypes/sponsor'
 import sponsorTier from './schemaTypes/sponsorTier'
 import topic from './schemaTypes/topic'
+import review from './schemaTypes/review'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [
-    conference,
-    speaker,
-    schedule,
-    talk,
-    sponsor,
-    sponsorTier,
-    topic,
-  ],
+  types: [conference, speaker, schedule, talk, review, sponsor, sponsorTier, topic],
 }

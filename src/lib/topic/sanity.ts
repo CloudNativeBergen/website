@@ -10,5 +10,7 @@ export async function getTopicById(id: string): Promise<Topic | null> {
 }
 
 export async function getTopicBySlug(slug: string): Promise<Topic | null> {
-  return client.fetch(`*[_type == "topic" && slug.current == $slug][0]`, { slug })
+  return client.fetch(`*[_type == "topic" && slug.current == $slug][0]`, {
+    slug,
+  })
 }

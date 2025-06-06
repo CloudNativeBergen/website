@@ -58,12 +58,13 @@ export default async function Submit({
 
   try {
     if (proposalId) {
-      const { proposal: fetchedProposal, err } = await getProposal(
-        proposalId,
-        session.speaker._id,
-      )
-      if (err) {
-        console.error('Error loading proposal:', err)
+      const { proposal: fetchedProposal, proposalError } = await getProposal({
+        id: proposalId,
+        speakerId: session.speaker._id,
+        isOrganizer: false,
+      })
+      if (proposalError) {
+        console.error('Error loading proposal:', proposalError)
         loadingError = {
           type: 'Server Error',
           message: 'Failed to load proposal.',
@@ -141,6 +142,7 @@ export default async function Submit({
               proposalId={proposalId}
               userEmail={session.speaker.email}
               conference={conference}
+              allowedFormats={conference.formats}
             />
           </div>
         </Container>

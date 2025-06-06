@@ -1,7 +1,8 @@
 import { Speaker } from '@/lib/speaker/types'
-import { Conference, ConferenceSchedule } from '../conference/types'
-import { Topic } from '../topic/types'
+import { Conference, ConferenceSchedule } from '@/lib/conference/types'
+import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock, Reference } from 'sanity'
+import { Review } from '@/lib/review/types'
 
 export enum Language {
   norwegian = 'norwegian',
@@ -42,6 +43,7 @@ export enum Status {
   confirmed = 'confirmed', // confirmed by the speaker
   rejected = 'rejected', // rejected by the organizers
   withdrawn = 'withdrawn', // withdrawn by the speaker
+  deleted = 'deleted', // deleted by the speaker
 }
 
 // Action is an enum that represents the possible actions that can be taken on a proposal.
@@ -54,6 +56,7 @@ export enum Action {
   confirm = 'confirm',
   reject = 'reject',
   withdraw = 'withdraw',
+  delete = 'delete',
 }
 
 export interface ActionInput {
@@ -88,6 +91,7 @@ export interface ProposalExisting extends Proposal {
   speaker?: Speaker | Reference
   schedule?: ConferenceSchedule[]
   conference: Conference | Reference
+  reviews?: Review[]
 }
 
 export interface ProposalBaseResponse {
@@ -127,6 +131,7 @@ export const statuses = new Map([
   [Status.rejected, 'Rejected'],
   [Status.confirmed, 'Confirmed'],
   [Status.withdrawn, 'Withdrawn'],
+  [Status.deleted, 'Deleted'],
 ])
 
 export const languages = new Map([

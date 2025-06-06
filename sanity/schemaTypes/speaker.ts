@@ -81,15 +81,15 @@ export default defineType({
       of: [{ type: 'string' }],
       validation: (Rule) =>
         Rule.custom((links) => {
-          if (!links) return true;
+          if (!links) return true
           for (const link of links as string[]) {
             try {
-              new URL(link);
+              new URL(link)
             } catch (error) {
-              return 'Invalid URL format';
+              return 'Invalid URL format'
             }
           }
-          return true;
+          return true
         }),
     }),
     defineField({

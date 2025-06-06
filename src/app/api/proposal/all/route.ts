@@ -1,5 +1,8 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
-import { proposalListResponse, proposalListResponseError } from '@/lib/proposal/server'
+import {
+  proposalListResponse,
+  proposalListResponseError,
+} from '@/lib/proposal/server'
 import { getProposals } from '@/lib/proposal/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
@@ -22,7 +25,8 @@ export const GET = auth(async (req: NextAuthRequest) => {
     )
   }
 
-  const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
+  const { conference, error: conferenceError } =
+    await getConferenceForCurrentDomain()
 
   if (conferenceError || !conference) {
     return proposalListResponseError(
@@ -33,7 +37,7 @@ export const GET = auth(async (req: NextAuthRequest) => {
     )
   }
 
-  const { proposals, error: proposalsError } = await getProposals({
+  const { proposals, proposalsError } = await getProposals({
     speakerId: req.auth.speaker._id,
     conferenceId: conference?._id,
     returnAll: req.auth.speaker.is_organizer,
@@ -44,7 +48,7 @@ export const GET = auth(async (req: NextAuthRequest) => {
       proposalsError,
       'Failed to fetch proposals',
       'server',
-      500
+      500,
     )
   }
 

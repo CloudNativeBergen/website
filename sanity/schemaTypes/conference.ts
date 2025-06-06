@@ -1,3 +1,4 @@
+import { formats } from '../../src/lib/proposal/types'
 import { defineField, defineType, ValidationContext } from 'sanity'
 
 export default defineType({
@@ -61,23 +62,25 @@ export default defineType({
       title: 'Vanity Metrics',
       description: 'Metrics to show on the conference landing page',
       type: 'array',
-      of: [{
-        type: 'object',
-        fields: [
-          { name: 'label', title: 'Label', type: 'string' },
-          { name: 'value', title: 'Value', type: 'string' },
-        ],
-        options: {
-          collapsible: true,
-          collapsed: true
-        },
-        preview: {
-          select: {
-            title: 'label',
-            subtitle: 'value',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            { name: 'label', title: 'Label', type: 'string' },
+            { name: 'value', title: 'Value', type: 'string' },
+          ],
+          options: {
+            collapsible: true,
+            collapsed: true,
+          },
+          preview: {
+            select: {
+              title: 'label',
+              subtitle: 'value',
+            },
           },
         },
-      }],
+      ],
     }),
     defineField({
       name: 'start_date',
@@ -153,12 +156,29 @@ export default defineType({
       title: 'Organizers',
       type: 'array',
       of: [{ type: 'reference', to: { type: 'speaker' } }],
+      validation: (Rule) => Rule.required().min(1).unique(),
     }),
     defineField({
       name: 'domains',
       title: 'Domains',
       type: 'array',
       of: [{ type: 'string' }],
+      validation: (Rule) => Rule.required().min(1).unique(),
+    }),
+    defineField({
+      name: 'formats',
+      title: 'Formats',
+      description: 'Formats for CFP submissions and agenda categorization',
+      type: 'array',
+      of: [
+        {
+          type: 'string',
+          options: {
+            list: Array.from(formats).map(([value, title]) => ({ value, title })),
+          }
+        },
+      ],
+      validation: (Rule) => Rule.required().min(1).unique(),
     }),
     defineField({
       name: 'topics',
@@ -168,55 +188,58 @@ export default defineType({
       of: [
         {
           type: 'reference',
-          to: [{ type: 'topic' }]
-        }
+          to: [{ type: 'topic' }],
+        },
       ],
+      validation: (Rule) => Rule.required().min(1).unique(),
     }),
     defineField({
       name: 'sponsors',
       title: 'Sponsors',
       type: 'array',
-      of: [{
-        type: 'object',
-        fields: [
-          defineField({
-            name: 'sponsor',
-            type: 'reference',
-            to: { type: 'sponsor' },
-            validation: (Rule) => Rule.required()
-          }),
-          defineField({
-            name: 'tier',
-            type: 'reference',
-            to: { type: 'sponsorTier' },
-            //validation: (Rule) => Rule.required().custom((tier: any, context: ValidationContext) => {
-            //  console.log('tier', tier)
-            //  console.log('context', context)
-            //  if (context.document && tier && 'conference' in tier && tier.conference &&
-            //    tier.conference._ref !== context.document._id) {
-            //    return 'Sponsor tier must belong to the same conference'
-            //  }
-            //  return true
-            //})
-          }),
-        ],
-        //validation: (Rule) => Rule.required().custom((sponsors: any[], context: ValidationContext) => {
-        //  const uniqueSponsors = new Set()
-        //  for (const sponsor of sponsors) {
-        //    if (uniqueSponsors && Array.isArray(uniqueSponsors) && uniqueSponsors.has(sponsor.sponsor._ref)) {
-        //      return 'Duplicate sponsors are not allowed'
-        //    }
-        //    uniqueSponsors.add(sponsor.sponsor._ref)
-        //  }
-        //  return true
-        //}),
-        preview: {
-          select: {
-            title: 'sponsor.name',
-            subtitle: 'tier.title',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'sponsor',
+              type: 'reference',
+              to: { type: 'sponsor' },
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'tier',
+              type: 'reference',
+              to: { type: 'sponsorTier' },
+              //validation: (Rule) => Rule.required().custom((tier: any, context: ValidationContext) => {
+              //  console.log('tier', tier)
+              //  console.log('context', context)
+              //  if (context.document && tier && 'conference' in tier && tier.conference &&
+              //    tier.conference._ref !== context.document._id) {
+              //    return 'Sponsor tier must belong to the same conference'
+              //  }
+              //  return true
+              //})
+            }),
+          ],
+          //validation: (Rule) => Rule.required().custom((sponsors: any[], context: ValidationContext) => {
+          //  const uniqueSponsors = new Set()
+          //  for (const sponsor of sponsors) {
+          //    if (uniqueSponsors && Array.isArray(uniqueSponsors) && uniqueSponsors.has(sponsor.sponsor._ref)) {
+          //      return 'Duplicate sponsors are not allowed'
+          //    }
+          //    uniqueSponsors.add(sponsor.sponsor._ref)
+          //  }
+          //  return true
+          //}),
+          preview: {
+            select: {
+              title: 'sponsor.name',
+              subtitle: 'tier.title',
+            },
           },
         },
-      }],
+      ],
       options: {
         layout: 'tags',
       },
@@ -234,9 +257,7 @@ export default defineType({
       type: 'array',
       of: [{ type: 'string' }],
       options: {
-        list: [
-          { title: 'Test Feature', value: 'test_feature' },
-        ],
+        list: [{ title: 'Test Feature', value: 'test_feature' }],
       },
     }),
   ],

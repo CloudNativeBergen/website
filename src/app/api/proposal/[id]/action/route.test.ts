@@ -19,7 +19,6 @@ import { Action, Status } from '@/lib/proposal/types'
 import sgMail from '@sendgrid/mail'
 import { ClientResponse } from '@sendgrid/mail'
 
-
 beforeAll(async () => {
   try {
     await Promise.all([
