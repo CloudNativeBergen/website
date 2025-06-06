@@ -26,22 +26,39 @@ export function useProposalFilter(proposals: ProposalExisting[]) {
 
   // Calculate statistics for different statuses
   const filterStats = useMemo<FilterStats>(() => {
-    const speakerSet = new Set(
-      proposals.map((proposal) =>
-        proposal.speaker && 'name' in proposal.speaker
-          ? proposal.speaker.name
-          : 'Unknown author',
-      ),
+    const speakerSet = new Set<string>();
+    const stats = proposals.reduce(
+      (acc, proposal) => {
+        // Add speaker to the set
+        if (proposal.speaker && 'name' in proposal.speaker) {
+          speakerSet.add(proposal.speaker.name);
+        } else {
+          speakerSet.add('Unknown author');
+        }
+
+        // Increment status counts
+        acc.total++;
+        if (proposal.status === Status.submitted) acc.submitted++;
+        if (proposal.status === Status.accepted) acc.accepted++;
+        if (proposal.status === Status.confirmed) acc.confirmed++;
+        if (proposal.status === Status.rejected) acc.rejected++;
+        if (proposal.status === Status.withdrawn) acc.withdrawn++;
+
+        return acc;
+      },
+      {
+        total: 0,
+        submitted: 0,
+        accepted: 0,
+        confirmed: 0,
+        rejected: 0,
+        withdrawn: 0,
+      } as FilterStats,
     );
 
     return {
-      total: proposals.length,
+      ...stats,
       speakerCount: speakerSet.size,
-      submitted: proposals.filter((p) => p.status === Status.submitted).length,
-      accepted: proposals.filter((p) => p.status === Status.accepted).length,
-      confirmed: proposals.filter((p) => p.status === Status.confirmed).length,
-      rejected: proposals.filter((p) => p.status === Status.rejected).length,
-      withdrawn: proposals.filter((p) => p.status === Status.withdrawn).length,
     };
   }, [proposals]);
 
