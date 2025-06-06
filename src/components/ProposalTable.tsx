@@ -60,11 +60,12 @@ function Dropdown({
       >
         <MenuItems className="ring-opacity-5 absolute right-0 z-10 mt-2 w-56 origin-top-right divide-y divide-gray-100 rounded-md bg-white shadow-lg ring-1 ring-black focus:outline-none">
           <div className="py-1">
-            <MenuItem disabled>
+            <MenuItem>
               {({ focus }) => (
-                <span
+                <a
+                  href={`https://cloudnativebergen.sanity.studio/studio/structure/talk;${proposal._id}`}
                   className={classNames(
-                    focus ? 'bg-gray-100 text-gray-900' : 'text-gray-300',
+                    focus ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
                     'group flex items-center px-4 py-2 text-sm',
                   )}
                 >
@@ -72,8 +73,8 @@ function Dropdown({
                     className="mr-3 h-5 w-5 text-gray-300 group-hover:text-gray-500"
                     aria-hidden="true"
                   />
-                  Edit
-                </span>
+                  Open in Sanity
+                </a>
               )}
             </MenuItem>
             <MenuItem>
