@@ -55,7 +55,6 @@ async function sendSlackMessage(message: SlackMessage) {
 export async function notifyNewProposal(proposal: ProposalExisting) {
   // Fetch speaker details if it's a reference
   let speakerName = 'Unknown'
-  console.log('Proposal speaker:', proposal.speaker)
   
   if (proposal.speaker && '_ref' in proposal.speaker) {
     console.log('Speaker ID:', proposal.speaker._ref)
