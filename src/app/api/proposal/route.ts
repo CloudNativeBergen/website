@@ -12,6 +12,7 @@ import {
 } from '@/lib/proposal/server'
 import { createProposal, getProposals } from '@/lib/proposal/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { notifyNewProposal } from '@/lib/slack/notify'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,6 +91,11 @@ export const POST = auth(async (req: NextAuthRequest) => {
       error: err,
       message: 'Failed to create proposal',
     })
+  }
+
+  // Send Slack notification for new proposal
+  if (created) {
+    await notifyNewProposal(created)
   }
 
   return proposalResponse(created)

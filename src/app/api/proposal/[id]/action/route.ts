@@ -10,6 +10,7 @@ import { getProposal, updateProposalStatus } from '@/lib/proposal/sanity'
 import { actionStateMachine } from '@/lib/proposal/states'
 import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
+import { notifyProposalStatusChange } from '@/lib/slack/notify'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,6 +86,11 @@ export const POST = auth(
         proposal: proposal,
         comment: comment || '',
       })
+    }
+
+    // Send Slack notification for confirm/withdraw actions
+    if (action === Action.confirm || action === Action.withdraw) {
+      await notifyProposalStatusChange(updatedProposal, action)
     }
 
     return new NextResponse(
