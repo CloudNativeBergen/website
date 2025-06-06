@@ -10,7 +10,7 @@ import {
   TrashIcon
 } from '@heroicons/react/24/solid';
 import { Menu, MenuButton, MenuItem as HeadlessMenuItem, MenuItems, Transition } from '@headlessui/react';
-import { ForwardRefExoticComponent, SVGProps, memo, useState } from 'react';
+import React, { ForwardRefExoticComponent, SVGProps, ElementType, memo, useState } from 'react';
 
 interface ProposalActionMenuProps {
   proposal: ProposalExisting;
@@ -43,7 +43,9 @@ const ActionMenuItem = memo(({
 }: ActionMenuItemProps) => {
   // Determine whether this is a link or just a menu item
   const isLink = Boolean(href) && !disabled;
-  const Component = isLink ? 'a' : 'button';
+
+  // Type the component properly to avoid TS errors
+  const Component: ElementType = isLink ? 'a' : 'button';
 
   return (
     <HeadlessMenuItem disabled={disabled}>
@@ -68,9 +70,12 @@ const ActionMenuItem = memo(({
           'aria-disabled': disabled
         };
 
-        return (
-          // @ts-ignore - Component could be either 'a' or 'button'
-          <Component {...commonProps}>
+        // JSX doesn't play well with ElementType when using dynamic components
+        // We need to create the element differently
+        return React.createElement(
+          Component,
+          commonProps,
+          <>
             <Icon
               className={classNames(
                 "mr-3 h-5 w-5",
@@ -79,7 +84,7 @@ const ActionMenuItem = memo(({
               aria-hidden="true"
             />
             {label}
-          </Component>
+          </>
         );
       }}
     </HeadlessMenuItem>
@@ -104,7 +109,6 @@ export const ProposalActionMenu = memo(({ proposal, onAcceptReject }: ProposalAc
       <MenuButton
         className="inline-flex w-full justify-center gap-x-1.5 rounded-md bg-white px-2 py-1 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
         aria-label={`Actions for proposal: ${proposal.title}`}
-        onClick={() => setIsOpen(true)}
       >
         Options
         <ChevronDownIcon
