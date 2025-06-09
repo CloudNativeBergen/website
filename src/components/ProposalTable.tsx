@@ -107,9 +107,9 @@ export function ProposalTable({
           onToggleReview={() => setShowReviewColumn(!showReviewColumn)}
         />
 
-        <div className="mt-6 flow-root">
-          <div className={sidebarMode ? "overflow-x-auto" : "-mx-4 -my-2 overflow-x-auto overflow-y-visible sm:-mx-6 md:overflow-x-visible lg:-mx-8"}>
-            <div className={sidebarMode ? "align-middle min-w-full" : "inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8"}>
+        <div className="mt-6 flow-root h-full">
+          <div className={sidebarMode ? "overflow-auto h-full" : "-mx-4 -my-2 overflow-x-auto overflow-y-visible sm:-mx-6 md:overflow-x-visible lg:-mx-8"}>
+            <div className={sidebarMode ? "align-middle min-w-full h-full" : "inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8"}>
               <table className="min-w-full divide-y divide-gray-300 bg-white">
                 <thead className={sidebarMode ? "bg-gray-50/75" : "bg-gray-50"}>
                   <tr>

@@ -35,11 +35,11 @@ export function AdminProposalLayout({
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex h-full">
       {/* Main content area */}
       <main className="flex-1 overflow-hidden xl:w-3/4">
         <div className="h-full flex flex-col bg-gray-50/25">
-          <div className="flex-1 p-6">
+          <div className="flex-1 p-6 overflow-hidden">
             <div className="h-full bg-white overflow-hidden">
               <ProposalTable
                 p={displayProposals}
@@ -53,7 +53,7 @@ export function AdminProposalLayout({
       </main>
 
       {/* Fixed sidebar panel */}
-      <aside className="top-16 bottom-0 right-0 hidden w-1/4 overflow-y-auto border-l border-gray-200 bg-white xl:block">
+      <aside className="hidden w-1/4 overflow-y-auto border-l border-gray-200 bg-white xl:block">
         <ProposalDetailPanel
           proposal={selectedProposal}
           onClose={handleProposalDeselect}

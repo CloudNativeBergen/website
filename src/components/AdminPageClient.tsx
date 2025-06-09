@@ -15,7 +15,7 @@ export function AdminPageClient({ proposals }: AdminPageClientProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
-    <div className="h-full">
+    <div className="h-full flex flex-col">
       {/* Header with search and actions */}
       <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center border-b border-gray-200 bg-white shadow-sm w-full">
         <div className="flex flex-1 items-center justify-between px-6 lg:px-8">
@@ -89,10 +89,12 @@ export function AdminPageClient({ proposals }: AdminPageClientProps) {
           </div>
         </div>
       ) : (
-        <AdminProposalLayout 
-          proposals={proposals} 
-          searchQuery={searchQuery}
-        />
+        <div className="flex-1">
+          <AdminProposalLayout 
+            proposals={proposals} 
+            searchQuery={searchQuery}
+          />
+        </div>
       )}
     </div>
   );
