@@ -30,12 +30,11 @@ export const ProposalTableRow = memo(({
   isSelected = false
 }: ProposalTableRowProps) => {
   return (
-    <tr 
-      className={`cursor-pointer transition-colors duration-150 ${
-        isSelected 
-          ? 'bg-indigo-50 border-indigo-200' 
+    <tr
+      className={`cursor-pointer transition-colors duration-150 ${isSelected
+          ? 'bg-indigo-50 border-indigo-200'
           : 'hover:bg-gray-50'
-      }`}
+        }`}
       onClick={() => onSelect?.(proposal)}
     >
       <td className="py-4 pr-3 pl-4 text-sm font-medium whitespace-nowrap text-gray-900 sm:pl-0 md:whitespace-normal">

@@ -20,8 +20,8 @@ export const ProposalPreviewModal = memo(({ proposal, isOpen, onClose }: Proposa
 
   const averageScore = proposal.reviews ? getAverageScore(proposal.reviews) : 0;
   const scoreColorClass = getScoreColorClass(averageScore);
-  const speakerName = proposal.speaker && 'name' in proposal.speaker 
-    ? (proposal.speaker as Speaker).name 
+  const speakerName = proposal.speaker && 'name' in proposal.speaker
+    ? (proposal.speaker as Speaker).name
     : 'Unknown speaker';
 
   return (
@@ -67,7 +67,7 @@ export const ProposalPreviewModal = memo(({ proposal, isOpen, onClose }: Proposa
                     <DialogTitle as="h3" className="text-lg font-semibold leading-6 text-gray-900 pr-8">
                       {proposal.title}
                     </DialogTitle>
-                    
+
                     <div className="mt-4 space-y-4">
                       {/* Speaker and Basic Info */}
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

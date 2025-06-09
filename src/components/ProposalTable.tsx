@@ -11,12 +11,12 @@ import { ProposalTableRow } from './proposal/ProposalTableRow'
 import { useProposalSort } from '@/hooks/useProposalSort'
 import { useProposalFilter } from '@/hooks/useProposalFilter'
 
-export function ProposalTable({ 
-  p, 
-  onProposalSelect, 
+export function ProposalTable({
+  p,
+  onProposalSelect,
   selectedProposal,
   sidebarMode = false
-}: { 
+}: {
   p: ProposalExisting[];
   onProposalSelect?: (proposal: ProposalExisting) => void;
   selectedProposal?: ProposalExisting | null;
@@ -108,8 +108,8 @@ export function ProposalTable({
         />
 
         <div className="mt-6 flow-root">
-          <div className={sidebarMode ? "overflow-hidden" : "-mx-4 -my-2 overflow-x-auto overflow-y-visible sm:-mx-6 md:overflow-x-visible lg:-mx-8"}>
-            <div className={sidebarMode ? "align-middle" : "inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8"}>
+          <div className={sidebarMode ? "overflow-x-auto" : "-mx-4 -my-2 overflow-x-auto overflow-y-visible sm:-mx-6 md:overflow-x-visible lg:-mx-8"}>
+            <div className={sidebarMode ? "align-middle min-w-full" : "inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8"}>
               <table className="min-w-full divide-y divide-gray-300 bg-white">
                 <thead className={sidebarMode ? "bg-gray-50/75" : "bg-gray-50"}>
                   <tr>

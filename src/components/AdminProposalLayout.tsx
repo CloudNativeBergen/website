@@ -11,18 +11,18 @@ interface AdminProposalLayoutProps {
   searchQuery?: string;
 }
 
-export function AdminProposalLayout({ 
-  proposals, 
+export function AdminProposalLayout({
+  proposals,
   searchQuery = ''
 }: AdminProposalLayoutProps) {
   const [selectedProposal, setSelectedProposal] = useState<ProposalExisting | null>(null);
   const { filteredProposals } = useProposalSearch(proposals);
 
   // Use either external search control or internal filtering
-  const displayProposals = searchQuery ? 
-    proposals.filter(p => 
+  const displayProposals = searchQuery ?
+    proposals.filter(p =>
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.speaker && 'name' in p.speaker && 
+      (p.speaker && 'name' in p.speaker &&
         (p.speaker as { name: string }).name.toLowerCase().includes(searchQuery.toLowerCase()))
     ) : filteredProposals;
 
@@ -37,12 +37,12 @@ export function AdminProposalLayout({
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Main content area */}
-      <main className="flex-1 overflow-hidden xl:pr-80">
+      <main className="flex-1 overflow-hidden xl:w-3/4">
         <div className="h-full flex flex-col bg-gray-50/25">
           <div className="flex-1 p-6">
-            <div className="h-full bg-white shadow-sm ring-1 ring-gray-900/5 rounded-xl overflow-hidden">
-              <ProposalTable 
-                p={displayProposals} 
+            <div className="h-full bg-white overflow-hidden">
+              <ProposalTable
+                p={displayProposals}
                 onProposalSelect={handleProposalSelect}
                 selectedProposal={selectedProposal}
                 sidebarMode={true}
@@ -53,8 +53,8 @@ export function AdminProposalLayout({
       </main>
 
       {/* Fixed sidebar panel */}
-      <aside className="fixed inset-y-16 right-0 hidden w-80 overflow-hidden border-l border-gray-200 bg-white xl:block">
-        <ProposalDetailPanel 
+      <aside className="top-16 bottom-0 right-0 hidden w-1/4 overflow-y-auto border-l border-gray-200 bg-white xl:block">
+        <ProposalDetailPanel
           proposal={selectedProposal}
           onClose={handleProposalDeselect}
         />

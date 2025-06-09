@@ -34,12 +34,12 @@ export const ProposalDetailPanel = memo(({ proposal, onClose }: ProposalDetailPa
 
   const averageScore = proposal.reviews ? getAverageScore(proposal.reviews) : 0;
   const scoreColorClass = getScoreColorClass(averageScore);
-  const speakerName = proposal.speaker && 'name' in proposal.speaker 
-    ? (proposal.speaker as Speaker).name 
+  const speakerName = proposal.speaker && 'name' in proposal.speaker
+    ? (proposal.speaker as Speaker).name
     : 'Unknown speaker';
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-[calc(100vh-4rem)] flex-col">
       {/* Header */}
       <div className="flex items-start justify-between gap-x-4 border-b border-gray-100 bg-gray-50/50 px-6 py-5">
         <div className="min-w-0 flex-1">

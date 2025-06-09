@@ -17,8 +17,8 @@ export function AdminPageClient({ proposals }: AdminPageClientProps) {
   return (
     <div className="h-full">
       {/* Header with search and actions */}
-      <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center border-b border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-1 items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center border-b border-gray-200 bg-white shadow-sm w-full">
+        <div className="flex flex-1 items-center justify-between px-6 lg:px-8">
           {/* Breadcrumb navigation */}
           <nav className="flex" aria-label="Breadcrumb">
             <ol className="flex items-center space-x-2 text-sm">
