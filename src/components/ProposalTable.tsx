@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ProposalExisting, Status, Action } from '@/lib/proposal/types'
 import { ProposalActionModal } from './ProposalActionModal'
+import { ProposalPreviewModal } from './proposal/ProposalPreviewModal'
 import { ProposalTableHeader } from './proposal/ProposalTableHeader'
 import { ProposalTableControls } from './proposal/ProposalTableControls'
 import { ProposalTableColumnHeader } from './proposal/ProposalTableColumnHeader'
@@ -16,6 +17,10 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
   const [actionProposal, setActionProposal] = useState<ProposalExisting>({} as ProposalExisting)
   const [actionAction, setActionAction] = useState<Action>(Action.accept)
   const [proposals, setProposals] = useState<ProposalExisting[]>(p)
+
+  // Preview modal state
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewProposal, setPreviewProposal] = useState<ProposalExisting | null>(null)
 
   // Column visibility settings
   const [showLanguageColumn, setShowLanguageColumn] = useState<boolean>(false)
@@ -33,10 +38,20 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
     setActionOpen(true)
   }
 
+  function previewClickHandler(proposal: ProposalExisting) {
+    setPreviewProposal(proposal)
+    setPreviewOpen(true)
+  }
+
   function modalCloseHandler() {
     setActionOpen(false)
     setActionProposal({} as ProposalExisting)
     setActionAction(Action.accept)
+  }
+
+  function previewCloseHandler() {
+    setPreviewOpen(false)
+    setPreviewProposal(null)
   }
 
   function modalActionHandler(id: string, status: Status) {
@@ -58,6 +73,11 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
         proposal={actionProposal}
         action={actionAction}
         adminUI={true}
+      />
+      <ProposalPreviewModal
+        proposal={previewProposal}
+        isOpen={previewOpen}
+        onClose={previewCloseHandler}
       />
       <div className="px-4 sm:px-6 lg:px-8">
         <ProposalTableHeader
@@ -133,9 +153,9 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                     )}
                     <th
                       scope="col"
-                      className="relative py-3.5 pr-4 pl-3 sm:pr-0"
+                      className="relative py-3.5 pr-4 pl-3 sm:pr-0 w-24"
                     >
-                      <span className="sr-only">Edit</span>
+                      <span className="sr-only">Preview and Actions</span>
                     </th>
                   </tr>
                 </thead>
@@ -148,6 +168,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                       showLevel={showLevelColumn}
                       showReview={showReviewColumn}
                       onAction={acceptRejectClickHandler}
+                      onPreview={previewClickHandler}
                     />
                   ))}
                 </tbody>

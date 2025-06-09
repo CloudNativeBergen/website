@@ -1,7 +1,7 @@
 'use client';
 
 import { Action, ProposalExisting } from '@/lib/proposal/types';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/solid';
+import { ExclamationTriangleIcon, EyeIcon } from '@heroicons/react/24/solid';
 import { FormatFormat, FormatLanguage, FormatLevel, FormatStatus } from '@/lib/proposal/format';
 import { Flags, Speaker } from '@/lib/speaker/types';
 import { ProposalActionMenu } from './ProposalActionMenu';
@@ -14,6 +14,7 @@ interface ProposalTableRowProps {
   showLevel: boolean;
   showReview: boolean;
   onAction: (proposal: ProposalExisting, action: Action) => void;
+  onPreview?: (proposal: ProposalExisting) => void;
 }
 
 export const ProposalTableRow = memo(({
@@ -21,7 +22,8 @@ export const ProposalTableRow = memo(({
   showLanguage,
   showLevel,
   showReview,
-  onAction
+  onAction,
+  onPreview
 }: ProposalTableRowProps) => {
   return (
     <tr key={proposal._id}>
@@ -83,10 +85,20 @@ export const ProposalTableRow = memo(({
         </td>
       )}
       <td className="relative py-4 pr-4 pl-3 text-right text-sm font-medium whitespace-nowrap sm:pr-0">
-        <ProposalActionMenu
-          proposal={proposal}
-          onAcceptReject={onAction}
-        />
+        <div className="flex items-center justify-end space-x-2">
+          <button
+            onClick={() => onPreview?.(proposal)}
+            className="rounded-md p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            title="Preview proposal"
+            aria-label={`Preview proposal: ${proposal.title}`}
+          >
+            <EyeIcon className="h-5 w-5" />
+          </button>
+          <ProposalActionMenu
+            proposal={proposal}
+            onAcceptReject={onAction}
+          />
+        </div>
       </td>
     </tr>
   );
