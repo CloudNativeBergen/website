@@ -15,6 +15,8 @@ interface ProposalTableRowProps {
   showReview: boolean;
   onAction: (proposal: ProposalExisting, action: Action) => void;
   onPreview?: (proposal: ProposalExisting) => void;
+  onSelect?: (proposal: ProposalExisting) => void;
+  isSelected?: boolean;
 }
 
 export const ProposalTableRow = memo(({
@@ -23,10 +25,19 @@ export const ProposalTableRow = memo(({
   showLevel,
   showReview,
   onAction,
-  onPreview
+  onPreview,
+  onSelect,
+  isSelected = false
 }: ProposalTableRowProps) => {
   return (
-    <tr key={proposal._id}>
+    <tr 
+      className={`cursor-pointer transition-colors duration-150 ${
+        isSelected 
+          ? 'bg-indigo-50 border-indigo-200' 
+          : 'hover:bg-gray-50'
+      }`}
+      onClick={() => onSelect?.(proposal)}
+    >
       <td className="py-4 pr-3 pl-4 text-sm font-medium whitespace-nowrap text-gray-900 sm:pl-0 md:whitespace-normal">
         {proposal.title}
       </td>

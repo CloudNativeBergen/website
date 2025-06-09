@@ -1,25 +1,35 @@
-import { BackgroundImage } from '@/components/BackgroundImage'
-import { Container } from '@/components/Container'
-import { ProposalTable } from '@/components/ProposalTable'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/sanity'
-import { ChevronRightIcon } from '@heroicons/react/20/solid'
+import { ExclamationTriangleIcon } from '@heroicons/react/20/solid'
 import Link from 'next/link'
+import { AdminPageClient } from '@/components/AdminPageClient'
 
 function ErrorDisplay({ title, message }: { title: string; message: string }) {
   return (
-    <div className="relative py-6 sm:pt-12 sm:pb-20">
-      <BackgroundImage className="absolute inset-x-0 -top-36 -bottom-14" />
-      <Container className="relative max-w-screen-2xl">
-        <div className="mx-auto max-w-screen-2xl lg:px-16">
-          <h1 className="font-display text-5xl font-bold tracking-tighter text-red-600 sm:text-7xl">
-            {title}
-          </h1>
-          <p className="mt-4 text-lg text-gray-700">
-            {message || 'An unexpected error occurred.'}
-          </p>
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center px-6 py-24 sm:py-32 lg:px-8">
+      <div className="text-center">
+        <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
+        <h1 className="mt-4 text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+          {title}
+        </h1>
+        <p className="mt-6 text-base leading-7 text-gray-600 max-w-lg">
+          {message || 'An unexpected error occurred. Please try again later.'}
+        </p>
+        <div className="mt-10 flex items-center justify-center gap-x-6">
+          <Link
+            href="/cfp"
+            className="rounded-md bg-indigo-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            Back to CFP
+          </Link>
+          <Link
+            href="/"
+            className="text-sm font-semibold text-gray-900 hover:text-gray-700"
+          >
+            Go home <span aria-hidden="true">&rarr;</span>
+          </Link>
         </div>
-      </Container>
+      </div>
     </div>
   )
 }
@@ -52,47 +62,5 @@ export default async function AllProposals() {
     )
   }
 
-  return (
-    <div className="relative py-6 sm:pt-12 sm:pb-20">
-      <BackgroundImage className="absolute inset-x-0 -top-36 -bottom-14" />
-      <Container className="relative max-w-screen-2xl">
-        <div className="mx-auto max-w-screen-2xl lg:px-16">
-          <nav className="mb-6">
-            <ol className="flex items-center space-x-2 text-sm text-gray-500">
-              <li>
-                <Link href="/" className="hover:text-indigo-600 transition-colors">
-                  Home
-                </Link>
-              </li>
-              <ChevronRightIcon className="h-4 w-4 flex-none text-gray-400" aria-hidden="true" />
-              <li>
-                <Link href="/cfp" className="hover:text-indigo-600 transition-colors">
-                  CFP
-                </Link>
-              </li>
-              <ChevronRightIcon className="h-4 w-4 flex-none text-gray-400" aria-hidden="true" />
-              <li className="font-medium text-indigo-600">
-                Admin
-              </li>
-            </ol>
-          </nav>
-
-          {proposals.length === 0 ? (
-            <div className="mx-auto flex flex-col items-center rounded-lg bg-white p-6">
-              <p className="text-lg font-semibold text-gray-900">
-                No proposals submitted yet.
-              </p>
-              <p className="mt-2 text-sm text-gray-500">
-                Ask speakers to submit proposals for the conference.
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-xl bg-white pt-4 shadow-sm">
-              <ProposalTable p={proposals} />
-            </div>
-          )}
-        </div>
-      </Container>
-    </div>
-  )
+  return <AdminPageClient proposals={proposals} />;
 }

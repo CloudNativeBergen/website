@@ -11,7 +11,17 @@ import { ProposalTableRow } from './proposal/ProposalTableRow'
 import { useProposalSort } from '@/hooks/useProposalSort'
 import { useProposalFilter } from '@/hooks/useProposalFilter'
 
-export function ProposalTable({ p }: { p: ProposalExisting[] }) {
+export function ProposalTable({ 
+  p, 
+  onProposalSelect, 
+  selectedProposal,
+  sidebarMode = false
+}: { 
+  p: ProposalExisting[];
+  onProposalSelect?: (proposal: ProposalExisting) => void;
+  selectedProposal?: ProposalExisting | null;
+  sidebarMode?: boolean;
+}) {
   // Modal state for action confirmation
   const [actionOpen, setActionOpen] = useState(false)
   const [actionProposal, setActionProposal] = useState<ProposalExisting>({} as ProposalExisting)
@@ -74,12 +84,14 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
         action={actionAction}
         adminUI={true}
       />
-      <ProposalPreviewModal
-        proposal={previewProposal}
-        isOpen={previewOpen}
-        onClose={previewCloseHandler}
-      />
-      <div className="px-4 sm:px-6 lg:px-8">
+      {!sidebarMode && (
+        <ProposalPreviewModal
+          proposal={previewProposal}
+          isOpen={previewOpen}
+          onClose={previewCloseHandler}
+        />
+      )}
+      <div className={sidebarMode ? "p-0" : "px-4 sm:px-6 lg:px-8"}>
         <ProposalTableHeader
           stats={filterStats}
           currentFilter={statusFilter}
@@ -95,12 +107,11 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
           onToggleReview={() => setShowReviewColumn(!showReviewColumn)}
         />
 
-        <div className="mt-8 flow-root">
-          {/* @TODO make overflow play nice with the dropdown on smaller screens */}
-          <div className="-mx-4 -my-2 overflow-x-auto overflow-y-visible sm:-mx-6 md:overflow-x-visible lg:-mx-8">
-            <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead>
+        <div className="mt-6 flow-root">
+          <div className={sidebarMode ? "overflow-hidden" : "-mx-4 -my-2 overflow-x-auto overflow-y-visible sm:-mx-6 md:overflow-x-visible lg:-mx-8"}>
+            <div className={sidebarMode ? "align-middle" : "inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8"}>
+              <table className="min-w-full divide-y divide-gray-300 bg-white">
+                <thead className={sidebarMode ? "bg-gray-50/75" : "bg-gray-50"}>
                   <tr>
                     <ProposalTableColumnHeader
                       title="Title"
@@ -159,7 +170,7 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200 bg-white">
                   {filteredProposals.map((proposal) => (
                     <ProposalTableRow
                       key={proposal._id}
@@ -168,7 +179,9 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
                       showLevel={showLevelColumn}
                       showReview={showReviewColumn}
                       onAction={acceptRejectClickHandler}
-                      onPreview={previewClickHandler}
+                      onPreview={sidebarMode ? onProposalSelect : previewClickHandler}
+                      onSelect={onProposalSelect}
+                      isSelected={selectedProposal?._id === proposal._id}
                     />
                   ))}
                 </tbody>
