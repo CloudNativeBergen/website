@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { ProposalExisting, Status, Format, Level, Language, Audience } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { Review } from '@/lib/review/types'
-import { FilterState } from './ProposalsFilter'
+import { FilterState, ReviewStatus } from './ProposalsFilter'
 
 /**
  * Calculate the average rating for a proposal based on its reviews
@@ -30,7 +30,7 @@ export function calculateAverageRating(proposal: ProposalExisting): number {
  * Custom hook for filtering and sorting proposals
  * Separates business logic from UI components
  */
-export function useProposalFiltering(proposals: ProposalExisting[], filters: FilterState) {
+export function useProposalFiltering(proposals: ProposalExisting[], filters: FilterState, currentUserId?: string) {
   return useMemo(() => {
     const filtered = proposals.filter(proposal => {
       // Filter by status
@@ -57,6 +57,29 @@ export function useProposalFiltering(proposals: ProposalExisting[], filters: Fil
       if (filters.audience.length > 0) {
         const hasMatchingAudience = proposal.audiences?.some(aud => filters.audience.includes(aud))
         if (!hasMatchingAudience) {
+          return false
+        }
+      }
+
+      // Filter by review status (only if currentUserId is provided)
+      if (currentUserId && filters.reviewStatus !== ReviewStatus.all) {
+        const hasUserReview = proposal.reviews?.some(review => {
+          const reviewObj = typeof review === 'object' && 'reviewer' in review ? review as Review : null
+          if (!reviewObj) return false
+
+          const reviewerId = typeof reviewObj.reviewer === 'object' && '_id' in reviewObj.reviewer
+            ? reviewObj.reviewer._id
+            : typeof reviewObj.reviewer === 'string'
+              ? reviewObj.reviewer
+              : null
+
+          return reviewerId === currentUserId
+        })
+
+        if (filters.reviewStatus === ReviewStatus.reviewed && !hasUserReview) {
+          return false
+        }
+        if (filters.reviewStatus === ReviewStatus.unreviewed && hasUserReview) {
           return false
         }
       }
@@ -101,7 +124,7 @@ export function useProposalFiltering(proposals: ProposalExisting[], filters: Fil
     })
 
     return filtered
-  }, [proposals, filters])
+  }, [proposals, filters, currentUserId])
 }
 
 /**
@@ -125,6 +148,10 @@ export function useFilterState(initialFilters: FilterState) {
     })
   }
 
+  const setReviewStatus = (reviewStatus: ReviewStatus) => {
+    setFilters(prev => ({ ...prev, reviewStatus }))
+  }
+
   const setSortBy = (sortBy: FilterState['sortBy']) => {
     setFilters(prev => ({ ...prev, sortBy }))
   }
@@ -143,22 +170,24 @@ export function useFilterState(initialFilters: FilterState) {
       level: [],
       language: [],
       audience: [],
+      reviewStatus: ReviewStatus.all,
       sortBy: 'created',
       sortOrder: 'desc'
     })
-  }
-
-  // Count active filters, excluding default status filters
+  }  // Count active filters, excluding default status filters
   const defaultStatusFilters = [Status.submitted, Status.accepted, Status.confirmed]
   const additionalStatusFilters = filters.status.filter(status => !defaultStatusFilters.includes(status))
   const removedDefaultStatusFilters = defaultStatusFilters.filter(status => !filters.status.includes(status))
   const statusFilterCount = additionalStatusFilters.length + removedDefaultStatusFilters.length
 
-  const activeFilterCount = statusFilterCount + filters.format.length + filters.level.length + filters.language.length + filters.audience.length
+  const reviewStatusFilterCount = filters.reviewStatus !== ReviewStatus.all ? 1 : 0
+
+  const activeFilterCount = statusFilterCount + filters.format.length + filters.level.length + filters.language.length + filters.audience.length + reviewStatusFilterCount
 
   return {
     filters,
     toggleFilter,
+    setReviewStatus,
     setSortBy,
     toggleSortOrder,
     clearAllFilters,

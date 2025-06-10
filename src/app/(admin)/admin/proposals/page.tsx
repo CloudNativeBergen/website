@@ -2,8 +2,11 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import { ProposalsPageClient } from '@/components/admin/ProposalsPageClient'
+import { auth } from '@/lib/auth'
 
 export default async function AdminProposals() {
+  const session = await auth()
+
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain()
 
@@ -31,5 +34,5 @@ export default async function AdminProposals() {
     )
   }
 
-  return <ProposalsPageClient proposals={proposals} />
+  return <ProposalsPageClient proposals={proposals} currentUserId={session?.speaker?._id} />
 }

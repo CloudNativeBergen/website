@@ -4,7 +4,7 @@ import { DocumentTextIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { ProposalCard } from './ProposalCard'
-import { ProposalsFilter, FilterState } from './ProposalsFilter'
+import { ProposalsFilter, FilterState, ReviewStatus } from './ProposalsFilter'
 import { useProposalFiltering, useFilterState } from './hooks'
 
 interface ProposalsListProps {
@@ -12,6 +12,7 @@ interface ProposalsListProps {
   onProposalSelect?: (proposalId: string | null) => void
   selectedProposalId?: string | null
   enablePreview?: boolean
+  currentUserId?: string
 }
 
 /**
@@ -22,7 +23,8 @@ export function ProposalsList({
   proposals,
   onProposalSelect,
   selectedProposalId,
-  enablePreview = false
+  enablePreview = false,
+  currentUserId
 }: ProposalsListProps) {
   const initialFilters: FilterState = {
     status: [Status.submitted, Status.accepted, Status.confirmed],
@@ -30,6 +32,7 @@ export function ProposalsList({
     level: [],
     language: [],
     audience: [],
+    reviewStatus: ReviewStatus.all,
     sortBy: 'created',
     sortOrder: 'desc'
   }
@@ -37,13 +40,14 @@ export function ProposalsList({
   const {
     filters,
     toggleFilter,
+    setReviewStatus,
     setSortBy,
     toggleSortOrder,
     clearAllFilters,
     activeFilterCount
   } = useFilterState(initialFilters)
 
-  const filteredProposals = useProposalFiltering(proposals, filters)
+  const filteredProposals = useProposalFiltering(proposals, filters, currentUserId)
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -62,10 +66,12 @@ export function ProposalsList({
         <ProposalsFilter
           filters={filters}
           onFilterChange={toggleFilter}
+          onReviewStatusChange={setReviewStatus}
           onSortChange={setSortBy}
           onSortOrderToggle={toggleSortOrder}
           onClearAll={clearAllFilters}
           activeFilterCount={activeFilterCount}
+          currentUserId={currentUserId}
         />
       </div>
 

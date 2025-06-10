@@ -7,9 +7,10 @@ import { ProposalPreview } from './ProposalPreview'
 
 interface ProposalsPageClientProps {
   proposals: ProposalExisting[]
+  currentUserId?: string
 }
 
-export function ProposalsPageClient({ proposals }: ProposalsPageClientProps) {
+export function ProposalsPageClient({ proposals, currentUserId }: ProposalsPageClientProps) {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const selectedProposal = selectedProposalId
     ? proposals.find(p => p._id === selectedProposalId)
@@ -24,6 +25,7 @@ export function ProposalsPageClient({ proposals }: ProposalsPageClientProps) {
           onProposalSelect={setSelectedProposalId}
           selectedProposalId={selectedProposalId}
           enablePreview={true}
+          currentUserId={currentUserId}
         />
       </div>
 

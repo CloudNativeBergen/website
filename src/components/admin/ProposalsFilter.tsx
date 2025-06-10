@@ -5,12 +5,19 @@ import { Status, Format, Level, Language, Audience, statuses, formats, levels } 
 import { FilterDropdown, FilterOption } from './FilterDropdown'
 import { getStatusBadgeStyle } from './utils'
 
+export enum ReviewStatus {
+  unreviewed = 'unreviewed',
+  reviewed = 'reviewed',
+  all = 'all'
+}
+
 export interface FilterState {
   status: Status[]
   format: Format[]
   level: Level[]
   language: Language[]
   audience: Audience[]
+  reviewStatus: ReviewStatus
   sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating'
   sortOrder: 'asc' | 'desc'
 }
@@ -18,10 +25,12 @@ export interface FilterState {
 interface ProposalsFilterProps {
   filters: FilterState
   onFilterChange: (filterType: keyof FilterState, value: Status | Format | Level | Language | Audience) => void
+  onReviewStatusChange: (reviewStatus: ReviewStatus) => void
   onSortChange: (sortBy: FilterState['sortBy']) => void
   onSortOrderToggle: () => void
   onClearAll: () => void
   activeFilterCount: number
+  currentUserId?: string
 }
 
 /**
@@ -31,10 +40,12 @@ interface ProposalsFilterProps {
 export function ProposalsFilter({
   filters,
   onFilterChange,
+  onReviewStatusChange,
   onSortChange,
   onSortOrderToggle,
   onClearAll,
-  activeFilterCount
+  activeFilterCount,
+  currentUserId
 }: ProposalsFilterProps) {
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -88,6 +99,27 @@ export function ProposalsFilter({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Review Status Filter - only show if user is logged in */}
+          {currentUserId && (
+            <FilterDropdown
+              label={`My Reviews: ${filters.reviewStatus === ReviewStatus.unreviewed ? 'Unreviewed' : filters.reviewStatus === ReviewStatus.reviewed ? 'Reviewed' : 'All'}`}
+              activeCount={filters.reviewStatus !== ReviewStatus.all ? 1 : 0}
+              position="right"
+            >
+              {Object.values(ReviewStatus).map((status) => (
+                <FilterOption
+                  key={status}
+                  onClick={() => onReviewStatusChange(status)}
+                  checked={filters.reviewStatus === status}
+                >
+                  {status === ReviewStatus.unreviewed ? 'Unreviewed by me' :
+                    status === ReviewStatus.reviewed ? 'Reviewed by me' :
+                      'All proposals'}
+                </FilterOption>
+              ))}
+            </FilterDropdown>
+          )}
+
           {/* Sort Options */}
           <FilterDropdown
             label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy}`}
