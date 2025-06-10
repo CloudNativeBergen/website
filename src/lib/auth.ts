@@ -87,8 +87,12 @@ const config = {
           return {}
         }
 
-        if (speaker.image && typeof speaker.image === 'object') {
-          token.picture = sanityImage(speaker.image).width(192).height(192).fit('crop').url()
+        if (speaker.image) {
+          if (typeof speaker.image === 'object') {
+            token.picture = sanityImage(speaker.image).width(192).height(192).fit('crop').url()
+          } else if (typeof speaker.image === 'string') {
+            token.picture = speaker.image
+          }
         }
 
         token.account = account
