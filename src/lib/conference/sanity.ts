@@ -56,18 +56,16 @@ export async function getConferenceForDomain(
   try {
     const query = `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{
       ...,
-      ${
-        organizers
-          ? `organizers[]->{
+      ${organizers
+        ? `organizers[]->{
       ...,
       "slug": slug.current,
       "image": image.asset->url
       },`
-          : ''
+        : ''
       }
-      ${
-        schedule
-          ? `schedules[]-> {
+      ${schedule
+        ? `schedules[]-> {
         ...,
         tracks[]{
           trackTitle,
@@ -91,22 +89,24 @@ export async function getConferenceForDomain(
           }
         }
       },`
-          : ''
+        : ''
       }
-      ${
-        sponsors
-          ? `sponsors[]{
+      ${sponsors
+        ? `sponsors[]{
         sponsor->{
           name,
           website,
           logo,
         },
+        tier->{
+          title,
+          tagline
+        }
       },`
-          : ''
+        : ''
       }
-      ${
-        sponsorTiers
-          ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id]{
+      ${sponsorTiers
+        ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id]{
         title,
         tagline,
         price[]{
@@ -120,18 +120,17 @@ export async function getConferenceForDomain(
         sold_out,
         most_popular
       },`
-          : ''
+        : ''
       }
-      ${
-        topics
-          ? `topics[]->{
+      ${topics
+        ? `topics[]->{
         _id,
         title,
         description,
         color,
         "slug": slug.current
       },`
-          : ''
+        : ''
       }
     }`
 

@@ -36,6 +36,10 @@ export interface ConferenceSponsor {
     website: string
     logo: string
   }
+  tier?: {
+    title: string
+    tagline: string
+  }
 }
 
 export interface SponsorTier {
