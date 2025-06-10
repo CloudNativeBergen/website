@@ -47,15 +47,25 @@ export function ProposalCard({
       </div>
       <div className="min-w-0 flex-1">
         <div className="focus:outline-none">
-          <p className="text-sm font-medium text-gray-900 line-clamp-2 mb-2">
-            {proposal.title}
-          </p>
-          <div className="space-y-2">
-            <div className="flex items-center text-sm text-gray-600">
-              <span className="font-medium truncate">
-                {speaker?.name || 'Unknown Speaker'}
-              </span>
-            </div>
+          {/* Header row with title and status */}
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h3 className="text-sm font-medium text-gray-900 line-clamp-2 flex-1">
+              {proposal.title}
+            </h3>
+            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium flex-shrink-0 ${getStatusBadgeStyle(proposal.status)}`}>
+              {statuses.get(proposal.status) || proposal.status || 'Unknown'}
+            </span>
+          </div>
+
+          {/* Speaker name */}
+          <div className="flex items-center text-sm text-gray-600 mb-2">
+            <span className="font-medium truncate">
+              {speaker?.name || 'Unknown Speaker'}
+            </span>
+          </div>
+
+          {/* Metadata in compact rows */}
+          <div className="space-y-1">
             <div className="flex items-center text-sm text-gray-500">
               <ClockIcon className="mr-1 h-4 w-4 flex-shrink-0" />
               <span className="truncate">
@@ -66,15 +76,10 @@ export function ProposalCard({
               {levels.get(proposal.level) || proposal.level || 'Level not specified'} • {languages.get(proposal.language) || proposal.language || 'Language not specified'}
             </div>
             {proposal.audiences && proposal.audiences.length > 0 && (
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 line-clamp-1">
                 Audience: {proposal.audiences.map(aud => audiences.get(aud) || aud).join(', ')}
               </div>
             )}
-          </div>
-          <div className="mt-3">
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeStyle(proposal.status)}`}>
-              {statuses.get(proposal.status) || proposal.status || 'Unknown'}
-            </span>
           </div>
         </div>
       </div>
@@ -102,7 +107,7 @@ export function ProposalCard({
     <Link href={href || '#'} className={cardClasses} onClick={handleClick}>
       <CardContent />
       {onSelect && (
-        <div className="absolute top-3 right-3 lg:block hidden">
+        <div className="absolute top-3 left-3 lg:block hidden">
           <div className={`h-2 w-2 rounded-full ${isSelected ? "bg-indigo-500" : "bg-gray-300"
             }`} />
         </div>
