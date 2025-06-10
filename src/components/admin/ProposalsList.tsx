@@ -2,7 +2,7 @@
 
 import { DocumentTextIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { ProposalExisting } from '@/lib/proposal/types'
+import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { ProposalCard } from './ProposalCard'
 import { ProposalsFilter, FilterState } from './ProposalsFilter'
 import { useProposalFiltering, useFilterState } from './hooks'
@@ -25,7 +25,7 @@ export function ProposalsList({
   enablePreview = false
 }: ProposalsListProps) {
   const initialFilters: FilterState = {
-    status: [],
+    status: [Status.submitted, Status.accepted, Status.confirmed],
     format: [],
     level: [],
     language: [],

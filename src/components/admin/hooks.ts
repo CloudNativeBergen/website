@@ -138,7 +138,7 @@ export function useFilterState(initialFilters: FilterState) {
 
   const clearAllFilters = () => {
     setFilters({
-      status: [],
+      status: [Status.submitted, Status.accepted, Status.confirmed],
       format: [],
       level: [],
       language: [],
@@ -148,7 +148,13 @@ export function useFilterState(initialFilters: FilterState) {
     })
   }
 
-  const activeFilterCount = filters.status.length + filters.format.length + filters.level.length + filters.language.length + filters.audience.length
+  // Count active filters, excluding default status filters
+  const defaultStatusFilters = [Status.submitted, Status.accepted, Status.confirmed]
+  const additionalStatusFilters = filters.status.filter(status => !defaultStatusFilters.includes(status))
+  const removedDefaultStatusFilters = defaultStatusFilters.filter(status => !filters.status.includes(status))
+  const statusFilterCount = additionalStatusFilters.length + removedDefaultStatusFilters.length
+
+  const activeFilterCount = statusFilterCount + filters.format.length + filters.level.length + filters.language.length + filters.audience.length
 
   return {
     filters,
