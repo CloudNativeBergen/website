@@ -236,7 +236,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </div>
 
         <main className="py-10 lg:pl-20">
-          <div className="px-4 sm:px-6 lg:px-8">
+          <div className="px-2 sm:px-4 lg:px-8">
             {children}
           </div>
         </main>

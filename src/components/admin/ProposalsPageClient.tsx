@@ -23,6 +23,7 @@ export function ProposalsPageClient({ proposals }: ProposalsPageClientProps) {
           proposals={proposals}
           onProposalSelect={setSelectedProposalId}
           selectedProposalId={selectedProposalId}
+          enablePreview={true}
         />
       </div>
 

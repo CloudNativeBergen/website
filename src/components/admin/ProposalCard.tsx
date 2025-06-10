@@ -83,34 +83,30 @@ export function ProposalCard({
 
   const baseCardClasses = "relative rounded-lg border bg-white px-6 py-5 shadow-sm transition-all duration-200"
   const cardClasses = `${baseCardClasses} ${isSelected
-      ? "border-indigo-500 bg-indigo-50 shadow-md"
-      : "border-gray-300 hover:border-gray-400 hover:shadow-md"
+    ? "border-indigo-500 bg-indigo-50 shadow-md"
+    : "border-gray-300 hover:border-gray-400 hover:shadow-md"
     } ${onSelect ? "cursor-pointer" : ""
     }`
 
-  const handleClick = () => {
-    if (onSelect) {
+  const handleClick = (e: React.MouseEvent) => {
+    // On large screens (lg+), if onSelect is provided, use preview mode
+    const isLargeScreen = window.innerWidth >= 1024 // lg breakpoint
+    if (onSelect && isLargeScreen) {
+      e.preventDefault()
       onSelect()
     }
-  }
-
-  if (href && !onSelect) {
-    return (
-      <Link href={href} className={cardClasses}>
-        <CardContent />
-      </Link>
-    )
+    // On smaller screens, let the Link handle navigation naturally
   }
 
   return (
-    <div className={cardClasses} onClick={handleClick}>
+    <Link href={href || '#'} className={cardClasses} onClick={handleClick}>
       <CardContent />
       {onSelect && (
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 lg:block hidden">
           <div className={`h-2 w-2 rounded-full ${isSelected ? "bg-indigo-500" : "bg-gray-300"
             }`} />
         </div>
       )}
-    </div>
+    </Link>
   )
 }

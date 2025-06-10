@@ -11,6 +11,7 @@ interface ProposalsListProps {
   proposals: ProposalExisting[]
   onProposalSelect?: (proposalId: string | null) => void
   selectedProposalId?: string | null
+  enablePreview?: boolean
 }
 
 /**
@@ -20,7 +21,8 @@ interface ProposalsListProps {
 export function ProposalsList({
   proposals,
   onProposalSelect,
-  selectedProposalId
+  selectedProposalId,
+  enablePreview = false
 }: ProposalsListProps) {
   const initialFilters: FilterState = {
     status: [],
@@ -44,64 +46,62 @@ export function ProposalsList({
   const filteredProposals = useProposalFiltering(proposals, filters)
 
   return (
-    <div className="px-4 py-10 sm:px-6 lg:px-8 lg:py-6">
-      <div className="mx-auto max-w-7xl">
-        {/* Header */}
-        <div className="border-b border-gray-200 pb-5">
-          <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
-            Proposal Management
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Review and manage all conference proposals ({filteredProposals.length} of {proposals.length} total)
-          </p>
-        </div>
+    <div className="mx-auto max-w-7xl">
+      {/* Header */}
+      <div className="border-b border-gray-200 pb-5">
+        <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+          Proposal Management
+        </h1>
+        <p className="mt-2 text-sm text-gray-600">
+          Review and manage all conference proposals ({filteredProposals.length} of {proposals.length} total)
+        </p>
+      </div>
 
-        {/* Filter and Sort Bar */}
-        <div className="mt-6">
-          <ProposalsFilter
-            filters={filters}
-            onFilterChange={toggleFilter}
-            onSortChange={setSortBy}
-            onSortOrderToggle={toggleSortOrder}
-            onClearAll={clearAllFilters}
-            activeFilterCount={activeFilterCount}
+      {/* Filter and Sort Bar */}
+      <div className="mt-6">
+        <ProposalsFilter
+          filters={filters}
+          onFilterChange={toggleFilter}
+          onSortChange={setSortBy}
+          onSortOrderToggle={toggleSortOrder}
+          onClearAll={clearAllFilters}
+          activeFilterCount={activeFilterCount}
+        />
+      </div>
+
+      {/* Proposals Grid */}
+      <div className="mt-8">
+        {filteredProposals.length === 0 ? (
+          <EmptyState
+            hasProposals={proposals.length > 0}
+            onClearFilters={clearAllFilters}
           />
-        </div>
-
-        {/* Proposals Grid */}
-        <div className="mt-8">
-          {filteredProposals.length === 0 ? (
-            <EmptyState
-              hasProposals={proposals.length > 0}
-              onClearFilters={clearAllFilters}
-            />
-          ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredProposals.map((proposal) => (
-                <ProposalCard
-                  key={proposal._id}
-                  proposal={proposal}
-                  href={!onProposalSelect ? `/admin/proposals/${proposal._id}` : undefined}
-                  onSelect={onProposalSelect ? () => onProposalSelect(proposal._id) : undefined}
-                  isSelected={selectedProposalId === proposal._id}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Footer Actions */}
-        {filteredProposals.length > 0 && (
-          <div className="mt-8 text-center">
-            <Link
-              href="/admin"
-              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-            >
-              Back to Dashboard
-            </Link>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredProposals.map((proposal) => (
+              <ProposalCard
+                key={proposal._id}
+                proposal={proposal}
+                href={`/admin/proposals/${proposal._id}`}
+                onSelect={enablePreview && onProposalSelect ? () => onProposalSelect(proposal._id) : undefined}
+                isSelected={selectedProposalId === proposal._id}
+              />
+            ))}
           </div>
         )}
       </div>
+
+      {/* Footer Actions */}
+      {filteredProposals.length > 0 && (
+        <div className="mt-8 text-center">
+          <Link
+            href="/admin"
+            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+          >
+            Back to Dashboard
+          </Link>
+        </div>
+      )}
     </div>
   )
 }
