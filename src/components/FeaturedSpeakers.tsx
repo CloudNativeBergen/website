@@ -1,6 +1,6 @@
-import Image from 'next/image'
 import { Container } from '@/components/Container'
 import { iconForLink } from '@/components/SocialIcons'
+import { sanityImage } from '@/lib/sanity/client'
 
 import { Speaker } from '@/lib/speaker/types'
 
@@ -43,12 +43,13 @@ export function FeaturedSpeakers({
                 <li key={person.name}>
                   {isOrganizers ? (
                     <>
-                      <Image
+                      <img
                         className="mx-auto h-56 w-56 rounded-full object-contain"
-                        src={person.image || '/images/default-avatar.png'}
+                        src={person.image ? sanityImage(person.image).width(448).height(448).fit('crop').url() : 'https://placehold.co/448x448/e5e7eb/6b7280?text=Speaker'}
                         alt={person.name}
                         width={224}
                         height={224}
+                        loading="lazy"
                       />
                       <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
                         {person.name}
@@ -56,12 +57,13 @@ export function FeaturedSpeakers({
                     </>
                   ) : (
                     <a href={`/speaker/${person.slug}`}>
-                      <Image
+                      <img
                         className="mx-auto h-56 w-56 rounded-full object-contain"
-                        src={person.image || '/images/default-avatar.png'}
+                        src={person.image ? sanityImage(person.image).width(448).height(448).fit('crop').url() : 'https://placehold.co/448x448/e5e7eb/6b7280?text=Speaker'}
                         alt={person.name}
                         width={224}
                         height={224}
+                        loading="lazy"
                       />
                       <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
                         {person.name}

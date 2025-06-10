@@ -66,11 +66,12 @@ export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewLis
                 <div className="flex-shrink-0">
                   {reviewer?.image ? (
                     <img
-                      src={sanityImage(reviewer.image).width(64).height(64).url()}
+                      src={sanityImage(reviewer.image).width(64).height(64).fit('crop').url()}
                       alt={reviewer.name || 'Reviewer'}
                       width={32}
                       height={32}
                       className="h-8 w-8 rounded-full object-cover"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">

@@ -38,11 +38,12 @@ export function ProposalCard({
       <div className="flex-shrink-0">
         {speaker?.image ? (
           <img
-            src={sanityImage(speaker.image).width(96).height(96).url()}
+            src={sanityImage(speaker.image).width(96).height(96).fit('crop').url()}
             alt={speaker.name || 'Speaker'}
             width={48}
             height={48}
             className="h-12 w-12 rounded-full object-cover"
+            loading="lazy"
           />
         ) : (
           <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">

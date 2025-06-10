@@ -1,7 +1,7 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import Image from 'next/image'
 import { getPublicSpeakers } from '@/lib/speaker/sanity'
+import { sanityImage } from '@/lib/sanity/client'
 
 export const revalidate = 3600
 
@@ -34,9 +34,9 @@ export default async function Speakers() {
               {speakers.map((speaker) => (
                 <li key={speaker._id}>
                   <a href={`/speaker/${speaker.slug}`} className="block">
-                    <Image
+                    <img
                       alt=""
-                      src={`${speaker.image || 'https://via.placeholder.com/300'}?h=300&w=300&auto=format&fit=crop`}
+                      src={speaker.image ? sanityImage(speaker.image).width(600).height(600).fit('crop').url() : 'https://placehold.co/600x600/e5e7eb/6b7280?text=Speaker'}
                       width={300}
                       height={300}
                       className="mx-auto h-30 w-30 rounded-full"

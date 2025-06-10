@@ -88,11 +88,12 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             <div className="flex items-center space-x-4">
               {speaker.image && (
                 <img
-                  src={sanityImage(speaker.image).width(96).height(96).url()}
+                  src={sanityImage(speaker.image).width(96).height(96).fit('crop').url()}
                   alt={speaker.name}
                   width={48}
                   height={48}
                   className="h-12 w-12 rounded-full object-cover"
+                  loading="lazy"
                 />
               )}
               <div>
