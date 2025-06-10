@@ -58,12 +58,16 @@ export async function fetchEventTickets(customerId: number, eventId: number): Pr
   });
 
   if (!response.ok) {
+    console.log((`Customer ID: ${customerId}, Event ID: ${eventId}`));
+    console.error('Failed to fetch event tickets:', response.status, response.statusText);
     throw new Error(`Failed to fetch event tickets: ${response.statusText}`);
   }
 
   const responseData: EventTicketsResponse = await response.json();
 
   if (!responseData.data || !responseData.data.eventTickets) {
+    console.log((`Customer ID: ${customerId}, Event ID: ${eventId}`));
+    console.error('Invalid response data:', responseData);
     throw new Error('Invalid response data');
   }
 
