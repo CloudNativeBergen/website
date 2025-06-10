@@ -10,7 +10,7 @@ export default function AdminReports() {
             Generate and view conference reports
           </p>
         </div>
-        
+
         <div className="mt-8">
           <div className="rounded-lg bg-gray-50 p-6 text-center">
             <p className="text-gray-500">Reports dashboard coming soon...</p>

@@ -10,7 +10,7 @@ export default function AdminSchedule() {
             Create and manage the conference schedule
           </p>
         </div>
-        
+
         <div className="mt-8">
           <div className="rounded-lg bg-gray-50 p-6 text-center">
             <p className="text-gray-500">Schedule management coming soon...</p>

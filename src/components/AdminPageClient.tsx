@@ -76,8 +76,8 @@ export function AdminPageClient({ proposals }: AdminPageClientProps) {
         </div>
       ) : (
         <div className="flex-1">
-          <AdminProposalLayout 
-            proposals={proposals} 
+          <AdminProposalLayout
+            proposals={proposals}
             searchQuery={searchQuery}
           />
         </div>

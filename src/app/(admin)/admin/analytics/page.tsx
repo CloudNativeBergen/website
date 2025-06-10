@@ -10,7 +10,7 @@ export default function AdminAnalytics() {
             View conference statistics and analytics
           </p>
         </div>
-        
+
         <div className="mt-8">
           <div className="rounded-lg bg-gray-50 p-6 text-center">
             <p className="text-gray-500">Analytics dashboard coming soon...</p>

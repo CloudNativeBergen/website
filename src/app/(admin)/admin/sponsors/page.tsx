@@ -10,7 +10,7 @@ export default function AdminSponsors() {
             Manage conference sponsors and partnerships
           </p>
         </div>
-        
+
         <div className="mt-8">
           <div className="rounded-lg bg-gray-50 p-6 text-center">
             <p className="text-gray-500">Sponsor management coming soon...</p>

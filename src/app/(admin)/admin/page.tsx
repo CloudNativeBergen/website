@@ -12,7 +12,7 @@ const stats = [
 
 export default async function AdminDashboard() {
   const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
-  
+
   let proposals: ProposalExisting[] = []
   if (!conferenceError && conference) {
     const { proposals: proposalData } = await getProposals({
