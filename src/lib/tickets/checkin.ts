@@ -25,8 +25,8 @@ interface EventTicketsResponse {
 
 export async function fetchEventTickets(customerId: number, eventId: number): Promise<EventTicket[]> {
   const query = `
-    query MyQuery {
-      eventTickets(customer_id: ${customerId}, id: ${eventId}) {
+    query FetchEventTickets($customerId: Int!, $eventId: Int!) {
+      eventTickets(customer_id: $customerId, id: $eventId) {
         id
         category
         customer_name
@@ -46,13 +46,15 @@ export async function fetchEventTickets(customerId: number, eventId: number): Pr
     }
   `;
 
+  const variables = { customerId, eventId };
+
   const response = await fetch(CHECKIN_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, variables }),
   });
 
   if (!response.ok) {
