@@ -1,7 +1,7 @@
 import { jest } from '@jest/globals'
 
 import { NextAuthRequest } from '@/lib/auth'
-import { AppRouteHandlerFn } from 'next/dist/server/future/route-modules/app-route/module'
+import { NextRequest } from 'next/server'
 import { Account } from 'next-auth'
 import speakers from '../testdata/speakers'
 import { Speaker } from '@/lib/speaker/types'
@@ -15,7 +15,7 @@ export class AuthError extends Error {
 }
 
 const NextAuth = () => ({
-  auth: jest.fn((handler: AppRouteHandlerFn) => {
+  auth: jest.fn((handler: (req: NextAuthRequest, ctx: any) => any) => {
     return (req: NextAuthRequest, ctx: any) => {
       if (!req) req = {} as NextAuthRequest
 

@@ -39,6 +39,15 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Prioritize performance and accessibility.
 - Use Vercel for deployment previews and production hosting.
 
+### Commands
+
+- **Linting:** `npm run lint` - Runs ESLint to check for code quality and style issues.
+- **Formatting:** `npm run format` - Formats code using Prettier.
+- **Type Checking:** `npm run typecheck` - Runs TypeScript type checks.
+- **Development Server:** `npm run dev` - Starts the Next.js development server.
+- **Build for Production:** `npm run build` - Builds the application for production.
+
+
 ## Code Organization & Refactoring
 
 ### Component Structure
