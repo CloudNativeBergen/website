@@ -78,9 +78,9 @@ export function ProposalReviewForm({
   };
 
   return (
-    <form className="space-y-4">
-      <div>
-        <label htmlFor="comment" className="block text-sm font-medium text-gray-700">
+    <form className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+      <div className="col-span-full">
+        <label htmlFor="comment" className="block text-sm/6 font-medium text-gray-900">
           Comment
         </label>
         <div className="mt-2">
@@ -88,15 +88,15 @@ export function ProposalReviewForm({
             id="comment"
             name="comment"
             rows={4}
-            className="block w-full rounded-md bg-white px-3 py-2 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm"
+            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
             placeholder="Write your internal review here..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
           ></textarea>
         </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700">Scores</label>
+      <div className="col-span-full">
+        <label className="block text-sm/6 font-medium text-gray-900">Scores</label>
         <div className="grid grid-cols-1 gap-4 mt-2">
           {[
             { key: 'content', label: 'Content Quality' },

@@ -46,7 +46,7 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
       <div className="flex h-full min-h-screen">
         {/* Main Content Area */}
         <div className="flex-1 min-w-0">
-          <div className="max-w-4xl mx-auto p-0 sm:p-6">
+          <div className="max-w-4xl mx-auto p-0">
             {/* Header with Navigation and Metadata */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">

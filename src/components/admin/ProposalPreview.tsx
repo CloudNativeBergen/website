@@ -21,6 +21,7 @@ import type { Speaker } from '@/lib/speaker/types'
 import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
 import { calculateAverageRating } from './hooks'
+import { formatDateSafe } from '@/lib/time'
 
 interface ProposalPreviewProps {
   proposal: ProposalExisting
@@ -213,7 +214,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                 <CalendarIcon className="h-4 w-4 text-gray-400" />
                 <span className="text-gray-600">Submitted:</span>
                 <span className="font-medium">
-                  {new Date(proposal._createdAt).toLocaleDateString()}
+                  {formatDateSafe(proposal._createdAt)}
                 </span>
               </div>
             )}

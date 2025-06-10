@@ -6,6 +6,7 @@ import { PortableText } from '@portabletext/react'
 import { ProposalExisting, statuses, formats, levels, languages, audiences, Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
+import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -43,7 +44,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
   return (
     <div className="bg-white">
       {/* Header */}
-      <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+      <div className="py-5 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
@@ -54,7 +55,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                 {statuses.get(proposal.status) || proposal.status}
               </span>
               <span className="text-sm text-gray-500">
-                Submitted {new Date(proposal._createdAt).toLocaleDateString()}
+                Submitted {formatDateSafe(proposal._createdAt)}
               </span>
             </div>
           </div>
@@ -62,7 +63,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
       </div>
 
       {/* Content */}
-      <div className="mt-6">
+      <div className="py-5">
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
@@ -183,26 +184,14 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                     Created
                   </dt>
                   <dd className="mt-1 text-sm text-gray-900">
-                    {new Date(proposal._createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {formatDateTimeSafe(proposal._createdAt)}
                   </dd>
                 </div>
                 {proposal._updatedAt && proposal._updatedAt !== proposal._createdAt && (
                   <div>
                     <dt className="text-sm font-medium text-gray-500">Last Updated</dt>
                     <dd className="mt-1 text-sm text-gray-900">
-                      {new Date(proposal._updatedAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {formatDateTimeSafe(proposal._updatedAt)}
                     </dd>
                   </div>
                 )}

@@ -5,6 +5,7 @@ import { Review } from '@/lib/review/types'
 import { Speaker } from '@/lib/speaker/types'
 import { sanityImage } from '@/lib/sanity/client'
 import Image from 'next/image'
+import { formatDateSafe } from '@/lib/time'
 
 interface AdminReviewListProps {
   reviews: Review[]
@@ -81,20 +82,22 @@ export function AdminReviewList({ reviews, currentUserId }: AdminReviewListProps
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h4 className={classNames(
-                      'text-sm font-medium',
-                      isCurrentUserReview ? 'text-indigo-900' : 'text-gray-900'
-                    )}>
-                      {reviewer?.name || 'Unknown Reviewer'}
+                  <div className="space-y-1">
+                    <div className="flex items-center">
+                      <h4 className={classNames(
+                        'text-sm font-medium',
+                        isCurrentUserReview ? 'text-indigo-900' : 'text-gray-900'
+                      )}>
+                        {reviewer?.name || 'Unknown Reviewer'}
+                      </h4>
                       {isCurrentUserReview && (
                         <span className="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">
                           You
                         </span>
                       )}
-                    </h4>
+                    </div>
                     <time className="text-xs text-gray-500">
-                      {new Date(review._createdAt).toLocaleDateString()}
+                      {formatDateSafe(review._createdAt)}
                     </time>
                   </div>
                 </div>
