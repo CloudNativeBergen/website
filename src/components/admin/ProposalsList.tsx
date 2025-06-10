@@ -9,13 +9,19 @@ import { useProposalFiltering, useFilterState } from './hooks'
 
 interface ProposalsListProps {
   proposals: ProposalExisting[]
+  onProposalSelect?: (proposalId: string | null) => void
+  selectedProposalId?: string | null
 }
 
 /**
  * Main proposals list component with filtering and sorting
  * Combines all admin proposal management functionality
  */
-export function ProposalsList({ proposals }: ProposalsListProps) {
+export function ProposalsList({
+  proposals,
+  onProposalSelect,
+  selectedProposalId
+}: ProposalsListProps) {
   const initialFilters: FilterState = {
     status: [],
     format: [],
@@ -70,12 +76,14 @@ export function ProposalsList({ proposals }: ProposalsListProps) {
               onClearFilters={clearAllFilters}
             />
           ) : (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
               {filteredProposals.map((proposal) => (
                 <ProposalCard
                   key={proposal._id}
                   proposal={proposal}
-                  href={`/admin/proposals/${proposal._id}`}
+                  href={!onProposalSelect ? `/admin/proposals/${proposal._id}` : undefined}
+                  onSelect={onProposalSelect ? () => onProposalSelect(proposal._id) : undefined}
+                  isSelected={selectedProposalId === proposal._id}
                 />
               ))}
             </div>

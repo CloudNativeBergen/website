@@ -1,6 +1,7 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/sanity'
-import { ProposalsList, ErrorDisplay } from '@/components/admin'
+import { ErrorDisplay } from '@/components/admin'
+import { ProposalsPageClient } from '@/components/admin/ProposalsPageClient'
 
 export default async function AdminProposals() {
   const { conference, error: conferenceError } =
@@ -30,5 +31,5 @@ export default async function AdminProposals() {
     )
   }
 
-  return <ProposalsList proposals={proposals} />
+  return <ProposalsPageClient proposals={proposals} />
 }

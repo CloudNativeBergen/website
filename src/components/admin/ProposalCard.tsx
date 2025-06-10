@@ -10,13 +10,20 @@ import { getStatusBadgeStyle } from './utils'
 interface ProposalCardProps {
   proposal: ProposalExisting
   href?: string
+  onSelect?: () => void
+  isSelected?: boolean
 }
 
 /**
  * Individual proposal card component for admin interface
  * Displays proposal information with speaker image, metadata, and status
  */
-export function ProposalCard({ proposal, href }: ProposalCardProps) {
+export function ProposalCard({
+  proposal,
+  href,
+  onSelect,
+  isSelected = false
+}: ProposalCardProps) {
   const speaker = typeof proposal.speaker === 'object' && proposal.speaker && 'name' in proposal.speaker
     ? proposal.speaker as Speaker
     : null
@@ -74,9 +81,20 @@ export function ProposalCard({ proposal, href }: ProposalCardProps) {
     </div>
   )
 
-  const cardClasses = "relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 hover:shadow-md transition-all duration-200"
+  const baseCardClasses = "relative rounded-lg border bg-white px-6 py-5 shadow-sm transition-all duration-200"
+  const cardClasses = `${baseCardClasses} ${isSelected
+      ? "border-indigo-500 bg-indigo-50 shadow-md"
+      : "border-gray-300 hover:border-gray-400 hover:shadow-md"
+    } ${onSelect ? "cursor-pointer" : ""
+    }`
 
-  if (href) {
+  const handleClick = () => {
+    if (onSelect) {
+      onSelect()
+    }
+  }
+
+  if (href && !onSelect) {
     return (
       <Link href={href} className={cardClasses}>
         <CardContent />
@@ -85,8 +103,14 @@ export function ProposalCard({ proposal, href }: ProposalCardProps) {
   }
 
   return (
-    <div className={cardClasses}>
+    <div className={cardClasses} onClick={handleClick}>
       <CardContent />
+      {onSelect && (
+        <div className="absolute top-3 right-3">
+          <div className={`h-2 w-2 rounded-full ${isSelected ? "bg-indigo-500" : "bg-gray-300"
+            }`} />
+        </div>
+      )}
     </div>
   )
 }

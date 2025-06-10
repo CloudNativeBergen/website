@@ -12,6 +12,8 @@ export { AdminLayout } from './AdminLayout'
 export { ProposalsList } from './ProposalsList'
 export { ProposalCard } from './ProposalCard'
 export { ProposalDetail } from './ProposalDetail'
+export { ProposalPreview } from './ProposalPreview'
+export { ProposalsPageClient } from './ProposalsPageClient'
 export { ProposalsFilter } from './ProposalsFilter'
 export { FilterDropdown } from './FilterDropdown'
 
