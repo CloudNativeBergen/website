@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useId, useState } from 'react'
-import Image from 'next/image'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import { ScheduleTrack } from '@/lib/conference/types'
+import { sanityImage } from '@/lib/sanity/client'
 
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
@@ -223,18 +223,16 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                               href={`/speaker/${speaker.slug}`}
                               className="absolute inset-0"
                             >
-                              <Image
+                              <img
                                 className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-110"
                                 src={
                                   speaker.image
-                                    ? `${speaker.image}?h=300`
-                                    : 'https://via.placeholder.com/300'
+                                    ? sanityImage(speaker.image).width(600).height(600).fit('crop').url()
+                                    : 'https://placehold.co/600x600/e5e7eb/6b7280?text=Speaker'
                                 }
                                 width={300}
                                 height={300}
                                 alt=""
-                                priority
-                                sizes="(min-width: 1280px) 17.5rem, (min-width: 1024px) 25vw, (min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
                               />
                             </a>
                           </div>

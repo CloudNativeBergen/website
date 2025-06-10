@@ -118,7 +118,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   <div className="flex-shrink-0">
                     {speaker.image ? (
                       <img
-                        src={sanityImage(speaker.image).width(128).height(128).url()}
+                        src={sanityImage(speaker.image).width(128).height(128).fit('crop').url()}
                         alt={speaker.name}
                         width={64}
                         height={64}

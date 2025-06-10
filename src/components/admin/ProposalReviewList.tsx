@@ -66,7 +66,7 @@ export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewLis
                 <div className="flex-shrink-0">
                   {reviewer?.image ? (
                     <img
-                      src={sanityImage(reviewer.image).width(64).height(64).url()}
+                      src={sanityImage(reviewer.image).width(64).height(64).fit('crop').url()}
                       alt={reviewer.name || 'Reviewer'}
                       width={32}
                       height={32}

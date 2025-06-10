@@ -7,12 +7,12 @@ import {
   ProposalExisting,
 } from '@/lib/proposal/types'
 import { flags, Flags } from '@/lib/speaker/types'
-import Image from 'next/image'
 import * as social from '@/components/SocialIcons'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { Button } from '@/components/Button'
 import { CalendarIcon } from '@heroicons/react/24/solid'
 import { TrackTalk } from '@/lib/conference/types'
+import { sanityImage } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
 
 type Props = {
@@ -27,14 +27,14 @@ export async function generateMetadata({ params }: Props) {
     return {
       title: 'Speaker not found',
       description: 'Sorry, we could not find the speaker you are looking for.',
-      image: 'https://via.placeholder.com/1200',
+      image: 'https://placehold.co/1200x630/e5e7eb/6b7280?text=Speaker',
     }
   }
 
   return {
     title: `${speaker.name} - ${talks[0].title}`,
     description: talks[0].description.slice(0, 200),
-    image: speaker.image || 'https://via.placeholder.com/1200',
+    image: speaker.image ? sanityImage(speaker.image).width(2400).height(1200).fit('crop').url() : 'https://placehold.co/1200x630/e5e7eb/6b7280?text=Speaker',
   }
 }
 
@@ -176,8 +176,8 @@ export default async function Profile({ params }: Props) {
               {/* speaker details */}
               <div className="flex flex-col items-center text-center">
                 <div className="relative h-40 w-40 overflow-hidden rounded-full">
-                  <Image
-                    src={speaker.image || 'https://via.placeholder.com/150'}
+                  <img
+                    src={speaker.image ? sanityImage(speaker.image).width(300).height(300).fit('crop').url() : 'https://placehold.co/300x300/e5e7eb/6b7280?text=Speaker'}
                     alt={speaker.name}
                     width={150}
                     height={150}

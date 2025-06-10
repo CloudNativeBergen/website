@@ -1,6 +1,7 @@
 import React from 'react'
 import { ImageResponse } from '@vercel/og'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
+import { sanityImage } from '@/lib/sanity/client'
 
 export const runtime = 'edge'
 
@@ -53,7 +54,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         </div>
         <div style={{ display: 'flex' }}>
           <img
-            src={speaker.image}
+            src={speaker.image ? sanityImage(speaker.image).width(800).height(800).fit('crop').url() : 'https://placehold.co/800x800/e5e7eb/6b7280?text=Speaker'}
             alt={alt}
             height={400}
             style={{ marginRight: 40, marginBottom: 50, borderRadius: '50%' }}

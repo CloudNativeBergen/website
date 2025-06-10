@@ -4,6 +4,7 @@ import LinkedIn from 'next-auth/providers/linkedin'
 import type { NextAuthConfig, Session, User } from 'next-auth'
 import { NextRequest } from 'next/server'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
+import { sanityImage } from '@/lib/sanity/client'
 
 export interface NextAuthRequest extends NextRequest {
   auth: Session | null
@@ -86,8 +87,8 @@ const config = {
           return {}
         }
 
-        if (speaker.image && typeof speaker.image === 'string') {
-          token.picture = `${speaker.image}?w=96&h=96&fit=crop`
+        if (speaker.image && typeof speaker.image === 'object') {
+          token.picture = sanityImage(speaker.image).width(192).height(192).fit('crop').url()
         }
 
         token.account = account
