@@ -89,7 +89,7 @@ export function AdminReviewForm({
   }
 
   const scoreCategories = [
-    { key: 'content', label: 'Content Quality' },
+    { key: 'content', label: 'Content' },
     { key: 'relevance', label: 'Relevance' },
     { key: 'speaker', label: 'Speaker' },
   ]
@@ -102,39 +102,40 @@ export function AdminReviewForm({
 
       <form onSubmit={submitHandler} className="space-y-4">
         {/* Rating Categories */}
-        <div className="space-y-3">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700 sr-only">Scores</label>
           {scoreCategories.map(({ key, label }) => (
-            <div key={key} className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">{label}</span>
-                <span className="text-sm text-gray-500">
+            <div key={key} className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700 w-24 flex-shrink-0">{label}</span>
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      className={classNames(
+                        'p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500',
+                        (hovered[key as keyof typeof hovered] || ratings[key as keyof typeof ratings]) >= star
+                          ? 'text-yellow-400'
+                          : 'text-gray-300 hover:text-yellow-300'
+                      )}
+                      onMouseEnter={() => {
+                        setHovered((h) => ({ ...h, [key]: star }))
+                      }}
+                      onMouseLeave={() => {
+                        setHovered((h) => ({ ...h, [key]: 0 }))
+                      }}
+                      onClick={() => {
+                        setRatings((r) => ({ ...r, [key]: star }))
+                      }}
+                    >
+                      <StarIcon className="h-5 w-5" />
+                    </button>
+                  ))}
+                </div>
+                <span className="text-sm text-gray-500 w-8 text-right">
                   {ratings[key as keyof typeof ratings]}/5
                 </span>
-              </div>
-              <div className="flex items-center space-x-1">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    className={classNames(
-                      'p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500',
-                      (hovered[key as keyof typeof hovered] || ratings[key as keyof typeof ratings]) >= star
-                        ? 'text-yellow-400'
-                        : 'text-gray-300 hover:text-yellow-300'
-                    )}
-                    onMouseEnter={() => {
-                      setHovered((h) => ({ ...h, [key]: star }))
-                    }}
-                    onMouseLeave={() => {
-                      setHovered((h) => ({ ...h, [key]: 0 }))
-                    }}
-                    onClick={() => {
-                      setRatings((r) => ({ ...r, [key]: star }))
-                    }}
-                  >
-                    <StarIcon className="h-5 w-5" />
-                  </button>
-                ))}
               </div>
             </div>
           ))}

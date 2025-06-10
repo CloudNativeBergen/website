@@ -99,7 +99,7 @@ export function ProposalReviewForm({
         <label className="block text-sm/6 font-medium text-gray-900">Scores</label>
         <div className="grid grid-cols-1 gap-4 mt-2">
           {[
-            { key: 'content', label: 'Content Quality' },
+            { key: 'content', label: 'Content' },
             { key: 'relevance', label: 'Relevance' },
             { key: 'speaker', label: 'Speaker' },
           ].map(({ key, label }) => (

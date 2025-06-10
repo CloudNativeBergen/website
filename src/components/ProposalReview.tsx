@@ -83,7 +83,7 @@ export function ProposalReview({ user, proposal, initialReviews }: { user: Speak
         <h3 className="text-lg font-medium text-gray-900">Average Score</h3>
         <div className="mt-2 space-y-1">
           {[
-            { key: 'content', label: 'Content Quality' },
+            { key: 'content', label: 'Content' },
             { key: 'relevance', label: 'Relevance' },
             { key: 'speaker', label: 'Speaker' },
           ].map(({ key, label }, idx) => {
@@ -114,7 +114,7 @@ export function ProposalReview({ user, proposal, initialReviews }: { user: Speak
             </h3>
             <div className="mt-2 space-y-1">
               {[
-                { key: 'content', label: 'Content Quality' },
+                { key: 'content', label: 'Content' },
                 { key: 'relevance', label: 'Relevance' },
                 { key: 'speaker', label: 'Speaker' },
               ].map(({ key, label }, idx) => {

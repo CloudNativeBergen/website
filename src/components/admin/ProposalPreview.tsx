@@ -151,7 +151,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                 <div className="mt-3 space-y-2">
                   <div className="text-xs text-gray-600">
                     <div className="flex justify-between">
-                      <span>Content Quality:</span>
+                      <span>Content:</span>
                       <span>
                         {(proposal.reviews.reduce((acc, review) => {
                           const reviewObj = typeof review === 'object' && 'score' in review ? review as Review : null

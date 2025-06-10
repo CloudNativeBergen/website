@@ -106,7 +106,7 @@ export function AdminReviewList({ reviews, currentUserId }: AdminReviewListProps
               {/* Scores */}
               <div className="space-y-1 mb-3">
                 {[
-                  { key: 'content', label: 'Content Quality' },
+                  { key: 'content', label: 'Content' },
                   { key: 'relevance', label: 'Relevance' },
                   { key: 'speaker', label: 'Speaker' },
                 ].map(({ key, label }) => {

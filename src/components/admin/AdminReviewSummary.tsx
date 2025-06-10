@@ -24,7 +24,7 @@ export function AdminReviewSummary({ reviews }: AdminReviewSummaryProps) {
     : 0
 
   const scoreCategories = [
-    { key: 'content', label: 'Content Quality', score: averageScores.content },
+    { key: 'content', label: 'Content', score: averageScores.content },
     { key: 'relevance', label: 'Relevance', score: averageScores.relevance },
     { key: 'speaker', label: 'Speaker', score: averageScores.speaker },
   ]
