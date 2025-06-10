@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { XMarkIcon, UserIcon, ClockIcon, CalendarIcon, StarIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
@@ -54,9 +55,17 @@ function isSpeaker(speaker: Speaker | unknown): speaker is Speaker {
 }
 
 export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const speaker = isSpeaker(proposal.speaker) ? proposal.speaker : null
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
+
+  // Scroll to top when proposal changes
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0
+    }
+  }, [proposal._id])
 
   return (
     <div className="flex h-full flex-col">
@@ -72,7 +81,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-6 py-6">
         <div className="space-y-6">
           {/* Speaker Info */}
           {speaker && (
