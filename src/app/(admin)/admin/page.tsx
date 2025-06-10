@@ -108,14 +108,14 @@ export default async function AdminDashboard() {
       stat: totalReviews.toString(),
       icon: StarIcon,
       subtext: `${reviewedProposals}/${totalProposals} proposals reviewed`,
-      href: '/admin/proposals?filter=reviewed'
+      href: '/admin/proposals?reviewStatus=reviewed'
     },
     {
       name: 'Acceptance Rate',
       stat: `${acceptanceRate}%`,
       icon: CheckCircleIcon,
       subtext: `${acceptedProposals + confirmedProposals} accepted, ${rejectedProposals} rejected`,
-      href: '/admin/proposals?filter=decided'
+      href: '/admin/proposals?status=accepted,confirmed'
     },
   ]
 
@@ -170,19 +170,35 @@ export default async function AdminDashboard() {
             <div className="mt-5">
               <dl className="space-y-3">
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">Submitted</dt>
+                  <dt className="text-sm font-medium text-gray-500">
+                    <Link href="/admin/proposals?status=submitted" className="hover:text-indigo-600">
+                      Submitted
+                    </Link>
+                  </dt>
                   <dd className="text-sm text-gray-900">{submittedProposals}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">Accepted</dt>
+                  <dt className="text-sm font-medium text-gray-500">
+                    <Link href="/admin/proposals?status=accepted" className="hover:text-indigo-600">
+                      Accepted
+                    </Link>
+                  </dt>
                   <dd className="text-sm text-green-600 font-medium">{acceptedProposals}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">Rejected</dt>
+                  <dt className="text-sm font-medium text-gray-500">
+                    <Link href="/admin/proposals?status=rejected" className="hover:text-indigo-600">
+                      Rejected
+                    </Link>
+                  </dt>
                   <dd className="text-sm text-red-600 font-medium">{rejectedProposals}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">Confirmed</dt>
+                  <dt className="text-sm font-medium text-gray-500">
+                    <Link href="/admin/proposals?status=confirmed" className="hover:text-indigo-600">
+                      Confirmed
+                    </Link>
+                  </dt>
                   <dd className="text-sm text-blue-600 font-medium">{confirmedProposals}</dd>
                 </div>
               </dl>
@@ -201,11 +217,19 @@ export default async function AdminDashboard() {
                   <dd className="text-sm text-gray-900">{totalReviews}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">Reviewed Proposals</dt>
+                  <dt className="text-sm font-medium text-gray-500">
+                    <Link href="/admin/proposals?reviewStatus=reviewed" className="hover:text-indigo-600">
+                      Reviewed Proposals
+                    </Link>
+                  </dt>
                   <dd className="text-sm text-green-600 font-medium">{reviewedProposals}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">Pending Review</dt>
+                  <dt className="text-sm font-medium text-gray-500">
+                    <Link href="/admin/proposals?reviewStatus=unreviewed" className="hover:text-indigo-600">
+                      Pending Review
+                    </Link>
+                  </dt>
                   <dd className="text-sm text-orange-600 font-medium">{unreviewedProposals}</dd>
                 </div>
                 <div className="flex justify-between">
@@ -227,7 +251,11 @@ export default async function AdminDashboard() {
               <dl className="space-y-3">
                 {Object.entries(formatBreakdown).map(([format, count]) => (
                   <div key={format} className="flex justify-between">
-                    <dt className="text-sm font-medium text-gray-500 capitalize">{format.replace('_', ' ')}</dt>
+                    <dt className="text-sm font-medium text-gray-500">
+                      <Link href={`/admin/proposals?format=${format}`} className="hover:text-indigo-600 capitalize">
+                        {format.replace('_', ' ')}
+                      </Link>
+                    </dt>
                     <dd className="text-sm text-gray-900">{count}</dd>
                   </div>
                 ))}

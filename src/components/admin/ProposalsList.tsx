@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ProposalExisting, Status, Format } from '@/lib/proposal/types'
 import { ProposalCard } from './ProposalCard'
 import { ProposalsFilter, FilterState, ReviewStatus } from './ProposalsFilter'
-import { useProposalFiltering, useFilterState } from './hooks'
+import { useProposalFiltering, useFilterStateWithURL } from './hooks'
 
 interface ProposalsListProps {
   proposals: ProposalExisting[]
@@ -47,7 +47,7 @@ export function ProposalsList({
     toggleSortOrder,
     clearAllFilters,
     activeFilterCount
-  } = useFilterState(initialFilters)
+  } = useFilterStateWithURL(initialFilters)
 
   const filteredProposals = useProposalFiltering(proposals, filters, currentUserId)
 

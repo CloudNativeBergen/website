@@ -145,3 +145,7 @@ Key components:
 To associate a schedule with an event, the `conference` document has a `schedules` field. This is an array that references one or more `schedule` documents. This allows for multi-day conferences by linking multiple `schedule` documents to a single `conference`.
 
 The frontend component (`src/components/Schedule.tsx`) fetches the relevant schedule data for the current conference and renders it, adapting the layout for different screen sizes.
+
+## Additional Documentation
+
+- **[Query Parameters for Proposal Filters](./QUERY_PARAMETERS.md)** - Guide to using URL query parameters for filtering proposals in the admin interface
