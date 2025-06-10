@@ -95,7 +95,10 @@ export function ProposalActionPanel({
             <button
               onClick={() => handleAction(Action.accept)}
               disabled={!canApprove}
-              className="relative inline-flex flex-1 items-center justify-center gap-x-2 rounded-l-md bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-500 focus:z-10 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`relative inline-flex flex-1 items-center justify-center gap-x-2 rounded-l-md px-3 py-2 text-sm font-semibold text-white focus:z-10 focus:ring-2 focus:ring-green-600 focus:ring-offset-2 ${canApprove
+                ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
+                : 'bg-green-600 opacity-50 cursor-not-allowed'
+                }`}
             >
               <CheckIcon className="h-4 w-4" />
               Approve
@@ -105,7 +108,10 @@ export function ProposalActionPanel({
             <button
               onClick={() => handleAction(Action.reject)}
               disabled={!canReject}
-              className="relative inline-flex flex-1 items-center justify-center gap-x-2 rounded-r-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500 focus:z-10 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed border-l border-red-500"
+              className={`relative inline-flex flex-1 items-center justify-center gap-x-2 rounded-r-md px-3 py-2 text-sm font-semibold text-white focus:z-10 focus:ring-2 focus:ring-red-600 focus:ring-offset-2 border-l ${canReject
+                ? 'bg-red-600 hover:bg-red-700 border-red-600 cursor-pointer'
+                : 'bg-red-600 opacity-50 cursor-not-allowed border-red-600'
+                }`}
             >
               <XMarkIcon className="h-4 w-4" />
               Reject
