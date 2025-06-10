@@ -12,7 +12,8 @@
     "test:debug": "jest",
     "test:watch": "jest --watch",
     "format:check": "prettier --check .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

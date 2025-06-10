@@ -54,3 +54,79 @@ export function formatDates(dateString1: string, dateString2: string): string {
     return 'TBD'
   }
 }
+
+/**
+ * Server-safe date formatting that produces consistent output regardless of server/client locale
+ * Uses explicit formatting to avoid hydration mismatches
+ */
+export function formatDateSafe(dateString: string): string {
+  if (!dateString) return 'TBD'
+
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Invalid Date'
+
+    // Use explicit formatting to ensure consistency between server and client
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]
+    const month = months[date.getMonth()]
+    const day = date.getDate()
+    const year = date.getFullYear()
+
+    return `${month} ${day}, ${year}`
+  } catch (error) {
+    console.error('Error formatting date:', error)
+    return 'Invalid Date'
+  }
+}
+
+/**
+ * Server-safe date and time formatting for detailed timestamps
+ */
+export function formatDateTimeSafe(dateString: string): string {
+  if (!dateString) return 'TBD'
+
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Invalid Date'
+
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ]
+    const month = months[date.getMonth()]
+    const day = date.getDate()
+    const year = date.getFullYear()
+
+    // Format time with leading zeros
+    const hours = date.getHours().toString().padStart(2, '0')
+    const minutes = date.getMinutes().toString().padStart(2, '0')
+
+    return `${month} ${day}, ${year} at ${hours}:${minutes}`
+  } catch (error) {
+    console.error('Error formatting date time:', error)
+    return 'Invalid Date'
+  }
+}

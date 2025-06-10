@@ -11,8 +11,9 @@ export const size = {
 }
 export const contentType = 'image/png'
 
-export default async function Image({ params }: { params: { slug: string } }) {
-  const { speaker, talks, err } = await getPublicSpeaker(params.slug)
+export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const { speaker, talks, err } = await getPublicSpeaker(slug)
 
   if (err || !speaker || !talks || talks.length === 0) {
     return new ImageResponse(<div>Speaker not found</div>, size)
