@@ -102,9 +102,10 @@ export function ProposalsFilter({
           {/* Review Status Filter - only show if user is logged in */}
           {currentUserId && (
             <FilterDropdown
-              label={`My Reviews: ${filters.reviewStatus === ReviewStatus.unreviewed ? 'Unreviewed' : filters.reviewStatus === ReviewStatus.reviewed ? 'Reviewed' : 'All'}`}
+              label={`My Reviews: ${filters.reviewStatus === ReviewStatus.unreviewed ? 'Todo' : filters.reviewStatus === ReviewStatus.reviewed ? 'Done' : 'All'}`}
               activeCount={filters.reviewStatus !== ReviewStatus.all ? 1 : 0}
               position="right"
+              width="wide"
             >
               {Object.values(ReviewStatus).map((status) => (
                 <FilterOption
@@ -112,8 +113,8 @@ export function ProposalsFilter({
                   onClick={() => onReviewStatusChange(status)}
                   checked={filters.reviewStatus === status}
                 >
-                  {status === ReviewStatus.unreviewed ? 'Unreviewed by me' :
-                    status === ReviewStatus.reviewed ? 'Reviewed by me' :
+                  {status === ReviewStatus.unreviewed ? 'Todo (not reviewed by me)' :
+                    status === ReviewStatus.reviewed ? 'Done (reviewed by me)' :
                       'All proposals'}
                 </FilterOption>
               ))}

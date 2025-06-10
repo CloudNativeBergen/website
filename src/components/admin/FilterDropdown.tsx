@@ -10,6 +10,7 @@ interface FilterDropdownProps {
   activeCount: number
   children: ReactNode
   position?: 'left' | 'right'
+  width?: 'default' | 'wide' | 'wider'
 }
 
 /**
@@ -20,8 +21,19 @@ export function FilterDropdown({
   label,
   activeCount,
   children,
-  position = 'left'
+  position = 'left',
+  width = 'default'
 }: FilterDropdownProps) {
+  const getWidthClass = () => {
+    switch (width) {
+      case 'wide':
+        return 'w-64' // 16rem / 256px
+      case 'wider':
+        return 'w-72' // 18rem / 288px
+      default:
+        return 'w-56' // 14rem / 224px
+    }
+  }
   return (
     <Menu as="div" className="relative">
       <Menu.Button className="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
@@ -42,9 +54,9 @@ export function FilterDropdown({
         leaveFrom="transform opacity-100 scale-100"
         leaveTo="transform opacity-0 scale-95"
       >
-        <Menu.Items className={`absolute z-10 mt-2 w-56 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none ${position === 'right'
-            ? 'right-0 origin-top-right'
-            : 'left-0 origin-top-left'
+        <Menu.Items className={`absolute z-10 mt-2 ${getWidthClass()} rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none ${position === 'right'
+          ? 'right-0 origin-top-right'
+          : 'left-0 origin-top-left'
           }`}>
           <div className="py-1">
             {children}
