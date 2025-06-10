@@ -1,12 +1,12 @@
 'use client'
 
-import Image from 'next/image'
 import { UserIcon, ClockIcon, CalendarIcon, TagIcon } from '@heroicons/react/24/outline'
 import { PortableText } from '@portabletext/react'
 import { ProposalExisting, statuses, formats, levels, languages, audiences, Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -117,8 +117,8 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                 <div className="flex items-start space-x-4">
                   <div className="flex-shrink-0">
                     {speaker.image ? (
-                      <Image
-                        src={speaker.image}
+                      <img
+                        src={sanityImage(speaker.image).width(128).height(128).url()}
                         alt={speaker.name}
                         width={64}
                         height={64}

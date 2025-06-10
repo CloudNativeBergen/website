@@ -3,11 +3,11 @@
 import { UserIcon, ClockIcon, StarIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import Link from 'next/link'
-import Image from 'next/image'
 import { ProposalExisting, statuses, formats, levels, languages, audiences } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { getStatusBadgeStyle } from './utils'
 import { calculateAverageRating } from './hooks'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface ProposalCardProps {
   proposal: ProposalExisting
@@ -37,8 +37,8 @@ export function ProposalCard({
     <div className="flex items-start space-x-4">
       <div className="flex-shrink-0">
         {speaker?.image ? (
-          <Image
-            src={speaker.image}
+          <img
+            src={sanityImage(speaker.image).width(96).height(96).url()}
             alt={speaker.name || 'Speaker'}
             width={48}
             height={48}

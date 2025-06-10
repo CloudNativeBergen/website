@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import { XMarkIcon, UserIcon, ClockIcon, CalendarIcon, StarIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
@@ -22,6 +21,7 @@ import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
 import { calculateAverageRating } from './hooks'
 import { formatDateSafe } from '@/lib/time'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface ProposalPreviewProps {
   proposal: ProposalExisting
@@ -78,8 +78,8 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
           {speaker && (
             <div className="flex items-center space-x-4">
               {speaker.image && (
-                <Image
-                  src={speaker.image}
+                <img
+                  src={sanityImage(speaker.image).width(96).height(96).url()}
                   alt={speaker.name}
                   width={48}
                   height={48}

@@ -4,7 +4,6 @@ import { StarIcon } from '@heroicons/react/24/solid'
 import { Review } from '@/lib/review/types'
 import { Speaker } from '@/lib/speaker/types'
 import { sanityImage } from '@/lib/sanity/client'
-import Image from 'next/image'
 import { formatDateSafe } from '@/lib/time'
 
 interface ProposalReviewListProps {
@@ -66,8 +65,8 @@ export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewLis
               <div className="flex items-start space-x-3 mb-3">
                 <div className="flex-shrink-0">
                   {reviewer?.image ? (
-                    <Image
-                      src={sanityImage(reviewer.image).width(32).url()}
+                    <img
+                      src={sanityImage(reviewer.image).width(64).height(64).url()}
                       alt={reviewer.name || 'Reviewer'}
                       width={32}
                       height={32}
