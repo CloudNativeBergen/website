@@ -225,6 +225,7 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                             >
                               <img
                                 className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-110"
+                                loading="lazy"
                                 src={
                                   speaker.image
                                     ? sanityImage(speaker.image).width(600).height(600).fit('crop').url()
