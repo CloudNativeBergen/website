@@ -13,5 +13,5 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ['/cfp/((?!opengraph-image.png).*)'],
+  matcher: ['/(cfp|admin)/((?!opengraph-image.png).*)'],
 }

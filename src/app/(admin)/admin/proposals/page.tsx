@@ -92,9 +92,9 @@ function ProposalsList({ proposals }: { proposals: ProposalExisting[] }) {
                         </div>
                         <div className="mt-2">
                           <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${proposal.status === 'accepted' ? 'bg-green-100 text-green-800' :
-                              proposal.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                proposal.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                                  'bg-yellow-100 text-yellow-800'
+                            proposal.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                              proposal.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                                'bg-yellow-100 text-yellow-800'
                             }`}>
                             {proposal.status}
                           </span>
@@ -112,7 +112,7 @@ function ProposalsList({ proposals }: { proposals: ProposalExisting[] }) {
         {proposals.length > 0 && (
           <div className="mt-8 text-center">
             <Link
-              href="/cfp/admin"
+              href="/admin"
               className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
             >
               Open Detailed Proposal Manager

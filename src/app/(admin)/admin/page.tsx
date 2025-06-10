@@ -2,6 +2,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/sanity'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { ChartBarIcon, DocumentTextIcon, UsersIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
+import Link from 'next/link'
 
 const stats = [
   { name: 'Total Proposals', stat: '0', icon: DocumentTextIcon, change: '+4.75%', changeType: 'positive' },
@@ -104,11 +105,11 @@ export default async function AdminDashboard() {
                   <DocumentTextIcon className="h-6 w-6 text-gray-400" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <a href="/admin/proposals" className="focus:outline-none">
+                  <Link href="/admin/proposals" className="focus:outline-none">
                     <span aria-hidden="true" className="absolute inset-0" />
                     <p className="text-sm font-medium text-gray-900">Manage Proposals</p>
                     <p className="truncate text-sm text-gray-500">Review and manage speaker proposals</p>
-                  </a>
+                  </Link>
                 </div>
               </div>
             </div>

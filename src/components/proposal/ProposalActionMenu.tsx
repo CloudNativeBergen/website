@@ -134,7 +134,7 @@ export const ProposalActionMenu = memo(({ proposal, onAcceptReject }: ProposalAc
                 <ActionMenuItem
                   icon={MagnifyingGlassIcon}
                   label="Review"
-                  href={`/cfp/admin/${proposal._id}/view`}
+                  href={`/admin/proposals/${proposal._id}`}
                 />
                 <ActionMenuItem
                   icon={PencilSquareIcon}

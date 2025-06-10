@@ -1,8 +1,6 @@
 'use client';
 
-import { useState } from 'react';
 import { AdminProposalLayout } from '@/components/AdminProposalLayout';
-import { MagnifyingGlassIcon } from '@heroicons/react/20/solid';
 import { FolderOpenIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { ProposalExisting } from '@/lib/proposal/types';
@@ -12,7 +10,7 @@ interface AdminPageClientProps {
 }
 
 export function AdminPageClient({ proposals }: AdminPageClientProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+  // Search functionality removed until fully functional
 
   return (
     <div className="h-full flex flex-col">
@@ -81,7 +79,6 @@ export function AdminPageClient({ proposals }: AdminPageClientProps) {
         <div className="flex-1">
           <AdminProposalLayout
             proposals={proposals}
-            searchQuery={searchQuery}
           />
         </div>
       )}

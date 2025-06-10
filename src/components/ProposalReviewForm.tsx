@@ -64,7 +64,7 @@ export function ProposalReviewForm({
 
       if (nextProposal) {
         // Navigate to the next unreviewed proposal
-        router.push(`/cfp/admin/${nextProposal._id}/view`);
+        router.push(`/admin/proposals/${nextProposal._id}`);
       } else {
         // Show notification that there are no more unreviewed proposals
         alert('No more unreviewed proposals available.');

@@ -161,7 +161,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
             <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
               {/* Search bar hidden until fully functional */}
-              {/* 
+              {/*
               <form action="#" method="GET" className="grid flex-1 grid-cols-1">
                 <input
                   name="search"
