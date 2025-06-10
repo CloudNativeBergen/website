@@ -8,7 +8,7 @@ import { postReview } from '@/lib/review/client'
 import { fetchNextUnreviewedProposal } from '@/lib/proposal/client'
 import { useRouter } from 'next/navigation'
 
-interface AdminReviewFormProps {
+interface ProposalReviewFormProps {
   proposalId: string
   existingReview?: Review
   onReviewSubmit: (review: Review) => void
@@ -18,11 +18,11 @@ function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
 }
 
-export function AdminReviewForm({
+export function ProposalReviewForm({
   proposalId,
   existingReview,
   onReviewSubmit
-}: AdminReviewFormProps) {
+}: ProposalReviewFormProps) {
   const router = useRouter()
   const [ratings, setRatings] = useState<{ content: number; relevance: number; speaker: number }>(
     existingReview?.score || { content: 0, relevance: 0, speaker: 0 }

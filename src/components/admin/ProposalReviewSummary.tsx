@@ -4,7 +4,7 @@ import { StarIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarIconOutline } from '@heroicons/react/24/outline'
 import { Review } from '@/lib/review/types'
 
-interface AdminReviewSummaryProps {
+interface ProposalReviewSummaryProps {
   reviews: Review[]
 }
 
@@ -12,7 +12,7 @@ function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
 }
 
-export function AdminReviewSummary({ reviews }: AdminReviewSummaryProps) {
+export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {
   const averageScores = reviews.length > 0 ? {
     content: reviews.reduce((acc, review) => acc + review.score.content, 0) / reviews.length,
     relevance: reviews.reduce((acc, review) => acc + review.score.relevance, 0) / reviews.length,

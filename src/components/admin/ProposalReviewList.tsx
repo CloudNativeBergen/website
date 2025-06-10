@@ -7,7 +7,7 @@ import { sanityImage } from '@/lib/sanity/client'
 import Image from 'next/image'
 import { formatDateSafe } from '@/lib/time'
 
-interface AdminReviewListProps {
+interface ProposalReviewListProps {
   reviews: Review[]
   currentUserId?: string
 }
@@ -16,7 +16,7 @@ function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ')
 }
 
-export function AdminReviewList({ reviews, currentUserId }: AdminReviewListProps) {
+export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewListProps) {
   if (reviews.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-lg p-6">

@@ -19,10 +19,12 @@ export { FilterDropdown } from './FilterDropdown'
 export { NextProposalButton } from './NextProposalButton'
 
 // Review Management Components
-export { AdminReviewPanel } from './AdminReviewPanel'
-export { AdminReviewSummary } from './AdminReviewSummary'
-export { AdminReviewForm } from './AdminReviewForm'
-export { AdminReviewList } from './AdminReviewList'
+export { AdminReviewPanel } from './ProposalReviewPanel'
+export { ProposalActionPanel } from './ProposalActionPanel'
+export { AdminReviewSummary } from './ProposalReviewSummary'
+export { AdminReviewForm } from './ProposalReviewForm'
+export { AdminReviewList } from './ProposalReviewList'
+export { ProposalActionModal } from './ProposalActionModal'
 
 // Utility Components
 export { ErrorDisplay } from './ErrorDisplay'

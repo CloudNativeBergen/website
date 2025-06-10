@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeftIcon, ClockIcon, UserIcon } from '@heroicons/react/20/solid'
 import { getProposal } from '@/lib/proposal/sanity'
-import { ProposalDetail, ErrorDisplay, AdminReviewPanel } from '@/components/admin'
+import { ProposalDetail, ErrorDisplay, ProposalActionPanel } from '@/components/admin'
 import { auth } from '@/lib/auth'
 
 interface ProposalDetailPageProps {
@@ -99,9 +99,9 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
           </div>
         </div>
 
-        {/* Review Panel */}
-        <AdminReviewPanel
-          proposalId={proposal._id}
+        {/* Proposal Action Panel */}
+        <ProposalActionPanel
+          proposal={proposal}
           initialReviews={proposal.reviews || []}
           currentUser={session?.speaker}
         />

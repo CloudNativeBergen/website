@@ -3,21 +3,21 @@
 import { useState } from 'react'
 import { Review } from '@/lib/review/types'
 import { Speaker } from '@/lib/speaker/types'
-import { AdminReviewSummary } from './AdminReviewSummary'
-import { AdminReviewForm } from './AdminReviewForm'
-import { AdminReviewList } from './AdminReviewList'
+import { ProposalReviewSummary } from './ProposalReviewSummary'
+import { ProposalReviewForm } from './ProposalReviewForm'
+import { ProposalReviewList } from './ProposalReviewList'
 
-interface AdminReviewPanelProps {
+interface ProposalReviewPanelProps {
   proposalId: string
   initialReviews: Review[]
   currentUser?: Speaker
 }
 
-export function AdminReviewPanel({
+export function ProposalReviewPanel({
   proposalId,
   initialReviews,
   currentUser
-}: AdminReviewPanelProps) {
+}: ProposalReviewPanelProps) {
   const [reviews, setReviews] = useState<Review[]>(initialReviews || [])
 
   // Find current user's review
@@ -66,11 +66,11 @@ export function AdminReviewPanel({
     <div className="w-96 flex-shrink-0 overflow-y-auto">
       <div className="p-4 space-y-4">
         {/* Review Summary */}
-        <AdminReviewSummary reviews={reviews} />
+        <ProposalReviewSummary reviews={reviews} />
 
         {/* Review Form - only show if user is logged in */}
         {currentUser && (
-          <AdminReviewForm
+          <ProposalReviewForm
             proposalId={proposalId}
             existingReview={currentUserReview}
             onReviewSubmit={handleReviewSubmit}
@@ -78,7 +78,7 @@ export function AdminReviewPanel({
         )}
 
         {/* Reviews List */}
-        <AdminReviewList
+        <ProposalReviewList
           reviews={reviews}
           currentUserId={currentUser?._id}
         />
