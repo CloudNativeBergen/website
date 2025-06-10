@@ -1,4 +1,4 @@
-import { AdminLayout } from '@/components/AdminLayout'
+import { AdminLayout } from '@/components/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export default async function AdminRootLayout({
