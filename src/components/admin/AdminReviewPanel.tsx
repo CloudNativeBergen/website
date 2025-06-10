@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Review } from '@/lib/review/types'
 import { Speaker } from '@/lib/speaker/types'
 import { AdminReviewSummary } from './AdminReviewSummary'
@@ -72,7 +72,6 @@ export function AdminReviewPanel({
         {currentUser && (
           <AdminReviewForm
             proposalId={proposalId}
-            currentUser={currentUser}
             existingReview={currentUserReview}
             onReviewSubmit={handleReviewSubmit}
           />

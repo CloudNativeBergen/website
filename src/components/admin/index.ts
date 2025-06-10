@@ -16,6 +16,7 @@ export { ProposalPreview } from './ProposalPreview'
 export { ProposalsPageClient } from './ProposalsPageClient'
 export { ProposalsFilter } from './ProposalsFilter'
 export { FilterDropdown } from './FilterDropdown'
+export { NextProposalButton } from './NextProposalButton'
 
 // Review Management Components
 export { AdminReviewPanel } from './AdminReviewPanel'

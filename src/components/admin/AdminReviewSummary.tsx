@@ -3,7 +3,6 @@
 import { StarIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarIconOutline } from '@heroicons/react/24/outline'
 import { Review } from '@/lib/review/types'
-import { Speaker } from '@/lib/speaker/types'
 
 interface AdminReviewSummaryProps {
   reviews: Review[]

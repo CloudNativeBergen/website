@@ -2,14 +2,14 @@
 
 import { useState } from 'react'
 import { StarIcon } from '@heroicons/react/24/solid'
-import { PaperAirplaneIcon } from '@heroicons/react/24/outline'
+import { PaperAirplaneIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
 import { Review, ReviewBase } from '@/lib/review/types'
 import { postReview } from '@/lib/review/client'
-import { Speaker } from '@/lib/speaker/types'
+import { fetchNextUnreviewedProposal } from '@/lib/proposal/client'
+import { useRouter } from 'next/navigation'
 
 interface AdminReviewFormProps {
   proposalId: string
-  currentUser: Speaker
   existingReview?: Review
   onReviewSubmit: (review: Review) => void
 }
@@ -20,10 +20,10 @@ function classNames(...classes: string[]) {
 
 export function AdminReviewForm({
   proposalId,
-  currentUser,
   existingReview,
   onReviewSubmit
 }: AdminReviewFormProps) {
+  const router = useRouter()
   const [ratings, setRatings] = useState<{ content: number; relevance: number; speaker: number }>(
     existingReview?.score || { content: 0, relevance: 0, speaker: 0 }
   )
@@ -34,6 +34,7 @@ export function AdminReviewForm({
   })
   const [comment, setComment] = useState<string>(existingReview?.comment || '')
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+  const [isLoadingNext, setIsLoadingNext] = useState<boolean>(false)
 
   const submitHandler = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,6 +58,33 @@ export function AdminReviewForm({
       console.error('Error submitting review:', error)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleNextProposal = async () => {
+    setIsLoadingNext(true)
+    try {
+      const { nextProposal, error } = await fetchNextUnreviewedProposal(proposalId)
+
+      if (error) {
+        console.error('Error fetching next unreviewed proposal:', error)
+        alert('Failed to fetch next unreviewed proposal.')
+        setIsLoadingNext(false)
+        return
+      }
+
+      if (nextProposal) {
+        // Navigate to the next unreviewed proposal
+        router.push(`/admin/proposals/${nextProposal._id}`)
+      } else {
+        // Show notification that there are no more unreviewed proposals
+        alert('No more unreviewed proposals available.')
+        setIsLoadingNext(false)
+      }
+    } catch (error) {
+      console.error('Error fetching next unreviewed proposal:', error)
+      alert('Failed to fetch next unreviewed proposal.')
+      setIsLoadingNext(false)
     }
   }
 
@@ -129,7 +157,16 @@ export function AdminReviewForm({
         </div>
 
         {/* Submit Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-end space-x-2">
+          <button
+            type="button"
+            onClick={handleNextProposal}
+            disabled={isLoadingNext}
+            className="inline-flex items-center gap-x-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ArrowRightIcon className="h-4 w-4" />
+            {isLoadingNext ? 'Loading...' : 'Next'}
+          </button>
           <button
             type="submit"
             disabled={isSubmitting || Object.values(ratings).some(r => r === 0)}
