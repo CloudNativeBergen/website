@@ -36,7 +36,7 @@ export interface ConferenceSponsor {
     website: string
     logo: string
   }
-  tier?: {
+  tier: {
     title: string
     tagline: string
   }
@@ -78,6 +78,8 @@ export interface Conference {
   registration_link?: string
   registration_enabled: boolean
   contact_email: string
+  checkin_customer_id?: number
+  checkin_event_id?: number
   social_links?: string[]
   organizers: Speaker[]
   domains: string[]

@@ -146,6 +146,18 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'checkin_customer_id',
+      title: 'Checkin.no Customer ID',
+      type: 'number',
+      description: 'Customer ID for Checkin.no API integration',
+    }),
+    defineField({
+      name: 'checkin_event_id',
+      title: 'Checkin.no Event ID',
+      type: 'number',
+      description: 'Event ID for Checkin.no API integration',
+    }),
+    defineField({
       name: 'social_links',
       title: 'Socials Links',
       type: 'array',

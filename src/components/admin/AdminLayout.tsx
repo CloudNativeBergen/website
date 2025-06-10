@@ -25,6 +25,7 @@ import {
   PresentationChartLineIcon,
   CalendarDaysIcon,
   BuildingOfficeIcon,
+  TicketIcon,
   MagnifyingGlassIcon,
   BellIcon,
   ChevronDownIcon,
@@ -37,6 +38,7 @@ const navigation = [
   { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
   { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
   { name: 'Sponsors', href: '/admin/sponsors', icon: BuildingOfficeIcon },
+  { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
   { name: 'Analytics', href: '/admin/analytics', icon: ChartPieIcon },
   { name: 'Reports', href: '/admin/reports', icon: PresentationChartLineIcon },
 ]
