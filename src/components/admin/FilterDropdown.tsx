@@ -9,13 +9,19 @@ interface FilterDropdownProps {
   label: string
   activeCount: number
   children: ReactNode
+  position?: 'left' | 'right'
 }
 
 /**
  * Reusable filter dropdown component
  * Provides consistent styling and behavior for filter menus
  */
-export function FilterDropdown({ label, activeCount, children }: FilterDropdownProps) {
+export function FilterDropdown({
+  label,
+  activeCount,
+  children,
+  position = 'left'
+}: FilterDropdownProps) {
   return (
     <Menu as="div" className="relative">
       <Menu.Button className="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
@@ -36,7 +42,10 @@ export function FilterDropdown({ label, activeCount, children }: FilterDropdownP
         leaveFrom="transform opacity-100 scale-100"
         leaveTo="transform opacity-0 scale-95"
       >
-        <Menu.Items className="absolute left-0 z-10 mt-2 w-56 origin-top-left rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+        <Menu.Items className={`absolute z-10 mt-2 w-56 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none ${position === 'right'
+            ? 'right-0 origin-top-right'
+            : 'left-0 origin-top-left'
+          }`}>
           <div className="py-1">
             {children}
           </div>

@@ -92,6 +92,7 @@ export function ProposalsFilter({
           <FilterDropdown
             label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy}`}
             activeCount={0}
+            position="right"
           >
             {[
               { key: 'created', label: 'Date Created' },

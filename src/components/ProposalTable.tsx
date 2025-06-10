@@ -3,8 +3,6 @@
 import { useState } from 'react'
 import { ProposalExisting, Status, Action } from '@/lib/proposal/types'
 import { ProposalActionModal } from './ProposalActionModal'
-import { ProposalTableHeader } from './proposal/ProposalTableHeader'
-import { ProposalTableControls } from './proposal/ProposalTableControls'
 import { ProposalTableColumnHeader } from './proposal/ProposalTableColumnHeader'
 import { ProposalTableRow } from './proposal/ProposalTableRow'
 import { useProposalSort } from '@/hooks/useProposalSort'
@@ -18,13 +16,13 @@ export function ProposalTable({ p }: { p: ProposalExisting[] }) {
   const [proposals, setProposals] = useState<ProposalExisting[]>(p)
 
   // Column visibility settings
-  const [showLanguageColumn, setShowLanguageColumn] = useState<boolean>(false)
-  const [showLevelColumn, setShowLevelColumn] = useState<boolean>(true)
-  const [showReviewColumn, setShowReviewColumn] = useState<boolean>(true)
+  const [showLanguageColumn] = useState<boolean>(false)
+  const [showLevelColumn] = useState<boolean>(true)
+  const [showReviewColumn] = useState<boolean>(true)
 
   // Custom hooks for sorting and filtering
   const { sortedProposals, sortConfig, handleSort } = useProposalSort(proposals)
-  const { filteredProposals, statusFilter, setStatusFilter, filterStats } = useProposalFilter(sortedProposals)
+  const { filteredProposals } = useProposalFilter(sortedProposals)
 
   // Action handlers
   function acceptRejectClickHandler(proposal: ProposalExisting, action: Action) {
