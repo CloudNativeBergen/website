@@ -1,11 +1,13 @@
 'use client'
 
-import { UserIcon, ClockIcon } from '@heroicons/react/24/outline'
+import { UserIcon, ClockIcon, StarIcon } from '@heroicons/react/24/outline'
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ProposalExisting, statuses, formats, levels, languages, audiences } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { getStatusBadgeStyle } from './utils'
+import { calculateAverageRating } from './hooks'
 
 interface ProposalCardProps {
   proposal: ProposalExisting
@@ -27,6 +29,9 @@ export function ProposalCard({
   const speaker = typeof proposal.speaker === 'object' && proposal.speaker && 'name' in proposal.speaker
     ? proposal.speaker as Speaker
     : null
+
+  const averageRating = calculateAverageRating(proposal)
+  const reviewCount = proposal.reviews?.length || 0
 
   const CardContent = () => (
     <div className="flex items-start space-x-4">
@@ -72,6 +77,31 @@ export function ProposalCard({
                 {formats.get(proposal.format) || proposal.format || 'Not specified'}
               </span>
             </div>
+
+            {/* Rating display */}
+            {reviewCount > 0 && (
+              <div className="flex items-center text-sm text-gray-500">
+                <div className="flex items-center mr-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    star <= Math.round(averageRating) ? (
+                      <StarIconSolid
+                        key={star}
+                        className="h-4 w-4 text-yellow-400"
+                      />
+                    ) : (
+                      <StarIcon
+                        key={star}
+                        className="h-4 w-4 text-gray-300"
+                      />
+                    )
+                  ))}
+                </div>
+                <span className="text-xs">
+                  {averageRating.toFixed(1)} ({reviewCount} review{reviewCount !== 1 ? 's' : ''})
+                </span>
+              </div>
+            )}
+
             <div className="text-xs text-gray-500">
               {levels.get(proposal.level) || proposal.level || 'Level not specified'} • {languages.get(proposal.language) || proposal.language || 'Language not specified'}
             </div>

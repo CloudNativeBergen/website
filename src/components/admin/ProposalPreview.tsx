@@ -2,7 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { XMarkIcon, UserIcon, ClockIcon, CalendarIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, UserIcon, ClockIcon, CalendarIcon, StarIcon } from '@heroicons/react/24/outline'
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import {
   ProposalExisting,
   statuses,
@@ -17,7 +18,9 @@ import {
   Audience
 } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
+import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
+import { calculateAverageRating } from './hooks'
 
 interface ProposalPreviewProps {
   proposal: ProposalExisting
@@ -51,6 +54,8 @@ function isSpeaker(speaker: Speaker | unknown): speaker is Speaker {
 
 export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
   const speaker = isSpeaker(proposal.speaker) ? proposal.speaker : null
+  const averageRating = calculateAverageRating(proposal)
+  const reviewCount = proposal.reviews?.length || 0
 
   return (
     <div className="flex h-full flex-col">
@@ -97,18 +102,85 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
           {/* Status Badge */}
           <div>
             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${proposal.status === Status.submitted
-                ? 'bg-yellow-100 text-yellow-800'
-                : proposal.status === Status.accepted
-                  ? 'bg-green-100 text-green-800'
-                  : proposal.status === Status.rejected
-                    ? 'bg-red-100 text-red-800'
-                    : proposal.status === Status.confirmed
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-gray-100 text-gray-800'
+              ? 'bg-yellow-100 text-yellow-800'
+              : proposal.status === Status.accepted
+                ? 'bg-green-100 text-green-800'
+                : proposal.status === Status.rejected
+                  ? 'bg-red-100 text-red-800'
+                  : proposal.status === Status.confirmed
+                    ? 'bg-blue-100 text-blue-800'
+                    : 'bg-gray-100 text-gray-800'
               }`}>
               {formatStatus(proposal.status)}
             </span>
           </div>
+
+          {/* Review Summary */}
+          {reviewCount > 0 && (
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Review Summary</h4>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      star <= Math.round(averageRating) ? (
+                        <StarIconSolid
+                          key={star}
+                          className="h-5 w-5 text-yellow-400"
+                        />
+                      ) : (
+                        <StarIcon
+                          key={star}
+                          className="h-5 w-5 text-gray-300"
+                        />
+                      )
+                    ))}
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">
+                    {averageRating.toFixed(1)} out of 5
+                  </span>
+                </div>
+                <span className="text-sm text-gray-500">
+                  {reviewCount} review{reviewCount !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Individual score breakdown */}
+              {proposal.reviews && proposal.reviews.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <div className="text-xs text-gray-600">
+                    <div className="flex justify-between">
+                      <span>Content Quality:</span>
+                      <span>
+                        {(proposal.reviews.reduce((acc, review) => {
+                          const reviewObj = typeof review === 'object' && 'score' in review ? review as Review : null
+                          return acc + (reviewObj?.score?.content || 0)
+                        }, 0) / proposal.reviews.length).toFixed(1)}/5
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Relevance:</span>
+                      <span>
+                        {(proposal.reviews.reduce((acc, review) => {
+                          const reviewObj = typeof review === 'object' && 'score' in review ? review as Review : null
+                          return acc + (reviewObj?.score?.relevance || 0)
+                        }, 0) / proposal.reviews.length).toFixed(1)}/5
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Speaker:</span>
+                      <span>
+                        {(proposal.reviews.reduce((acc, review) => {
+                          const reviewObj = typeof review === 'object' && 'score' in review ? review as Review : null
+                          return acc + (reviewObj?.score?.speaker || 0)
+                        }, 0) / proposal.reviews.length).toFixed(1)}/5
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Details */}
           <div className="grid grid-cols-1 gap-4 text-sm">

@@ -11,7 +11,7 @@ export interface FilterState {
   level: Level[]
   language: Language[]
   audience: Audience[]
-  sortBy: 'title' | 'status' | 'created' | 'speaker'
+  sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating'
   sortOrder: 'asc' | 'desc'
 }
 
@@ -90,7 +90,7 @@ export function ProposalsFilter({
         <div className="flex items-center gap-3">
           {/* Sort Options */}
           <FilterDropdown
-            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy}`}
+            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy}`}
             activeCount={0}
             position="right"
           >
@@ -98,7 +98,8 @@ export function ProposalsFilter({
               { key: 'created', label: 'Date Created' },
               { key: 'title', label: 'Title' },
               { key: 'speaker', label: 'Speaker' },
-              { key: 'status', label: 'Status' }
+              { key: 'status', label: 'Status' },
+              { key: 'rating', label: 'Rating' }
             ].map((option) => (
               <FilterOption
                 key={option.key}
