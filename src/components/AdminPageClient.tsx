@@ -28,6 +28,8 @@ export function AdminPageClient({ proposals }: AdminPageClientProps) {
             </p>
           </div>
           <div className="ml-4 flex items-center gap-x-4">
+            {/* Search functionality hidden until fully functional */}
+            {/*
             <form className="relative flex flex-1" action="#" onSubmit={(e) => e.preventDefault()}>
               <label htmlFor="search-field" className="sr-only">
                 Search proposals
@@ -46,6 +48,7 @@ export function AdminPageClient({ proposals }: AdminPageClientProps) {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </form>
+            */}
             <div className="flex items-center text-sm text-gray-500">
               {proposals.length} proposal{proposals.length !== 1 ? 's' : ''}
             </div>

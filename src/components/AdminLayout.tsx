@@ -26,7 +26,7 @@ import {
   CalendarDaysIcon,
   BuildingOfficeIcon,
 } from '@heroicons/react/24/outline'
-import { ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/react/20/solid'
+import { ChevronDownIcon } from '@heroicons/react/20/solid'
 import { Logomark } from '@/components/Logo'
 
 const navigation = [
@@ -160,6 +160,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <div aria-hidden="true" className="h-6 w-px bg-gray-900/10 lg:hidden" />
 
             <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
+              {/* Search bar hidden until fully functional */}
+              {/* 
               <form action="#" method="GET" className="grid flex-1 grid-cols-1">
                 <input
                   name="search"
@@ -173,7 +175,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400"
                 />
               </form>
-              <div className="flex items-center gap-x-4 lg:gap-x-6">
+              */}
+              <div className="flex items-center gap-x-4 lg:gap-x-6 ml-auto">
                 <button type="button" className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500">
                   <span className="sr-only">View notifications</span>
                   <BellIcon aria-hidden="true" className="size-6" />
