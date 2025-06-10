@@ -17,6 +17,12 @@ export { ProposalsPageClient } from './ProposalsPageClient'
 export { ProposalsFilter } from './ProposalsFilter'
 export { FilterDropdown } from './FilterDropdown'
 
+// Review Management Components
+export { AdminReviewPanel } from './AdminReviewPanel'
+export { AdminReviewSummary } from './AdminReviewSummary'
+export { AdminReviewForm } from './AdminReviewForm'
+export { AdminReviewList } from './AdminReviewList'
+
 // Utility Components
 export { ErrorDisplay } from './ErrorDisplay'
 

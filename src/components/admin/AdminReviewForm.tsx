@@ -1,0 +1,146 @@
+'use client'
+
+import { useState } from 'react'
+import { StarIcon } from '@heroicons/react/24/solid'
+import { PaperAirplaneIcon } from '@heroicons/react/24/outline'
+import { Review, ReviewBase } from '@/lib/review/types'
+import { postReview } from '@/lib/review/client'
+import { Speaker } from '@/lib/speaker/types'
+
+interface AdminReviewFormProps {
+  proposalId: string
+  currentUser: Speaker
+  existingReview?: Review
+  onReviewSubmit: (review: Review) => void
+}
+
+function classNames(...classes: string[]) {
+  return classes.filter(Boolean).join(' ')
+}
+
+export function AdminReviewForm({
+  proposalId,
+  currentUser,
+  existingReview,
+  onReviewSubmit
+}: AdminReviewFormProps) {
+  const [ratings, setRatings] = useState<{ content: number; relevance: number; speaker: number }>(
+    existingReview?.score || { content: 0, relevance: 0, speaker: 0 }
+  )
+  const [hovered, setHovered] = useState<{ content: number; relevance: number; speaker: number }>({
+    content: 0,
+    relevance: 0,
+    speaker: 0,
+  })
+  const [comment, setComment] = useState<string>(existingReview?.comment || '')
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+
+  const submitHandler = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+
+    const reviewData: ReviewBase = {
+      comment,
+      score: ratings,
+    }
+
+    try {
+      const res = await postReview(proposalId, reviewData)
+
+      if (res.reviewError || !res.review) {
+        console.error('Error submitting review:', res.reviewError)
+        return
+      }
+
+      onReviewSubmit(res.review)
+    } catch (error) {
+      console.error('Error submitting review:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const scoreCategories = [
+    { key: 'content', label: 'Content Quality' },
+    { key: 'relevance', label: 'Relevance' },
+    { key: 'speaker', label: 'Speaker' },
+  ]
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-4">
+      <h3 className="text-lg font-semibold text-gray-900 mb-3">
+        {existingReview ? 'Update My Review' : 'Add My Review'}
+      </h3>
+
+      <form onSubmit={submitHandler} className="space-y-4">
+        {/* Rating Categories */}
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-700">Scores</label>
+          {scoreCategories.map(({ key, label }) => (
+            <div key={key} className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">{label}</span>
+                <span className="text-sm text-gray-500">
+                  {ratings[key as keyof typeof ratings]}/5
+                </span>
+              </div>
+              <div className="flex items-center space-x-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    className={classNames(
+                      'p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500',
+                      (hovered[key as keyof typeof hovered] || ratings[key as keyof typeof ratings]) >= star
+                        ? 'text-yellow-400'
+                        : 'text-gray-300 hover:text-yellow-300'
+                    )}
+                    onMouseEnter={() => {
+                      setHovered((h) => ({ ...h, [key]: star }))
+                    }}
+                    onMouseLeave={() => {
+                      setHovered((h) => ({ ...h, [key]: 0 }))
+                    }}
+                    onClick={() => {
+                      setRatings((r) => ({ ...r, [key]: star }))
+                    }}
+                  >
+                    <StarIcon className="h-5 w-5" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Comment */}
+        <div>
+          <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
+            Comment
+          </label>
+          <textarea
+            id="comment"
+            name="comment"
+            rows={3}
+            className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+            placeholder="Write your review comments here..."
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
+        </div>
+
+        {/* Submit Button */}
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={isSubmitting || Object.values(ratings).some(r => r === 0)}
+            className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <PaperAirplaneIcon className="h-4 w-4" />
+            {isSubmitting ? 'Submitting...' : existingReview ? 'Update Review' : 'Submit Review'}
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}

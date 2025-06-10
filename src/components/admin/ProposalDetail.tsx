@@ -62,8 +62,8 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
       </div>
 
       {/* Content */}
-      <div className="px-4 py-6 sm:px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="mt-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-8">
             {/* Description */}
