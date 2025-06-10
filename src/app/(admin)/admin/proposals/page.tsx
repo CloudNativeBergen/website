@@ -34,5 +34,9 @@ export default async function AdminProposals() {
     )
   }
 
-  return <ProposalsPageClient proposals={proposals} currentUserId={session?.speaker?._id} />
+  return <ProposalsPageClient
+    proposals={proposals}
+    currentUserId={session?.speaker?._id}
+    conference={conference}
+  />
 }

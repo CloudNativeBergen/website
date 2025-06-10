@@ -31,6 +31,7 @@ interface ProposalsFilterProps {
   onClearAll: () => void
   activeFilterCount: number
   currentUserId?: string
+  allowedFormats?: Format[]
 }
 
 /**
@@ -45,7 +46,8 @@ export function ProposalsFilter({
   onSortOrderToggle,
   onClearAll,
   activeFilterCount,
-  currentUserId
+  currentUserId,
+  allowedFormats
 }: ProposalsFilterProps) {
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -57,12 +59,14 @@ export function ProposalsFilter({
           </div>
 
           {/* Status Filter */}
-          <FilterDropdown label="Status" activeCount={filters.status.length}>
+          <FilterDropdown label="Status" activeCount={filters.status.length} keepOpen>
             {Object.values(Status).map((status) => (
               <FilterOption
                 key={status}
                 onClick={() => onFilterChange('status', status)}
                 checked={filters.status.includes(status)}
+                type="checkbox"
+                keepOpen
               >
                 <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusBadgeStyle(status)}`}>
                   {statuses.get(status)}
@@ -72,12 +76,14 @@ export function ProposalsFilter({
           </FilterDropdown>
 
           {/* Format Filter */}
-          <FilterDropdown label="Format" activeCount={filters.format.length}>
-            {Object.values(Format).map((format) => (
+          <FilterDropdown label="Format" activeCount={filters.format.length} keepOpen>
+            {(allowedFormats || Object.values(Format)).map((format) => (
               <FilterOption
                 key={format}
                 onClick={() => onFilterChange('format', format)}
                 checked={filters.format.includes(format)}
+                type="checkbox"
+                keepOpen
               >
                 {formats.get(format)}
               </FilterOption>
@@ -85,12 +91,14 @@ export function ProposalsFilter({
           </FilterDropdown>
 
           {/* Level Filter */}
-          <FilterDropdown label="Level" activeCount={filters.level.length}>
+          <FilterDropdown label="Level" activeCount={filters.level.length} keepOpen>
             {Object.values(Level).map((level) => (
               <FilterOption
                 key={level}
                 onClick={() => onFilterChange('level', level)}
                 checked={filters.level.includes(level)}
+                type="checkbox"
+                keepOpen
               >
                 {levels.get(level)}
               </FilterOption>
@@ -112,6 +120,7 @@ export function ProposalsFilter({
                   key={status}
                   onClick={() => onReviewStatusChange(status)}
                   checked={filters.reviewStatus === status}
+                  type="radio"
                 >
                   {status === ReviewStatus.unreviewed ? 'Todo (not reviewed by me)' :
                     status === ReviewStatus.reviewed ? 'Done (reviewed by me)' :
@@ -138,6 +147,7 @@ export function ProposalsFilter({
                 key={option.key}
                 onClick={() => onSortChange(option.key as FilterState['sortBy'])}
                 checked={filters.sortBy === option.key}
+                type="radio"
               >
                 {option.label}
               </FilterOption>
@@ -146,6 +156,7 @@ export function ProposalsFilter({
             <FilterOption
               onClick={onSortOrderToggle}
               checked={false}
+              type="checkbox"
             >
               {filters.sortOrder === 'asc' ? '↑ Ascending' : '↓ Descending'}
             </FilterOption>

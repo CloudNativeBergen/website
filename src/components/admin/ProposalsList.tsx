@@ -2,7 +2,7 @@
 
 import { DocumentTextIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { ProposalExisting, Status } from '@/lib/proposal/types'
+import { ProposalExisting, Status, Format } from '@/lib/proposal/types'
 import { ProposalCard } from './ProposalCard'
 import { ProposalsFilter, FilterState, ReviewStatus } from './ProposalsFilter'
 import { useProposalFiltering, useFilterState } from './hooks'
@@ -13,6 +13,7 @@ interface ProposalsListProps {
   selectedProposalId?: string | null
   enablePreview?: boolean
   currentUserId?: string
+  allowedFormats?: Format[]
 }
 
 /**
@@ -24,7 +25,8 @@ export function ProposalsList({
   onProposalSelect,
   selectedProposalId,
   enablePreview = false,
-  currentUserId
+  currentUserId,
+  allowedFormats
 }: ProposalsListProps) {
   const initialFilters: FilterState = {
     status: [Status.submitted, Status.accepted, Status.confirmed],
@@ -72,6 +74,7 @@ export function ProposalsList({
           onClearAll={clearAllFilters}
           activeFilterCount={activeFilterCount}
           currentUserId={currentUserId}
+          allowedFormats={allowedFormats}
         />
       </div>
 

@@ -11,6 +11,7 @@ interface FilterDropdownProps {
   children: ReactNode
   position?: 'left' | 'right'
   width?: 'default' | 'wide' | 'wider'
+  keepOpen?: boolean // For multi-select filters
 }
 
 /**
@@ -22,7 +23,7 @@ export function FilterDropdown({
   activeCount,
   children,
   position = 'left',
-  width = 'default'
+  width = 'default',
 }: FilterDropdownProps) {
   const getWidthClass = () => {
     switch (width) {
@@ -72,18 +73,35 @@ interface FilterOptionProps {
   checked: boolean
   children: ReactNode
   className?: string
+  type?: 'checkbox' | 'radio'
+  keepOpen?: boolean
 }
 
 /**
  * Individual filter option component
  * Used within FilterDropdown for consistent option styling
  */
-export function FilterOption({ onClick, checked, children, className }: FilterOptionProps) {
+export function FilterOption({
+  onClick,
+  checked,
+  children,
+  className,
+  type = 'checkbox',
+  keepOpen = false
+}: FilterOptionProps) {
+  const handleClick = (e: React.MouseEvent) => {
+    if (keepOpen) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    onClick()
+  }
+
   return (
     <Menu.Item>
       {({ active }) => (
         <button
-          onClick={onClick}
+          onClick={handleClick}
           className={classNames(
             active ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
             'group flex w-full items-center px-4 py-2 text-sm',
@@ -91,10 +109,13 @@ export function FilterOption({ onClick, checked, children, className }: FilterOp
           )}
         >
           <input
-            type="checkbox"
+            type={type}
             checked={checked}
             onChange={() => { }}
-            className="mr-3 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+            className={type === 'radio'
+              ? "mr-3 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600"
+              : "mr-3 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+            }
           />
           {children}
         </button>

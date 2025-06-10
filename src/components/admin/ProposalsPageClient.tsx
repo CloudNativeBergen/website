@@ -2,15 +2,17 @@
 
 import { useState } from 'react'
 import { ProposalExisting } from '@/lib/proposal/types'
+import { Conference } from '@/lib/conference/types'
 import { ProposalsList } from './ProposalsList'
 import { ProposalPreview } from './ProposalPreview'
 
 interface ProposalsPageClientProps {
   proposals: ProposalExisting[]
   currentUserId?: string
+  conference: Conference
 }
 
-export function ProposalsPageClient({ proposals, currentUserId }: ProposalsPageClientProps) {
+export function ProposalsPageClient({ proposals, currentUserId, conference }: ProposalsPageClientProps) {
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
   const selectedProposal = selectedProposalId
     ? proposals.find(p => p._id === selectedProposalId)
@@ -26,6 +28,7 @@ export function ProposalsPageClient({ proposals, currentUserId }: ProposalsPageC
           selectedProposalId={selectedProposalId}
           enablePreview={true}
           currentUserId={currentUserId}
+          allowedFormats={conference.formats}
         />
       </div>
 
