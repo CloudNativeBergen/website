@@ -17,12 +17,11 @@ import {
 } from '@headlessui/react'
 import {
   Bars3Icon,
-  ChartPieIcon,
+  Cog6ToothIcon,
   DocumentTextIcon,
   HomeIcon,
   UsersIcon,
   XMarkIcon,
-  PresentationChartLineIcon,
   CalendarDaysIcon,
   BuildingOfficeIcon,
   TicketIcon,
@@ -39,8 +38,7 @@ const navigation = [
   { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
   { name: 'Sponsors', href: '/admin/sponsors', icon: BuildingOfficeIcon },
   { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
-  { name: 'Analytics', href: '/admin/analytics', icon: ChartPieIcon },
-  { name: 'Reports', href: '/admin/reports', icon: PresentationChartLineIcon },
+  { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
 ]
 
 function classNames(...classes: string[]) {

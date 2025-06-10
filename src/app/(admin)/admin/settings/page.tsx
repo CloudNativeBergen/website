@@ -1,0 +1,357 @@
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { formatDate } from '@/lib/time'
+import { formats } from '@/lib/proposal/types'
+import {
+  CalendarIcon,
+  GlobeAltIcon,
+  MapPinIcon,
+  UserGroupIcon,
+  DocumentTextIcon,
+  TagIcon,
+  CurrencyDollarIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  InformationCircleIcon,
+  LinkIcon,
+  EnvelopeIcon,
+} from '@heroicons/react/24/outline'
+
+function Badge({ children, variant = 'default' }: { children: React.ReactNode, variant?: 'default' | 'success' | 'warning' | 'error' }) {
+  const variants = {
+    default: 'bg-gray-100 text-gray-800',
+    success: 'bg-green-100 text-green-800',
+    warning: 'bg-yellow-100 text-yellow-800',
+    error: 'bg-red-100 text-red-800',
+  }
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${variants[variant]}`}>
+      {children}
+    </span>
+  )
+}
+
+function InfoCard({ title, children, icon: Icon }: { title: string, children: React.ReactNode, icon: React.ComponentType<{ className?: string }> }) {
+  return (
+    <div className="bg-white shadow rounded-lg p-6">
+      <div className="flex items-center mb-4">
+        <Icon className="h-5 w-5 text-gray-400 mr-2" />
+        <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+      </div>
+      <div className="space-y-3">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function FieldRow({
+  label,
+  value,
+  type = 'text'
+}: {
+  label: string;
+  value: string | boolean | Array<any> | number | null | undefined; // eslint-disable-line @typescript-eslint/no-explicit-any
+  type?: 'text' | 'date' | 'boolean' | 'array' | 'links' | 'formats' | 'team' | 'url' | 'email';
+}) {
+  let displayValue: React.ReactNode = value as React.ReactNode
+
+  switch (type) {
+    case 'date':
+      displayValue = value ? formatDate(value as string) : 'Not set'
+      break
+    case 'boolean':
+      displayValue = (
+        <div className="flex items-center">
+          {value ? (
+            <>
+              <CheckCircleIcon className="h-4 w-4 text-green-500 mr-1" />
+              <span className="text-green-700">Yes</span>
+            </>
+          ) : (
+            <>
+              <XCircleIcon className="h-4 w-4 text-red-500 mr-1" />
+              <span className="text-red-700">No</span>
+            </>
+          )}
+        </div>
+      )
+      break
+    case 'array':
+      displayValue = Array.isArray(value) && value.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {value.map((item, idx) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const displayText = typeof item === 'string' ? item : (item as any)?.title || (item as any)?.name || JSON.stringify(item)
+            return <Badge key={idx}>{displayText}</Badge>
+          })}
+        </div>
+      ) : (
+        <span className="text-gray-500">None</span>
+      )
+      break
+    case 'links':
+      displayValue = Array.isArray(value) && value.length > 0 ? (
+        <div className="space-y-2">
+          {value.map((link, idx) => (
+            <div key={idx}>
+              <a
+                href={link as string}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-600 hover:text-indigo-500 text-sm inline-flex items-center hover:underline"
+              >
+                <span className="truncate max-w-sm">{link as string}</span>
+                <LinkIcon className="h-3 w-3 ml-1 flex-shrink-0" />
+              </a>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <span className="text-gray-500">None</span>
+      )
+      break
+    case 'formats':
+      displayValue = Array.isArray(value) && value.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {value.map((format, idx) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const formatKey = typeof format === 'string' ? format : (format as any)?.title || (format as any)?.name
+            const displayText = formats.get(formatKey) || formatKey || 'Unknown Format'
+            return <Badge key={idx}>{displayText}</Badge>
+          })}
+        </div>
+      ) : (
+        <span className="text-gray-500">None</span>
+      )
+      break
+    case 'team':
+      displayValue = Array.isArray(value) && value.length > 0 ? (
+        <div className="grid grid-cols-2 gap-2">
+          {value.map((member, idx) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const memberName = typeof member === 'string' ? member : (member as any)?.name || 'Unknown Member'
+            return (
+              <div key={idx} className="text-sm text-gray-900 py-1">
+                {memberName}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <span className="text-gray-500">None</span>
+      )
+      break
+    case 'url':
+      displayValue = value ? (
+        <a href={value as string} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-500 flex items-center">
+          {value as string}
+          <LinkIcon className="h-3 w-3 ml-1" />
+        </a>
+      ) : 'Not set'
+      break
+    case 'email':
+      displayValue = value ? (
+        <a href={`mailto:${value}`} className="text-indigo-600 hover:text-indigo-500 flex items-center">
+          {value as string}
+          <EnvelopeIcon className="h-3 w-3 ml-1" />
+        </a>
+      ) : 'Not set'
+      break
+    default:
+      displayValue = (value as string) || 'Not set'
+  }
+
+  return (
+    <div className="flex justify-between py-2 border-b border-gray-200 last:border-b-0">
+      <dt className="text-sm font-medium text-gray-500">{label}</dt>
+      <dd className="text-sm text-gray-900 text-right max-w-xs">{displayValue}</dd>
+    </div>
+  )
+}
+
+export default async function SettingsPage() {
+  const { conference, error } = await getConferenceForCurrentDomain({
+    organizers: true,
+    schedule: true,
+    sponsors: true,
+    sponsorTiers: true,
+    topics: true,
+  })
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="flex">
+              <XCircleIcon className="h-5 w-5 text-red-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Error loading conference settings</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>{error.message}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!conference) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <div className="flex">
+              <InformationCircleIcon className="h-5 w-5 text-yellow-400" />
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">No conference found</h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>No conference configuration found for the current domain.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold leading-tight text-gray-900">Conference Settings</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Configuration settings for {conference.title}
+          </p>
+        </div>
+
+        {/* Settings Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Basic Information */}
+          <InfoCard title="Basic Information" icon={InformationCircleIcon}>
+            <FieldRow label="Title" value={conference.title} />
+            <FieldRow label="Organizer" value={conference.organizer} />
+            <FieldRow label="City" value={conference.city} />
+            <FieldRow label="Country" value={conference.country} />
+            <FieldRow label="Tagline" value={conference.tagline} />
+            <FieldRow label="Description" value={conference.description} />
+          </InfoCard>
+
+          {/* Venue Information */}
+          <InfoCard title="Venue Information" icon={MapPinIcon}>
+            <FieldRow label="Venue Name" value={conference.venue_name} />
+            <FieldRow label="Venue Address" value={conference.venue_address} />
+          </InfoCard>
+
+          {/* Dates & Timeline */}
+          <InfoCard title="Dates & Timeline" icon={CalendarIcon}>
+            <FieldRow label="Start Date" value={conference.start_date} type="date" />
+            <FieldRow label="End Date" value={conference.end_date} type="date" />
+            <FieldRow label="CFP Start Date" value={conference.cfp_start_date} type="date" />
+            <FieldRow label="CFP End Date" value={conference.cfp_end_date} type="date" />
+            <FieldRow label="CFP Notify Date" value={conference.cfp_notify_date} type="date" />
+            <FieldRow label="Program Release Date" value={conference.program_date} type="date" />
+          </InfoCard>
+
+          {/* Configuration */}
+          <InfoCard title="Configuration" icon={DocumentTextIcon}>
+            <FieldRow label="Registration Enabled" value={conference.registration_enabled} type="boolean" />
+            <FieldRow label="Registration Link" value={conference.registration_link} type="url" />
+            <FieldRow label="Code of Conduct Link" value={conference.coc_link} type="url" />
+            <FieldRow label="Contact Email" value={conference.contact_email} type="email" />
+          </InfoCard>
+
+          {/* Domain Configuration */}
+          <InfoCard title="Domain Configuration" icon={GlobeAltIcon}>
+            <FieldRow label="Domains" value={conference.domains} type="array" />
+            <FieldRow label="Social Links" value={conference.social_links} type="links" />
+          </InfoCard>
+
+          {/* External Integrations */}
+          <InfoCard title="External Integrations" icon={LinkIcon}>
+            <FieldRow label="Checkin Customer ID" value={conference.checkin_customer_id} />
+            <FieldRow label="Checkin Event ID" value={conference.checkin_event_id} />
+          </InfoCard>
+
+          {/* Content Configuration */}
+          <InfoCard title="Content Configuration" icon={TagIcon}>
+            <FieldRow label="Available Formats" value={conference.formats} type="formats" />
+            <FieldRow label="Available Topics" value={conference.topics} type="array" />
+            <FieldRow label="Features" value={conference.features} type="array" />
+          </InfoCard>
+
+          {/* Team */}
+          <InfoCard title="Team" icon={UserGroupIcon}>
+            <FieldRow
+              label="Organizers"
+              value={conference.organizers?.map(org => org.name)}
+              type="team"
+            />
+          </InfoCard>
+
+          {/* Sponsorship */}
+          {conference.sponsor_tiers && conference.sponsor_tiers.length > 0 && (
+            <InfoCard title="Sponsorship Tiers" icon={CurrencyDollarIcon}>
+              {conference.sponsor_tiers.map((tier, idx) => (
+                <div key={idx} className="border-b border-gray-200 last:border-b-0 pb-3 last:pb-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-gray-900">{tier.title}</span>
+                    <div className="flex items-center space-x-2">
+                      {tier.sold_out && <Badge variant="error">Sold Out</Badge>}
+                      {tier.most_popular && <Badge variant="success">Popular</Badge>}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-2">{tier.tagline}</p>
+                  {tier.price && tier.price.length > 0 && (
+                    <div className="text-sm text-gray-500">
+                      {tier.price.map((price, pidx) => (
+                        <span key={pidx}>
+                          {price.amount} {price.currency}
+                          {pidx < tier.price.length - 1 && ', '}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </InfoCard>
+          )}
+
+          {/* Current Sponsors */}
+          {conference.sponsors && conference.sponsors.length > 0 && (
+            <InfoCard title="Current Sponsors" icon={CurrencyDollarIcon}>
+              <FieldRow
+                label="Sponsors"
+                value={conference.sponsors.map(s => `${s.sponsor.name} (${s.tier.title})`)}
+                type="array"
+              />
+            </InfoCard>
+          )}
+
+          {/* Vanity Metrics */}
+          {conference.vanity_metrics && conference.vanity_metrics.length > 0 && (
+            <InfoCard title="Vanity Metrics" icon={ChartPieIcon}>
+              {conference.vanity_metrics.map((metric, idx) => (
+                <FieldRow key={idx} label={metric.label} value={metric.value} />
+              ))}
+            </InfoCard>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ChartPieIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0013.5 3v7.5z" />
+    </svg>
+  )
+}
