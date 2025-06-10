@@ -175,6 +175,7 @@ export function ProposalCard({
             alt="Speaker Image"
             width={40}
             height={40}
+            loading="lazy"
           />
         ) : (
           <UserCircleIcon

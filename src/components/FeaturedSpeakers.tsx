@@ -49,6 +49,7 @@ export function FeaturedSpeakers({
                         alt={person.name}
                         width={224}
                         height={224}
+                        loading="lazy"
                       />
                       <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
                         {person.name}
@@ -62,6 +63,7 @@ export function FeaturedSpeakers({
                         alt={person.name}
                         width={224}
                         height={224}
+                        loading="lazy"
                       />
                       <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
                         {person.name}

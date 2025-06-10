@@ -71,6 +71,7 @@ export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewLis
                       width={32}
                       height={32}
                       className="h-8 w-8 rounded-full object-cover"
+                      loading="lazy"
                     />
                   ) : (
                     <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
