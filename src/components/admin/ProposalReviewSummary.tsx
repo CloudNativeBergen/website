@@ -3,13 +3,10 @@
 import { StarIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarIconOutline } from '@heroicons/react/24/outline'
 import { Review } from '@/lib/review/types'
+import clsx from 'clsx'
 
 interface ProposalReviewSummaryProps {
   reviews: Review[]
-}
-
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
 }
 
 export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {
@@ -75,7 +72,7 @@ export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {
                     {[1, 2, 3, 4, 5].map((star) => (
                       <StarIcon
                         key={star}
-                        className={classNames(
+                        className={clsx(
                           star <= Math.round(score) ? 'text-yellow-400' : 'text-gray-300',
                           'h-3 w-3'
                         )}

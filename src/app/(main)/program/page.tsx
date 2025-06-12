@@ -2,10 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
-
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 export const revalidate = 3600
 
@@ -168,7 +165,7 @@ export default async function Info() {
                       className="rounded-lg bg-white p-4 shadow-lg"
                     >
                       <h3
-                        className={classNames(
+                        className={clsx(
                           'text-xl font-semibold',
                           track.title === 'Platform Engineering (Teglverket)'
                             ? 'text-green-600'

@@ -11,9 +11,7 @@ interface ProposalReviewListProps {
   currentUserId?: string
 }
 
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewListProps) {
   if (reviews.length === 0) {
@@ -54,7 +52,7 @@ export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewLis
           return (
             <div
               key={review._id || index}
-              className={classNames(
+              className={clsx(
                 'border rounded-lg p-3',
                 isCurrentUserReview
                   ? 'border-indigo-200 bg-indigo-50'
@@ -84,7 +82,7 @@ export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewLis
                 <div className="flex-1 min-w-0">
                   <div className="space-y-1">
                     <div className="flex items-center">
-                      <h4 className={classNames(
+                      <h4 className={clsx(
                         'text-sm font-medium',
                         isCurrentUserReview ? 'text-indigo-900' : 'text-gray-900'
                       )}>
@@ -119,7 +117,7 @@ export function ProposalReviewList({ reviews, currentUserId }: ProposalReviewLis
                           {[1, 2, 3, 4, 5].map((star) => (
                             <StarIcon
                               key={star}
-                              className={classNames(
+                              className={clsx(
                                 star <= score ? 'text-yellow-400' : 'text-gray-300',
                                 'h-3 w-3'
                               )}

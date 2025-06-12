@@ -41,9 +41,7 @@ const navigation = [
   { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
 ]
 
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 interface AdminLayoutProps {
   children: React.ReactNode
@@ -90,7 +88,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                         <li key={item.name}>
                           <Link
                             href={item.href}
-                            className={classNames(
+                            className={clsx(
                               isCurrent
                                 ? 'bg-gray-800 text-white'
                                 : 'text-gray-400 hover:bg-gray-800 hover:text-white',
@@ -126,7 +124,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                       <Link
                         href={item.href}
                         title={item.name}
-                        className={classNames(
+                        className={clsx(
                           isCurrent
                             ? 'bg-gray-800 text-white'
                             : 'text-gray-400 hover:bg-gray-800 hover:text-white',

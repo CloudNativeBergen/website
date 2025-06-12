@@ -3,10 +3,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 function PriceFormat({
   price,
@@ -81,7 +78,7 @@ export default async function Sponsor() {
             {sponsorTiers.map((tier, index) => (
               <div
                 key={index}
-                className={classNames(
+                className={clsx(
                   tier.most_popular ? 'lg:z-10 lg:rounded-b-none' : 'lg:mt-8',
                   tier.sold_out ? 'lg:opacity-50' : '',
                   index === 0 ? 'lg:rounded-r-none' : '',
@@ -93,7 +90,7 @@ export default async function Sponsor() {
                   <div className="flex items-center justify-between gap-x-4">
                     <h3
                       id={`tier-${index}`}
-                      className={classNames(
+                      className={clsx(
                         tier.most_popular ? 'text-blue-600' : 'text-gray-900',
                         'text-xl leading-8 font-semibold',
                       )}
@@ -134,7 +131,7 @@ export default async function Sponsor() {
                   <Button
                     href={`mailto:${conference.contact_email}?subject=Interested in sponsoring ${conference.title}&body=We are interested in the ${tier.title} sponsorship tier.`}
                     aria-describedby={`tier-${index}`}
-                    className={classNames(
+                    className={clsx(
                       tier.most_popular
                         ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-500'
                         : 'text-blue-600 ring-1 ring-blue-200 ring-inset hover:ring-blue-300',

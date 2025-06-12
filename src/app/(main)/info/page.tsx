@@ -1,9 +1,6 @@
 import { formatDate } from '@/lib/time'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 export default async function Info() {
   const { conference } = await getConferenceForCurrentDomain()
@@ -174,7 +171,7 @@ export default async function Info() {
                           {faq.answer.split('\n').map((item, key) => (
                             <p
                               key={key}
-                              className={classNames(key > 0 ? 'mt-2' : '')}
+                              className={clsx(key > 0 ? 'mt-2' : '')}
                               dangerouslySetInnerHTML={{ __html: item }}
                             ></p>
                           ))}

@@ -18,10 +18,7 @@ import {
 import { Speaker } from '@/lib/speaker/types'
 import { postProposalAction } from '@/lib/proposal/client'
 import { TrashIcon } from '@heroicons/react/24/solid'
-
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 function capitalizeFirstLetter(string: string) {
   return string.charAt(0).toUpperCase() + string.slice(1)
@@ -143,13 +140,13 @@ export function ProposalActionModal({
                 </div>
                 <div className="sm:flex sm:items-start">
                   <div
-                    className={classNames(
+                    className={clsx(
                       iconBgColor,
                       'mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full sm:mx-0 sm:h-10 sm:w-10',
                     )}
                   >
                     <ActionIcon
-                      className={classNames(iconTextColor, 'h-6 w-6')}
+                      className={clsx(iconTextColor, 'h-6 w-6')}
                       aria-hidden="true"
                     />
                   </div>
@@ -228,7 +225,7 @@ export function ProposalActionModal({
                   <button
                     type="button"
                     disabled={isSubmitting}
-                    className={classNames(
+                    className={clsx(
                       buttonColor,
                       isSubmitting ? 'cursor-not-allowed' : 'cursor-pointer',
                       'inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-white shadow-sm sm:ml-3 sm:w-auto',

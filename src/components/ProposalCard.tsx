@@ -22,9 +22,7 @@ interface ProposalButtonAction {
   onClick?: () => void
 }
 
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 function capitalizeFirstLetter(string: string) {
   return string.charAt(0).toUpperCase() + string.slice(1)
@@ -145,7 +143,7 @@ export function ProposalCard({
   return (
     <li
       key={proposal._id}
-      className={classNames(
+      className={clsx(
         proposal.status === Status.accepted
           ? 'border-2 border-green-500/50'
           : '',
@@ -190,7 +188,7 @@ export function ProposalCard({
             {actions.map((action, i) => (
               <div
                 key={`${proposal._id}-${action.label}`}
-                className={classNames(
+                className={clsx(
                   i > 0 ? '-ml-px' : '',
                   'relative inline-flex w-0 flex-1',
                 )}

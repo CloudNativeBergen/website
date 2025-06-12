@@ -14,9 +14,7 @@ interface ProposalReviewFormProps {
   onReviewSubmit: (review: Review) => void
 }
 
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 export function ProposalReviewForm({
   proposalId,
@@ -113,7 +111,7 @@ export function ProposalReviewForm({
                     <button
                       key={star}
                       type="button"
-                      className={classNames(
+                      className={clsx(
                         'p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500',
                         (hovered[key as keyof typeof hovered] || ratings[key as keyof typeof ratings]) >= star
                           ? 'text-yellow-400'

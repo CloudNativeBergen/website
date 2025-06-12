@@ -11,10 +11,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
 import { formats } from '@/lib/proposal/types'
-
-function classNames(...classes: string[]) {
-  return classes.filter(Boolean).join(' ')
-}
+import clsx from 'clsx'
 
 export default async function CFP() {
   const { conference } = await getConferenceForCurrentDomain({ topics: true })
@@ -285,7 +282,7 @@ export default async function CFP() {
                   className="col-span-1 flex rounded-md shadow-sm"
                 >
                   <div
-                    className={classNames(
+                    className={clsx(
                       date.bgColor,
                       'flex w-16 flex-shrink-0 items-center justify-center rounded-l-md text-sm font-medium text-white',
                     )}

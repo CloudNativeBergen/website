@@ -27,13 +27,10 @@ export function getStatusBadgeStyle(status: Status): string {
 }
 
 /**
- * Utility function for combining CSS classes
- * @param classes - Array of CSS class strings
- * @returns Combined class string with falsy values filtered out
+ * Re-export clsx as our standard class name utility
+ * This provides a consistent API while leveraging the battle-tested clsx library
  */
-export function classNames(...classes: (string | boolean | undefined | null)[]): string {
-  return classes.filter(Boolean).join(' ')
-}
+export { default as classNames } from 'clsx'
 
 /**
  * Common error display props interface
