@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import { ChevronLeftIcon, ClockIcon, UserIcon } from '@heroicons/react/20/solid'
+import { ClockIcon, UserIcon } from '@heroicons/react/20/solid'
 import { getProposal } from '@/lib/proposal/sanity'
-import { ProposalDetail, ErrorDisplay, ProposalActionPanel } from '@/components/admin'
+import { ProposalDetail, ErrorDisplay, ProposalActionPanel, BackToProposalsButton } from '@/components/admin'
 import { auth } from '@/lib/auth'
 
 interface ProposalDetailPageProps {
@@ -50,13 +49,7 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
             {/* Header with Navigation and Metadata */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
-                <Link
-                  href="/admin/proposals"
-                  className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
-                >
-                  <ChevronLeftIcon className="mr-2 h-4 w-4" />
-                  Back to Proposals
-                </Link>
+                <BackToProposalsButton />
 
                 {/* Quick Actions */}
                 <div className="flex items-center space-x-3">
