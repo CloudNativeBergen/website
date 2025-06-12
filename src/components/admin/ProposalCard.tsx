@@ -1,10 +1,11 @@
 'use client'
 
 import { UserIcon, ClockIcon, StarIcon } from '@heroicons/react/24/outline'
+import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { ProposalExisting, statuses, formats, levels, languages, audiences } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
+import { Speaker, Flags } from '@/lib/speaker/types'
 import { getStatusBadgeStyle } from './utils'
 import { calculateAverageRating } from './hooks'
 import { sanityImage } from '@/lib/sanity/client'
@@ -32,6 +33,7 @@ export function ProposalCard({
 
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
+  const requiresTravelFunding = speaker?.flags?.includes(Flags.requiresTravelFunding) || false
 
   const CardContent = () => (
     <div className="flex items-start space-x-4">
@@ -68,6 +70,14 @@ export function ProposalCard({
             <span className="font-medium truncate">
               {speaker?.name || 'Unknown Speaker'}
             </span>
+            {requiresTravelFunding && (
+              <div className="ml-2 flex items-center">
+                <ExclamationTriangleIcon
+                  className="h-4 w-4 text-red-500"
+                  title="Requires travel funding"
+                />
+              </div>
+            )}
           </div>
 
           {/* Metadata in compact rows */}

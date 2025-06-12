@@ -1,9 +1,10 @@
 'use client'
 
 import { UserIcon, ClockIcon, CalendarIcon, TagIcon } from '@heroicons/react/24/outline'
+import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { PortableText } from '@portabletext/react'
 import { ProposalExisting, statuses, formats, levels, languages, audiences, Status } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
+import { Speaker, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { sanityImage } from '@/lib/sanity/client'
@@ -40,6 +41,7 @@ function getStatusBadgeStyle(status: Status) {
 export function ProposalDetail({ proposal }: ProposalDetailProps) {
   const speaker = proposal.speaker as Speaker
   const topics = proposal.topics as Topic[]
+  const requiresTravelFunding = speaker?.flags?.includes(Flags.requiresTravelFunding) || false
 
   return (
     <div className="bg-white">
@@ -132,7 +134,14 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-900">{speaker.name}</p>
+                    <div className="flex items-center space-x-2">
+                      <p className="text-sm font-medium text-gray-900">{speaker.name}</p>
+                      {requiresTravelFunding && (
+                        <div className="flex items-center" title="Requires travel funding">
+                          <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
+                        </div>
+                      )}
+                    </div>
                     {speaker.bio && (
                       <p className="mt-1 text-sm text-gray-500 line-clamp-3">{speaker.bio}</p>
                     )}

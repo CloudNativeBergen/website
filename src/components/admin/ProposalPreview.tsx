@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { XMarkIcon, UserIcon, ClockIcon, CalendarIcon, StarIcon } from '@heroicons/react/24/outline'
-import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
+import { ExclamationTriangleIcon, StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import {
   ProposalExisting,
   statuses,
@@ -18,6 +18,7 @@ import {
   Audience
 } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
+import { Flags } from '@/lib/speaker/types'
 import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
 import { calculateAverageRating } from './hooks'
@@ -59,6 +60,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
   const speaker = isSpeaker(proposal.speaker) ? proposal.speaker : null
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
+  const requiresTravelFunding = speaker?.flags?.includes(Flags.requiresTravelFunding) || false
 
   // Scroll to top when proposal changes
   useEffect(() => {
@@ -97,7 +99,14 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                 />
               )}
               <div>
-                <h3 className="text-sm font-medium text-gray-900">{speaker.name}</h3>
+                <div className="flex items-center space-x-2">
+                  <h3 className="text-sm font-medium text-gray-900">{speaker.name}</h3>
+                  {requiresTravelFunding && (
+                    <div className="flex items-center" title="Requires travel funding">
+                      <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
+                    </div>
+                  )}
+                </div>
                 {speaker.bio && (
                   <p className="text-sm text-gray-500 line-clamp-2">{speaker.bio}</p>
                 )}
