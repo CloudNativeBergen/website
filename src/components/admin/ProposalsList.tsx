@@ -55,12 +55,17 @@ export function ProposalsList({
     <div className="mx-auto max-w-7xl">
       {/* Header */}
       <div className="border-b border-gray-200 pb-5">
-        <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
-          Proposal Management
-        </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Review and manage all conference proposals ({filteredProposals.length} of {proposals.length} total)
-        </p>
+        <div className="flex items-center gap-3">
+          <DocumentTextIcon className="h-8 w-8 text-gray-400" />
+          <div>
+            <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+              Proposal Management
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Review and manage all conference proposals ({filteredProposals.length} of {proposals.length} total)
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Filter and Sort Bar */}

@@ -71,21 +71,26 @@ export default async function AdminSponsors() {
   return (
     <div className="mx-auto max-w-7xl">
       <div className="border-b border-gray-200 pb-5">
-        <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
-          Sponsor Management
-        </h1>
-        <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-gray-600">
-            Manage conference sponsors and partnerships ({sponsors.length} active sponsors)
-          </p>
-          {totalSponsorshipValue > 0 && (
-            <div className="mt-2 sm:mt-0 flex items-center space-x-2">
-              <CurrencyDollarIcon className="h-5 w-5 text-green-600" />
-              <span className="text-sm font-medium text-gray-900">
-                Total Value: {totalSponsorshipValue.toLocaleString()} {primaryCurrency}
-              </span>
+        <div className="flex items-center gap-3">
+          <BuildingOffice2Icon className="h-8 w-8 text-gray-400" />
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+              Sponsor Management
+            </h1>
+            <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-gray-600">
+                Manage conference sponsors and partnerships ({sponsors.length} active sponsors)
+              </p>
+              {totalSponsorshipValue > 0 && (
+                <div className="mt-2 sm:mt-0 flex items-center space-x-2">
+                  <CurrencyDollarIcon className="h-5 w-5 text-green-600" />
+                  <span className="text-sm font-medium text-gray-900">
+                    Total Value: {totalSponsorshipValue.toLocaleString()} {primaryCurrency}
+                  </span>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 

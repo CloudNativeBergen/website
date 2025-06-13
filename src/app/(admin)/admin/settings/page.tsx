@@ -1,6 +1,7 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 import { formats } from '@/lib/proposal/types'
+import { ErrorDisplay } from '@/components/admin'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -14,6 +15,7 @@ import {
   InformationCircleIcon,
   LinkIcon,
   EnvelopeIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
 
 function Badge({ children, variant = 'default' }: { children: React.ReactNode, variant?: 'default' | 'success' | 'warning' | 'error' }) {
@@ -33,7 +35,7 @@ function Badge({ children, variant = 'default' }: { children: React.ReactNode, v
 
 function InfoCard({ title, children, icon: Icon }: { title: string, children: React.ReactNode, icon: React.ComponentType<{ className?: string }> }) {
   return (
-    <div className="bg-white shadow rounded-lg p-6">
+    <div className="bg-white shadow-sm ring-1 ring-gray-200 rounded-lg p-6">
       <div className="flex items-center mb-4">
         <Icon className="h-5 w-5 text-gray-400 mr-2" />
         <h3 className="text-lg font-medium text-gray-900">{title}</h3>
@@ -170,7 +172,7 @@ function FieldRow({
   )
 }
 
-export default async function SettingsPage() {
+export default async function AdminSettings() {
   const { conference, error } = await getConferenceForCurrentDomain({
     organizers: true,
     schedule: true,
@@ -181,55 +183,39 @@ export default async function SettingsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
-            <div className="flex">
-              <XCircleIcon className="h-5 w-5 text-red-400" />
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error loading conference settings</h3>
-                <div className="mt-2 text-sm text-red-700">
-                  <p>{error.message}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ErrorDisplay
+        title="Error Loading Conference"
+        message={error.message}
+      />
     )
   }
 
   if (!conference) {
     return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
-            <div className="flex">
-              <InformationCircleIcon className="h-5 w-5 text-yellow-400" />
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">No conference found</h3>
-                <div className="mt-2 text-sm text-yellow-700">
-                  <p>No conference configuration found for the current domain.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ErrorDisplay
+        title="No Conference Found"
+        message="No conference configuration found for the current domain."
+      />
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold leading-tight text-gray-900">Conference Settings</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Configuration settings for {conference.title}
-          </p>
+    <div className="mx-auto max-w-7xl">
+      <div className="border-b border-gray-200 pb-5">
+        <div className="flex items-center gap-3">
+          <Cog6ToothIcon className="h-8 w-8 text-gray-400" />
+          <div>
+            <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+              Conference Settings
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Configuration settings for {conference.title}
+            </p>
+          </div>
         </div>
+      </div>
 
+      <div className="mt-8">
         {/* Settings Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Basic Information */}
