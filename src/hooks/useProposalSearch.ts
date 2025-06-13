@@ -10,18 +10,21 @@ export function useProposalSearch(proposals: ProposalExisting[]) {
 
     // Apply search query filter
     if (searchQuery) {
-      filtered = filtered.filter(proposal =>
-        proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (proposal.speaker &&
-          typeof proposal.speaker === 'object' &&
-          'name' in proposal.speaker &&
-          proposal.speaker.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      filtered = filtered.filter(
+        (proposal) =>
+          proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (proposal.speaker &&
+            typeof proposal.speaker === 'object' &&
+            'name' in proposal.speaker &&
+            proposal.speaker.name
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase())),
       )
     }
 
     // Apply status filter
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(proposal => proposal.status === statusFilter)
+      filtered = filtered.filter((proposal) => proposal.status === statusFilter)
     }
 
     return filtered
@@ -32,6 +35,6 @@ export function useProposalSearch(proposals: ProposalExisting[]) {
     searchQuery,
     setSearchQuery,
     statusFilter,
-    setStatusFilter
+    setStatusFilter,
   }
 }

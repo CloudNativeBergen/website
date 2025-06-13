@@ -9,7 +9,7 @@ export default async function AdminRootLayout({
   const session = await auth()
   if (!session || !session.speaker || !session.speaker.is_organizer) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex h-screen items-center justify-center">
         <p className="text-lg text-gray-500">Access Denied</p>
       </div>
     )

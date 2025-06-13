@@ -36,7 +36,15 @@ export default async function Speakers() {
                   <a href={`/speaker/${speaker.slug}`} className="block">
                     <img
                       alt=""
-                      src={speaker.image ? sanityImage(speaker.image).width(600).height(600).fit('crop').url() : 'https://placehold.co/600x600/e5e7eb/6b7280?text=Speaker'}
+                      src={
+                        speaker.image
+                          ? sanityImage(speaker.image)
+                              .width(600)
+                              .height(600)
+                              .fit('crop')
+                              .url()
+                          : 'https://placehold.co/600x600/e5e7eb/6b7280?text=Speaker'
+                      }
                       width={300}
                       height={300}
                       className="mx-auto h-30 w-30 rounded-full"

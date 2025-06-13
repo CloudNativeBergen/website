@@ -13,8 +13,8 @@ interface BackToProposalsButtonProps {
  * otherwise falls back to the proposals list
  */
 export function BackToProposalsButton({
-  className = "inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors cursor-pointer",
-  fallbackHref = "/admin/proposals"
+  className = 'inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors cursor-pointer',
+  fallbackHref = '/admin/proposals',
 }: BackToProposalsButtonProps) {
   const router = useRouter()
 
@@ -46,12 +46,8 @@ export function BackToProposalsButton({
   }
 
   return (
-    <button
-      onClick={handleBack}
-      className={className}
-      type="button"
-    >
-      <ChevronLeftIcon className="mr-2 h-4 w-4 cur" />
+    <button onClick={handleBack} className={className} type="button">
+      <ChevronLeftIcon className="cur mr-2 h-4 w-4" />
       Back to Proposals
     </button>
   )

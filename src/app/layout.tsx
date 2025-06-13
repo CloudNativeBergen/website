@@ -1,5 +1,12 @@
 import { type Metadata } from 'next'
-import { DM_Sans, Inter } from 'next/font/google'
+import {
+  Inter,
+  JetBrains_Mono,
+  Space_Grotesk,
+  IBM_Plex_Sans,
+  IBM_Plex_Mono,
+  Bricolage_Grotesque,
+} from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import clsx from 'clsx'
@@ -14,11 +21,36 @@ const inter = Inter({
   variable: '--font-inter',
 })
 
-const dmSans = DM_Sans({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
   display: 'swap',
-  variable: '--font-dm-sans',
+  variable: '--font-jetbrains',
+})
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-space-grotesk',
+})
+
+const ibmPlexSans = IBM_Plex_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-ibm-plex-sans',
+})
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-ibm-plex-mono',
+})
+
+const bricolageGrotesque = Bricolage_Grotesque({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-bricolage',
 })
 
 export const metadata: Metadata = {
@@ -53,7 +85,11 @@ export default async function RootLayout({
       className={clsx(
         'h-full bg-white antialiased',
         inter.variable,
-        dmSans.variable,
+        jetbrainsMono.variable,
+        spaceGrotesk.variable,
+        ibmPlexSans.variable,
+        ibmPlexMono.variable,
+        bricolageGrotesque.variable,
       )}
     >
       <body className="flex min-h-full">

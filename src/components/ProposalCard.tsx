@@ -169,7 +169,15 @@ export function ProposalCard({
         {proposal.speaker && 'image' in proposal.speaker ? (
           <img
             className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-300"
-            src={proposal.speaker.image ? sanityImage(proposal.speaker.image).width(80).height(80).fit('crop').url() : 'https://placehold.co/80x80/e5e7eb/6b7280?text=Speaker'}
+            src={
+              proposal.speaker.image
+                ? sanityImage(proposal.speaker.image)
+                    .width(80)
+                    .height(80)
+                    .fit('crop')
+                    .url()
+                : 'https://placehold.co/80x80/e5e7eb/6b7280?text=Speaker'
+            }
             alt="Speaker Image"
             width={40}
             height={40}

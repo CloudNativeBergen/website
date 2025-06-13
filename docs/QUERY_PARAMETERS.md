@@ -7,22 +7,27 @@ The admin proposal management interface now supports URL query parameters for al
 ### Filter Parameters
 
 - **`status`** - Comma-separated list of proposal statuses
+
   - Valid values: `submitted`, `accepted`, `confirmed`, `declined`, `waitlisted`
   - Example: `?status=submitted,accepted`
 
 - **`format`** - Comma-separated list of presentation formats
+
   - Valid values: `talk`, `lightning_talk`, `workshop`, `panel`
   - Example: `?format=talk,workshop`
 
 - **`level`** - Comma-separated list of experience levels
+
   - Valid values: `beginner`, `intermediate`, `advanced`
   - Example: `?level=beginner,intermediate`
 
 - **`language`** - Comma-separated list of languages
+
   - Valid values: `english`, `norwegian`
   - Example: `?language=english`
 
 - **`audience`** - Comma-separated list of target audiences
+
   - Valid values: `developers`, `architects`, `devops`, `managers`, `students`
   - Example: `?audience=developers,architects`
 
@@ -33,6 +38,7 @@ The admin proposal management interface now supports URL query parameters for al
 ### Sort Parameters
 
 - **`sortBy`** - Field to sort by
+
   - Valid values: `title`, `status`, `created`, `speaker`, `rating`
   - Example: `?sortBy=rating`
 
@@ -81,6 +87,7 @@ The query parameter functionality is implemented using:
 ## Browser Support
 
 This feature requires modern browser support for:
+
 - URL API
 - Next.js client-side routing
 - JavaScript enabled

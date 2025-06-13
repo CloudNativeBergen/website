@@ -2,7 +2,14 @@
 
 import { useMemo, useState, useCallback } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
-import { ProposalExisting, Status, Format, Level, Language, Audience } from '@/lib/proposal/types'
+import {
+  ProposalExisting,
+  Status,
+  Format,
+  Level,
+  Language,
+  Audience,
+} from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { Review } from '@/lib/review/types'
 import { FilterState, ReviewStatus } from './ProposalsFilter'
@@ -16,9 +23,17 @@ export function calculateAverageRating(proposal: ProposalExisting): number {
   }
 
   const totalScores = proposal.reviews.reduce((acc, review) => {
-    const reviewObj = typeof review === 'object' && 'score' in review ? review as Review : null
+    const reviewObj =
+      typeof review === 'object' && 'score' in review
+        ? (review as Review)
+        : null
     if (reviewObj && reviewObj.score) {
-      return acc + reviewObj.score.content + reviewObj.score.relevance + reviewObj.score.speaker
+      return (
+        acc +
+        reviewObj.score.content +
+        reviewObj.score.relevance +
+        reviewObj.score.speaker
+      )
     }
     return acc
   }, 0)
@@ -31,16 +46,26 @@ export function calculateAverageRating(proposal: ProposalExisting): number {
  * Custom hook for filtering and sorting proposals
  * Separates business logic from UI components
  */
-export function useProposalFiltering(proposals: ProposalExisting[], filters: FilterState, currentUserId?: string) {
+export function useProposalFiltering(
+  proposals: ProposalExisting[],
+  filters: FilterState,
+  currentUserId?: string,
+) {
   return useMemo(() => {
-    const filtered = proposals.filter(proposal => {
+    const filtered = proposals.filter((proposal) => {
       // Filter by status
-      if (filters.status.length > 0 && !filters.status.includes(proposal.status)) {
+      if (
+        filters.status.length > 0 &&
+        !filters.status.includes(proposal.status)
+      ) {
         return false
       }
 
       // Filter by format
-      if (filters.format.length > 0 && !filters.format.includes(proposal.format)) {
+      if (
+        filters.format.length > 0 &&
+        !filters.format.includes(proposal.format)
+      ) {
         return false
       }
 
@@ -50,13 +75,18 @@ export function useProposalFiltering(proposals: ProposalExisting[], filters: Fil
       }
 
       // Filter by language
-      if (filters.language.length > 0 && !filters.language.includes(proposal.language)) {
+      if (
+        filters.language.length > 0 &&
+        !filters.language.includes(proposal.language)
+      ) {
         return false
       }
 
       // Filter by audience
       if (filters.audience.length > 0) {
-        const hasMatchingAudience = proposal.audiences?.some(aud => filters.audience.includes(aud))
+        const hasMatchingAudience = proposal.audiences?.some((aud) =>
+          filters.audience.includes(aud),
+        )
         if (!hasMatchingAudience) {
           return false
         }
@@ -64,15 +94,20 @@ export function useProposalFiltering(proposals: ProposalExisting[], filters: Fil
 
       // Filter by review status (only if currentUserId is provided)
       if (currentUserId && filters.reviewStatus !== ReviewStatus.all) {
-        const hasUserReview = proposal.reviews?.some(review => {
-          const reviewObj = typeof review === 'object' && 'reviewer' in review ? review as Review : null
+        const hasUserReview = proposal.reviews?.some((review) => {
+          const reviewObj =
+            typeof review === 'object' && 'reviewer' in review
+              ? (review as Review)
+              : null
           if (!reviewObj) return false
 
-          const reviewerId = typeof reviewObj.reviewer === 'object' && '_id' in reviewObj.reviewer
-            ? reviewObj.reviewer._id
-            : typeof reviewObj.reviewer === 'string'
-              ? reviewObj.reviewer
-              : null
+          const reviewerId =
+            typeof reviewObj.reviewer === 'object' &&
+            '_id' in reviewObj.reviewer
+              ? reviewObj.reviewer._id
+              : typeof reviewObj.reviewer === 'string'
+                ? reviewObj.reviewer
+                : null
 
           return reviewerId === currentUserId
         })
@@ -103,8 +138,16 @@ export function useProposalFiltering(proposals: ProposalExisting[], filters: Fil
           bValue = b.status
           break
         case 'speaker':
-          aValue = (typeof a.speaker === 'object' && a.speaker && 'name' in a.speaker ? (a.speaker as Speaker).name : 'Unknown').toLowerCase()
-          bValue = (typeof b.speaker === 'object' && b.speaker && 'name' in b.speaker ? (b.speaker as Speaker).name : 'Unknown').toLowerCase()
+          aValue = (
+            typeof a.speaker === 'object' && a.speaker && 'name' in a.speaker
+              ? (a.speaker as Speaker).name
+              : 'Unknown'
+          ).toLowerCase()
+          bValue = (
+            typeof b.speaker === 'object' && b.speaker && 'name' in b.speaker
+              ? (b.speaker as Speaker).name
+              : 'Unknown'
+          ).toLowerCase()
           break
         case 'rating':
           aValue = calculateAverageRating(a)
@@ -135,32 +178,41 @@ export function useProposalFiltering(proposals: ProposalExisting[], filters: Fil
 export function useFilterState(initialFilters: FilterState) {
   const [filters, setFilters] = useState<FilterState>(initialFilters)
 
-  const toggleFilter = (filterType: keyof FilterState, value: Status | Format | Level | Language | Audience) => {
-    setFilters(prev => {
-      const currentValues = prev[filterType] as (Status | Format | Level | Language | Audience)[]
+  const toggleFilter = (
+    filterType: keyof FilterState,
+    value: Status | Format | Level | Language | Audience,
+  ) => {
+    setFilters((prev) => {
+      const currentValues = prev[filterType] as (
+        | Status
+        | Format
+        | Level
+        | Language
+        | Audience
+      )[]
       const newValues = currentValues.includes(value)
-        ? currentValues.filter(v => v !== value)
+        ? currentValues.filter((v) => v !== value)
         : [...currentValues, value]
 
       return {
         ...prev,
-        [filterType]: newValues
+        [filterType]: newValues,
       }
     })
   }
 
   const setReviewStatus = (reviewStatus: ReviewStatus) => {
-    setFilters(prev => ({ ...prev, reviewStatus }))
+    setFilters((prev) => ({ ...prev, reviewStatus }))
   }
 
   const setSortBy = (sortBy: FilterState['sortBy']) => {
-    setFilters(prev => ({ ...prev, sortBy }))
+    setFilters((prev) => ({ ...prev, sortBy }))
   }
 
   const toggleSortOrder = () => {
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
-      sortOrder: prev.sortOrder === 'asc' ? 'desc' : 'asc'
+      sortOrder: prev.sortOrder === 'asc' ? 'desc' : 'asc',
     }))
   }
 
@@ -173,17 +225,33 @@ export function useFilterState(initialFilters: FilterState) {
       audience: [],
       reviewStatus: ReviewStatus.all,
       sortBy: 'created',
-      sortOrder: 'desc'
+      sortOrder: 'desc',
     })
-  }  // Count active filters, excluding default status filters
-  const defaultStatusFilters = [Status.submitted, Status.accepted, Status.confirmed]
-  const additionalStatusFilters = filters.status.filter(status => !defaultStatusFilters.includes(status))
-  const removedDefaultStatusFilters = defaultStatusFilters.filter(status => !filters.status.includes(status))
-  const statusFilterCount = additionalStatusFilters.length + removedDefaultStatusFilters.length
+  } // Count active filters, excluding default status filters
+  const defaultStatusFilters = [
+    Status.submitted,
+    Status.accepted,
+    Status.confirmed,
+  ]
+  const additionalStatusFilters = filters.status.filter(
+    (status) => !defaultStatusFilters.includes(status),
+  )
+  const removedDefaultStatusFilters = defaultStatusFilters.filter(
+    (status) => !filters.status.includes(status),
+  )
+  const statusFilterCount =
+    additionalStatusFilters.length + removedDefaultStatusFilters.length
 
-  const reviewStatusFilterCount = filters.reviewStatus !== ReviewStatus.all ? 1 : 0
+  const reviewStatusFilterCount =
+    filters.reviewStatus !== ReviewStatus.all ? 1 : 0
 
-  const activeFilterCount = statusFilterCount + filters.format.length + filters.level.length + filters.language.length + filters.audience.length + reviewStatusFilterCount
+  const activeFilterCount =
+    statusFilterCount +
+    filters.format.length +
+    filters.level.length +
+    filters.language.length +
+    filters.audience.length +
+    reviewStatusFilterCount
 
   return {
     filters,
@@ -192,7 +260,7 @@ export function useFilterState(initialFilters: FilterState) {
     setSortBy,
     toggleSortOrder,
     clearAllFilters,
-    activeFilterCount
+    activeFilterCount,
   }
 }
 
@@ -210,50 +278,76 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     const urlFilters = parseFiltersFromURL(searchParams)
     return {
       ...initialFilters,
-      ...urlFilters
+      ...urlFilters,
     }
   })
 
   // Update URL when filters change
-  const updateURL = useCallback((newFilters: FilterState) => {
-    const params = serializeFiltersToURL(newFilters, initialFilters)
-    const newURL = params.toString() ? `${pathname}?${params.toString()}` : pathname
-    router.replace(newURL, { scroll: false })
-  }, [router, pathname, initialFilters])
+  const updateURL = useCallback(
+    (newFilters: FilterState) => {
+      const params = serializeFiltersToURL(newFilters, initialFilters)
+      const newURL = params.toString()
+        ? `${pathname}?${params.toString()}`
+        : pathname
+      router.replace(newURL, { scroll: false })
+    },
+    [router, pathname, initialFilters],
+  )
 
   // Update filters and URL
-  const updateFilters = useCallback((newFilters: FilterState) => {
-    setFilters(newFilters)
-    updateURL(newFilters)
-  }, [updateURL])
+  const updateFilters = useCallback(
+    (newFilters: FilterState) => {
+      setFilters(newFilters)
+      updateURL(newFilters)
+    },
+    [updateURL],
+  )
 
-  const toggleFilter = useCallback((filterType: keyof FilterState, value: Status | Format | Level | Language | Audience) => {
-    const newFilters = {
-      ...filters,
-      [filterType]: (() => {
-        const currentValues = filters[filterType] as (Status | Format | Level | Language | Audience)[]
-        return currentValues.includes(value)
-          ? currentValues.filter(v => v !== value)
-          : [...currentValues, value]
-      })()
-    }
-    updateFilters(newFilters)
-  }, [filters, updateFilters])
+  const toggleFilter = useCallback(
+    (
+      filterType: keyof FilterState,
+      value: Status | Format | Level | Language | Audience,
+    ) => {
+      const newFilters = {
+        ...filters,
+        [filterType]: (() => {
+          const currentValues = filters[filterType] as (
+            | Status
+            | Format
+            | Level
+            | Language
+            | Audience
+          )[]
+          return currentValues.includes(value)
+            ? currentValues.filter((v) => v !== value)
+            : [...currentValues, value]
+        })(),
+      }
+      updateFilters(newFilters)
+    },
+    [filters, updateFilters],
+  )
 
-  const setReviewStatus = useCallback((reviewStatus: ReviewStatus) => {
-    const newFilters = { ...filters, reviewStatus }
-    updateFilters(newFilters)
-  }, [filters, updateFilters])
+  const setReviewStatus = useCallback(
+    (reviewStatus: ReviewStatus) => {
+      const newFilters = { ...filters, reviewStatus }
+      updateFilters(newFilters)
+    },
+    [filters, updateFilters],
+  )
 
-  const setSortBy = useCallback((sortBy: FilterState['sortBy']) => {
-    const newFilters = { ...filters, sortBy }
-    updateFilters(newFilters)
-  }, [filters, updateFilters])
+  const setSortBy = useCallback(
+    (sortBy: FilterState['sortBy']) => {
+      const newFilters = { ...filters, sortBy }
+      updateFilters(newFilters)
+    },
+    [filters, updateFilters],
+  )
 
   const toggleSortOrder = useCallback(() => {
     const newFilters: FilterState = {
       ...filters,
-      sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc'
+      sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc',
     }
     updateFilters(newFilters)
   }, [filters, updateFilters])
@@ -263,14 +357,30 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
   }, [initialFilters, updateFilters])
 
   // Count active filters, excluding default status filters
-  const defaultStatusFilters = [Status.submitted, Status.accepted, Status.confirmed]
-  const additionalStatusFilters = filters.status.filter(status => !defaultStatusFilters.includes(status))
-  const removedDefaultStatusFilters = defaultStatusFilters.filter(status => !filters.status.includes(status))
-  const statusFilterCount = additionalStatusFilters.length + removedDefaultStatusFilters.length
+  const defaultStatusFilters = [
+    Status.submitted,
+    Status.accepted,
+    Status.confirmed,
+  ]
+  const additionalStatusFilters = filters.status.filter(
+    (status) => !defaultStatusFilters.includes(status),
+  )
+  const removedDefaultStatusFilters = defaultStatusFilters.filter(
+    (status) => !filters.status.includes(status),
+  )
+  const statusFilterCount =
+    additionalStatusFilters.length + removedDefaultStatusFilters.length
 
-  const reviewStatusFilterCount = filters.reviewStatus !== ReviewStatus.all ? 1 : 0
+  const reviewStatusFilterCount =
+    filters.reviewStatus !== ReviewStatus.all ? 1 : 0
 
-  const activeFilterCount = statusFilterCount + filters.format.length + filters.level.length + filters.language.length + filters.audience.length + reviewStatusFilterCount
+  const activeFilterCount =
+    statusFilterCount +
+    filters.format.length +
+    filters.level.length +
+    filters.language.length +
+    filters.audience.length +
+    reviewStatusFilterCount
 
   return {
     filters,
@@ -279,7 +389,7 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     setSortBy,
     toggleSortOrder,
     clearAllFilters,
-    activeFilterCount
+    activeFilterCount,
   }
 }
 
@@ -290,9 +400,14 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
 /**
  * Parse array values from URL search params
  */
-function parseArrayParam<T extends string>(param: string | null, validValues: T[]): T[] {
+function parseArrayParam<T extends string>(
+  param: string | null,
+  validValues: T[],
+): T[] {
   if (!param) return []
-  return param.split(',').filter((value): value is T => validValues.includes(value as T))
+  return param
+    .split(',')
+    .filter((value): value is T => validValues.includes(value as T))
 }
 
 /**
@@ -305,7 +420,9 @@ function serializeArrayParam<T extends string>(values: T[]): string | null {
 /**
  * Parse FilterState from URL search parameters
  */
-function parseFiltersFromURL(searchParams: URLSearchParams): Partial<FilterState> {
+function parseFiltersFromURL(
+  searchParams: URLSearchParams,
+): Partial<FilterState> {
   const filters: Partial<FilterState> = {}
 
   // Parse status filter
@@ -340,13 +457,19 @@ function parseFiltersFromURL(searchParams: URLSearchParams): Partial<FilterState
 
   // Parse review status
   const reviewStatusParam = searchParams.get('reviewStatus')
-  if (reviewStatusParam && Object.values(ReviewStatus).includes(reviewStatusParam as ReviewStatus)) {
+  if (
+    reviewStatusParam &&
+    Object.values(ReviewStatus).includes(reviewStatusParam as ReviewStatus)
+  ) {
     filters.reviewStatus = reviewStatusParam as ReviewStatus
   }
 
   // Parse sort options
   const sortByParam = searchParams.get('sortBy')
-  if (sortByParam && ['title', 'status', 'created', 'speaker', 'rating'].includes(sortByParam)) {
+  if (
+    sortByParam &&
+    ['title', 'status', 'created', 'speaker', 'rating'].includes(sortByParam)
+  ) {
     filters.sortBy = sortByParam as FilterState['sortBy']
   }
 
@@ -361,12 +484,22 @@ function parseFiltersFromURL(searchParams: URLSearchParams): Partial<FilterState
 /**
  * Serialize FilterState to URL search parameters
  */
-function serializeFiltersToURL(filters: FilterState, defaultFilters: FilterState): URLSearchParams {
+function serializeFiltersToURL(
+  filters: FilterState,
+  defaultFilters: FilterState,
+): URLSearchParams {
   const params = new URLSearchParams()
 
   // Only add parameters that differ from defaults
-  const defaultStatusFilters = [Status.submitted, Status.accepted, Status.confirmed]
-  if (JSON.stringify([...filters.status].sort()) !== JSON.stringify([...defaultStatusFilters].sort())) {
+  const defaultStatusFilters = [
+    Status.submitted,
+    Status.accepted,
+    Status.confirmed,
+  ]
+  if (
+    JSON.stringify([...filters.status].sort()) !==
+    JSON.stringify([...defaultStatusFilters].sort())
+  ) {
     const statusParam = serializeArrayParam(filters.status)
     if (statusParam) params.set('status', statusParam)
   }

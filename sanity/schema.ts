@@ -10,5 +10,14 @@ import topic from './schemaTypes/topic'
 import review from './schemaTypes/review'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [conference, speaker, schedule, talk, review, sponsor, sponsorTier, topic],
+  types: [
+    conference,
+    speaker,
+    schedule,
+    talk,
+    review,
+    sponsor,
+    sponsorTier,
+    topic,
+  ],
 }

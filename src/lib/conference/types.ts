@@ -1,7 +1,7 @@
-import { Reference, TypedObject } from "sanity"
-import { Format, ProposalExisting } from "@/lib/proposal/types"
-import { Speaker } from "@/lib/speaker/types"
-import { Topic } from "@/lib/topic/types"
+import { Reference, TypedObject } from 'sanity'
+import { Format, ProposalExisting } from '@/lib/proposal/types'
+import { Speaker } from '@/lib/speaker/types'
+import { Topic } from '@/lib/topic/types'
 
 export interface ConferenceProposals {
   conference: Conference | Reference

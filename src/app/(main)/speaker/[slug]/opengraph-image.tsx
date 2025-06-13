@@ -12,8 +12,12 @@ export const size = {
 }
 export const contentType = 'image/png'
 
-export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export default async function Image({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
   const { speaker, talks, err } = await getPublicSpeaker(slug)
 
   if (err || !speaker || !talks || talks.length === 0) {
@@ -54,7 +58,15 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         </div>
         <div style={{ display: 'flex' }}>
           <img
-            src={speaker.image ? sanityImage(speaker.image).width(800).height(800).fit('crop').url() : 'https://placehold.co/800x800/e5e7eb/6b7280?text=Speaker'}
+            src={
+              speaker.image
+                ? sanityImage(speaker.image)
+                    .width(800)
+                    .height(800)
+                    .fit('crop')
+                    .url()
+                : 'https://placehold.co/800x800/e5e7eb/6b7280?text=Speaker'
+            }
             alt={alt}
             height={400}
             style={{ marginRight: 40, marginBottom: 50, borderRadius: '50%' }}

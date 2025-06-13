@@ -21,7 +21,8 @@ export default async function CFP() {
   const workshopFormats = conference.formats
     .filter((formatId) => formatId.startsWith('workshop_'))
     .map((formatId) => formats.get(formatId))
-  const hasWorkshops = Array.isArray(workshopFormats) && workshopFormats.length > 0;
+  const hasWorkshops =
+    Array.isArray(workshopFormats) && workshopFormats.length > 0
 
   const datesToRemember = [
     {
@@ -99,14 +100,20 @@ export default async function CFP() {
             {hasWorkshops && (
               <div className="mt-10 rounded-xl bg-gradient-to-br from-blue-100/80 to-blue-200/80 p-1 shadow-lg">
                 <div className="rounded-lg bg-white px-6 py-6 sm:p-8">
-                  <h2 className="font-display text-3xl font-semibold tracking-tight text-blue-700 sm:text-4xl mb-2 flex items-center gap-2">
+                  <h2 className="mb-2 flex items-center gap-2 font-display text-3xl font-semibold tracking-tight text-blue-700 sm:text-4xl">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-blue-600">
-                      <ClipboardDocumentCheckIcon className="h-5 w-5" aria-hidden="true" />
+                      <ClipboardDocumentCheckIcon
+                        className="h-5 w-5"
+                        aria-hidden="true"
+                      />
                     </span>
                     Hands-on Workshops
                   </h2>
                   <p className="mt-2 text-lg text-blue-900">
-                    This conference also includes hands-on workshops led by experienced instructors. These sessions are designed to provide practical, in-depth learning opportunities. If you have a workshop idea, we encourage you to submit a proposal.
+                    This conference also includes hands-on workshops led by
+                    experienced instructors. These sessions are designed to
+                    provide practical, in-depth learning opportunities. If you
+                    have a workshop idea, we encourage you to submit a proposal.
                   </p>
                   <ul className="mt-4 list-disc pl-6 text-base text-blue-900">
                     {workshopFormats.map((format, idx) => (
@@ -134,8 +141,8 @@ export default async function CFP() {
                 environment for everyone.
               </p>
               <p>
-                We are especially interested in content that covers the following
-                topics:
+                We are especially interested in content that covers the
+                following topics:
               </p>
               <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
                 {(() => {

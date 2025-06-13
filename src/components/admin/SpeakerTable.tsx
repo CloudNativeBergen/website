@@ -1,8 +1,18 @@
 'use client'
 
 import { Speaker } from '@/lib/speaker/types'
-import { ProposalExisting, Status, Format, languages, formats } from '@/lib/proposal/types'
-import { EnvelopeIcon, UserIcon, ClipboardIcon } from '@heroicons/react/24/outline'
+import {
+  ProposalExisting,
+  Status,
+  Format,
+  languages,
+  formats,
+} from '@/lib/proposal/types'
+import {
+  EnvelopeIcon,
+  UserIcon,
+  ClipboardIcon,
+} from '@heroicons/react/24/outline'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { getStatusBadgeStyle } from './utils'
 import { useState } from 'react'
@@ -38,7 +48,9 @@ const StatusBadge = ({ status }: { status: Status }) => {
   const Icon = status === Status.confirmed ? CheckBadgeIcon : ClockIcon
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${getStatusBadgeStyle(status)}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${getStatusBadgeStyle(status)}`}
+    >
       <Icon className="h-3 w-3" />
       {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
@@ -61,7 +73,7 @@ const CopyEmailButton = ({ email }: { email: string }) => {
   return (
     <button
       onClick={copyToClipboard}
-      className="ml-2 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+      className="ml-2 p-1 text-gray-400 transition-colors hover:text-gray-600"
       title={copied ? 'Copied!' : 'Copy email'}
     >
       {copied ? (
@@ -78,9 +90,12 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
     return (
       <div className="rounded-lg bg-gray-50 p-8 text-center">
         <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900">No speakers found</h3>
+        <h3 className="mt-2 text-sm font-medium text-gray-900">
+          No speakers found
+        </h3>
         <p className="mt-1 text-sm text-gray-500">
-          No speakers with accepted or confirmed talks were found for this conference.
+          No speakers with accepted or confirmed talks were found for this
+          conference.
         </p>
       </div>
     )
@@ -93,19 +108,19 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
           <tr>
             <th
               scope="col"
-              className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
             >
               Speaker
             </th>
             <th
               scope="col"
-              className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
             >
               Contact
             </th>
             <th
               scope="col"
-              className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"
+              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
             >
               Talks
             </th>
@@ -115,7 +130,7 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
           {speakers.map((speaker) => (
             <tr key={speaker._id} className="hover:bg-gray-50">
               <td className="px-4 py-3">
-                <div className="flex items-center min-w-0">
+                <div className="flex min-w-0 items-center">
                   <div className="h-8 w-8 flex-shrink-0">
                     {speaker.image ? (
                       <img
@@ -124,27 +139,29 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
                         alt={speaker.name}
                       />
                     ) : (
-                      <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300">
                         <UserIcon className="h-5 w-5 text-gray-600" />
                       </div>
                     )}
                   </div>
                   <div className="ml-3 min-w-0 flex-1">
-                    <div className="text-sm font-medium text-gray-900 truncate">
+                    <div className="truncate text-sm font-medium text-gray-900">
                       {speaker.name}
                     </div>
                     {speaker.title && (
-                      <div className="text-xs text-gray-500 truncate">{speaker.title}</div>
+                      <div className="truncate text-xs text-gray-500">
+                        {speaker.title}
+                      </div>
                     )}
                   </div>
                 </div>
               </td>
               <td className="px-4 py-3">
-                <div className="flex items-center text-sm text-gray-900 min-w-0">
-                  <EnvelopeIcon className="mr-2 h-4 w-4 text-gray-400 flex-shrink-0" />
+                <div className="flex min-w-0 items-center text-sm text-gray-900">
+                  <EnvelopeIcon className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400" />
                   <a
                     href={`mailto:${speaker.email}`}
-                    className="hover:text-blue-600 truncate"
+                    className="truncate hover:text-blue-600"
                     title={speaker.email}
                   >
                     {speaker.email}
@@ -155,16 +172,23 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
               <td className="px-4 py-3">
                 <div className="space-y-1">
                   {speaker.proposals.map((proposal) => (
-                    <div key={proposal._id} className="flex items-center gap-2 text-xs">
+                    <div
+                      key={proposal._id}
+                      className="flex items-center gap-2 text-xs"
+                    >
                       <StatusBadge status={proposal.status} />
-                      <span className="text-gray-900 truncate max-w-[200px]" title={proposal.title}>
+                      <span
+                        className="max-w-[200px] truncate text-gray-900"
+                        title={proposal.title}
+                      >
                         {proposal.title}
                       </span>
                       <span
-                        className="text-gray-500 flex-shrink-0"
+                        className="flex-shrink-0 text-gray-500"
                         title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
                       >
-                        {getCompactFormat(proposal.format)} • {languages.get(proposal.language)}
+                        {getCompactFormat(proposal.format)} •{' '}
+                        {languages.get(proposal.language)}
                       </span>
                     </div>
                   ))}

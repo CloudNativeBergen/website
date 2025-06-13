@@ -7,22 +7,21 @@ export const dynamic = 'force-dynamic'
 
 export const GET = auth(async (req: NextAuthRequest) => {
   if (!req.auth || !req.auth.speaker || !req.auth.speaker._id) {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 401 }
-    )
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const reviewerId = req.auth.speaker._id
-  const currentProposalId = req.nextUrl.searchParams.get('currentProposalId') || undefined
+  const currentProposalId =
+    req.nextUrl.searchParams.get('currentProposalId') || undefined
 
   // Get the conference from the current domain
-  const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
+  const { conference, error: conferenceError } =
+    await getConferenceForCurrentDomain()
 
   if (conferenceError || !conference) {
     return NextResponse.json(
       { error: conferenceError?.message || 'Conference not found' },
-      { status: 404 }
+      { status: 404 },
     )
   }
 
@@ -30,13 +29,13 @@ export const GET = auth(async (req: NextAuthRequest) => {
   const { nextProposal, error } = await fetchNextUnreviewedProposal({
     conferenceId: conference._id,
     reviewerId,
-    currentProposalId
+    currentProposalId,
   })
 
   if (error) {
     return NextResponse.json(
       { error: 'Failed to fetch next unreviewed proposal' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 

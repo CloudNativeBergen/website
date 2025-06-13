@@ -42,7 +42,7 @@ export async function sendAcceptRejectNotification({
   action: Action
   speaker: Speaker
   proposal: ProposalExisting
-  event: { location: string; date: string; name: string, url: string }
+  event: { location: string; date: string; name: string; url: string }
   comment: string
 }): Promise<[sgMail.ClientResponse, object]> {
   const templateId = getTemplate(action)
@@ -64,7 +64,7 @@ export async function sendAcceptRejectNotification({
         confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${proposal._id}`,
         comment,
       },
-      event
+      event,
     },
   }
 

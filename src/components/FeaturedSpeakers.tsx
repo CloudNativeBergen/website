@@ -45,7 +45,15 @@ export function FeaturedSpeakers({
                     <>
                       <img
                         className="mx-auto h-56 w-56 rounded-full object-contain"
-                        src={person.image ? sanityImage(person.image).width(448).height(448).fit('crop').url() : 'https://placehold.co/448x448/e5e7eb/6b7280?text=Speaker'}
+                        src={
+                          person.image
+                            ? sanityImage(person.image)
+                                .width(448)
+                                .height(448)
+                                .fit('crop')
+                                .url()
+                            : 'https://placehold.co/448x448/e5e7eb/6b7280?text=Speaker'
+                        }
                         alt={person.name}
                         width={224}
                         height={224}
@@ -59,7 +67,15 @@ export function FeaturedSpeakers({
                     <a href={`/speaker/${person.slug}`}>
                       <img
                         className="mx-auto h-56 w-56 rounded-full object-contain"
-                        src={person.image ? sanityImage(person.image).width(448).height(448).fit('crop').url() : 'https://placehold.co/448x448/e5e7eb/6b7280?text=Speaker'}
+                        src={
+                          person.image
+                            ? sanityImage(person.image)
+                                .width(448)
+                                .height(448)
+                                .fit('crop')
+                                .url()
+                            : 'https://placehold.co/448x448/e5e7eb/6b7280?text=Speaker'
+                        }
                         alt={person.name}
                         width={224}
                         height={224}

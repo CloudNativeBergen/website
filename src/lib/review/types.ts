@@ -1,5 +1,5 @@
-import { Reference } from "sanity"
-import { Speaker } from "../speaker/types"
+import { Reference } from 'sanity'
+import { Speaker } from '../speaker/types'
 
 export type ReviewBase = {
   comment: string

@@ -246,7 +246,7 @@ export async function getFeatured(): Promise<{
 
 export async function getSpeakers(
   conferenceId?: string,
-  statuses: Status[] = [Status.accepted, Status.confirmed]
+  statuses: Status[] = [Status.accepted, Status.confirmed],
 ): Promise<{
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
   err: Error | null
@@ -255,8 +255,10 @@ export async function getSpeakers(
   let err = null
 
   try {
-    const conferenceFilter = conferenceId ? `&& conference._ref == $conferenceId` : ''
-    const statusFilter = statuses.map(status => `"${status}"`).join(', ')
+    const conferenceFilter = conferenceId
+      ? `&& conference._ref == $conferenceId`
+      : ''
+    const statusFilter = statuses.map((status) => `"${status}"`).join(', ')
 
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
       ...,
@@ -286,7 +288,7 @@ export async function getSpeakers(
     speakers = await clientRead.fetch(
       query,
       conferenceId ? { conferenceId } : {},
-      { cache: 'no-store' }
+      { cache: 'no-store' },
     )
   } catch (error) {
     err = error as Error

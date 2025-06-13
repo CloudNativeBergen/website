@@ -228,7 +228,11 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                                 loading="lazy"
                                 src={
                                   speaker.image
-                                    ? sanityImage(speaker.image).width(600).height(600).fit('crop').url()
+                                    ? sanityImage(speaker.image)
+                                        .width(600)
+                                        .height(600)
+                                        .fit('crop')
+                                        .url()
                                     : 'https://placehold.co/600x600/e5e7eb/6b7280?text=Speaker'
                                 }
                                 width={300}

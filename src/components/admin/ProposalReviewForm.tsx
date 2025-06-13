@@ -19,13 +19,19 @@ import clsx from 'clsx'
 export function ProposalReviewForm({
   proposalId,
   existingReview,
-  onReviewSubmit
+  onReviewSubmit,
 }: ProposalReviewFormProps) {
   const router = useRouter()
-  const [ratings, setRatings] = useState<{ content: number; relevance: number; speaker: number }>(
-    existingReview?.score || { content: 0, relevance: 0, speaker: 0 }
-  )
-  const [hovered, setHovered] = useState<{ content: number; relevance: number; speaker: number }>({
+  const [ratings, setRatings] = useState<{
+    content: number
+    relevance: number
+    speaker: number
+  }>(existingReview?.score || { content: 0, relevance: 0, speaker: 0 })
+  const [hovered, setHovered] = useState<{
+    content: number
+    relevance: number
+    speaker: number
+  }>({
     content: 0,
     relevance: 0,
     speaker: 0,
@@ -62,7 +68,8 @@ export function ProposalReviewForm({
   const handleNextProposal = async () => {
     setIsLoadingNext(true)
     try {
-      const { nextProposal, error } = await fetchNextUnreviewedProposal(proposalId)
+      const { nextProposal, error } =
+        await fetchNextUnreviewedProposal(proposalId)
 
       if (error) {
         console.error('Error fetching next unreviewed proposal:', error)
@@ -93,18 +100,22 @@ export function ProposalReviewForm({
   ]
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h3 className="text-lg font-semibold text-gray-900 mb-3">
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-lg font-semibold text-gray-900">
         {existingReview ? 'Update My Review' : 'Add My Review'}
       </h3>
 
       <form onSubmit={submitHandler} className="space-y-4">
         {/* Rating Categories */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium text-gray-700 sr-only">Scores</label>
+          <label className="sr-only block text-sm font-medium text-gray-700">
+            Scores
+          </label>
           {scoreCategories.map(({ key, label }) => (
             <div key={key} className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 w-24 flex-shrink-0">{label}</span>
+              <span className="w-24 flex-shrink-0 text-sm font-medium text-gray-700">
+                {label}
+              </span>
               <div className="flex items-center space-x-2">
                 <div className="flex items-center space-x-1">
                   {[1, 2, 3, 4, 5].map((star) => (
@@ -112,10 +123,11 @@ export function ProposalReviewForm({
                       key={star}
                       type="button"
                       className={clsx(
-                        'p-0.5 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500',
-                        (hovered[key as keyof typeof hovered] || ratings[key as keyof typeof ratings]) >= star
+                        'rounded p-0.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none',
+                        (hovered[key as keyof typeof hovered] ||
+                          ratings[key as keyof typeof ratings]) >= star
                           ? 'text-yellow-400'
-                          : 'text-gray-300 hover:text-yellow-300'
+                          : 'text-gray-300 hover:text-yellow-300',
                       )}
                       onMouseEnter={() => {
                         setHovered((h) => ({ ...h, [key]: star }))
@@ -131,7 +143,7 @@ export function ProposalReviewForm({
                     </button>
                   ))}
                 </div>
-                <span className="text-sm text-gray-500 w-8 text-right">
+                <span className="w-8 text-right text-sm text-gray-500">
                   {ratings[key as keyof typeof ratings]}/5
                 </span>
               </div>
@@ -141,7 +153,10 @@ export function ProposalReviewForm({
 
         {/* Comment */}
         <div>
-          <label htmlFor="comment" className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="comment"
+            className="mb-1 block text-sm font-medium text-gray-700"
+          >
             Comment
           </label>
           <textarea
@@ -161,18 +176,24 @@ export function ProposalReviewForm({
             type="button"
             onClick={handleNextProposal}
             disabled={isLoadingNext}
-            className="inline-flex items-center gap-x-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-x-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ArrowRightIcon className="h-4 w-4" />
             {isLoadingNext ? 'Loading...' : 'Next'}
           </button>
           <button
             type="submit"
-            disabled={isSubmitting || Object.values(ratings).some(r => r === 0)}
-            className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={
+              isSubmitting || Object.values(ratings).some((r) => r === 0)
+            }
+            className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <PaperAirplaneIcon className="h-4 w-4" />
-            {isSubmitting ? 'Submitting...' : existingReview ? 'Update Review' : 'Submit Review'}
+            {isSubmitting
+              ? 'Submitting...'
+              : existingReview
+                ? 'Update Review'
+                : 'Submit Review'}
           </button>
         </div>
       </form>

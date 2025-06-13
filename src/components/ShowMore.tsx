@@ -1,13 +1,16 @@
 'use client'
 
-import clsx from "clsx"
-import { useState } from "react"
+import clsx from 'clsx'
+import { useState } from 'react'
 
 export interface AboutSectionProps
   extends React.ComponentPropsWithoutRef<'section'> {
   text: string
 }
-export function ShowMore({ children, ...props }: React.ComponentPropsWithoutRef<'section'>) {
+export function ShowMore({
+  children,
+  ...props
+}: React.ComponentPropsWithoutRef<'section'>) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   return (
@@ -22,7 +25,7 @@ export function ShowMore({ children, ...props }: React.ComponentPropsWithoutRef<
       </span>
       <button
         type="button"
-        className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 active:text-indigo-900 underline cursor-pointer"
+        className="mt-2 cursor-pointer text-sm font-medium text-indigo-600 underline hover:text-indigo-800 active:text-indigo-900"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {isExpanded ? 'Show less' : 'Show more'}

@@ -1,7 +1,13 @@
 import { notFound } from 'next/navigation'
 import { ClockIcon } from '@heroicons/react/20/solid'
 import { getProposal } from '@/lib/proposal/sanity'
-import { ProposalDetail, ErrorDisplay, BackToProposalsButton, ProposalReviewPanel, AdminActionBar } from '@/components/admin'
+import {
+  ProposalDetail,
+  ErrorDisplay,
+  BackToProposalsButton,
+  ProposalReviewPanel,
+  AdminActionBar,
+} from '@/components/admin'
 import { auth } from '@/lib/auth'
 
 interface ProposalDetailPageProps {
@@ -15,7 +21,9 @@ interface ProposalDetailPageProps {
  * Displays comprehensive proposal information for admin review
  * Includes metadata, review history, and admin actions
  */
-export default async function ProposalDetailPage({ params }: ProposalDetailPageProps) {
+export default async function ProposalDetailPage({
+  params,
+}: ProposalDetailPageProps) {
   const { id } = await params
   const session = await auth()
 
@@ -42,21 +50,23 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
     }
 
     return (
-      <div className="flex flex-col lg:flex-row h-full min-h-screen">
+      <div className="flex h-full min-h-screen flex-col lg:flex-row">
         {/* Main Content Area */}
-        <div className="flex-1 min-w-0">
-          <div className="max-w-4xl mx-auto p-4 lg:p-0">
+        <div className="min-w-0 flex-1">
+          <div className="mx-auto max-w-4xl p-4 lg:p-0">
             {/* Header with Navigation and Metadata */}
             <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4 flex items-center justify-between">
                 <BackToProposalsButton />
 
                 {/* Quick Actions */}
                 <div className="flex items-center space-x-3">
-                  <div className="text-sm text-gray-500 flex items-center">
+                  <div className="flex items-center text-sm text-gray-500">
                     <ClockIcon className="mr-1 h-4 w-4" />
                     <span className="hidden sm:inline">Last updated: </span>
-                    {new Date(proposal._updatedAt || proposal._createdAt).toLocaleDateString()}
+                    {new Date(
+                      proposal._updatedAt || proposal._createdAt,
+                    ).toLocaleDateString()}
                   </div>
                 </div>
               </div>

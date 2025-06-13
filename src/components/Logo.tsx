@@ -91,7 +91,6 @@ export function Logo(props: React.ComponentPropsWithoutRef<'svg'>) {
   )
 }
 
-
 export function Logomark(props: React.ComponentPropsWithoutRef<'svg'>) {
   return (
     <svg
@@ -120,5 +119,5 @@ export function Logomark(props: React.ComponentPropsWithoutRef<'svg'>) {
         </linearGradient>
       </defs>
     </svg>
-  );
+  )
 }

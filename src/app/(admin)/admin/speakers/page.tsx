@@ -17,10 +17,10 @@ export default async function AdminSpeakers() {
     )
   }
 
-  const { speakers, err: speakersError } = await getSpeakers(
-    conference._id,
-    [Status.accepted, Status.confirmed]
-  )
+  const { speakers, err: speakersError } = await getSpeakers(conference._id, [
+    Status.accepted,
+    Status.confirmed,
+  ])
 
   if (speakersError) {
     return (
@@ -37,11 +37,12 @@ export default async function AdminSpeakers() {
         <div className="flex items-center gap-3">
           <UserGroupIcon className="h-8 w-8 text-gray-400" />
           <div>
-            <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+            <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
               Speaker Management
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Manage speakers with accepted or confirmed talks for {conference.title}
+              Manage speakers with accepted or confirmed talks for{' '}
+              {conference.title}
             </p>
           </div>
         </div>
@@ -49,11 +50,25 @@ export default async function AdminSpeakers() {
         <div className="mt-4 flex items-center gap-4 text-sm text-gray-500">
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full bg-green-100"></div>
-            <span>{speakers.filter(s => s.proposals.some(p => p.status === 'confirmed')).length} with confirmed talks</span>
+            <span>
+              {
+                speakers.filter((s) =>
+                  s.proposals.some((p) => p.status === 'confirmed'),
+                ).length
+              }{' '}
+              with confirmed talks
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full bg-blue-100"></div>
-            <span>{speakers.filter(s => s.proposals.some(p => p.status === 'accepted')).length} with accepted talks</span>
+            <span>
+              {
+                speakers.filter((s) =>
+                  s.proposals.some((p) => p.status === 'accepted'),
+                ).length
+              }{' '}
+              with accepted talks
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full bg-gray-200"></div>

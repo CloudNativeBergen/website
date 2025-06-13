@@ -17,13 +17,16 @@ The admin components follow a modular approach with clear separation of concerns
 ### Layout Components
 
 #### `AdminLayout`
+
 Main layout component for admin pages with:
+
 - Responsive sidebar navigation
 - Top navigation bar
 - User menu and authentication
 - Consistent admin styling
 
 **Usage:**
+
 ```tsx
 import { AdminLayout } from '@/lib/components/admin'
 
@@ -35,35 +38,45 @@ export default function AdminPage({ children }) {
 ### Proposal Management Components
 
 #### `ProposalsList`
+
 Main proposals list component with filtering and sorting:
+
 - Grid view of proposal cards
 - Advanced filtering by status, format, level, language, audience
 - Sorting capabilities
 - Empty state handling
 
 #### `ProposalCard`
+
 Individual proposal card component:
+
 - Speaker information and avatar
 - Proposal metadata (status, format, level)
 - Navigation to detail view
 - Responsive design
 
 #### `ProposalDetail`
+
 Detailed proposal view component:
+
 - Full proposal information display
 - Speaker details with image
 - Formatted metadata using mapping objects
 - Portable text rendering for descriptions
 
 #### `ProposalsFilter`
+
 Filtering interface component:
+
 - Multiple filter dropdowns
 - Sort controls
 - Active filter indicators
 - Clear all functionality
 
 #### `FilterDropdown`
+
 Reusable dropdown filter component:
+
 - Checkbox-based selection
 - Active selection indicators
 - Headless UI integration
@@ -71,7 +84,9 @@ Reusable dropdown filter component:
 ### Utility Components
 
 #### `ErrorDisplay`
+
 Consistent error display component:
+
 - Customizable error messages
 - Navigation options
 - Proper error icons and styling
@@ -79,14 +94,18 @@ Consistent error display component:
 ## Hooks
 
 ### `useFilterState`
+
 Manages filter state for proposals:
+
 - Filter toggles by category
 - Sort controls
 - Clear all functionality
 - Active filter counting
 
 ### `useProposalFiltering`
+
 Applies filters and sorting to proposal data:
+
 - Real-time filtering
 - Multiple filter criteria
 - Sorting by various fields
@@ -95,22 +114,26 @@ Applies filters and sorting to proposal data:
 ## Best Practices
 
 ### Component Design
+
 - **Single Responsibility**: Each component has one clear purpose
 - **Composition**: Components are designed to work together
 - **Reusability**: Common patterns are extracted into reusable components
 - **TypeScript**: Full type safety with proper interfaces
 
 ### State Management
+
 - **Local State**: Use React state for component-specific data
 - **Custom Hooks**: Extract complex state logic into reusable hooks
 - **Immutable Updates**: Follow React best practices for state updates
 
 ### Performance
+
 - **Memoization**: Use useMemo and useCallback where appropriate
 - **Lazy Loading**: Components support Suspense boundaries
 - **Efficient Filtering**: Optimized filter operations
 
 ### Accessibility
+
 - **Semantic HTML**: Proper HTML structure and ARIA labels
 - **Keyboard Navigation**: Full keyboard accessibility
 - **Screen Readers**: Proper labeling and descriptions
@@ -135,42 +158,44 @@ src/lib/components/admin/
 ## Usage Guidelines
 
 ### Importing Components
+
 Always import from the main index file for clean imports:
 
 ```tsx
 import {
   AdminLayout,
   ProposalsList,
-  ErrorDisplay
+  ErrorDisplay,
 } from '@/lib/components/admin'
 ```
 
 ### Error Handling
+
 Use the ErrorDisplay component consistently:
 
 ```tsx
 if (error) {
-  return (
-    <ErrorDisplay
-      title="Error Loading Data"
-      message={error.message}
-    />
-  )
+  return <ErrorDisplay title="Error Loading Data" message={error.message} />
 }
 ```
 
 ### Filtering and State
+
 Use the provided hooks for consistent behavior:
 
 ```tsx
-const initialFilters = { /* filter config */ }
-const { filters, toggleFilter, clearAllFilters } = useFilterState(initialFilters)
+const initialFilters = {
+  /* filter config */
+}
+const { filters, toggleFilter, clearAllFilters } =
+  useFilterState(initialFilters)
 const filteredData = useProposalFiltering(data, filters)
 ```
 
 ## Development
 
 ### Adding New Components
+
 1. Create the component in this directory
 2. Add proper TypeScript interfaces
 3. Include JSDoc comments
@@ -178,11 +203,13 @@ const filteredData = useProposalFiltering(data, filters)
 5. Update this documentation
 
 ### Testing
+
 - Unit tests should cover component logic
 - Integration tests should cover component interactions
 - Accessibility tests should verify ARIA compliance
 
 ### Performance Considerations
+
 - Use React.memo for expensive components
 - Implement proper key props for lists
 - Consider virtualization for large datasets

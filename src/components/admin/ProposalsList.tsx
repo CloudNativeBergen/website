@@ -26,7 +26,7 @@ export function ProposalsList({
   selectedProposalId,
   enablePreview = false,
   currentUserId,
-  allowedFormats
+  allowedFormats,
 }: ProposalsListProps) {
   const initialFilters: FilterState = {
     status: [Status.submitted, Status.accepted, Status.confirmed],
@@ -36,7 +36,7 @@ export function ProposalsList({
     audience: [],
     reviewStatus: ReviewStatus.all,
     sortBy: 'created',
-    sortOrder: 'desc'
+    sortOrder: 'desc',
   }
 
   const {
@@ -46,10 +46,14 @@ export function ProposalsList({
     setSortBy,
     toggleSortOrder,
     clearAllFilters,
-    activeFilterCount
+    activeFilterCount,
   } = useFilterStateWithURL(initialFilters)
 
-  const filteredProposals = useProposalFiltering(proposals, filters, currentUserId)
+  const filteredProposals = useProposalFiltering(
+    proposals,
+    filters,
+    currentUserId,
+  )
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -58,11 +62,12 @@ export function ProposalsList({
         <div className="flex items-center gap-3">
           <DocumentTextIcon className="h-8 w-8 text-gray-400" />
           <div>
-            <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+            <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
               Proposal Management
             </h1>
             <p className="mt-2 text-sm text-gray-600">
-              Review and manage all conference proposals ({filteredProposals.length} of {proposals.length} total)
+              Review and manage all conference proposals (
+              {filteredProposals.length} of {proposals.length} total)
             </p>
           </div>
         </div>
@@ -97,7 +102,11 @@ export function ProposalsList({
                 key={proposal._id}
                 proposal={proposal}
                 href={`/admin/proposals/${proposal._id}`}
-                onSelect={enablePreview && onProposalSelect ? () => onProposalSelect(proposal._id) : undefined}
+                onSelect={
+                  enablePreview && onProposalSelect
+                    ? () => onProposalSelect(proposal._id)
+                    : undefined
+                }
                 isSelected={selectedProposalId === proposal._id}
               />
             ))}
@@ -130,7 +139,7 @@ interface EmptyStateProps {
  */
 function EmptyState({ hasProposals, onClearFilters }: EmptyStateProps) {
   return (
-    <div className="text-center py-12">
+    <div className="py-12 text-center">
       <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
       <h3 className="mt-2 text-sm font-semibold text-gray-900">
         {hasProposals ? 'No proposals match your filters' : 'No proposals'}
@@ -138,8 +147,7 @@ function EmptyState({ hasProposals, onClearFilters }: EmptyStateProps) {
       <p className="mt-1 text-sm text-gray-500">
         {hasProposals
           ? 'Try adjusting your filters to see more results.'
-          : 'Get started by promoting the CFP.'
-        }
+          : 'Get started by promoting the CFP.'}
       </p>
       <div className="mt-6">
         {hasProposals ? (

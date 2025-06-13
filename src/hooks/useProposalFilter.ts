@@ -1,50 +1,52 @@
-'use client';
+'use client'
 
-import { ProposalExisting, Status } from '@/lib/proposal/types';
-import { useMemo, useState } from 'react';
+import { ProposalExisting, Status } from '@/lib/proposal/types'
+import { useMemo, useState } from 'react'
 
 export interface FilterStats {
-  total: number;
-  speakerCount: number;
-  submitted: number;
-  accepted: number;
-  confirmed: number;
-  rejected: number;
-  withdrawn: number;
+  total: number
+  speakerCount: number
+  submitted: number
+  accepted: number
+  confirmed: number
+  rejected: number
+  withdrawn: number
 }
 
 export function useProposalFilter(proposals: ProposalExisting[]) {
-  const [statusFilter, setStatusFilter] = useState<Status | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<Status | undefined>(
+    undefined,
+  )
 
   // Filter proposals based on status
   const filteredProposals = useMemo(() => {
     return proposals.filter((p) => {
-      if (!statusFilter) return true;
-      return p.status === statusFilter;
-    });
-  }, [proposals, statusFilter]);
+      if (!statusFilter) return true
+      return p.status === statusFilter
+    })
+  }, [proposals, statusFilter])
 
   // Calculate statistics for different statuses
   const filterStats = useMemo<FilterStats>(() => {
-    const speakerSet = new Set<string>();
+    const speakerSet = new Set<string>()
     const stats = proposals.reduce(
       (acc, proposal) => {
         // Add speaker to the set
         if (proposal.speaker && 'name' in proposal.speaker) {
-          speakerSet.add(proposal.speaker.name);
+          speakerSet.add(proposal.speaker.name)
         } else {
-          speakerSet.add('Unknown author');
+          speakerSet.add('Unknown author')
         }
 
         // Increment status counts
-        acc.total++;
-        if (proposal.status === Status.submitted) acc.submitted++;
-        if (proposal.status === Status.accepted) acc.accepted++;
-        if (proposal.status === Status.confirmed) acc.confirmed++;
-        if (proposal.status === Status.rejected) acc.rejected++;
-        if (proposal.status === Status.withdrawn) acc.withdrawn++;
+        acc.total++
+        if (proposal.status === Status.submitted) acc.submitted++
+        if (proposal.status === Status.accepted) acc.accepted++
+        if (proposal.status === Status.confirmed) acc.confirmed++
+        if (proposal.status === Status.rejected) acc.rejected++
+        if (proposal.status === Status.withdrawn) acc.withdrawn++
 
-        return acc;
+        return acc
       },
       {
         total: 0,
@@ -54,13 +56,13 @@ export function useProposalFilter(proposals: ProposalExisting[]) {
         rejected: 0,
         withdrawn: 0,
       } as FilterStats,
-    );
+    )
 
     return {
       ...stats,
       speakerCount: speakerSet.size,
-    };
-  }, [proposals]);
+    }
+  }, [proposals])
 
-  return { filteredProposals, statusFilter, setStatusFilter, filterStats };
+  return { filteredProposals, statusFilter, setStatusFilter, filterStats }
 }

@@ -1,6 +1,4 @@
-import {
-  clientWrite,
-} from '@/lib/sanity/client'
+import { clientWrite } from '@/lib/sanity/client'
 import { Review, ReviewBase } from './types'
 
 export async function updateReview(
@@ -12,13 +10,13 @@ export async function updateReview(
   let updatedReview: Review | undefined
 
   try {
-    updatedReview = await clientWrite
+    updatedReview = (await clientWrite
       .patch(reviewId)
       .set({
         ...review,
         reviewer: { _type: 'reference', _ref: speakerId },
       })
-      .commit() as Review
+      .commit()) as Review
   } catch (error) {
     reviewError = error as Error
   }
@@ -35,13 +33,12 @@ export async function createReview(
   let createdReview: Review | undefined
 
   try {
-    createdReview = await clientWrite
-      .create({
-        ...review,
-        _type: 'review',
-        proposal: { _type: 'reference', _ref: proposalId },
-        reviewer: { _type: 'reference', _ref: speakerId },
-      }) as Review
+    createdReview = (await clientWrite.create({
+      ...review,
+      _type: 'review',
+      proposal: { _type: 'reference', _ref: proposalId },
+      reviewer: { _type: 'reference', _ref: speakerId },
+    })) as Review
   } catch (error) {
     reviewError = error as Error
   }

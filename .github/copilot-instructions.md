@@ -47,10 +47,10 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - **Development Server:** `npm run dev` - Starts the Next.js development server.
 - **Build for Production:** `npm run build` - Builds the application for production.
 
-
 ## Code Organization & Refactoring
 
 ### Component Structure
+
 - Use a modular approach to components:
   - Keep components focused on a single responsibility
   - Break large components into smaller, reusable ones
@@ -58,6 +58,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
   - Name components clearly to reflect their purpose (e.g., `ProposalTableRow`, `ProposalTableHeader`)
 
 ### Business Logic
+
 - Extract complex business logic into custom hooks:
   - Keep UI components focused on rendering
   - Create hooks that handle state management and data manipulation (e.g., `useProposalSort`, `useProposalFilter`)
@@ -65,7 +66,9 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
   - Name hooks with the `use` prefix followed by a descriptive name
 
 ### Refactoring Approach
+
 When refactoring code:
+
 1. Identify overly complex components or duplicate functionality
 2. Determine logical separations of concerns
 3. Create new files/components for each distinct concern
@@ -74,6 +77,7 @@ When refactoring code:
 6. Update the original component to use the new structure
 
 ### Folder Structure
+
 - Group related functionality in dedicated directories:
   - `/components/{feature}/` - UI components for a specific feature
   - `/hooks/` - Custom React hooks
@@ -85,6 +89,7 @@ When refactoring code:
   - `/types/` - Shared TypeScript type definitions
 
 ### Component Props
+
 - Define clear TypeScript interfaces for component props
 - Use consistent naming patterns (e.g., `{ComponentName}Props`)
 - Provide sensible defaults where appropriate

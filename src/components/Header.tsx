@@ -58,6 +58,13 @@ export function Header({ c }: { c: Conference }) {
                 >
                   {previousYear} Conference
                 </a>
+                <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
+                <Link
+                  href="/branding"
+                  className="text-blue-600 hover:text-blue-800"
+                >
+                  Brand Guidelines
+                </Link>
               </div>
             )
           })()}

@@ -35,12 +35,15 @@ export default async function Home() {
   }
 
   const hasSchedules = conference.schedules && conference.schedules.length > 0
-  const hasScheduledSpeakers = hasSchedules && schedulesHasSpeakers(conference.schedules!)
+  const hasScheduledSpeakers =
+    hasSchedules && schedulesHasSpeakers(conference.schedules!)
   const currentSchedule = hasSchedules ? conference.schedules![0] : null
-  const displaySpeakers = conference.featured_speakers && conference.featured_speakers.length > 0
-    ? conference.featured_speakers
-    : conference.organizers
-  const isOrganizers = !conference.featured_speakers || conference.featured_speakers.length === 0
+  const displaySpeakers =
+    conference.featured_speakers && conference.featured_speakers.length > 0
+      ? conference.featured_speakers
+      : conference.organizers
+  const isOrganizers =
+    !conference.featured_speakers || conference.featured_speakers.length === 0
 
   return (
     <>
@@ -49,7 +52,10 @@ export default async function Home() {
       {hasScheduledSpeakers ? (
         <Speakers tracks={currentSchedule!.tracks} />
       ) : (
-        <FeaturedSpeakers speakers={displaySpeakers} isOrganizers={isOrganizers} />
+        <FeaturedSpeakers
+          speakers={displaySpeakers}
+          isOrganizers={isOrganizers}
+        />
       )}
 
       {currentSchedule && <Schedule schedule={currentSchedule} />}

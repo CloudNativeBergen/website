@@ -89,7 +89,11 @@ const config = {
 
         if (speaker.image) {
           if (typeof speaker.image === 'object') {
-            token.picture = sanityImage(speaker.image).width(192).height(192).fit('crop').url()
+            token.picture = sanityImage(speaker.image)
+              .width(192)
+              .height(192)
+              .fit('crop')
+              .url()
           } else if (typeof speaker.image === 'string') {
             token.picture = speaker.image
           }
@@ -101,7 +105,7 @@ const config = {
           name: speaker.name,
           email: speaker.email,
           image: speaker.image,
-          is_organizer: speaker.is_organizer
+          is_organizer: speaker.is_organizer,
         }
       }
 

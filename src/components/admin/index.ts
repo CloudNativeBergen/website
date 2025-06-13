@@ -36,7 +36,7 @@ export { ErrorDisplay } from './ErrorDisplay'
 export {
   useFilterState,
   useFilterStateWithURL,
-  useProposalFiltering
+  useProposalFiltering,
 } from './hooks'
 
 // Types and Utils

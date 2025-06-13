@@ -12,10 +12,16 @@ interface ProposalsPageClientProps {
   conference: Conference
 }
 
-export function ProposalsPageClient({ proposals, currentUserId, conference }: ProposalsPageClientProps) {
-  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null)
+export function ProposalsPageClient({
+  proposals,
+  currentUserId,
+  conference,
+}: ProposalsPageClientProps) {
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
+    null,
+  )
   const selectedProposal = selectedProposalId
-    ? proposals.find(p => p._id === selectedProposalId)
+    ? proposals.find((p) => p._id === selectedProposalId)
     : null
 
   return (
@@ -34,7 +40,7 @@ export function ProposalsPageClient({ proposals, currentUserId, conference }: Pr
 
       {/* Preview panel */}
       {selectedProposal && (
-        <div className="fixed inset-y-0 right-0 hidden w-96 overflow-y-auto border-l border-gray-200 bg-white lg:block lg:mt-16">
+        <div className="fixed inset-y-0 right-0 hidden w-96 overflow-y-auto border-l border-gray-200 bg-white lg:mt-16 lg:block">
           <ProposalPreview
             proposal={selectedProposal}
             onClose={() => setSelectedProposalId(null)}

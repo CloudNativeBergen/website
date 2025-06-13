@@ -223,26 +223,28 @@ describe('POST /api/proposal/[id]/action', () => {
         expect(doc).not.toBeNull()
         expect(doc!.status).toBe(Status.accepted)
 
-        expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
-          to: speaker.email,
-          from: process.env.SENDGRID_FROM_EMAIL,
-          templateId: process.env.SENDGRID_TEMPALTE_ID_CFP_ACCEPT,
-          dynamicTemplateData: expect.objectContaining({
-            speaker: expect.objectContaining({
-              name: speaker.name,
-            }),
-            proposal: expect.objectContaining({
-              title: submittedProposal.title,
-              confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${submittedProposal._id}`,
-              comment: 'this is the comment',
-            }),
-            event: expect.objectContaining({
-              location: 'Kvarteret, Bergen, Norway',
-              date: '30 October 2024',
-              name: 'Cloud Native Day Bergen 2024',
+        expect(sendMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            to: speaker.email,
+            from: process.env.SENDGRID_FROM_EMAIL,
+            templateId: process.env.SENDGRID_TEMPALTE_ID_CFP_ACCEPT,
+            dynamicTemplateData: expect.objectContaining({
+              speaker: expect.objectContaining({
+                name: speaker.name,
+              }),
+              proposal: expect.objectContaining({
+                title: submittedProposal.title,
+                confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${submittedProposal._id}`,
+                comment: 'this is the comment',
+              }),
+              event: expect.objectContaining({
+                location: 'Kvarteret, Bergen, Norway',
+                date: '30 October 2024',
+                name: 'Cloud Native Day Bergen 2024',
+              }),
             }),
           }),
-        }))
+        )
       },
     })
   })
@@ -290,26 +292,28 @@ describe('POST /api/proposal/[id]/action', () => {
         expect(doc).not.toBeNull()
         expect(doc!.status).toBe(Status.rejected)
 
-        expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
-          to: speaker.email,
-          from: process.env.SENDGRID_FROM_EMAIL,
-          templateId: process.env.SENDGRID_TEMPALTE_ID_CFP_REJECT,
-          dynamicTemplateData: expect.objectContaining({
-            speaker: expect.objectContaining({
-              name: speaker.name,
-            }),
-            proposal: expect.objectContaining({
-              title: submittedProposal.title,
-              confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${submittedProposal._id}`,
-              comment: 'this is the comment',
-            }),
-            event: expect.objectContaining({
-              location: 'Kvarteret, Bergen, Norway',
-              date: '30 October 2024',
-              name: 'Cloud Native Day Bergen 2024',
+        expect(sendMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            to: speaker.email,
+            from: process.env.SENDGRID_FROM_EMAIL,
+            templateId: process.env.SENDGRID_TEMPALTE_ID_CFP_REJECT,
+            dynamicTemplateData: expect.objectContaining({
+              speaker: expect.objectContaining({
+                name: speaker.name,
+              }),
+              proposal: expect.objectContaining({
+                title: submittedProposal.title,
+                confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${submittedProposal._id}`,
+                comment: 'this is the comment',
+              }),
+              event: expect.objectContaining({
+                location: 'Kvarteret, Bergen, Norway',
+                date: '30 October 2024',
+                name: 'Cloud Native Day Bergen 2024',
+              }),
             }),
           }),
-        }))
+        )
       },
     })
   })

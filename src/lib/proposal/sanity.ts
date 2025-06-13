@@ -15,15 +15,19 @@ export async function getProposal({
   isOrganizer = false,
   includeReviews = false,
 }: {
-  id: string;
-  speakerId: string;
-  isOrganizer?: boolean;
-  includeReviews?: boolean;
-}): Promise<{ proposal: ProposalExisting; reviews?: Review[]; proposalError: Error | null }> {
-  let proposalError = null;
-  let proposal: ProposalExisting = {} as ProposalExisting;
+  id: string
+  speakerId: string
+  isOrganizer?: boolean
+  includeReviews?: boolean
+}): Promise<{
+  proposal: ProposalExisting
+  reviews?: Review[]
+  proposalError: Error | null
+}> {
+  let proposalError = null
+  let proposal: ProposalExisting = {} as ProposalExisting
 
-  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId';
+  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId'
 
   try {
     const query = groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
@@ -38,26 +42,36 @@ export async function getProposal({
       topics[]-> {
         _id, title, color, slug, description
       },
-      ${includeReviews && isOrganizer ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+      ${
+        includeReviews && isOrganizer
+          ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
         ...,
         reviewer-> {
           _id, name, email, image
         }
-      }` : ''}
-    }[0]`;
+      }`
+          : ''
+      }
+    }[0]`
 
-    proposal = await clientRead.fetch(query, { id, speakerId }, { cache: 'no-store' });
+    proposal = await clientRead.fetch(
+      query,
+      { id, speakerId },
+      { cache: 'no-store' },
+    )
   } catch (error) {
-    console.error('Error fetching proposal:', error);
-    proposalError = error as Error;
+    console.error('Error fetching proposal:', error)
+    proposalError = error as Error
   }
 
   if (proposal?.description) {
-    proposal.description = convertStringToPortableTextBlocks(proposal.description);
+    proposal.description = convertStringToPortableTextBlocks(
+      proposal.description,
+    )
   }
 
   // @TODO - Check if the proposal is not found and return an error
-  return { proposal, proposalError };
+  return { proposal, proposalError }
 }
 
 export async function getProposals({
@@ -97,12 +111,16 @@ export async function getProposals({
     topics[]-> {
       _id, title, color, slug, description
     },
-    ${includeReviews ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+    ${
+      includeReviews
+        ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
       ...,
       reviewer-> {
         _id, name, email, image
       }
-    }` : ''}
+    }`
+        : ''
+    }
   } | order(conference->start_date desc, _updatedAt desc)`
 
   try {
@@ -220,20 +238,20 @@ export async function fetchNextUnreviewedProposal({
   reviewerId,
   currentProposalId,
 }: {
-  conferenceId: string;
-  reviewerId: string;
-  currentProposalId?: string;
+  conferenceId: string
+  reviewerId: string
+  currentProposalId?: string
 }): Promise<{
   nextProposal: {
-    _id: string;
-    title: string;
-    status: string;
-    speaker?: { _id: string; name: string };
-  } | null;
-  error: Error | null;
+    _id: string
+    title: string
+    status: string
+    speaker?: { _id: string; name: string }
+  } | null
+  error: Error | null
 }> {
-  let error = null;
-  let nextProposal = null;
+  let error = null
+  let nextProposal = null
 
   const query = groq`
     *[
@@ -248,24 +266,24 @@ export async function fetchNextUnreviewedProposal({
       status,
       speaker->{ _id, name }
     } | order(_createdAt asc)[0...1]
-  `;
+  `
 
   try {
     const proposals = await clientRead.fetch(
       query,
       { conferenceId, reviewerId, currentProposalId },
-      { cache: 'no-store' }
-    );
+      { cache: 'no-store' },
+    )
 
     if (!proposals || proposals.length === 0) {
-      return { nextProposal: null, error: null };
+      return { nextProposal: null, error: null }
     }
 
-    nextProposal = proposals[0];
+    nextProposal = proposals[0]
   } catch (err) {
-    console.error('Error finding next unreviewed proposal:', err);
-    error = err as Error;
+    console.error('Error finding next unreviewed proposal:', err)
+    error = err as Error
   }
 
-  return { nextProposal, error };
+  return { nextProposal, error }
 }

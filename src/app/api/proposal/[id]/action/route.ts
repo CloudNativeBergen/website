@@ -7,7 +7,11 @@ import {
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { proposalResponseError } from '@/lib/proposal/server'
 import { NextResponse } from 'next/server'
-import { deleteProposal, getProposal, updateProposalStatus } from '@/lib/proposal/sanity'
+import {
+  deleteProposal,
+  getProposal,
+  updateProposalStatus,
+} from '@/lib/proposal/sanity'
 import { actionStateMachine } from '@/lib/proposal/states'
 import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
@@ -39,7 +43,8 @@ export const POST = auth(
       })
     }
 
-    const { conference, error: conferenceError } = await getConferenceForCurrentDomain()
+    const { conference, error: conferenceError } =
+      await getConferenceForCurrentDomain()
     if (conferenceError || !conference) {
       console.error(conferenceError || 'Conference not found')
       return proposalResponseError({
@@ -110,7 +115,12 @@ export const POST = auth(
       })
     }
 
-    if (notify && (action === Action.accept || action === Action.reject || action === Action.remind)) {
+    if (
+      notify &&
+      (action === Action.accept ||
+        action === Action.reject ||
+        action === Action.remind)
+    ) {
       await sendAcceptRejectNotification({
         action,
         speaker: proposal.speaker as Speaker,
@@ -120,8 +130,8 @@ export const POST = auth(
           location: conference.city,
           date: formatDate(conference.start_date),
           name: conference.title,
-          url: (conference.domains?.[0] ?? ''),
-        }
+          url: conference.domains?.[0] ?? '',
+        },
       })
     }
 

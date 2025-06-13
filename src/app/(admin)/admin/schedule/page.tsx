@@ -7,7 +7,7 @@ export default function AdminSchedule() {
         <div className="flex items-center gap-3">
           <CalendarIcon className="h-8 w-8 text-gray-400" />
           <div>
-            <h1 className="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+            <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
               Schedule Management
             </h1>
             <p className="mt-2 text-sm text-gray-600">

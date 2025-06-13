@@ -18,20 +18,22 @@ interface ProposalReviewPanelProps {
 export function ProposalReviewPanel({
   proposalId,
   initialReviews,
-  currentUser
+  currentUser,
 }: ProposalReviewPanelProps) {
   const [reviews, setReviews] = useState<Review[]>(initialReviews || [])
   const [actionModalOpen, setActionModalOpen] = useState(false)
   const [selectedAction, setSelectedAction] = useState<Action>(Action.accept)
-  const [proposalForAction, setProposalForAction] = useState<ProposalExisting | null>(null)
+  const [proposalForAction, setProposalForAction] =
+    useState<ProposalExisting | null>(null)
 
   // Find current user's review
   const currentUserReview = currentUser
-    ? reviews.find(review =>
-      typeof review.reviewer === 'object' &&
-      '_id' in review.reviewer &&
-      review.reviewer._id === currentUser._id
-    )
+    ? reviews.find(
+        (review) =>
+          typeof review.reviewer === 'object' &&
+          '_id' in review.reviewer &&
+          review.reviewer._id === currentUser._id,
+      )
     : undefined
 
   const handleReviewSubmit = (newReview: Review) => {
@@ -43,7 +45,7 @@ export function ProposalReviewPanel({
         (review) =>
           typeof review.reviewer === 'object' &&
           '_id' in review.reviewer &&
-          review.reviewer._id === currentUser!._id
+          review.reviewer._id === currentUser!._id,
       )
 
       if (existingReviewIndex !== -1) {
@@ -58,11 +60,14 @@ export function ProposalReviewPanel({
         return updatedReviews
       } else {
         // Add new review
-        return [...prevReviews, {
-          ...newReview,
-          _createdAt: new Date().toISOString(),
-          _updatedAt: new Date().toISOString(),
-        }]
+        return [
+          ...prevReviews,
+          {
+            ...newReview,
+            _createdAt: new Date().toISOString(),
+            _updatedAt: new Date().toISOString(),
+          },
+        ]
       }
     })
   }
@@ -82,13 +87,20 @@ export function ProposalReviewPanel({
       }
     }
 
-    window.addEventListener('proposalAction', handleProposalAction as EventListener)
-    return () => window.removeEventListener('proposalAction', handleProposalAction as EventListener)
+    window.addEventListener(
+      'proposalAction',
+      handleProposalAction as EventListener,
+    )
+    return () =>
+      window.removeEventListener(
+        'proposalAction',
+        handleProposalAction as EventListener,
+      )
   }, [proposalId])
   return (
     <>
       <div className="w-full lg:w-96 lg:flex-shrink-0 lg:overflow-y-auto">
-        <div className="p-4 lg:p-4 space-y-4">
+        <div className="space-y-4 p-4 lg:p-4">
           {/* Review Summary */}
           <ProposalReviewSummary reviews={reviews} />
 

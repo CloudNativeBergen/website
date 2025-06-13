@@ -14,25 +14,33 @@ interface ProposalReviewListProps {
 
 import clsx from 'clsx'
 
-export function ProposalReviewList({ reviews, currentUserId, minimal = false }: ProposalReviewListProps) {
+export function ProposalReviewList({
+  reviews,
+  currentUserId,
+  minimal = false,
+}: ProposalReviewListProps) {
   if (reviews.length === 0) {
     if (minimal) {
-      return (
-        <p className="text-gray-500 text-sm py-4">No reviews yet</p>
-      )
+      return <p className="py-4 text-sm text-gray-500">No reviews yet</p>
     }
     return (
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Reviews</h3>
-        <p className="text-gray-500 text-sm">No reviews yet</p>
+      <div className="rounded-lg border border-gray-200 bg-white p-6">
+        <h3 className="mb-4 text-lg font-semibold text-gray-900">Reviews</h3>
+        <p className="text-sm text-gray-500">No reviews yet</p>
       </div>
     )
   }
 
   const sortedReviews = [...reviews].sort((a, b) => {
     // Put current user's review first
-    const aIsCurrentUser = typeof a.reviewer === 'object' && '_id' in a.reviewer && a.reviewer._id === currentUserId
-    const bIsCurrentUser = typeof b.reviewer === 'object' && '_id' in b.reviewer && b.reviewer._id === currentUserId
+    const aIsCurrentUser =
+      typeof a.reviewer === 'object' &&
+      '_id' in a.reviewer &&
+      a.reviewer._id === currentUserId
+    const bIsCurrentUser =
+      typeof b.reviewer === 'object' &&
+      '_id' in b.reviewer &&
+      b.reviewer._id === currentUserId
 
     if (aIsCurrentUser && !bIsCurrentUser) return -1
     if (!aIsCurrentUser && bIsCurrentUser) return 1
@@ -44,9 +52,10 @@ export function ProposalReviewList({ reviews, currentUserId, minimal = false }: 
   const renderReviewItems = () => (
     <div className="space-y-4">
       {sortedReviews.map((review, index) => {
-        const reviewer = typeof review.reviewer === 'object' && 'name' in review.reviewer
-          ? review.reviewer as Speaker
-          : null
+        const reviewer =
+          typeof review.reviewer === 'object' && 'name' in review.reviewer
+            ? (review.reviewer as Speaker)
+            : null
 
         const isCurrentUserReview = reviewer && reviewer._id === currentUserId
 
@@ -54,18 +63,22 @@ export function ProposalReviewList({ reviews, currentUserId, minimal = false }: 
           <div
             key={review._id || index}
             className={clsx(
-              'border rounded-lg p-3',
+              'rounded-lg border p-3',
               isCurrentUserReview
                 ? 'border-indigo-200 bg-indigo-50'
-                : 'border-gray-200'
+                : 'border-gray-200',
             )}
           >
             {/* Reviewer Info */}
-            <div className="flex items-start space-x-3 mb-3">
+            <div className="mb-3 flex items-start space-x-3">
               <div className="flex-shrink-0">
                 {reviewer?.image ? (
                   <img
-                    src={sanityImage(reviewer.image).width(64).height(64).fit('crop').url()}
+                    src={sanityImage(reviewer.image)
+                      .width(64)
+                      .height(64)
+                      .fit('crop')
+                      .url()}
                     alt={reviewer.name || 'Reviewer'}
                     width={32}
                     height={32}
@@ -73,20 +86,24 @@ export function ProposalReviewList({ reviews, currentUserId, minimal = false }: 
                     loading="lazy"
                   />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
                     <span className="text-xs font-medium text-gray-500">
                       {reviewer?.name?.charAt(0) || 'U'}
                     </span>
                   </div>
                 )}
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="space-y-1">
                   <div className="flex items-center">
-                    <h4 className={clsx(
-                      'text-sm font-medium',
-                      isCurrentUserReview ? 'text-indigo-900' : 'text-gray-900'
-                    )}>
+                    <h4
+                      className={clsx(
+                        'text-sm font-medium',
+                        isCurrentUserReview
+                          ? 'text-indigo-900'
+                          : 'text-gray-900',
+                      )}
+                    >
                       {reviewer?.name || 'Unknown Reviewer'}
                     </h4>
                     {isCurrentUserReview && (
@@ -103,7 +120,7 @@ export function ProposalReviewList({ reviews, currentUserId, minimal = false }: 
             </div>
 
             {/* Scores */}
-            <div className="space-y-1 mb-3">
+            <div className="mb-3 space-y-1">
               {[
                 { key: 'content', label: 'Content' },
                 { key: 'relevance', label: 'Relevance' },
@@ -112,20 +129,22 @@ export function ProposalReviewList({ reviews, currentUserId, minimal = false }: 
                 const score = review.score[key as keyof typeof review.score]
                 return (
                   <div key={key} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 w-24">{label}</span>
+                    <span className="w-24 text-sm text-gray-600">{label}</span>
                     <div className="flex items-center space-x-2">
                       <div className="flex items-center space-x-0.5">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <StarIcon
                             key={star}
                             className={clsx(
-                              star <= score ? 'text-yellow-400' : 'text-gray-300',
-                              'h-3 w-3'
+                              star <= score
+                                ? 'text-yellow-400'
+                                : 'text-gray-300',
+                              'h-3 w-3',
                             )}
                           />
                         ))}
                       </div>
-                      <span className="text-sm font-medium text-gray-900 w-6">
+                      <span className="w-6 text-sm font-medium text-gray-900">
                         {score}/5
                       </span>
                     </div>
@@ -137,7 +156,7 @@ export function ProposalReviewList({ reviews, currentUserId, minimal = false }: 
             {/* Comment */}
             {review.comment && (
               <div className="border-t pt-2">
-                <p className="text-sm text-gray-700 leading-relaxed">
+                <p className="text-sm leading-relaxed text-gray-700">
                   {review.comment}
                 </p>
               </div>
@@ -153,8 +172,8 @@ export function ProposalReviewList({ reviews, currentUserId, minimal = false }: 
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h3 className="text-lg font-semibold text-gray-900 mb-3">
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
+      <h3 className="mb-3 text-lg font-semibold text-gray-900">
         Reviews ({reviews.length})
       </h3>
       {renderReviewItems()}

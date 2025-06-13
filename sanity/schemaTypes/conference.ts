@@ -194,8 +194,11 @@ export default defineType({
         {
           type: 'string',
           options: {
-            list: Array.from(formats).map(([value, title]) => ({ value, title })),
-          }
+            list: Array.from(formats).map(([value, title]) => ({
+              value,
+              title,
+            })),
+          },
         },
       ],
       validation: (Rule) => Rule.required().min(1).unique(),
@@ -239,9 +242,9 @@ export default defineType({
 
                   return {
                     filter: 'conference._ref == $conferenceId',
-                    params: { conferenceId }
+                    params: { conferenceId },
                   }
-                }
+                },
               },
             }),
           ],
@@ -253,23 +256,24 @@ export default defineType({
           },
         },
       ],
-      validation: (Rule) => Rule.custom((sponsors: any[] | undefined) => {
-        if (!sponsors || !Array.isArray(sponsors)) {
+      validation: (Rule) =>
+        Rule.custom((sponsors: any[] | undefined) => {
+          if (!sponsors || !Array.isArray(sponsors)) {
+            return true
+          }
+
+          const sponsorRefs = sponsors
+            .filter((item) => item.sponsor?._ref)
+            .map((item) => item.sponsor._ref)
+
+          const uniqueSponsors = new Set(sponsorRefs)
+
+          if (uniqueSponsors.size !== sponsorRefs.length) {
+            return 'Duplicate sponsors are not allowed in the same conference'
+          }
+
           return true
-        }
-
-        const sponsorRefs = sponsors
-          .filter(item => item.sponsor?._ref)
-          .map(item => item.sponsor._ref)
-
-        const uniqueSponsors = new Set(sponsorRefs)
-
-        if (uniqueSponsors.size !== sponsorRefs.length) {
-          return 'Duplicate sponsors are not allowed in the same conference'
-        }
-
-        return true
-      }),
+        }),
       options: {
         layout: 'tags',
       },

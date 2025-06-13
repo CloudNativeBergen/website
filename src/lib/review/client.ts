@@ -1,4 +1,4 @@
-import { Review, ReviewBase } from '@/lib/review/types';
+import { Review, ReviewBase } from '@/lib/review/types'
 
 export async function postReview(proposalId: string, review: ReviewBase) {
   const res = await fetch(`/api/proposal/${proposalId}/review`, {
@@ -11,5 +11,8 @@ export async function postReview(proposalId: string, review: ReviewBase) {
     body: JSON.stringify(review),
   })
 
-  return (await res.json()) as { review: Review | null; reviewError: Error | null }
+  return (await res.json()) as {
+    review: Review | null
+    reviewError: Error | null
+  }
 }

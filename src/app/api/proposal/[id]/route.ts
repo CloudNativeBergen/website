@@ -32,10 +32,11 @@ export const GET = auth(
       })
     }
 
-    const { proposal: existingProposal, proposalError: error } = await getProposal({
-      id: id as string,
-      speakerId: req.auth.speaker._id,
-    })
+    const { proposal: existingProposal, proposalError: error } =
+      await getProposal({
+        id: id as string,
+        speakerId: req.auth.speaker._id,
+      })
     if (error) {
       return proposalResponseError({
         error,
