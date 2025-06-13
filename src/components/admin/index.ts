@@ -26,6 +26,9 @@ export { ProposalReviewForm } from './ProposalReviewForm'
 export { ProposalReviewList } from './ProposalReviewList'
 export { ProposalActionModal } from './ProposalActionModal'
 
+// Speaker Management Components
+export { SpeakerTable } from './SpeakerTable'
+
 // Utility Components
 export { ErrorDisplay } from './ErrorDisplay'
 

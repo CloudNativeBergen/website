@@ -4,9 +4,10 @@ import {
   clientWrite,
   clientReadCached,
 } from '@/lib/sanity/client'
+import { groq } from 'next-sanity'
 import { v4 as randomUUID } from 'uuid'
 import { Account, User } from 'next-auth'
-import { ProposalExisting } from '../proposal/types'
+import { ProposalExisting, Status } from '../proposal/types'
 
 export function providerAccount(
   provider: string,
@@ -241,4 +242,64 @@ export async function getFeatured(): Promise<{
   }
 
   return { speakers, err }
+}
+
+export async function getSpeakers(
+  conferenceId?: string,
+  statuses: Status[] = [Status.accepted, Status.confirmed]
+): Promise<{
+  speakers: (Speaker & { proposals: ProposalExisting[] })[]
+  err: Error | null
+}> {
+  let speakers: (Speaker & { proposals: ProposalExisting[] })[] = []
+  let err = null
+
+  try {
+    const conferenceFilter = conferenceId ? `&& conference._ref == $conferenceId` : ''
+    const statusFilter = statuses.map(status => `"${status}"`).join(', ')
+
+    const query = groq`*[_type == "speaker" && count(*[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
+      ...,
+      "image": image.asset->url,
+      "proposals": *[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}] {
+        _id,
+        title,
+        status,
+        format,
+        language,
+        level,
+        audiences,
+        conference-> {
+          _id,
+          title,
+          start_date,
+          end_date
+        },
+        topics[]-> {
+          _id,
+          title,
+          color
+        }
+      }
+    } | order(name asc)`
+
+    speakers = await clientRead.fetch(
+      query,
+      conferenceId ? { conferenceId } : {},
+      { cache: 'no-store' }
+    )
+  } catch (error) {
+    err = error as Error
+  }
+
+  return { speakers, err }
+}
+
+export async function getSpeakersWithAcceptedTalks(
+  conferenceId?: string,
+): Promise<{
+  speakers: (Speaker & { proposals: ProposalExisting[] })[]
+  err: Error | null
+}> {
+  return getSpeakers(conferenceId, [Status.accepted, Status.confirmed])
 }
