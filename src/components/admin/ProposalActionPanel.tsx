@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Review } from '@/lib/review/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Action, Status } from '@/lib/proposal/types'
@@ -8,7 +8,7 @@ import { ProposalReviewSummary } from './ProposalReviewSummary'
 import { ProposalReviewForm } from './ProposalReviewForm'
 import { ProposalReviewList } from './ProposalReviewList'
 import { ProposalActionModal } from './ProposalActionModal'
-import { CheckIcon, XMarkIcon, BellIcon } from '@heroicons/react/24/outline'
+import { CheckIcon, XMarkIcon, BellIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
 
 interface ProposalActionPanelProps {
   proposal: ProposalExisting
@@ -25,6 +25,19 @@ export function ProposalActionPanel({
   const [actionModalOpen, setActionModalOpen] = useState(false)
   const [selectedAction, setSelectedAction] = useState<Action>(Action.accept)
   const [proposalStatus, setProposalStatus] = useState<Status>(proposal.status)
+  const [reviewsExpanded, setReviewsExpanded] = useState(false)
+
+  // Set initial state based on screen size
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setReviewsExpanded(window.innerWidth >= 1024) // lg breakpoint
+    }
+
+    checkScreenSize()
+    window.addEventListener('resize', checkScreenSize)
+
+    return () => window.removeEventListener('resize', checkScreenSize)
+  }, [])
 
   // Find current user's review
   const currentUserReview = currentUser
@@ -84,14 +97,14 @@ export function ProposalActionPanel({
   const canReject = proposalStatus === Status.submitted || proposalStatus === Status.accepted
 
   return (
-    <div className="w-96 flex-shrink-0 overflow-y-auto">
+    <div className="w-full lg:w-96 lg:flex-shrink-0 lg:overflow-y-auto">
       <div className="p-4 space-y-4">
         {/* Admin Actions */}
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h3 className="text-lg font-semibold text-gray-900 mb-3">Admin Actions</h3>
 
           {/* Button Group */}
-          <div className="inline-flex rounded-md shadow-sm w-full" role="group">
+          <div className="flex rounded-md shadow-sm w-full" role="group">
             {/* Approve or Remind Button */}
             {canApprove ? (
               <button
@@ -163,11 +176,39 @@ export function ProposalActionPanel({
           />
         )}
 
-        {/* Reviews List */}
-        <ProposalReviewList
-          reviews={reviews}
-          currentUserId={currentUser?._id}
-        />
+        {/* Collapsible Reviews List - Default to expanded on desktop, collapsed on mobile */}
+        <div className="bg-white border border-gray-200 rounded-lg">
+          <button
+            onClick={() => setReviewsExpanded(!reviewsExpanded)}
+            className="w-full p-4 text-left flex items-center justify-between hover:bg-gray-50 transition-colors lg:hidden"
+          >
+            <h3 className="text-lg font-semibold text-gray-900">
+              Reviews {reviews.length > 0 && `(${reviews.length})`}
+            </h3>
+            {reviewsExpanded ? (
+              <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+            ) : (
+              <ChevronDownIcon className="h-5 w-5 text-gray-400" />
+            )}
+          </button>
+
+          {/* Always show on desktop, conditionally on mobile */}
+          <div className={`lg:block ${reviewsExpanded ? 'block' : 'hidden lg:block'}`}>
+            {/* Header for desktop */}
+            <div className="hidden lg:block p-4 pb-0">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Reviews {reviews.length > 0 && `(${reviews.length})`}
+              </h3>
+            </div>
+            <div className="px-4 pb-4">
+              <ProposalReviewList
+                reviews={reviews}
+                currentUserId={currentUser?._id}
+                minimal={true}
+              />
+            </div>
+          </div>
+        </div>
 
         {/* Action Modal */}
         <ProposalActionModal

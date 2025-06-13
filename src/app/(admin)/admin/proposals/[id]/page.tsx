@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
-import { ClockIcon, UserIcon } from '@heroicons/react/20/solid'
+import { ClockIcon } from '@heroicons/react/20/solid'
 import { getProposal } from '@/lib/proposal/sanity'
-import { ProposalDetail, ErrorDisplay, ProposalActionPanel, BackToProposalsButton } from '@/components/admin'
+import { ProposalDetail, ErrorDisplay, BackToProposalsButton, ProposalReviewPanel, AdminActionBar } from '@/components/admin'
 import { auth } from '@/lib/auth'
 
 interface ProposalDetailPageProps {
@@ -42,10 +42,10 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
     }
 
     return (
-      <div className="flex h-full min-h-screen">
+      <div className="flex flex-col lg:flex-row h-full min-h-screen">
         {/* Main Content Area */}
         <div className="flex-1 min-w-0">
-          <div className="max-w-4xl mx-auto p-0">
+          <div className="max-w-4xl mx-auto p-4 lg:p-0">
             {/* Header with Navigation and Metadata */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
@@ -55,49 +55,26 @@ export default async function ProposalDetailPage({ params }: ProposalDetailPageP
                 <div className="flex items-center space-x-3">
                   <div className="text-sm text-gray-500 flex items-center">
                     <ClockIcon className="mr-1 h-4 w-4" />
-                    Last updated: {new Date(proposal._updatedAt || proposal._createdAt).toLocaleDateString()}
+                    <span className="hidden sm:inline">Last updated: </span>
+                    {new Date(proposal._updatedAt || proposal._createdAt).toLocaleDateString()}
                   </div>
                 </div>
               </div>
-
-              {/* Admin Metadata Bar */}
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center space-x-6">
-                    <div className="flex items-center text-gray-600">
-                      <UserIcon className="mr-1 h-4 w-4" />
-                      <span className="font-medium">ID:</span>
-                      <code className="ml-1 text-xs bg-gray-100 px-1 py-0.5 rounded">{proposal._id}</code>
-                    </div>
-                    <div className="text-gray-600">
-                      <span className="font-medium">Created:</span>
-                      <span className="ml-1">{new Date(proposal._createdAt).toLocaleString()}</span>
-                    </div>
-                    {proposal.reviews && proposal.reviews.length > 0 && (
-                      <div className="text-gray-600">
-                        <span className="font-medium">Reviews:</span>
-                        <span className="ml-1">{proposal.reviews.length}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-gray-500">
-                    Admin View
-                  </div>
-                </div>
-              </div>
+              {/* Enhanced Admin Action Bar */}
+              <AdminActionBar proposal={proposal} />
             </div>
 
-            {/* Proposal Detail Component */}
             <ProposalDetail proposal={proposal} />
           </div>
         </div>
 
-        {/* Proposal Action Panel */}
-        <ProposalActionPanel
-          proposal={proposal}
-          initialReviews={proposal.reviews || []}
-          currentUser={session?.speaker}
-        />
+        <div className="lg:block">
+          <ProposalReviewPanel
+            proposalId={proposal._id}
+            initialReviews={proposal.reviews || []}
+            currentUser={session?.speaker}
+          />
+        </div>
       </div>
     )
   } catch (error) {
