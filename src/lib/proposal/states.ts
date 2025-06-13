@@ -7,56 +7,58 @@ export function actionStateMachine(
   isOrganizer: boolean,
 ): { status: Status; isValidAction: boolean } {
   let status = currentStatus || Status.draft
-  let isValidAction = false
+  let isValidAction = true
 
   switch (status) {
     case Status.draft:
       if (action === Action.submit) {
         status = Status.submitted
-        isValidAction = true
       } else if (action === Action.delete) {
         status = Status.deleted
-        isValidAction = true
+      } else {
+        isValidAction = false
       }
       break
     case Status.submitted:
       if (action === Action.unsubmit) {
         status = Status.draft
-        isValidAction = true
       } else if (isOrganizer && action === Action.accept) {
         status = Status.accepted
-        isValidAction = true
       } else if (isOrganizer && action === Action.reject) {
         status = Status.rejected
-        isValidAction = true
+      } else {
+        isValidAction = false
       }
       break
     case Status.accepted:
       if (isOrganizer && action === Action.remind) {
-        status = Status.accepted
-        isValidAction = true
+        // status remains the same
       } else if (action === Action.confirm) {
         status = Status.confirmed
-        isValidAction = true
       } else if (action === Action.withdraw) {
         status = Status.withdrawn
-        isValidAction = true
       } else if (isOrganizer && action === Action.reject) {
         status = Status.rejected
-        isValidAction = true
+      } else {
+        isValidAction = false
       }
       break
     case Status.rejected:
       if (isOrganizer && action === Action.accept) {
         status = Status.accepted
-        isValidAction = true
+      } else {
+        isValidAction = false
       }
+      break
     case Status.confirmed:
       if (action === Action.withdraw) {
         status = Status.withdrawn
-        isValidAction = true
+      } else {
+        isValidAction = false
       }
       break
+    default:
+      isValidAction = false
   }
 
   return { status, isValidAction }
