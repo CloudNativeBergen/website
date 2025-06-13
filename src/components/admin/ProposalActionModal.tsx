@@ -14,6 +14,7 @@ import {
   EnvelopeIcon,
   HeartIcon,
   XMarkIcon,
+  BellIcon,
 } from '@heroicons/react/20/solid'
 import { Speaker } from '@/lib/speaker/types'
 import { postProposalAction } from '@/lib/proposal/client'
@@ -35,6 +36,12 @@ function colorForAction(action: Action): [string, string, string] {
         'text-green-600',
         'bg-green-600 hover:bg-green-500',
       ]
+    case Action.remind:
+      return [
+        'bg-yellow-100',
+        'text-yellow-600',
+        'bg-yellow-600 hover:bg-yellow-500',
+      ]
     case Action.reject:
     case Action.withdraw:
     case Action.delete:
@@ -53,6 +60,8 @@ function iconForAction(
     case Action.accept:
     case Action.confirm:
       return HeartIcon
+    case Action.remind:
+      return BellIcon
     case Action.reject:
       return ArchiveBoxXMarkIcon
     case Action.withdraw:
