@@ -223,27 +223,20 @@ export default defineType({
               name: 'tier',
               type: 'reference',
               to: { type: 'sponsorTier' },
-              //validation: (Rule) => Rule.required().custom((tier: any, context: ValidationContext) => {
-              //  console.log('tier', tier)
-              //  console.log('context', context)
-              //  if (context.document && tier && 'conference' in tier && tier.conference &&
-              //    tier.conference._ref !== context.document._id) {
-              //    return 'Sponsor tier must belong to the same conference'
-              //  }
-              //  return true
-              //})
+              options: {
+                filter: ({ document }) => {
+                  if (!document?._id) return {}
+
+                  const conferenceId = document._id.replace(/^drafts\./, '')
+
+                  return {
+                    filter: 'conference._ref == $conferenceId',
+                    params: { conferenceId }
+                  }
+                }
+              },
             }),
           ],
-          //validation: (Rule) => Rule.required().custom((sponsors: any[], context: ValidationContext) => {
-          //  const uniqueSponsors = new Set()
-          //  for (const sponsor of sponsors) {
-          //    if (uniqueSponsors && Array.isArray(uniqueSponsors) && uniqueSponsors.has(sponsor.sponsor._ref)) {
-          //      return 'Duplicate sponsors are not allowed'
-          //    }
-          //    uniqueSponsors.add(sponsor.sponsor._ref)
-          //  }
-          //  return true
-          //}),
           preview: {
             select: {
               title: 'sponsor.name',
@@ -252,6 +245,23 @@ export default defineType({
           },
         },
       ],
+      validation: (Rule) => Rule.custom((sponsors: any[] | undefined) => {
+        if (!sponsors || !Array.isArray(sponsors)) {
+          return true
+        }
+
+        const sponsorRefs = sponsors
+          .filter(item => item.sponsor?._ref)
+          .map(item => item.sponsor._ref)
+
+        const uniqueSponsors = new Set(sponsorRefs)
+
+        if (uniqueSponsors.size !== sponsorRefs.length) {
+          return 'Duplicate sponsors are not allowed in the same conference'
+        }
+
+        return true
+      }),
       options: {
         layout: 'tags',
       },
