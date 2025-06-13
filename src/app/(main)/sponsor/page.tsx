@@ -56,7 +56,7 @@ export default async function Sponsor() {
             <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
               Become a Sponsor
             </h1>
-            <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
+            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
               <p>
                 Showcase your brand to {conference.city}&apos;s cloud-native
                 community by sponsoring {conference.title}. We&apos;ve designed

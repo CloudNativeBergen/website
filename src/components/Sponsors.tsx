@@ -28,7 +28,7 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
   return (
     <section id="sponsors" aria-label="Sponsors" className="py-20 sm:py-32">
       <Container>
-        <h2 className="mx-auto max-w-4xl text-center font-display text-4xl font-medium tracking-tighter text-blue-900 sm:text-5xl">
+        <h2 className="font-display mx-auto max-w-4xl text-center text-4xl font-medium tracking-tighter text-blue-900 sm:text-5xl">
           Fueling the cluster: Our sponsors keep the pods running!
         </h2>
         <div className="mx-auto mt-20 grid max-w-max grid-cols-1 place-content-center gap-x-32 gap-y-12 sm:grid-cols-4 md:gap-x-16 lg:gap-x-32">

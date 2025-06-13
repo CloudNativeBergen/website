@@ -113,7 +113,7 @@ export default async function Profile({ params }: Props) {
             <p className="font-display text-2xl tracking-tight text-blue-900">
               404
             </p>
-            <h1 className="mt-4 font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
+            <h1 className="font-display mt-4 text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
               Speaker not found
             </h1>
             <p className="mt-4 text-lg tracking-tight text-blue-900">

@@ -16,11 +16,6 @@ export function Footer({ c }: { c: Conference }) {
               </a>
             ))}
           </div>
-          <nav className="flex space-x-4 text-sm">
-            <a href="/branding" className="text-slate-600 hover:text-brand-cloud-blue">
-              Brand Guidelines
-            </a>
-          </nav>
         </div>
         <p className="mt-6 text-base text-slate-500 md:mt-0">
           Copyright &copy; {new Date().getFullYear()} {c.organizer}. All rights

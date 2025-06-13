@@ -28,7 +28,7 @@ export function FeaturedSpeakers({
             >
               {isOrganizers ? 'Conference Controllers' : 'Masters of the Kube'}
             </h2>
-            <p className="mt-4 font-display text-2xl tracking-tight text-blue-900">
+            <p className="font-display mt-4 text-2xl tracking-tight text-blue-900">
               {isOrganizers
                 ? 'Meet the control plane ensuring a smooth conference deployment.'
                 : 'Brace yourselves for wisdom deployed directly from the masters of the Cloud Native ecosystem.'}

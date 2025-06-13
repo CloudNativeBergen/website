@@ -54,7 +54,7 @@ export default async function CFP() {
             <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
               Call for Presentations
             </h1>
-            <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
+            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
               <p>
                 Become our next speaker and share your knowledge with the
                 community! We are especially interested in local speakers who
@@ -100,7 +100,7 @@ export default async function CFP() {
             {hasWorkshops && (
               <div className="mt-10 rounded-xl bg-gradient-to-br from-blue-100/80 to-blue-200/80 p-1 shadow-lg">
                 <div className="rounded-lg bg-white px-6 py-6 sm:p-8">
-                  <h2 className="mb-2 flex items-center gap-2 font-display text-3xl font-semibold tracking-tight text-blue-700 sm:text-4xl">
+                  <h2 className="font-display mb-2 flex items-center gap-2 text-3xl font-semibold tracking-tight text-blue-700 sm:text-4xl">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-blue-600">
                       <ClipboardDocumentCheckIcon
                         className="h-5 w-5"
@@ -124,10 +124,10 @@ export default async function CFP() {
               </div>
             )}
 
-            <h2 className="mt-10 font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
+            <h2 className="font-display mt-10 text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
               Process and Details
             </h2>
-            <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
+            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
               <p>
                 We are looking for content that is relevant to the community and
                 that provide valuable insights. We welcome speakers of all
@@ -275,7 +275,7 @@ export default async function CFP() {
               </p>
             </div>
 
-            <h3 className="mt-5 mb-5 font-display text-3xl font-medium tracking-tighter text-blue-600 sm:text-3xl">
+            <h3 className="font-display mt-5 mb-5 text-3xl font-medium tracking-tighter text-blue-600 sm:text-3xl">
               Dates to Remember
             </h3>
 
@@ -306,11 +306,11 @@ export default async function CFP() {
               ))}
             </ul>
 
-            <h2 className="mt-10 font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
+            <h2 className="font-display mt-10 text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
               Diversity and Inclusion
             </h2>
 
-            <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
+            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
               <p>
                 Cloud Native Day Bergen is committed to creating a diverse and
                 inclusive event that welcomes speakers and attendees of all

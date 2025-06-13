@@ -1,3 +1,4 @@
+@import url('https://fonts.bunny.net/css?family=atkinson-hyperlegible:400,400i,700,700i&display=swap');
 @import 'tailwindcss';
 
 @theme {
@@ -32,16 +33,415 @@
   --radius-4xl: 2rem;
   --radius-5xl: 2.5rem;
 
-  --font-sans: var(--font-inter);
-  --font-display: var(--font-dm-sans);
+  /* Cloud Native Day Bergen Brand Colors */
+  --brand-cloud-blue: #1d4ed8;
+  --brand-aqua-start: #3b82f6;
+  --brand-aqua-end: #06b6d4;
+  --brand-sky-mist: #e0f2fe;
+  --brand-fresh-green: #10b981;
+  --brand-glacier-white: #f9fafb;
+  --brand-nordic-purple: #6366f1;
+  --brand-sunbeam-yellow: #facc15;
+  --brand-slate-gray: #334155;
+  --brand-frosted-steel: #cbd5e1;
+
+  /* Background Gradients */
+  --gradient-aqua: linear-gradient(135deg, #3b82f6, #06b6d4);
+  --gradient-brand: linear-gradient(135deg, #1d4ed8, #06b6d4);
+  --gradient-nordic: linear-gradient(135deg, #6366f1, #1d4ed8);
+  --gradient-cloud: linear-gradient(135deg, #1d4ed8, #3b82f6);
+
+  /* Background Image Utilities */
+  --background-image-aqua-gradient: linear-gradient(135deg, #3b82f6, #06b6d4);
+  --background-image-brand-gradient: linear-gradient(135deg, #1d4ed8, #06b6d4);
+  --background-image-nordic-gradient: linear-gradient(135deg, #6366f1, #1d4ed8);
+  --background-image-cloud-gradient: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  --background-image-aqua-gradient-to-r: linear-gradient(
+    to right,
+    #3b82f6,
+    #06b6d4
+  );
+  --background-image-aqua-gradient-to-b: linear-gradient(
+    to bottom,
+    #3b82f6,
+    #06b6d4
+  );
+
+  /* Color System */
+  --color-brand-cloud-blue: #1d4ed8;
+  --color-brand-aqua-start: #3b82f6;
+  --color-brand-aqua-end: #06b6d4;
+  --color-brand-sky-mist: #e0f2fe;
+  --color-brand-fresh-green: #10b981;
+  --color-brand-glacier-white: #f9fafb;
+  --color-brand-nordic-purple: #6366f1;
+  --color-brand-sunbeam-yellow: #facc15;
+  --color-brand-slate-gray: #334155;
+  --color-brand-frosted-steel: #cbd5e1;
+
+  /* Primary Color Scale */
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #1d4ed8;
+  --color-primary-700: #1e40af;
+  --color-primary-800: #1e3a8a;
+  --color-primary-900: #1e3a8a;
+  --color-primary-950: #172554;
+
+  /* Secondary Color Scale */
+  --color-secondary-50: #f0fdf4;
+  --color-secondary-100: #dcfce7;
+  --color-secondary-200: #bbf7d0;
+  --color-secondary-300: #86efac;
+  --color-secondary-400: #4ade80;
+  --color-secondary-500: #10b981;
+  --color-secondary-600: #059669;
+  --color-secondary-700: #047857;
+  --color-secondary-800: #065f46;
+  --color-secondary-900: #064e3b;
+  --color-secondary-950: #022c22;
+
+  /* Accent Colors */
+  --color-accent-purple: #6366f1;
+  --color-accent-yellow: #facc15;
+
+  /* Neutral Colors */
+  --color-neutral-mist: #e0f2fe;
+  --color-neutral-glacier: #f9fafb;
+  --color-neutral-slate: #334155;
+  --color-neutral-steel: #cbd5e1;
+
+  /* Additional required colors for compatibility */
+  --color-blue-700: #1e40af;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Font Family Variables */
+  --font-family-jetbrains: var(--font-jetbrains), 'JetBrains Mono', monospace;
+  --font-family-space-grotesk:
+    var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+  --font-family-bricolage:
+    var(--font-bricolage), 'Bricolage Grotesque', sans-serif;
+  --font-family-inter: var(--font-inter), 'Inter', sans-serif;
+  --font-family-ibm-plex-sans:
+    var(--font-ibm-plex-sans), 'IBM Plex Sans', sans-serif;
+  --font-family-ibm-plex-mono:
+    var(--font-ibm-plex-mono), 'IBM Plex Mono', monospace;
+  --font-family-atkinson: 'Atkinson Hyperlegible', system-ui, sans-serif;
+
+  /* Default font mappings */
+  --font-family-sans: var(--font-inter), 'Inter', sans-serif;
+  --font-family-display: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+  --font-family-mono: var(--font-jetbrains), 'JetBrains Mono', monospace;
 
   --container-2xl: 40rem;
 }
 
+/* Brand Color Utility Classes */
+.bg-brand-cloud-blue {
+  background-color: var(--color-brand-cloud-blue);
+}
+
+.bg-brand-sky-mist {
+  background-color: var(--color-brand-sky-mist);
+}
+
+.bg-brand-fresh-green {
+  background-color: var(--color-brand-fresh-green);
+}
+
+.bg-brand-glacier-white {
+  background-color: var(--color-brand-glacier-white);
+}
+
+.bg-brand-nordic-purple {
+  background-color: var(--color-brand-nordic-purple);
+}
+
+.bg-brand-sunbeam-yellow {
+  background-color: var(--color-brand-sunbeam-yellow);
+}
+
+.bg-brand-frosted-steel {
+  background-color: var(--color-brand-frosted-steel);
+}
+
+.text-brand-cloud-blue {
+  color: var(--color-brand-cloud-blue);
+}
+
+.text-brand-sky-mist {
+  color: var(--color-brand-sky-mist);
+}
+
+.text-brand-fresh-green {
+  color: var(--color-brand-fresh-green);
+}
+
+.text-brand-glacier-white {
+  color: var(--color-brand-glacier-white);
+}
+
+.text-brand-nordic-purple {
+  color: var(--color-brand-nordic-purple);
+}
+
+.text-brand-sunbeam-yellow {
+  color: var(--color-brand-sunbeam-yellow);
+}
+
+.text-brand-slate-gray {
+  color: var(--color-brand-slate-gray);
+}
+
+.text-brand-frosted-steel {
+  color: var(--color-brand-frosted-steel);
+}
+
+/* Brand Gradient Utility Classes */
+.bg-aqua-gradient {
+  background-image: var(--background-image-aqua-gradient);
+}
+
+.bg-brand-gradient {
+  background-image: var(--background-image-brand-gradient);
+}
+
+.bg-nordic-gradient {
+  background-image: var(--background-image-nordic-gradient);
+}
+
+.bg-cloud-gradient {
+  background-image: var(--background-image-cloud-gradient);
+}
+
+/* Border Color Utilities */
+.border-brand-cloud-blue {
+  border-color: var(--color-brand-cloud-blue);
+}
+
+.border-brand-sky-mist {
+  border-color: var(--color-brand-sky-mist);
+}
+
+.border-brand-fresh-green {
+  border-color: var(--color-brand-fresh-green);
+}
+
+.border-brand-nordic-purple {
+  border-color: var(--color-brand-nordic-purple);
+}
+
+/* Font Family Utilities */
+.font-jetbrains {
+  font-family: var(--font-family-jetbrains);
+}
+
+.font-space-grotesk {
+  font-family: var(--font-family-space-grotesk);
+}
+
+.font-bricolage {
+  font-family: var(--font-family-bricolage);
+}
+
+.font-inter {
+  font-family: var(--font-family-inter);
+}
+
+.font-ibm-plex-sans {
+  font-family: var(--font-family-ibm-plex-sans);
+}
+
+.font-ibm-plex-mono {
+  font-family: var(--font-family-ibm-plex-mono);
+}
+
+/* Hover Utilities */
+.hover\:bg-brand-cloud-blue:hover {
+  background-color: var(--color-brand-cloud-blue);
+}
+
+.hover\:bg-brand-sky-mist:hover {
+  background-color: var(--color-brand-sky-mist);
+}
+
+.hover\:bg-blue-700:hover {
+  background-color: var(--color-blue-700);
+}
+
+.hover\:bg-white:hover {
+  background-color: var(--color-white);
+}
+
+.hover\:text-brand-cloud-blue:hover {
+  color: var(--color-brand-cloud-blue);
+}
+
+.hover\:text-white:hover {
+  color: var(--color-white);
+}
+
 .tooltip {
-  @apply invisible absolute;
+  visibility: hidden;
+  position: absolute;
 }
 
 .has-tooltip:hover .tooltip {
-  @apply visible z-50;
+  visibility: visible;
+  z-index: 50;
+}
+
+/* Cloud Native Pattern Animations */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+
+  25% {
+    transform: translateY(-8px) translateX(4px);
+  }
+
+  50% {
+    transform: translateY(-4px) translateX(-3px);
+  }
+
+  75% {
+    transform: translateY(-12px) translateX(2px);
+  }
+}
+
+@keyframes float-reverse {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+
+  25% {
+    transform: translateY(8px) translateX(-4px);
+  }
+
+  50% {
+    transform: translateY(4px) translateX(3px);
+  }
+
+  75% {
+    transform: translateY(12px) translateX(-2px);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+
+  25% {
+    transform: translateY(-15px) translateX(8px);
+  }
+
+  50% {
+    transform: translateY(-8px) translateX(-12px);
+  }
+
+  75% {
+    transform: translateY(-20px) translateX(5px);
+  }
+}
+
+@keyframes float-drift {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+
+  20% {
+    transform: translateY(-10px) translateX(6px);
+  }
+
+  40% {
+    transform: translateY(-5px) translateX(-8px);
+  }
+
+  60% {
+    transform: translateY(-15px) translateX(4px);
+  }
+
+  80% {
+    transform: translateY(-8px) translateX(-6px);
+  }
+}
+
+@keyframes float-gentle {
+  0%,
+  100% {
+    transform: translateY(0px) translateX(0px);
+  }
+
+  33% {
+    transform: translateY(-6px) translateX(3px);
+  }
+
+  66% {
+    transform: translateY(-3px) translateX(-4px);
+  }
+}
+
+.animate-float {
+  animation: float 20s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+  animation: float-reverse 25s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float-slow 40s ease-in-out infinite;
+}
+
+.animate-float-drift {
+  animation: float-drift 35s ease-in-out infinite;
+}
+
+.animate-float-gentle {
+  animation: float-gentle 30s ease-in-out infinite;
+}
+
+/* Custom Slider Styles */
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  background-color: #1d4ed8;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background-color: #1e40af;
+}
+
+.slider::-moz-range-thumb {
+  width: 1.25rem;
+  height: 1.25rem;
+  background-color: #1d4ed8;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.slider::-moz-range-thumb:hover {
+  background-color: #1e40af;
+}
+
+.slider:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.5);
 }

@@ -57,7 +57,7 @@ export default async function SpeakerDashboard() {
               </a>
             )}
           </h1>
-          <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
+          <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
             <p>
               Thank you for your interest in submitting a presentation to our
               conference.

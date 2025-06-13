@@ -107,7 +107,7 @@ export default async function Submit({
             <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
               Submit Presentation
             </h1>
-            <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
+            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
               <p>
                 Become our next speaker and share your knowledge with the
                 community! We are especially interested in local speakers who

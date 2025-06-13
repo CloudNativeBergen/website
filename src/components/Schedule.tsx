@@ -264,7 +264,7 @@ export function Schedule({ schedule }: { schedule: ConferenceSchedule }) {
             Our three-track schedule: Expertly configured and deployed with
             brilliant sessions from the cloud-native ecosystem.
           </h2>
-          <p className="mt-4 font-display text-2xl tracking-tight text-blue-900">
+          <p className="font-display mt-4 text-2xl tracking-tight text-blue-900">
             Dive into our multi-cluster mesh of cloud-native knowledge.
             Orchestrate your conference experience by selecting the sessions
             that best scale your expertise.

@@ -82,15 +82,15 @@ function FieldRow({
   label: string
   value: string | boolean | Array<any> | number | null | undefined // eslint-disable-line @typescript-eslint/no-explicit-any
   type?:
-  | 'text'
-  | 'date'
-  | 'boolean'
-  | 'array'
-  | 'links'
-  | 'formats'
-  | 'team'
-  | 'url'
-  | 'email'
+    | 'text'
+    | 'date'
+    | 'boolean'
+    | 'array'
+    | 'links'
+    | 'formats'
+    | 'team'
+    | 'url'
+    | 'email'
 }) {
   let displayValue: React.ReactNode = value as React.ReactNode
 
@@ -124,8 +124,8 @@ function FieldRow({
                 typeof item === 'string'
                   ? item
                   : (item as NamedItem)?.title ||
-                  (item as NamedItem)?.name ||
-                  JSON.stringify(item)
+                    (item as NamedItem)?.name ||
+                    JSON.stringify(item)
               return <Badge key={idx}>{displayText}</Badge>
             })}
           </div>
@@ -164,9 +164,10 @@ function FieldRow({
                 typeof format === 'string'
                   ? format
                   : (format as NamedItem)?.title || (format as NamedItem)?.name
-              const displayText = formatKey && isValidFormat(formatKey)
-                ? formats.get(formatKey) || formatKey
-                : formatKey || 'Unknown Format'
+              const displayText =
+                formatKey && isValidFormat(formatKey)
+                  ? formats.get(formatKey) || formatKey
+                  : formatKey || 'Unknown Format'
               return <Badge key={idx}>{displayText}</Badge>
             })}
           </div>

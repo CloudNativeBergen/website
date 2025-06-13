@@ -104,7 +104,7 @@ export function Hero({ conference }: { conference: Conference }) {
             <span className="sr-only">{conference.title} - </span>
             {conference.tagline}
           </h1>
-          <div className="mt-6 space-y-6 font-display text-2xl tracking-tight text-blue-900">
+          <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
             <p>
               Cloud Native Day Bergen is the nerdiest tech conference in Bergen.
               Join us to learn about the latest trends, best practices, and
