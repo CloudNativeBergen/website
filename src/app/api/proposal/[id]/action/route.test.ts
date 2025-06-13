@@ -102,6 +102,13 @@ describe('actionStateMachine', () => {
     },
     {
       currentStatus: Status.accepted,
+      action: Action.remind,
+      isOrganizer: true,
+      expectedStatus: Status.accepted,
+      expectedValidAction: true,
+    },
+    {
+      currentStatus: Status.accepted,
       action: Action.withdraw,
       isOrganizer: false,
       expectedStatus: Status.withdrawn,

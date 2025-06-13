@@ -8,7 +8,7 @@ import { ProposalReviewSummary } from './ProposalReviewSummary'
 import { ProposalReviewForm } from './ProposalReviewForm'
 import { ProposalReviewList } from './ProposalReviewList'
 import { ProposalActionModal } from './ProposalActionModal'
-import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { CheckIcon, XMarkIcon, BellIcon } from '@heroicons/react/24/outline'
 
 interface ProposalActionPanelProps {
   proposal: ProposalExisting
@@ -80,6 +80,7 @@ export function ProposalActionPanel({
   }
 
   const canApprove = proposalStatus === Status.submitted
+  const canRemind = proposalStatus === Status.accepted
   const canReject = proposalStatus === Status.submitted || proposalStatus === Status.accepted
 
   return (
@@ -91,18 +92,32 @@ export function ProposalActionPanel({
 
           {/* Button Group */}
           <div className="inline-flex rounded-md shadow-sm w-full" role="group">
-            {/* Approve Button */}
-            <button
-              onClick={() => handleAction(Action.accept)}
-              disabled={!canApprove}
-              className={`relative inline-flex flex-1 items-center justify-center gap-x-2 rounded-l-md px-3 py-2 text-sm font-semibold text-white focus:z-10 focus:ring-2 focus:ring-green-600 focus:ring-offset-2 ${canApprove
-                ? 'bg-green-600 hover:bg-green-700 cursor-pointer'
-                : 'bg-green-600 opacity-50 cursor-not-allowed'
-                }`}
-            >
-              <CheckIcon className="h-4 w-4" />
-              Approve
-            </button>
+            {/* Approve or Remind Button */}
+            {canApprove ? (
+              <button
+                onClick={() => handleAction(Action.accept)}
+                className="relative inline-flex flex-1 items-center justify-center gap-x-2 rounded-l-md px-3 py-2 text-sm font-semibold text-white focus:z-10 focus:ring-2 focus:ring-green-600 focus:ring-offset-2 bg-green-600 hover:bg-green-700 cursor-pointer"
+              >
+                <CheckIcon className="h-4 w-4" />
+                Approve
+              </button>
+            ) : canRemind ? (
+              <button
+                onClick={() => handleAction(Action.remind)}
+                className="relative inline-flex flex-1 items-center justify-center gap-x-2 rounded-l-md px-3 py-2 text-sm font-semibold text-white focus:z-10 focus:ring-2 focus:ring-yellow-600 focus:ring-offset-2 bg-yellow-600 hover:bg-yellow-700 cursor-pointer"
+              >
+                <BellIcon className="h-4 w-4" />
+                Remind
+              </button>
+            ) : (
+              <button
+                disabled
+                className="relative inline-flex flex-1 items-center justify-center gap-x-2 rounded-l-md px-3 py-2 text-sm font-semibold text-white focus:z-10 focus:ring-2 focus:ring-green-600 focus:ring-offset-2 bg-green-600 opacity-50 cursor-not-allowed"
+              >
+                <CheckIcon className="h-4 w-4" />
+                Approve
+              </button>
+            )}
 
             {/* Reject Button */}
             <button

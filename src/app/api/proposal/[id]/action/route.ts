@@ -110,7 +110,7 @@ export const POST = auth(
       })
     }
 
-    if (notify && (action === Action.accept || action === Action.reject)) {
+    if (notify && (action === Action.accept || action === Action.reject || action === Action.remind)) {
       await sendAcceptRejectNotification({
         action,
         speaker: proposal.speaker as Speaker,

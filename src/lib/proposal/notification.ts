@@ -23,6 +23,7 @@ const templateReject = process.env.SENDGRID_TEMPALTE_ID_CFP_REJECT as string
 function getTemplate(action: Action) {
   switch (action) {
     case Action.accept:
+    case Action.remind:
       return templateAccept
     case Action.reject:
       return templateReject

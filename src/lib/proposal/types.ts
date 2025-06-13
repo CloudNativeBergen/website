@@ -53,6 +53,7 @@ export enum Action {
   submit = 'submit',
   unsubmit = 'unsubmit',
   accept = 'accept',
+  remind = 'remind',
   confirm = 'confirm',
   reject = 'reject',
   withdraw = 'withdraw',
