@@ -82,6 +82,7 @@ export interface Conference {
   checkin_event_id?: number
   social_links?: string[]
   organizers: Speaker[]
+  featured_speakers?: Speaker[]
   domains: string[]
   formats: Format[]
   topics: Topic[]

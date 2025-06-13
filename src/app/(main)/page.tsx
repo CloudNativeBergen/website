@@ -23,6 +23,7 @@ function schedulesHasSpeakers(schedules: ConferenceSchedule[]) {
 export default async function Home() {
   const { conference, error } = await getConferenceForCurrentDomain({
     organizers: true,
+    featuredSpeakers: true,
     schedule: true,
     sponsors: true,
     revalidate,
@@ -33,30 +34,27 @@ export default async function Home() {
     return <div>Error loading conference data</div>
   }
 
+  const hasSchedules = conference.schedules && conference.schedules.length > 0
+  const hasScheduledSpeakers = hasSchedules && schedulesHasSpeakers(conference.schedules!)
+  const currentSchedule = hasSchedules ? conference.schedules![0] : null
+  const displaySpeakers = conference.featured_speakers && conference.featured_speakers.length > 0
+    ? conference.featured_speakers
+    : conference.organizers
+  const isOrganizers = !conference.featured_speakers || conference.featured_speakers.length === 0
+
   return (
     <>
       <Hero conference={conference} />
 
-      {!conference?.schedules || conference.schedules.length === 0 ? (
-        <FeaturedSpeakers
-          speakers={conference.organizers || []}
-          isOrganizers={true}
-        />
+      {hasScheduledSpeakers ? (
+        <Speakers tracks={currentSchedule!.tracks} />
       ) : (
-        <>
-          {!schedulesHasSpeakers(conference.schedules) ? (
-            <FeaturedSpeakers
-              speakers={conference.organizers || []}
-              isOrganizers={true}
-            />
-          ) : (
-            <Speakers tracks={conference.schedules[0].tracks} />
-          )}
-          <Schedule schedule={conference.schedules[0]} />
-        </>
+        <FeaturedSpeakers speakers={displaySpeakers} isOrganizers={isOrganizers} />
       )}
+
+      {currentSchedule && <Schedule schedule={currentSchedule} />}
+
       <Sponsors sponsors={conference.sponsors || []} />
-      {/*<Newsletter />*/}
     </>
   )
 }

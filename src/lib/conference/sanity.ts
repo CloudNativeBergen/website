@@ -8,6 +8,7 @@ export async function getConferenceForCurrentDomain({
   sponsors = false,
   sponsorTiers = false,
   topics = false,
+  featuredSpeakers = false,
   revalidate = 3600,
 }: {
   organizers?: boolean
@@ -15,6 +16,7 @@ export async function getConferenceForCurrentDomain({
   sponsors?: boolean
   sponsorTiers?: boolean
   topics?: boolean
+  featuredSpeakers?: boolean
   revalidate?: number
 } = {}): Promise<{
   conference: Conference
@@ -30,6 +32,7 @@ export async function getConferenceForCurrentDomain({
       sponsors,
       sponsorTiers,
       topics,
+      featuredSpeakers,
       revalidate,
     )
   } catch (err) {
@@ -46,6 +49,7 @@ export async function getConferenceForDomain(
   sponsors: boolean = false,
   sponsorTiers: boolean = false,
   topics: boolean = false,
+  featuredSpeakers: boolean = false,
   revalidate: number = 3600,
 ): Promise<{ conference: Conference; error: Error | null }> {
   let conference = {} as Conference
@@ -58,6 +62,14 @@ export async function getConferenceForDomain(
       ...,
       ${organizers
         ? `organizers[]->{
+      ...,
+      "slug": slug.current,
+      "image": image.asset->url
+      },`
+        : ''
+      }
+      ${featuredSpeakers
+        ? `featured_speakers[]->{
       ...,
       "slug": slug.current,
       "image": image.asset->url

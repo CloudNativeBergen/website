@@ -171,6 +171,14 @@ export default defineType({
       validation: (Rule) => Rule.required().min(1).unique(),
     }),
     defineField({
+      name: 'featured_speakers',
+      title: 'Featured Speakers',
+      type: 'array',
+      of: [{ type: 'reference', to: { type: 'speaker' } }],
+      validation: (Rule) => Rule.unique(),
+      initialValue: [],
+    }),
+    defineField({
       name: 'domains',
       title: 'Domains',
       type: 'array',
