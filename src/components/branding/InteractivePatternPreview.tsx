@@ -15,11 +15,7 @@ export function InteractivePatternPreview() {
   const maxDisplaySize = Math.round(baseSize * 1.6)
 
   return (
-    <div className="space-y-6">
-      <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-        Interactive Pattern Preview
-      </h3>
-
+    <div className="flex h-full flex-col space-y-6">
       {/* Pattern Display */}
       <div
         className={`relative h-80 overflow-hidden rounded-xl ${
@@ -63,7 +59,7 @@ export function InteractivePatternPreview() {
       </div>
 
       {/* Controls */}
-      <div className="space-y-6 rounded-xl bg-brand-sky-mist p-6">
+      <div className="flex-1 space-y-6 rounded-xl bg-brand-sky-mist p-6">
         <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
           Pattern Controls
         </h4>

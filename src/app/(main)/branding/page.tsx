@@ -1,6 +1,5 @@
 import { Metadata } from 'next'
 import { Container } from '@/components/Container'
-import { Button } from '@/components/Button'
 import { DiamondIcon } from '@/components/DiamondIcon'
 import { SpeakerCard } from '@/components/SpeakerCard'
 import Image from 'next/image'
@@ -92,40 +91,34 @@ export default function BrandingPage() {
                 Icons
               </a>
               <a
-                href="#brand-in-action"
-                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
-              >
-                In Action
-              </a>
-              <a
-                href="#talk-examples"
-                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
-              >
-                Talk Cards
-              </a>
-              <a
-                href="#background-utilities"
-                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
-              >
-                Backgrounds
-              </a>
-              <a
                 href="#pattern-system"
                 className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
               >
                 Patterns
               </a>
               <a
-                href="#design-principles"
+                href="#buttons-showcase"
                 className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
               >
-                Principles
+                Buttons
               </a>
               <a
-                href="#brand-resources"
+                href="#hero-examples"
                 className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
               >
-                Resources
+                Hero
+              </a>
+              <a
+                href="#speaker-examples"
+                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
+              >
+                Speakers
+              </a>
+              <a
+                href="#talk-examples"
+                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
+              >
+                Talks
               </a>
             </div>
           </div>
@@ -190,6 +183,62 @@ export default function BrandingPage() {
                 </ul>
               </div>
             </div>
+
+            {/* Design Principles */}
+            <div className="mt-20">
+              <h3 className="font-space-grotesk mb-8 text-center text-3xl font-bold text-brand-cloud-blue">
+                Design Principles
+              </h3>
+              <p className="font-inter mx-auto mb-12 max-w-3xl text-center text-lg text-brand-slate-gray">
+                These principles guide every design decision and ensure our
+                brand remains consistent, accessible, and true to our community
+                values.
+              </p>
+
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
+                {[
+                  {
+                    title: 'Developer-First',
+                    description:
+                      'Every design choice considers the developer experience and technical audience.',
+                    icon: CommandLineIcon,
+                  },
+                  {
+                    title: 'Accessible by Design',
+                    description:
+                      'We prioritize accessibility and inclusive design in all brand applications.',
+                    icon: EyeIcon,
+                  },
+                  {
+                    title: 'Nordic Minimalism',
+                    description:
+                      'Clean, functional design that lets content shine without unnecessary complexity.',
+                    icon: BoltIcon,
+                  },
+                  {
+                    title: 'Community Driven',
+                    description:
+                      'Our brand reflects the collaborative spirit of the open source community.',
+                    icon: GlobeAltIcon,
+                  },
+                ].map((principle) => (
+                  <div
+                    key={principle.title}
+                    className="rounded-xl bg-white p-6 text-center shadow-sm"
+                  >
+                    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-brand-cloud-blue/10">
+                      <principle.icon className="h-6 w-6 text-brand-cloud-blue" />
+                    </div>
+                    <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-cloud-blue">
+                      {principle.title}
+                    </h4>
+                    <p className="font-inter text-brand-slate-gray">
+                      {principle.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </Container>
       </section>
@@ -220,6 +269,208 @@ export default function BrandingPage() {
               </div>
             </div>
           ))}
+
+          {/* Background Utilities */}
+          <div className="mt-20">
+            <h3 className="font-space-grotesk mb-8 text-center text-3xl font-bold text-brand-cloud-blue">
+              Background Utilities
+            </h3>
+            <p className="font-inter mx-auto mb-12 max-w-3xl text-center text-lg text-brand-slate-gray">
+              Our background system includes solid colors and gradients that
+              work seamlessly across all brand applications and maintain proper
+              contrast ratios.
+            </p>
+
+            {/* Gradient Backgrounds */}
+            <div className="mb-16">
+              <h4 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray">
+                Gradient Backgrounds
+              </h4>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                <div className="relative flex min-h-[200px] items-center justify-center rounded-xl bg-aqua-gradient p-8 text-center">
+                  <div className="absolute inset-0 rounded-xl bg-black/20"></div>
+                  <div className="relative z-10">
+                    <h5 className="font-space-grotesk mb-2 text-xl font-semibold text-white">
+                      Aqua Gradient
+                    </h5>
+                    <p className="font-inter mb-3 text-sm text-white/90">
+                      Primary hero gradient
+                    </p>
+                    <code className="font-jetbrains rounded bg-black/30 px-3 py-1 text-xs text-white">
+                      bg-aqua-gradient
+                    </code>
+                  </div>
+                </div>
+
+                <div className="relative flex min-h-[200px] items-center justify-center rounded-xl bg-brand-gradient p-8 text-center">
+                  <div className="absolute inset-0 rounded-xl bg-black/20"></div>
+                  <div className="relative z-10">
+                    <h5 className="font-space-grotesk mb-2 text-xl font-semibold text-white">
+                      Brand Gradient
+                    </h5>
+                    <p className="font-inter mb-3 text-sm text-white/90">
+                      Enhanced brand gradient
+                    </p>
+                    <code className="font-jetbrains rounded bg-black/30 px-3 py-1 text-xs text-white">
+                      bg-brand-gradient
+                    </code>
+                  </div>
+                </div>
+
+                <div className="relative flex min-h-[200px] items-center justify-center rounded-xl bg-nordic-gradient p-8 text-center">
+                  <div className="absolute inset-0 rounded-xl bg-black/20"></div>
+                  <div className="relative z-10">
+                    <h5 className="font-space-grotesk mb-2 text-xl font-semibold text-white">
+                      Nordic Gradient
+                    </h5>
+                    <p className="font-inter mb-3 text-sm text-white/90">
+                      Accent gradient
+                    </p>
+                    <code className="font-jetbrains rounded bg-black/30 px-3 py-1 text-xs text-white">
+                      bg-nordic-gradient
+                    </code>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Solid Color Backgrounds */}
+            <div className="mb-16">
+              <h4 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray">
+                Solid Color Backgrounds
+              </h4>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                {/* Primary Colors */}
+                <div className="rounded-lg bg-brand-cloud-blue p-6 text-center">
+                  <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/20"></div>
+                  <h5 className="font-space-grotesk mb-1 text-sm font-semibold text-white">
+                    Cloud Blue
+                  </h5>
+                  <code className="font-jetbrains text-xs text-white/80">
+                    bg-brand-cloud-blue
+                  </code>
+                </div>
+
+                <div className="rounded-lg bg-brand-fresh-green p-6 text-center">
+                  <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/20"></div>
+                  <h5 className="font-space-grotesk mb-1 text-sm font-semibold text-white">
+                    Fresh Green
+                  </h5>
+                  <code className="font-jetbrains text-xs text-white/80">
+                    bg-brand-fresh-green
+                  </code>
+                </div>
+
+                <div className="rounded-lg bg-brand-nordic-purple p-6 text-center">
+                  <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/20"></div>
+                  <h5 className="font-space-grotesk mb-1 text-sm font-semibold text-white">
+                    Nordic Purple
+                  </h5>
+                  <code className="font-jetbrains text-xs text-white/80">
+                    bg-brand-nordic-purple
+                  </code>
+                </div>
+
+                <div className="rounded-lg bg-brand-sunbeam-yellow p-6 text-center">
+                  <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-black/20"></div>
+                  <h5 className="font-space-grotesk mb-1 text-sm font-semibold text-black">
+                    Sunbeam Yellow
+                  </h5>
+                  <code className="font-jetbrains text-xs text-black/70">
+                    bg-brand-sunbeam-yellow
+                  </code>
+                </div>
+
+                {/* Neutral Colors */}
+                <div className="rounded-lg border border-brand-frosted-steel bg-brand-sky-mist p-6 text-center">
+                  <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-brand-cloud-blue/20"></div>
+                  <h5 className="font-space-grotesk mb-1 text-sm font-semibold text-brand-slate-gray">
+                    Sky Mist
+                  </h5>
+                  <code className="font-jetbrains text-xs text-brand-slate-gray">
+                    bg-brand-sky-mist
+                  </code>
+                </div>
+
+                <div className="rounded-lg border border-brand-frosted-steel bg-brand-glacier-white p-6 text-center">
+                  <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-brand-cloud-blue/20"></div>
+                  <h5 className="font-space-grotesk mb-1 text-sm font-semibold text-brand-slate-gray">
+                    Glacier White
+                  </h5>
+                  <code className="font-jetbrains text-xs text-brand-slate-gray">
+                    bg-brand-glacier-white
+                  </code>
+                </div>
+
+                <div className="rounded-lg bg-brand-slate-gray p-6 text-center">
+                  <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/20"></div>
+                  <h5 className="font-space-grotesk mb-1 text-sm font-semibold text-white">
+                    Slate Gray
+                  </h5>
+                  <code className="font-jetbrains text-xs text-white/80">
+                    bg-brand-slate-gray
+                  </code>
+                </div>
+
+                <div className="rounded-lg bg-brand-frosted-steel p-6 text-center">
+                  <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-brand-slate-gray/20"></div>
+                  <h5 className="font-space-grotesk mb-1 text-sm font-semibold text-brand-slate-gray">
+                    Frosted Steel
+                  </h5>
+                  <code className="font-jetbrains text-xs text-brand-slate-gray">
+                    bg-brand-frosted-steel
+                  </code>
+                </div>
+              </div>
+            </div>
+
+            {/* Usage Guidelines */}
+            <div className="rounded-xl bg-brand-glacier-white p-8">
+              <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
+                Background Usage Guidelines
+              </h4>
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                <div>
+                  <h5 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
+                    When to Use Gradients
+                  </h5>
+                  <ul className="font-inter space-y-2 text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      Hero sections and primary call-to-actions
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      Section dividers and visual breaks
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      Digital badges and highlighting
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h5 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
+                    When to Use Solid Colors
+                  </h5>
+                  <ul className="font-inter space-y-2 text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      Content sections and cards
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      UI components and interactive elements
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      Status indicators and alerts
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         </Container>
       </section>
 
@@ -561,208 +812,546 @@ export default function BrandingPage() {
         </Container>
       </section>
 
-      {/* Usage Examples */}
-      <section id="brand-in-action" className="bg-white py-20">
+      {/* Cloud Native Pattern System */}
+      <section id="pattern-system" className="bg-white py-20">
         <Container>
           <div className="mb-16 text-center">
             <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
-              Brand in Action
+              Cloud Native Pattern System
             </h2>
             <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
-              See how our brand elements work together to create compelling,
-              accessible experiences across different use cases.
+              Our animated background patterns incorporate authentic cloud
+              native project logos with intelligent focus/diffusion effects.
+              Smaller icons appear sharp and vibrant (in focus), while larger
+              icons become more diffuse and subtle, creating natural visual
+              depth that enhances readability and engagement.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
+            {/* Interactive Pattern Preview - Pattern Controls */}
+            <div className="flex flex-col lg:col-span-2">
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Interactive Pattern Preview
+              </h3>
+              <div className="flex-1">
+                <InteractivePatternPreview />
+              </div>
+            </div>
+
+            {/* Configuration Guidelines */}
+            <div className="flex flex-col lg:col-span-1">
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Configuration Guidelines
+              </h3>
+              <div className="flex-1 rounded-lg bg-brand-sky-mist p-6">
+                <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div>
+                    <h4 className="font-space-grotesk mb-3 text-sm font-semibold tracking-wide text-brand-slate-gray uppercase">
+                      Icon Size
+                    </h4>
+                    <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                      <li className="flex items-start">
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                        Content sections: 15-35px icons
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                        Hero sections: 25-70px icons
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                        Background fills: 20-50px icons
+                      </li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-space-grotesk mb-3 text-sm font-semibold tracking-wide text-brand-slate-gray uppercase">
+                      Icon Count
+                    </h4>
+                    <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                      <li className="flex items-start">
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                        Subtle: 10-30 icons for content backgrounds
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                        Balanced: 30-60 icons for hero sections
+                      </li>
+                      <li className="flex items-start">
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                        Dense: 60-120 icons for dramatic effects
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                <div className="border-t border-brand-frosted-steel pt-4">
+                  <h4 className="font-space-grotesk mb-3 text-sm font-semibold tracking-wide text-brand-slate-gray uppercase">
+                    Focus/Diffusion System
+                  </h4>
+                  <ul className="font-inter mb-4 space-y-2 text-sm text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      Small icons (20-30px): High opacity, vibrant colors, sharp
+                      focus
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      Medium icons (30-50px): Balanced opacity and slight blur
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      Large icons (50-70px): Lower opacity, subtle colors, soft
+                      blur
+                    </li>
+                  </ul>
+                  <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple"></span>
+                      Adjust opacity (0.08-0.15) based on content readability
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple"></span>
+                      Use slow movement animation for engaging backgrounds
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple"></span>
+                      Disable animation for static contexts or better
+                      performance
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple"></span>
+                      Combine with gradient backgrounds for optimal contrast
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pattern Elements Section - Moved below main grid */}
+          <div className="mt-16">
+            <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+              Pattern Elements
+            </h3>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+              <div className="flex flex-col items-center rounded-lg bg-brand-glacier-white p-6 text-center">
+                <div className="relative mb-4 h-12 w-12">
+                  <Image
+                    src={KubernetesIcon}
+                    alt="Kubernetes"
+                    width={48}
+                    height={48}
+                    className="h-full w-full object-contain"
+                    style={{
+                      filter:
+                        'brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%)',
+                    }}
+                  />
+                </div>
+                <h4 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray">
+                  Container Orchestration
+                </h4>
+                <p className="font-inter text-sm text-brand-slate-gray">
+                  Kubernetes, containerd, and etcd - the foundation of modern
+                  container orchestration.
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center rounded-lg bg-brand-glacier-white p-6 text-center">
+                <div className="relative mb-4 h-12 w-12">
+                  <Image
+                    src={PrometheusIcon}
+                    alt="Prometheus"
+                    width={48}
+                    height={48}
+                    className="h-full w-full object-contain"
+                    style={{
+                      filter:
+                        'brightness(0) saturate(100%) invert(25%) sepia(15%) saturate(4478%) hue-rotate(202deg) brightness(100%) contrast(92%)',
+                    }}
+                  />
+                </div>
+                <h4 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray">
+                  Observability & Monitoring
+                </h4>
+                <p className="font-inter text-sm text-brand-slate-gray">
+                  Prometheus, Jaeger, and Falco for comprehensive system
+                  observability and security.
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center rounded-lg bg-brand-glacier-white p-6 text-center">
+                <div className="relative mb-4 h-12 w-12">
+                  <Image
+                    src={IstioIcon}
+                    alt="Istio"
+                    width={48}
+                    height={48}
+                    className="h-full w-full object-contain"
+                    style={{
+                      filter:
+                        'brightness(0) saturate(100%) invert(47%) sepia(61%) saturate(558%) hue-rotate(101deg) brightness(94%) contrast(86%)',
+                    }}
+                  />
+                </div>
+                <h4 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray">
+                  Service Mesh & Networking
+                </h4>
+                <p className="font-inter text-sm text-brand-slate-gray">
+                  Istio, Envoy, and Cilium for secure, observable
+                  service-to-service communication.
+                </p>
+              </div>
+
+              <div className="flex flex-col items-center rounded-lg bg-brand-glacier-white p-6 text-center">
+                <div className="relative mb-4 h-12 w-12">
+                  <Image
+                    src={HelmIcon}
+                    alt="Helm"
+                    width={48}
+                    height={48}
+                    className="h-full w-full object-contain"
+                    style={{
+                      filter:
+                        'brightness(0) saturate(100%) invert(75%) sepia(32%) saturate(1207%) hue-rotate(357deg) brightness(98%) contrast(84%)',
+                    }}
+                  />
+                </div>
+                <h4 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray">
+                  Packaging & GitOps
+                </h4>
+                <p className="font-inter text-sm text-brand-slate-gray">
+                  Helm, Argo, and Crossplane for application packaging and
+                  deployment automation.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      {/* Configuration Examples Section */}
+      <section className="bg-brand-glacier-white py-20">
+        <Container>
+          <div className="mb-12 text-center">
+            <h2 className="font-space-grotesk mb-4 text-3xl font-bold text-brand-cloud-blue">
+              Configuration Examples
+            </h2>
+            <p className="font-inter mx-auto max-w-2xl text-lg text-brand-slate-gray">
+              See how different settings create unique visual effects for
+              various use cases
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            {/* Light variant with custom sizing */}
+            <PatternExample
+              title="Content Background"
+              description="Subtle pattern for content sections and cards"
+              opacity={0.06}
+              variant="light"
+              baseSize={25}
+              iconCount={18}
+              animated={true}
+            />
+
+            {/* Default hero pattern - improved with larger icons */}
+            <PatternExample
+              title="Hero Section (Default)"
+              description="Perfect balance for wide hero sections"
+              opacity={0.15}
+              variant="brand"
+              baseSize={52}
+              iconCount={38}
+              animated={true}
+            />
+
+            {/* Dense dramatic pattern */}
+            <PatternExample
+              title="Dramatic Background"
+              description="Dense, dramatic effect for special sections"
+              opacity={0.2}
+              variant="dark"
+              baseSize={58}
+              iconCount={55}
+              animated={true}
+            />
+          </div>
+
+          {/* Technical Details */}
+          <div className="mt-12 rounded-xl bg-white p-8">
+            <h4 className="font-space-grotesk mb-6 text-center text-xl font-semibold text-brand-slate-gray">
+              Focus/Diffusion Technology
+            </h4>
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-fresh-green/20">
+                  <span className="text-2xl font-bold text-brand-fresh-green">
+                    S
+                  </span>
+                </div>
+                <h5 className="font-space-grotesk text-md mb-2 font-semibold text-brand-slate-gray">
+                  Small Icons (Sharp Focus)
+                </h5>
+                <p className="font-inter text-sm text-brand-slate-gray">
+                  Higher opacity, vibrant colors, no blur. Draw attention as
+                  foreground elements.
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-cloud-blue/20">
+                  <span className="text-2xl font-bold text-brand-cloud-blue">
+                    M
+                  </span>
+                </div>
+                <h5 className="font-space-grotesk text-md mb-2 font-semibold text-brand-slate-gray">
+                  Medium Icons (Balanced)
+                </h5>
+                <p className="font-inter text-sm text-brand-slate-gray">
+                  Moderate opacity and subtle blur. Provide visual texture
+                  without distraction.
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-frosted-steel/40">
+                  <span className="text-2xl font-bold text-brand-slate-gray">
+                    L
+                  </span>
+                </div>
+                <h5 className="font-space-grotesk text-md mb-2 font-semibold text-brand-slate-gray">
+                  Large Icons (Soft Diffusion)
+                </h5>
+                <p className="font-inter text-sm text-brand-slate-gray">
+                  Lower opacity, muted colors, soft blur. Create atmospheric
+                  background depth.
+                </p>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+      {/* Button Showcase */}
+      <section id="buttons-showcase" className="bg-white py-20">
+        <Container>
+          <div className="mb-16 text-center">
+            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
+              Button Showcase
+            </h2>
+            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
+              Our button system provides consistent, accessible interactions
+              across all brand applications with clear visual hierarchy.
+            </p>
+          </div>
+
+          <ButtonShowcase />
+
+          {/* Icon Usage Examples */}
+          <div className="mt-16">
+            <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+              Icons in UI Components
+            </h3>
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              {/* Feature Grid Example */}
+              <div className="rounded-xl border border-gray-200 bg-white p-8">
+                <h4 className="font-space-grotesk mb-6 text-lg font-semibold text-brand-cloud-blue">
+                  Platform Features
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center space-x-3">
+                    <CloudIcon className="h-6 w-6 text-brand-cloud-blue" />
+                    <span className="font-inter text-sm text-brand-slate-gray">
+                      Cloud Native
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CubeIcon className="h-6 w-6 text-accent-yellow" />
+                    <span className="font-inter text-sm text-brand-slate-gray">
+                      Containers
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <ShieldCheckIcon className="h-6 w-6 text-secondary-500" />
+                    <span className="font-inter text-sm text-brand-slate-gray">
+                      Security
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <ChartBarIcon className="h-6 w-6 text-brand-cloud-blue" />
+                    <span className="font-inter text-sm text-brand-slate-gray">
+                      Monitoring
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation Example */}
+              <div className="rounded-xl border border-gray-200 bg-white p-8">
+                <h4 className="font-space-grotesk mb-6 text-lg font-semibold text-brand-cloud-blue">
+                  Navigation with Icons
+                </h4>
+                <nav className="space-y-3">
+                  <a
+                    href="#"
+                    className="flex items-center space-x-3 rounded p-2 transition-colors hover:bg-brand-sky-mist"
+                  >
+                    <ServerIcon className="h-5 w-5 text-brand-fresh-green" />
+                    <span className="font-inter text-brand-slate-gray">
+                      Infrastructure
+                    </span>
+                  </a>
+                  <a
+                    href="#"
+                    className="flex items-center space-x-3 rounded p-2 transition-colors hover:bg-brand-sky-mist"
+                  >
+                    <ArrowPathIcon className="h-5 w-5 text-accent-purple" />
+                    <span className="font-inter text-brand-slate-gray">
+                      CI/CD
+                    </span>
+                  </a>
+                  <a
+                    href="#"
+                    className="flex items-center space-x-3 rounded p-2 transition-colors hover:bg-brand-sky-mist"
+                  >
+                    <CommandLineIcon className="h-5 w-5 text-primary-500" />
+                    <span className="font-inter text-brand-slate-gray">
+                      Developer Tools
+                    </span>
+                  </a>
+                  <a
+                    href="#"
+                    className="flex items-center space-x-3 rounded p-2 transition-colors hover:bg-brand-sky-mist"
+                  >
+                    <BoltIcon className="h-5 w-5 text-accent-yellow" />
+                    <span className="font-inter text-brand-slate-gray">
+                      Performance
+                    </span>
+                  </a>
+                </nav>
+              </div>
+            </div>
+          </div>
+
+          {/* Icon Style Comparison */}
+          <div>
+            <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+              Outline vs Solid Icons
+            </h3>
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              {/* Outline Style */}
+              <div className="rounded-xl border border-gray-200 bg-white p-8">
+                <h4 className="font-space-grotesk mb-6 text-lg font-semibold text-brand-cloud-blue">
+                  Outline Style (Default)
+                </h4>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between rounded-lg bg-brand-glacier-white p-3">
+                    <div className="flex items-center space-x-3">
+                      <CloudIcon className="h-6 w-6 text-brand-cloud-blue" />
+                      <span className="font-inter">Infrastructure</span>
+                    </div>
+                    <span className="font-inter text-sm text-gray-500">
+                      Available
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-brand-glacier-white p-3">
+                    <div className="flex items-center space-x-3">
+                      <ServerIcon className="h-6 w-6 text-brand-fresh-green" />
+                      <span className="font-inter">Compute</span>
+                    </div>
+                    <span className="font-inter text-sm text-gray-500">
+                      Running
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-brand-glacier-white p-3">
+                    <div className="flex items-center space-x-3">
+                      <ShieldCheckIcon className="h-6 w-6 text-secondary-500" />
+                      <span className="font-inter">Security</span>
+                    </div>
+                    <span className="font-inter text-sm text-gray-500">
+                      Active
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Solid Style */}
+              <div className="rounded-xl border border-gray-200 bg-white p-8">
+                <h4 className="font-space-grotesk mb-6 text-lg font-semibold text-brand-cloud-blue">
+                  Solid Style (Emphasis)
+                </h4>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3">
+                    <div className="flex items-center space-x-3">
+                      <CloudIconSolid className="h-6 w-6 text-green-600" />
+                      <span className="font-inter font-medium">
+                        Infrastructure
+                      </span>
+                    </div>
+                    <span className="font-inter text-sm font-medium text-green-700">
+                      Healthy
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <div className="flex items-center space-x-3">
+                      <ServerIconSolid className="h-6 w-6 text-blue-600" />
+                      <span className="font-inter font-medium">Compute</span>
+                    </div>
+                    <span className="font-inter text-sm font-medium text-blue-700">
+                      Optimized
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-purple-200 bg-purple-50 p-3">
+                    <div className="flex items-center space-x-3">
+                      <ShieldCheckIconSolid className="h-6 w-6 text-purple-600" />
+                      <span className="font-inter font-medium">Security</span>
+                    </div>
+                    <span className="font-inter text-sm font-medium text-purple-700">
+                      Protected
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      {/* Hero Examples */}
+      <section id="hero-examples" className="bg-brand-glacier-white py-20">
+        <Container>
+          <div className="mb-16 text-center">
+            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
+              Hero Examples
+            </h2>
+            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
+              Hero sections showcase our brand&apos;s visual impact through
+              compelling combinations of typography, color, and cloud native
+              patterns.
+            </p>
+          </div>
+
+          <BrandingExampleHeroSection />
+        </Container>
+      </section>
+
+      {/* Speaker Examples */}
+      <section id="speaker-examples" className="bg-white py-20">
+        <Container>
+          <div className="mb-16 text-center">
+            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
+              Speaker Examples
+            </h2>
+            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
+              Speaker cards demonstrate our flexible design system with multiple
+              variants and layout options for different contexts.
             </p>
           </div>
 
           <div className="space-y-16">
-            {/* Action Buttons in Practice */}
-            <div>
-              <h3 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray">
-                Action Buttons in Practice
-              </h3>
-              <ButtonShowcase />
-            </div>
-
-            {/* Heroicons in Practice */}
-            <div>
-              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-                Heroicons in Practice
-              </h3>
-              <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-                {/* Feature Grid Example */}
-                <div className="rounded-xl border border-gray-200 bg-white p-8">
-                  <h4 className="font-space-grotesk mb-6 text-lg font-semibold text-brand-cloud-blue">
-                    Platform Features
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex items-center space-x-3">
-                      <CloudIcon className="h-6 w-6 text-brand-cloud-blue" />
-                      <span className="font-inter text-sm text-brand-slate-gray">
-                        Cloud Native
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <CubeIcon className="h-6 w-6 text-accent-yellow" />
-                      <span className="font-inter text-sm text-brand-slate-gray">
-                        Containers
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <ShieldCheckIcon className="h-6 w-6 text-secondary-500" />
-                      <span className="font-inter text-sm text-brand-slate-gray">
-                        Security
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <ChartBarIcon className="h-6 w-6 text-brand-cloud-blue" />
-                      <span className="font-inter text-sm text-brand-slate-gray">
-                        Monitoring
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Navigation Example */}
-                <div className="rounded-xl border border-gray-200 bg-white p-8">
-                  <h4 className="font-space-grotesk mb-6 text-lg font-semibold text-brand-cloud-blue">
-                    Navigation with Icons
-                  </h4>
-                  <nav className="space-y-3">
-                    <a
-                      href="#"
-                      className="flex items-center space-x-3 rounded p-2 transition-colors hover:bg-brand-sky-mist"
-                    >
-                      <ServerIcon className="h-5 w-5 text-brand-fresh-green" />
-                      <span className="font-inter text-brand-slate-gray">
-                        Infrastructure
-                      </span>
-                    </a>
-                    <a
-                      href="#"
-                      className="flex items-center space-x-3 rounded p-2 transition-colors hover:bg-brand-sky-mist"
-                    >
-                      <ArrowPathIcon className="h-5 w-5 text-accent-purple" />
-                      <span className="font-inter text-brand-slate-gray">
-                        CI/CD
-                      </span>
-                    </a>
-                    <a
-                      href="#"
-                      className="flex items-center space-x-3 rounded p-2 transition-colors hover:bg-brand-sky-mist"
-                    >
-                      <CommandLineIcon className="h-5 w-5 text-primary-500" />
-                      <span className="font-inter text-brand-slate-gray">
-                        Developer Tools
-                      </span>
-                    </a>
-                    <a
-                      href="#"
-                      className="flex items-center space-x-3 rounded p-2 transition-colors hover:bg-brand-sky-mist"
-                    >
-                      <BoltIcon className="h-5 w-5 text-accent-yellow" />
-                      <span className="font-inter text-brand-slate-gray">
-                        Performance
-                      </span>
-                    </a>
-                  </nav>
-                </div>
-              </div>
-            </div>
-
-            {/* Icon Style Comparison */}
-            <div>
-              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-                Outline vs Solid Icons
-              </h3>
-              <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-                {/* Outline Style */}
-                <div className="rounded-xl border border-gray-200 bg-white p-8">
-                  <h4 className="font-space-grotesk mb-6 text-lg font-semibold text-brand-cloud-blue">
-                    Outline Style (Default)
-                  </h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between rounded-lg bg-brand-glacier-white p-3">
-                      <div className="flex items-center space-x-3">
-                        <CloudIcon className="h-6 w-6 text-brand-cloud-blue" />
-                        <span className="font-inter">Infrastructure</span>
-                      </div>
-                      <span className="font-inter text-sm text-gray-500">
-                        Available
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg bg-brand-glacier-white p-3">
-                      <div className="flex items-center space-x-3">
-                        <ServerIcon className="h-6 w-6 text-brand-fresh-green" />
-                        <span className="font-inter">Compute</span>
-                      </div>
-                      <span className="font-inter text-sm text-gray-500">
-                        Running
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg bg-brand-glacier-white p-3">
-                      <div className="flex items-center space-x-3">
-                        <ShieldCheckIcon className="h-6 w-6 text-secondary-500" />
-                        <span className="font-inter">Security</span>
-                      </div>
-                      <span className="font-inter text-sm text-gray-500">
-                        Active
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Solid Style */}
-                <div className="rounded-xl border border-gray-200 bg-white p-8">
-                  <h4 className="font-space-grotesk mb-6 text-lg font-semibold text-brand-cloud-blue">
-                    Solid Style (Emphasis)
-                  </h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3">
-                      <div className="flex items-center space-x-3">
-                        <CloudIconSolid className="h-6 w-6 text-green-600" />
-                        <span className="font-inter font-medium">
-                          Infrastructure
-                        </span>
-                      </div>
-                      <span className="font-inter text-sm font-medium text-green-700">
-                        Healthy
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 p-3">
-                      <div className="flex items-center space-x-3">
-                        <ServerIconSolid className="h-6 w-6 text-blue-600" />
-                        <span className="font-inter font-medium">Compute</span>
-                      </div>
-                      <span className="font-inter text-sm font-medium text-blue-700">
-                        Optimized
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between rounded-lg border border-purple-200 bg-purple-50 p-3">
-                      <div className="flex items-center space-x-3">
-                        <ShieldCheckIconSolid className="h-6 w-6 text-purple-600" />
-                        <span className="font-inter font-medium">Security</span>
-                      </div>
-                      <span className="font-inter text-sm font-medium text-purple-700">
-                        Protected
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Hero Example */}
-            <div>
-              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-                Hero Section Example
-              </h3>
-              <BrandingExampleHeroSection />
-            </div>
-
             {/* Speaker Card Examples */}
             <div>
               <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-                Speaker Card Examples
+                Speaker Card Variants
               </h3>
               <p className="font-inter mb-8 text-gray-600">
                 Three different speaker card styles: Keynote (largest), Regular
@@ -938,9 +1527,26 @@ export default function BrandingPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </Container>
+      </section>
 
+      {/* Talk Examples */}
+      <section id="talk-examples" className="bg-brand-glacier-white py-20">
+        <Container>
+          <div className="mb-16 text-center">
+            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
+              Talk Examples
+            </h2>
+            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
+              Talk cards and promotions showcase conference presentations with
+              format-specific styling and clear visual hierarchy.
+            </p>
+          </div>
+
+          <div className="space-y-16">
             {/* Talk Card Examples */}
-            <div id="talk-examples">
+            <div>
               <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
                 Talk Card Examples
               </h3>
@@ -1120,646 +1726,6 @@ export default function BrandingPage() {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      {/* Background Utilities Showcase */}
-      <section id="background-utilities" className="bg-white py-20">
-        <Container>
-          <div className="mb-16 text-center">
-            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
-              Background Utilities
-            </h2>
-            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
-              Our background system includes solid colors and gradients that
-              work seamlessly across all brand applications and maintain proper
-              contrast ratios.
-            </p>
-          </div>
-
-          {/* Gradient Backgrounds */}
-          <div className="mb-16">
-            <h3 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray">
-              Gradient Backgrounds
-            </h3>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div className="relative flex min-h-[200px] items-center justify-center rounded-xl bg-aqua-gradient p-8 text-center">
-                <div className="absolute inset-0 rounded-xl bg-black/20"></div>
-                <div className="relative z-10">
-                  <h4 className="font-space-grotesk mb-2 text-xl font-semibold text-white">
-                    Aqua Gradient
-                  </h4>
-                  <p className="font-inter mb-3 text-sm text-white/90">
-                    Primary hero gradient
-                  </p>
-                  <code className="font-jetbrains rounded bg-black/30 px-3 py-1 text-xs text-white">
-                    bg-aqua-gradient
-                  </code>
-                </div>
-              </div>
-
-              <div className="relative flex min-h-[200px] items-center justify-center rounded-xl bg-brand-gradient p-8 text-center">
-                <div className="absolute inset-0 rounded-xl bg-black/20"></div>
-                <div className="relative z-10">
-                  <h4 className="font-space-grotesk mb-2 text-xl font-semibold text-white">
-                    Brand Gradient
-                  </h4>
-                  <p className="font-inter mb-3 text-sm text-white/90">
-                    Enhanced brand gradient
-                  </p>
-                  <code className="font-jetbrains rounded bg-black/30 px-3 py-1 text-xs text-white">
-                    bg-brand-gradient
-                  </code>
-                </div>
-              </div>
-
-              <div className="relative flex min-h-[200px] items-center justify-center rounded-xl bg-nordic-gradient p-8 text-center">
-                <div className="absolute inset-0 rounded-xl bg-black/20"></div>
-                <div className="relative z-10">
-                  <h4 className="font-space-grotesk mb-2 text-xl font-semibold text-white">
-                    Nordic Gradient
-                  </h4>
-                  <p className="font-inter mb-3 text-sm text-white/90">
-                    Accent gradient
-                  </p>
-                  <code className="font-jetbrains rounded bg-black/30 px-3 py-1 text-xs text-white">
-                    bg-nordic-gradient
-                  </code>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Solid Color Backgrounds */}
-          <div>
-            <h3 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray">
-              Solid Color Backgrounds
-            </h3>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              {/* Primary Colors */}
-              <div className="rounded-lg bg-brand-cloud-blue p-6 text-center">
-                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/20"></div>
-                <h4 className="font-space-grotesk mb-1 text-sm font-semibold text-white">
-                  Cloud Blue
-                </h4>
-                <code className="font-jetbrains text-xs text-white/80">
-                  bg-brand-cloud-blue
-                </code>
-              </div>
-
-              <div className="rounded-lg bg-brand-fresh-green p-6 text-center">
-                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/20"></div>
-                <h4 className="font-space-grotesk mb-1 text-sm font-semibold text-white">
-                  Fresh Green
-                </h4>
-                <code className="font-jetbrains text-xs text-white/80">
-                  bg-brand-fresh-green
-                </code>
-              </div>
-
-              <div className="rounded-lg bg-brand-nordic-purple p-6 text-center">
-                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/20"></div>
-                <h4 className="font-space-grotesk mb-1 text-sm font-semibold text-white">
-                  Nordic Purple
-                </h4>
-                <code className="font-jetbrains text-xs text-white/80">
-                  bg-brand-nordic-purple
-                </code>
-              </div>
-
-              <div className="rounded-lg bg-brand-sunbeam-yellow p-6 text-center">
-                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-black/20"></div>
-                <h4 className="font-space-grotesk mb-1 text-sm font-semibold text-black">
-                  Sunbeam Yellow
-                </h4>
-                <code className="font-jetbrains text-xs text-black/70">
-                  bg-brand-sunbeam-yellow
-                </code>
-              </div>
-
-              {/* Neutral Colors */}
-              <div className="rounded-lg border border-brand-frosted-steel bg-brand-sky-mist p-6 text-center">
-                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-brand-cloud-blue/20"></div>
-                <h4 className="font-space-grotesk mb-1 text-sm font-semibold text-brand-slate-gray">
-                  Sky Mist
-                </h4>
-                <code className="font-jetbrains text-xs text-brand-slate-gray">
-                  bg-brand-sky-mist
-                </code>
-              </div>
-
-              <div className="rounded-lg border border-brand-frosted-steel bg-brand-glacier-white p-6 text-center">
-                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-brand-cloud-blue/20"></div>
-                <h4 className="font-space-grotesk mb-1 text-sm font-semibold text-brand-slate-gray">
-                  Glacier White
-                </h4>
-                <code className="font-jetbrains text-xs text-brand-slate-gray">
-                  bg-brand-glacier-white
-                </code>
-              </div>
-
-              <div className="rounded-lg bg-brand-slate-gray p-6 text-center">
-                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-white/20"></div>
-                <h4 className="font-space-grotesk mb-1 text-sm font-semibold text-white">
-                  Slate Gray
-                </h4>
-                <code className="font-jetbrains text-xs text-white/80">
-                  bg-brand-slate-gray
-                </code>
-              </div>
-
-              <div className="rounded-lg bg-brand-frosted-steel p-6 text-center">
-                <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-brand-slate-gray/20"></div>
-                <h4 className="font-space-grotesk mb-1 text-sm font-semibold text-brand-slate-gray">
-                  Frosted Steel
-                </h4>
-                <code className="font-jetbrains text-xs text-brand-slate-gray">
-                  bg-brand-frosted-steel
-                </code>
-              </div>
-            </div>
-          </div>
-
-          {/* Usage Guidelines */}
-          <div className="mt-16 rounded-xl bg-brand-glacier-white p-8">
-            <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
-              Background Usage Guidelines
-            </h3>
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <div>
-                <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
-                  When to Use Gradients
-                </h4>
-                <ul className="font-inter space-y-2 text-brand-slate-gray">
-                  <li className="flex items-start">
-                    <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                    Hero sections and primary call-to-actions
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                    Section dividers and visual breaks
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                    Digital badges and highlighting
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
-                  When to Use Solid Colors
-                </h4>
-                <ul className="font-inter space-y-2 text-brand-slate-gray">
-                  <li className="flex items-start">
-                    <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                    Content sections and cards
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                    UI components and interactive elements
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                    Status indicators and alerts
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      {/* Cloud Native Pattern System */}
-      <section id="pattern-system" className="bg-white py-20">
-        <Container>
-          <div className="mb-16 text-center">
-            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
-              Cloud Native Pattern System
-            </h2>
-            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
-              Our animated background patterns incorporate authentic cloud
-              native project logos with intelligent focus/diffusion effects.
-              Smaller icons appear sharp and vibrant (in focus), while larger
-              icons become more diffuse and subtle, creating natural visual
-              depth that enhances readability and engagement.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-2">
-            {/* Interactive Pattern Preview */}
-            <div>
-              <InteractivePatternPreview />
-            </div>
-
-            {/* Pattern Elements */}
-            <div>
-              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-                Pattern Elements
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-start space-x-4">
-                  <div className="relative mt-1 h-8 w-8">
-                    <Image
-                      src={KubernetesIcon}
-                      alt="Kubernetes"
-                      width={32}
-                      height={32}
-                      className="h-full w-full object-contain"
-                      style={{
-                        filter:
-                          'brightness(0) saturate(100%) invert(27%) sepia(51%) saturate(2878%) hue-rotate(346deg) brightness(104%) contrast(97%)',
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
-                      Container Orchestration
-                    </h4>
-                    <p className="font-inter text-brand-slate-gray">
-                      Kubernetes, containerd, and etcd - the foundation of
-                      modern container orchestration.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="relative mt-1 h-8 w-8">
-                    <Image
-                      src={PrometheusIcon}
-                      alt="Prometheus"
-                      width={32}
-                      height={32}
-                      className="h-full w-full object-contain"
-                      style={{
-                        filter:
-                          'brightness(0) saturate(100%) invert(25%) sepia(15%) saturate(4478%) hue-rotate(202deg) brightness(100%) contrast(92%)',
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
-                      Observability & Monitoring
-                    </h4>
-                    <p className="font-inter text-brand-slate-gray">
-                      Prometheus, Jaeger, and Falco for comprehensive system
-                      observability and security.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="relative mt-1 h-8 w-8">
-                    <Image
-                      src={IstioIcon}
-                      alt="Istio"
-                      width={32}
-                      height={32}
-                      className="h-full w-full object-contain"
-                      style={{
-                        filter:
-                          'brightness(0) saturate(100%) invert(47%) sepia(61%) saturate(558%) hue-rotate(101deg) brightness(94%) contrast(86%)',
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
-                      Service Mesh & Networking
-                    </h4>
-                    <p className="font-inter text-brand-slate-gray">
-                      Istio, Envoy, and Cilium for secure, observable
-                      service-to-service communication.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="relative mt-1 h-8 w-8">
-                    <Image
-                      src={HelmIcon}
-                      alt="Helm"
-                      width={32}
-                      height={32}
-                      className="h-full w-full object-contain"
-                      style={{
-                        filter:
-                          'brightness(0) saturate(100%) invert(75%) sepia(32%) saturate(1207%) hue-rotate(357deg) brightness(98%) contrast(84%)',
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <h4 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
-                      Package Management & GitOps
-                    </h4>
-                    <p className="font-inter text-brand-slate-gray">
-                      Helm, Argo, and Crossplane for application packaging and
-                      deployment automation.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 rounded-lg bg-brand-sky-mist p-6">
-                <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
-                  Configuration Guidelines
-                </h4>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <h5 className="font-space-grotesk mb-2 text-sm font-semibold tracking-wide text-brand-slate-gray uppercase">
-                      Size Configuration
-                    </h5>
-                    <ul className="font-inter space-y-1 text-sm text-brand-slate-gray">
-                      <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                        Content sections: 15-35px icons
-                      </li>
-                      <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                        Hero sections: 25-70px icons
-                      </li>
-                      <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                        Background fills: 20-50px icons
-                      </li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h5 className="font-space-grotesk mb-2 text-sm font-semibold tracking-wide text-brand-slate-gray uppercase">
-                      Icon Count Configuration
-                    </h5>
-                    <ul className="font-inter space-y-1 text-sm text-brand-slate-gray">
-                      <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                        Subtle: 10-30 icons for content backgrounds
-                      </li>
-                      <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                        Balanced: 30-60 icons for hero sections
-                      </li>
-                      <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                        Dense: 60-120 icons for dramatic effects
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-                <div className="mt-4 border-t border-brand-frosted-steel pt-4">
-                  <h5 className="font-space-grotesk mb-2 text-sm font-semibold tracking-wide text-brand-slate-gray uppercase">
-                    Focus/Diffusion System
-                  </h5>
-                  <ul className="font-inter mb-4 space-y-2 text-sm text-brand-slate-gray">
-                    <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                      Small icons (20-30px): High opacity, vibrant colors, sharp
-                      focus
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                      Medium icons (30-50px): Balanced opacity and slight blur
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                      Large icons (50-70px): Lower opacity, subtle colors, soft
-                      blur
-                    </li>
-                  </ul>
-                  <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
-                    <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple"></span>
-                      Adjust opacity (0.08-0.15) based on content readability
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple"></span>
-                      Use slow movement animation for engaging backgrounds
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple"></span>
-                      Disable animation for static contexts or better
-                      performance
-                    </li>
-                    <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple"></span>
-                      Combine with gradient backgrounds for optimal contrast
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      {/* Configuration Examples Section */}
-      <section className="bg-brand-glacier-white py-20">
-        <Container>
-          <div className="mb-12 text-center">
-            <h2 className="font-space-grotesk mb-4 text-3xl font-bold text-brand-cloud-blue">
-              Configuration Examples
-            </h2>
-            <p className="font-inter mx-auto max-w-2xl text-lg text-brand-slate-gray">
-              See how different settings create unique visual effects for
-              various use cases
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            {/* Light variant with custom sizing */}
-            <PatternExample
-              title="Content Background"
-              description="Subtle pattern for content sections and cards"
-              opacity={0.06}
-              variant="light"
-              baseSize={25}
-              iconCount={18}
-              animated={true}
-            />
-
-            {/* Default hero pattern - improved with larger icons */}
-            <PatternExample
-              title="Hero Section (Default)"
-              description="Perfect balance for wide hero sections"
-              opacity={0.15}
-              variant="brand"
-              baseSize={52}
-              iconCount={38}
-              animated={true}
-            />
-
-            {/* Dense dramatic pattern */}
-            <PatternExample
-              title="Dramatic Background"
-              description="Dense, dramatic effect for special sections"
-              opacity={0.2}
-              variant="dark"
-              baseSize={58}
-              iconCount={55}
-              animated={true}
-            />
-          </div>
-
-          {/* Technical Details */}
-          <div className="mt-12 rounded-xl bg-white p-8">
-            <h4 className="font-space-grotesk mb-6 text-center text-xl font-semibold text-brand-slate-gray">
-              Focus/Diffusion Technology
-            </h4>
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-              <div className="text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-fresh-green/20">
-                  <span className="text-2xl font-bold text-brand-fresh-green">
-                    S
-                  </span>
-                </div>
-                <h5 className="font-space-grotesk text-md mb-2 font-semibold text-brand-slate-gray">
-                  Small Icons (Sharp Focus)
-                </h5>
-                <p className="font-inter text-sm text-brand-slate-gray">
-                  Higher opacity, vibrant colors, no blur. Draw attention as
-                  foreground elements.
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-cloud-blue/20">
-                  <span className="text-2xl font-bold text-brand-cloud-blue">
-                    M
-                  </span>
-                </div>
-                <h5 className="font-space-grotesk text-md mb-2 font-semibold text-brand-slate-gray">
-                  Medium Icons (Balanced)
-                </h5>
-                <p className="font-inter text-sm text-brand-slate-gray">
-                  Moderate opacity and subtle blur. Provide visual texture
-                  without distraction.
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-frosted-steel/40">
-                  <span className="text-2xl font-bold text-brand-slate-gray">
-                    L
-                  </span>
-                </div>
-                <h5 className="font-space-grotesk text-md mb-2 font-semibold text-brand-slate-gray">
-                  Large Icons (Soft Diffusion)
-                </h5>
-                <p className="font-inter text-sm text-brand-slate-gray">
-                  Lower opacity, muted colors, soft blur. Create atmospheric
-                  background depth.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Container>
-      </section>
-
-      {/* Design Principles */}
-      <section id="design-principles" className="bg-brand-sky-mist py-20">
-        <Container>
-          <div className="mb-16 text-center">
-            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
-              Design Principles
-            </h2>
-            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
-              These principles guide every design decision and ensure our brand
-              remains consistent, accessible, and true to our community values.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4">
-            {[
-              {
-                title: 'Developer-First',
-                description:
-                  'Every design choice considers the developer experience and technical audience.',
-                icon: CommandLineIcon,
-              },
-              {
-                title: 'Accessible by Design',
-                description:
-                  'We prioritize accessibility and inclusive design in all brand applications.',
-                icon: EyeIcon,
-              },
-              {
-                title: 'Nordic Minimalism',
-                description:
-                  'Clean, functional design that lets content shine without unnecessary complexity.',
-                icon: BoltIcon,
-              },
-              {
-                title: 'Community Driven',
-                description:
-                  'Our brand reflects the collaborative spirit of the open source community.',
-                icon: GlobeAltIcon,
-              },
-            ].map((principle) => (
-              <div
-                key={principle.title}
-                className="rounded-xl bg-white p-6 text-center"
-              >
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-brand-cloud-blue/10">
-                  <principle.icon className="h-6 w-6 text-brand-cloud-blue" />
-                </div>
-                <h3 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-cloud-blue">
-                  {principle.title}
-                </h3>
-                <p className="font-inter text-brand-slate-gray">
-                  {principle.description}
-                </p>
-              </div>
-            ))}
-          </div>
-        </Container>
-      </section>
-
-      {/* Resources & Downloads */}
-      <section id="brand-resources" className="bg-white py-20">
-        <Container>
-          <div className="mb-16 text-center">
-            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
-              Brand Resources
-            </h2>
-            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
-              Download logo files, access color codes, and get implementation
-              guidelines for using the Cloud Native Day Bergen brand.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-            <div className="rounded-xl bg-brand-glacier-white p-8 text-center">
-              <h3 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-slate-gray">
-                Logo Package
-              </h3>
-              <p className="font-inter mb-6 text-brand-slate-gray">
-                SVG, PNG, and PDF versions in various sizes and orientations.
-              </p>
-              <Button variant="outline" className="font-space-grotesk">
-                Download Logos
-              </Button>
-            </div>
-
-            <div className="rounded-xl bg-brand-glacier-white p-8 text-center">
-              <h3 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-slate-gray">
-                Color Palette
-              </h3>
-              <p className="font-inter mb-6 text-brand-slate-gray">
-                Hex codes, RGB values, and Pantone colors for print and digital
-                use.
-              </p>
-              <Button variant="outline" className="font-space-grotesk">
-                Get Color Codes
-              </Button>
-            </div>
-
-            <div className="rounded-xl bg-brand-glacier-white p-8 text-center">
-              <h3 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-slate-gray">
-                Usage Guidelines
-              </h3>
-              <p className="font-inter mb-6 text-brand-slate-gray">
-                Detailed guidelines for proper logo usage, spacing, and
-                applications.
-              </p>
-              <Button variant="outline" className="font-space-grotesk">
-                View Guidelines
-              </Button>
             </div>
           </div>
         </Container>
