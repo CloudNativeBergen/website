@@ -11,12 +11,21 @@ import { Conference } from '@/lib/conference/types'
 import { PortableText } from '@portabletext/react'
 
 function ActionButtons({ conference }: { conference: Conference }) {
-  const buttons = [
+  const buttons: Array<{
+    label: string
+    href: string
+    variant:
+      | 'primary'
+      | 'secondary'
+      | 'success'
+      | 'warning'
+      | 'info'
+      | 'outline'
+  }> = [
     {
       label: 'Practical Info',
       href: '/info',
-      color: 'bg-teal-600',
-      hoverColor: 'hover:bg-teal-500',
+      variant: 'outline',
     },
   ]
 
@@ -29,8 +38,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
     buttons.push({
       label: 'Become a Sponsor',
       href: '/sponsor',
-      color: 'bg-teal-600',
-      hoverColor: 'hover:bg-teal-500',
+      variant: 'success',
     })
   }
 
@@ -44,8 +52,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
     buttons.push({
       label: 'Submit to Speak',
       href: '/cfp',
-      color: 'bg-teal-600',
-      hoverColor: 'hover:bg-teal-500',
+      variant: 'warning',
     })
   }
 
@@ -56,8 +63,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
     buttons.push({
       label: 'Program',
       href: '/program',
-      color: 'bg-purple-600',
-      hoverColor: 'hover:bg-purple-500',
+      variant: 'secondary',
     })
   }
 
@@ -65,8 +71,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
     buttons.push({
       label: 'Tickets',
       href: conference.registration_link,
-      color: '',
-      hoverColor: '',
+      variant: 'primary',
     })
   }
 
@@ -80,7 +85,8 @@ function ActionButtons({ conference }: { conference: Conference }) {
         <Button
           key={button.label}
           href={button.href}
-          className={`mt-2 w-full md:w-1/2 ${button.color} ${button.hoverColor} md:mr-2 md:ml-2`}
+          variant={button.variant}
+          className="mt-2 w-full md:mr-2 md:ml-2 md:w-1/2"
         >
           {button.label}
         </Button>
@@ -96,15 +102,15 @@ export function Hero({ conference }: { conference: Conference }) {
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
           {conference.announcement && (
-            <div className="mb-8 rounded-lg bg-blue-100 p-6 text-center text-blue-900 shadow-md">
+            <div className="mb-8 rounded-lg border border-brand-cloud-blue/20 bg-brand-sky-mist p-6 text-center text-brand-slate-gray shadow-md">
               <PortableText value={conference.announcement} />
             </div>
           )}
-          <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
+          <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
             <span className="sr-only">{conference.title} - </span>
             {conference.tagline}
           </h1>
-          <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
+          <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray">
             <p>
               Cloud Native Day Bergen is the nerdiest tech conference in Bergen.
               Join us to learn about the latest trends, best practices, and
@@ -129,31 +135,37 @@ export function Hero({ conference }: { conference: Conference }) {
                 key={metric.label}
                 className="text-center sm:text-center lg:text-left"
               >
-                <dt className="font-mono text-sm text-blue-600">
+                <dt className="font-jetbrains text-sm text-brand-cloud-blue">
                   {metric.label}
                 </dt>
-                <dd className="mt-0.5 text-2xl font-semibold tracking-tight text-blue-900">
+                <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray">
                   {metric.value}
                 </dd>
               </div>
             ))}
           </dl>
           <div className="mt-10 flex justify-center space-x-4 sm:hidden">
-            <a href="#" className="text-blue-600 hover:text-blue-800">
+            <a
+              href="#"
+              className="text-brand-cloud-blue hover:text-brand-slate-gray"
+            >
               <InstagramIcon className="h-12 w-12" />
             </a>
-            <a href="#" className="text-blue-600 hover:text-blue-800">
+            <a
+              href="#"
+              className="text-brand-cloud-blue hover:text-brand-slate-gray"
+            >
               <TwitterIcon className="h-12 w-12" />
             </a>
             <a
               href="https://github.com/CloudNativeBergen"
-              className="text-blue-600 hover:text-blue-800"
+              className="text-brand-cloud-blue hover:text-brand-slate-gray"
             >
               <GitHubIcon className="h-12 w-12" />
             </a>
             <a
               href="https://www.linkedin.com/company/cloud-native-bergen"
-              className="text-blue-600 hover:text-blue-800"
+              className="text-brand-cloud-blue hover:text-brand-slate-gray"
             >
               <LinkedInIcon className="h-12 w-12" />
             </a>

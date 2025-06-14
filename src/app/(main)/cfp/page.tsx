@@ -70,7 +70,8 @@ export default async function CFP() {
 
             <Button
               href="/cfp/submit"
-              className="mt-10 w-full bg-teal-600 hover:bg-teal-500"
+              variant="warning"
+              className="mt-10 w-full"
             >
               Submit your proposal
             </Button>

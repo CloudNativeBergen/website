@@ -21,10 +21,11 @@ export function InteractivePatternPreview() {
 
       {/* Pattern Display */}
       <div
-        className={`relative h-80 overflow-hidden rounded-xl ${variant === 'light'
+        className={`relative h-80 overflow-hidden rounded-xl ${
+          variant === 'light'
             ? 'border-2 border-brand-frosted-steel bg-brand-glacier-white'
             : 'bg-brand-gradient'
-          }`}
+        }`}
       >
         <CloudNativePattern
           className="z-0"
@@ -38,22 +39,23 @@ export function InteractivePatternPreview() {
           maxCount={maxCount}
         />
         <div
-          className={`absolute inset-0 z-10 ${variant === 'light' ? 'bg-black/20' : 'bg-black/40'
-            }`}
+          className={`absolute inset-0 z-10 ${
+            variant === 'light' ? 'bg-black/20' : 'bg-black/40'
+          }`}
         ></div>
         <div className="relative z-20 flex h-full items-center justify-center">
           <div className="text-center">
             <h4
-              className={`font-jetbrains mb-4 text-2xl font-bold ${variant === 'light' ? 'text-brand-slate-gray' : 'text-white'
-                }`}
+              className={`font-jetbrains mb-4 text-2xl font-bold ${
+                variant === 'light' ? 'text-brand-slate-gray' : 'text-white'
+              }`}
             >
               Cloud Native Elements
             </h4>
             <p
-              className={`font-inter max-w-md text-sm ${variant === 'light'
-                  ? 'text-brand-slate-gray'
-                  : 'text-white/90'
-                }`}
+              className={`font-inter max-w-md text-sm ${
+                variant === 'light' ? 'text-brand-slate-gray' : 'text-white/90'
+              }`}
             >
               Opacity: {opacity.toFixed(2)} • Size: {minSize}-{maxSize}px •
               Count: {minCount}-{maxCount} • {density} density
@@ -119,12 +121,14 @@ export function InteractivePatternPreview() {
                 className="sr-only"
               />
               <div
-                className={`relative h-6 w-12 rounded-full transition-colors ${animated ? 'bg-brand-cloud-blue' : 'bg-brand-frosted-steel'
-                  }`}
+                className={`relative h-6 w-12 rounded-full transition-colors ${
+                  animated ? 'bg-brand-cloud-blue' : 'bg-brand-frosted-steel'
+                }`}
               >
                 <div
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${animated ? 'translate-x-6' : 'translate-x-0'
-                    }`}
+                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                    animated ? 'translate-x-6' : 'translate-x-0'
+                  }`}
                 ></div>
               </div>
               <span className="font-inter ml-3 text-sm text-brand-slate-gray">

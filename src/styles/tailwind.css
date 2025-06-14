@@ -35,14 +35,20 @@
 
   /* Cloud Native Day Bergen Brand Colors */
   --brand-cloud-blue: #1d4ed8;
+  --brand-cloud-blue-hover: #1e40af;
   --brand-aqua-start: #3b82f6;
   --brand-aqua-end: #06b6d4;
   --brand-sky-mist: #e0f2fe;
   --brand-fresh-green: #10b981;
+  --brand-fresh-green-hover: #059669;
   --brand-glacier-white: #f9fafb;
   --brand-nordic-purple: #6366f1;
+  --brand-nordic-purple-hover: #4338ca;
   --brand-sunbeam-yellow: #facc15;
+  --brand-sunbeam-yellow-hover: #eab308;
   --brand-slate-gray: #334155;
+  --brand-slate-gray-hover: #1e293b;
+  --brand-cloud-gray: #64748b;
   --brand-frosted-steel: #cbd5e1;
 
   /* Background Gradients */
@@ -69,14 +75,20 @@
 
   /* Color System */
   --color-brand-cloud-blue: #1d4ed8;
+  --color-brand-cloud-blue-hover: #1e40af;
   --color-brand-aqua-start: #3b82f6;
   --color-brand-aqua-end: #06b6d4;
   --color-brand-sky-mist: #e0f2fe;
   --color-brand-fresh-green: #10b981;
+  --color-brand-fresh-green-hover: #059669;
   --color-brand-glacier-white: #f9fafb;
   --color-brand-nordic-purple: #6366f1;
+  --color-brand-nordic-purple-hover: #4338ca;
   --color-brand-sunbeam-yellow: #facc15;
+  --color-brand-sunbeam-yellow-hover: #eab308;
   --color-brand-slate-gray: #334155;
+  --color-brand-slate-gray-hover: #1e293b;
+  --color-brand-cloud-gray: #64748b;
   --color-brand-frosted-steel: #cbd5e1;
 
   /* Primary Color Scale */
@@ -170,6 +182,27 @@
   background-color: var(--color-brand-frosted-steel);
 }
 
+/* Brand Hover Color Utility Classes */
+.hover\:bg-brand-cloud-blue-hover:hover {
+  background-color: var(--color-brand-cloud-blue-hover);
+}
+
+.hover\:bg-brand-fresh-green-hover:hover {
+  background-color: var(--color-brand-fresh-green-hover);
+}
+
+.hover\:bg-brand-nordic-purple-hover:hover {
+  background-color: var(--color-brand-nordic-purple-hover);
+}
+
+.hover\:bg-brand-sunbeam-yellow-hover:hover {
+  background-color: var(--color-brand-sunbeam-yellow-hover);
+}
+
+.hover\:bg-brand-slate-gray-hover:hover {
+  background-color: var(--color-brand-slate-gray-hover);
+}
+
 .text-brand-cloud-blue {
   color: var(--color-brand-cloud-blue);
 }
@@ -196,6 +229,10 @@
 
 .text-brand-slate-gray {
   color: var(--color-brand-slate-gray);
+}
+
+.text-brand-cloud-gray {
+  color: var(--color-brand-cloud-gray);
 }
 
 .text-brand-frosted-steel {

@@ -33,7 +33,7 @@ export default async function Sponsor() {
           We&apos;re experiencing technical difficulties. Please try again
           later.
         </p>
-        <Button href="/" className="bg-blue-600 text-white hover:bg-blue-500">
+        <Button href="/" variant="primary">
           Return to Home
         </Button>
       </div>
@@ -131,12 +131,8 @@ export default async function Sponsor() {
                   <Button
                     href={`mailto:${conference.contact_email}?subject=Interested in sponsoring ${conference.title}&body=We are interested in the ${tier.title} sponsorship tier.`}
                     aria-describedby={`tier-${index}`}
-                    className={clsx(
-                      tier.most_popular
-                        ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-500'
-                        : 'text-blue-600 ring-1 ring-blue-200 ring-inset hover:ring-blue-300',
-                      'mt-8 block rounded-md px-3 py-2 text-center text-sm leading-6 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600',
-                    )}
+                    variant={tier.most_popular ? 'success' : 'outline'}
+                    className="mt-8 w-full"
                   >
                     Become a &apos;{tier.title}&apos; sponsor
                   </Button>

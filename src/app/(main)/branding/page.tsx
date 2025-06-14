@@ -44,6 +44,7 @@ import {
   BrandingHeroSection,
   BrandingExampleHeroSection,
   PatternExample,
+  ButtonShowcase,
 } from '@/components/branding'
 import { colorPalette, typography } from '@/lib/branding/data'
 
@@ -53,7 +54,6 @@ export const metadata: Metadata = {
 }
 
 export default function BrandingPage() {
-
   return (
     <div className="bg-brand-glacier-white">
       {/* Hero Section */}
@@ -566,6 +566,14 @@ export default function BrandingPage() {
           </div>
 
           <div className="space-y-16">
+            {/* Action Buttons in Practice */}
+            <div>
+              <h3 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray">
+                Action Buttons in Practice
+              </h3>
+              <ButtonShowcase />
+            </div>
+
             {/* Heroicons in Practice */}
             <div>
               <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
@@ -1570,7 +1578,7 @@ export default function BrandingPage() {
               <p className="font-inter mb-6 text-brand-slate-gray">
                 SVG, PNG, and PDF versions in various sizes and orientations.
               </p>
-              <Button className="font-space-grotesk border-2 border-brand-cloud-blue bg-transparent text-brand-cloud-blue hover:bg-brand-cloud-blue hover:text-white">
+              <Button variant="outline" className="font-space-grotesk">
                 Download Logos
               </Button>
             </div>
@@ -1583,7 +1591,7 @@ export default function BrandingPage() {
                 Hex codes, RGB values, and Pantone colors for print and digital
                 use.
               </p>
-              <Button className="font-space-grotesk border-2 border-brand-cloud-blue bg-transparent text-brand-cloud-blue hover:bg-brand-cloud-blue hover:text-white">
+              <Button variant="outline" className="font-space-grotesk">
                 Get Color Codes
               </Button>
             </div>
@@ -1596,7 +1604,7 @@ export default function BrandingPage() {
                 Detailed guidelines for proper logo usage, spacing, and
                 applications.
               </p>
-              <Button className="font-space-grotesk border-2 border-brand-cloud-blue bg-transparent text-brand-cloud-blue hover:bg-brand-cloud-blue hover:text-white">
+              <Button variant="outline" className="font-space-grotesk">
                 View Guidelines
               </Button>
             </div>

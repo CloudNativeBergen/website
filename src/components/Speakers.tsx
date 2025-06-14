@@ -6,6 +6,7 @@ import clsx from 'clsx'
 import { ScheduleTrack } from '@/lib/conference/types'
 import { sanityImage } from '@/lib/sanity/client'
 
+import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
 
@@ -38,15 +39,17 @@ function SubmitToSpeakLi() {
       key="submit-to-speak-1"
       className="col-span-1 flex flex-col divide-y divide-gray-200 rounded-lg bg-white text-center"
     >
-      <a
-        type="button"
-        href="/cfp"
-        className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 p-10 text-center hover:border-gray-400 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none sm:gap-y-16"
-      >
-        <p className="mt-1 font-mono text-sm text-slate-500">
-          Become a speaker
-        </p>
-      </a>
+      <div className="p-10">
+        <Button
+          href="/cfp"
+          variant="outline"
+          className="w-full border-2 border-dashed border-brand-frosted-steel hover:border-brand-cloud-blue focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2"
+        >
+          <p className="font-jetbrains text-sm text-brand-slate-gray">
+            Become a speaker
+          </p>
+        </Button>
+      </div>
     </li>
   )
 }
@@ -101,11 +104,11 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
         <div className="mx-auto max-w-2xl lg:mx-0">
           <h2
             id="speakers-title"
-            className="font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl"
+            className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl"
           >
             Our Speakers
           </h2>
-          <p className="font-display mt-4 text-2xl tracking-tight text-blue-900">
+          <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray">
             Learn from yaml-experts and cloud-native nerds from Bergen and
             around the world at Cloud Native Day Bergen.
           </p>

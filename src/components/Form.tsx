@@ -22,7 +22,7 @@ export function Input({
     <>
       <label
         htmlFor={name}
-        className="block text-sm/6 font-medium text-gray-900"
+        className="font-space-grotesk block text-sm/6 font-medium text-brand-slate-gray"
       >
         {label}
       </label>
@@ -36,7 +36,7 @@ export function Input({
           disabled={setValue === undefined}
           onChange={(e) => setValue && setValue(e.target.value)}
           autoComplete={name}
-          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-cloud-gray placeholder:text-brand-cloud-gray focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
         />
       </div>
     </>
@@ -97,7 +97,19 @@ export function ErrorText({ children }: { children: React.ReactNode }) {
 }
 
 export function HelpText({ children }: { children: React.ReactNode }) {
-  return <p className="mt-2 text-sm/6 text-gray-600">{children}</p>
+  return (
+    <p className="font-inter mt-2 text-sm/6 text-brand-cloud-gray">
+      {children}
+    </p>
+  )
+}
+
+export function DescriptionText({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="font-inter mt-2 text-sm/6 text-brand-cloud-gray">
+      {children}
+    </p>
+  )
 }
 
 export function Textarea({

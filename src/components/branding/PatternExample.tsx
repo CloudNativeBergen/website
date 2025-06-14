@@ -41,7 +41,9 @@ export function PatternExample({
       <h5 className="font-space-grotesk text-md mb-3 font-semibold text-brand-slate-gray">
         {title}
       </h5>
-      <div className={`relative overflow-hidden rounded-xl ${backgroundClass} ${className}`}>
+      <div
+        className={`relative overflow-hidden rounded-xl ${backgroundClass} ${className}`}
+      >
         <CloudNativePattern
           className="z-0"
           opacity={opacity}
@@ -56,14 +58,21 @@ export function PatternExample({
         {!isLight && <div className="absolute inset-0 z-10 bg-black/30"></div>}
         <div className="relative z-20 flex h-full items-center justify-center">
           <div className="px-4 text-center">
-            <h6 className={`font-space-grotesk mb-2 text-lg font-semibold ${isLight ? 'text-brand-slate-gray' : 'text-white'}`}>
+            <h6
+              className={`font-space-grotesk mb-2 text-lg font-semibold ${isLight ? 'text-brand-slate-gray' : 'text-white'}`}
+            >
               {title}
             </h6>
-            <p className={`font-inter text-sm ${isLight ? 'text-brand-slate-gray' : 'text-white/90'}`}>
+            <p
+              className={`font-inter text-sm ${isLight ? 'text-brand-slate-gray' : 'text-white/90'}`}
+            >
               {description}
             </p>
-            <div className={`mt-3 rounded px-2 py-1 font-mono text-xs ${isLight ? 'bg-white/80 text-brand-slate-gray' : 'bg-black/30 text-white/80'}`}>
-              {minSize}-{maxSize}px • {minCount}-{maxCount} icons • {variant} variant
+            <div
+              className={`mt-3 rounded px-2 py-1 font-mono text-xs ${isLight ? 'bg-white/80 text-brand-slate-gray' : 'bg-black/30 text-white/80'}`}
+            >
+              {minSize}-{maxSize}px • {minCount}-{maxCount} icons • {variant}{' '}
+              variant
             </div>
           </div>
         </div>

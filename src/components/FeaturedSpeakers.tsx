@@ -24,11 +24,11 @@ export function FeaturedSpeakers({
           <div className="mx-auto max-w-2xl lg:mx-0">
             <h2
               id="speakers-title"
-              className="font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl"
+              className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl"
             >
               {isOrganizers ? 'Conference Controllers' : 'Masters of the Kube'}
             </h2>
-            <p className="font-display mt-4 text-2xl tracking-tight text-blue-900">
+            <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray">
               {isOrganizers
                 ? 'Meet the control plane ensuring a smooth conference deployment.'
                 : 'Brace yourselves for wisdom deployed directly from the masters of the Cloud Native ecosystem.'}

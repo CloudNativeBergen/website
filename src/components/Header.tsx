@@ -25,13 +25,15 @@ export function Header({ c }: { c: Conference }) {
       <Container className="flex flex-wrap items-center justify-center sm:justify-between lg:flex-nowrap">
         <div className="mt-10 lg:mt-0 lg:grow lg:basis-0">
           <Link href="/">
-            <Logo className="h-12 w-auto text-slate-900" />
+            <Logo className="h-12 w-auto text-brand-slate-gray" />
           </Link>
         </div>
-        <div className="order-first -mx-4 flex flex-auto basis-full overflow-x-auto border-b border-blue-600/10 py-4 font-mono text-sm whitespace-nowrap sm:-mx-6 lg:order-none lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
+        <div className="font-jetbrains order-first -mx-4 flex flex-auto basis-full overflow-x-auto border-b border-brand-cloud-blue/10 py-4 text-sm whitespace-nowrap sm:-mx-6 lg:order-none lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
           {(() => {
             const isPast = new Date(c.start_date) < new Date()
-            const textColor = isPast ? 'text-slate-400' : 'text-blue-600'
+            const textColor = isPast
+              ? 'text-brand-cloud-gray'
+              : 'text-brand-cloud-blue'
 
             return (
               <div
@@ -47,21 +49,21 @@ export function Header({ c }: { c: Conference }) {
                   {c.city}, {c.country}
                 </p>
                 {isPast && (
-                  <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-sm font-semibold text-slate-600">
+                  <span className="ml-2 rounded-full bg-brand-cloud-gray/20 px-2 py-0.5 text-sm font-semibold text-brand-cloud-gray">
                     Past Event
                   </span>
                 )}
                 <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
                 <a
                   href={`https://${previousDomain}`}
-                  className="text-blue-600 hover:text-blue-800"
+                  className="text-brand-cloud-blue hover:text-brand-slate-gray"
                 >
                   {previousYear} Conference
                 </a>
                 <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
                 <Link
                   href="/branding"
-                  className="text-blue-600 hover:text-blue-800"
+                  className="text-brand-cloud-blue hover:text-brand-slate-gray"
                 >
                   Brand Guidelines
                 </Link>
@@ -71,7 +73,9 @@ export function Header({ c }: { c: Conference }) {
         </div>
         <div className="hidden whitespace-nowrap sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end">
           {c.registration_enabled && (
-            <Button href={c.registration_link ?? '#'}>Get your ticket</Button>
+            <Button href={c.registration_link ?? '#'} variant="primary">
+              Get your ticket
+            </Button>
           )}
         </div>
         <div className="mt-10 ml-10 sm:flex lg:mt-0 lg:ml-4">
@@ -85,7 +89,7 @@ export function Header({ c }: { c: Conference }) {
                 className="h-12 w-12 rounded-full"
               />
             ) : (
-              <UserCircleIcon className="h-12 w-12 text-slate-900" />
+              <UserCircleIcon className="h-12 w-12 text-brand-slate-gray" />
             )}
           </a>
         </div>

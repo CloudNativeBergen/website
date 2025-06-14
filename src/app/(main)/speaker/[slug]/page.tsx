@@ -119,7 +119,7 @@ export default async function Profile({ params }: Props) {
             <p className="mt-4 text-lg tracking-tight text-blue-900">
               Sorry, we could not find the speaker you are looking for.
             </p>
-            <Button href="/" className="mt-8">
+            <Button href="/" variant="primary" className="mt-8">
               Go back home
             </Button>
           </Container>

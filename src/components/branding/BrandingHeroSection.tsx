@@ -1,8 +1,5 @@
-'use client'
-
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { Container } from '@/components/Container'
-import { Button } from '@/components/Button'
 
 export function BrandingHeroSection() {
   return (
@@ -20,8 +17,8 @@ export function BrandingHeroSection() {
           <p className="font-inter mx-auto max-w-2xl text-lg text-white/95">
             Our brand reflects the spirit of the cloud native community:
             innovative, open, collaborative, and forward-thinking. These
-            guidelines ensure consistent and impactful communication across
-            all touchpoints.
+            guidelines ensure consistent and impactful communication across all
+            touchpoints.
           </p>
         </div>
       </Container>

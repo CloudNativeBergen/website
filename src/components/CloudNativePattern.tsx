@@ -23,6 +23,28 @@ import FalcoIcon from '@/images/icons/falco-icon-white.svg'
 import GRPCIcon from '@/images/icons/grpc-icon-white.svg'
 import KyvernoIcon from '@/images/icons/kyverno-icon-white.svg'
 
+// Cloud native project icons from imported SVGs
+const cloudNativeIcons = [
+  KubernetesIcon,
+  HelmIcon,
+  PrometheusIcon,
+  IstioIcon,
+  EnvoyIcon,
+  JaegerIcon,
+  ArgoIcon,
+  BackstageIcon,
+  CertManagerIcon,
+  CiliumIcon,
+  CloudNativePGIcon,
+  ContainerdIcon,
+  CoreDNSIcon,
+  CrossplaneIcon,
+  EtcdIcon,
+  FalcoIcon,
+  GRPCIcon,
+  KyvernoIcon,
+]
+
 interface CloudNativePatternProps {
   className?: string
   opacity?: number
@@ -46,28 +68,6 @@ export function CloudNativePattern({
   minCount = 35,
   maxCount = 70,
 }: CloudNativePatternProps) {
-  // Cloud native project icons from imported SVGs
-  const cloudNativeIcons = [
-    KubernetesIcon,
-    HelmIcon,
-    PrometheusIcon,
-    IstioIcon,
-    EnvoyIcon,
-    JaegerIcon,
-    ArgoIcon,
-    BackstageIcon,
-    CertManagerIcon,
-    CiliumIcon,
-    CloudNativePGIcon,
-    ContainerdIcon,
-    CoreDNSIcon,
-    CrossplaneIcon,
-    EtcdIcon,
-    FalcoIcon,
-    GRPCIcon,
-    KyvernoIcon,
-  ]
-
   // Generate random positions and properties for icons
   const iconElements = useMemo(() => {
     const elements = []
@@ -172,7 +172,16 @@ export function CloudNativePattern({
     }
 
     return elements
-  }, [minCount, maxCount, density, variant, minSize, maxSize, opacity, animated])
+  }, [
+    minCount,
+    maxCount,
+    density,
+    variant,
+    minSize,
+    maxSize,
+    opacity,
+    animated,
+  ])
 
   const generateIcons = () => iconElements
 
@@ -182,10 +191,11 @@ export function CloudNativePattern({
     >
       {/* Gradient overlay */}
       <div
-        className={`absolute inset-0 ${variant === 'light'
-          ? 'bg-gradient-to-br from-blue-50/20 via-purple-50/20 to-cyan-50/20'
-          : 'bg-gradient-to-br from-blue-900/20 via-purple-900/20 to-cyan-900/20'
-          }`}
+        className={`absolute inset-0 ${
+          variant === 'light'
+            ? 'bg-gradient-to-br from-blue-50/20 via-purple-50/20 to-cyan-50/20'
+            : 'bg-gradient-to-br from-blue-900/20 via-purple-900/20 to-cyan-900/20'
+        }`}
       />
 
       {/* Cloud Native Icons Pattern */}

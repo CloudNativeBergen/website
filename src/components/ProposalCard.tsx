@@ -32,9 +32,12 @@ function ProposalActionLink({ action }: { action: ProposalButtonAction }) {
   return (
     <a
       href={action.link}
-      className="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-gray-900"
+      className="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-brand-slate-gray"
     >
-      <action.icon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+      <action.icon
+        className="h-5 w-5 text-brand-cloud-gray"
+        aria-hidden="true"
+      />
       {capitalizeFirstLetter(action.label)}
     </a>
   )
@@ -51,12 +54,15 @@ function ProposalActionButton({
     <button
       disabled={isLoading}
       onClick={action.onClick}
-      className="relative inline-flex w-0 flex-1 cursor-pointer items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-gray-900"
+      className="relative inline-flex w-0 flex-1 cursor-pointer items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-brand-slate-gray"
     >
       {isLoading ? (
-        <SpinnerIcon className="text-grey-400 h-5 w-5 animate-spin" />
+        <SpinnerIcon className="h-5 w-5 animate-spin text-brand-cloud-gray" />
       ) : (
-        <action.icon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+        <action.icon
+          className="h-5 w-5 text-brand-cloud-gray"
+          aria-hidden="true"
+        />
       )}
       {capitalizeFirstLetter(action.label)}
     </button>
@@ -145,20 +151,20 @@ export function ProposalCard({
       key={proposal._id}
       className={clsx(
         proposal.status === Status.accepted
-          ? 'border-2 border-green-500/50'
+          ? 'border-2 border-brand-fresh-green/50'
           : '',
-        'col-span-1 divide-y divide-gray-200 rounded-lg bg-white shadow',
+        'col-span-1 divide-y divide-brand-cloud-gray/20 rounded-lg bg-white shadow',
       )}
     >
       <div className="flex w-full items-center justify-between space-x-6 p-6">
         <div className="flex-1 truncate">
           <div className="flex items-center space-x-3">
-            <h3 className="truncate text-sm font-medium text-gray-900">
+            <h3 className="font-space-grotesk truncate text-sm font-medium text-brand-slate-gray">
               {proposal.title}
             </h3>
             <FormatStatus status={proposal.status} />
           </div>
-          <p className="mt-1 truncate text-sm text-gray-500">
+          <p className="font-inter mt-1 truncate text-sm text-brand-cloud-gray">
             {proposal.status === Status.accepted ? (
               <>Your proposal has been accepted.</>
             ) : (
@@ -185,14 +191,14 @@ export function ProposalCard({
           />
         ) : (
           <UserCircleIcon
-            className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-300"
+            className="h-10 w-10 flex-shrink-0 rounded-full bg-brand-cloud-gray/20"
             aria-hidden="true"
           />
         )}
       </div>
       {!readOnly && actions.length > 0 && (
         <div>
-          <div className="-mt-px flex divide-x divide-gray-200">
+          <div className="-mt-px flex divide-x divide-brand-cloud-gray/20">
             {actions.map((action, i) => (
               <div
                 key={`${proposal._id}-${action.label}`}
