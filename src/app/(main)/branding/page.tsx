@@ -1,10 +1,7 @@
-'use client'
-
-import { useState, useEffect } from 'react'
+import { Metadata } from 'next'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { DiamondIcon } from '@/components/DiamondIcon'
-import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { SpeakerCard } from '@/components/SpeakerCard'
 import Image from 'next/image'
 
@@ -38,651 +35,29 @@ import {
   ShieldCheckIcon as ShieldCheckIconSolid,
 } from '@heroicons/react/24/solid'
 
-// Color palette data
-const colorPalette = {
-  primary: [
-    {
-      name: 'Cloud Blue',
-      value: '#1D4ED8',
-      description:
-        'Used in headlines and CTA buttons. Strong, tech-oriented, and accessible.',
-      usage: 'Headlines, primary buttons, key navigation elements',
-      tailwind: 'bg-brand-cloud-blue text-brand-cloud-blue',
-    },
-    {
-      name: 'Aqua Gradient',
-      value: 'linear-gradient(135deg, #3B82F6, #06B6D4)',
-      description: 'For backgrounds, section dividers, or digital badges.',
-      usage: 'Hero backgrounds, section dividers, badges',
-      tailwind: 'bg-aqua-gradient',
-    },
-    {
-      name: 'Brand Gradient',
-      value: 'linear-gradient(135deg, #1D4ED8, #06B6D4)',
-      description:
-        'Enhanced brand gradient for premium sections and hero areas.',
-      usage: 'Primary hero sections, premium features, branding headers',
-      tailwind: 'bg-brand-gradient',
-    },
-    {
-      name: 'Nordic Gradient',
-      value: 'linear-gradient(135deg, #6366F1, #1D4ED8)',
-      description: 'Accent gradient combining nordic purple with cloud blue.',
-      usage: 'Secondary features, call-to-action sections, accent areas',
-      tailwind: 'bg-nordic-gradient',
-    },
-  ],
-  secondary: [
-    {
-      name: 'Sky Mist',
-      value: '#E0F2FE',
-      description:
-        'A soft sky blue for background fills, cards, or hover states.',
-      usage: 'Card backgrounds, hover states, subtle highlights',
-      tailwind: 'bg-brand-sky-mist',
-    },
-    {
-      name: 'Fresh Green',
-      value: '#10B981',
-      description:
-        'Reflects the green in our logo. Good for highlights, tags, or eco-related themes.',
-      usage: 'Success states, tags, eco themes, speaker badges',
-      tailwind: 'bg-brand-fresh-green',
-    },
-    {
-      name: 'Glacier White',
-      value: '#F9FAFB',
-      description:
-        'A clean background neutral to keep the interface minimal and modern.',
-      usage: 'Page backgrounds, card fills, clean sections',
-      tailwind: 'bg-brand-glacier-white',
-    },
-  ],
-  accent: [
-    {
-      name: 'Nordic Purple',
-      value: '#6366F1',
-      description:
-        'Subtle contrast for agenda highlights, speaker names, or session tags.',
-      usage: 'Agenda highlights, speaker emphasis, session categories',
-      tailwind: 'bg-brand-nordic-purple',
-    },
-    {
-      name: 'Sunbeam Yellow',
-      value: '#FACC15',
-      description:
-        'For urgency, early-bird ticket alerts, and callouts without breaking cool-tone harmony.',
-      usage: 'Alerts, early-bird notifications, important callouts',
-      tailwind: 'bg-brand-sunbeam-yellow',
-    },
-  ],
-  neutral: [
-    {
-      name: 'Slate Gray',
-      value: '#334155',
-      description: 'For body text, navigation, or footer elements.',
-      usage: 'Body text, navigation, secondary information',
-      tailwind: 'text-brand-slate-gray',
-    },
-    {
-      name: 'Frosted Steel',
-      value: '#CBD5E1',
-      description: 'For dividers, secondary buttons, or muted labels.',
-      usage: 'Dividers, muted text, secondary elements',
-      tailwind: 'bg-brand-frosted-steel',
-    },
-  ],
-}
+// Import branding components and data
+import {
+  ColorSwatch,
+  TypographyShowcase,
+  IconShowcase,
+  InteractivePatternPreview,
+  BrandingHeroSection,
+  BrandingExampleHeroSection,
+  PatternExample,
+} from '@/components/branding'
+import { colorPalette, typography } from '@/lib/branding/data'
 
-// Typography data
-const typography = {
-  primary: [
-    {
-      name: 'JetBrains Mono',
-      className: 'font-jetbrains',
-      description:
-        'A monospaced font made for developers. Playful, readable, and distinctly &quot;dev culture.&quot;',
-      tone: 'Developer-native, playful, authentic',
-      usage: 'Hero text, quotes, session titles, code examples',
-      example: 'Cloud Native Day Bergen 2025',
-    },
-    {
-      name: 'Space Grotesk',
-      className: 'font-space-grotesk',
-      description:
-        'Clean, geometric sans-serif with a slightly quirky personality.',
-      tone: 'Futuristic yet warm',
-      usage: 'Section headings, speaker names, navigation',
-      example: 'Kubernetes in Production',
-    },
-    {
-      name: 'Bricolage Grotesque',
-      className: 'font-bricolage',
-      description:
-        'Grotesque-style with some expressive, almost rebellious energy.',
-      tone: 'Open-source spirit meets design edge',
-      usage: 'Special announcements, call-to-action text',
-      example: 'Submit Your Talk Now!',
-    },
-  ],
-  secondary: [
-    {
-      name: 'Inter',
-      className: 'font-inter',
-      description: 'Versatile, neutral sans-serif with high legibility.',
-      tone: 'Functional, modern, minimal',
-      usage: 'Body text, descriptions, form labels',
-      example:
-        'Join us for a day of learning about cloud native technologies, networking with industry experts, and discovering the latest trends in Kubernetes and containerization.',
-    },
-    {
-      name: 'IBM Plex Sans',
-      className: 'font-ibm-plex-sans',
-      description: 'A great balance of precision and friendliness.',
-      tone: 'Engineering-friendly with typographic richness',
-      usage: 'Alternative body text, technical content',
-      example:
-        'Learn about microservices architecture, service mesh implementations, and cloud-native security best practices.',
-    },
-    {
-      name: 'Atkinson Hyperlegible',
-      className: 'font-atkinson',
-      description:
-        'Designed for readability, but with unique, humanistic forms.',
-      tone: 'Thoughtful, community-driven, accessible',
-      usage: 'Accessibility-focused content, important announcements',
-      example:
-        'We are committed to creating an inclusive and accessible conference experience for all attendees.',
-    },
-  ],
-}
-
-function ColorSwatch({
-  color,
-}: {
-  color: {
-    name: string
-    value: string
-    description: string
-    usage: string
-    tailwind: string
-  }
-}) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <div
-        className="mb-4 h-20 w-full rounded-lg"
-        style={{ background: color.value }}
-      />
-      <h3 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
-        {color.name}
-      </h3>
-      <p className="mt-1 font-mono text-sm text-gray-600">{color.value}</p>
-      <p className="font-inter mt-3 text-sm text-gray-700">
-        {color.description}
-      </p>
-      <div className="mt-4">
-        <p className="font-ibm-plex-sans text-xs font-medium tracking-wide text-gray-500 uppercase">
-          Usage
-        </p>
-        <p className="font-inter mt-1 text-sm text-gray-600">{color.usage}</p>
-      </div>
-      <div className="mt-4">
-        <p className="font-ibm-plex-sans text-xs font-medium tracking-wide text-gray-500 uppercase">
-          Tailwind Classes
-        </p>
-        <code className="font-jetbrains mt-1 block rounded bg-gray-100 px-2 py-1 text-xs text-gray-800">
-          {color.tailwind}
-        </code>
-      </div>
-    </div>
-  )
-}
-
-function TypographyShowcase({
-  font,
-}: {
-  font: {
-    name: string
-    className: string
-    example: string
-    description: string
-    tone: string
-    usage: string
-  }
-}) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="mb-4">
-        <h3 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
-          {font.name}
-        </h3>
-        <code className="font-jetbrains text-sm text-gray-600">
-          {font.className}
-        </code>
-      </div>
-
-      <div className={`mb-4 ${font.className} text-xl text-brand-slate-gray`}>
-        {font.example}
-      </div>
-
-      <p className="font-inter mb-3 text-sm text-gray-700">
-        {font.description}
-      </p>
-
-      <div className="space-y-2">
-        <div>
-          <span className="font-ibm-plex-sans text-xs font-medium tracking-wide text-gray-500 uppercase">
-            Tone:
-          </span>
-          <span className="font-inter ml-2 text-sm text-gray-600">
-            {font.tone}
-          </span>
-        </div>
-        <div>
-          <span className="font-ibm-plex-sans text-xs font-medium tracking-wide text-gray-500 uppercase">
-            Best for:
-          </span>
-          <span className="font-inter ml-2 text-sm text-gray-600">
-            {font.usage}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function IconShowcase({
-  name,
-  description,
-  component,
-  usage,
-}: {
-  name: string
-  description: string
-  component: React.ReactNode
-  usage: string
-}) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm">
-      <div className="mb-6 flex justify-center">{component}</div>
-
-      <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
-        {name}
-      </h4>
-
-      <p className="font-inter mb-4 text-sm text-gray-700">{description}</p>
-
-      <div>
-        <span className="font-ibm-plex-sans text-xs font-medium tracking-wide text-gray-500 uppercase">
-          Best for:
-        </span>
-        <p className="font-inter mt-1 text-xs text-gray-600">{usage}</p>
-      </div>
-    </div>
-  )
-}
-
-// Interactive Pattern Preview Component
-function InteractivePatternPreview() {
-  const [opacity, setOpacity] = useState(0.15)
-  const [animated, setAnimated] = useState(true)
-  const [variant, setVariant] = useState<'dark' | 'light' | 'brand'>('brand')
-  const [density, setDensity] = useState<'low' | 'medium' | 'high'>('medium')
-  const [minSize, setMinSize] = useState(20)
-  const [maxSize, setMaxSize] = useState(60)
-  const [minCount, setMinCount] = useState(30)
-  const [maxCount, setMaxCount] = useState(80)
-
-  return (
-    <div className="space-y-6">
-      <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-        Interactive Pattern Preview
-      </h3>
-
-      {/* Pattern Display */}
-      <div
-        className={`relative h-80 overflow-hidden rounded-xl ${variant === 'light'
-          ? 'border-2 border-brand-frosted-steel bg-brand-glacier-white'
-          : 'bg-brand-gradient'
-          }`}
-      >
-        <CloudNativePattern
-          className="z-0"
-          opacity={opacity}
-          animated={animated}
-          variant={variant}
-          density={density}
-          minSize={minSize}
-          maxSize={maxSize}
-          minCount={minCount}
-          maxCount={maxCount}
-        />
-        <div
-          className={`absolute inset-0 z-10 ${variant === 'light' ? 'bg-black/20' : 'bg-black/40'}`}
-        ></div>
-        <div className="relative z-20 flex h-full items-center justify-center">
-          <div className="text-center">
-            <h4
-              className={`font-jetbrains mb-4 text-2xl font-bold ${variant === 'light' ? 'text-brand-slate-gray' : 'text-white'
-                }`}
-            >
-              Cloud Native Elements
-            </h4>
-            <p
-              className={`font-inter max-w-md text-sm ${variant === 'light' ? 'text-brand-slate-gray' : 'text-white/90'
-                }`}
-            >
-              Opacity: {opacity.toFixed(2)} • Size: {minSize}-{maxSize}px •
-              Count: {minCount}-{maxCount} • {density} density
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="space-y-6 rounded-xl bg-brand-sky-mist p-6">
-        <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
-          Pattern Controls
-        </h4>
-
-        {/* Basic Controls Row */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {/* Variant Selector */}
-          <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
-              Variant
-            </label>
-            <select
-              value={variant}
-              onChange={(e) =>
-                setVariant(e.target.value as 'dark' | 'light' | 'brand')
-              }
-              className="w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-brand-cloud-blue"
-            >
-              <option value="brand">Brand</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-            </select>
-          </div>
-
-          {/* Density Selector */}
-          <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
-              Density
-            </label>
-            <select
-              value={density}
-              onChange={(e) =>
-                setDensity(e.target.value as 'low' | 'medium' | 'high')
-              }
-              className="w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-brand-cloud-blue"
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-          </div>
-
-          {/* Animation Toggle */}
-          <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
-              Animation
-            </label>
-            <label className="flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                checked={animated}
-                onChange={(e) => setAnimated(e.target.checked)}
-                className="sr-only"
-              />
-              <div
-                className={`relative h-6 w-12 rounded-full transition-colors ${animated ? 'bg-brand-cloud-blue' : 'bg-brand-frosted-steel'
-                  }`}
-              >
-                <div
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform ${animated ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                ></div>
-              </div>
-              <span className="font-inter ml-3 text-sm text-brand-slate-gray">
-                {animated ? 'Enabled' : 'Disabled'}
-              </span>
-            </label>
-          </div>
-        </div>
-
-        {/* Sliders */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Opacity Slider */}
-          <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
-              Opacity: {opacity.toFixed(2)}
-            </label>
-            <input
-              type="range"
-              min="0.05"
-              max="0.3"
-              step="0.01"
-              value={opacity}
-              onChange={(e) => setOpacity(parseFloat(e.target.value))}
-              className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel"
-            />
-            <div className="mt-1 flex justify-between text-xs text-brand-slate-gray">
-              <span>0.05</span>
-              <span>0.30</span>
-            </div>
-          </div>
-
-          {/* Size Range */}
-          <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
-              Size Range: {minSize}px - {maxSize}px
-            </label>
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-brand-slate-gray">
-                  Min Size: {minSize}px
-                </label>
-                <input
-                  type="range"
-                  min="15"
-                  max="50"
-                  step="1"
-                  value={minSize}
-                  onChange={(e) => {
-                    const newMin = parseInt(e.target.value)
-                    setMinSize(newMin)
-                    if (newMin >= maxSize) setMaxSize(newMin + 10)
-                  }}
-                  className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-brand-slate-gray">
-                  Max Size: {maxSize}px
-                </label>
-                <input
-                  type="range"
-                  min="30"
-                  max="100"
-                  step="1"
-                  value={maxSize}
-                  onChange={(e) => {
-                    const newMax = parseInt(e.target.value)
-                    setMaxSize(newMax)
-                    if (newMax <= minSize) setMinSize(newMax - 10)
-                  }}
-                  className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Count Range */}
-          <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
-              Count Range: {minCount} - {maxCount}
-            </label>
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-brand-slate-gray">
-                  Min Count: {minCount}
-                </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="60"
-                  step="1"
-                  value={minCount}
-                  onChange={(e) => {
-                    const newMin = parseInt(e.target.value)
-                    setMinCount(newMin)
-                    if (newMin >= maxCount) setMaxCount(newMin + 20)
-                  }}
-                  className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-brand-slate-gray">
-                  Max Count: {maxCount}
-                </label>
-                <input
-                  type="range"
-                  min="40"
-                  max="150"
-                  step="1"
-                  value={maxCount}
-                  onChange={(e) => {
-                    const newMax = parseInt(e.target.value)
-                    setMaxCount(newMax)
-                    if (newMax <= minCount) setMinCount(newMax - 20)
-                  }}
-                  className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Current Settings Display */}
-          <div className="rounded-lg bg-white p-4">
-            <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
-              Current Configuration
-            </h5>
-            <div className="space-y-1 font-mono text-xs text-brand-slate-gray">
-              <div>opacity={opacity}</div>
-              <div>variant=&quot;{variant}&quot;</div>
-              <div>density=&quot;{density}&quot;</div>
-              <div>animated={animated.toString()}</div>
-              <div>minSize={minSize}</div>
-              <div>maxSize={maxSize}</div>
-              <div>minCount={minCount}</div>
-              <div>maxCount={maxCount}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Preset Buttons */}
-        <div>
-          <h5 className="font-space-grotesk mb-3 text-sm font-semibold text-brand-slate-gray">
-            Quick Presets
-          </h5>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => {
-                setOpacity(0.08)
-                setVariant('light')
-                setDensity('low')
-                setMinSize(15)
-                setMaxSize(35)
-                setMinCount(20)
-                setMaxCount(40)
-                setAnimated(true)
-              }}
-              className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white"
-            >
-              Content Background
-            </button>
-            <button
-              onClick={() => {
-                setOpacity(0.15)
-                setVariant('brand')
-                setDensity('medium')
-                setMinSize(30)
-                setMaxSize(75)
-                setMinCount(35)
-                setMaxCount(70)
-                setAnimated(true)
-              }}
-              className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white"
-            >
-              Hero Section
-            </button>
-            <button
-              onClick={() => {
-                setOpacity(0.2)
-                setVariant('dark')
-                setDensity('high')
-                setMinSize(20)
-                setMaxSize(80)
-                setMinCount(50)
-                setMaxCount(120)
-                setAnimated(true)
-              }}
-              className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white"
-            >
-              Dramatic Background
-            </button>
-            <button
-              onClick={() => {
-                setOpacity(0.06)
-                setVariant('light')
-                setDensity('low')
-                setMinSize(18)
-                setMaxSize(28)
-                setMinCount(15)
-                setMaxCount(30)
-                setAnimated(false)
-              }}
-              className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white"
-            >
-              Subtle Static
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+export const metadata: Metadata = {
+  title: 'Brand Guidelines - Cloud Native Day Bergen',
+  description: 'Brand guidelines and design system for Cloud Native Day Bergen',
 }
 
 export default function BrandingPage() {
-  useEffect(() => {
-    document.title = 'Brand Guidelines - Cloud Native Day Bergen'
-  }, [])
 
   return (
     <div className="bg-brand-glacier-white">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-aqua-gradient py-24">
-        <CloudNativePattern className="z-0" opacity={0.12} animated={true} />
-        <div className="absolute inset-0 z-10 bg-black/30"></div>
-        <Container className="relative z-20">
-          <div className="text-center">
-            <h1 className="font-jetbrains mb-6 text-5xl font-bold text-white">
-              Cloud Native Day Bergen
-            </h1>
-            <p className="font-space-grotesk mx-auto mb-8 max-w-3xl text-xl text-white">
-              Brand Guidelines & Design System
-            </p>
-            <p className="font-inter mx-auto max-w-2xl text-lg text-white/95">
-              Our brand reflects the spirit of the cloud native community:
-              innovative, open, collaborative, and forward-thinking. These
-              guidelines ensure consistent and impactful communication across
-              all touchpoints.
-            </p>
-          </div>
-        </Container>
-      </section>
+      <BrandingHeroSection />
 
       {/* Navigation Menu */}
       <nav className="sticky top-0 z-50 border-b border-brand-cloud-blue/20 bg-white/95 backdrop-blur-sm">
@@ -857,7 +232,7 @@ export default function BrandingPage() {
             <h3 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray">
               Primary Fonts (Headings & Branding)
             </h3>
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
               {typography.primary.map((font) => (
                 <TypographyShowcase key={font.name} font={font} />
               ))}
@@ -868,7 +243,7 @@ export default function BrandingPage() {
             <h3 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray">
               Secondary Fonts (Body & UI Text)
             </h3>
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
               {typography.secondary.map((font) => (
                 <TypographyShowcase key={font.name} font={font} />
               ))}
@@ -1364,35 +739,7 @@ export default function BrandingPage() {
               <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
                 Hero Section Example
               </h3>
-              <div className="relative overflow-hidden rounded-xl bg-brand-gradient p-12 text-center">
-                <CloudNativePattern
-                  className="z-0"
-                  opacity={0.08}
-                  animated={true}
-                />
-                <div className="absolute inset-0 z-10 rounded-xl bg-black/30"></div>
-                <div className="relative z-20">
-                  <h1 className="font-jetbrains mb-4 text-4xl font-bold text-white">
-                    Cloud Native Day Bergen 2025
-                  </h1>
-                  <p className="font-space-grotesk mb-8 text-xl text-white/90">
-                    June 15, 2025 • Bergen, Norway
-                  </p>
-                  <p className="font-inter mx-auto mb-8 max-w-2xl text-lg text-white/95">
-                    Join the Nordic cloud native community for a day of
-                    cutting-edge talks, hands-on workshops, and meaningful
-                    connections.
-                  </p>
-                  <div className="flex flex-col justify-center gap-4 sm:flex-row">
-                    <Button className="font-space-grotesk bg-brand-cloud-blue text-white hover:bg-blue-700">
-                      Register Now
-                    </Button>
-                    <Button className="font-space-grotesk border-2 border-white bg-transparent text-white hover:bg-white hover:text-brand-cloud-blue">
-                      Submit a Talk
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <BrandingExampleHeroSection />
             </div>
 
             {/* Speaker Card Examples */}
@@ -2048,105 +1395,46 @@ export default function BrandingPage() {
 
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             {/* Light variant with custom sizing */}
-            <div>
-              <h5 className="font-space-grotesk text-md mb-3 font-semibold text-brand-slate-gray">
-                Content Background
-              </h5>
-              <div className="relative h-64 overflow-hidden rounded-xl border-2 border-brand-frosted-steel bg-white">
-                <CloudNativePattern
-                  className="z-0"
-                  opacity={0.06}
-                  animated={true}
-                  variant="light"
-                  density="low"
-                  minSize={18}
-                  maxSize={32}
-                  minCount={12}
-                  maxCount={25}
-                />
-                <div className="relative z-20 flex h-full items-center justify-center">
-                  <div className="px-4 text-center">
-                    <h6 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray">
-                      Light Background
-                    </h6>
-                    <p className="font-inter text-sm text-brand-slate-gray">
-                      Subtle pattern for content sections and cards
-                    </p>
-                    <div className="mt-3 rounded bg-white/80 px-2 py-1 font-mono text-xs text-brand-slate-gray">
-                      18-32px • 12-25 icons • Light variant
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <PatternExample
+              title="Content Background"
+              description="Subtle pattern for content sections and cards"
+              opacity={0.06}
+              variant="light"
+              density="low"
+              minSize={18}
+              maxSize={32}
+              minCount={12}
+              maxCount={25}
+              animated={true}
+            />
 
             {/* Default hero pattern - improved with larger icons */}
-            <div>
-              <h5 className="font-space-grotesk text-md mb-3 font-semibold text-brand-slate-gray">
-                Hero Section (Default)
-              </h5>
-              <div className="relative h-64 overflow-hidden rounded-xl bg-brand-gradient">
-                <CloudNativePattern
-                  className="z-0"
-                  opacity={0.15}
-                  animated={true}
-                  variant="brand"
-                  density="medium"
-                  minSize={30}
-                  maxSize={75}
-                  minCount={25}
-                  maxCount={50}
-                />
-                <div className="absolute inset-0 z-10 bg-black/40"></div>
-                <div className="relative z-20 flex h-full items-center justify-center">
-                  <div className="px-4 text-center">
-                    <h6 className="font-space-grotesk mb-2 text-lg font-semibold text-white">
-                      Brand Hero Pattern
-                    </h6>
-                    <p className="font-inter text-sm text-white/90">
-                      Perfect balance for wide hero sections
-                    </p>
-                    <div className="mt-3 rounded bg-black/30 px-2 py-1 font-mono text-xs text-white/80">
-                      30-75px • 25-50 icons • Brand variant
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <PatternExample
+              title="Hero Section (Default)"
+              description="Perfect balance for wide hero sections"
+              opacity={0.15}
+              variant="brand"
+              density="medium"
+              minSize={30}
+              maxSize={75}
+              minCount={25}
+              maxCount={50}
+              animated={true}
+            />
 
             {/* Dense dramatic pattern */}
-            <div>
-              <h5 className="font-space-grotesk text-md mb-3 font-semibold text-brand-slate-gray">
-                Dramatic Background
-              </h5>
-              <div className="relative h-64 overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 to-blue-900">
-                <CloudNativePattern
-                  className="z-0"
-                  opacity={0.2}
-                  animated={true}
-                  variant="dark"
-                  density="high"
-                  minSize={25}
-                  maxSize={90}
-                  minCount={35}
-                  maxCount={75}
-                />
-                <div className="absolute inset-0 z-10 bg-black/30"></div>
-                <div className="relative z-20 flex h-full items-center justify-center">
-                  <div className="px-4 text-center">
-                    <h6 className="font-space-grotesk mb-2 text-lg font-semibold text-white">
-                      High Impact Pattern
-                    </h6>
-                    <p className="font-inter text-sm text-white/90">
-                      Dense, dramatic effect for special sections
-                    </p>
-                    <div className="mt-3 rounded bg-black/30 px-2 py-1 font-mono text-xs text-white/80">
-                      25-90px • 35-75 icons • Dark variant
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <PatternExample
+              title="Dramatic Background"
+              description="Dense, dramatic effect for special sections"
+              opacity={0.2}
+              variant="dark"
+              density="high"
+              minSize={25}
+              maxSize={90}
+              minCount={35}
+              maxCount={75}
+              animated={true}
+            />
           </div>
 
           {/* Technical Details */}
