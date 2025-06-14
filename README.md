@@ -18,6 +18,54 @@ npm run dev
 
 Finally, open [http://localhost:3000](http://localhost:3000) in your browser to view the website.
 
+## Development Setup
+
+### VS Code Configuration
+
+This project includes VS Code workspace settings in `.vscode/settings.json` that automatically configure:
+
+- **Prettier formatting** using the project's `prettier.config.js` settings
+- **Format on save** for consistent code style
+- **ESLint integration** with auto-fix on save
+- **Tailwind CSS IntelliSense** for better development experience
+
+#### Recommended Extensions
+
+The project includes recommended VS Code extensions in `.vscode/extensions.json`:
+
+- **Prettier - Code formatter** (`esbenp.prettier-vscode`)
+- **Tailwind CSS IntelliSense** (`bradlc.vscode-tailwindcss`)
+- **TypeScript and JavaScript Nightly** (`ms-vscode.vscode-typescript-next`)
+- **Sanity.io** (`sanity-io.vscode-sanity`)
+
+VS Code will prompt you to install these extensions when you open the workspace.
+
+### Code Style
+
+The project uses **Prettier** for code formatting with these settings:
+
+- Single quotes (`'`) instead of double quotes
+- No semicolons
+- Tailwind CSS class sorting via `prettier-plugin-tailwindcss`
+
+To format all files manually:
+
+```bash
+npm run format
+```
+
+To check for linting issues:
+
+```bash
+npm run lint
+```
+
+To run TypeScript type checking:
+
+```bash
+npm run typecheck
+```
+
 ## Sanity
 
 Install the Sanity CLI:
