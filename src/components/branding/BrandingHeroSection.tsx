@@ -4,7 +4,14 @@ import { Container } from '@/components/Container'
 export function BrandingHeroSection() {
   return (
     <section className="relative overflow-hidden bg-aqua-gradient py-24">
-      <CloudNativePattern className="z-0" opacity={0.12} animated={true} />
+      <CloudNativePattern
+        className="z-0"
+        opacity={0.18}
+        animated={true}
+        variant="brand"
+        baseSize={50}
+        iconCount={100}
+      />
       <div className="absolute inset-0 z-10 bg-black/30"></div>
       <Container className="relative z-20">
         <div className="text-center">

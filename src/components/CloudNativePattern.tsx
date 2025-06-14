@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useRef } from 'react'
 import Image from 'next/image'
 
 // Import all cloud native SVG icons
@@ -20,6 +20,7 @@ import CoreDNSIcon from '@/images/icons/coredns-icon-white.svg'
 import CrossplaneIcon from '@/images/icons/crossplane-icon-white.svg'
 import EtcdIcon from '@/images/icons/etcd-icon-white.svg'
 import FalcoIcon from '@/images/icons/falco-icon-white.svg'
+import FluxIcon from '@/images/icons/flux-icon-white.svg'
 import GRPCIcon from '@/images/icons/grpc-icon-white.svg'
 import KyvernoIcon from '@/images/icons/kyverno-icon-white.svg'
 import HarborIcon from '@/images/icons/harbor-icon-white.svg'
@@ -36,91 +37,218 @@ import VitessIcon from '@/images/icons/vitess-icon-white.svg'
 import WasmEdgeRuntimeIcon from '@/images/icons/wasm-edge-runtime-icon-white.svg'
 import WasmCloudIcon from '@/images/icons/wasmcloud.icon_inversed.svg'
 
-// Categorize icons by popularity/recognition level
-const popularIcons = [
-  { icon: KubernetesIcon, name: 'Kubernetes', weight: 30 }, // Most popular
+// Types
+type IconCategory = 'popular' | 'moderate' | 'specialized'
+type Variant = 'dark' | 'light' | 'brand'
+
+interface BaseIcon {
+  icon: string
+  name: string
+  weight: number
+}
+
+interface IconData extends Omit<BaseIcon, 'weight'> {
+  category: IconCategory
+}
+
+interface DepthLayer {
+  name: string
+  zIndex: number
+  sizeRange: [number, number]
+  opacityMultiplier: number
+  blur: number
+  frequency: number
+  animationSpeedMultiplier: number
+  brightness: number
+}
+
+// Constants and Configuration
+const POPULAR_ICONS: BaseIcon[] = [
+  { icon: KubernetesIcon, name: 'Kubernetes', weight: 30 },
   { icon: HelmIcon, name: 'Helm', weight: 25 },
   { icon: PrometheusIcon, name: 'Prometheus', weight: 25 },
   { icon: IstioIcon, name: 'Istio', weight: 20 },
   { icon: ArgoIcon, name: 'Argo', weight: 20 },
-  { icon: OpenTelemetryIcon, name: 'OpenTelemetry', weight: 18 }, // Growing popularity in observability
-]
+  { icon: FluxIcon, name: 'Flux', weight: 20 },
+  { icon: OpenTelemetryIcon, name: 'OpenTelemetry', weight: 18 },
+  { icon: BackstageIcon, name: 'Backstage', weight: 18 },
+] as const
 
-const moderatelyKnownIcons = [
+const MODERATELY_KNOWN_ICONS: BaseIcon[] = [
   { icon: EnvoyIcon, name: 'Envoy', weight: 15 },
   { icon: JaegerIcon, name: 'Jaeger', weight: 15 },
-  { icon: LinkerdIcon, name: 'Linkerd', weight: 14 }, // Popular service mesh
-  { icon: HarborIcon, name: 'Harbor', weight: 13 }, // Well-known registry
+  { icon: LinkerdIcon, name: 'Linkerd', weight: 14 },
+  { icon: HarborIcon, name: 'Harbor', weight: 13 },
   { icon: CertManagerIcon, name: 'Cert Manager', weight: 12 },
   { icon: EtcdIcon, name: 'Etcd', weight: 12 },
   { icon: ContainerdIcon, name: 'Containerd', weight: 12 },
-  { icon: VitessIcon, name: 'Vitess', weight: 11 }, // Database scaling
+  { icon: VitessIcon, name: 'Vitess', weight: 11 },
   { icon: CoreDNSIcon, name: 'CoreDNS', weight: 10 },
   { icon: GRPCIcon, name: 'gRPC', weight: 10 },
   { icon: OperatorFrameworkIcon, name: 'Operator Framework', weight: 10 },
-]
+] as const
 
-const specializedIcons = [
-  { icon: BackstageIcon, name: 'Backstage', weight: 8 },
+const SPECIALIZED_ICONS: BaseIcon[] = [
   { icon: CiliumIcon, name: 'Cilium', weight: 8 },
   { icon: CrossplaneIcon, name: 'Crossplane', weight: 8 },
   { icon: FalcoIcon, name: 'Falco', weight: 8 },
-  { icon: KubevirtIcon, name: 'KubeVirt', weight: 7 }, // Virtualization
-  { icon: OpenFeatureIcon, name: 'OpenFeature', weight: 7 }, // Feature flags
+  { icon: KubevirtIcon, name: 'KubeVirt', weight: 7 },
+  { icon: OpenFeatureIcon, name: 'OpenFeature', weight: 7 },
   { icon: KyvernoIcon, name: 'Kyverno', weight: 6 },
-  { icon: ShipwrightIcon, name: 'Shipwright', weight: 6 }, // Build framework
+  { icon: ShipwrightIcon, name: 'Shipwright', weight: 6 },
   { icon: VirtualKubeletIcon, name: 'Virtual Kubelet', weight: 5 },
   { icon: CloudNativePGIcon, name: 'CloudNativePG', weight: 5 },
   { icon: LoggingOperatorIcon, name: 'Logging Operator', weight: 5 },
-  { icon: KuredIcon, name: 'Kured', weight: 4 }, // Node reboot daemon
-  { icon: WasmEdgeRuntimeIcon, name: 'WasmEdge Runtime', weight: 4 }, // WebAssembly
-  { icon: WasmCloudIcon, name: 'wasmCloud', weight: 4 }, // WebAssembly platform
-]
+  { icon: KuredIcon, name: 'Kured', weight: 4 },
+  { icon: WasmEdgeRuntimeIcon, name: 'WasmEdge Runtime', weight: 4 },
+  { icon: WasmCloudIcon, name: 'wasmCloud', weight: 4 },
+] as const
 
-// Create weighted icon pool for selection
-interface IconData {
-  icon: string
-  name: string
-  category: 'popular' | 'moderate' | 'specialized'
-}
+const COLOR_SCHEMES = {
+  dark: [
+    'text-blue-400',
+    'text-cyan-400',
+    'text-purple-400',
+    'text-indigo-400',
+    'text-teal-400',
+    'text-blue-300',
+    'text-purple-300',
+    'text-cyan-300',
+  ],
+  light: [
+    'text-slate-800',
+    'text-gray-800',
+    'text-zinc-800',
+    'text-blue-800',
+    'text-cyan-800',
+    'text-purple-800',
+    'text-indigo-800',
+    'text-slate-900',
+  ],
+  brand: [
+    'text-blue-400',
+    'text-cyan-400',
+    'text-purple-400',
+    'text-indigo-400',
+    'text-teal-400',
+    'text-blue-300',
+    'text-purple-300',
+    'text-cyan-300',
+  ],
+} as const
 
+const CATEGORY_MULTIPLIERS = {
+  popular: 1.2,
+  moderate: 1.0,
+  specialized: 0.8,
+} as const
+
+// Utility Functions
 const createWeightedIconPool = (): IconData[] => {
   const pool: IconData[] = []
 
-  // Add popular icons with higher frequency
-  popularIcons.forEach(({ icon, name, weight }) => {
-    for (let i = 0; i < weight; i++) {
-      pool.push({ icon, name, category: 'popular' })
-    }
-  })
+  const addIconsToPool = (
+    icons: readonly BaseIcon[],
+    category: IconCategory,
+  ) => {
+    icons.forEach(({ icon, name, weight }) => {
+      for (let i = 0; i < weight; i++) {
+        pool.push({ icon, name, category })
+      }
+    })
+  }
 
-  // Add moderately known icons
-  moderatelyKnownIcons.forEach(({ icon, name, weight }) => {
-    for (let i = 0; i < weight; i++) {
-      pool.push({ icon, name, category: 'moderate' })
-    }
-  })
-
-  // Add specialized icons with lower frequency
-  specializedIcons.forEach(({ icon, name, weight }) => {
-    for (let i = 0; i < weight; i++) {
-      pool.push({ icon, name, category: 'specialized' })
-    }
-  })
+  addIconsToPool(POPULAR_ICONS, 'popular')
+  addIconsToPool(MODERATELY_KNOWN_ICONS, 'moderate')
+  addIconsToPool(SPECIALIZED_ICONS, 'specialized')
 
   return pool
 }
 
+const createDepthLayers = (
+  baseSize: number,
+  variant: Variant,
+): DepthLayer[] => [
+    {
+      name: 'background',
+      zIndex: 1,
+      sizeRange: [baseSize * 0.5, baseSize * 0.7],
+      opacityMultiplier: variant === 'light' ? 0.4 : 0.3,
+      blur: 2.0,
+      frequency: 0.5,
+      animationSpeedMultiplier: 1.5,
+      brightness: 0.6,
+    },
+    {
+      name: 'midground',
+      zIndex: 10,
+      sizeRange: [baseSize * 0.8, baseSize * 1.2],
+      opacityMultiplier: variant === 'light' ? 0.7 : 0.6,
+      blur: 0.8,
+      frequency: 0.35,
+      animationSpeedMultiplier: 1.0,
+      brightness: 0.8,
+    },
+    {
+      name: 'foreground',
+      zIndex: 20,
+      sizeRange: [baseSize * 1.3, baseSize * 1.6],
+      opacityMultiplier: variant === 'light' ? 1.0 : 0.9,
+      blur: 0,
+      frequency: 0.15,
+      animationSpeedMultiplier: 0.7,
+      brightness: 1.0,
+    },
+  ]
+
 interface CloudNativePatternProps {
+  /**
+   * Additional CSS classes to apply to the container element
+   * @default ''
+   */
   className?: string
+
+  /**
+   * Overall opacity of the icon pattern
+   * Controls the transparency of all icons in the pattern
+   * @default 0.15
+   * @range 0.0 to 1.0
+   */
   opacity?: number
+
+  /**
+   * Whether icons should have floating animations
+   * When enabled, icons will gently float with different speeds and delays
+   * @default true
+   */
   animated?: boolean
-  variant?: 'dark' | 'light' | 'brand'
-  density?: 'low' | 'medium' | 'high'
-  minCount?: number
-  maxCount?: number
-  minSize?: number
-  maxSize?: number
+
+  /**
+   * Visual variant that controls color scheme and styling
+   * - 'dark': Blue/cyan/purple tones for dark backgrounds
+   * - 'light': Dark grays/blacks with inverted styling for light backgrounds
+   * - 'brand': Brand colors (blue/cyan/purple) suitable for most contexts
+   * @default 'brand'
+   */
+  variant?: Variant
+
+  /**
+   * Base size for icons in the midground layer (in pixels)
+   * - Background icons will be 50%-70% of this size
+   * - Midground icons will be 80%-120% of this size
+   * - Foreground icons will be 130%-160% of this size
+   * @default 45
+   * @range Recommended: 20-100 pixels
+   */
+  baseSize?: number
+
+  /**
+   * Total number of icons to display in the pattern
+   * Icons are distributed across three depth layers (background, midground, foreground)
+   * @default 50
+   * @range Recommended: 10-200 icons for optimal performance
+   */
+  iconCount?: number
 }
 
 export function CloudNativePattern({
@@ -128,141 +256,125 @@ export function CloudNativePattern({
   opacity = 0.15,
   animated = true,
   variant = 'brand',
-  density = 'medium',
-  minCount = 40,
-  maxCount = 80,
-  minSize = 30,
-  maxSize = 60,
+  baseSize = 45,
+  iconCount = 50,
 }: CloudNativePatternProps) {
-  // Generate random positions and properties for icons with depth layers
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Memoized icon pool to avoid recreation on every render
+  const iconPool = useMemo(() => createWeightedIconPool(), [])
+
+  // Memoized depth layers configuration
+  const depthLayers = useMemo(
+    () => createDepthLayers(baseSize, variant),
+    [baseSize, variant],
+  )
+
+  // Generate icon elements with optimized rendering and better distribution
   const iconElements = useMemo(() => {
     const elements: React.JSX.Element[] = []
-    const iconPool = createWeightedIconPool()
-
-    // Calculate depth layers relative to minSize and maxSize
-    const sizeRange = maxSize - minSize
-    const depthLayersWithSize = [
-      {
-        name: 'background',
-        zIndex: 1,
-        sizeRange: [
-          minSize - sizeRange * 0.3, // 30% smaller than minSize
-          minSize - sizeRange * 0.1, // 10% smaller than minSize
-        ] as [number, number],
-        opacityMultiplier: variant === 'light' ? 0.4 : 0.3, // Higher opacity for light variant
-        blur: 2.0,
-        frequency: 0.5,
-        animationSpeedMultiplier: 1.5,
-        brightness: 0.6,
-      },
-      {
-        name: 'midground',
-        zIndex: 10,
-        sizeRange: [minSize, maxSize] as [number, number], // Base size range
-        opacityMultiplier: variant === 'light' ? 0.7 : 0.6, // Higher opacity for light variant
-        blur: 0.8,
-        frequency: 0.35,
-        animationSpeedMultiplier: 1.0,
-        brightness: 0.8,
-      },
-      {
-        name: 'foreground',
-        zIndex: 20,
-        sizeRange: [
-          maxSize + sizeRange * 0.1, // 10% larger than maxSize
-          maxSize + sizeRange * 0.4, // 40% larger than maxSize
-        ] as [number, number],
-        opacityMultiplier: variant === 'light' ? 1.0 : 0.9, // Higher opacity for light variant
-        blur: 0,
-        frequency: 0.15,
-        animationSpeedMultiplier: 0.7,
-        brightness: 1.0,
-      },
-    ]
-
-    // Calculate icon count based on density
-    const densityMultipliers = {
-      low: 0.6,
-      medium: 1.0,
-      high: 1.4,
-    }
-    const baseCount = minCount + (maxCount - minCount) * densityMultipliers[density]
-    const iconCount = Math.floor(Math.max(minCount, Math.min(maxCount, baseCount)))
-
-    // Color schemes based on variant
-    const colorSchemes = {
-      dark: [
-        'text-blue-400',
-        'text-cyan-400',
-        'text-purple-400',
-        'text-indigo-400',
-        'text-teal-400',
-        'text-blue-300',
-        'text-purple-300',
-        'text-cyan-300',
-      ],
-      light: [
-        'text-slate-800',
-        'text-gray-800',
-        'text-zinc-800',
-        'text-blue-800',
-        'text-cyan-800',
-        'text-purple-800',
-        'text-indigo-800',
-        'text-slate-900',
-      ],
-      brand: [
-        'text-blue-400',
-        'text-cyan-400',
-        'text-purple-400',
-        'text-indigo-400',
-        'text-teal-400',
-        'text-blue-300',
-        'text-purple-300',
-        'text-cyan-300',
-      ],
-    }
-
-    const colors = colorSchemes[variant]
-
-    // Distribute icons across depth layers (background to foreground)
+    const colors = COLOR_SCHEMES[variant]
     let currentIconIndex = 0
 
-    depthLayersWithSize.forEach((layer) => {
+    // Create a grid-based distribution system to prevent clustering
+    const createDistributedPositions = (count: number) => {
+      const positions: { x: number; y: number }[] = []
+
+      // Calculate grid dimensions - aim for roughly square cells
+      const gridCols = Math.ceil(Math.sqrt(count * 1.2)) // 1.2 factor for better spacing
+      const gridRows = Math.ceil(count / gridCols)
+
+      // Calculate cell dimensions (in percentage)
+      const cellWidth = 100 / gridCols
+      const cellHeight = 100 / gridRows
+
+      // Generate shuffled grid positions to avoid predictable patterns
+      const gridCells: { col: number; row: number }[] = []
+      for (let row = 0; row < gridRows; row++) {
+        for (let col = 0; col < gridCols; col++) {
+          gridCells.push({ col, row })
+        }
+      }
+
+      // Shuffle the grid cells for more organic distribution
+      for (let i = gridCells.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+          ;[gridCells[i], gridCells[j]] = [gridCells[j], gridCells[i]]
+      }
+
+      // Assign positions with jitter within each cell
+      for (let i = 0; i < count && i < gridCells.length; i++) {
+        const { col, row } = gridCells[i]
+
+        // Calculate base position (center of cell)
+        const baseCellX = col * cellWidth + cellWidth / 2
+        const baseCellY = row * cellHeight + cellHeight / 2
+
+        // Add jitter within the cell (up to 40% of cell size from center)
+        const jitterRange = 0.4
+        const jitterX = (Math.random() - 0.5) * cellWidth * jitterRange
+        const jitterY = (Math.random() - 0.5) * cellHeight * jitterRange
+
+        // Final position with bounds checking
+        const x = Math.max(5, Math.min(95, baseCellX + jitterX))
+        const y = Math.max(5, Math.min(95, baseCellY + jitterY))
+
+        positions.push({ x, y })
+      }
+
+      return positions
+    }
+
+    // Pre-generate all positions for better distribution
+    const allPositions = createDistributedPositions(iconCount)
+    let positionIndex = 0
+
+    depthLayers.forEach((layer) => {
       const layerIconCount = Math.floor(iconCount * layer.frequency)
 
       for (let i = 0; i < layerIconCount && currentIconIndex < iconCount; i++) {
         currentIconIndex++
 
         // Select icon from weighted pool
-        const selectedIcon = iconPool[Math.floor(Math.random() * iconPool.length)]
-        const size = Math.random() * (layer.sizeRange[1] - layer.sizeRange[0]) + layer.sizeRange[0]
-        const x = Math.random() * 100 // Random x position (%)
-        const y = Math.random() * 100 // Random y position (%)
-        const animationDelay = Math.random() * 20 // Random animation delay
-        const baseAnimationDuration = 15 + Math.random() * 10 // Base duration 15-25s
-        const animationDuration = baseAnimationDuration * layer.animationSpeedMultiplier
+        const selectedIcon =
+          iconPool[Math.floor(Math.random() * iconPool.length)]
+        const size =
+          Math.random() * (layer.sizeRange[1] - layer.sizeRange[0]) +
+          layer.sizeRange[0]
+
+        // Use pre-calculated distributed position
+        const position = allPositions[positionIndex % allPositions.length]
+        const x = position.x
+        const y = position.y
+        positionIndex++
+
+        const animationDelay = Math.random() * 20
+        const baseAnimationDuration = 15 + Math.random() * 10
+        const animationDuration =
+          baseAnimationDuration * layer.animationSpeedMultiplier
         const color = colors[Math.floor(Math.random() * colors.length)]
 
-        // Calculate opacity based on layer and icon category
-        const categoryMultiplier = selectedIcon.category === 'popular' ? 1.2 :
-          selectedIcon.category === 'moderate' ? 1.0 : 0.8
-        const variantMultiplier = variant === 'light' ? 1.0 : 1.0 // Keep full opacity for light variant visibility
-        const finalOpacity = opacity * layer.opacityMultiplier * categoryMultiplier * variantMultiplier
+        // Calculate opacity with category-based multipliers
+        const categoryMultiplier = CATEGORY_MULTIPLIERS[selectedIcon.category]
+        const finalOpacity =
+          opacity * layer.opacityMultiplier * categoryMultiplier
 
-        // Apply depth-based visual effects
-        const blur = layer.blur
-        const brightness = layer.brightness
-
-        // Add slight perspective scaling based on position (further objects slightly smaller towards edges)
-        const perspectiveScale = layer.name === 'background' ?
-          1 - (Math.abs(x - 50) + Math.abs(y - 50)) * 0.001 : 1
-
+        // Apply perspective scaling for depth effect
+        const perspectiveScale =
+          layer.name === 'background'
+            ? 1 - (Math.abs(x - 50) + Math.abs(y - 50)) * 0.001
+            : 1
         const finalSize = size * perspectiveScale
+
+        // Create filter styles based on variant
+        const filterStyle =
+          variant === 'light'
+            ? `invert(1) brightness(${layer.brightness * 0.7}) contrast(1.5) sepia(0.3) saturate(1.1)`
+            : `brightness(${layer.brightness}) sepia(${0.3 * layer.brightness}) saturate(${1.3 * layer.brightness})`
 
         elements.push(
           <div
-            key={`${layer.name}-${i}`}
+            key={`${layer.name}-${i}-${selectedIcon.name}`}
             className={`absolute ${color} transition-all duration-1000`}
             style={{
               width: `${finalSize}px`,
@@ -274,8 +386,9 @@ export function CloudNativePattern({
               animation: animated
                 ? `float ${animationDuration}s ease-in-out infinite ${animationDelay}s`
                 : 'none',
-              filter: blur > 0 ? `blur(${blur}px)` : 'none',
-              transform: layer.name === 'background' ? 'scale(0.98)' : 'scale(1)', // Slight scale for depth
+              filter: layer.blur > 0 ? `blur(${layer.blur}px)` : 'none',
+              transform:
+                layer.name === 'background' ? 'scale(0.98)' : 'scale(1)',
             }}
           >
             <Image
@@ -284,12 +397,7 @@ export function CloudNativePattern({
               width={Math.round(finalSize)}
               height={Math.round(finalSize)}
               className="h-full w-full object-contain"
-              style={{
-                filter:
-                  variant === 'light'
-                    ? `invert(1) brightness(${brightness * 0.7}) contrast(1.5) sepia(0.3) saturate(1.1)`
-                    : `brightness(${brightness}) sepia(${0.3 * brightness}) saturate(${1.3 * brightness})`,
-              }}
+              style={{ filter: filterStyle }}
             />
           </div>,
         )
@@ -297,27 +405,34 @@ export function CloudNativePattern({
     })
 
     return elements
-  }, [minCount, maxCount, density, variant, opacity, animated, minSize, maxSize])
+  }, [iconCount, iconPool, depthLayers, variant, opacity, animated])
+
+  // Memoized background gradients
+  const backgroundGradients = useMemo(() => {
+    const isLight = variant === 'light'
+    return {
+      deep: isLight
+        ? 'bg-gradient-to-r from-blue-50/5 via-purple-50/8 to-cyan-50/5'
+        : 'bg-gradient-to-r from-blue-900/5 via-purple-900/8 to-cyan-900/5',
+      mid: isLight
+        ? 'bg-gradient-to-br from-cyan-50/6 via-transparent to-indigo-50/6'
+        : 'bg-gradient-to-br from-cyan-900/6 via-transparent to-indigo-900/6',
+      foreground: isLight
+        ? 'bg-gradient-to-t from-transparent via-transparent to-blue-50/3'
+        : 'bg-gradient-to-t from-transparent via-transparent to-blue-900/3',
+    }
+  }, [variant])
 
   return (
     <div
+      ref={containerRef}
       className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
     >
       {/* Deep background gradient for atmospheric depth */}
-      <div
-        className={`absolute inset-0 ${variant === 'light'
-          ? 'bg-gradient-to-r from-blue-50/5 via-purple-50/8 to-cyan-50/5'
-          : 'bg-gradient-to-r from-blue-900/5 via-purple-900/8 to-cyan-900/5'
-          }`}
-      />
+      <div className={`absolute inset-0 ${backgroundGradients.deep}`} />
 
       {/* Mid-depth atmospheric layer */}
-      <div
-        className={`absolute inset-0 ${variant === 'light'
-          ? 'bg-gradient-to-br from-cyan-50/6 via-transparent to-indigo-50/6'
-          : 'bg-gradient-to-br from-cyan-900/6 via-transparent to-indigo-900/6'
-          }`}
-      />
+      <div className={`absolute inset-0 ${backgroundGradients.mid}`} />
 
       {/* Cloud Native Icons with proper depth layering */}
       <div className="absolute inset-0" style={{ perspective: '1000px' }}>
@@ -326,10 +441,7 @@ export function CloudNativePattern({
 
       {/* Foreground atmospheric enhancement */}
       <div
-        className={`absolute inset-0 pointer-events-none ${variant === 'light'
-          ? 'bg-gradient-to-t from-transparent via-transparent to-blue-50/3'
-          : 'bg-gradient-to-t from-transparent via-transparent to-blue-900/3'
-          }`}
+        className={`pointer-events-none absolute inset-0 ${backgroundGradients.foreground}`}
       />
     </div>
   )

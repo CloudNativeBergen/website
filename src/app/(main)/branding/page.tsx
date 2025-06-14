@@ -1316,20 +1316,20 @@ export default function BrandingPage() {
                   </div>
                   <div>
                     <h5 className="font-space-grotesk mb-2 text-sm font-semibold tracking-wide text-brand-slate-gray uppercase">
-                      Density Configuration
+                      Icon Count Configuration
                     </h5>
                     <ul className="font-inter space-y-1 text-sm text-brand-slate-gray">
                       <li className="flex items-start">
                         <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                        Low: 20-40 icons for subtle backgrounds
+                        Subtle: 10-30 icons for content backgrounds
                       </li>
                       <li className="flex items-start">
                         <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                        Medium: 30-60 icons for balanced patterns
+                        Balanced: 30-60 icons for hero sections
                       </li>
                       <li className="flex items-start">
                         <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-                        High: 40-100 icons for dramatic effects
+                        Dense: 60-120 icons for dramatic effects
                       </li>
                     </ul>
                   </div>
@@ -1408,11 +1408,8 @@ export default function BrandingPage() {
               description="Subtle pattern for content sections and cards"
               opacity={0.06}
               variant="light"
-              density="low"
-              minSize={18}
-              maxSize={32}
-              minCount={12}
-              maxCount={25}
+              baseSize={25}
+              iconCount={18}
               animated={true}
             />
 
@@ -1422,11 +1419,8 @@ export default function BrandingPage() {
               description="Perfect balance for wide hero sections"
               opacity={0.15}
               variant="brand"
-              density="medium"
-              minSize={30}
-              maxSize={75}
-              minCount={25}
-              maxCount={50}
+              baseSize={52}
+              iconCount={38}
               animated={true}
             />
 
@@ -1436,11 +1430,8 @@ export default function BrandingPage() {
               description="Dense, dramatic effect for special sections"
               opacity={0.2}
               variant="dark"
-              density="high"
-              minSize={25}
-              maxSize={90}
-              minCount={35}
-              maxCount={75}
+              baseSize={58}
+              iconCount={55}
               animated={true}
             />
           </div>

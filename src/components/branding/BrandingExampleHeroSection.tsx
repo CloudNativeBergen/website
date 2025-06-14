@@ -6,7 +6,14 @@ import { Button } from '@/components/Button'
 export function BrandingExampleHeroSection() {
   return (
     <div className="relative overflow-hidden rounded-xl bg-brand-gradient p-12 text-center">
-      <CloudNativePattern className="z-0" opacity={0.08} animated={true} />
+      <CloudNativePattern
+        className="z-0"
+        opacity={0.15}
+        animated={true}
+        variant="brand"
+        baseSize={45}
+        iconCount={80}
+      />
       <div className="absolute inset-0 z-10 rounded-xl bg-black/30"></div>
       <div className="relative z-20">
         <h1 className="font-jetbrains mb-4 text-4xl font-bold text-white">

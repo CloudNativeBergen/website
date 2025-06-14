@@ -7,11 +7,8 @@ interface PatternExampleProps {
   description: string
   opacity: number
   variant: 'dark' | 'light' | 'brand'
-  density: 'low' | 'medium' | 'high'
-  minSize: number
-  maxSize: number
-  minCount: number
-  maxCount: number
+  baseSize: number
+  iconCount: number
   animated?: boolean
   className?: string
 }
@@ -21,11 +18,8 @@ export function PatternExample({
   description,
   opacity,
   variant,
-  density,
-  minSize,
-  maxSize,
-  minCount,
-  maxCount,
+  baseSize,
+  iconCount,
   animated = true,
   className = 'h-64',
 }: PatternExampleProps) {
@@ -49,11 +43,8 @@ export function PatternExample({
           opacity={opacity}
           animated={animated}
           variant={variant}
-          density={density}
-          minSize={minSize}
-          maxSize={maxSize}
-          minCount={minCount}
-          maxCount={maxCount}
+          baseSize={baseSize}
+          iconCount={iconCount}
         />
         {!isLight && <div className="absolute inset-0 z-10 bg-black/30"></div>}
         <div className="relative z-20 flex h-full items-center justify-center">
@@ -71,8 +62,8 @@ export function PatternExample({
             <div
               className={`mt-3 rounded px-2 py-1 font-mono text-xs ${isLight ? 'bg-white/80 text-brand-slate-gray' : 'bg-black/30 text-white/80'}`}
             >
-              {minSize}-{maxSize}px • {minCount}-{maxCount} icons • {variant}{' '}
-              variant
+              {Math.round(baseSize * 0.5)}-{Math.round(baseSize * 1.6)}px •{' '}
+              {iconCount} icons • {variant} variant
             </div>
           </div>
         </div>
