@@ -35,11 +35,11 @@ export interface SpeakerCardData extends Partial<Speaker> {
   gradient?: 'brand' | 'blue-purple' | 'green-yellow'
   /** Topic badge color variant */
   topicVariant?:
-  | 'security'
-  | 'devops'
-  | 'observability'
-  | 'performance'
-  | 'platform'
+    | 'security'
+    | 'devops'
+    | 'observability'
+    | 'performance'
+    | 'platform'
 }
 
 export interface SpeakerCardProps {
@@ -52,11 +52,11 @@ export interface SpeakerCardProps {
     compactFillContainer?: boolean
     customGradient?: 'brand' | 'blue-purple' | 'green-yellow'
     customTopicVariant?:
-    | 'security'
-    | 'devops'
-    | 'observability'
-    | 'performance'
-    | 'platform'
+      | 'security'
+      | 'devops'
+      | 'observability'
+      | 'performance'
+      | 'platform'
   }
 }
 

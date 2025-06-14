@@ -47,6 +47,9 @@ import {
   ButtonShowcase,
 } from '@/components/branding'
 import { colorPalette, typography } from '@/lib/branding/data'
+import { TalkCard } from '@/components/TalkCard'
+import { TalkPromotion } from '@/components/TalkPromotion'
+import { Format } from '@/lib/proposal/types'
 
 export const metadata: Metadata = {
   title: 'Brand Guidelines - Cloud Native Day Bergen',
@@ -93,6 +96,12 @@ export default function BrandingPage() {
                 className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
               >
                 In Action
+              </a>
+              <a
+                href="#talk-examples"
+                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
+              >
+                Talk Cards
               </a>
               <a
                 href="#background-utilities"
@@ -930,6 +939,167 @@ export default function BrandingPage() {
               </div>
             </div>
 
+            {/* Talk Card Examples */}
+            <div id="talk-examples">
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Talk Card Examples
+              </h3>
+              <p className="font-inter mb-8 text-gray-600">
+                Talk cards showcase conference presentations with
+                format-specific styling and branding elements.
+              </p>
+
+              <div className="space-y-8">
+                {/* Card Variants */}
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                    Card Variants
+                  </h4>
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    <TalkCard
+                      title="Building Resilient Microservices"
+                      speaker="Dr. Sarah Chen"
+                      format={Format.presentation_45}
+                      level="intermediate"
+                      topic="Architecture"
+                      description="Learn how to design fault-tolerant microservices that can handle failures gracefully and maintain system reliability."
+                      variant="featured"
+                    />
+
+                    <TalkCard
+                      title="Kubernetes Security Best Practices"
+                      speaker="Marcus Rodriguez"
+                      format={Format.presentation_25}
+                      level="advanced"
+                      topic="Security"
+                      description="Essential security patterns and practices for running Kubernetes in production environments."
+                    />
+
+                    <TalkCard
+                      title="Quick Start with Helm"
+                      speaker="Emma Thompson"
+                      format={Format.lightning_10}
+                      level="beginner"
+                      topic="Tools"
+                      variant="compact"
+                    />
+                  </div>
+                </div>
+
+                {/* Format Showcase */}
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                    Talk Format Showcase
+                  </h4>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <TalkCard
+                      title="CI/CD in 10 Minutes"
+                      speaker="Alex Kim"
+                      format={Format.lightning_10}
+                      level="beginner"
+                      variant="compact"
+                    />
+
+                    <TalkCard
+                      title="Container Orchestration"
+                      speaker="Jordan Lee"
+                      format={Format.presentation_20}
+                      level="intermediate"
+                      variant="compact"
+                    />
+
+                    <TalkCard
+                      title="Deep Dive: Service Mesh"
+                      speaker="Taylor Wong"
+                      format={Format.presentation_40}
+                      level="advanced"
+                      variant="compact"
+                    />
+
+                    <TalkCard
+                      title="Hands-on GitOps"
+                      speaker="Casey Miller"
+                      format={Format.workshop_120}
+                      level="intermediate"
+                      variant="compact"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Talk Promotion Examples */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Talk Promotion Examples
+              </h3>
+              <p className="font-inter mb-8 text-gray-600">
+                Promotional components for highlighting featured talks and
+                driving engagement.
+              </p>
+
+              <div className="space-y-8">
+                {/* Banner Promotion */}
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                    Banner Promotion
+                  </h4>
+                  <TalkPromotion
+                    title="The Future of Cloud Native Computing"
+                    speaker="Dr. Kubernetes Expert"
+                    format={Format.presentation_45}
+                    date="March 15, 2025"
+                    time="14:00 - 14:45"
+                    location="Main Stage"
+                    description="Explore the next generation of cloud native technologies and their impact on modern software development. This keynote will cover emerging trends in container orchestration, serverless computing, and edge computing."
+                    ctaText="Reserve Your Seat"
+                    variant="banner"
+                  />
+                </div>
+
+                {/* Card and Social Promotions */}
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                    Card & Social Promotions
+                  </h4>
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                    <TalkPromotion
+                      title="Workshop: GitOps with ArgoCD"
+                      speaker="DevOps Specialist"
+                      format={Format.workshop_120}
+                      date="March 16, 2025"
+                      time="09:00 - 11:00"
+                      location="Workshop Room A"
+                      description="Hands-on workshop covering GitOps principles and practical implementation with ArgoCD."
+                      ctaText="Join Workshop"
+                    />
+
+                    <TalkPromotion
+                      title="Lightning: WebAssembly & Cloud"
+                      speaker="WASM Enthusiast"
+                      format={Format.lightning_10}
+                      date="March 15, 2025"
+                      time="16:30 - 16:40"
+                      location="Lightning Stage"
+                      description="Quick dive into how WebAssembly is changing cloud computing."
+                      ctaText="Watch Live"
+                    />
+
+                    <TalkPromotion
+                      title="Observability at Scale"
+                      speaker="SRE Lead"
+                      format={Format.presentation_25}
+                      date="March 15, 2025"
+                      location="Tech Stage"
+                      description="Learn to monitor and observe large-scale distributed systems effectively."
+                      variant="social"
+                      ctaText="Learn More"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Alert Example */}
             <div>
               <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
@@ -1374,14 +1544,6 @@ export default function BrandingPage() {
                     </li>
                   </ul>
                 </div>
-              </div>
-
-              {/* Configuration Examples moved to separate section */}
-              <div className="mt-8">
-                <p className="font-inter text-brand-slate-gray">
-                  Explore different pattern configurations in the examples
-                  below.
-                </p>
               </div>
             </div>
           </div>

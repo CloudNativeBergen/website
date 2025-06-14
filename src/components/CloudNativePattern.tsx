@@ -169,37 +169,37 @@ const createDepthLayers = (
   baseSize: number,
   variant: Variant,
 ): DepthLayer[] => [
-    {
-      name: 'background',
-      zIndex: 1,
-      sizeRange: [baseSize * 0.5, baseSize * 0.7],
-      opacityMultiplier: variant === 'light' ? 0.4 : 0.3,
-      blur: 2.0,
-      frequency: 0.5,
-      animationSpeedMultiplier: 1.5,
-      brightness: 0.6,
-    },
-    {
-      name: 'midground',
-      zIndex: 10,
-      sizeRange: [baseSize * 0.8, baseSize * 1.2],
-      opacityMultiplier: variant === 'light' ? 0.7 : 0.6,
-      blur: 0.8,
-      frequency: 0.35,
-      animationSpeedMultiplier: 1.0,
-      brightness: 0.8,
-    },
-    {
-      name: 'foreground',
-      zIndex: 20,
-      sizeRange: [baseSize * 1.3, baseSize * 1.6],
-      opacityMultiplier: variant === 'light' ? 1.0 : 0.9,
-      blur: 0,
-      frequency: 0.15,
-      animationSpeedMultiplier: 0.7,
-      brightness: 1.0,
-    },
-  ]
+  {
+    name: 'background',
+    zIndex: 1,
+    sizeRange: [baseSize * 0.5, baseSize * 0.7],
+    opacityMultiplier: variant === 'light' ? 0.4 : 0.3,
+    blur: 2.0,
+    frequency: 0.5,
+    animationSpeedMultiplier: 1.5,
+    brightness: 0.6,
+  },
+  {
+    name: 'midground',
+    zIndex: 10,
+    sizeRange: [baseSize * 0.8, baseSize * 1.2],
+    opacityMultiplier: variant === 'light' ? 0.7 : 0.6,
+    blur: 0.8,
+    frequency: 0.35,
+    animationSpeedMultiplier: 1.0,
+    brightness: 0.8,
+  },
+  {
+    name: 'foreground',
+    zIndex: 20,
+    sizeRange: [baseSize * 1.3, baseSize * 1.6],
+    opacityMultiplier: variant === 'light' ? 1.0 : 0.9,
+    blur: 0,
+    frequency: 0.15,
+    animationSpeedMultiplier: 0.7,
+    brightness: 1.0,
+  },
+]
 
 interface CloudNativePatternProps {
   /**
@@ -299,7 +299,7 @@ export function CloudNativePattern({
       // Shuffle the grid cells for more organic distribution
       for (let i = gridCells.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1))
-          ;[gridCells[i], gridCells[j]] = [gridCells[j], gridCells[i]]
+        ;[gridCells[i], gridCells[j]] = [gridCells[j], gridCells[i]]
       }
 
       // Assign positions with jitter within each cell
