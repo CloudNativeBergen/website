@@ -28,11 +28,11 @@ export interface SpeakerCardData extends Partial<Speaker> {
   gradient?: 'brand' | 'blue-purple' | 'green-yellow'
   /** Topic badge color variant */
   topicVariant?:
-    | 'security'
-    | 'devops'
-    | 'observability'
-    | 'performance'
-    | 'platform'
+  | 'security'
+  | 'devops'
+  | 'observability'
+  | 'performance'
+  | 'platform'
 }
 
 export interface SpeakerCardProps {
@@ -45,11 +45,11 @@ export interface SpeakerCardProps {
     compactFillContainer?: boolean
     customGradient?: 'brand' | 'blue-purple' | 'green-yellow'
     customTopicVariant?:
-      | 'security'
-      | 'devops'
-      | 'observability'
-      | 'performance'
-      | 'platform'
+    | 'security'
+    | 'devops'
+    | 'observability'
+    | 'performance'
+    | 'platform'
   }
 }
 
@@ -181,6 +181,13 @@ export function SpeakerCard({ speaker, options = {} }: SpeakerCardProps) {
   const topicVariant =
     options.customTopicVariant || speaker.topicVariant || 'security'
 
+  // Generate unique seed from speaker name for consistent pattern
+  // Use a better hash function to ensure more varied seeds
+  // const patternSeed = Math.abs(name.split('').reduce((acc, char, index) => {
+  //   // Use position-dependent multipliers and different base to create more variance
+  //   return acc + char.charCodeAt(0) * (index + 1) * 31 + index * 97
+  // }, name.length * 1337)) % 1000000 // Start with name length multiplied by a prime, bound to reasonable range
+
   // Parse social links from speaker.links array or use provided socialLinks
   const socialLinks =
     speaker.socialLinks || parseSocialLinks(speaker.links || [])
@@ -240,19 +247,19 @@ export function SpeakerCard({ speaker, options = {} }: SpeakerCardProps) {
       >
         <CloudNativePattern
           className="z-0"
-          opacity={0.12}
+          opacity={0.06}
           animated={false}
           variant="light"
-          density="low"
-          minSize={isKeynote ? 16 : isCompact ? 8 : 12}
-          maxSize={isKeynote ? 32 : isCompact ? 16 : 24}
-          minCount={isKeynote ? 8 : isCompact ? 4 : 6}
-          maxCount={isKeynote ? 12 : isCompact ? 8 : 10}
+          density="medium"
+          minSize={isKeynote ? 32 : isCompact ? 16 : 24}
+          maxSize={isKeynote ? 64 : isCompact ? 32 : 48}
+          minCount={isKeynote ? 16 : isCompact ? 8 : 12}
+          maxCount={isKeynote ? 24 : isCompact ? 16 : 20}
         />
 
         {/* Keynote Badge */}
         {isKeynote && (
-          <div className="relative z-10 mb-8 flex justify-center">
+          <div className="relative z-10 mb-4 flex justify-center">
             <span className="font-inter inline-flex items-center gap-1.5 rounded-full border border-white/30 bg-white/20 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
               <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                 <path
