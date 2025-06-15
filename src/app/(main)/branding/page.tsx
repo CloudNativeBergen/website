@@ -1351,179 +1351,353 @@ export default function BrandingPage() {
             {/* Speaker Card Examples */}
             <div>
               <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-                Speaker Card Variants
+                Responsive Speaker Cards
               </h3>
               <p className="font-inter mb-8 text-gray-600">
-                Three different speaker card styles: Keynote (largest), Regular
-                (medium), and Compact (smallest).
+                Speaker cards automatically adapt their layout, sizing, and
+                content based on available container space. The same component
+                works seamlessly across different container sizes without manual
+                variant props.
               </p>
-              <div className="flex flex-wrap items-start justify-center gap-4">
+
+              {/* Different container sizes demonstration */}
+              <div className="space-y-8">
+                {/* Large container - Full size */}
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-medium text-brand-slate-gray">
+                    Large Container (400px+)
+                  </h4>
+                  <div className="mx-auto max-w-sm">
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Dr. Alex Cloudsmith',
+                        title: 'Principal Engineer',
+                        company: 'CloudNative Labs',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1502685104226-ee32379fefbe?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'Security & Compliance',
+                        bio: 'Leading expert in cloud native security with 15+ years of experience in distributed systems and Kubernetes orchestration.',
+                        isKeynote: true,
+                        gradient: 'brand',
+                        topicVariant: 'security',
+                        socialLinks: {
+                          linkedin: '#',
+                          bluesky: '#',
+                          github: '#',
+                        },
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Medium containers - 300-400px */}
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-medium text-brand-slate-gray">
+                    Medium Containers (300-400px)
+                  </h4>
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Jordan Kubernetes',
+                        title: 'DevOps Engineer',
+                        company: 'ContainerCorp',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1463453091185-61582044d556?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'CI/CD & DevOps',
+                        bio: 'Expert in GitOps and continuous deployment strategies for cloud native applications.',
+                        gradient: 'blue-purple',
+                        topicVariant: 'devops',
+                        socialLinks: {
+                          linkedin: '#',
+                          github: '#',
+                        },
+                      }}
+                    />
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Taylor Prometheus',
+                        title: 'SRE Lead',
+                        company: 'ObservaTech',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1509783236416-c9ad59bae472?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'Observability',
+                        bio: 'Specializes in large-scale monitoring and reliability engineering for microservices.',
+                        gradient: 'green-yellow',
+                        topicVariant: 'observability',
+                        socialLinks: {
+                          linkedin: '#',
+                          bluesky: '#',
+                        },
+                      }}
+                    />
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Sam Performance',
+                        title: 'Performance Engineer',
+                        company: 'SpeedTech',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'Performance',
+                        bio: 'Optimizing applications for maximum throughput and minimal latency.',
+                        gradient: 'brand',
+                        topicVariant: 'performance',
+                        socialLinks: {
+                          github: '#',
+                        },
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Small Containers - 200px-300px */}
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-medium text-brand-slate-gray">
+                    Small Containers (200-300px)
+                  </h4>
+                  {/* Regular Speakers Grid - 2 rows × 4 columns */}
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 lg:grid-cols-4">
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Marcus Rodriguez',
+                        title: 'DevSecOps Lead',
+                        company: 'SecureCloud',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'Security-First DevOps',
+                        bio: 'Implementing security-first development practices in cloud native environments.',
+                        topicVariant: 'security',
+                        socialLinks: { github: '#', linkedin: '#' },
+                      }}
+                    />
+
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Emma Thompson',
+                        title: 'Site Reliability Engineer',
+                        company: 'ReliableOps',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'Observability at Scale',
+                        bio: 'Building resilient systems that scale with comprehensive monitoring and alerting.',
+                        topicVariant: 'observability',
+                        socialLinks: { linkedin: '#' },
+                      }}
+                    />
+
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Alex Kim',
+                        title: 'Platform Engineer',
+                        company: 'DevPlatform',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1502685104226-ee32379fefbe?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'Developer Experience',
+                        bio: 'Creating seamless developer workflows with modern platform engineering.',
+                        topicVariant: 'devops',
+                        socialLinks: { github: '#' },
+                      }}
+                    />
+
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Lisa Wang',
+                        title: 'Cloud Security Architect',
+                        company: 'SecureTech Solutions',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'Zero Trust Architecture',
+                        bio: 'Designing secure cloud architectures with zero trust principles.',
+                        topicVariant: 'security',
+                        socialLinks: { linkedin: '#', github: '#' },
+                      }}
+                    />
+
+                    <SpeakerCard
+                      speaker={{
+                        name: 'David Chen',
+                        title: 'Observability Lead',
+                        company: 'MonitorCorp',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'Distributed Tracing',
+                        bio: 'Making complex distributed systems transparent and debuggable.',
+                        topicVariant: 'observability',
+                        socialLinks: { github: '#', bluesky: '#' },
+                      }}
+                    />
+
+                    <SpeakerCard
+                      speaker={{
+                        name: 'Maya Singh',
+                        title: 'Automation Specialist',
+                        company: 'AutoFlow Technologies',
+                        imageUrl:
+                          'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                        topic: 'CI/CD Optimization',
+                        bio: 'Streamlining development workflows with intelligent automation.',
+                        topicVariant: 'devops',
+                        socialLinks: { linkedin: '#', bluesky: '#' },
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Adaptive Layout Example */}
+          <div>
+            <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+              Adaptive Layout Example
+            </h3>
+            <p className="font-inter mb-8 text-gray-600">
+              This example demonstrates how speaker cards adapt to different
+              container sizes and layouts. Watch how the layout transforms:
+              single column on mobile, keynote + column on tablet, and keynote +
+              2×2 grid on desktop. Each card automatically adjusts its
+              typography, spacing, and content based on its container size using
+              Tailwind container queries.
+            </p>
+
+            {/* Mobile: Stack all cards vertically */}
+            {/* Tablet: Keynote left, speakers right in column */}
+            {/* Desktop: Keynote left, speakers in 2x2 grid right */}
+            <div className="grid auto-rows-fr grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 xl:grid-rows-2">
+              {/* Featured Keynote Speaker */}
+              <div className="md:row-span-2 xl:row-span-2">
                 <SpeakerCard
                   speaker={{
-                    name: 'Dr. Alex Cloudsmith',
+                    name: 'Dr. Alexandra Chen',
                     title: 'Principal Engineer',
-                    company: 'CloudNative Labs',
+                    company: 'Cloud Innovations Inc.',
                     imageUrl:
-                      'https://images.unsplash.com/photo-1502685104226-ee32379fefbe?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                    topic: 'Security & Compliance',
-                    bio: 'Leading expert in cloud native security with 15+ years of experience in distributed systems and Kubernetes orchestration.',
-                    gradient: 'brand',
-                    topicVariant: 'security',
+                      'https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                    topic: 'Future of Cloud Native',
+                    bio: 'Leading expert in distributed systems and cloud native architecture with over 12 years of experience building scalable platforms.',
+                    isKeynote: true,
+                    gradient: 'blue-purple',
                     socialLinks: {
-                      linkedin: '#',
-                      bluesky: '#',
-                      github: '#',
+                      linkedin: 'https://linkedin.com/in/alexandra-chen',
+                      github: 'https://github.com/achen',
                     },
                   }}
                   options={{
-                    showAsKeynote: true,
+                    prominent: true,
+                    alwaysShowBio: true,
+                    fullHeight: true,
                   }}
-                />
-
-                <SpeakerCard
-                  speaker={{
-                    name: 'Jordan Kubernetes',
-                    title: 'DevOps Engineer',
-                    company: 'ContainerCorp',
-                    imageUrl:
-                      'https://images.unsplash.com/photo-1463453091185-61582044d556?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                    topic: 'CI/CD & DevOps',
-                    bio: 'Expert in GitOps and continuous deployment strategies for cloud native applications.',
-                    gradient: 'blue-purple',
-                    topicVariant: 'devops',
-                    socialLinks: {
-                      linkedin: '#',
-                      github: '#',
-                    },
-                  }}
-                />
-
-                <SpeakerCard
-                  speaker={{
-                    name: 'Taylor Prometheus',
-                    title: 'SRE Lead',
-                    company: 'ObservaTech',
-                    imageUrl:
-                      'https://images.unsplash.com/photo-1509783236416-c9ad59bae472?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                    topic: 'Observability',
-                    bio: 'Specializes in large-scale monitoring and reliability engineering for microservices.',
-                    gradient: 'green-yellow',
-                    topicVariant: 'observability',
-                    socialLinks: {
-                      linkedin: '#',
-                      bluesky: '#',
-                    },
-                  }}
-                  options={{ showAsCompact: true }}
                 />
               </div>
+
+              {/* Regular Speaker 1 */}
+              <SpeakerCard
+                speaker={{
+                  name: 'Michael Torres',
+                  title: 'DevOps Lead',
+                  company: 'TechFlow Systems',
+                  imageUrl:
+                    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                  topic: 'CI/CD Pipelines',
+                  bio: 'Streamlining deployment processes with automated testing and continuous delivery.',
+                  topicVariant: 'devops',
+                  socialLinks: {
+                    github: 'https://github.com/mtorres',
+                    linkedin: 'https://linkedin.com/in/michael-torres',
+                  },
+                }}
+                options={{ fullHeight: true }}
+              />
+
+              {/* Regular Speaker 2 */}
+              <SpeakerCard
+                speaker={{
+                  name: 'Jessica Park',
+                  title: 'Security Architect',
+                  company: 'SecureCloud Ltd',
+                  imageUrl:
+                    'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                  topic: 'Zero Trust Security',
+                  bio: 'Implementing comprehensive security strategies for cloud native applications.',
+                  topicVariant: 'security',
+                  socialLinks: {
+                    linkedin: 'https://linkedin.com/in/jessica-park',
+                    bluesky: 'https://bsky.app/profile/jessica.dev',
+                  },
+                }}
+                options={{ fullHeight: true }}
+              />
+
+              {/* Regular Speaker 3 */}
+              <SpeakerCard
+                speaker={{
+                  name: 'David Kumar',
+                  title: 'Platform Engineer',
+                  company: 'DataScale Corp',
+                  imageUrl:
+                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                  topic: 'Observability',
+                  bio: 'Building monitoring and logging solutions for distributed microservices.',
+                  topicVariant: 'observability',
+                  socialLinks: {
+                    github: 'https://github.com/dkumar',
+                    bluesky: 'https://bsky.app/profile/david.tech',
+                  },
+                }}
+                options={{ fullHeight: true }}
+              />
+
+              {/* Regular Speaker 4 */}
+              <SpeakerCard
+                speaker={{
+                  name: 'Sarah Williams',
+                  title: 'Cloud Architect',
+                  company: 'InfraBuilder Pro',
+                  imageUrl:
+                    'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
+                  topic: 'Infrastructure as Code',
+                  bio: 'Designing scalable infrastructure solutions using modern IaC practices.',
+                  topicVariant: 'platform',
+                  socialLinks: {
+                    linkedin: 'https://linkedin.com/in/sarah-williams',
+                    github: 'https://github.com/swilliams',
+                  },
+                }}
+                options={{ fullHeight: true }}
+              />
             </div>
 
-            {/* Layout Example: Keynote + 2x2 Compact */}
-            <div>
-              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-                Layout Example: Keynote + 2x2 Compact Grid
-              </h3>
-              <p className="font-inter mb-8 text-gray-600">
-                Example layout showing how a keynote speaker can be paired with
-                a 2x2 grid of compact speaker cards.
-              </p>
-
-              <div className="flex flex-col items-start gap-8 lg:flex-row">
-                {/* Keynote Speaker */}
-                <div className="flex-shrink-0">
-                  <SpeakerCard
-                    speaker={{
-                      name: 'Dr. Sarah Mitchell',
-                      title: 'CTO',
-                      company: 'CloudNative Inc.',
-                      imageUrl:
-                        'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                      topic: 'Cloud Native Future',
-                      bio: 'Visionary leader in cloud native technologies with 15+ years of experience building distributed systems.',
-                      isKeynote: true,
-                      gradient: 'brand',
-                      socialLinks: {
-                        linkedin: '#',
-                        bluesky: '#',
-                      },
-                    }}
-                  />
+            {/* Responsive Behavior Guide */}
+            <div className="to-brand-tech-purple/5 mt-12 rounded-2xl bg-gradient-to-br from-brand-cloud-blue/5 p-8">
+              <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
+                Responsive Behavior
+              </h4>
+              <div className="grid gap-6 md:grid-cols-3">
+                <div className="rounded-xl bg-white/50 p-4">
+                  <h5 className="font-inter mb-2 font-semibold text-brand-cloud-blue">
+                    📱 Mobile (Default)
+                  </h5>
+                  <p className="font-inter text-sm text-gray-600">
+                    Single column layout with all speakers stacked vertically.
+                    Keynote speaker appears first with prominent styling.
+                  </p>
                 </div>
-
-                {/* 2x2 Compact Grid */}
-                <div className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2">
-                  <SpeakerCard
-                    speaker={{
-                      name: 'Tom Wilson',
-                      title: 'Sr. Developer',
-                      company: 'MicroTech',
-                      imageUrl:
-                        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                      topic: 'Microservices',
-                      bio: 'Expert in distributed systems architecture.',
-                      topicVariant: 'security',
-                      socialLinks: { github: '#' },
-                    }}
-                    options={{
-                      showAsCompact: true,
-                      compactFillContainer: true,
-                    }}
-                  />
-
-                  <SpeakerCard
-                    speaker={{
-                      name: 'Emma Rodriguez',
-                      title: 'Site Reliability Engineer',
-                      company: 'ReliableCorp',
-                      imageUrl:
-                        'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                      topic: 'SRE',
-                      bio: 'Building reliable cloud infrastructure.',
-                      topicVariant: 'observability',
-                      socialLinks: { linkedin: '#' },
-                    }}
-                    options={{
-                      showAsCompact: true,
-                      compactFillContainer: true,
-                    }}
-                  />
-
-                  <SpeakerCard
-                    speaker={{
-                      name: 'Ryan Park',
-                      title: 'Cloud Architect',
-                      company: 'ArchitectCo',
-                      imageUrl:
-                        'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                      topic: 'Architecture',
-                      bio: 'Designing scalable cloud solutions.',
-                      topicVariant: 'platform',
-                      socialLinks: { linkedin: '#', github: '#' },
-                    }}
-                    options={{
-                      showAsCompact: true,
-                      compactFillContainer: true,
-                    }}
-                  />
-
-                  <SpeakerCard
-                    speaker={{
-                      name: 'Anna Kowalski',
-                      title: 'DevOps Engineer',
-                      company: 'AutomationHub',
-                      imageUrl:
-                        'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                      topic: 'Automation',
-                      bio: 'Streamlining development workflows.',
-                      topicVariant: 'devops',
-                      socialLinks: { bluesky: '#' },
-                    }}
-                    options={{
-                      showAsCompact: true,
-                      compactFillContainer: true,
-                    }}
-                  />
+                <div className="rounded-xl bg-white/50 p-4">
+                  <h5 className="font-inter mb-2 font-semibold text-brand-cloud-blue">
+                    📱 Tablet (md: 768px+)
+                  </h5>
+                  <p className="font-inter text-sm text-gray-600">
+                    Two column layout: keynote speaker spans full height on
+                    left, regular speakers stack in right column.
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white/50 p-4">
+                  <h5 className="font-inter mb-2 font-semibold text-brand-cloud-blue">
+                    🖥️ Desktop (xl: 1280px+)
+                  </h5>
+                  <p className="font-inter text-sm text-gray-600">
+                    Three column grid: keynote spans 2 rows on left, regular
+                    speakers form 2×2 grid on right.
+                  </p>
                 </div>
               </div>
             </div>
