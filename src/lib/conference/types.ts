@@ -1,6 +1,6 @@
 import { Reference, TypedObject } from 'sanity'
 import { Format, ProposalExisting } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
+import { Speaker, SpeakerWithTalks } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 
 export interface ConferenceProposals {
@@ -82,7 +82,7 @@ export interface Conference {
   checkin_event_id?: number
   social_links?: string[]
   organizers: Speaker[]
-  featured_speakers?: Speaker[]
+  featured_speakers?: SpeakerWithTalks[]
   domains: string[]
   formats: Format[]
   topics: Topic[]

@@ -1,4 +1,4 @@
-import { FormError } from '@/lib/proposal/types'
+import { FormError, ProposalExisting } from '@/lib/proposal/types'
 
 export enum Flags {
   localSpeaker = 'local',
@@ -42,6 +42,10 @@ export interface Speaker extends SpeakerBase {
   imageURL?: string
   is_organizer?: boolean
   is_featured?: boolean
+}
+
+export interface SpeakerWithTalks extends Speaker {
+  talks?: ProposalExisting[]
 }
 
 export interface SpeakerResponse {

@@ -75,79 +75,86 @@ export async function getConferenceForDomain(
           ? `featured_speakers[]->{
       ...,
       "slug": slug.current,
-      "image": image.asset->url
+      "image": image.asset->url,
+      "talks": *[_type == "talk" && speaker._ref == ^._id && conference._ref == ^.^._id && status == "confirmed"]{
+      _id,
+      title,
+      description,
+      format,
+      status
+      }
       },`
           : ''
       }
       ${
         schedule
           ? `schedules[]-> {
-        ...,
-        tracks[]{
-          trackTitle,
-          trackDescription,
-          talks[]{
-            startTime,
-            endTime,
-            placeholder,
-            talk->{
-              _id,
-              title,
-              description,
-              format,
-              speaker->{
-                name,
-                "slug": slug.current,
-                title,
-                "image": image.asset->url
-              }
-            }
+      ...,
+      tracks[]{
+        trackTitle,
+        trackDescription,
+        talks[]{
+        startTime,
+        endTime,
+        placeholder,
+        talk->{
+          _id,
+          title,
+          description,
+          format,
+          speaker->{
+          name,
+          "slug": slug.current,
+          title,
+          "image": image.asset->url
           }
         }
+        }
+      }
       },`
           : ''
       }
       ${
         sponsors
           ? `sponsors[]{
-        sponsor->{
-          name,
-          website,
-          logo,
-        },
-        tier->{
-          title,
-          tagline
-        }
+      sponsor->{
+        name,
+        website,
+        logo,
+      },
+      tier->{
+        title,
+        tagline
+      }
       },`
           : ''
       }
       ${
         sponsorTiers
           ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id]{
-        title,
-        tagline,
-        price[]{
-          amount,
-          currency
-        },
-        perks[]{
-          label,
-          description
-        },
-        sold_out,
-        most_popular
+      title,
+      tagline,
+      price[]{
+        amount,
+        currency
+      },
+      perks[]{
+        label,
+        description
+      },
+      sold_out,
+      most_popular
       },`
           : ''
       }
       ${
         topics
           ? `topics[]->{
-        _id,
-        title,
-        description,
-        color,
-        "slug": slug.current
+      _id,
+      title,
+      description,
+      color,
+      "slug": slug.current
       },`
           : ''
       }

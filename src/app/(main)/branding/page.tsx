@@ -1,7 +1,6 @@
 import { Metadata } from 'next'
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
-import { SpeakerCard } from '@/components/SpeakerCard'
 import Image from 'next/image'
 
 // Import cloud native icons for the pattern examples
@@ -48,14 +47,20 @@ import {
 import { colorPalette, typography } from '@/lib/branding/data'
 import { TalkCard } from '@/components/TalkCard'
 import { TalkPromotion } from '@/components/TalkPromotion'
+import { SpeakerPromotion } from '@/components/SpeakerPromotion'
 import { Format } from '@/lib/proposal/types'
+import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
 
 export const metadata: Metadata = {
   title: 'Brand Guidelines - Cloud Native Day Bergen',
   description: 'Brand guidelines and design system for Cloud Native Day Bergen',
 }
 
-export default function BrandingPage() {
+export default async function BrandingPage() {
+  const { conference, error } = await getConferenceForCurrentDomain({
+    featuredSpeakers: true,
+  })
+
   return (
     <div className="bg-brand-glacier-white">
       {/* Hero Section */}
@@ -1342,362 +1347,363 @@ export default function BrandingPage() {
               Speaker Examples
             </h2>
             <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
-              Speaker cards demonstrate our flexible design system with multiple
-              variants and layout options for different contexts.
+              Showcase conference speakers with flexible, brand-consistent
+              layouts. From keynote heroes to compact grids, these examples
+              demonstrate various ways to highlight our community experts using
+              real conference data.
             </p>
           </div>
 
-          <div className="space-y-16">
-            {/* Speaker Card Examples */}
-            <div>
-              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-                Responsive Speaker Cards
+          <div className="space-y-20">
+            {/* Featured Speaker */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length > 0 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Featured Speaker
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Streamlined presentation for featured speakers with
+                      essential information and clean visual design. Perfect for
+                      homepage highlights and key announcements.
+                    </p>
+                  </div>
+
+                  <SpeakerPromotion
+                    speaker={conference.featured_speakers[0]}
+                    isFeatured={true}
+                    variant="featured"
+                    ctaText="View Speaker"
+                    ctaUrl={`/speaker/${conference.featured_speakers[0].slug || conference.featured_speakers[0]._id}`}
+                  />
+                </div>
+              )}
+
+            {/* Three Featured Speakers */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 3 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Three Featured Speakers
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Perfect for highlighting key speakers with balanced visual
+                      weight. Ideal for homepage features and conference
+                      announcements.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {conference.featured_speakers.slice(0, 3).map((speaker) => (
+                      <SpeakerPromotion
+                        key={speaker._id}
+                        speaker={speaker}
+                        variant="card"
+                        ctaText="View Profile"
+                        ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Six Speaker Grid */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 6 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Six Speaker Grid
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Comprehensive speaker showcase for full conference
+                      lineups. Maintains visual consistency while showing
+                      diversity of expertise.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    {conference.featured_speakers.slice(0, 6).map((speaker) => (
+                      <SpeakerPromotion
+                        key={speaker._id}
+                        speaker={speaker}
+                        variant="card"
+                        ctaText="Learn More"
+                        ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Compact Speaker List */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 4 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Compact Speaker List
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Space-efficient format for agenda pages and speaker
+                      directories. Shows essential information with talk details
+                      prominently featured.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {conference.featured_speakers
+                      .slice(0, 6)
+                      .map((speaker, index) => (
+                        <SpeakerPromotion
+                          key={speaker._id}
+                          speaker={speaker}
+                          isFeatured={index === 0}
+                          variant="compact"
+                          ctaText="View Details"
+                          ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                        />
+                      ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Social Media Cards */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 4 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Social Media Cards
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Optimized for social sharing and promotional content.
+                      Perfect for LinkedIn posts, Twitter announcements, and
+                      conference marketing.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                    {conference.featured_speakers
+                      .slice(0, 4)
+                      .map((speaker, index) => (
+                        <SpeakerPromotion
+                          key={speaker._id}
+                          speaker={speaker}
+                          isFeatured={index === 0}
+                          variant="social"
+                          ctaText="Follow"
+                          ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                        />
+                      ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Speaker Directory */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 8 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Speaker Directory
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Comprehensive speaker listing for conference programs and
+                      attendee guides. Maximizes information density while
+                      maintaining readability.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {conference.featured_speakers
+                      .slice(0, 10)
+                      .map((speaker) => (
+                        <SpeakerPromotion
+                          key={speaker._id}
+                          speaker={speaker}
+                          variant="compact"
+                          ctaText="View"
+                          ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                        />
+                      ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Mixed Layout Example */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 6 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Mixed Layout
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Combines different speaker presentation styles for
+                      dynamic, engaging layouts. Perfect for conference websites
+                      that need visual variety and clear hierarchy.
+                    </p>
+                  </div>
+
+                  <div className="space-y-8">
+                    {/* Featured speaker at top */}
+                    <div className="mb-8">
+                      <SpeakerPromotion
+                        speaker={conference.featured_speakers[0]}
+                        isFeatured={true}
+                        variant="featured"
+                        ctaText="View Speaker"
+                        ctaUrl={`/speaker/${conference.featured_speakers[0].slug || conference.featured_speakers[0]._id}`}
+                      />
+                    </div>
+
+                    {/* Three card speakers */}
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                      {conference.featured_speakers
+                        .slice(1, 4)
+                        .map((speaker) => (
+                          <SpeakerPromotion
+                            key={speaker._id}
+                            speaker={speaker}
+                            variant="card"
+                            ctaText="View Profile"
+                            ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                          />
+                        ))}
+                    </div>
+
+                    {/* Compact list for additional speakers */}
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {conference.featured_speakers
+                        .slice(4, 10)
+                        .map((speaker) => (
+                          <SpeakerPromotion
+                            key={speaker._id}
+                            speaker={speaker}
+                            variant="compact"
+                            ctaText="View Details"
+                            ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* Design Guidelines */}
+            <div className="rounded-xl bg-brand-sky-mist p-8">
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-cloud-blue">
+                Speaker Display Guidelines
               </h3>
-              <p className="font-inter mb-8 text-gray-600">
-                Speaker cards automatically adapt their layout, sizing, and
-                content based on available container space. The same component
-                works seamlessly across different container sizes without manual
-                variant props.
-              </p>
 
-              {/* Different container sizes demonstration */}
-              <div className="space-y-8">
-                {/* Large container - Full size */}
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
                 <div>
-                  <h4 className="font-space-grotesk mb-4 text-lg font-medium text-brand-slate-gray">
-                    Large Container (400px+)
+                  <h4 className="font-inter mb-4 text-lg font-semibold text-brand-slate-gray">
+                    Layout Recommendations
                   </h4>
-                  <div className="mx-auto max-w-sm">
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Dr. Alex Cloudsmith',
-                        title: 'Principal Engineer',
-                        company: 'CloudNative Labs',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1502685104226-ee32379fefbe?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'Security & Compliance',
-                        bio: 'Leading expert in cloud native security with 15+ years of experience in distributed systems and Kubernetes orchestration.',
-                        isKeynote: true,
-                        gradient: 'brand',
-                        topicVariant: 'security',
-                        socialLinks: {
-                          linkedin: '#',
-                          bluesky: '#',
-                          github: '#',
-                        },
-                      }}
-                    />
-                  </div>
+                  <ul className="font-inter space-y-3 text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>Featured Layout:</strong> Compact yet impactful
+                        design for keynote speakers and main announcements
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>3-Speaker Grid:</strong> Perfect for homepage
+                        highlights and featured speaker sections
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>6-Speaker Grid:</strong> Ideal for complete
+                        conference lineups and speaker pages
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>Compact Format:</strong> Use for agenda pages
+                        and speaker directories
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>Social Cards:</strong> Optimized for social
+                        media sharing and promotion
+                      </span>
+                    </li>
+                  </ul>
                 </div>
 
-                {/* Medium containers - 300-400px */}
                 <div>
-                  <h4 className="font-space-grotesk mb-4 text-lg font-medium text-brand-slate-gray">
-                    Medium Containers (300-400px)
+                  <h4 className="font-inter mb-4 text-lg font-semibold text-brand-slate-gray">
+                    Content Hierarchy
                   </h4>
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Jordan Kubernetes',
-                        title: 'DevOps Engineer',
-                        company: 'ContainerCorp',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1463453091185-61582044d556?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'CI/CD & DevOps',
-                        bio: 'Expert in GitOps and continuous deployment strategies for cloud native applications.',
-                        gradient: 'blue-purple',
-                        topicVariant: 'devops',
-                        socialLinks: {
-                          linkedin: '#',
-                          github: '#',
-                        },
-                      }}
-                    />
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Taylor Prometheus',
-                        title: 'SRE Lead',
-                        company: 'ObservaTech',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1509783236416-c9ad59bae472?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'Observability',
-                        bio: 'Specializes in large-scale monitoring and reliability engineering for microservices.',
-                        gradient: 'green-yellow',
-                        topicVariant: 'observability',
-                        socialLinks: {
-                          linkedin: '#',
-                          bluesky: '#',
-                        },
-                      }}
-                    />
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Sam Performance',
-                        title: 'Performance Engineer',
-                        company: 'SpeedTech',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'Performance',
-                        bio: 'Optimizing applications for maximum throughput and minimal latency.',
-                        gradient: 'brand',
-                        topicVariant: 'performance',
-                        socialLinks: {
-                          github: '#',
-                        },
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Small Containers - 200px-300px */}
-                <div>
-                  <h4 className="font-space-grotesk mb-4 text-lg font-medium text-brand-slate-gray">
-                    Small Containers (200-300px)
-                  </h4>
-                  {/* Regular Speakers Grid - 2 rows × 4 columns */}
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 lg:grid-cols-4">
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Marcus Rodriguez',
-                        title: 'DevSecOps Lead',
-                        company: 'SecureCloud',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'Security-First DevOps',
-                        bio: 'Implementing security-first development practices in cloud native environments.',
-                        topicVariant: 'security',
-                        socialLinks: { github: '#', linkedin: '#' },
-                      }}
-                    />
-
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Emma Thompson',
-                        title: 'Site Reliability Engineer',
-                        company: 'ReliableOps',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'Observability at Scale',
-                        bio: 'Building resilient systems that scale with comprehensive monitoring and alerting.',
-                        topicVariant: 'observability',
-                        socialLinks: { linkedin: '#' },
-                      }}
-                    />
-
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Alex Kim',
-                        title: 'Platform Engineer',
-                        company: 'DevPlatform',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1502685104226-ee32379fefbe?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'Developer Experience',
-                        bio: 'Creating seamless developer workflows with modern platform engineering.',
-                        topicVariant: 'devops',
-                        socialLinks: { github: '#' },
-                      }}
-                    />
-
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Lisa Wang',
-                        title: 'Cloud Security Architect',
-                        company: 'SecureTech Solutions',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'Zero Trust Architecture',
-                        bio: 'Designing secure cloud architectures with zero trust principles.',
-                        topicVariant: 'security',
-                        socialLinks: { linkedin: '#', github: '#' },
-                      }}
-                    />
-
-                    <SpeakerCard
-                      speaker={{
-                        name: 'David Chen',
-                        title: 'Observability Lead',
-                        company: 'MonitorCorp',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'Distributed Tracing',
-                        bio: 'Making complex distributed systems transparent and debuggable.',
-                        topicVariant: 'observability',
-                        socialLinks: { github: '#', bluesky: '#' },
-                      }}
-                    />
-
-                    <SpeakerCard
-                      speaker={{
-                        name: 'Maya Singh',
-                        title: 'Automation Specialist',
-                        company: 'AutoFlow Technologies',
-                        imageUrl:
-                          'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                        topic: 'CI/CD Optimization',
-                        bio: 'Streamlining development workflows with intelligent automation.',
-                        topicVariant: 'devops',
-                        socialLinks: { linkedin: '#', bluesky: '#' },
-                      }}
-                    />
-                  </div>
+                  <ul className="font-inter space-y-3 text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Name:</strong> Primary focus with largest text
+                        size
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Title & Company:</strong> Secondary information
+                        for context
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Talk Information:</strong> Shows format badges
+                        and talk titles when available
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Biography:</strong> Included in featured and
+                        card layouts for depth
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Keynote Badge:</strong> Special highlighting for
+                        keynote speakers
+                      </span>
+                    </li>
+                  </ul>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* Adaptive Layout Example */}
-          <div>
-            <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-              Adaptive Layout Example
-            </h3>
-            <p className="font-inter mb-8 text-gray-600">
-              This example demonstrates how speaker cards adapt to different
-              container sizes and layouts. Watch how the layout transforms:
-              single column on mobile, keynote + column on tablet, and keynote +
-              2×2 grid on desktop. Each card automatically adjusts its
-              typography, spacing, and content based on its container size using
-              Tailwind container queries.
-            </p>
-
-            {/* Mobile: Stack all cards vertically */}
-            {/* Tablet: Keynote left, speakers right in column */}
-            {/* Desktop: Keynote left, speakers in 2x2 grid right */}
-            <div className="grid auto-rows-fr grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 xl:grid-rows-2">
-              {/* Featured Keynote Speaker */}
-              <div className="md:row-span-2 xl:row-span-2">
-                <SpeakerCard
-                  speaker={{
-                    name: 'Dr. Alexandra Chen',
-                    title: 'Principal Engineer',
-                    company: 'Cloud Innovations Inc.',
-                    imageUrl:
-                      'https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                    topic: 'Future of Cloud Native',
-                    bio: 'Leading expert in distributed systems and cloud native architecture with over 12 years of experience building scalable platforms.',
-                    isKeynote: true,
-                    gradient: 'blue-purple',
-                    socialLinks: {
-                      linkedin: 'https://linkedin.com/in/alexandra-chen',
-                      github: 'https://github.com/achen',
-                    },
-                  }}
-                  options={{
-                    prominent: true,
-                    alwaysShowBio: true,
-                    fullHeight: true,
-                  }}
-                />
-              </div>
-
-              {/* Regular Speaker 1 */}
-              <SpeakerCard
-                speaker={{
-                  name: 'Michael Torres',
-                  title: 'DevOps Lead',
-                  company: 'TechFlow Systems',
-                  imageUrl:
-                    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                  topic: 'CI/CD Pipelines',
-                  bio: 'Streamlining deployment processes with automated testing and continuous delivery.',
-                  topicVariant: 'devops',
-                  socialLinks: {
-                    github: 'https://github.com/mtorres',
-                    linkedin: 'https://linkedin.com/in/michael-torres',
-                  },
-                }}
-                options={{ fullHeight: true }}
-              />
-
-              {/* Regular Speaker 2 */}
-              <SpeakerCard
-                speaker={{
-                  name: 'Jessica Park',
-                  title: 'Security Architect',
-                  company: 'SecureCloud Ltd',
-                  imageUrl:
-                    'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                  topic: 'Zero Trust Security',
-                  bio: 'Implementing comprehensive security strategies for cloud native applications.',
-                  topicVariant: 'security',
-                  socialLinks: {
-                    linkedin: 'https://linkedin.com/in/jessica-park',
-                    bluesky: 'https://bsky.app/profile/jessica.dev',
-                  },
-                }}
-                options={{ fullHeight: true }}
-              />
-
-              {/* Regular Speaker 3 */}
-              <SpeakerCard
-                speaker={{
-                  name: 'David Kumar',
-                  title: 'Platform Engineer',
-                  company: 'DataScale Corp',
-                  imageUrl:
-                    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                  topic: 'Observability',
-                  bio: 'Building monitoring and logging solutions for distributed microservices.',
-                  topicVariant: 'observability',
-                  socialLinks: {
-                    github: 'https://github.com/dkumar',
-                    bluesky: 'https://bsky.app/profile/david.tech',
-                  },
-                }}
-                options={{ fullHeight: true }}
-              />
-
-              {/* Regular Speaker 4 */}
-              <SpeakerCard
-                speaker={{
-                  name: 'Sarah Williams',
-                  title: 'Cloud Architect',
-                  company: 'InfraBuilder Pro',
-                  imageUrl:
-                    'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=8&w=1024&h=1024&q=80',
-                  topic: 'Infrastructure as Code',
-                  bio: 'Designing scalable infrastructure solutions using modern IaC practices.',
-                  topicVariant: 'platform',
-                  socialLinks: {
-                    linkedin: 'https://linkedin.com/in/sarah-williams',
-                    github: 'https://github.com/swilliams',
-                  },
-                }}
-                options={{ fullHeight: true }}
-              />
-            </div>
-
-            {/* Responsive Behavior Guide */}
-            <div className="to-brand-tech-purple/5 mt-12 rounded-2xl bg-gradient-to-br from-brand-cloud-blue/5 p-8">
-              <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
-                Responsive Behavior
-              </h4>
-              <div className="grid gap-6 md:grid-cols-3">
-                <div className="rounded-xl bg-white/50 p-4">
-                  <h5 className="font-inter mb-2 font-semibold text-brand-cloud-blue">
-                    📱 Mobile (Default)
-                  </h5>
-                  <p className="font-inter text-sm text-gray-600">
-                    Single column layout with all speakers stacked vertically.
-                    Keynote speaker appears first with prominent styling.
-                  </p>
-                </div>
-                <div className="rounded-xl bg-white/50 p-4">
-                  <h5 className="font-inter mb-2 font-semibold text-brand-cloud-blue">
-                    📱 Tablet (md: 768px+)
-                  </h5>
-                  <p className="font-inter text-sm text-gray-600">
-                    Two column layout: keynote speaker spans full height on
-                    left, regular speakers stack in right column.
-                  </p>
-                </div>
-                <div className="rounded-xl bg-white/50 p-4">
-                  <h5 className="font-inter mb-2 font-semibold text-brand-cloud-blue">
-                    🖥️ Desktop (xl: 1280px+)
-                  </h5>
-                  <p className="font-inter text-sm text-gray-600">
-                    Three column grid: keynote spans 2 rows on left, regular
-                    speakers form 2×2 grid on right.
-                  </p>
+              <div className="mt-8 rounded-lg bg-white/50 p-6">
+                <h4 className="font-inter mb-3 text-lg font-semibold text-brand-slate-gray">
+                  Accessibility & Performance
+                </h4>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                    <li>• High contrast ratios for all text elements</li>
+                    <li>• Keyboard navigation support throughout</li>
+                    <li>• Screen reader optimized alt text and labels</li>
+                    <li>• Focus indicators on all interactive elements</li>
+                  </ul>
+                  <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                    <li>• Optimized images with proper sizing</li>
+                    <li>• Lazy loading for large speaker grids</li>
+                    <li>• Responsive layouts for all screen sizes</li>
+                    <li>• Progressive enhancement for slower connections</li>
+                  </ul>
                 </div>
               </div>
             </div>
