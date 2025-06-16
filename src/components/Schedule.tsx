@@ -272,7 +272,7 @@ export function Schedule({ schedule }: { schedule: ConferenceSchedule }) {
         </div>
       </Container>
       <div className="relative mt-14 sm:mt-24">
-        <BackgroundImage position="right" className="-top-40 -bottom-32" />
+        <BackgroundImage className="-top-40 -bottom-32" />
         <Container className="relative">
           <ScheduleTabbed tracks={schedule.tracks} date={schedule.date} />
           <ScheduleStatic tracks={schedule.tracks} date={schedule.date} />

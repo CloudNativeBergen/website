@@ -165,6 +165,20 @@ const createWeightedIconPool = (): IconData[] => {
   return pool
 }
 
+// Seeded random number generator for consistent but varied patterns
+class SeededRandom {
+  private seed: number
+
+  constructor(seed: number) {
+    this.seed = seed
+  }
+
+  next(): number {
+    this.seed = (this.seed * 1664525 + 1013904223) % 4294967296
+    return this.seed / 4294967296
+  }
+}
+
 const createDepthLayers = (
   baseSize: number,
   variant: Variant,
@@ -249,6 +263,20 @@ interface CloudNativePatternProps {
    * @range Recommended: 10-200 icons for optimal performance
    */
   iconCount?: number
+
+  /**
+   * Seed value for the random number generator
+   * Allows for consistent but customizable patterns - use different seeds to find suitable arrangements
+   * @default undefined (uses computed seed based on props)
+   * @range Any positive integer
+   * @example
+   * // Try different seeds to find visually appealing patterns:
+   * seed={42}    // Balanced distribution
+   * seed={123}   // More clustered icons
+   * seed={999}   // Sparse arrangement
+   * seed={1337}  // Dense pattern
+   */
+  seed?: number
 }
 
 export function CloudNativePattern({
@@ -258,6 +286,7 @@ export function CloudNativePattern({
   variant = 'brand',
   baseSize = 45,
   iconCount = 50,
+  seed,
 }: CloudNativePatternProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -275,6 +304,14 @@ export function CloudNativePattern({
     const elements: React.JSX.Element[] = []
     const colors = COLOR_SCHEMES[variant]
     let currentIconIndex = 0
+
+    // Create seeded random generator for consistent patterns
+    const computedSeed =
+      seed ??
+      iconCount +
+        baseSize +
+        (variant === 'light' ? 1000 : variant === 'dark' ? 2000 : 3000)
+    const seededRandom = new SeededRandom(computedSeed)
 
     // Create a grid-based distribution system to prevent clustering
     const createDistributedPositions = (count: number) => {
@@ -296,9 +333,9 @@ export function CloudNativePattern({
         }
       }
 
-      // Shuffle the grid cells for more organic distribution
+      // Shuffle the grid cells using seeded random for consistency
       for (let i = gridCells.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
+        const j = Math.floor(seededRandom.next() * (i + 1))
         ;[gridCells[i], gridCells[j]] = [gridCells[j], gridCells[i]]
       }
 
@@ -312,8 +349,8 @@ export function CloudNativePattern({
 
         // Add jitter within the cell (up to 40% of cell size from center)
         const jitterRange = 0.4
-        const jitterX = (Math.random() - 0.5) * cellWidth * jitterRange
-        const jitterY = (Math.random() - 0.5) * cellHeight * jitterRange
+        const jitterX = (seededRandom.next() - 0.5) * cellWidth * jitterRange
+        const jitterY = (seededRandom.next() - 0.5) * cellHeight * jitterRange
 
         // Final position with bounds checking
         const x = Math.max(5, Math.min(95, baseCellX + jitterX))
@@ -335,11 +372,11 @@ export function CloudNativePattern({
       for (let i = 0; i < layerIconCount && currentIconIndex < iconCount; i++) {
         currentIconIndex++
 
-        // Select icon from weighted pool
+        // Select icon from weighted pool using seeded random
         const selectedIcon =
-          iconPool[Math.floor(Math.random() * iconPool.length)]
+          iconPool[Math.floor(seededRandom.next() * iconPool.length)]
         const size =
-          Math.random() * (layer.sizeRange[1] - layer.sizeRange[0]) +
+          seededRandom.next() * (layer.sizeRange[1] - layer.sizeRange[0]) +
           layer.sizeRange[0]
 
         // Use pre-calculated distributed position
@@ -348,11 +385,11 @@ export function CloudNativePattern({
         const y = position.y
         positionIndex++
 
-        const animationDelay = Math.random() * 20
-        const baseAnimationDuration = 15 + Math.random() * 10
+        const animationDelay = seededRandom.next() * 20
+        const baseAnimationDuration = 15 + seededRandom.next() * 10
         const animationDuration =
           baseAnimationDuration * layer.animationSpeedMultiplier
-        const color = colors[Math.floor(Math.random() * colors.length)]
+        const color = colors[Math.floor(seededRandom.next() * colors.length)]
 
         // Calculate opacity with category-based multipliers
         const categoryMultiplier = CATEGORY_MULTIPLIERS[selectedIcon.category]
@@ -374,8 +411,8 @@ export function CloudNativePattern({
 
         elements.push(
           <div
-            key={`${layer.name}-${i}-${selectedIcon.name}`}
-            className={`absolute ${color} transition-all duration-1000`}
+            key={`${layer.name}-${i}-${selectedIcon.name}-${currentIconIndex}`}
+            className={`absolute ${color} transition-all duration-500`}
             style={{
               width: `${finalSize}px`,
               height: `${finalSize}px`,
@@ -398,6 +435,8 @@ export function CloudNativePattern({
               height={Math.round(finalSize)}
               className="h-full w-full object-contain"
               style={{ filter: filterStyle }}
+              loading="lazy"
+              decoding="async"
             />
           </div>,
         )
@@ -405,7 +444,7 @@ export function CloudNativePattern({
     })
 
     return elements
-  }, [iconCount, iconPool, depthLayers, variant, opacity, animated])
+  }, [iconCount, iconPool, depthLayers, variant, opacity, animated, seed, baseSize])
 
   // Memoized background gradients
   const backgroundGradients = useMemo(() => {

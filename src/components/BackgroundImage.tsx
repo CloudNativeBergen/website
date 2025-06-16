@@ -2,36 +2,23 @@ import clsx from 'clsx'
 
 import { CloudNativePattern } from './CloudNativePattern'
 
-export function BackgroundImage({
-  className,
-  position = 'left',
-}: {
-  className?: string
-  position?: 'left' | 'right'
-}) {
+export function BackgroundImage({ className }: { className?: string }) {
   return (
     <div className={clsx('absolute inset-0 overflow-hidden', className)}>
       {/* Branding colored background that fades to white */}
       <div className="absolute inset-0 bg-brand-gradient opacity-20" />
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white" />
 
-      {/* Cloud Native Pattern with positioning */}
-      <div
-        className={clsx(
-          'absolute inset-0',
-          position === 'left' &&
-            'translate-x-[-25%] translate-y-[-5%] scale-110 sm:translate-x-[-35%] sm:translate-y-[-3%] lg:translate-x-[-40%] xl:translate-x-[-45%]',
-          position === 'right' &&
-            'translate-x-[25%] translate-y-[-5%] scale-110 sm:translate-x-[35%] sm:translate-y-[-8%] md:translate-x-[40%] lg:translate-x-[45%] xl:translate-x-[50%] xl:translate-y-[-5%]',
-        )}
-      >
+      {/* Cloud Native Pattern - full width */}
+      <div className="absolute inset-0">
         <CloudNativePattern
           variant="light"
           opacity={0.05}
           animated={true}
-          baseSize={80}
+          baseSize={100}
           iconCount={50}
           className="h-full w-full"
+          seed={new Date().setHours(0, 0, 0, 0)}
         />
       </div>
 
