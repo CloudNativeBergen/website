@@ -1415,62 +1415,6 @@ export default async function BrandingPage() {
                 </div>
               )}
 
-            {/* Three Minimal Speakers */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 3 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
-                      Three Minimal Speakers
-                    </h3>
-                    <p className="font-inter text-gray-600">
-                      Clean, eye-catching design perfect for highlighting key
-                      speakers in a row. Features bigger text, minimal details,
-                      and enhanced visual impact with hover animations.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {conference.featured_speakers.slice(0, 3).map((speaker) => (
-                      <SpeakerPromotion
-                        key={speaker._id}
-                        speaker={speaker}
-                        variant="minimal"
-                        ctaText="View Profile"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            {/* Six Speaker Grid */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 6 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
-                      Six Speaker Grid
-                    </h3>
-                    <p className="font-inter text-gray-600">
-                      Comprehensive speaker showcase for full conference
-                      lineups. Maintains visual consistency while showing
-                      diversity of expertise.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                    {conference.featured_speakers.slice(0, 6).map((speaker) => (
-                      <SpeakerPromotion
-                        key={speaker._id}
-                        speaker={speaker}
-                        variant="card"
-                        ctaText="Learn More"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
             {/* Compact Speaker List */}
             {conference?.featured_speakers &&
               conference.featured_speakers.length >= 4 && (
@@ -1555,39 +1499,6 @@ export default async function BrandingPage() {
                         ctaText="View Profile"
                       />
                     ))}
-                  </div>
-                </div>
-              )}
-
-            {/* Social Image for Conference Promotion */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 2 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
-                      Speaker Spotlight Images
-                    </h3>
-                    <p className="font-inter text-gray-600">
-                      Conference-branded promotional images highlighting
-                      individual speakers. Includes QR code for easy access to
-                      speaker information and designed for conference social
-                      media accounts.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                    {conference.featured_speakers
-                      .slice(0, 3)
-                      .map((speaker, index) => (
-                        <SpeakerPromotion
-                          key={speaker._id}
-                          speaker={speaker}
-                          isFeatured={index === 0}
-                          variant="speaker-spotlight"
-                          eventName={conference.title || 'Cloud Native Bergen'}
-                          ctaText="Learn More"
-                        />
-                      ))}
                   </div>
                 </div>
               )}
