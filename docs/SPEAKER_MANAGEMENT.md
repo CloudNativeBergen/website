@@ -66,6 +66,61 @@ Legacy wrapper function that calls `getSpeakers` with accepted and confirmed sta
 
 Navigate to `/admin/speakers` in the admin interface to access the speaker management page.
 
+## Migration Scripts
+
+### Speaker Slug Migration
+
+All speakers need to have slugs for proper URL generation. If you have existing speakers without slugs, you can run the Sanity migration to ensure all speakers get proper slugs.
+
+#### Running the Migration
+
+> **Important**: Always backup your dataset before running migrations
+
+##### Step 1: Backup your dataset
+
+```bash
+npx sanity@latest dataset export production speaker-slugs-backup.tar.gz
+```
+
+##### Step 2: Validate your documents
+
+```bash
+npx sanity@latest documents validate -y
+```
+
+##### Step 3: Run the migration
+
+```bash
+npx sanity@latest migration run ensure-speaker-slugs
+```
+
+##### Alternative: Check migration status
+
+```bash
+# Get information about the migration
+curl http://localhost:3000/api/migrate/speaker-slugs
+```
+
+The migration will:
+
+- Find all speaker documents without slugs
+- Generate slugs based on their names (following the same pattern as the Sanity schema)
+- Update the speakers in the database using Sanity's migration system
+- Provide detailed logging of the migration process
+
+### Automatic Slug Generation
+
+New speakers created through authentication will automatically get slugs generated based on their names. The slug generation follows these rules:
+
+- Convert name to lowercase
+- Replace spaces with hyphens
+- Truncate to 96 characters maximum
+- Remove special characters (following Sanity's slug generation pattern)
+
+### Migration Details
+
+The migration is located at `migrations/ensure-speaker-slugs/index.ts` and uses Sanity's official migration system for safe, atomic updates to your dataset.
+
 ## Future Enhancements
 
 - Speaker detail view for individual speaker management

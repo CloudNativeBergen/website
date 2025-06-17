@@ -16,6 +16,13 @@ export function providerAccount(
   return `${provider}:${providerAccountId}`
 }
 
+/**
+ * Generate a slug from a speaker's name, similar to the Sanity schema slugify function
+ */
+function generateSlug(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '-').slice(0, 96)
+}
+
 async function findSpeakerByProvider(
   id: string,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
@@ -26,6 +33,7 @@ async function findSpeakerByProvider(
     speaker = await clientRead.fetch(
       `*[ _type == "speaker" && $id in providers][0]{
       ...,
+      "slug": slug.current,
       "image": image.asset->url
     }`,
       { id },
@@ -48,6 +56,7 @@ async function findSpeakerByEmail(
     speaker = await clientRead.fetch(
       `*[ _type == "speaker" && email == $email][0]{
       ...,
+      "slug": slug.current,
       "image": image.asset->url
     }`,
       { email },
@@ -116,11 +125,24 @@ export async function getOrCreateSpeaker(
     imageURL: user.image || '',
     providers: [providerAccountId],
   } as Speaker
+
+  const slugValue = generateSlug(user.name)
+  
   try {
-    speaker = (await clientWrite.create({
+    const createdSpeaker = await clientWrite.create({
       _type: 'speaker',
       ...speaker,
-    })) as Speaker
+      slug: {
+        _type: 'slug',
+        current: slugValue,
+      },
+    })
+    
+    // Convert the created speaker to match our Speaker interface
+    speaker = {
+      ...createdSpeaker,
+      slug: slugValue, // Extract the slug value from the object
+    } as Speaker
   } catch (error) {
     err = error as Error
   }
@@ -138,6 +160,7 @@ export async function getSpeaker(
     speaker = await clientRead.fetch(
       `*[ _type == "speaker" && _id == $speakerId][0]{
       ...,
+      "slug": slug.current,
       "image": image.asset->url
     }`,
       { speakerId },
@@ -276,6 +299,7 @@ export async function getSpeakers(
 
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
       ...,
+      "slug": slug.current,
       "image": image.asset->url,
       "proposals": *[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}] {
         _id,
