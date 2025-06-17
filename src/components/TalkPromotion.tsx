@@ -1,4 +1,3 @@
-import { CloudNativePattern } from '@/components/CloudNativePattern'
 import {
   CalendarIcon,
   MapPinIcon,
@@ -54,8 +53,6 @@ const variantConfig = {
   banner: {
     containerClass:
       'relative overflow-hidden rounded-2xl border border-gray-200 p-8 md:p-12',
-    backgroundClass: 'absolute inset-0 opacity-10',
-    patternProps: { iconCount: 24, baseSize: 24 },
     titleClass:
       'font-space-grotesk mb-3 text-3xl font-bold text-brand-slate-gray md:text-4xl',
     speakerClass: 'font-inter mb-4 text-xl text-gray-700',
@@ -68,8 +65,6 @@ const variantConfig = {
   featured: {
     containerClass:
       'group relative overflow-hidden rounded-xl border-2 border-brand-cloud-blue bg-white p-8 shadow-md transition-all duration-300 hover:shadow-lg',
-    backgroundClass: 'absolute inset-0 opacity-5',
-    patternProps: { iconCount: 16, baseSize: 20 },
     titleClass:
       'font-space-grotesk mb-4 text-2xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
     speakerClass: 'font-inter font-medium text-gray-700',
@@ -82,8 +77,6 @@ const variantConfig = {
   compact: {
     containerClass:
       'group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-lg',
-    backgroundClass: 'absolute inset-0 opacity-5',
-    patternProps: { iconCount: 8, baseSize: 16 },
     titleClass:
       'font-space-grotesk mb-2 text-lg font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
     speakerClass: 'font-inter text-sm font-medium text-gray-700',
@@ -96,8 +89,6 @@ const variantConfig = {
   social: {
     containerClass:
       'relative aspect-square overflow-hidden rounded-2xl border border-gray-200 max-w-sm p-6',
-    backgroundClass: 'absolute inset-0 opacity-15',
-    patternProps: { iconCount: 16, baseSize: 20 },
     titleClass:
       'font-space-grotesk mb-3 text-xl font-bold text-brand-slate-gray',
     speakerClass: 'font-inter mb-4 text-gray-700',
@@ -110,8 +101,6 @@ const variantConfig = {
   card: {
     containerClass:
       'group relative overflow-hidden rounded-xl border border-gray-200 p-6 transition-all duration-300 hover:border-gray-300 hover:shadow-lg',
-    backgroundClass: 'absolute inset-0 opacity-10',
-    patternProps: { iconCount: 12, baseSize: 18 },
     titleClass:
       'font-space-grotesk mb-3 text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
     speakerClass: 'font-inter mb-4 text-gray-700',
@@ -413,15 +402,6 @@ export const TalkPromotion = memo(function TalkPromotion({
   // Main render logic using unified approach
   return (
     <div className={computedValues.containerClassName}>
-      {/* Background Pattern */}
-      <div className={variantSettings.backgroundClass}>
-        <CloudNativePattern
-          iconCount={variantSettings.patternProps.iconCount}
-          baseSize={variantSettings.patternProps.baseSize}
-          className="h-full w-full"
-        />
-      </div>
-
       {/* Content */}
       <div className="relative">
         {variant === 'banner' ? (

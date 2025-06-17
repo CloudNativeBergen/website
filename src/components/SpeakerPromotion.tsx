@@ -76,8 +76,8 @@ type VariantConfig = {
  * Computed speaker data interface
  */
 interface ComputedSpeakerData {
-  talks: any[]
-  primaryTalk: any | null
+  talks: SpeakerWithTalks['talks']
+  primaryTalk: NonNullable<SpeakerWithTalks['talks']>[0] | null
   expertise: string[]
   company: string | undefined
   talkCount: number
@@ -216,7 +216,7 @@ function computeSpeakerData(speaker: SpeakerWithTalks): ComputedSpeakerData {
  */
 
 interface SpeakerImageProps {
-  image?: any
+  image?: SpeakerWithTalks['image']
   name: string
   size: number
   className?: string
@@ -275,6 +275,7 @@ const QRCodeDisplay = ({
     <div
       className={`rounded-lg bg-white shadow-lg ${className}`}
       style={{ padding: size * 0.1 }}
+      data-qr-code="true"
     >
       <Image
         src={qrCodeUrl}
@@ -282,13 +283,14 @@ const QRCodeDisplay = ({
         width={size}
         height={size}
         style={{ width: size, height: size }}
+        crossOrigin="anonymous"
       />
     </div>
   )
 }
 
 interface TalkFormatDisplayProps {
-  talk: any
+  talk: { format?: string }
   size?: 'sm' | 'md' | 'lg'
 }
 
@@ -340,7 +342,7 @@ export async function SpeakerPromotion({
   eventName = 'Cloud Native Bergen',
 }: SpeakerPromotionProps) {
   // Derive computed values
-  const { talks, primaryTalk, expertise, company, talkCount } =
+  const { primaryTalk, expertise, company, talkCount } =
     computeSpeakerData(speaker)
 
   // Get variant config
@@ -368,8 +370,10 @@ export async function SpeakerPromotion({
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
           <CloudNativePattern
-            iconCount={16}
-            baseSize={20}
+            opacity={0.3}
+            iconCount={30}
+            baseSize={60}
+            variant="light"
             className="h-full w-full"
           />
         </div>
@@ -477,15 +481,6 @@ export async function SpeakerPromotion({
       <div
         className={`group relative ${COMMON_STYLES.socialCard} overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-200 p-8 transition-all duration-300 hover:shadow-xl ${className}`}
       >
-        {/* Background Pattern */}
-        <div className={COMMON_STYLES.backgroundPattern}>
-          <CloudNativePattern
-            iconCount={20}
-            baseSize={24}
-            className="h-full w-full"
-          />
-        </div>
-
         <div className="relative flex h-full flex-col text-center text-white">
           {/* Header */}
           <div className="mb-4">
@@ -512,13 +507,13 @@ export async function SpeakerPromotion({
                 <SpeakerImage
                   image={image}
                   name={name}
-                  size={100}
+                  size={95}
                   className="rounded-2xl object-cover shadow-lg"
                 />
               </div>
 
               {/* QR Code */}
-              <QRCodeDisplay qrCodeUrl={qrCodeUrl} size={90} />
+              <QRCodeDisplay qrCodeUrl={qrCodeUrl} size={80} />
             </div>
           </div>
 
@@ -563,15 +558,6 @@ export async function SpeakerPromotion({
       <div
         className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-100 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg ${className}`}
       >
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-5">
-          <CloudNativePattern
-            iconCount={8}
-            baseSize={16}
-            className="h-full w-full"
-          />
-        </div>
-
         <div className="relative flex h-full flex-col text-center">
           {/* Speaker Image */}
           <div className="mb-4 flex justify-center">
@@ -686,15 +672,6 @@ export async function SpeakerPromotion({
     <div
       className={`group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-lg ${className}`}
     >
-      {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-10">
-        <CloudNativePattern
-          iconCount={12}
-          baseSize={18}
-          className="h-full w-full"
-        />
-      </div>
-
       <div className="relative flex h-full flex-col">
         {/* Featured Badge (only if featured) */}
         {isFeatured && (

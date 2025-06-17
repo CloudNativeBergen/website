@@ -43,6 +43,7 @@ import {
   BrandingExampleHeroSection,
   PatternExample,
   ButtonShowcase,
+  DownloadSpeakerImage,
 } from '@/components/branding'
 import { colorPalette, typography } from '@/lib/branding/data'
 
@@ -1511,13 +1512,41 @@ export default async function BrandingPage() {
                     </h3>
                     <p className="font-inter text-gray-600">
                       Branded images speakers can share on their own social
-                      media with "I'm speaking at [event]" message. Includes QR
-                      code linking to their speaker profile and talk details.
+                      media with &ldquo;I&rsquo;m speaking at [event]&rdquo;
+                      message. Includes QR code linking to their speaker profile
+                      and talk details.
                     </p>
+                    <div className="mt-4 rounded-lg bg-blue-50 p-4">
+                      <p className="font-inter text-sm text-blue-800">
+                        <strong className="text-brand-cloud-blue">
+                          💡 Try the Download Feature!
+                        </strong>
+                        <br />
+                        Click &ldquo;Download as PNG&rdquo; below the first
+                        speaker card to save a high-quality image. The download
+                        may take a few seconds to process as it waits for all
+                        content (including QR codes) to load properly.
+                      </p>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                    {conference.featured_speakers.slice(0, 3).map((speaker) => (
+                    {/* First speaker with download functionality */}
+                    <DownloadSpeakerImage
+                      filename={`${
+                        conference.featured_speakers[0]?.slug
+                      }-share`}
+                    >
+                      <SpeakerPromotion
+                        speaker={conference.featured_speakers[0]}
+                        variant="speaker-share"
+                        eventName={conference.title || 'Cloud Native Bergen'}
+                        ctaText="View Profile"
+                      />
+                    </DownloadSpeakerImage>
+
+                    {/* Remaining speakers without download */}
+                    {conference.featured_speakers.slice(1, 3).map((speaker) => (
                       <SpeakerPromotion
                         key={speaker._id}
                         speaker={speaker}
@@ -1694,8 +1723,8 @@ export default async function BrandingPage() {
                       <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       <span>
                         <strong>Speaker Share Images:</strong> Branded 4:5 ratio
-                        images for speakers to share "I'm speaking at [event]"
-                        with QR codes
+                        images for speakers to share &ldquo;I&rsquo;m speaking
+                        at [event]&rdquo; with QR codes
                       </span>
                     </li>
                     <li className="flex items-start">
