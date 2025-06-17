@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import { ScheduleTrack } from '@/lib/conference/types'
@@ -34,7 +34,6 @@ function SubmitToSpeakLi() {
   )
 }
 export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
-  const id = useId()
   const [tabOrientation, setTabOrientation] = useState('horizontal')
   const [selectedTabIndex, setSelectedTabIndex] = useState(0)
 

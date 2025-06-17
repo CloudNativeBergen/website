@@ -27,10 +27,10 @@ export default async function Speakers() {
         <Container className="relative">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="mx-auto max-w-2xl lg:mx-0">
-              <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              <h2 className="font-jetbrains text-3xl font-bold tracking-tight text-brand-slate-gray sm:text-4xl">
                 Meet our speakers
               </h2>
-              <p className="mt-6 text-lg leading-8 text-gray-600">
+              <p className="mt-6 text-lg leading-8 text-brand-cloud-gray">
                 These industry experts will share their insights and experiences
                 in the world of cloud native technologies. Get ready to be
                 inspired and learn from the best in the field.
@@ -38,7 +38,7 @@ export default async function Speakers() {
             </div>
 
             {/* Updated grid layout for SpeakerPromotion cards */}
-            <div className="mx-auto mt-20 grid max-w-2xl grid-cols-1 gap-6 lg:mx-0 lg:max-w-none lg:grid-cols-2 xl:grid-cols-3">
+            <div className="mx-auto mt-20 grid max-w-2xl grid-cols-1 gap-6 md:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
               {speakersWithTalks.map((speaker) => (
                 <SpeakerPromotion
                   key={speaker._id}

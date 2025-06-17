@@ -127,7 +127,7 @@ export async function getOrCreateSpeaker(
   } as Speaker
 
   const slugValue = generateSlug(user.name)
-  
+
   try {
     const createdSpeaker = await clientWrite.create({
       _type: 'speaker',
@@ -137,7 +137,7 @@ export async function getOrCreateSpeaker(
         current: slugValue,
       },
     })
-    
+
     // Convert the created speaker to match our Speaker interface
     speaker = {
       ...createdSpeaker,

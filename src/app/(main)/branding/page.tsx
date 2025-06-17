@@ -48,6 +48,7 @@ import { colorPalette, typography } from '@/lib/branding/data'
 
 import { TalkPromotion } from '@/components/TalkPromotion'
 import { SpeakerPromotion } from '@/components/SpeakerPromotion'
+import { CallToAction } from '@/components/CallToAction'
 import { Format } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
 
@@ -124,6 +125,12 @@ export default async function BrandingPage() {
                 className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
               >
                 Talks
+              </a>
+              <a
+                href="#cta-examples"
+                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
+              >
+                Call to Action
               </a>
             </div>
           </div>
@@ -1407,6 +1414,34 @@ export default async function BrandingPage() {
                 </div>
               )}
 
+            {/* Three Minimal Speakers */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 3 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Three Minimal Speakers
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Clean, eye-catching design perfect for highlighting key
+                      speakers in a row. Features bigger text, minimal details,
+                      and enhanced visual impact with hover animations.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {conference.featured_speakers.slice(0, 3).map((speaker) => (
+                      <SpeakerPromotion
+                        key={speaker._id}
+                        speaker={speaker}
+                        variant="minimal"
+                        ctaText="View Profile"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
             {/* Six Speaker Grid */}
             {conference?.featured_speakers &&
               conference.featured_speakers.length >= 6 && (
@@ -1893,6 +1928,235 @@ export default async function BrandingPage() {
                       Register before January 31st to secure your spot at 40%
                       off the regular price. Limited seats available for this
                       community-driven event.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      {/* Call to Action Examples */}
+      <section id="cta-examples" className="bg-white py-20">
+        <Container>
+          <div className="mb-16 text-center">
+            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
+              Call to Action Examples
+            </h2>
+            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
+              Call to action components drive engagement and conversions across
+              the conference website. These reusable components can be
+              customized for different contexts while maintaining consistent
+              branding and accessibility standards.
+            </p>
+          </div>
+
+          <div className="space-y-16">
+            {/* Standard Call to Action */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Standard Call to Action
+              </h3>
+              <p className="font-inter mb-8 text-lg text-brand-slate-gray">
+                The default configuration encourages both speaker submissions
+                and ticket reservations with balanced messaging.
+              </p>
+              <div className="rounded-lg border border-gray-200 bg-white p-8">
+                <CallToAction />
+              </div>
+            </div>
+
+            {/* Organizers Context */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Organizers Context
+              </h3>
+              <p className="font-inter mb-8 text-lg text-brand-slate-gray">
+                When used in organizer-facing contexts, the messaging and button
+                styling adapt to focus on community engagement.
+              </p>
+              <div className="rounded-lg border border-gray-200 bg-white p-8">
+                <CallToAction
+                  isOrganizers={true}
+                  title="Join Our Community"
+                  description="Whether you're looking to share your expertise or learn from the best, we'd love to have you at Cloud Native Bergen."
+                />
+              </div>
+            </div>
+
+            {/* Speaker Focus */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Speaker Submission Focus
+              </h3>
+              <p className="font-inter mb-8 text-lg text-brand-slate-gray">
+                Configuration that emphasizes speaker submissions while hiding
+                ticket reservations for CFP-focused pages.
+              </p>
+              <div className="rounded-lg border border-gray-200 bg-white p-8">
+                <CallToAction
+                  title="Share Your Expertise"
+                  description="Join our community of cloud native experts and share your knowledge with the Bergen tech community."
+                  showTicketReservation={false}
+                />
+              </div>
+            </div>
+
+            {/* Ticket Focus */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Ticket Reservation Focus
+              </h3>
+              <p className="font-inter mb-8 text-lg text-brand-slate-gray">
+                Configuration that focuses solely on ticket sales when the CFP
+                period has ended.
+              </p>
+              <div className="rounded-lg border border-gray-200 bg-white p-8">
+                <CallToAction
+                  title="Secure Your Spot"
+                  description="Don't miss this opportunity to learn from industry experts and connect with the Bergen cloud native community."
+                  showSpeakerSubmission={false}
+                />
+              </div>
+            </div>
+
+            {/* Custom Messaging */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Custom Messaging
+              </h3>
+              <p className="font-inter mb-8 text-lg text-brand-slate-gray">
+                Fully customizable title and description for specific campaigns
+                or landing pages.
+              </p>
+              <div className="rounded-lg border border-gray-200 bg-white p-8">
+                <CallToAction
+                  title="Early Bird Special"
+                  description="Register now and save 40% on your conference ticket. Limited time offer for the Bergen cloud native community."
+                />
+              </div>
+            </div>
+
+            {/* Component Documentation */}
+            <div className="rounded-xl bg-brand-glacier-white p-8">
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Component Features & Usage
+              </h3>
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                    Customizable Props
+                  </h4>
+                  <ul className="font-inter space-y-2 text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm">
+                          isOrganizers
+                        </code>{' '}
+                        - Changes messaging and button styles
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm">
+                          title
+                        </code>{' '}
+                        - Custom headline text
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm">
+                          description
+                        </code>{' '}
+                        - Custom description text
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm">
+                          showSpeakerSubmission
+                        </code>{' '}
+                        - Toggle CFP button
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm">
+                          showTicketReservation
+                        </code>{' '}
+                        - Toggle ticket button
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                    Design Features
+                  </h4>
+                  <ul className="font-inter space-y-2 text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>Gradient background with brand colors</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        Responsive button layout (stacked to horizontal)
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>Accessible ARIA labels and semantic markup</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>Icons from Heroicons for visual clarity</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>Conditional urgency messaging</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="mt-8 rounded-lg bg-white p-6">
+                <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                  Usage Guidelines
+                </h4>
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                  <div>
+                    <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+                      Placement
+                    </h5>
+                    <p className="font-inter text-sm text-brand-slate-gray">
+                      Use at natural break points in content flow, typically
+                      after speaker showcases or information sections.
+                    </p>
+                  </div>
+                  <div>
+                    <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+                      Frequency
+                    </h5>
+                    <p className="font-inter text-sm text-brand-slate-gray">
+                      Limit to 1-2 instances per page to avoid overwhelming
+                      users while maintaining conversion opportunities.
+                    </p>
+                  </div>
+                  <div>
+                    <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+                      Context
+                    </h5>
+                    <p className="font-inter text-sm text-brand-slate-gray">
+                      Adapt button visibility and messaging based on page
+                      purpose (CFP pages vs. general conference info).
                     </p>
                   </div>
                 </div>

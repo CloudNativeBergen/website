@@ -34,7 +34,7 @@ export default defineMigration({
   migrate: {
     document(doc, context) {
       const speaker = doc as SpeakerDocument
-      
+
       // Skip documents that already have a slug
       if (speaker.slug && speaker.slug.current) {
         console.log(
@@ -52,7 +52,7 @@ export default defineMigration({
       }
 
       const slugValue = generateSlug(speaker.name)
-      
+
       console.log(
         `Adding slug "${slugValue}" to speaker "${speaker.name}" (${speaker._id})`,
       )

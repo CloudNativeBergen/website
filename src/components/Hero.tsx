@@ -7,6 +7,13 @@ import {
   LinkedInIcon,
   TwitterIcon,
 } from '@/components/SocialIcons'
+import {
+  InformationCircleIcon,
+  UserGroupIcon,
+  MicrophoneIcon,
+  CalendarDaysIcon,
+  TicketIcon,
+} from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
 import { PortableText } from '@portabletext/react'
 
@@ -21,11 +28,13 @@ function ActionButtons({ conference }: { conference: Conference }) {
       | 'warning'
       | 'info'
       | 'outline'
+    icon: React.ComponentType<{ className?: string }>
   }> = [
     {
       label: 'Practical Info',
       href: '/info',
       variant: 'outline',
+      icon: InformationCircleIcon,
     },
   ]
 
@@ -39,6 +48,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
       label: 'Become a Sponsor',
       href: '/sponsor',
       variant: 'success',
+      icon: UserGroupIcon,
     })
   }
 
@@ -53,6 +63,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
       label: 'Submit to Speak',
       href: '/cfp',
       variant: 'warning',
+      icon: MicrophoneIcon,
     })
   }
 
@@ -64,14 +75,16 @@ function ActionButtons({ conference }: { conference: Conference }) {
       label: 'Program',
       href: '/program',
       variant: 'secondary',
+      icon: CalendarDaysIcon,
     })
   }
 
   if (conference.registration_enabled && conference.registration_link) {
     buttons.push({
       label: 'Tickets',
-      href: conference.registration_link,
+      href: '/tickets',
       variant: 'primary',
+      icon: TicketIcon,
     })
   }
 
@@ -80,17 +93,21 @@ function ActionButtons({ conference }: { conference: Conference }) {
   const displayButtons = buttons.reverse().slice(0, 2)
 
   return (
-    <div className="mt-10 flex flex-col justify-between md:flex-row">
-      {displayButtons.map((button) => (
-        <Button
-          key={button.label}
-          href={button.href}
-          variant={button.variant}
-          className="mt-2 w-full md:mr-2 md:ml-2 md:w-1/2"
-        >
-          {button.label}
-        </Button>
-      ))}
+    <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
+      {displayButtons.map((button) => {
+        const Icon = button.icon
+        return (
+          <Button
+            key={button.label}
+            href={button.href}
+            variant={button.variant}
+            className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
+          >
+            <Icon className="h-5 w-5" aria-hidden="true" />
+            <span>{button.label}</span>
+          </Button>
+        )
+      })}
     </div>
   )
 }

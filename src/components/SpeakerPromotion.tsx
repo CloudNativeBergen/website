@@ -26,7 +26,7 @@ interface SpeakerPromotionProps {
   /** Speaker data including talks and personal information */
   speaker: SpeakerWithTalks
   /** Visual variant of the component */
-  variant?: 'featured' | 'card' | 'compact' | 'social'
+  variant?: 'featured' | 'card' | 'compact' | 'social' | 'minimal'
   /** Additional CSS classes */
   className?: string
   /** Whether to show as a featured speaker */
@@ -57,6 +57,11 @@ const variantConfig = {
     gradient: 'from-brand-fresh-green/20 to-brand-cloud-blue/15',
     accentColor: 'text-brand-fresh-green',
     icon: LightBulbIcon,
+  },
+  minimal: {
+    gradient: 'from-white to-brand-glacier-white/50',
+    accentColor: 'text-brand-cloud-blue',
+    icon: StarIcon,
   },
 }
 
@@ -157,7 +162,7 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
   if (variant === 'featured') {
     return (
       <div
-        className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${config.gradient} border border-gray-200 p-6 md:p-8 ${className}`}
+        className={`group relative overflow-hidden rounded-2xl bg-gradient-to-r ${config.gradient} border border-gray-200 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg md:p-8 ${className}`}
       >
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
@@ -212,7 +217,7 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
 
               {/* Title & Company */}
               <div className="mb-4">
-                <h2 className="font-space-grotesk mb-2 text-2xl font-bold text-brand-slate-gray md:text-3xl">
+                <h2 className="font-space-grotesk mb-2 text-2xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue md:text-3xl">
                   {name}
                 </h2>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-700">
@@ -297,7 +302,7 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
   if (variant === 'social') {
     return (
       <div
-        className={`relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} max-w-sm border border-gray-200 p-6 ${className}`}
+        className={`group relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} max-w-sm border border-gray-200 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg ${className}`}
       >
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-15">
@@ -347,7 +352,7 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
 
           {/* Content */}
           <div className="flex-1 text-center">
-            <h3 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray">
+            <h3 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
               {name}
             </h3>
             {title && (
@@ -406,6 +411,108 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
                 {talkCount} {talkCount === 1 ? 'talk' : 'talks'}
               </p>
             )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (variant === 'minimal') {
+    return (
+      <div
+        className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-100 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg ${className}`}
+      >
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-5">
+          <CloudNativePattern
+            iconCount={8}
+            baseSize={16}
+            className="h-full w-full"
+          />
+        </div>
+
+        <div className="relative flex h-full flex-col text-center">
+          {/* Speaker Image */}
+          <div className="mb-4 flex justify-center">
+            {image ? (
+              <Image
+                src={sanityImage(image)
+                  .width(200) // 2x the display size of 100px for high-DPI
+                  .height(200)
+                  .fit('crop')
+                  .url()}
+                alt={name}
+                width={100}
+                height={100}
+                className="rounded-2xl object-cover shadow-md transition-colors duration-300"
+              />
+            ) : (
+              <div className="flex h-25 w-25 items-center justify-center rounded-2xl bg-brand-cloud-blue/10 shadow-md transition-colors duration-300">
+                <UserIcon className="h-12 w-12 text-brand-cloud-blue/50" />
+              </div>
+            )}
+          </div>
+
+          {/* Content Area - Flexible */}
+          <div className="flex flex-1 flex-col">
+            {/* Speaker Name - Large and Bold */}
+            <h3 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
+              {name}
+            </h3>
+
+            {/* Title - Clean and Prominent */}
+            {title && (
+              <p className="font-inter mb-3 text-sm leading-relaxed font-semibold text-brand-slate-gray/80">
+                {title}
+              </p>
+            )}
+
+            {/* Company Badge */}
+            {company && (
+              <div className="mb-4 inline-flex items-center justify-center">
+                <div className="inline-flex items-center rounded-full bg-brand-sky-mist px-3 py-1">
+                  <BuildingOfficeIcon className="mr-1.5 h-3 w-3 text-brand-cloud-blue" />
+                  <span className="font-inter text-xs font-medium text-brand-cloud-blue">
+                    {company}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Primary Talk - Minimal Display */}
+            {primaryTalk && (
+              <div className="mb-4 flex-1">
+                <div className="inline-flex items-center rounded-lg bg-white/80 px-3 py-2 shadow-sm">
+                  {(() => {
+                    const talkConfig =
+                      formatConfig[primaryTalk.format as Format]
+                    const TalkIcon =
+                      talkConfig?.icon || PresentationChartBarIcon
+                    return (
+                      <>
+                        <TalkIcon
+                          className={`mr-2 h-4 w-4 ${talkConfig?.color || 'text-brand-cloud-blue'}`}
+                        />
+                        <span className="font-inter text-xs font-medium text-brand-slate-gray">
+                          {talkConfig?.label || 'Talk'}
+                        </span>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* View Profile Button - Always at bottom */}
+          <div className="mt-auto">
+            <a
+              href={finalCtaUrl}
+              className="group/btn font-inter inline-flex items-center space-x-2 rounded-xl bg-brand-cloud-blue px-6 py-3 font-semibold text-white transition-all hover:bg-brand-cloud-blue/90 hover:shadow-md"
+            >
+              <span>{finalCtaText}</span>
+              <ArrowRightIcon className="h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
+            </a>
           </div>
         </div>
       </div>
