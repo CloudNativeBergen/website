@@ -11,6 +11,8 @@ export function iconForLink(link: string, className = 'h-10 w-10') {
   switch (hostname) {
     case 'twitter.com':
     case 'www.twitter.com':
+    case 'x.com':
+    case 'www.x.com':
       return (
         <>
           <span className="sr-only">Twitter</span>

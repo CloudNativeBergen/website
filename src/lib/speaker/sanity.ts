@@ -1,4 +1,4 @@
-import { Speaker, SpeakerInput } from '@/lib/speaker/types'
+import { Speaker, SpeakerInput, SpeakerWithTalks } from '@/lib/speaker/types'
 import {
   clientReadUncached as clientRead,
   clientWrite,
@@ -150,31 +150,34 @@ export async function getSpeaker(
   return { speaker, err }
 }
 
-export async function getPublicSpeaker(speakerSlug: string) {
+export async function getPublicSpeaker(
+  conferenceId: string,
+  speakerSlug: string,
+) {
   let data = {}
   let err = null
 
   try {
     data = await clientReadCached.fetch(
-      `*[ _type == "speaker" && slug.current == $speakerSlug][0]{
-      name, title, bio, links, flags, "image": image.asset->url,
-      "talks": *[_type == "talk" && references(^._id) && status == "confirmed"]{
-        _id, title, description, language, level, format, audiences,
-        topics -> {
-          _id, title, "slug": slug.current
-        },
-        "schedule": *[_type == "schedule" && references(^._id)]{
-          date, tracks[]{
-            trackTitle, trackDescription, talks[]{
-              startTime, endTime, talk -> {
-                _id
+      `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
+        name, title, bio, links, flags, "image": image.asset->url,
+        "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
+          _id, title, description, language, level, format, audiences,
+          topics[]-> {
+            _id, title, "slug": slug.current
+          },
+          "schedule": *[_type == "schedule" && references(^._id)]{
+            date, tracks[]{
+              trackTitle, trackDescription, talks[]{
+                startTime, endTime, talk -> {
+                  _id
+                }
               }
             }
           }
         }
-      }
-    }`,
-      { speakerSlug },
+      }`,
+      { speakerSlug, conferenceId },
     )
   } catch (error) {
     err = error as Error
@@ -186,16 +189,27 @@ export async function getPublicSpeaker(speakerSlug: string) {
   return { speaker, talks, err }
 }
 
-export async function getPublicSpeakers(revalidate: number = 3600) {
-  let speakers: Speaker[] = []
+export async function getPublicSpeakers(
+  conferenceId: string,
+  revalidate: number = 3600,
+) {
+  let speakers: SpeakerWithTalks[] = []
   let err = null
 
   try {
     speakers = await clientReadCached.fetch(
-      `*[ _type == "speaker" && count(*[_type == "talk" && references(^._id) && status == "confirmed"]) > 0]{
-          _id, name, "slug": slug.current, title, bio, links, flags, "image": image.asset->url
-        }`,
-      {},
+      `*[ _type == "speaker" && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0]{
+        _id, name, "slug": slug.current, title, bio, links, flags, "image": image.asset->url,
+        "talks": *[_type == "talk" && speaker._ref == ^._id && status == "confirmed" && conference._ref == $conferenceId] {
+          _id, title, description, language, level, format, audiences,
+          topics[]-> {
+            _id,
+            title,
+            "slug": slug.current,
+          }
+        }
+      }`,
+      { conferenceId },
       {
         next: {
           revalidate: revalidate,

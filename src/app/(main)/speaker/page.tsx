@@ -1,15 +1,24 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
+import { SpeakerPromotion } from '@/components/SpeakerPromotion'
 import { getPublicSpeakers } from '@/lib/speaker/sanity'
-import { sanityImage } from '@/lib/sanity/client'
+import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
+import { SpeakerWithTalks } from '@/lib/speaker/types'
 
 export const revalidate = 3600
 
 export default async function Speakers() {
-  const { speakers, err } = await getPublicSpeakers(revalidate)
+  const { conference } = await getConferenceForCurrentDomain()
+  const { speakers, err } = await getPublicSpeakers(conference._id, revalidate)
   if (err) {
     console.error(err)
   }
+
+  // Transform speakers to SpeakerWithTalks format for SpeakerPromotion component
+  const speakersWithTalks: SpeakerWithTalks[] = speakers.map((speaker) => ({
+    ...speaker,
+    talks: [], // We'll fetch talks separately if needed, for now empty array
+  }))
 
   return (
     <>
@@ -27,38 +36,18 @@ export default async function Speakers() {
                 inspired and learn from the best in the field.
               </p>
             </div>
-            <ul
-              role="list"
-              className="mx-auto mt-20 grid max-w-2xl grid-cols-2 gap-x-8 gap-y-16 text-center sm:grid-cols-3 md:grid-cols-4 lg:mx-0 lg:max-w-none lg:grid-cols-5 xl:grid-cols-6"
-            >
-              {speakers.map((speaker) => (
-                <li key={speaker._id}>
-                  <a href={`/speaker/${speaker.slug}`} className="block">
-                    <img
-                      alt=""
-                      src={
-                        speaker.image
-                          ? sanityImage(speaker.image)
-                              .width(600)
-                              .height(600)
-                              .fit('crop')
-                              .url()
-                          : 'https://placehold.co/600x600/e5e7eb/6b7280?text=Speaker'
-                      }
-                      width={300}
-                      height={300}
-                      className="mx-auto h-30 w-30 rounded-full"
-                    />
-                    <h3 className="mt-6 text-base leading-7 font-semibold tracking-tight text-gray-900">
-                      {speaker.name}
-                    </h3>
-                    <p className="text-sm leading-6 text-gray-600">
-                      {speaker.title}
-                    </p>
-                  </a>
-                </li>
+
+            {/* Updated grid layout for SpeakerPromotion cards */}
+            <div className="mx-auto mt-20 grid max-w-2xl grid-cols-1 gap-6 lg:mx-0 lg:max-w-none lg:grid-cols-2 xl:grid-cols-3">
+              {speakersWithTalks.map((speaker) => (
+                <SpeakerPromotion
+                  key={speaker._id}
+                  speaker={speaker}
+                  variant="card"
+                  ctaText="View Profile"
+                />
               ))}
-            </ul>
+            </div>
           </div>
         </Container>
       </div>

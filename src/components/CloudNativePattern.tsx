@@ -444,7 +444,16 @@ export function CloudNativePattern({
     })
 
     return elements
-  }, [iconCount, iconPool, depthLayers, variant, opacity, animated, seed, baseSize])
+  }, [
+    iconCount,
+    iconPool,
+    depthLayers,
+    variant,
+    opacity,
+    animated,
+    seed,
+    baseSize,
+  ])
 
   // Memoized background gradients
   const backgroundGradients = useMemo(() => {

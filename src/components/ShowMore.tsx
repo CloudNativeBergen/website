@@ -15,17 +15,17 @@ export function ShowMore({
 
   return (
     <section {...props}>
-      <span
+      <div
         className={clsx(
-          'mt-2 text-base leading-7 text-slate-700',
-          !isExpanded && 'lg:line-clamp-4',
+          'text-base leading-7',
+          !isExpanded && 'line-clamp-6', // Show 5-6 lines initially
         )}
       >
         {children}
-      </span>
+      </div>
       <button
         type="button"
-        className="mt-2 cursor-pointer text-sm font-medium text-indigo-600 underline hover:text-indigo-800 active:text-indigo-900"
+        className="mt-3 cursor-pointer text-sm font-medium text-brand-cloud-blue underline transition-colors hover:text-brand-cloud-blue/80 active:text-brand-cloud-blue/90"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {isExpanded ? 'Show less' : 'Show more'}

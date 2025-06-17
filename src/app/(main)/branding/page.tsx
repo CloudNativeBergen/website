@@ -1375,7 +1375,6 @@ export default async function BrandingPage() {
                     isFeatured={true}
                     variant="featured"
                     ctaText="View Speaker"
-                    ctaUrl={`/speaker/${conference.featured_speakers[0].slug || conference.featured_speakers[0]._id}`}
                   />
                 </div>
               )}
@@ -1402,7 +1401,6 @@ export default async function BrandingPage() {
                         speaker={speaker}
                         variant="card"
                         ctaText="View Profile"
-                        ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
                       />
                     ))}
                   </div>
@@ -1431,7 +1429,6 @@ export default async function BrandingPage() {
                         speaker={speaker}
                         variant="card"
                         ctaText="Learn More"
-                        ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
                       />
                     ))}
                   </div>
@@ -1463,7 +1460,6 @@ export default async function BrandingPage() {
                           isFeatured={index === 0}
                           variant="compact"
                           ctaText="View Details"
-                          ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
                         />
                       ))}
                   </div>
@@ -1495,7 +1491,6 @@ export default async function BrandingPage() {
                           isFeatured={index === 0}
                           variant="social"
                           ctaText="Follow"
-                          ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
                         />
                       ))}
                   </div>
@@ -1526,7 +1521,6 @@ export default async function BrandingPage() {
                           speaker={speaker}
                           variant="compact"
                           ctaText="View"
-                          ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
                         />
                       ))}
                   </div>
@@ -1556,7 +1550,6 @@ export default async function BrandingPage() {
                         isFeatured={true}
                         variant="featured"
                         ctaText="View Speaker"
-                        ctaUrl={`/speaker/${conference.featured_speakers[0].slug || conference.featured_speakers[0]._id}`}
                       />
                     </div>
 
@@ -1570,7 +1563,6 @@ export default async function BrandingPage() {
                             speaker={speaker}
                             variant="card"
                             ctaText="View Profile"
-                            ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
                           />
                         ))}
                     </div>
@@ -1585,7 +1577,6 @@ export default async function BrandingPage() {
                             speaker={speaker}
                             variant="compact"
                             ctaText="View Details"
-                            ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
                           />
                         ))}
                     </div>

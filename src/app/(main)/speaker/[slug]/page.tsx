@@ -1,19 +1,17 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import {
-  formats,
-  languages,
-  levels,
-  ProposalExisting,
-} from '@/lib/proposal/types'
+import { formats, languages, levels } from '@/lib/proposal/types'
 import { flags, Flags } from '@/lib/speaker/types'
+import { Topic } from '@/lib/topic/types'
 import * as social from '@/components/SocialIcons'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { Button } from '@/components/Button'
-import { CalendarIcon } from '@heroicons/react/24/solid'
-import { TrackTalk } from '@/lib/conference/types'
+import { BackLink } from '@/components/BackButton'
+import { ShowMore } from '@/components/ShowMore'
+import { UserIcon } from '@heroicons/react/24/solid'
 import { sanityImage } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
+import { getConferenceForCurrentDomain } from '../../../../lib/conference/sanity'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -21,7 +19,11 @@ type Props = {
 
 export async function generateMetadata({ params }: Props) {
   const resolvedParams = await params
-  const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug)
+  const { conference } = await getConferenceForCurrentDomain()
+  const { speaker, talks, err } = await getPublicSpeaker(
+    conference._id,
+    resolvedParams.slug,
+  )
 
   if (err || !speaker || !talks || talks.length === 0) {
     return {
@@ -40,195 +42,248 @@ export async function generateMetadata({ params }: Props) {
   }
 }
 
-function getSchedulesForTalk(talk: ProposalExisting) {
-  if (!talk.schedule || talk.schedule.length === 0) {
-    return []
-  }
-
-  const schedules = []
-
-  // Loop through all schedule days
-  for (const day of talk.schedule) {
-    if (!day.tracks || day.tracks.length === 0) {
-      continue
-    }
-
-    // Loop through all tracks for each day
-    for (const [trackIndex, track] of day.tracks.entries()) {
-      if (!track.talks || track.talks.length === 0) {
-        continue
-      }
-
-      // Find any talks that match the current talk ID
-      const matchingTalks = track.talks.filter(
-        (t: TrackTalk) => t.talk?._id === talk._id,
-      )
-
-      // Add each matching talk to the schedules array
-      for (const matchedTalk of matchingTalks) {
-        schedules.push({
-          date: day.date,
-          startTime: matchedTalk.startTime,
-          endTime: matchedTalk.endTime,
-          trackTitle: track.trackTitle,
-          trackNumber: trackIndex + 1,
-        })
-      }
-    }
-  }
-
-  return schedules
-}
-
-function ScheduleDisplay({ talk }: { talk: ProposalExisting }) {
-  const schedules = getSchedulesForTalk(talk)
-  if (schedules.length === 0) {
-    return <p>No schedule available</p>
-  }
-  return (
-    <div>
-      {schedules.map((schedule, index) => (
-        <div key={index} className="mt-2">
-          <p className="text-lg">
-            <CalendarIcon className="mr-2 inline-block h-6 w-6" />
-            Scheduled: {schedule.startTime} - {schedule.endTime},{' '}
-            {schedule.trackTitle}
-          </p>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export default async function Profile({ params }: Props) {
   const resolvedParams = await params
-  const { speaker, talks, err } = await getPublicSpeaker(resolvedParams.slug)
+  const { conference } = await getConferenceForCurrentDomain()
+  const { speaker, talks, err } = await getPublicSpeaker(
+    conference._id,
+    resolvedParams.slug,
+  )
 
-  if (err || !speaker || !talks || talks.length === 0) {
+  // Handle errors
+  if (err) {
+    console.error('Error loading speaker:', err)
+  }
+
+  if (!speaker) {
     return (
-      <>
-        <div className="relative flex h-full items-center py-20 sm:py-36">
-          <BackgroundImage className="-top-36 bottom-0" />
-          <Container className="relative flex w-full flex-col items-center">
-            <p className="font-display text-2xl tracking-tight text-blue-900">
-              404
-            </p>
-            <h1 className="font-display mt-4 text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
-              Speaker not found
-            </h1>
-            <p className="mt-4 text-lg tracking-tight text-blue-900">
-              Sorry, we could not find the speaker you are looking for.
-            </p>
-            <Button href="/" variant="primary" className="mt-8">
-              Go back home
-            </Button>
+      <div className="bg-brand-glacier-white">
+        <div className="relative py-20 sm:pt-36 sm:pb-24">
+          <BackgroundImage className="-top-36 -bottom-14" />
+          <Container className="relative">
+            <div className="mx-auto max-w-4xl text-center">
+              <h1 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-slate-gray">
+                Speaker Not Found
+              </h1>
+              <p className="font-inter mb-8 text-xl text-gray-600">
+                Sorry, we couldn&apos;t find the speaker you&apos;re looking
+                for.
+              </p>
+              <Button href="/speaker" variant="primary">
+                View All Speakers
+              </Button>
+            </div>
           </Container>
         </div>
-      </>
+      </div>
     )
   }
 
   return (
-    <>
+    <div className="bg-brand-glacier-white">
+      {/* Hero Section */}
       <div className="relative py-20 sm:pt-36 sm:pb-24">
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
-          <div className="mx-auto w-full max-w-7xl grow lg:flex xl:px-2">
-            <div className="flex-1 px-4 py-6 sm:px-6 lg:pl-8 xl:flex xl:pl-6">
-              {/* proposal details */}
-              {talks.map((talk) => (
-                <div key={talk._id} className="block">
-                  <h2 className="text-3xl font-bold text-blue-900">
-                    {talk.title} - {formats.get(talk.format)}
-                  </h2>
-                  {talk.topics &&
-                    talk.topics.map((topic, index) => (
-                      <span
-                        key={index}
-                        className="mt-2 mr-2 inline-block rounded-full bg-blue-900 px-3 py-1 text-sm font-semibold text-blue-100"
-                      >
-                        {typeof topic === 'string'
-                          ? topic
-                          : 'label' in topic
-                            ? topic.label
-                            : // fallback for reference objects or other shapes
-                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                              ((topic as any).title ?? '')}
-                      </span>
-                    ))}
-                  {talk.schedule && (
-                    <div className="mt-2 py-1">
-                      <ScheduleDisplay talk={talk} />
+          {/* Back Link - Top Left */}
+          <div className="mb-8">
+            <BackLink fallbackUrl="/speaker" variant="link">
+              Back to Speakers
+            </BackLink>
+          </div>
+
+          <div className="mx-auto max-w-7xl">
+            <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-3">
+              {/* Speaker Image & Basic Info */}
+              <div className="lg:col-span-1">
+                <div className="sticky top-8">
+                  {/* Speaker Image */}
+                  <div className="mb-6 flex justify-center lg:justify-start">
+                    {speaker.image ? (
+                      <img
+                        src={sanityImage(speaker.image)
+                          .width(400)
+                          .height(400)
+                          .fit('crop')
+                          .url()}
+                        alt={speaker.name}
+                        className="h-48 w-48 rounded-full object-cover shadow-lg ring-4 ring-white lg:h-64 lg:w-64"
+                      />
+                    ) : (
+                      <div className="flex h-48 w-48 items-center justify-center rounded-full bg-brand-cloud-blue/10 shadow-lg ring-4 ring-white lg:h-64 lg:w-64">
+                        <UserIcon className="h-24 w-24 text-brand-cloud-blue/50 lg:h-32 lg:w-32" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Speaker Flags */}
+                  {speaker.flags && speaker.flags.length > 0 && (
+                    <div className="mb-6 flex flex-wrap justify-center gap-2 lg:justify-start">
+                      {speaker.flags.map((flag) => (
+                        <span
+                          key={flag}
+                          className="rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-xs font-medium text-brand-cloud-blue"
+                        >
+                          {flags.get(flag as Flags)}
+                        </span>
+                      ))}
                     </div>
                   )}
 
-                  <PortableText value={talk.description} />
+                  {/* Social Links */}
+                  {speaker.links && speaker.links.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-4 lg:justify-start">
+                      {speaker.links.map((link, index) => (
+                        <a
+                          key={index}
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-md transition-all hover:scale-105 hover:shadow-lg"
+                        >
+                          {social.iconForLink(
+                            link,
+                            'h-5 w-5 text-brand-slate-gray',
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                  <p className="mt-4 text-lg">
-                    Language: {languages.get(talk.language)}
-                  </p>
-                  <p className="mt-2 text-lg">
-                    Level: {levels.get(talk.level)}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="shrink-0 px-4 py-6 sm:px-6 lg:w-96 lg:pr-8 xl:pr-6">
-              {/* speaker details */}
-              <div className="flex flex-col items-center text-center">
-                <div className="relative h-40 w-40 overflow-hidden rounded-full">
-                  <img
-                    src={
-                      speaker.image
-                        ? sanityImage(speaker.image)
-                            .width(300)
-                            .height(300)
-                            .fit('crop')
-                            .url()
-                        : 'https://placehold.co/300x300/e5e7eb/6b7280?text=Speaker'
-                    }
-                    alt={speaker.name}
-                    width={150}
-                    height={150}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <h2 className="mt-4 text-2xl font-bold">{speaker.name}</h2>
-                <p className="mt-2 text-gray-500">{speaker.title}</p>
-                <div className="mt-2">
-                  {speaker.flags &&
-                    speaker.flags.includes(Flags.localSpeaker) && (
-                      <span className="mt-2 mr-2 inline-block rounded-full bg-blue-900 px-3 py-1 text-sm font-semibold text-blue-100">
-                        {flags.get(Flags.localSpeaker)}
-                      </span>
-                    )}
-                </div>
-                {speaker.bio &&
-                  speaker.bio.split('\n\n').map((paragraph, index) => (
-                    <p key={`bio-${index}`} className="mt-4 text-lg">
-                      {paragraph}
+              {/* Speaker Content */}
+              <div className="lg:col-span-2">
+                {/* Name & Title */}
+                <div className="mb-8 text-center lg:text-left">
+                  <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-slate-gray sm:text-5xl">
+                    {speaker.name}
+                  </h1>
+                  {speaker.title && (
+                    <p className="font-inter text-xl font-semibold text-brand-cloud-blue">
+                      {speaker.title}
                     </p>
-                  ))}
-                <div className="mt-4 flex space-x-2">
-                  {speaker.links &&
-                    speaker.links.map((link) => (
-                      <a
-                        key={link}
-                        href={link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mr-2 text-blue-500 hover:text-blue-700"
-                      >
-                        {social.iconForLink(link)}
-                      </a>
-                    ))}
+                  )}
                 </div>
+
+                {/* Bio */}
+                {speaker.bio && (
+                  <div className="mb-8 rounded-xl bg-white p-6 shadow-sm">
+                    <h2 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      About
+                    </h2>
+                    <ShowMore className="font-inter prose prose-lg max-w-none text-gray-700">
+                      {typeof speaker.bio === 'string' ? (
+                        // Split on new lines and render each as a paragraph
+                        speaker.bio.split('\n').map(
+                          (paragraph, index) =>
+                            paragraph.trim() && (
+                              <p key={index} className="mb-3 last:mb-0">
+                                {paragraph}
+                              </p>
+                            ),
+                        )
+                      ) : (
+                        <PortableText value={speaker.bio} />
+                      )}
+                    </ShowMore>
+                  </div>
+                )}
+
+                {/* Talks Section */}
+                {talks && talks.length > 0 && (
+                  <div className="mb-8">
+                    <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                      {talks.length === 1 ? 'Presentation' : 'Presentations'}
+                    </h2>
+                    <div className="space-y-6">
+                      {talks.map((talk) => (
+                        <div
+                          key={talk._id}
+                          className="rounded-xl bg-white p-6 shadow-sm transition-all hover:shadow-md"
+                        >
+                          {/* Talk Header */}
+                          <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-brand-slate-gray">
+                                {talk.title}
+                              </h3>
+                              <div className="flex flex-wrap gap-3">
+                                {/* Format */}
+                                {talk.format && (
+                                  <span className="inline-flex items-center rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-sm font-medium text-brand-cloud-blue">
+                                    {formats.get(talk.format)}
+                                  </span>
+                                )}
+                                {/* Level */}
+                                {talk.level && (
+                                  <span className="inline-flex items-center rounded-full bg-brand-fresh-green/10 px-3 py-1 text-sm font-medium text-brand-fresh-green">
+                                    {levels.get(talk.level)}
+                                  </span>
+                                )}
+                                {/* Language */}
+                                {talk.language && (
+                                  <span className="inline-flex items-center rounded-full bg-accent-purple/10 px-3 py-1 text-sm font-medium text-accent-purple">
+                                    {languages.get(talk.language)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Schedule Info - Only show if available */}
+                          </div>
+
+                          {/* Talk Description */}
+                          {talk.description && (
+                            <div className="mb-4">
+                              <div className="font-inter prose prose-gray max-w-none text-gray-700 [&>p]:mb-4 [&>p]:leading-relaxed">
+                                {typeof talk.description === 'string' ? (
+                                  <p>{talk.description}</p>
+                                ) : (
+                                  <PortableText value={talk.description} />
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Topics */}
+                          {talk.topics && talk.topics.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {talk.topics.map((topic, index) => {
+                                // Type guard to check if topic is a Topic object (not a Reference)
+                                const isTopicObject = (
+                                  t: unknown,
+                                ): t is Topic =>
+                                  t !== null &&
+                                  typeof t === 'object' &&
+                                  '_id' in t &&
+                                  'title' in t
+
+                                const topicObj = isTopicObject(topic)
+                                  ? topic
+                                  : null
+
+                                return (
+                                  <span
+                                    key={topicObj?._id || `topic-${index}`}
+                                    className="rounded-md bg-brand-sky-mist px-2 py-1 text-xs font-medium text-brand-slate-gray"
+                                  >
+                                    {topicObj?.title || 'Topic'}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </Container>
       </div>
-    </>
+    </div>
   )
 }

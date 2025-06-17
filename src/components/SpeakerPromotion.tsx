@@ -473,7 +473,7 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
   // Default card variant
   return (
     <div
-      className={`group relative overflow-hidden rounded-xl bg-gradient-to-br ${config.gradient} border border-gray-200 p-6 transition-all duration-300 hover:border-gray-300 hover:shadow-lg ${className}`}
+      className={`group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-lg ${className}`}
     >
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-10">
@@ -484,133 +484,141 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
         />
       </div>
 
-      <div className="relative">
-        {/* Speaker Badge */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Icon className={`h-5 w-5 ${config.accentColor}`} />
-            <span
-              className={`font-inter text-sm font-semibold ${config.accentColor}`}
-            >
-              {isFeatured ? 'Featured Speaker' : 'Speaker'}
-            </span>
-          </div>
-          {isFeatured && <TrophyIcon className="h-5 w-5 text-accent-yellow" />}
-        </div>
-
-        {/* Speaker Image */}
-        <div className="mb-4 flex justify-center">
-          {image ? (
-            <Image
-              src={sanityImage(image)
-                .width(200) // 2x the display size of 100px for high-DPI
-                .height(200)
-                .fit('crop')
-                .url()}
-              alt={name}
-              width={100}
-              height={100}
-              className="rounded-full object-cover shadow-md"
-            />
-          ) : (
-            <div className="flex h-25 w-25 items-center justify-center rounded-full bg-brand-cloud-blue/10 shadow-md">
-              <UserIcon className="h-12 w-12 text-brand-cloud-blue/50" />
-            </div>
-          )}
-        </div>
-
-        {/* Name */}
-        <h3 className="font-space-grotesk mb-2 text-center text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
-          {name}
-        </h3>
-
-        {/* Title & Company */}
-        <div className="mb-4 text-center">
-          {title && (
-            <p className="font-inter mb-1 font-semibold text-gray-700">
-              {title}
-            </p>
-          )}
-          {company && (
-            <div className="flex items-center justify-center space-x-1">
-              <BuildingOfficeIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-sm text-gray-600">
-                {company}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Bio */}
-        {bio && (
-          <p className="font-inter mb-4 line-clamp-3 text-center text-sm text-gray-600">
-            {bio}
-          </p>
-        )}
-
-        {/* Primary Talk */}
-        {primaryTalk && (
-          <div className="mb-4 rounded-lg border border-gray-100 bg-white/80 p-3">
-            <div className="mb-2 flex items-center justify-center space-x-2">
-              {(() => {
-                const talkConfig = formatConfig[primaryTalk.format as Format]
-                const TalkIcon = talkConfig?.icon || PresentationChartBarIcon
-                return (
-                  <>
-                    <TalkIcon
-                      className={`h-4 w-4 ${talkConfig?.color || 'text-brand-cloud-blue'}`}
-                    />
-                    <span
-                      className={`font-inter text-xs font-semibold ${talkConfig?.color || 'text-brand-cloud-blue'}`}
-                    >
-                      {talkConfig?.label || 'Talk'}
-                    </span>
-                  </>
-                )
-              })()}
-            </div>
-            <h4 className="font-space-grotesk mb-1 line-clamp-2 text-center text-sm font-semibold text-brand-slate-gray">
-              {primaryTalk.title}
-            </h4>
+      <div className="relative flex h-full flex-col">
+        {/* Featured Badge (only if featured) */}
+        {isFeatured && (
+          <div className="mb-3 flex justify-end">
+            <TrophyIcon className="h-5 w-5 text-accent-yellow" />
           </div>
         )}
 
-        {/* Expertise Tags */}
-        {expertise.length > 0 && (
-          <div className="mb-4">
-            <div className="flex flex-wrap justify-center gap-2">
-              {expertise.slice(0, 4).map((skill) => (
-                <span
-                  key={skill}
-                  className="rounded-full bg-brand-cloud-blue/10 px-2 py-1 text-xs font-medium text-brand-cloud-blue"
-                >
-                  {skill}
+        {/* Horizontal Header: Image + Name + Title */}
+        <div className="mb-4 flex items-start space-x-3">
+          {/* Speaker Image */}
+          <div className="flex-shrink-0">
+            {image ? (
+              <Image
+                src={sanityImage(image)
+                  .width(120) // 2x the display size of 60px for high-DPI
+                  .height(120)
+                  .fit('crop')
+                  .url()}
+                alt={name}
+                width={60}
+                height={60}
+                className="rounded-full object-cover shadow-md"
+              />
+            ) : (
+              <div className="flex h-15 w-15 items-center justify-center rounded-full bg-brand-cloud-blue/10 shadow-md">
+                <UserIcon className="h-8 w-8 text-brand-cloud-blue/50" />
+              </div>
+            )}
+          </div>
+
+          {/* Name, Title & Company */}
+          <div className="min-w-0 flex-1">
+            {/* Name */}
+            <h3 className="font-space-grotesk mb-1 text-lg font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
+              {name}
+            </h3>
+
+            {/* Title */}
+            {title && (
+              <p className="font-inter mb-1 line-clamp-1 text-sm font-semibold text-gray-700">
+                {title}
+              </p>
+            )}
+
+            {/* Company */}
+            {company && (
+              <div className="flex items-center space-x-1">
+                <BuildingOfficeIcon className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                <span className="font-inter line-clamp-1 text-xs text-gray-600">
+                  {company}
                 </span>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* Additional Info */}
-        {talkCount > 0 && (
-          <div className="mb-6 space-y-2">
-            <div className="flex items-center justify-center space-x-2">
+        {/* Content Area - Flexible */}
+        <div className="flex-1">
+          {/* Bio */}
+          {bio && (
+            <div className="mb-3 rounded-lg bg-white/50 p-2">
+              <p className="font-inter line-clamp-2 text-xs text-gray-600">
+                {bio}
+              </p>
+            </div>
+          )}
+
+          {/* Primary Talk */}
+          {primaryTalk && (
+            <div className="mb-3 rounded-lg border border-gray-100 bg-white/80 p-2">
+              <div className="flex items-center space-x-2">
+                {(() => {
+                  const talkConfig = formatConfig[primaryTalk.format as Format]
+                  const TalkIcon = talkConfig?.icon || PresentationChartBarIcon
+                  return (
+                    <>
+                      <TalkIcon
+                        className={`h-4 w-4 flex-shrink-0 ${talkConfig?.color || 'text-brand-cloud-blue'}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span
+                          className={`font-inter text-xs font-semibold ${talkConfig?.color || 'text-brand-cloud-blue'}`}
+                        >
+                          {talkConfig?.label || 'Talk'}:
+                        </span>
+                        <h4 className="font-space-grotesk line-clamp-1 text-xs font-semibold text-brand-slate-gray">
+                          {primaryTalk.title}
+                        </h4>
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Expertise Tags */}
+          {expertise.length > 0 && (
+            <div className="mb-3">
+              <div className="flex flex-wrap gap-1">
+                {expertise.slice(0, 3).map((skill) => (
+                  <span
+                    key={skill}
+                    className="rounded-full bg-brand-cloud-blue/10 px-2 py-0.5 text-xs font-medium text-brand-cloud-blue"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer: Talk Count + CTA - Always at bottom */}
+        <div className="mt-auto flex items-center justify-between pt-2">
+          {/* Talk Count */}
+          {talkCount > 0 ? (
+            <div className="flex items-center space-x-1">
               <SpeakerWaveIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-sm text-gray-700">
+              <span className="font-inter text-xs text-gray-700">
                 {talkCount} {talkCount === 1 ? 'Talk' : 'Talks'}
               </span>
             </div>
-          </div>
-        )}
+          ) : (
+            <div></div> // Empty div to maintain layout when no talks
+          )}
 
-        {/* CTA */}
-        <div className="text-center">
+          {/* CTA */}
           <a
             href={finalCtaUrl}
-            className="group/cta font-inter inline-flex items-center space-x-2 text-sm font-semibold text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80"
+            className="group/cta font-inter inline-flex items-center space-x-1 text-xs font-semibold text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80"
           >
             <span>{finalCtaText}</span>
-            <ArrowRightIcon className="h-4 w-4 transition-transform group-hover/cta:translate-x-1" />
+            <ArrowRightIcon className="h-3 w-3 transition-transform group-hover/cta:translate-x-1" />
           </a>
         </div>
       </div>
