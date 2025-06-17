@@ -4,34 +4,14 @@ import { useEffect, useId, useState } from 'react'
 import { Tab } from '@headlessui/react'
 import clsx from 'clsx'
 import { ScheduleTrack } from '@/lib/conference/types'
-import { sanityImage } from '@/lib/sanity/client'
+import { SpeakerPromotion } from '@/components/SpeakerPromotion'
+import { SpeakerWithTalks } from '@/lib/speaker/types'
 
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
 
 const selectedTabKey = 'selectedSpeakerTab'
-
-function ImageClipPaths({
-  id,
-  ...props
-}: React.ComponentPropsWithoutRef<'svg'> & { id: string }) {
-  return (
-    <svg aria-hidden="true" width={0} height={0} {...props}>
-      <defs>
-        <clipPath id={`${id}-0`} clipPathUnits="objectBoundingBox">
-          <path d="M0,0 h0.729 v0.129 h0.121 l-0.016,0.032 C0.815,0.198,0.843,0.243,0.885,0.243 H1 v0.757 H0.271 v-0.086 l-0.121,0.057 v-0.214 c0,-0.032,-0.026,-0.057,-0.057,-0.057 H0 V0" />
-        </clipPath>
-        <clipPath id={`${id}-1`} clipPathUnits="objectBoundingBox">
-          <path d="M1,1 H0.271 v-0.129 H0.15 l0.016,-0.032 C0.185,0.802,0.157,0.757,0.115,0.757 H0 V0 h0.729 v0.086 l0.121,-0.057 v0.214 c0,0.032,0.026,0.057,0.057,0.057 h0.093 v0.7" />
-        </clipPath>
-        <clipPath id={`${id}-2`} clipPathUnits="objectBoundingBox">
-          <path d="M1,0 H0.271 v0.129 H0.15 l0.016,0.032 C0.185,0.198,0.157,0.243,0.115,0.243 H0 v0.757 h0.729 v-0.086 l0.121,0.057 v-0.214 c0,-0.032,0.026,-0.057,0.057,-0.057 h0.093 V0" />
-        </clipPath>
-      </defs>
-    </svg>
-  )
-}
 
 function SubmitToSpeakLi() {
   return (
@@ -99,7 +79,6 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
       aria-labelledby="speakers-title"
       className="py-20 sm:py-32"
     >
-      <ImageClipPaths id={id} />
       <Container>
         <div className="mx-auto max-w-2xl lg:mx-0">
           <h2
@@ -190,7 +169,13 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                         talk.talk.speaker &&
                         'slug' in talk.talk.speaker
                       ) {
-                        acc.set(talk.talk.speaker.slug, talk.talk.speaker)
+                        const speaker = talk.talk.speaker
+                        // Convert speaker to SpeakerWithTalks format
+                        const speakerWithTalks: SpeakerWithTalks = {
+                          ...speaker,
+                          talks: [talk.talk], // Just include the current talk for now
+                        }
+                        acc.set(speaker.slug, speakerWithTalks)
                       }
                       return acc
                     }, new Map())
@@ -200,58 +185,16 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                 return (
                   <Tab.Panel
                     key={trackNumber}
-                    className="ui-not-focus-visible:outline-none grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 sm:gap-y-16 md:grid-cols-3"
+                    className="ui-not-focus-visible:outline-none grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3"
                     unmount={false}
                   >
                     {uniqueSpeakers.map((speaker, speakerIndex) => (
-                      <div key={speakerIndex}>
-                        <div className="group relative h-[17.5rem] transform overflow-hidden rounded-4xl">
-                          <div
-                            className={clsx(
-                              'absolute top-0 right-4 bottom-6 left-0 rounded-4xl border transition duration-300 group-hover:scale-95 xl:right-6',
-                              [
-                                'border-blue-300',
-                                'border-indigo-300',
-                                'border-sky-300',
-                              ][speakerIndex % 3],
-                            )}
-                          />
-                          <div
-                            className="absolute inset-0 bg-indigo-50"
-                            style={{
-                              clipPath: `url(#${id}-${speakerIndex % 3})`,
-                            }}
-                          >
-                            <a
-                              href={`/speaker/${speaker.slug}`}
-                              className="absolute inset-0"
-                            >
-                              <img
-                                className="absolute inset-0 h-full w-full object-cover transition duration-300 group-hover:scale-110"
-                                loading="lazy"
-                                src={
-                                  speaker.image
-                                    ? sanityImage(speaker.image)
-                                        .width(600)
-                                        .height(600)
-                                        .fit('crop')
-                                        .url()
-                                    : 'https://placehold.co/600x600/e5e7eb/6b7280?text=Speaker'
-                                }
-                                width={300}
-                                height={300}
-                                alt=""
-                              />
-                            </a>
-                          </div>
-                        </div>
-                        <h3 className="font-display mt-8 text-xl font-bold tracking-tight text-slate-900">
-                          {speaker.name}
-                        </h3>
-                        <p className="mt-1 text-base tracking-tight text-slate-500">
-                          {speaker.title}
-                        </p>
-                      </div>
+                      <SpeakerPromotion
+                        key={speaker.slug || speakerIndex}
+                        speaker={speaker}
+                        variant="card"
+                        isFeatured={speaker.is_featured}
+                      />
                     ))}
                   </Tab.Panel>
                 )

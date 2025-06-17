@@ -181,7 +181,7 @@ export function BlueskyFeed({
   // This must be before any conditional returns to follow Rules of Hooks
   const postItems = useMemo(() => {
     if (!posts || posts.length === 0) return []
-    
+
     return posts.map((post, index) => {
       const postDate = new Date(post.record.createdAt)
       const relativeTime = formatRelativeTime(postDate)

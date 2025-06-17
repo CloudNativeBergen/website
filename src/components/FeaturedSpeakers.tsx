@@ -1,11 +1,9 @@
 import { Container } from '@/components/Container'
-import { iconForLink } from '@/components/SocialIcons'
-import { sanityImage } from '@/lib/sanity/client'
-
-import { Speaker } from '@/lib/speaker/types'
+import { SpeakerPromotion } from '@/components/SpeakerPromotion'
+import { SpeakerWithTalks } from '@/lib/speaker/types'
 
 interface FeaturedSpeakersProps {
-  speakers: Speaker[]
+  speakers: SpeakerWithTalks[]
   isOrganizers?: boolean
 }
 
@@ -13,6 +11,14 @@ export function FeaturedSpeakers({
   speakers,
   isOrganizers,
 }: FeaturedSpeakersProps) {
+  // Select a random speaker to feature (but keep it consistent during the session)
+  const featuredSpeakerIndex =
+    speakers.length > 0 ? Math.floor(Math.random() * speakers.length) : 0
+  const featuredSpeaker = speakers[featuredSpeakerIndex]
+  const remainingSpeakers = speakers.filter(
+    (_, index) => index !== featuredSpeakerIndex,
+  )
+
   return (
     <section
       id="speakers"
@@ -35,76 +41,29 @@ export function FeaturedSpeakers({
             </p>
           </div>
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
-            <ul
-              role="list"
-              className="mx-auto mt-20 grid max-w-2xl grid-cols-1 gap-x-8 gap-y-16 text-center sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3"
-            >
-              {speakers.map((person) => (
-                <li key={person.name}>
-                  {isOrganizers ? (
-                    <>
-                      <img
-                        className="mx-auto h-56 w-56 rounded-full object-contain"
-                        src={
-                          person.image
-                            ? sanityImage(person.image)
-                                .width(448)
-                                .height(448)
-                                .fit('crop')
-                                .url()
-                            : 'https://placehold.co/448x448/e5e7eb/6b7280?text=Speaker'
-                        }
-                        alt={person.name}
-                        width={224}
-                        height={224}
-                        loading="lazy"
-                      />
-                      <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
-                        {person.name}
-                      </h3>
-                    </>
-                  ) : (
-                    <a href={`/speaker/${person.slug}`}>
-                      <img
-                        className="mx-auto h-56 w-56 rounded-full object-contain"
-                        src={
-                          person.image
-                            ? sanityImage(person.image)
-                                .width(448)
-                                .height(448)
-                                .fit('crop')
-                                .url()
-                            : 'https://placehold.co/448x448/e5e7eb/6b7280?text=Speaker'
-                        }
-                        alt={person.name}
-                        width={224}
-                        height={224}
-                        loading="lazy"
-                      />
-                      <h3 className="mt-6 text-2xl leading-7 font-semibold tracking-tight text-gray-900">
-                        {person.name}
-                      </h3>
-                    </a>
-                  )}
+            {/* Featured Speaker - Show randomly selected speaker prominently */}
+            {featuredSpeaker && (
+              <div className="mt-20 mb-16">
+                <SpeakerPromotion
+                  key={featuredSpeaker._id}
+                  speaker={featuredSpeaker}
+                  variant="featured"
+                />
+              </div>
+            )}
 
-                  <p className="text-l leading-6 text-gray-600">
-                    {person.title}
-                  </p>
-                  <ul role="list" className="mt-6 flex justify-center gap-x-6">
-                    {person.links?.map((link, index) => (
-                      <li key={`${person.name}-${index}`}>
-                        <a
-                          href={link}
-                          className="text-gray-400 hover:text-gray-500"
-                        >
-                          {iconForLink(link)}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
+            {/* Grid of remaining speakers */}
+            {remainingSpeakers.length > 0 && (
+              <div className="mx-auto grid max-w-2xl grid-cols-1 gap-6 sm:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
+                {remainingSpeakers.map((speaker) => (
+                  <SpeakerPromotion
+                    key={speaker._id}
+                    speaker={speaker}
+                    variant="card"
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </Container>
