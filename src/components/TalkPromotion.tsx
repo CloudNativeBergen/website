@@ -10,6 +10,7 @@ import {
 import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal/formatConfig'
 import { memo, useMemo } from 'react'
+import Link from 'next/link'
 
 /**
  * Props for the TalkPromotion component
@@ -376,26 +377,26 @@ export const TalkPromotion = memo(function TalkPromotion({
     if (variant === 'banner') {
       return (
         <div className="lg:ml-8">
-          <a
+          <Link
             href={ctaUrl}
             className="group font-inter inline-flex items-center space-x-2 rounded-xl bg-brand-cloud-blue px-8 py-4 font-semibold text-white transition-all hover:bg-brand-cloud-blue/90 hover:shadow-lg"
           >
             <TicketIcon className="h-5 w-5" />
             <span>{ctaText}</span>
             <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </a>
+          </Link>
         </div>
       )
     }
 
     return (
-      <a
+      <Link
         href={ctaUrl}
         className="group/cta font-inter inline-flex items-center space-x-2 text-sm font-semibold text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80"
       >
         <span>{ctaText}</span>
         <ArrowRightIcon className="h-4 w-4 transition-transform group-hover/cta:translate-x-1" />
-      </a>
+      </Link>
     )
   }
 

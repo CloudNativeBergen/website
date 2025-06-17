@@ -3,6 +3,7 @@ import { Container } from '@/components/Container'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import clsx from 'clsx'
+import Link from 'next/link'
 
 export const revalidate = 3600
 
@@ -184,7 +185,7 @@ export default async function Info() {
                         <div key={talkIndex} className="mt-4">
                           <p>{talk.startTime}</p>
                           <p>
-                            <a
+                            <Link
                               href={`/speaker/${talk.talk!.speaker && 'slug' in talk.talk!.speaker ? talk.talk!.speaker.slug : ''}`}
                               className="hover:underline"
                             >
@@ -197,7 +198,7 @@ export default async function Info() {
                                 1000 /
                                 60}{' '}
                               minutes)
-                            </a>
+                            </Link>
                           </p>
                           <p className="text-gray-500">
                             by{' '}

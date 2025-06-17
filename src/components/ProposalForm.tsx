@@ -39,6 +39,7 @@ import {
   Textarea,
 } from './Form'
 import { PortableTextEditor } from './PortableTextEditor'
+import Link from 'next/link'
 
 export function ProposalForm({
   initialProposal,
@@ -107,23 +108,23 @@ export function ProposalForm({
     <form onSubmit={handleSubmit}>
       <div className="space-y-12">
         {proposalSubmitError.type && (
-          <div className="rounded-md bg-red-50 p-4">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6">
             <div className="flex">
               <div className="flex-shrink-0">
                 <XCircleIcon
-                  className="h-5 w-5 text-red-400"
+                  className="h-6 w-6 text-red-500"
                   aria-hidden="true"
                 />
               </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">
+              <div className="ml-4">
+                <h3 className="font-space-grotesk text-lg font-semibold text-red-800">
                   Submission failed: {proposalSubmitError.type}
                 </h3>
-                <div className="mt-2 text-sm text-red-700">
+                <div className="font-inter mt-2 text-red-700">
                   <p>{proposalSubmitError.message}</p>
                   {proposalSubmitError.validationErrors &&
                     proposalSubmitError.validationErrors.length > 0 && (
-                      <ul className="mt-2 list-inside list-disc text-sm text-red-700">
+                      <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700">
                         {proposalSubmitError.validationErrors.map((error) => (
                           <li key={error.field}>{error.message}</li>
                         ))}
@@ -149,33 +150,33 @@ export function ProposalForm({
       </div>
 
       <div className="mt-6">
-        <p className="text-sm text-gray-600">
+        <p className="font-inter text-sm text-brand-slate-gray">
           <span className="font-semibold">Note:</span> Don&apos;t worry. You
           will be able to edit your proposal after you have submitted it. Simply
           navigate to the{' '}
-          <a
-            href="/cfp/list"
-            className="text-indigo-500 underline hover:text-indigo-700"
+          <Link
+            href="/cfp"
+            className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover"
           >
-            CFP list
-          </a>{' '}
+            CFP page
+          </Link>{' '}
           or click on your avatar in the top right corner of the page to access
           your proposals.
         </p>
       </div>
 
       <div className="mt-6 flex items-center justify-end gap-x-6">
-        <a
-          href="/cfp/list"
+        <Link
+          href="/cfp"
           type="button"
-          className="text-sm leading-6 font-semibold text-gray-900"
+          className="font-inter text-sm leading-6 font-semibold text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
         >
           Cancel
-        </a>
+        </Link>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting ? buttonPrimaryLoading : buttonPrimary}
         </button>
@@ -239,11 +240,11 @@ function ProposalDetailsForm({
   ])
 
   return (
-    <div className="border-b border-gray-900/10 pb-12">
-      <h2 className="text-base leading-7 font-semibold text-gray-900">
+    <div className="border-b border-brand-frosted-steel pb-12">
+      <h2 className="font-space-grotesk text-lg leading-7 font-semibold text-brand-slate-gray">
         Presentation Details
       </h2>
-      <p className="mt-1 text-sm leading-6 text-gray-600">
+      <p className="font-inter mt-1 text-sm leading-6 text-brand-cloud-gray">
         Please provide the following details about your presentation.
       </p>
 
@@ -349,18 +350,18 @@ function ProposalDetailsForm({
         <div className="col-span-full">
           <Checkbox
             name="tos"
-            label="I agree to the CNCF Code of Conduct"
+            label="I agree to the Cloud Native Bergen Code of Conduct"
             value={tos}
             setValue={setTos}
           >
             <HelpText>
               You must agree to the{' '}
-              <a
-                href={conference.coc_link}
-                className="text-indigo-500 underline hover:text-indigo-700"
+              <Link
+                href="/conduct"
+                className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover"
               >
-                CNCF Code of Conduct
-              </a>{' '}
+                Cloud Native Bergen Code of Conduct
+              </Link>{' '}
               to submit your presentation.
             </HelpText>
           </Checkbox>
@@ -470,11 +471,11 @@ function SpeakerDetailsForm({
   ])
 
   return (
-    <div className="border-b border-gray-900/10 pb-12">
-      <h2 className="text-base leading-7 font-semibold text-gray-900">
+    <div className="border-b border-brand-frosted-steel pb-12">
+      <h2 className="font-space-grotesk text-lg leading-7 font-semibold text-brand-slate-gray">
         Speaker Information
       </h2>
-      <p className="mt-1 text-sm leading-6 text-gray-600">
+      <p className="font-inter mt-1 text-sm leading-6 text-brand-cloud-gray">
         We need information about you as the speaker.
       </p>
 
@@ -529,7 +530,7 @@ function SpeakerDetailsForm({
         <div className="col-span-full">
           <label
             htmlFor="photo"
-            className="block text-sm leading-6 font-medium text-gray-900"
+            className="font-space-grotesk block text-sm leading-6 font-medium text-brand-slate-gray"
           >
             Photo
           </label>
@@ -557,14 +558,14 @@ function SpeakerDetailsForm({
             />
             {isUploading ? (
               <div className="flex items-center gap-x-2">
-                <div className="h-5 w-5 animate-spin rounded-full border-t-2 border-b-2 border-gray-500"></div>
-                <p className="text-sm leading-6 font-medium text-gray-900">
+                <div className="h-5 w-5 animate-spin rounded-full border-t-2 border-b-2 border-brand-cloud-blue"></div>
+                <p className="font-inter text-sm leading-6 font-medium text-brand-slate-gray">
                   Uploading...
                 </p>
               </div>
             ) : (
               <label htmlFor="photo" className="cursor-pointer">
-                <span className="text-sm leading-6 font-medium text-gray-900">
+                <span className="font-inter text-sm leading-6 font-medium text-brand-cloud-blue hover:text-brand-cloud-blue-hover">
                   Upload Photo
                 </span>
               </label>
@@ -581,7 +582,7 @@ function SpeakerDetailsForm({
 
         <div className="sm:col-span-4">
           <fieldset>
-            <legend className="text-sm leading-6 font-semibold text-gray-900">
+            <legend className="font-space-grotesk text-sm leading-6 font-semibold text-brand-slate-gray">
               Social profiles and links
             </legend>
             <HelpText>
@@ -606,7 +607,7 @@ function SpeakerDetailsForm({
 
         <div className="col-span-full">
           <fieldset>
-            <legend className="text-sm leading-6 font-semibold text-gray-900">
+            <legend className="font-space-grotesk text-sm leading-6 font-semibold text-brand-slate-gray">
               Speaker Details
             </legend>
             <div className="mt-6 space-y-6">

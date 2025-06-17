@@ -94,7 +94,7 @@ export function Header({ c }: { c: Conference }) {
           )}
         </div>
         <div className="mt-10 ml-10 sm:flex lg:mt-0 lg:ml-4">
-          <a href="/cfp/list">
+          <Link href="/cfp/list">
             {session ? (
               <Image
                 src={session.user.picture || '/images/default-avatar.png'}
@@ -106,7 +106,7 @@ export function Header({ c }: { c: Conference }) {
             ) : (
               <UserCircleIcon className="h-12 w-12 text-brand-slate-gray" />
             )}
-          </a>
+          </Link>
         </div>
       </Container>
     </header>

@@ -343,11 +343,6 @@ export default async function AdminSettings() {
               type="url"
             />
             <FieldRow
-              label="Code of Conduct Link"
-              value={conference.coc_link}
-              type="url"
-            />
-            <FieldRow
               label="Contact Email"
               value={conference.contact_email}
               type="email"

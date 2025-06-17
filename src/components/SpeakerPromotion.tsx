@@ -18,6 +18,7 @@ import { sanityImage } from '@/lib/sanity/client'
 import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal/formatConfig'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
+import Link from 'next/link'
 
 // QR code cache to avoid regenerating the same codes
 const qrCodeCache = new Map<string, string>()
@@ -462,13 +463,13 @@ export async function SpeakerPromotion({
 
             {/* CTA */}
             <div className="mt-6 md:mt-0 md:flex-shrink-0">
-              <a
+              <Link
                 href={finalCtaUrl}
                 className="group font-inter inline-flex items-center space-x-2 rounded-lg bg-brand-cloud-blue px-6 py-3 font-semibold text-white transition-all hover:bg-brand-cloud-blue/90 hover:shadow-lg"
               >
                 <span>{finalCtaText}</span>
                 <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -607,13 +608,13 @@ export async function SpeakerPromotion({
 
           {/* View Profile Button - Always at bottom */}
           <div className="mt-auto">
-            <a
+            <Link
               href={finalCtaUrl}
               className="group/btn font-inter inline-flex items-center space-x-2 rounded-xl bg-brand-cloud-blue px-6 py-3 font-semibold text-white transition-all hover:bg-brand-cloud-blue/90 hover:shadow-md"
             >
               <span>{finalCtaText}</span>
               <ArrowRightIcon className="h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -775,13 +776,13 @@ export async function SpeakerPromotion({
           )}
 
           {/* CTA */}
-          <a
+          <Link
             href={finalCtaUrl}
             className="group/cta font-inter inline-flex items-center space-x-1 text-xs font-semibold text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80"
           >
             <span>{finalCtaText}</span>
             <ArrowRightIcon className="h-3 w-3 transition-transform group-hover/cta:translate-x-1" />
-          </a>
+          </Link>
         </div>
       </div>
     </div>

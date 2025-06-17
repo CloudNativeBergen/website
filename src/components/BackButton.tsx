@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import Link from 'next/link'
 
 interface BackLinkProps {
   fallbackUrl?: string
@@ -36,14 +37,14 @@ export function BackLink({
   }
 
   return (
-    <a
+    <Link
       href={fallbackUrl}
       onClick={handleBack}
       className={`${baseClasses} ${variantClasses[variant]} ${className}`}
     >
       <ArrowLeftIcon className="h-4 w-4" />
       <span>{children}</span>
-    </a>
+    </Link>
   )
 }
 

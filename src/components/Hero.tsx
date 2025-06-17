@@ -1,12 +1,7 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
-import {
-  GitHubIcon,
-  InstagramIcon,
-  LinkedInIcon,
-  TwitterIcon,
-} from '@/components/SocialIcons'
+import { iconForLink } from '@/components/SocialIcons'
 import {
   InformationCircleIcon,
   UserGroupIcon,
@@ -162,32 +157,21 @@ export function Hero({ conference }: { conference: Conference }) {
                 ))}
               </dl>
             )}
-          <div className="mt-10 flex justify-center space-x-4 sm:hidden">
-            <a
-              href="#"
-              className="text-brand-cloud-blue hover:text-brand-slate-gray"
-            >
-              <InstagramIcon className="h-12 w-12" />
-            </a>
-            <a
-              href="#"
-              className="text-brand-cloud-blue hover:text-brand-slate-gray"
-            >
-              <TwitterIcon className="h-12 w-12" />
-            </a>
-            <a
-              href="https://github.com/CloudNativeBergen"
-              className="text-brand-cloud-blue hover:text-brand-slate-gray"
-            >
-              <GitHubIcon className="h-12 w-12" />
-            </a>
-            <a
-              href="https://www.linkedin.com/company/cloud-native-bergen"
-              className="text-brand-cloud-blue hover:text-brand-slate-gray"
-            >
-              <LinkedInIcon className="h-12 w-12" />
-            </a>
-          </div>
+          {conference.social_links && conference.social_links.length > 0 && (
+            <div className="mt-10 flex justify-center space-x-4 sm:hidden">
+              {conference.social_links.map((link) => (
+                <a
+                  key={link}
+                  href={link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-brand-cloud-blue hover:text-brand-slate-gray"
+                >
+                  {iconForLink(link, 'h-12 w-12')}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </Container>
     </div>

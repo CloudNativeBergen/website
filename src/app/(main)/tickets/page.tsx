@@ -5,6 +5,7 @@ import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { formatDates } from '@/lib/time'
 import { CalendarDaysIcon, ClockIcon } from '@heroicons/react/24/outline'
+import Link from 'next/dist/client/link'
 
 export default async function Tickets() {
   const { conference, error } = await getConferenceForCurrentDomain()
@@ -89,12 +90,12 @@ export default async function Tickets() {
                 <div className="mt-8 border-t border-brand-cloud-blue/20 pt-6">
                   <p className="font-inter text-sm text-brand-slate-gray">
                     Have questions?{' '}
-                    <a
-                      href="mailto:info@cloudnativebergen.io"
+                    <Link
+                      href={`mailto:${conference.contact_email}`}
                       className="text-brand-cloud-blue transition-colors hover:text-brand-fresh-green"
                     >
                       Contact us
-                    </a>
+                    </Link>
                   </p>
                 </div>
               </div>

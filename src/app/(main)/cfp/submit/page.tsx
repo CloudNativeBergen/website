@@ -104,10 +104,10 @@ export default async function Submit({
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
               Submit Presentation
             </h1>
-            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
+            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
               <p>
                 Become our next speaker and share your knowledge with the
                 community! We are especially interested in local speakers who
@@ -116,26 +116,26 @@ export default async function Submit({
             </div>
           </div>
           {loadingError && (
-            <div className="mx-auto mt-12 max-w-2xl rounded-md bg-red-50 p-4 lg:max-w-4xl lg:px-12">
+            <div className="mx-auto mt-12 max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 lg:max-w-4xl lg:px-12">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <XCircleIcon
-                    className="h-5 w-5 text-red-400"
+                    className="h-6 w-6 text-red-500"
                     aria-hidden="true"
                   />
                 </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
-                    Loading failed: {loadingError.type}
+                <div className="ml-4">
+                  <h3 className="font-space-grotesk text-lg font-semibold text-red-800">
+                    Loading Error: {loadingError.type}
                   </h3>
-                  <div className="mt-2 text-sm text-red-700">
+                  <div className="font-inter mt-2 text-red-700">
                     <p>{loadingError.message}</p>
                   </div>
                 </div>
               </div>
             </div>
           )}
-          <div className="mx-auto mt-12 max-w-2xl rounded-lg bg-white p-6 lg:max-w-4xl lg:px-12">
+          <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12">
             <ProposalForm
               initialProposal={proposal}
               initialSpeaker={speaker}

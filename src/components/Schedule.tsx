@@ -11,6 +11,7 @@ import {
   ScheduleTrack,
   TrackTalk,
 } from '@/lib/conference/types'
+import Link from 'next/link'
 
 interface ScheduleTrackSummary extends ScheduleTrack {
   name: React.ReactNode
@@ -115,14 +116,14 @@ function PlaceholderTimeSlot({
   talk: TrackTalk
 }) {
   return (
-    <a
+    <Link
       type="button"
       href="/cfp"
       className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 py-3 pb-4 hover:border-gray-400 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
     >
       <p className="mt-1 font-mono text-sm text-slate-500">Submit to speak</p>
       <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
-    </a>
+    </Link>
   )
 }
 
@@ -157,12 +158,12 @@ function TalkTimeSlot({ date, talk }: { date: string; talk: TrackTalk }) {
           {talk.talk?.title || talk.placeholder || 'TBD'}
         </h4>
       ) : (
-        <a href={`/speaker/${talk.talk.speaker.slug}`} className="block">
+        <Link href={`/speaker/${talk.talk.speaker.slug}`} className="block">
           <h4 className="text-lg font-semibold tracking-tight text-blue-900">
             {talk.talk.speaker.name}
           </h4>
           <p className="mt-1 tracking-tight text-blue-900">{talk.talk.title}</p>
-        </a>
+        </Link>
       )}
       <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
       {talk.talk?.video && <YouTubeEmbed url={talk.talk.video} />}

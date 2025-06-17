@@ -23,6 +23,7 @@ interface ProposalButtonAction {
 }
 
 import clsx from 'clsx'
+import Link from 'next/link'
 
 function capitalizeFirstLetter(string: string) {
   return string.charAt(0).toUpperCase() + string.slice(1)
@@ -30,8 +31,8 @@ function capitalizeFirstLetter(string: string) {
 
 function ProposalActionLink({ action }: { action: ProposalButtonAction }) {
   return (
-    <a
-      href={action.link}
+    <Link
+      href={action.link || '#'}
       className="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-brand-slate-gray"
     >
       <action.icon
@@ -39,7 +40,7 @@ function ProposalActionLink({ action }: { action: ProposalButtonAction }) {
         aria-hidden="true"
       />
       {capitalizeFirstLetter(action.label)}
-    </a>
+    </Link>
   )
 }
 

@@ -12,6 +12,7 @@ import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
 import { formats } from '@/lib/proposal/types'
 import clsx from 'clsx'
+import Link from 'next/link'
 
 export default async function CFP() {
   const { conference } = await getConferenceForCurrentDomain({ topics: true })
@@ -51,10 +52,10 @@ export default async function CFP() {
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
               Call for Presentations
             </h1>
-            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
+            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
               <p>
                 Become our next speaker and share your knowledge with the
                 community! We are especially interested in local speakers who
@@ -83,8 +84,10 @@ export default async function CFP() {
                 ['Workshop formats', workshopFormats],
               ].map(([name, value]) => (
                 <div key={String(name)}>
-                  <dt className="font-mono text-sm text-blue-600">{name}</dt>
-                  <dd className="mt-0.5 text-2xl font-semibold tracking-tight text-blue-900">
+                  <dt className="font-jetbrains text-sm text-brand-cloud-blue">
+                    {name}
+                  </dt>
+                  <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray">
                     {Array.isArray(value) ? (
                       <ul className="space-y-1">
                         {value.map((item, index) => (
@@ -99,10 +102,10 @@ export default async function CFP() {
               ))}
             </dl>
             {hasWorkshops && (
-              <div className="mt-10 rounded-xl bg-gradient-to-br from-blue-100/80 to-blue-200/80 p-1 shadow-lg">
+              <div className="mt-10 rounded-xl bg-gradient-to-br from-brand-sky-mist/80 to-brand-cloud-blue/10 p-1 shadow-lg">
                 <div className="rounded-lg bg-white px-6 py-6 sm:p-8">
-                  <h2 className="font-display mb-2 flex items-center gap-2 text-3xl font-semibold tracking-tight text-blue-700 sm:text-4xl">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-blue-200 text-blue-600">
+                  <h2 className="font-space-grotesk mb-2 flex items-center gap-2 text-2xl font-semibold tracking-tight text-brand-cloud-blue sm:text-3xl">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-sky-mist text-brand-cloud-blue">
                       <ClipboardDocumentCheckIcon
                         className="h-5 w-5"
                         aria-hidden="true"
@@ -110,13 +113,13 @@ export default async function CFP() {
                     </span>
                     Hands-on Workshops
                   </h2>
-                  <p className="mt-2 text-lg text-blue-900">
+                  <p className="font-inter mt-2 text-lg text-brand-slate-gray">
                     This conference also includes hands-on workshops led by
                     experienced instructors. These sessions are designed to
                     provide practical, in-depth learning opportunities. If you
                     have a workshop idea, we encourage you to submit a proposal.
                   </p>
-                  <ul className="mt-4 list-disc pl-6 text-base text-blue-900">
+                  <ul className="font-inter mt-4 list-disc pl-6 text-base text-brand-slate-gray">
                     {workshopFormats.map((format, idx) => (
                       <li key={idx}>{format}</li>
                     ))}
@@ -125,10 +128,10 @@ export default async function CFP() {
               </div>
             )}
 
-            <h2 className="font-display mt-10 text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
+            <h2 className="font-jetbrains mt-10 text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl">
               Process and Details
             </h2>
-            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
+            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
               <p>
                 We are looking for content that is relevant to the community and
                 that provide valuable insights. We welcome speakers of all
@@ -276,7 +279,7 @@ export default async function CFP() {
               </p>
             </div>
 
-            <h3 className="font-display mt-5 mb-5 text-3xl font-medium tracking-tighter text-blue-600 sm:text-3xl">
+            <h3 className="font-space-grotesk mt-5 mb-5 text-2xl font-medium tracking-tighter text-brand-cloud-blue sm:text-3xl">
               Dates to Remember
             </h3>
 
@@ -307,11 +310,11 @@ export default async function CFP() {
               ))}
             </ul>
 
-            <h2 className="font-display mt-10 text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
+            <h2 className="font-jetbrains mt-10 text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl">
               Diversity and Inclusion
             </h2>
 
-            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
+            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
               <p>
                 Cloud Native Day Bergen is committed to creating a diverse and
                 inclusive event that welcomes speakers and attendees of all
@@ -324,13 +327,12 @@ export default async function CFP() {
                 everyone. We do not tolerate harassment or discrimination of any
                 kind, and we will take appropriate action against anyone who
                 violates our{' '}
-                <a
-                  href={conference.coc_link}
+                <Link
+                  href="/conduct"
                   className="text-indigo-500 underline hover:text-indigo-700"
-                  target="_blank"
                 >
                   code of conduct
-                </a>
+                </Link>
                 .
               </p>
             </div>

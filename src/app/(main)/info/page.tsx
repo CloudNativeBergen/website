@@ -47,7 +47,7 @@ export default async function Info() {
         },
         {
           question: 'What is the code of conduct?',
-          answer: `We have a code of conduct that all attendees, speakers, and sponsors must follow. You can read the code of conduct on our website at <u><a href="${conference.coc_link}">Code of Conduct</a></u>. If you have any questions or concerns, please contact us.`,
+          answer: `We have a code of conduct that all attendees, speakers, and sponsors must follow. You can read the code of conduct on our website at <u><a href="/conduct">Code of Conduct</a></u>. If you have any questions or concerns, please contact us.`,
         },
         {
           question: 'What happens after the conference?',

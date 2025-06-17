@@ -119,12 +119,6 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'coc_link',
-      title: 'Code of Conduct Link',
-      type: 'string',
-      validation: (Rule) => Rule.required(),
-    }),
-    defineField({
       name: 'registration_link',
       title: 'Registration Link',
       type: 'string',

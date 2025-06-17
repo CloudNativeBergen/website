@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { ProposalActionModal } from './ProposalActionModal'
 import { ProposalCard } from './ProposalCard'
+import Link from 'next/link'
 
 function ProposalSuccessMessage({
   showMessage,
@@ -130,12 +131,12 @@ export function ProposalList({
               <p className="font-inter mt-2 text-sm text-gray-600">
                 Submit a proposal to become a speaker.
               </p>
-              <a
+              <Link
                 href="/cfp/submit"
                 className="font-inter mt-4 rounded-md bg-brand-cloud-blue px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-cloud-blue/90"
               >
                 Submit Proposal
-              </a>
+              </Link>
             </>
           )}
         </div>

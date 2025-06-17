@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
+import Link from 'next/link'
 
 function ErrorDisplay({ message }: { message: string }) {
   return (
@@ -59,9 +60,9 @@ export default async function SpeakerDashboard() {
           <h1 className="font-space-grotesk text-4xl font-bold tracking-tight text-brand-slate-gray sm:text-6xl">
             Speaker Dashboard
             {cfpIsOpen && (
-              <a href="/cfp/submit">
+              <Link href="/cfp/submit">
                 <PlusCircleIcon className="ml-6 inline-block h-12 w-12 text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80" />
-              </a>
+              </Link>
             )}
           </h1>
           <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700">
