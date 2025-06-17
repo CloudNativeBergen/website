@@ -45,7 +45,7 @@ import {
   ButtonShowcase,
 } from '@/components/branding'
 import { colorPalette, typography } from '@/lib/branding/data'
-import { TalkCard } from '@/components/TalkCard'
+
 import { TalkPromotion } from '@/components/TalkPromotion'
 import { SpeakerPromotion } from '@/components/SpeakerPromotion'
 import { Format } from '@/lib/proposal/types'
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
 }
 
 export default async function BrandingPage() {
-  const { conference, error } = await getConferenceForCurrentDomain({
+  const { conference } = await getConferenceForCurrentDomain({
     featuredSpeakers: true,
   })
 
@@ -1742,7 +1742,7 @@ export default async function BrandingPage() {
                     Card Variants
                   </h4>
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    <TalkCard
+                    <TalkPromotion
                       title="Building Resilient Microservices"
                       speaker="Dr. Sarah Chen"
                       format={Format.presentation_45}
@@ -1752,7 +1752,7 @@ export default async function BrandingPage() {
                       variant="featured"
                     />
 
-                    <TalkCard
+                    <TalkPromotion
                       title="Kubernetes Security Best Practices"
                       speaker="Marcus Rodriguez"
                       format={Format.presentation_25}
@@ -1761,7 +1761,7 @@ export default async function BrandingPage() {
                       description="Essential security patterns and practices for running Kubernetes in production environments."
                     />
 
-                    <TalkCard
+                    <TalkPromotion
                       title="Quick Start with Helm"
                       speaker="Emma Thompson"
                       format={Format.lightning_10}
@@ -1778,7 +1778,7 @@ export default async function BrandingPage() {
                     Talk Format Showcase
                   </h4>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <TalkCard
+                    <TalkPromotion
                       title="CI/CD in 10 Minutes"
                       speaker="Alex Kim"
                       format={Format.lightning_10}
@@ -1786,7 +1786,7 @@ export default async function BrandingPage() {
                       variant="compact"
                     />
 
-                    <TalkCard
+                    <TalkPromotion
                       title="Container Orchestration"
                       speaker="Jordan Lee"
                       format={Format.presentation_20}
@@ -1794,7 +1794,7 @@ export default async function BrandingPage() {
                       variant="compact"
                     />
 
-                    <TalkCard
+                    <TalkPromotion
                       title="Deep Dive: Service Mesh"
                       speaker="Taylor Wong"
                       format={Format.presentation_40}
@@ -1802,7 +1802,7 @@ export default async function BrandingPage() {
                       variant="compact"
                     />
 
-                    <TalkCard
+                    <TalkPromotion
                       title="Hands-on GitOps"
                       speaker="Casey Miller"
                       format={Format.workshop_120}

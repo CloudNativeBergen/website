@@ -11,13 +11,11 @@ import {
   MicrophoneIcon,
   TrophyIcon,
   LightBulbIcon,
-  BoltIcon,
-  WrenchScrewdriverIcon,
-  ChartBarIcon,
 } from '@heroicons/react/24/solid'
 import Image from 'next/image'
 import { sanityImage } from '@/lib/sanity/client'
 import { Format } from '@/lib/proposal/types'
+import { formatConfig } from '@/lib/proposal/formatConfig'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { useMemo, memo } from 'react'
 
@@ -62,58 +60,6 @@ const variantConfig = {
   },
 }
 
-const formatConfig = {
-  [Format.lightning_10]: {
-    label: 'Lightning',
-    duration: '10 min',
-    icon: BoltIcon,
-    color: 'text-accent-yellow',
-    bgColor: 'bg-accent-yellow/10',
-  },
-  [Format.presentation_20]: {
-    label: 'Presentation',
-    duration: '20 min',
-    icon: PresentationChartBarIcon,
-    color: 'text-brand-cloud-blue',
-    bgColor: 'bg-brand-cloud-blue/10',
-  },
-  [Format.presentation_25]: {
-    label: 'Presentation',
-    duration: '25 min',
-    icon: PresentationChartBarIcon,
-    color: 'text-brand-cloud-blue',
-    bgColor: 'bg-brand-cloud-blue/10',
-  },
-  [Format.presentation_40]: {
-    label: 'Deep Dive',
-    duration: '40 min',
-    icon: ChartBarIcon,
-    color: 'text-brand-fresh-green',
-    bgColor: 'bg-brand-fresh-green/10',
-  },
-  [Format.presentation_45]: {
-    label: 'Deep Dive',
-    duration: '45 min',
-    icon: ChartBarIcon,
-    color: 'text-brand-fresh-green',
-    bgColor: 'bg-brand-fresh-green/10',
-  },
-  [Format.workshop_120]: {
-    label: 'Workshop',
-    duration: '2 hours',
-    icon: WrenchScrewdriverIcon,
-    color: 'text-accent-purple',
-    bgColor: 'bg-accent-purple/10',
-  },
-  [Format.workshop_240]: {
-    label: 'Extended Workshop',
-    duration: '4 hours',
-    icon: WrenchScrewdriverIcon,
-    color: 'text-accent-purple',
-    bgColor: 'bg-accent-purple/10',
-  },
-}
-
 /**
  * Helper function to derive expertise areas from speaker talks
  */
@@ -136,7 +82,19 @@ const deriveExpertise = (talks: SpeakerWithTalks['talks']): string[] => {
  * Helper function to derive company name from speaker title
  */
 const deriveCompany = (title: string | undefined): string | undefined => {
-  return title?.includes(' at ') ? title.split(' at ')[1] : undefined
+  if (!title) return undefined
+
+  // Check for " at " pattern first
+  if (title.includes(' at ')) {
+    return title.split(' at ')[1]
+  }
+
+  // Check for "@" pattern
+  if (title.includes('@')) {
+    return title.split('@')[1]
+  }
+
+  return undefined
 }
 
 /**
@@ -396,9 +354,6 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
               <p className="font-inter mb-2 text-sm font-semibold text-gray-700">
                 {title}
               </p>
-            )}
-            {company && (
-              <p className="font-inter mb-4 text-sm text-gray-600">{company}</p>
             )}
 
             {/* Expertise Tags or Talk Info */}

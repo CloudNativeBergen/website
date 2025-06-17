@@ -1,3 +1,4 @@
+import { getFormatConfig, getFormatStyling } from './formatConfig'
 import {
   Level,
   levels,
@@ -6,55 +7,27 @@ import {
   Language,
   languages,
   Format,
-  formats,
   Audience,
   audiences,
 } from './types'
 
 export function FormatFormat({ format }: { format?: string }) {
-  let text: string
-  let color: string
-
-  switch (format) {
-    case Format.lightning_10:
-      text = formats.get(Format.lightning_10) ?? format
-      color = 'bg-gray-100 text-gray-800'
-      break
-    case Format.presentation_20:
-      text = formats.get(Format.presentation_20) ?? format
-      color = 'bg-gray-100 text-gray-800'
-      break
-    case Format.presentation_25:
-      text = formats.get(Format.presentation_25) ?? format
-      color = 'bg-gray-100 text-gray-800'
-      break
-    case Format.presentation_40:
-      text = formats.get(Format.presentation_40) ?? format
-      color = 'bg-gray-100 text-gray-800'
-      break
-    case Format.presentation_45:
-      text = formats.get(Format.presentation_45) ?? format
-      color = 'bg-gray-100 text-gray-800'
-      break
-    case Format.workshop_120:
-      text = formats.get(Format.workshop_120) ?? format
-      color = 'bg-gray-100 text-gray-800'
-      break
-    case Format.workshop_240:
-      text = formats.get(Format.workshop_240) ?? format
-      color = 'bg-gray-100 text-gray-800'
-      break
-    default:
-      text = 'Unknown'
-      color = 'bg-gray-100 text-gray-800'
-      break
+  if (!format || !Object.values(Format).includes(format as Format)) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+        Unknown
+      </span>
+    )
   }
+
+  const config = getFormatConfig(format as Format)
+  const styling = getFormatStyling(format as Format)
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${color}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${styling.bgColor} ${styling.color}`}
     >
-      {text}
+      {config.label}
     </span>
   )
 }
