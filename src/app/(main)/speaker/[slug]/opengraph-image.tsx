@@ -1,6 +1,7 @@
 import React from 'react'
 import { ImageResponse } from '@vercel/og'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sanityImage } from '@/lib/sanity/client'
 
 export const runtime = 'edge'
@@ -18,7 +19,8 @@ export default async function Image({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const { speaker, talks, err } = await getPublicSpeaker(slug)
+  const { conference } = await getConferenceForCurrentDomain()
+  const { speaker, talks, err } = await getPublicSpeaker(conference._id, slug)
 
   if (err || !speaker || !talks || talks.length === 0) {
     return new ImageResponse(<div>Speaker not found</div>, size)
