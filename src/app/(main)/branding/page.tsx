@@ -1501,31 +1501,62 @@ export default async function BrandingPage() {
                 </div>
               )}
 
-            {/* Social Media Cards */}
+            {/* Social Image for Speaker Sharing */}
             {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 4 && (
+              conference.featured_speakers.length >= 2 && (
                 <div>
                   <div className="mb-8">
                     <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
-                      Social Media Cards
+                      Speaker Share Images
                     </h3>
                     <p className="font-inter text-gray-600">
-                      Optimized for social sharing and promotional content.
-                      Perfect for LinkedIn posts, Twitter announcements, and
-                      conference marketing.
+                      Branded images speakers can share on their own social
+                      media with "I'm speaking at [event]" message. Includes QR
+                      code linking to their speaker profile and talk details.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                    {conference.featured_speakers.slice(0, 3).map((speaker) => (
+                      <SpeakerPromotion
+                        key={speaker._id}
+                        speaker={speaker}
+                        variant="speaker-share"
+                        eventName={conference.title || 'Cloud Native Bergen'}
+                        ctaText="View Profile"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+            {/* Social Image for Conference Promotion */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 2 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Speaker Spotlight Images
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Conference-branded promotional images highlighting
+                      individual speakers. Includes QR code for easy access to
+                      speaker information and designed for conference social
+                      media accounts.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
                     {conference.featured_speakers
-                      .slice(0, 4)
+                      .slice(0, 3)
                       .map((speaker, index) => (
                         <SpeakerPromotion
                           key={speaker._id}
                           speaker={speaker}
                           isFeatured={index === 0}
-                          variant="social"
-                          ctaText="Follow"
+                          variant="speaker-spotlight"
+                          eventName={conference.title || 'Cloud Native Bergen'}
+                          ctaText="Learn More"
                         />
                       ))}
                   </div>
@@ -1662,8 +1693,17 @@ export default async function BrandingPage() {
                     <li className="flex items-start">
                       <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       <span>
-                        <strong>Social Cards:</strong> Optimized for social
-                        media sharing and promotion
+                        <strong>Speaker Share Images:</strong> Branded 4:5 ratio
+                        images for speakers to share "I'm speaking at [event]"
+                        with QR codes
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>Speaker Spotlight Images:</strong>{' '}
+                        Conference-branded 4:5 ratio promotional images with QR
+                        codes for speaker promotion
                       </span>
                     </li>
                   </ul>
@@ -1708,6 +1748,28 @@ export default async function BrandingPage() {
                         <strong>Keynote Badge:</strong> Special highlighting for
                         keynote speakers
                       </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="mt-8 rounded-lg bg-brand-sky-mist/50 p-6">
+                <h4 className="font-inter mb-3 text-lg font-semibold text-brand-cloud-blue">
+                  QR Code Integration
+                </h4>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                    <li>• Automatically generated for social image variants</li>
+                    <li>• Links to full speaker profile and talk details</li>
+                    <li>• High contrast design for reliable scanning</li>
+                    <li>• Optimized size for mobile camera scanning</li>
+                  </ul>
+                  <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                    <li>• White background with dark QR pattern</li>
+                    <li>• Rounded corners to match design language</li>
+                    <li>• Positioned for easy access without UI overlap</li>
+                    <li>
+                      • Error correction level ensures scanning reliability
                     </li>
                   </ul>
                 </div>

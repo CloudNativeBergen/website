@@ -5,6 +5,7 @@ import {
   SpeakerWaveIcon,
   StarIcon,
   PresentationChartBarIcon,
+  QrCodeIcon,
 } from '@heroicons/react/24/outline'
 import {
   UserIcon,
@@ -17,27 +18,75 @@ import { sanityImage } from '@/lib/sanity/client'
 import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal/formatConfig'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
-import { useMemo, memo } from 'react'
+
+// QR code cache to avoid regenerating the same codes
+const qrCodeCache = new Map<string, string>()
+
+// Fallback QR code pattern as a constant
+const FALLBACK_QR_CODE =
+  "data:image/svg+xml,%3csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='120' height='120' fill='white'/%3e%3cpath d='M10,10 L20,10 L20,20 L10,20 Z M30,10 L40,10 L40,20 L30,20 Z M50,10 L60,10 L60,20 L50,20 Z M70,10 L80,10 L80,20 L70,20 Z M10,30 L20,30 L20,40 L10,40 Z M50,30 L60,30 L60,40 L50,40 Z M70,30 L80,30 L80,40 L70,40 Z M10,50 L20,50 L20,60 L10,60 Z M30,50 L40,50 L40,60 L30,60 Z M50,50 L60,50 L60,60 L50,60 Z M70,50 L80,50 L80,60 L70,60 Z M30,70 L40,70 L40,80 L30,80 Z M50,70 L60,70 L60,80 L50,80 Z' fill='black'/%3e%3c/svg%3e"
+
+// Shared styling constants for consistency
+const COMMON_STYLES = {
+  gradientBg:
+    'relative overflow-hidden rounded-2xl border border-gray-200 transition-all duration-300',
+  backgroundPattern: 'absolute inset-0 opacity-10',
+  contentWrapper: 'relative',
+  socialCard: 'aspect-[4/5] max-w-lg p-8 hover:shadow-xl',
+  textTruncate: 'line-clamp-2 px-2',
+  iconBase: 'flex-shrink-0',
+} as const
 
 /**
- * Props for the SpeakerPromotion component
+ * Extended props interface with better type safety
  */
 interface SpeakerPromotionProps {
   /** Speaker data including talks and personal information */
   speaker: SpeakerWithTalks
   /** Visual variant of the component */
-  variant?: 'featured' | 'card' | 'compact' | 'social' | 'minimal'
+  variant?:
+    | 'featured'
+    | 'card'
+    | 'compact'
+    | 'minimal'
+    | 'speaker-share'
+    | 'speaker-spotlight'
   /** Additional CSS classes */
   className?: string
   /** Whether to show as a featured speaker */
   isFeatured?: boolean
   /** Custom call-to-action text */
   ctaText?: string
-  /** Custom call-to-action URL */
+  /** Custom call-to-action URL (used for both CTA link and QR code generation) */
   ctaUrl?: string
+  /** Conference/event name for social variants */
+  eventName?: string
 }
 
-const variantConfig = {
+/**
+ * Variant configuration type for better type safety
+ */
+type VariantConfig = {
+  gradient: string
+  accentColor: string
+  icon: React.ComponentType<{ className?: string }>
+}
+
+/**
+ * Computed speaker data interface
+ */
+interface ComputedSpeakerData {
+  talks: any[]
+  primaryTalk: any | null
+  expertise: string[]
+  company: string | undefined
+  talkCount: number
+}
+
+const variantConfig: Record<
+  NonNullable<SpeakerPromotionProps['variant']>,
+  VariantConfig
+> = {
   featured: {
     gradient: 'from-brand-cloud-blue/20 to-brand-fresh-green/10',
     accentColor: 'text-brand-cloud-blue',
@@ -53,20 +102,61 @@ const variantConfig = {
     accentColor: 'text-brand-cloud-blue',
     icon: MicrophoneIcon,
   },
-  social: {
-    gradient: 'from-brand-fresh-green/20 to-brand-cloud-blue/15',
-    accentColor: 'text-brand-fresh-green',
-    icon: LightBulbIcon,
-  },
   minimal: {
     gradient: 'from-white to-brand-glacier-white/50',
     accentColor: 'text-brand-cloud-blue',
     icon: StarIcon,
   },
+  'speaker-share': {
+    gradient: 'from-brand-cloud-blue to-brand-fresh-green',
+    accentColor: 'text-white',
+    icon: MicrophoneIcon,
+  },
+  'speaker-spotlight': {
+    gradient: 'from-brand-fresh-green to-brand-cloud-blue',
+    accentColor: 'text-white',
+    icon: StarIcon,
+  },
 }
 
 /**
- * Helper function to derive expertise areas from speaker talks
+ * Generate QR code data URL for the given URL with caching
+ */
+async function generateQRCode(url: string): Promise<string> {
+  const fullUrl = url.startsWith('http')
+    ? url
+    : `https://cloudnativebergen.no${url}`
+
+  // Check cache first
+  if (qrCodeCache.has(fullUrl)) {
+    return qrCodeCache.get(fullUrl)!
+  }
+
+  try {
+    // Dynamic import to reduce bundle size
+    const QRCode = (await import('qrcode')).default
+    const qrCodeDataUrl = await QRCode.toDataURL(fullUrl, {
+      width: 120,
+      margin: 1,
+      color: {
+        dark: '#1a1a1a',
+        light: '#ffffff',
+      },
+    })
+
+    // Cache the result
+    qrCodeCache.set(fullUrl, qrCodeDataUrl)
+    return qrCodeDataUrl
+  } catch (error) {
+    console.error('Failed to generate QR code:', error)
+    // Cache the fallback as well
+    qrCodeCache.set(fullUrl, FALLBACK_QR_CODE)
+    return FALLBACK_QR_CODE
+  }
+}
+
+/**
+ * Memoized helper function to derive expertise areas from speaker talks
  */
 const deriveExpertise = (talks: SpeakerWithTalks['talks']): string[] => {
   if (!talks?.length) return []
@@ -84,80 +174,191 @@ const deriveExpertise = (talks: SpeakerWithTalks['talks']): string[] => {
 }
 
 /**
- * Helper function to derive company name from speaker title
+ * Memoized helper function to derive company name from speaker title
  */
 const deriveCompany = (title: string | undefined): string | undefined => {
   if (!title) return undefined
 
-  // Check for " at " pattern first
+  // Check for " at " pattern first (more specific)
   if (title.includes(' at ')) {
-    return title.split(' at ')[1]
+    return title.split(' at ')[1].trim()
   }
 
   // Check for "@" pattern
   if (title.includes('@')) {
-    return title.split('@')[1]
+    return title.split('@')[1].trim()
   }
 
   return undefined
 }
 
 /**
- * Optimized SpeakerPromotion component with multiple visual variants.
+ * Compute all derived speaker data in one function for better performance
+ */
+function computeSpeakerData(speaker: SpeakerWithTalks): ComputedSpeakerData {
+  const talks = speaker.talks || []
+  const primaryTalk = talks.length > 0 ? talks[0] : null
+  const expertise = deriveExpertise(talks)
+  const company = deriveCompany(speaker.title)
+  const talkCount = talks.length
+
+  return {
+    talks,
+    primaryTalk,
+    expertise,
+    company,
+    talkCount,
+  }
+}
+
+/**
+ * Reusable components for SpeakerPromotion variants
+ */
+
+interface SpeakerImageProps {
+  image?: any
+  name: string
+  size: number
+  className?: string
+}
+
+const SpeakerImage = ({
+  image,
+  name,
+  size,
+  className = '',
+}: SpeakerImageProps) => {
+  if (image) {
+    return (
+      <Image
+        src={sanityImage(image)
+          .width(size * 2) // 2x for high-DPI
+          .height(size * 2)
+          .fit('crop')
+          .url()}
+        alt={name}
+        width={size}
+        height={size}
+        className={`object-cover ${className}`}
+      />
+    )
+  }
+
+  const iconSize = Math.round(size * 0.4)
+  return (
+    <div
+      className={`flex items-center justify-center bg-white/20 ${className}`}
+      style={{ width: size, height: size }}
+    >
+      <UserIcon
+        className="text-white/80"
+        style={{ width: iconSize, height: iconSize }}
+      />
+    </div>
+  )
+}
+
+interface QRCodeDisplayProps {
+  qrCodeUrl?: string
+  size: number
+  className?: string
+}
+
+const QRCodeDisplay = ({
+  qrCodeUrl,
+  size,
+  className = '',
+}: QRCodeDisplayProps) => {
+  if (!qrCodeUrl) return null
+
+  return (
+    <div
+      className={`rounded-lg bg-white shadow-lg ${className}`}
+      style={{ padding: size * 0.1 }}
+    >
+      <Image
+        src={qrCodeUrl}
+        alt="QR Code - Scan to view speaker profile"
+        width={size}
+        height={size}
+        style={{ width: size, height: size }}
+      />
+    </div>
+  )
+}
+
+interface TalkFormatDisplayProps {
+  talk: any
+  size?: 'sm' | 'md' | 'lg'
+}
+
+const TalkFormatDisplay = ({ talk, size = 'md' }: TalkFormatDisplayProps) => {
+  const talkConfig = formatConfig[talk.format as Format]
+  const TalkIcon = talkConfig?.icon || PresentationChartBarIcon
+
+  const sizeClasses = {
+    sm: { icon: 'h-3 w-3', text: 'text-xs' },
+    md: { icon: 'h-4 w-4', text: 'text-sm' },
+    lg: { icon: 'h-5 w-5', text: 'text-base' },
+  }
+
+  const classes = sizeClasses[size]
+
+  return (
+    <div className="flex items-center justify-center space-x-2">
+      <TalkIcon
+        className={`${classes.icon} ${talkConfig?.color || 'text-brand-cloud-blue'}`}
+      />
+      <span className={`font-inter font-semibold ${classes.text}`}>
+        {talkConfig?.label || 'Talk'}
+      </span>
+    </div>
+  )
+}
+
+// ...existing code...
+
+/**
+ * Server-rendered SpeakerPromotion component with multiple visual variants.
  *
  * Features:
  * - Single speaker prop interface with derived fields
  * - High-DPI image support (2x resolution)
- * - Memoized computations for performance
  * - Support for featured speakers with badges
- * - Multiple variants: featured, card, compact, social
+ * - Multiple variants: featured, card, compact, minimal, speaker-share, speaker-spotlight
  * - Automatic expertise derivation from talks
  * - Company extraction from title
+ * - Server-side QR code generation for social variants
  */
-export const SpeakerPromotion = memo(function SpeakerPromotion({
+export async function SpeakerPromotion({
   speaker,
   variant = 'card',
   className = '',
   isFeatured = false,
   ctaText,
   ctaUrl,
+  eventName = 'Cloud Native Bergen',
 }: SpeakerPromotionProps) {
-  // Memoize computed values to prevent unnecessary recalculations
-  const derivedData = useMemo(() => {
-    const talks = speaker.talks || []
-    const primaryTalk = talks.length > 0 ? talks[0] : null
-    const expertise = deriveExpertise(talks)
-    const company = deriveCompany(speaker.title)
+  // Derive computed values
+  const { talks, primaryTalk, expertise, company, talkCount } =
+    computeSpeakerData(speaker)
 
-    return {
-      primaryTalk,
-      talkCount: talks.length,
-      expertise,
-      company,
-    }
-  }, [speaker.talks, speaker.title])
-
-  // Memoize variant config
-  const config = useMemo(() => variantConfig[variant], [variant])
+  // Get variant config
+  const config = variantConfig[variant]
   const Icon = config.icon
 
-  // Memoize CTA values
-  const ctaData = useMemo(() => {
-    const defaultCtaText = isFeatured
-      ? 'View Speaker'
-      : variant === 'social'
-        ? 'Follow'
-        : 'View Profile'
-    const finalCtaText = ctaText || defaultCtaText
-    const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug || speaker._id}`
+  // CTA values
+  const finalCtaText = ctaText || (isFeatured ? 'View Speaker' : 'View Profile')
+  const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug || speaker._id}`
 
-    return { finalCtaText, finalCtaUrl }
-  }, [ctaText, ctaUrl, isFeatured, variant, speaker.slug, speaker._id])
+  // Generate QR code for social variants using server-side generation
+  const qrCodeUrl =
+    variant === 'speaker-share' || variant === 'speaker-spotlight'
+      ? await generateQRCode(finalCtaUrl)
+      : undefined
 
   // Extract speaker properties for cleaner code
   const { name, title, bio, image } = speaker
-  const { primaryTalk, talkCount, expertise, company } = derivedData
-  const { finalCtaText, finalCtaUrl } = ctaData
 
   if (variant === 'featured') {
     return (
@@ -178,23 +379,12 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
             {/* Speaker Image & Badge */}
             <div className="mb-6 md:mb-0 md:flex-shrink-0">
               <div className="relative">
-                {image ? (
-                  <Image
-                    src={sanityImage(image)
-                      .width(240) // 2x the display size of 120px for high-DPI
-                      .height(240)
-                      .fit('crop')
-                      .url()}
-                    alt={name}
-                    width={120}
-                    height={120}
-                    className="rounded-xl object-cover shadow-lg"
-                  />
-                ) : (
-                  <div className="flex h-30 w-30 items-center justify-center rounded-xl bg-brand-cloud-blue/10 shadow-lg">
-                    <UserIcon className="h-12 w-12 text-brand-cloud-blue/50" />
-                  </div>
-                )}
+                <SpeakerImage
+                  image={image}
+                  name={name}
+                  size={120}
+                  className="rounded-xl object-cover shadow-lg"
+                />
                 {isFeatured && (
                   <div className="absolute -top-1 -right-1 rounded-full bg-accent-yellow p-1.5 shadow-lg">
                     <TrophyIcon className="h-4 w-4 text-white" />
@@ -239,24 +429,7 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
                 {/* Primary Talk */}
                 {primaryTalk && (
                   <div className="rounded-lg border border-white/80 bg-white/60 px-3 py-2">
-                    <div className="flex items-center space-x-2">
-                      {(() => {
-                        const talkConfig =
-                          formatConfig[primaryTalk.format as Format]
-                        const TalkIcon =
-                          talkConfig?.icon || PresentationChartBarIcon
-                        return (
-                          <>
-                            <TalkIcon
-                              className={`h-4 w-4 ${talkConfig?.color || 'text-brand-cloud-blue'}`}
-                            />
-                            <span className="font-inter text-sm font-semibold text-brand-slate-gray">
-                              {primaryTalk.title}
-                            </span>
-                          </>
-                        )
-                      })()}
-                    </div>
+                    <TalkFormatDisplay talk={primaryTalk} size="sm" />
                   </div>
                 )}
 
@@ -299,118 +472,86 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
     )
   }
 
-  if (variant === 'social') {
+  if (variant === 'speaker-share' || variant === 'speaker-spotlight') {
     return (
       <div
-        className={`group relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} max-w-sm border border-gray-200 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg ${className}`}
+        className={`group relative ${COMMON_STYLES.socialCard} overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-200 p-8 transition-all duration-300 hover:shadow-xl ${className}`}
       >
         {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-15">
+        <div className={COMMON_STYLES.backgroundPattern}>
           <CloudNativePattern
-            iconCount={16}
-            baseSize={20}
+            iconCount={20}
+            baseSize={24}
             className="h-full w-full"
           />
         </div>
 
-        <div className="relative flex h-full flex-col">
-          {/* Speaker Badge */}
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Icon className={`h-5 w-5 ${config.accentColor}`} />
-              <span
-                className={`font-inter text-sm font-semibold ${config.accentColor}`}
-              >
-                {isFeatured ? 'Featured' : 'Speaker'}
+        <div className="relative flex h-full flex-col text-center text-white">
+          {/* Header */}
+          <div className="mb-4">
+            <div className="mb-2 flex items-center justify-center space-x-2">
+              <Icon className="h-5 w-5" />
+              <span className="font-inter text-base font-bold">
+                {variant === 'speaker-spotlight'
+                  ? isFeatured
+                    ? 'Featured Speaker'
+                    : 'Speaker Spotlight'
+                  : "I'm speaking at"}
               </span>
             </div>
-            {isFeatured && (
-              <TrophyIcon className="h-5 w-5 text-accent-yellow" />
-            )}
+            <h1 className="font-space-grotesk line-clamp-2 px-2 text-2xl leading-tight font-bold">
+              {eventName}
+            </h1>
           </div>
 
-          {/* Speaker Image */}
-          <div className="mb-4 flex justify-center">
-            {image ? (
-              <Image
-                src={sanityImage(image)
-                  .width(160) // 2x the display size of 80px for high-DPI
-                  .height(160)
-                  .fit('crop')
-                  .url()}
-                alt={name}
-                width={80}
-                height={80}
-                className="rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand-cloud-blue/10">
-                <UserIcon className="h-10 w-10 text-brand-cloud-blue/50" />
+          {/* Speaker Image and QR Code */}
+          <div className="mb-4">
+            <div className="flex items-start justify-center space-x-3">
+              {/* Speaker Image */}
+              <div className="flex-shrink-0">
+                <SpeakerImage
+                  image={image}
+                  name={name}
+                  size={100}
+                  className="rounded-2xl object-cover shadow-lg"
+                />
               </div>
-            )}
+
+              {/* QR Code */}
+              <QRCodeDisplay qrCodeUrl={qrCodeUrl} size={90} />
+            </div>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 text-center">
-            <h3 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
+          {/* Speaker Info - Flexible content area */}
+          <div className="mb-4 flex-1">
+            <h2 className="font-space-grotesk mb-2 line-clamp-2 px-2 text-xl font-bold">
               {name}
-            </h3>
+            </h2>
             {title && (
-              <p className="font-inter mb-2 text-sm font-semibold text-gray-700">
+              <p className="font-inter mb-3 line-clamp-2 px-2 text-base font-semibold text-white/90">
                 {title}
               </p>
             )}
 
-            {/* Expertise Tags or Talk Info */}
-            {primaryTalk ? (
-              <div className="mb-4">
-                <div className="mb-2 flex items-center justify-center space-x-1">
-                  {(() => {
-                    const talkConfig =
-                      formatConfig[primaryTalk.format as Format]
-                    const TalkIcon =
-                      talkConfig?.icon || PresentationChartBarIcon
-                    return (
-                      <>
-                        <TalkIcon
-                          className={`h-3 w-3 ${talkConfig?.color || 'text-brand-cloud-blue'}`}
-                        />
-                        <span className="font-inter text-xs font-medium text-gray-700">
-                          {talkConfig?.label || 'Talk'}
-                        </span>
-                      </>
-                    )
-                  })()}
-                </div>
-                <p className="font-inter line-clamp-2 text-center text-xs text-gray-600">
+            {/* Primary Talk */}
+            {primaryTalk && (
+              <div className="mx-2 mb-3 rounded-xl bg-white/20 p-3 backdrop-blur-sm">
+                <TalkFormatDisplay talk={primaryTalk} />
+                <h3 className="font-space-grotesk line-clamp-3 text-base leading-tight font-bold">
                   {primaryTalk.title}
-                </p>
+                </h3>
               </div>
-            ) : (
-              expertise.length > 0 && (
-                <div className="mb-4">
-                  <div className="flex flex-wrap justify-center gap-1">
-                    {expertise.slice(0, 3).map((skill) => (
-                      <span
-                        key={skill}
-                        className="rounded-full bg-brand-cloud-blue/10 px-2 py-1 text-xs font-medium text-brand-cloud-blue"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )
             )}
           </div>
 
-          {/* Quick Info */}
-          <div className="mt-4 text-center">
-            {talkCount > 0 && (
-              <p className="font-inter text-xs text-gray-600">
-                {talkCount} {talkCount === 1 ? 'talk' : 'talks'}
+          {/* Footer - Pinned to bottom */}
+          <div className="mt-auto">
+            <div className="flex items-center justify-center space-x-1">
+              <QrCodeIcon className="h-4 w-4" />
+              <p className="font-inter text-xs">
+                Scan QR code to view full profile
               </p>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -434,23 +575,12 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
         <div className="relative flex h-full flex-col text-center">
           {/* Speaker Image */}
           <div className="mb-4 flex justify-center">
-            {image ? (
-              <Image
-                src={sanityImage(image)
-                  .width(200) // 2x the display size of 100px for high-DPI
-                  .height(200)
-                  .fit('crop')
-                  .url()}
-                alt={name}
-                width={100}
-                height={100}
-                className="rounded-2xl object-cover shadow-md transition-colors duration-300"
-              />
-            ) : (
-              <div className="flex h-25 w-25 items-center justify-center rounded-2xl bg-brand-cloud-blue/10 shadow-md transition-colors duration-300">
-                <UserIcon className="h-12 w-12 text-brand-cloud-blue/50" />
-              </div>
-            )}
+            <SpeakerImage
+              image={image}
+              name={name}
+              size={100}
+              className="rounded-2xl object-cover shadow-md transition-colors duration-300"
+            />
           </div>
 
           {/* Content Area - Flexible */}
@@ -483,22 +613,7 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
             {primaryTalk && (
               <div className="mb-4 flex-1">
                 <div className="inline-flex items-center rounded-lg bg-white/80 px-3 py-2 shadow-sm">
-                  {(() => {
-                    const talkConfig =
-                      formatConfig[primaryTalk.format as Format]
-                    const TalkIcon =
-                      talkConfig?.icon || PresentationChartBarIcon
-                    return (
-                      <>
-                        <TalkIcon
-                          className={`mr-2 h-4 w-4 ${talkConfig?.color || 'text-brand-cloud-blue'}`}
-                        />
-                        <span className="font-inter text-xs font-medium text-brand-slate-gray">
-                          {talkConfig?.label || 'Talk'}
-                        </span>
-                      </>
-                    )
-                  })()}
+                  <TalkFormatDisplay talk={primaryTalk} size="sm" />
                 </div>
               </div>
             )}
@@ -527,23 +642,12 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
         <div className="flex items-center space-x-4">
           {/* Speaker Image */}
           <div className="flex-shrink-0">
-            {image ? (
-              <Image
-                src={sanityImage(image)
-                  .width(120) // 2x the display size of 60px for high-DPI
-                  .height(120)
-                  .fit('crop')
-                  .url()}
-                alt={name}
-                width={60}
-                height={60}
-                className="rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-15 w-15 items-center justify-center rounded-full bg-brand-cloud-blue/10">
-                <UserIcon className="h-8 w-8 text-brand-cloud-blue/50" />
-              </div>
-            )}
+            <SpeakerImage
+              image={image}
+              name={name}
+              size={60}
+              className="rounded-full object-cover"
+            />
           </div>
 
           {/* Content */}
@@ -603,23 +707,12 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
         <div className="mb-4 flex items-start space-x-3">
           {/* Speaker Image */}
           <div className="flex-shrink-0">
-            {image ? (
-              <Image
-                src={sanityImage(image)
-                  .width(120) // 2x the display size of 60px for high-DPI
-                  .height(120)
-                  .fit('crop')
-                  .url()}
-                alt={name}
-                width={60}
-                height={60}
-                className="rounded-full object-cover shadow-md"
-              />
-            ) : (
-              <div className="flex h-15 w-15 items-center justify-center rounded-full bg-brand-cloud-blue/10 shadow-md">
-                <UserIcon className="h-8 w-8 text-brand-cloud-blue/50" />
-              </div>
-            )}
+            <SpeakerImage
+              image={image}
+              name={name}
+              size={60}
+              className="rounded-full object-cover shadow-md"
+            />
           </div>
 
           {/* Name, Title & Company */}
@@ -663,27 +756,12 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
           {primaryTalk && (
             <div className="mb-3 rounded-lg border border-gray-100 bg-white/80 p-2">
               <div className="flex items-center space-x-2">
-                {(() => {
-                  const talkConfig = formatConfig[primaryTalk.format as Format]
-                  const TalkIcon = talkConfig?.icon || PresentationChartBarIcon
-                  return (
-                    <>
-                      <TalkIcon
-                        className={`h-4 w-4 flex-shrink-0 ${talkConfig?.color || 'text-brand-cloud-blue'}`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <span
-                          className={`font-inter text-xs font-semibold ${talkConfig?.color || 'text-brand-cloud-blue'}`}
-                        >
-                          {talkConfig?.label || 'Talk'}:
-                        </span>
-                        <h4 className="font-space-grotesk line-clamp-1 text-xs font-semibold text-brand-slate-gray">
-                          {primaryTalk.title}
-                        </h4>
-                      </div>
-                    </>
-                  )
-                })()}
+                <TalkFormatDisplay talk={primaryTalk} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-space-grotesk line-clamp-1 text-xs font-semibold text-brand-slate-gray">
+                    {primaryTalk.title}
+                  </h4>
+                </div>
               </div>
             </div>
           )}
@@ -731,4 +809,4 @@ export const SpeakerPromotion = memo(function SpeakerPromotion({
       </div>
     </div>
   )
-})
+}
