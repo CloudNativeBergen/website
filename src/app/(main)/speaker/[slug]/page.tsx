@@ -14,9 +14,22 @@ import { PortableText } from '@portabletext/react'
 import { getConferenceForCurrentDomain } from '../../../../lib/conference/sanity'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
+import { PortableTextBlock } from '@portabletext/editor'
+import { PortableTextTextBlock, PortableTextObject } from 'sanity'
 
 type Props = {
   params: Promise<{ slug: string }>
+}
+
+// Utility function to convert PortableText to plain text for metadata
+function portableTextToString(value: PortableTextBlock[]): string {
+  return value
+    .map((block) =>
+      (block as PortableTextTextBlock<PortableTextObject>).children
+        .map((child) => child.text)
+        .join(''),
+    )
+    .join(' ')
 }
 
 export async function generateMetadata({ params }: Props) {
@@ -35,12 +48,40 @@ export async function generateMetadata({ params }: Props) {
     }
   }
 
+  const title = `${speaker.name} - ${talks[0].title}`
+
+  // Extract description from the first talk's PortableText description
+  let description = ''
+  if (talks[0].description) {
+    if (typeof talks[0].description === 'string') {
+      description = talks[0].description
+    } else {
+      description = portableTextToString(talks[0].description)
+    }
+    // Truncate description for metadata (ideal length is 150-160 characters)
+    if (description.length > 160) {
+      description = description.substring(0, 157) + '...'
+    }
+  }
+
+  const image = speaker.image
+    ? sanityImage(speaker.image).width(1200).height(630).fit('crop').url()
+    : 'https://placehold.co/1200x630/e5e7eb/6b7280?text=Speaker'
+
   return {
-    title: `${speaker.name} - ${talks[0].title}`,
-    description: talks[0].description.slice(0, 200),
-    image: speaker.image
-      ? sanityImage(speaker.image).width(2400).height(1200).fit('crop').url()
-      : 'https://placehold.co/1200x630/e5e7eb/6b7280?text=Speaker',
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: [{ url: image }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [image],
+    },
   }
 }
 
