@@ -12,6 +12,8 @@ import { UserIcon } from '@heroicons/react/24/solid'
 import { sanityImage } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
 import { getConferenceForCurrentDomain } from '../../../../lib/conference/sanity'
+import { BlueskyFeed } from '@/components/BlueskyFeed'
+import { hasBlueskySocial } from '@/lib/bluesky/utils'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -132,7 +134,7 @@ export default async function Profile({ params }: Props) {
 
                   {/* Social Links */}
                   {speaker.links && speaker.links.length > 0 && (
-                    <div className="flex flex-wrap justify-center gap-4 lg:justify-start">
+                    <div className="mb-6 flex flex-wrap justify-center gap-4 lg:justify-start">
                       {speaker.links.map((link, index) => (
                         <a
                           key={index}
@@ -149,6 +151,17 @@ export default async function Profile({ params }: Props) {
                       ))}
                     </div>
                   )}
+
+                  {/* Bluesky Feed */}
+                  {(() => {
+                    const blueskyLink = hasBlueskySocial(speaker.links)
+                    return blueskyLink ? (
+                      <BlueskyFeed
+                        blueskyHandle={blueskyLink}
+                        className="mt-6"
+                      />
+                    ) : null
+                  })()}
                 </div>
               </div>
 
