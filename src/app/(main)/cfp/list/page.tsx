@@ -57,7 +57,7 @@ export default async function SpeakerDashboard() {
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
-          <h1 className="font-space-grotesk text-4xl font-bold tracking-tight text-brand-slate-gray sm:text-6xl">
+          <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
             Speaker Dashboard
             {cfpIsOpen && (
               <Link href="/cfp/submit">
