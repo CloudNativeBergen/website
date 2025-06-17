@@ -199,7 +199,7 @@ export default async function Profile({ params }: Props) {
                     return blueskyLink ? (
                       <BlueskyFeed
                         blueskyHandle={blueskyLink}
-                        className="mt-6"
+                        className="mt-6 hidden lg:block"
                       />
                     ) : null
                   })()}
