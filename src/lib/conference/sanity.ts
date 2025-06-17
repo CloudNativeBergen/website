@@ -20,11 +20,12 @@ export async function getConferenceForCurrentDomain({
   revalidate?: number
 } = {}): Promise<{
   conference: Conference
+  domain: string
   error: Error | null
 }> {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
   try {
-    const headersList = await headers()
-    const domain = headersList.get('host') || ''
     return await getConferenceForDomain(
       domain,
       organizers,
@@ -38,7 +39,7 @@ export async function getConferenceForCurrentDomain({
   } catch (err) {
     const error = err as Error
     const conference = {} as Conference
-    return { conference, error }
+    return { conference, domain, error }
   }
 }
 
@@ -51,7 +52,7 @@ export async function getConferenceForDomain(
   topics: boolean = false,
   featuredSpeakers: boolean = false,
   revalidate: number = 3600,
-): Promise<{ conference: Conference; error: Error | null }> {
+): Promise<{ conference: Conference; domain: string; error: Error | null }> {
   let conference = {} as Conference
   let error = null
 
@@ -173,5 +174,5 @@ export async function getConferenceForDomain(
     error = err as Error
   }
 
-  return { conference, error }
+  return { conference, domain, error }
 }

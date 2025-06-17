@@ -103,7 +103,7 @@ export async function getProposals({
   const query = groq`*[${filters}]{
     ...,
     speaker-> {
-      _id, name, email, providers, "image": image.asset->url, flags
+      _id, name, email, providers, "image": image.asset->url, flags, "slug": slug.current
     },
     conference-> {
       _id, title, start_date, end_date
