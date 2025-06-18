@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/sanity'
 import { ProposalList } from '@/components/ProposalList'
 import { SpeakerPromotion } from '@/components/SpeakerPromotion'
-import { DownloadSpeakerImage } from '@/components/branding/DownloadSpeakerImage'
+import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -94,13 +94,10 @@ export default async function SpeakerDashboard() {
                 return confirmedProposals.length > 0 ? (
                   <div className="sticky top-8">
                     {/* Header aligned with proposals list */}
-                    <div className="mt-6 mb-6">
+                    <div className="mt-6 mb-4">
                       <h2 className="font-space-grotesk text-2xl font-bold tracking-tight text-brand-slate-gray">
                         Share Your Talks
                       </h2>
-                      <p className="font-inter mt-2 text-gray-600">
-                        Your speaker social cards
-                      </p>
                     </div>
 
                     <div className="space-y-6">
@@ -115,10 +112,15 @@ export default async function SpeakerDashboard() {
                         return speaker ? (
                           <div
                             key={proposal._id}
-                            className="flex flex-col items-center space-y-3"
+                            className="flex flex-col items-center"
                           >
-                            <DownloadSpeakerImage
+                            <SpeakerSharingActions
                               filename={`${speaker.slug || speaker.name?.replace(/\s+/g, '-').toLowerCase()}-speaker-card`}
+                              speakerUrl={`https://${domain}/speaker/${speaker.slug}`}
+                              talkTitle={proposal.title}
+                              eventName={
+                                conference?.title || 'Cloud Native Bergen'
+                              }
                             >
                               <SpeakerPromotion
                                 speaker={{
@@ -133,7 +135,7 @@ export default async function SpeakerDashboard() {
                                 ctaUrl={`https://${domain}/speaker/${speaker.slug}`}
                                 className="w-full max-w-xs"
                               />
-                            </DownloadSpeakerImage>
+                            </SpeakerSharingActions>
                           </div>
                         ) : null
                       })}
