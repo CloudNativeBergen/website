@@ -64,10 +64,6 @@ export async function generateMetadata({ params }: Props) {
     }
   }
 
-  const image = speaker.image
-    ? sanityImage(speaker.image).width(1200).height(630).fit('crop').url()
-    : 'https://placehold.co/1200x630/e5e7eb/6b7280?text=Speaker'
-
   return {
     title,
     description,
