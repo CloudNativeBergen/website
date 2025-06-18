@@ -79,13 +79,6 @@ const STYLES = {
   },
 } as const
 
-// Helper function to create glassmorphism style
-const createGlassmorphismStyle = (blur = '10px') => ({
-  background: STYLES.colors.whiteVeryLight,
-  backdropFilter: `blur(${blur})`,
-  border: `1px solid ${STYLES.colors.whiteLight}`,
-})
-
 // Optimized sponsor logo rendering with memoization-like behavior
 const createSponsorLogo = (
   logoSvg: string | null | undefined,
@@ -116,7 +109,7 @@ const createSponsorLogo = (
           src={dataUrl}
           alt={sponsorName}
           style={{
-            width: isLarge ? '120px' : '80px',
+            width: isLarge ? '120px' : '120px',
             height: isLarge ? '60px' : '40px',
             objectFit: 'contain',
             filter: 'brightness(0) invert(1)',
@@ -304,7 +297,7 @@ const TalkCard = ({ title }: { title: string }) => (
         <LightBulbIcon size={25} />
       </div>
       TALK
-    </div>
+    </div>{' '}
     <h3
       style={{
         fontSize: '32px',
@@ -314,6 +307,7 @@ const TalkCard = ({ title }: { title: string }) => (
         maxWidth: '100%',
         fontFamily: STYLES.fontFamily,
         textShadow: STYLES.shadow.textSmall,
+        display: 'flex',
       }}
     >
       {title}
@@ -327,7 +321,9 @@ export default async function Image({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const { conference } = await getConferenceForCurrentDomain({ sponsors: true })
+  const { conference, domain } = await getConferenceForCurrentDomain({
+    sponsors: true,
+  })
   const { speaker, talks, err } = await getPublicSpeaker(conference._id, slug)
 
   // Early return for error state
@@ -387,64 +383,161 @@ export default async function Image({
       >
         <BackgroundPatterns />
 
-        {/* Ingress Sponsors - Top Right */}
+        {/* Conference Info - Top Header */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: STYLES.spacing.large,
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: '32px',
+            zIndex: 2,
+            maxWidth: '800px',
+          }}
+        >
+          {(conference?.start_date || conference?.end_date) && (
+            <div
+              style={{
+                fontSize: '18px',
+                fontWeight: '700',
+                color: STYLES.colors.white,
+                fontFamily: STYLES.fontFamily,
+                textShadow: STYLES.shadow.text,
+                display: 'flex',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {(() => {
+                if (conference?.start_date && conference?.end_date) {
+                  const startDate = new Date(conference.start_date)
+                  const endDate = new Date(conference.end_date)
+
+                  // Check if same day
+                  if (startDate.toDateString() === endDate.toDateString()) {
+                    return startDate.toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })
+                  }
+
+                  // Check if same month
+                  if (
+                    startDate.getMonth() === endDate.getMonth() &&
+                    startDate.getFullYear() === endDate.getFullYear()
+                  ) {
+                    return `${startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${endDate.getDate()}, ${endDate.getFullYear()}`
+                  }
+
+                  // Different months
+                  return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                }
+
+                const singleDate =
+                  conference?.start_date || conference?.end_date
+                return new Date(singleDate).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })
+              })()}
+            </div>
+          )}
+          {(conference?.city || conference?.country) && (
+            <div
+              style={{
+                fontSize: '18px',
+                fontWeight: '700',
+                color: STYLES.colors.white,
+                fontFamily: STYLES.fontFamily,
+                textShadow: STYLES.shadow.text,
+                display: 'flex',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {[conference?.city, conference?.country]
+                .filter(Boolean)
+                .join(', ')}
+            </div>
+          )}
+          <div
+            style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: STYLES.colors.white,
+              fontFamily: STYLES.fontFamily,
+              textShadow: STYLES.shadow.text,
+              display: 'flex',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {domain}
+          </div>
+        </div>
+
+        {/* Ingress Sponsors - Top Right (Horizontal) */}
         {ingressSponsors.length > 0 && (
           <div
             style={{
               position: 'absolute',
-              top: STYLES.spacing.large,
+              top: '20px',
               right: STYLES.spacing.large,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'flex-end',
-              gap: '12px',
+              gap: '8px',
               zIndex: 2,
-              maxWidth: '250px',
+              maxWidth: '400px',
             }}
           >
             <div
               style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                opacity: 0.8,
-                color: STYLES.colors.white,
-                fontFamily: STYLES.fontFamily,
-                textAlign: 'right',
-                marginBottom: '4px',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+                justifyContent: 'flex-end',
               }}
             >
-              INGRESS SPONSORS
-            </div>
-            {ingressSponsors.slice(0, 4).map((sponsor, index) => (
-              <div
-                key={index}
-                style={{
-                  ...createGlassmorphismStyle(),
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  borderRadius: STYLES.borderRadius.small,
-                  padding: '12px',
-                  minWidth: '140px',
-                }}
-              >
+              {ingressSponsors.slice(0, 3).map((sponsor, index) => (
                 <div
+                  key={index}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    minHeight: '50px',
-                    minWidth: '100px',
+                    padding: '8px 12px',
+                    minWidth: '80px',
+                    minHeight: '40px',
                   }}
                 >
                   {renderSponsorLogo(
                     sponsor?.sponsor?.logo,
                     sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
-                    'large',
+                    'small',
                   )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div
+              style={{
+                fontSize: '12px',
+                fontWeight: '600',
+                opacity: 0.9,
+                color: STYLES.colors.white,
+                fontFamily: STYLES.fontFamily,
+                textAlign: 'right',
+                textShadow: STYLES.shadow.textSmall,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                display: 'flex',
+              }}
+            >
+              INGRESS SPONSORS
+            </div>
           </div>
         )}
 
@@ -488,6 +581,7 @@ export default async function Image({
                 maxWidth: '100%',
                 fontFamily: STYLES.fontFamily,
                 textShadow: STYLES.shadow.text,
+                display: 'flex',
               }}
             >
               {speaker.name}
@@ -505,6 +599,7 @@ export default async function Image({
                   maxWidth: '100%',
                   fontFamily: STYLES.fontFamily,
                   textShadow: STYLES.shadow.textSmall,
+                  display: 'flex',
                 }}
               >
                 {speaker.title}
@@ -561,6 +656,7 @@ export default async function Image({
                   background: 'linear-gradient(45deg, #ffffff, #e0f2fe)',
                   backgroundClip: 'text',
                   color: 'transparent',
+                  display: 'flex',
                 }}
               >
                 {conference?.title || 'Cloud Native Bergen'}
@@ -590,13 +686,17 @@ export default async function Image({
                 fontSize: '12px',
                 fontWeight: '600',
                 marginBottom: '10px',
-                opacity: 0.7,
+                opacity: 0.9,
                 fontFamily: STYLES.fontFamily,
                 color: STYLES.colors.white,
                 textAlign: 'center',
+                textShadow: STYLES.shadow.textSmall,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                display: 'flex',
               }}
             >
-              Service Sponsors
+              SERVICE SPONSORS
             </div>
             <div
               style={{
