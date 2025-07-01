@@ -14,11 +14,15 @@ export async function getProposal({
   speakerId,
   isOrganizer = false,
   includeReviews = false,
+  includeSubmittedTalks = false,
+  includePreviousAcceptedTalks = false,
 }: {
   id: string
   speakerId: string
   isOrganizer?: boolean
   includeReviews?: boolean
+  includeSubmittedTalks?: boolean
+  includePreviousAcceptedTalks?: boolean
 }): Promise<{
   proposal: ProposalExisting
   reviews?: Review[]
@@ -36,16 +40,31 @@ export async function getProposal({
         ...,
         "image": image.asset->url,
         ${
-          isOrganizer
-            ? `"submittedTalks": *[_type == "talk" && speaker._ref == ^._id && conference._ref == ^.^.conference._ref && _id != ^.^._id && status != "draft"]{
-          _id, title, status, _createdAt,
-          topics[]-> { _id, title, color }
-        },
-        "previousAcceptedTalks": *[_type == "talk" && speaker._ref == ^._id && conference._ref != ^.^.conference._ref && (status == "accepted" || status == "confirmed")]{
-          _id, title, status, _createdAt,
-          conference-> { _id, title, start_date },
-          topics[]-> { _id, title, color }
-        }`
+          isOrganizer && includeSubmittedTalks
+            ? `"submittedTalks": *[
+            _type == "talk"
+            && speaker._ref == ^._id
+            && conference._ref == ^.^.conference._ref
+            && _id != ^.^._id
+            && status != "draft"
+          ]{
+            _id, title, status, _createdAt,
+            topics[]-> { _id, title, color }
+          },`
+            : ''
+        }
+        ${
+          isOrganizer && includePreviousAcceptedTalks
+            ? `"previousAcceptedTalks": *[
+            _type == "talk"
+            && speaker._ref == ^._id
+            && conference._ref != ^.^.conference._ref
+            && (status == "accepted" || status == "confirmed")
+          ]{
+            _id, title, status, _createdAt,
+            conference-> { _id, title, start_date },
+            topics[]-> { _id, title, color }
+          }`
             : ''
         }
       },

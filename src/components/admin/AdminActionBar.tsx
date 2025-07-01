@@ -1,7 +1,17 @@
 'use client'
 
-import { CheckIcon, XMarkIcon, BellIcon } from '@heroicons/react/20/solid'
+import {
+  CheckIcon,
+  XMarkIcon,
+  BellIcon,
+  StarIcon,
+  UserPlusIcon,
+  MapPinIcon,
+  ExclamationTriangleIcon,
+  HeartIcon,
+} from '@heroicons/react/20/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
+import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
@@ -20,10 +30,25 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
   const canReject =
     proposal.status === 'submitted' || proposal.status === 'accepted'
 
+  // Get speaker information for indicators
+  const speaker = proposal.speaker as SpeakerWithReviewInfo
+  const isSeasonedSpeaker =
+    speaker?.previousAcceptedTalks && speaker.previousAcceptedTalks.length > 0
+  const isNewSpeaker =
+    !speaker?.previousAcceptedTalks ||
+    speaker.previousAcceptedTalks.length === 0
+  const isLocalSpeaker = speaker?.flags?.includes(Flags.localSpeaker)
+  const isUnderrepresentedSpeaker = speaker?.flags?.includes(
+    Flags.diverseSpeaker,
+  )
+  const requiresTravelSupport = speaker?.flags?.includes(
+    Flags.requiresTravelFunding,
+  )
+
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        {/* Left side - Status and Info */}
+        {/* Left side - Status, Reviews, and Speaker Indicators */}
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           {/* Status */}
           <div className="flex flex-shrink-0 items-center gap-2">
@@ -66,6 +91,57 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
                   return ` (${averageScore.toFixed(1)}/5)`
                 })()}
               </span>
+            </div>
+          )}
+
+          {/* Speaker Indicators */}
+          {speaker && (
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <span className="text-sm font-medium text-gray-600">
+                Speaker:
+              </span>
+              <div className="flex items-center gap-1">
+                {isSeasonedSpeaker && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-100 text-yellow-700"
+                    title="Seasoned speaker - has previous accepted talks"
+                  >
+                    <StarIcon className="h-3 w-3" />
+                  </div>
+                )}
+                {isNewSpeaker && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700"
+                    title="New speaker - no previous accepted talks"
+                  >
+                    <UserPlusIcon className="h-3 w-3" />
+                  </div>
+                )}
+                {isLocalSpeaker && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
+                    title="Local speaker"
+                  >
+                    <MapPinIcon className="h-3 w-3" />
+                  </div>
+                )}
+                {isUnderrepresentedSpeaker && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-purple-700"
+                    title="Underrepresented speaker"
+                  >
+                    <HeartIcon className="h-3 w-3" />
+                  </div>
+                )}
+                {requiresTravelSupport && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-red-700"
+                    title="Requires travel support"
+                  >
+                    <ExclamationTriangleIcon className="h-3 w-3" />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

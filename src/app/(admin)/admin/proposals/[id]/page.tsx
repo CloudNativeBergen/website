@@ -33,6 +33,8 @@ export default async function ProposalDetailPage({
       speakerId: '', // For admin view, we don't need to filter by speaker
       isOrganizer: true,
       includeReviews: true,
+      includePreviousAcceptedTalks: true,
+      includeSubmittedTalks: true,
     })
 
     if (proposalError) {
