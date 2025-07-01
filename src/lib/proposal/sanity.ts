@@ -37,15 +37,15 @@ export async function getProposal({
         "image": image.asset->url,
         ${
           isOrganizer
-            ? `"submittedTalks": *[_type == "talk" && speaker._ref == ^._id && conference._ref == ^.^.conference._ref && _id != ^.^._id && status != "draft"]{
-          _id, title, status, _createdAt,
-          topics[]-> { _id, title, color }
-        },
-        "previousAcceptedTalks": *[_type == "talk" && speaker._ref == ^._id && conference._ref != ^.^.conference._ref && (status == "accepted" || status == "confirmed")]{
-          _id, title, status, _createdAt,
-          conference-> { _id, title, start_date },
-          topics[]-> { _id, title, color }
-        }`
+            ? `${
+                process.env.NEXT_PUBLIC_FEATURE_SPEAKER_SUBMISSION_HISTORY === 'true'
+                  ? '"submittedTalks": *[_type == "talk" && speaker._ref == ^._id && conference._ref == ^.^.conference._ref && _id != ^.^._id && status != "draft"]{ _id, title, status, _createdAt, topics[]-> { _id, title, color } },'
+                  : ''
+              }${
+                process.env.NEXT_PUBLIC_FEATURE_SPEAKER_PREVIOUS_TALKS === 'true'
+                  ? '"previousAcceptedTalks": *[_type == "talk" && speaker._ref == ^._id && conference._ref != ^.^.conference._ref && (status == "accepted" || status == "confirmed")]{ _id, title, status, _createdAt, conference-> { _id, title, start_date }, topics[]-> { _id, title, color } }'
+                  : ''
+              }`
             : ''
         }
       },
