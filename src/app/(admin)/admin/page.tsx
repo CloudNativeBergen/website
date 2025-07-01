@@ -26,6 +26,7 @@ export default async function AdminDashboard() {
       conferenceId: conference._id,
       returnAll: true,
       includeReviews: true,
+      includePreviousAcceptedTalks: true,
     })
     proposals = proposalData || []
   }

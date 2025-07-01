@@ -1,8 +1,17 @@
 'use client'
 
-import { UserIcon, ClockIcon, StarIcon } from '@heroicons/react/24/outline'
-import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
-import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
+import {
+  UserIcon,
+  ClockIcon,
+  StarIcon,
+  UserPlusIcon,
+  MapPinIcon,
+  HeartIcon,
+} from '@heroicons/react/24/outline'
+import {
+  ExclamationTriangleIcon,
+  StarIcon as StarIconSolid,
+} from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import {
   ProposalExisting,
@@ -12,7 +21,7 @@ import {
   languages,
   audiences,
 } from '@/lib/proposal/types'
-import { Speaker, Flags } from '@/lib/speaker/types'
+import { Speaker, SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
 import { getStatusBadgeStyle } from './utils'
 import { calculateAverageRating } from './hooks'
 import { sanityImage } from '@/lib/sanity/client'
@@ -38,13 +47,24 @@ export function ProposalCard({
     typeof proposal.speaker === 'object' &&
     proposal.speaker &&
     'name' in proposal.speaker
-      ? (proposal.speaker as Speaker)
+      ? (proposal.speaker as SpeakerWithReviewInfo)
       : null
 
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
   const requiresTravelFunding =
     speaker?.flags?.includes(Flags.requiresTravelFunding) || false
+
+  // Speaker indicators
+  const isSeasonedSpeaker =
+    speaker?.previousAcceptedTalks && speaker.previousAcceptedTalks.length > 0
+  const isNewSpeaker =
+    !speaker?.previousAcceptedTalks ||
+    speaker.previousAcceptedTalks.length === 0
+  const isLocalSpeaker = speaker?.flags?.includes(Flags.localSpeaker)
+  const isUnderrepresentedSpeaker = speaker?.flags?.includes(
+    Flags.diverseSpeaker,
+  )
 
   const CardContent = () => (
     <div className="flex items-start space-x-4">
@@ -82,17 +102,57 @@ export function ProposalCard({
             </span>
           </div>
 
-          {/* Speaker name */}
-          <div className="mb-2 flex items-center text-sm text-gray-600">
-            <span className="truncate font-medium">
-              {speaker?.name || 'Unknown Speaker'}
-            </span>
-            {requiresTravelFunding && (
-              <div className="ml-2 flex items-center">
-                <ExclamationTriangleIcon
-                  className="h-4 w-4 text-red-500"
-                  title="Requires travel funding"
-                />
+          {/* Speaker name with indicators */}
+          <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
+            <div className="flex min-w-0 flex-1 items-center">
+              <span className="truncate font-medium">
+                {speaker?.name || 'Unknown Speaker'}
+              </span>
+            </div>
+
+            {/* Speaker Indicators */}
+            {speaker && (
+              <div className="ml-2 flex items-center gap-1">
+                {isSeasonedSpeaker && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-100 text-yellow-700"
+                    title="Seasoned speaker - has previous accepted talks"
+                  >
+                    <StarIconSolid className="h-3 w-3" />
+                  </div>
+                )}
+                {isNewSpeaker && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700"
+                    title="New speaker - no previous accepted talks"
+                  >
+                    <UserPlusIcon className="h-3 w-3" />
+                  </div>
+                )}
+                {isLocalSpeaker && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
+                    title="Local speaker"
+                  >
+                    <MapPinIcon className="h-3 w-3" />
+                  </div>
+                )}
+                {isUnderrepresentedSpeaker && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-purple-700"
+                    title="Underrepresented speaker"
+                  >
+                    <HeartIcon className="h-3 w-3" />
+                  </div>
+                )}
+                {requiresTravelFunding && (
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-red-700"
+                    title="Requires travel funding"
+                  >
+                    <ExclamationTriangleIcon className="h-3 w-3" />
+                  </div>
+                )}
               </div>
             )}
           </div>

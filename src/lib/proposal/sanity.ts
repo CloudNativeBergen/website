@@ -111,11 +111,13 @@ export async function getProposals({
   conferenceId,
   returnAll = false,
   includeReviews = false,
+  includePreviousAcceptedTalks = false,
 }: {
   speakerId?: string
   conferenceId?: string
   returnAll?: boolean
   includeReviews?: boolean
+  includePreviousAcceptedTalks?: boolean
 }): Promise<{ proposals: ProposalExisting[]; proposalsError: Error | null }> {
   let proposalsError = null
   let proposals: ProposalExisting[] = []
@@ -135,7 +137,21 @@ export async function getProposals({
   const query = groq`*[${filters}]{
     ...,
     speaker-> {
-      _id, name, email, providers, "image": image.asset->url, flags, "slug": slug.current
+      _id, name, email, providers, "image": image.asset->url, flags, "slug": slug.current,
+      ${
+        includePreviousAcceptedTalks
+          ? `"previousAcceptedTalks": *[
+          _type == "talk"
+          && speaker._ref == ^._id
+          && conference._ref != ^.^.conference._ref
+          && (status == "accepted" || status == "confirmed")
+        ]{
+          _id, title, status, _createdAt,
+          conference-> { _id, title, start_date },
+          topics[]-> { _id, title, color }
+        }`
+          : ''
+      }
     },
     conference-> {
       _id, title, start_date, end_date

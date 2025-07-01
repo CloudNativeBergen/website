@@ -23,6 +23,7 @@ export default async function AdminProposals() {
     conferenceId: conference._id,
     returnAll: true,
     includeReviews: true,
+    includePreviousAcceptedTalks: true,
   })
 
   if (proposalsError) {
