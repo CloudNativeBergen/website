@@ -48,6 +48,11 @@ export interface SpeakerWithTalks extends Speaker {
   talks?: ProposalExisting[]
 }
 
+export interface SpeakerWithReviewInfo extends Speaker {
+  submittedTalks?: ProposalExisting[]
+  previousAcceptedTalks?: ProposalExisting[]
+}
+
 export interface SpeakerResponse {
   speaker?: Speaker
   error?: FormError

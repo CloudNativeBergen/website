@@ -41,6 +41,7 @@ export const GET = auth(async (req: NextAuthRequest) => {
     speakerId: req.auth.speaker._id,
     conferenceId: conference?._id,
     returnAll: req.auth.speaker.is_organizer,
+    includePreviousAcceptedTalks: req.auth.speaker.is_organizer,
   })
 
   if (proposalsError) {

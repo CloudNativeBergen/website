@@ -17,7 +17,7 @@ import {
   audiences,
   Status,
 } from '@/lib/proposal/types'
-import { Speaker, Flags } from '@/lib/speaker/types'
+import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { sanityImage } from '@/lib/sanity/client'
@@ -52,7 +52,7 @@ function getStatusBadgeStyle(status: Status) {
  * Used in admin proposal detail pages
  */
 export function ProposalDetail({ proposal }: ProposalDetailProps) {
-  const speaker = proposal.speaker as Speaker
+  const speaker = proposal.speaker as SpeakerWithReviewInfo
   const topics = proposal.topics as Topic[]
   const requiresTravelFunding =
     speaker?.flags?.includes(Flags.requiresTravelFunding) || false
@@ -130,6 +130,140 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                 </div>
               </div>
             )}
+
+            {/* Other Submissions */}
+            {speaker?.submittedTalks && speaker.submittedTalks.length > 0 && (
+              <div>
+                <h2 className="mb-4 text-lg font-medium text-gray-900">
+                  Other Submissions
+                </h2>
+                <div className="space-y-3">
+                  {speaker.submittedTalks.map((talk) => (
+                    <div
+                      key={talk._id}
+                      className="flex items-start justify-between rounded-lg bg-gray-50 p-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-900">
+                          {talk.title}
+                        </p>
+                        <div className="mt-1 flex items-center space-x-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(talk.status)}`}
+                          >
+                            {statuses.get(talk.status) || talk.status}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatDateSafe(talk._createdAt)}
+                          </span>
+                        </div>
+                        {talk.topics && talk.topics.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {talk.topics.map((topic) => {
+                              // Type guard to check if topic is a Topic object (not a Reference)
+                              const isTopicObject = (t: unknown): t is Topic =>
+                                t !== null &&
+                                typeof t === 'object' &&
+                                '_id' in t &&
+                                'title' in t
+
+                              if (!isTopicObject(topic)) return null
+
+                              return (
+                                <span
+                                  key={topic._id}
+                                  className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20"
+                                >
+                                  {topic.title}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Previous Accepted Talks */}
+            {speaker?.previousAcceptedTalks &&
+              speaker.previousAcceptedTalks.length > 0 && (
+                <div>
+                  <h2 className="mb-4 text-lg font-medium text-gray-900">
+                    Previous Accepted Talks
+                  </h2>
+                  <div className="space-y-3">
+                    {speaker.previousAcceptedTalks.map((talk) => (
+                      <div
+                        key={talk._id}
+                        className="flex items-start justify-between rounded-lg bg-gray-50 p-4"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-gray-900">
+                            {talk.title}
+                          </p>
+                          <div className="mt-1 flex items-center space-x-2">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(talk.status)}`}
+                            >
+                              {statuses.get(talk.status) || talk.status}
+                            </span>
+                            {talk.conference && (
+                              <span className="text-xs text-gray-500">
+                                {(() => {
+                                  // Type guard to check if conference is a Conference object (not a Reference)
+                                  const isConferenceObject = (
+                                    c: unknown,
+                                  ): c is {
+                                    title: string
+                                    start_date: string
+                                  } =>
+                                    c !== null &&
+                                    typeof c === 'object' &&
+                                    'title' in c &&
+                                    'start_date' in c
+
+                                  if (isConferenceObject(talk.conference)) {
+                                    return `${talk.conference.title} (${formatDateSafe(talk.conference.start_date)})`
+                                  }
+                                  return 'Conference'
+                                })()}
+                              </span>
+                            )}
+                          </div>
+                          {talk.topics && talk.topics.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {talk.topics.map((topic) => {
+                                // Type guard to check if topic is a Topic object (not a Reference)
+                                const isTopicObject = (
+                                  t: unknown,
+                                ): t is Topic =>
+                                  t !== null &&
+                                  typeof t === 'object' &&
+                                  '_id' in t &&
+                                  'title' in t
+
+                                if (!isTopicObject(topic)) return null
+
+                                return (
+                                  <span
+                                    key={topic._id}
+                                    className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20"
+                                  >
+                                    {topic.title}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
           </div>
 
           {/* Sidebar */}
@@ -184,6 +318,27 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                       <p className="mt-1 text-sm text-gray-500">
                         {speaker.title}
                       </p>
+                    )}
+                    {speaker.links && speaker.links.length > 0 && (
+                      <div className="mt-3">
+                        <p className="mb-1 text-xs font-medium text-gray-500">
+                          Social Links
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {speaker.links.map((link, index) => (
+                            <a
+                              key={index}
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs break-all text-blue-600 hover:text-blue-800 hover:underline"
+                              title={link}
+                            >
+                              {new URL(link).hostname}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
