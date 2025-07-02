@@ -111,3 +111,15 @@ export async function fetchNextUnreviewedProposal(
 
   return (await res.json()) as NextUnreviewedProposalResponse
 }
+
+export async function searchProposals(
+  query: string,
+): Promise<ProposalListResponse> {
+  const searchParams = new URLSearchParams({ q: query })
+  const res = await fetch(`/api/proposal/search?${searchParams}`, {
+    cache: 'no-store',
+    next: { revalidate: 0 },
+  })
+
+  return (await res.json()) as ProposalListResponse
+}

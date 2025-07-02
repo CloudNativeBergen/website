@@ -8,6 +8,7 @@
 // Layout Components
 export { AdminLayout } from './AdminLayout'
 export { AdminActionBar } from './AdminActionBar'
+export { SearchResults } from './SearchResults'
 
 // Proposal Management Components
 export { ProposalsList } from './ProposalsList'
@@ -38,6 +39,7 @@ export {
   useFilterStateWithURL,
   useProposalFiltering,
 } from './hooks'
+export { useProposalSearch } from './hooks/useProposalSearch'
 
 // Types and Utils
 export type { FilterState } from './ProposalsFilter'

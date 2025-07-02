@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -30,6 +30,8 @@ import {
   ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import { Logomark } from '@/components/Logo'
+import { useProposalSearch } from './hooks/useProposalSearch'
+import { SearchResults } from './SearchResults'
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon },
@@ -49,8 +51,64 @@ interface AdminLayoutProps {
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showSearchResults, setShowSearchResults] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
   const pathname = usePathname()
   const { data: session } = useSession()
+  const {
+    search,
+    isSearching,
+    searchResults,
+    searchError,
+    navigateToProposal,
+    clearSearch,
+  } = useProposalSearch()
+
+  // Handle search input changes with debouncing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.trim()) {
+        search(searchQuery)
+        setShowSearchResults(true)
+      } else {
+        clearSearch()
+        setShowSearchResults(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery, search, clearSearch])
+
+  // Handle clicks outside search to close results
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(event.target as Node)
+      ) {
+        setShowSearchResults(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchResults.length > 0) {
+      navigateToProposal(searchResults[0]._id)
+      setShowSearchResults(false)
+      setSearchQuery('')
+    }
+  }
+
+  // Show search results when searching, has results, or has an error
+  const shouldShowSearchResults =
+    showSearchResults &&
+    searchQuery.trim() &&
+    (isSearching || searchResults.length > 0 || searchError)
 
   return (
     <>
@@ -196,23 +254,50 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         {/* Desktop top menu bar */}
         <div className="sticky top-0 z-40 hidden h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:flex lg:px-8 lg:pl-28">
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <form action="#" method="GET" className="relative flex flex-1">
-              <label htmlFor="search-field" className="sr-only">
-                Search
-              </label>
-              <MagnifyingGlassIcon
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 left-0 h-full w-5 text-gray-400"
-              />
-              <input
-                id="search-field"
-                name="search"
-                type="search"
-                placeholder="Search..."
-                className="block h-full w-full border-0 py-0 pr-0 pl-8 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm"
-                disabled
-              />
-            </form>
+            <div className="relative flex flex-1" ref={searchRef}>
+              <form
+                onSubmit={handleSearchSubmit}
+                className="relative flex flex-1"
+              >
+                <label htmlFor="search-field" className="sr-only">
+                  Search
+                </label>
+                <MagnifyingGlassIcon
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-y-0 left-0 h-full w-5 text-gray-400"
+                />
+                <input
+                  id="search-field"
+                  name="search"
+                  type="search"
+                  placeholder="Search proposals..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => {
+                    if (
+                      searchQuery.trim() &&
+                      (searchResults.length > 0 || isSearching)
+                    ) {
+                      setShowSearchResults(true)
+                    }
+                  }}
+                  autoComplete="off"
+                  className="block h-full w-full border-0 py-0 pr-0 pl-8 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm"
+                />
+              </form>
+              {shouldShowSearchResults && (
+                <SearchResults
+                  results={searchResults}
+                  isSearching={isSearching}
+                  error={searchError}
+                  onSelect={navigateToProposal}
+                  onClose={() => {
+                    setShowSearchResults(false)
+                    setSearchQuery('')
+                  }}
+                />
+              )}
+            </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
               <button
                 type="button"

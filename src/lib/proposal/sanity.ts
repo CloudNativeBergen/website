@@ -335,3 +335,118 @@ export async function fetchNextUnreviewedProposal({
 
   return { nextProposal, error }
 }
+
+export async function searchProposals({
+  query,
+  conferenceId,
+  includeReviews = false,
+  includePreviousAcceptedTalks = false,
+}: {
+  query: string
+  conferenceId?: string
+  includeReviews?: boolean
+  includePreviousAcceptedTalks?: boolean
+}): Promise<{ proposals: ProposalExisting[]; proposalsError: Error | null }> {
+  let proposalsError = null
+  let proposals: ProposalExisting[] = []
+
+  if (!query.trim()) {
+    return { proposals: [], proposalsError: null }
+  }
+
+  const filters = [
+    `_type == "talk"`,
+    `status != "${Status.draft}"`,
+    conferenceId ? `conference._ref == $conferenceId` : null,
+  ]
+    .filter(Boolean)
+    .join(' && ')
+
+  const searchQuery = groq`
+    *[${filters} &&
+      // Search in various proposal and speaker fields
+      (pt::text(description) match $searchTerm
+      || title match $searchTerm
+      || outline match $searchTerm
+      || language match $searchTerm
+      || format match $searchTerm
+      || level match $searchTerm
+      || audiences[] match $searchTerm
+      || speaker->name match $searchTerm
+      || speaker->bio match $searchTerm
+      || speaker->title match $searchTerm
+      || topics[]->title match $searchTerm
+      || topics[]->description match $searchTerm)]
+    {
+      ...,
+      speaker-> {
+        _id,
+        name,
+        title,
+        email,
+        providers,
+        bio,
+        "image": image.asset->url,
+        flags,
+        "slug": slug.current
+        ${
+          includePreviousAcceptedTalks
+            ? `,
+        "previousAcceptedTalks": *[
+          _type == "talk"
+          && speaker._ref == ^._id
+          && conference._ref != ^.^.conference._ref
+          && (status == "accepted" || status == "confirmed")
+        ]{
+          _id, title, status, _createdAt,
+          conference-> { _id, title, start_date },
+          topics[]-> { _id, title, color }
+        }`
+            : ''
+        }
+      },
+      conference-> {
+        _id, title, start_date, end_date
+      },
+      topics[]-> {
+        _id, title, color, slug, description
+      }
+      ${
+        includeReviews
+          ? `,
+      "reviews": *[_type == "review" && proposal._ref == ^._id]{
+        ...,
+        reviewer-> {
+          _id, name, email, image
+        }
+      }`
+          : ''
+      }
+    } | order(_updatedAt desc)
+  `
+
+  try {
+    proposals = await clientRead.fetch(
+      searchQuery,
+      {
+        searchTerm: `*${query.trim()}*`,
+        ...(conferenceId && { conferenceId }),
+      },
+      { cache: 'no-store' },
+    )
+  } catch (error) {
+    console.error('Error searching proposals:', error)
+    proposalsError = error as Error
+  }
+
+  proposals = proposals.map((proposal) => {
+    if (proposal.description) {
+      proposal.description = convertStringToPortableTextBlocks(
+        proposal.description,
+      )
+    }
+    return proposal
+  })
+
+  return { proposals, proposalsError }
+}
