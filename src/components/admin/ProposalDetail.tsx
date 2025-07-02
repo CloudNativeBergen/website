@@ -15,36 +15,15 @@ import {
   levels,
   languages,
   audiences,
-  Status,
 } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { sanityImage } from '@/lib/sanity/client'
+import { getStatusBadgeStyle } from './utils'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
-}
-
-function getStatusBadgeStyle(status: Status) {
-  switch (status) {
-    case Status.accepted:
-      return 'bg-green-100 text-green-800 ring-green-600/20'
-    case Status.rejected:
-      return 'bg-red-100 text-red-800 ring-red-600/20'
-    case Status.confirmed:
-      return 'bg-blue-100 text-blue-800 ring-blue-600/20'
-    case Status.submitted:
-      return 'bg-yellow-100 text-yellow-800 ring-yellow-600/20'
-    case Status.draft:
-      return 'bg-gray-100 text-gray-800 ring-gray-600/20'
-    case Status.withdrawn:
-      return 'bg-orange-100 text-orange-800 ring-orange-600/20'
-    case Status.deleted:
-      return 'bg-red-100 text-red-800 ring-red-600/20'
-    default:
-      return 'bg-gray-100 text-gray-800 ring-gray-600/20'
-  }
 }
 
 /**

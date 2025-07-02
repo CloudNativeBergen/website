@@ -17,17 +17,14 @@ import {
 } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { useProposalSearch } from './hooks/useProposalSearch'
-import { ProposalExisting, statuses } from '@/lib/proposal/types'
+import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { sanityImage } from '@/lib/sanity/client'
+import { getStatusBadgeStyle } from './utils'
 
 interface SearchModalProps {
   open: boolean
   onClose: () => void
-}
-
-function classNames(...classes: (string | boolean | undefined)[]): string {
-  return classes.filter(Boolean).join(' ')
 }
 
 export function SearchModal({ open, onClose }: SearchModalProps) {
@@ -62,7 +59,10 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     onClose()
   }
 
-  const handleSelect = (proposal: ProposalExisting) => {
+  const handleSelect = (proposal: ProposalExisting | null) => {
+    if (!proposal || !proposal._id) {
+      return
+    }
     navigateToProposal(proposal._id)
     handleClose()
   }
@@ -79,7 +79,13 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           transition
           className="mx-auto max-w-xl transform divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 transition-all data-closed:scale-95 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in"
         >
-          <Combobox onChange={handleSelect}>
+          <Combobox
+            onChange={(proposal: ProposalExisting | null) => {
+              if (proposal && proposal._id) {
+                handleSelect(proposal)
+              }
+            }}
+          >
             <div className="grid grid-cols-1">
               <ComboboxInput
                 autoFocus
@@ -94,72 +100,99 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               />
             </div>
 
+            {!isSearching &&
+              query &&
+              searchResults.length > 0 &&
+              (() => {
+                const talks = searchResults.filter(
+                  (p) =>
+                    p.format !== Format.workshop_120 &&
+                    p.format !== Format.workshop_240,
+                )
+                const workshops = searchResults.filter(
+                  (p) =>
+                    p.format === Format.workshop_120 ||
+                    p.format === Format.workshop_240,
+                )
+
+                const renderProposalOption = (proposal: ProposalExisting) => {
+                  const speaker = proposal.speaker as Speaker
+                  return (
+                    <ComboboxOption
+                      as="li"
+                      key={proposal._id}
+                      value={proposal}
+                      className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden"
+                    >
+                      <div className="flex-shrink-0">
+                        {speaker?.image ? (
+                          <img
+                            src={sanityImage(speaker.image)
+                              .width(64)
+                              .height(64)
+                              .fit('crop')
+                              .url()}
+                            alt={speaker.name || 'Speaker'}
+                            className="size-6 flex-none rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200 group-data-focus:bg-white/20">
+                            <UserIcon className="size-4 text-gray-400 group-data-focus:text-white" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="ml-3 flex-auto truncate">
+                        <div className="font-medium">{proposal.title}</div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-500 group-data-focus:text-white/70">
+                            by {speaker?.name || 'Unknown Speaker'}
+                          </div>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}
+                          >
+                            {statuses.get(proposal.status) || proposal.status}
+                          </span>
+                        </div>
+                      </div>
+                    </ComboboxOption>
+                  )
+                }
+
+                return (
+                  <ComboboxOptions
+                    static
+                    as="ul"
+                    className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2"
+                  >
+                    {talks.length > 0 && (
+                      <li>
+                        <h2 className="text-xs font-semibold text-gray-900">
+                          Talks ({talks.length})
+                        </h2>
+                        <ul className="-mx-4 mt-2 text-sm text-gray-700">
+                          {talks.map(renderProposalOption)}
+                        </ul>
+                      </li>
+                    )}
+                    {workshops.length > 0 && (
+                      <li>
+                        <h2 className="text-xs font-semibold text-gray-900">
+                          Workshops ({workshops.length})
+                        </h2>
+                        <ul className="-mx-4 mt-2 text-sm text-gray-700">
+                          {workshops.map(renderProposalOption)}
+                        </ul>
+                      </li>
+                    )}
+                  </ComboboxOptions>
+                )
+              })()}
+
             {isSearching && (
               <div className="px-6 py-14 text-center text-sm sm:px-14">
                 <div className="mx-auto mb-4 h-6 w-6 animate-spin rounded-full border-b-2 border-gray-400"></div>
                 <p className="font-semibold text-gray-900">Searching...</p>
               </div>
-            )}
-
-            {!isSearching && query && searchResults.length > 0 && (
-              <ComboboxOptions
-                static
-                as="ul"
-                className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2"
-              >
-                <li>
-                  <h2 className="text-xs font-semibold text-gray-900">
-                    Proposals ({searchResults.length})
-                  </h2>
-                  <ul className="-mx-4 mt-2 text-sm text-gray-700">
-                    {searchResults.map((proposal) => {
-                      const speaker = proposal.speaker as Speaker
-                      return (
-                        <ComboboxOption
-                          as="li"
-                          key={proposal._id}
-                          value={proposal}
-                          className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden"
-                        >
-                          <div className="flex min-w-0 flex-1 items-center space-x-3">
-                            <div className="flex-shrink-0">
-                              {speaker?.image ? (
-                                <img
-                                  src={sanityImage(speaker.image)
-                                    .width(64)
-                                    .height(64)
-                                    .fit('crop')
-                                    .url()}
-                                  alt={speaker.name || 'Speaker'}
-                                  className="h-6 w-6 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 group-data-focus:bg-white/20">
-                                  <UserIcon className="h-4 w-4 text-gray-400 group-data-focus:text-white" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center justify-between">
-                                <p className="truncate font-medium">
-                                  {proposal.title}
-                                </p>
-                                <span className="ml-2 inline-flex flex-shrink-0 items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800 group-data-focus:bg-white/20 group-data-focus:text-white">
-                                  {statuses.get(proposal.status) ||
-                                    proposal.status}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-500 group-data-focus:text-white/70">
-                                by {speaker?.name || 'Unknown Speaker'}
-                              </p>
-                            </div>
-                          </div>
-                        </ComboboxOption>
-                      )
-                    })}
-                  </ul>
-                </li>
-              </ComboboxOptions>
             )}
 
             {searchError && (
@@ -186,8 +219,8 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                     No proposals found
                   </p>
                   <p className="mt-2 text-gray-500">
-                    We couldn't find any proposals matching "{query}". Try
-                    different keywords.
+                    We couldn&apos;t find any proposals matching &quot;{query}
+                    &quot;. Try different keywords.
                   </p>
                 </div>
               )}
@@ -209,17 +242,17 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
             )}
 
             <div className="flex flex-wrap items-center bg-gray-50 px-4 py-2.5 text-xs text-gray-700">
-              <kbd className="mx-1 flex h-5 w-8 items-center justify-center gap-0.5 rounded border border-gray-400 bg-white font-semibold text-gray-900">
+              <kbd className="mx-1 flex size-5 w-7 items-center justify-center gap-0.5 rounded border border-gray-400 bg-white font-semibold text-gray-900 sm:mx-2">
                 <span className="text-xs">⌘</span>K
               </kbd>
               <span className="ml-1">to open search</span>
               <span className="mx-2">•</span>
-              <kbd className="mx-1 flex h-5 w-5 items-center justify-center rounded border border-gray-400 bg-white font-semibold text-gray-900">
+              <kbd className="mx-1 flex size-5 items-center justify-center rounded border border-gray-400 bg-white font-semibold text-gray-900 sm:mx-2">
                 ↵
               </kbd>
               <span className="ml-1">to select</span>
               <span className="mx-2">•</span>
-              <kbd className="mx-1 flex h-5 w-7 items-center justify-center rounded border border-gray-400 bg-white font-semibold text-gray-900">
+              <kbd className="mx-1 flex size-5 w-7 items-center justify-center rounded border border-gray-400 bg-white font-semibold text-gray-900 sm:mx-2">
                 esc
               </kbd>
               <span className="ml-1">to close</span>

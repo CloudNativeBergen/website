@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { ProposalExisting, statuses } from '@/lib/proposal/types'
+import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { sanityImage } from '@/lib/sanity/client'
 import { UserIcon } from '@heroicons/react/24/outline'
+import { getStatusBadgeStyle } from './utils'
 
 interface SearchResultsProps {
   results: ProposalExisting[]
@@ -54,69 +55,111 @@ export function SearchResults({
           </div>
         )}
 
-        {!isSearching && !error && results.length > 0 && (
-          <>
-            <div className="border-b px-3 py-2 text-xs text-gray-500">
-              {results.length} proposal{results.length !== 1 ? 's' : ''} found
-            </div>
-            {results.map((proposal, index) => {
-              const speaker = proposal.speaker as Speaker
-              const isSelected = index === selectedIndex
+        {!isSearching &&
+          !error &&
+          results.length > 0 &&
+          (() => {
+            const talks = results.filter(
+              (p) =>
+                p.format !== Format.workshop_120 &&
+                p.format !== Format.workshop_240,
+            )
+            const workshops = results.filter(
+              (p) =>
+                p.format === Format.workshop_120 ||
+                p.format === Format.workshop_240,
+            )
 
-              return (
-                <button
-                  key={proposal._id}
-                  ref={isSelected ? selectedRef : null}
-                  onClick={() => {
-                    onSelect(proposal._id)
-                    onClose()
-                  }}
-                  className={`w-full border-b border-gray-100 p-3 text-left last:border-b-0 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
-                    isSelected ? 'bg-blue-50 ring-1 ring-blue-500' : ''
-                  }`}
-                >
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-shrink-0">
-                      {speaker?.image ? (
-                        <img
-                          src={sanityImage(speaker.image)
-                            .width(64)
-                            .height(64)
-                            .fit('crop')
-                            .url()}
-                          alt={speaker.name || 'Speaker'}
-                          width={32}
-                          height={32}
-                          className="h-8 w-8 rounded-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
-                          <UserIcon className="h-4 w-4 text-gray-400" />
+            const renderProposalGroup = (
+              proposals: ProposalExisting[],
+              startIndex: number,
+            ) => {
+              return proposals.map((proposal, index) => {
+                const globalIndex = startIndex + index
+                const speaker = proposal.speaker as Speaker
+                const isSelected = globalIndex === selectedIndex
+
+                return (
+                  <button
+                    key={proposal._id}
+                    ref={isSelected ? selectedRef : null}
+                    onClick={() => {
+                      onSelect(proposal._id)
+                      onClose()
+                    }}
+                    className={`w-full border-b border-gray-100 p-3 text-left last:border-b-0 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
+                      isSelected ? 'bg-blue-50 ring-1 ring-blue-500' : ''
+                    }`}
+                  >
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        {speaker?.image ? (
+                          <img
+                            src={sanityImage(speaker.image)
+                              .width(64)
+                              .height(64)
+                              .fit('crop')
+                              .url()}
+                            alt={speaker.name || 'Speaker'}
+                            width={32}
+                            height={32}
+                            className="h-8 w-8 rounded-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
+                            <UserIcon className="h-4 w-4 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-gray-900">
+                              {proposal.title}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              by {speaker?.name || 'Unknown Speaker'}
+                            </p>
+                          </div>
+                          <span
+                            className={`ml-2 inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}
+                          >
+                            {statuses.get(proposal.status) || proposal.status}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-900">
-                            {proposal.title}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            by {speaker?.name || 'Unknown Speaker'}
-                          </p>
-                        </div>
-                        <span className="ml-2 inline-flex flex-shrink-0 items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">
-                          {statuses.get(proposal.status) || proposal.status}
-                        </span>
                       </div>
                     </div>
-                  </div>
-                </button>
-              )
-            })}
-          </>
-        )}
+                  </button>
+                )
+              })
+            }
+
+            return (
+              <>
+                <div className="border-b px-3 py-2 text-xs text-gray-500">
+                  {results.length} proposal{results.length !== 1 ? 's' : ''}{' '}
+                  found
+                </div>
+                {talks.length > 0 && (
+                  <>
+                    <div className="bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700">
+                      Talks ({talks.length})
+                    </div>
+                    {renderProposalGroup(talks, 0)}
+                  </>
+                )}
+                {workshops.length > 0 && (
+                  <>
+                    <div className="bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700">
+                      Workshops ({workshops.length})
+                    </div>
+                    {renderProposalGroup(workshops, talks.length)}
+                  </>
+                )}
+              </>
+            )
+          })()}
       </div>
     </div>
   )
