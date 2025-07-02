@@ -9,6 +9,7 @@
 export { AdminLayout } from './AdminLayout'
 export { AdminActionBar } from './AdminActionBar'
 export { SearchResults } from './SearchResults'
+export { SearchModal } from './SearchModal'
 
 // Proposal Management Components
 export { ProposalsList } from './ProposalsList'

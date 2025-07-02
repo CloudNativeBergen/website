@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -30,8 +30,7 @@ import {
   ChevronDownIcon,
 } from '@heroicons/react/24/outline'
 import { Logomark } from '@/components/Logo'
-import { useProposalSearch } from './hooks/useProposalSearch'
-import { SearchResults } from './SearchResults'
+import { SearchModal } from './SearchModal'
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon },
@@ -51,83 +50,22 @@ interface AdminLayoutProps {
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showSearchResults, setShowSearchResults] = useState(false)
-  const searchRef = useRef<HTMLDivElement>(null)
+  const [searchModalOpen, setSearchModalOpen] = useState(false)
   const pathname = usePathname()
   const { data: session } = useSession()
-  const {
-    search,
-    isSearching,
-    searchResults,
-    searchError,
-    selectedIndex,
-    navigateToProposal,
-    clearSearch,
-    handleKeyNavigation,
-  } = useProposalSearch()
 
-  // Handle search input changes with debouncing
+  // Handle keyboard shortcuts
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchQuery.trim()) {
-        search(searchQuery)
-        setShowSearchResults(true)
-      } else {
-        clearSearch()
-        setShowSearchResults(false)
-      }
-    }, 300)
-
-    return () => clearTimeout(timeoutId)
-  }, [searchQuery, search, clearSearch])
-
-  // Handle clicks outside search to close results
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        searchRef.current &&
-        !searchRef.current.contains(event.target as Node)
-      ) {
-        setShowSearchResults(false)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchModalOpen(true)
       }
     }
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
-      navigateToProposal(searchResults[selectedIndex]._id)
-      setShowSearchResults(false)
-      setSearchQuery('')
-    } else if (searchResults.length > 0) {
-      navigateToProposal(searchResults[0]._id)
-      setShowSearchResults(false)
-      setSearchQuery('')
-    }
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    const handled = handleKeyNavigation(e.key)
-    if (handled) {
-      e.preventDefault()
-      if (e.key === 'Enter' || e.key === 'Escape') {
-        setShowSearchResults(false)
-        if (e.key === 'Enter' || e.key === 'Escape') {
-          setSearchQuery('')
-        }
-      }
-    }
-  }
-
-  // Show search results when searching, has results, or has an error
-  const shouldShowSearchResults =
-    showSearchResults &&
-    searchQuery.trim() &&
-    (isSearching || searchResults.length > 0 || searchError)
 
   return (
     <>
@@ -249,8 +187,18 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <span className="sr-only">Open sidebar</span>
             <Bars3Icon aria-hidden="true" className="size-6" />
           </button>
-          <div className="flex-1 text-sm leading-6 font-semibold text-white">
-            Dashboard
+          <div className="flex flex-1 items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setSearchModalOpen(true)}
+              className="flex items-center gap-x-2 rounded-md bg-gray-800 px-3 py-1.5 text-sm text-gray-300 ring-1 ring-gray-600 ring-inset hover:bg-gray-700 hover:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:ring-inset"
+            >
+              <MagnifyingGlassIcon className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Search</span>
+              <kbd className="ml-auto flex h-4 items-center gap-1 rounded bg-gray-700 px-1 text-xs font-semibold text-gray-300">
+                <span className="text-xs">⌘</span>K
+              </kbd>
+            </button>
           </div>
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
@@ -273,51 +221,21 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         {/* Desktop top menu bar */}
         <div className="sticky top-0 z-40 hidden h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:flex lg:px-8 lg:pl-28">
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <div className="relative flex flex-1" ref={searchRef}>
-              <form
-                onSubmit={handleSearchSubmit}
-                className="relative flex flex-1"
+            <div className="flex flex-1 items-center">
+              <button
+                type="button"
+                onClick={() => setSearchModalOpen(true)}
+                className="flex w-full max-w-lg items-center gap-x-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-500 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 hover:text-gray-700 focus:ring-2 focus:ring-indigo-600 focus:outline-none focus:ring-inset lg:max-w-xs"
               >
-                <label htmlFor="search-field" className="sr-only">
-                  Search
-                </label>
                 <MagnifyingGlassIcon
+                  className="h-5 w-5 flex-shrink-0"
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-y-0 left-0 h-full w-5 text-gray-400"
                 />
-                <input
-                  id="search-field"
-                  name="search"
-                  type="search"
-                  placeholder="Search proposals..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onFocus={() => {
-                    if (
-                      searchQuery.trim() &&
-                      (searchResults.length > 0 || isSearching)
-                    ) {
-                      setShowSearchResults(true)
-                    }
-                  }}
-                  autoComplete="off"
-                  className="block h-full w-full border-0 py-0 pr-0 pl-8 text-gray-900 placeholder:text-gray-400 focus:ring-0 sm:text-sm"
-                />
-              </form>
-              {shouldShowSearchResults && (
-                <SearchResults
-                  results={searchResults}
-                  isSearching={isSearching}
-                  error={searchError}
-                  selectedIndex={selectedIndex}
-                  onSelect={navigateToProposal}
-                  onClose={() => {
-                    setShowSearchResults(false)
-                    setSearchQuery('')
-                  }}
-                />
-              )}
+                <span className="flex-1 text-left">Search proposals...</span>
+                <kbd className="ml-auto flex h-5 items-center gap-0.5 rounded border border-gray-200 bg-gray-50 px-1.5 text-xs font-semibold text-gray-600">
+                  <span className="text-xs">⌘</span>K
+                </kbd>
+              </button>
             </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
               <button
@@ -383,6 +301,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <div className="px-2 sm:px-4 lg:px-8">{children}</div>
         </main>
       </div>
+
+      <SearchModal
+        open={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
+      />
     </>
   )
 }
