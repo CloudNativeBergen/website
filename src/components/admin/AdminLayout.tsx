@@ -61,8 +61,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     isSearching,
     searchResults,
     searchError,
+    selectedIndex,
     navigateToProposal,
     clearSearch,
+    handleKeyNavigation,
   } = useProposalSearch()
 
   // Handle search input changes with debouncing
@@ -97,10 +99,27 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (searchResults.length > 0) {
+    if (selectedIndex >= 0 && selectedIndex < searchResults.length) {
+      navigateToProposal(searchResults[selectedIndex]._id)
+      setShowSearchResults(false)
+      setSearchQuery('')
+    } else if (searchResults.length > 0) {
       navigateToProposal(searchResults[0]._id)
       setShowSearchResults(false)
       setSearchQuery('')
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const handled = handleKeyNavigation(e.key)
+    if (handled) {
+      e.preventDefault()
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        setShowSearchResults(false)
+        if (e.key === 'Enter' || e.key === 'Escape') {
+          setSearchQuery('')
+        }
+      }
     }
   }
 
@@ -273,6 +292,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   placeholder="Search proposals..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleKeyDown}
                   onFocus={() => {
                     if (
                       searchQuery.trim() &&
@@ -290,6 +310,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   results={searchResults}
                   isSearching={isSearching}
                   error={searchError}
+                  selectedIndex={selectedIndex}
                   onSelect={navigateToProposal}
                   onClose={() => {
                     setShowSearchResults(false)

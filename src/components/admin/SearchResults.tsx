@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { ProposalExisting, statuses } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { sanityImage } from '@/lib/sanity/client'
@@ -9,6 +10,7 @@ interface SearchResultsProps {
   results: ProposalExisting[]
   isSearching: boolean
   error: string | null
+  selectedIndex: number
   onSelect: (proposalId: string) => void
   onClose: () => void
 }
@@ -17,9 +19,21 @@ export function SearchResults({
   results,
   isSearching,
   error,
+  selectedIndex,
   onSelect,
   onClose,
 }: SearchResultsProps) {
+  const selectedRef = useRef<HTMLButtonElement>(null)
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (selectedIndex >= 0 && selectedRef.current) {
+      selectedRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+      })
+    }
+  }, [selectedIndex])
   return (
     <div className="absolute top-full right-0 left-0 z-50 mt-1 max-h-96 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
       <div className="p-2">
@@ -45,17 +59,21 @@ export function SearchResults({
             <div className="border-b px-3 py-2 text-xs text-gray-500">
               {results.length} proposal{results.length !== 1 ? 's' : ''} found
             </div>
-            {results.map((proposal) => {
+            {results.map((proposal, index) => {
               const speaker = proposal.speaker as Speaker
+              const isSelected = index === selectedIndex
 
               return (
                 <button
                   key={proposal._id}
+                  ref={isSelected ? selectedRef : null}
                   onClick={() => {
                     onSelect(proposal._id)
                     onClose()
                   }}
-                  className="w-full border-b border-gray-100 p-3 text-left last:border-b-0 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                  className={`w-full border-b border-gray-100 p-3 text-left last:border-b-0 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
+                    isSelected ? 'bg-blue-50 ring-1 ring-blue-500' : ''
+                  }`}
                 >
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
