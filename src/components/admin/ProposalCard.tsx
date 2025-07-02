@@ -21,7 +21,7 @@ import {
   languages,
   audiences,
 } from '@/lib/proposal/types'
-import { Speaker, SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
 import { getStatusBadgeStyle } from './utils'
 import { calculateAverageRating } from './hooks'
 import { sanityImage } from '@/lib/sanity/client'
