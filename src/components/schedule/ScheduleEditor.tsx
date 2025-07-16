@@ -8,10 +8,12 @@ import {
   pointerWithin,
 } from '@dnd-kit/core'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
+import React from 'react'
 import {
   ScheduleTrack,
   ConferenceSchedule,
   TrackTalk,
+  Conference,
 } from '@/lib/conference/types'
 import { DragItem } from '@/lib/schedule/types'
 import { useScheduleEditor } from '@/hooks/useScheduleEditor'
@@ -27,7 +29,8 @@ import {
 } from '@heroicons/react/24/outline'
 
 interface ScheduleEditorProps {
-  initialSchedule: ConferenceSchedule | null
+  initialSchedules: ConferenceSchedule[]
+  conference: Conference
   initialProposals: ProposalExisting[]
 }
 
@@ -56,12 +59,18 @@ const LAYOUT_CLASSES = {
 // Memoized HeaderSection component
 const HeaderSection = ({
   schedule,
+  schedules,
+  currentDayIndex,
+  onDayChange,
   onAddTrack,
   onSave,
   isSaving,
   saveSuccess,
 }: {
   schedule: ConferenceSchedule | null
+  schedules: ConferenceSchedule[]
+  currentDayIndex: number
+  onDayChange: (index: number) => void
   onAddTrack: () => void
   onSave: () => void
   isSaving: boolean
@@ -77,16 +86,59 @@ const HeaderSection = ({
     return `${schedule.date} • ${trackCount} tracks`
   }, [schedule, trackCount])
 
+  // Memoized day navigation
+  const dayNavigation = useMemo(() => {
+    if (!schedules || schedules.length <= 1) return null
+
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-gray-700">Day:</span>
+        <div className="flex rounded-lg border border-gray-300 bg-white">
+          {schedules.map((daySchedule, index) => {
+            const isActive = index === currentDayIndex
+            const dayDate = new Date(daySchedule.date)
+            const dayLabel = `Day ${index + 1}`
+            const dateLabel = dayDate.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+            })
+
+            return (
+              <button
+                key={`day-${index}-${daySchedule.date}`}
+                onClick={() => onDayChange(index)}
+                className={`px-3 py-1.5 text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                  isActive
+                    ? 'border-blue-200 bg-blue-50 text-blue-700'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+                type="button"
+              >
+                <div className="flex flex-col items-center">
+                  <span className="text-xs font-semibold">{dayLabel}</span>
+                  <span className="text-xs">{dateLabel}</span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }, [schedules, currentDayIndex, onDayChange])
+
   return (
     <div className={LAYOUT_CLASSES.header}>
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">
-            Schedule Editor
-          </h1>
-          {headerInfo && (
-            <p className="mt-1 text-sm text-gray-600">{headerInfo}</p>
-          )}
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">
+              Schedule Editor
+            </h1>
+            {headerInfo && (
+              <p className="mt-1 text-sm text-gray-600">{headerInfo}</p>
+            )}
+          </div>
+          {dayNavigation}
         </div>
         <div className="flex gap-3">
           <button
@@ -125,15 +177,19 @@ const HeaderSection = ({
   )
 }
 
+const MemoizedHeaderSection = React.memo(HeaderSection)
+MemoizedHeaderSection.displayName = 'MemoizedHeaderSection'
+
 // Memoized ErrorBanner component
-const ErrorBanner = ({ error }: { error: string }) => (
+const ErrorBanner = React.memo(({ error }: { error: string }) => (
   <div className={LAYOUT_CLASSES.errorBanner}>
     <p className="text-red-800">{error}</p>
   </div>
-)
+))
+ErrorBanner.displayName = 'ErrorBanner'
 
 // Memoized EmptyState component
-const EmptyState = ({ onAddTrack }: { onAddTrack: () => void }) => (
+const EmptyState = React.memo(({ onAddTrack }: { onAddTrack: () => void }) => (
   <div className={LAYOUT_CLASSES.emptyState}>
     <div className="text-center">
       <p className="mb-4 text-gray-500">No tracks created yet</p>
@@ -147,7 +203,8 @@ const EmptyState = ({ onAddTrack }: { onAddTrack: () => void }) => (
       </button>
     </div>
   </div>
-)
+))
+EmptyState.displayName = 'EmptyState'
 
 // Memoized TracksGrid component
 const TracksGrid = ({
@@ -187,6 +244,9 @@ const TracksGrid = ({
     </div>
   )
 }
+
+const MemoizedTracksGrid = React.memo(TracksGrid)
+MemoizedTracksGrid.displayName = 'MemoizedTracksGrid'
 
 // Memoized AddTrackModal component
 const AddTrackModal = ({
@@ -289,7 +349,9 @@ const AddTrackModal = ({
 }
 
 export function ScheduleEditor({
-  initialSchedule,
+  initialSchedules,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  conference: _,
   initialProposals,
 }: ScheduleEditorProps) {
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
@@ -297,20 +359,27 @@ export function ScheduleEditor({
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentDayIndex, setCurrentDayIndex] = useState(0)
+  // Store modified schedules separately to persist changes across day switches
+  const [modifiedSchedules, setModifiedSchedules] =
+    useState<ConferenceSchedule[]>(initialSchedules)
   const hasInitialized = useRef(false)
 
   const scheduleEditor = useScheduleEditor()
+
+  // Get current schedule based on selected day from modified schedules
+  const currentSchedule = modifiedSchedules[currentDayIndex] || null
 
   // Initialize data when component mounts or when initial data changes
   useEffect(() => {
     if (
       !hasInitialized.current ||
-      scheduleEditor.schedule?._id !== initialSchedule?._id
+      scheduleEditor.schedule?._id !== currentSchedule?._id
     ) {
-      scheduleEditor.setInitialData(initialSchedule, initialProposals)
+      scheduleEditor.setInitialData(currentSchedule, initialProposals)
       hasInitialized.current = true
     }
-  }, [initialSchedule, initialProposals]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentSchedule, initialProposals, currentDayIndex]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Memoized event handlers
   const handleSave = useCallback(async () => {
@@ -319,6 +388,15 @@ export function ScheduleEditor({
     setIsSaving(true)
     setError(null)
     setSaveSuccess(false)
+
+    // Sync current editor state to modifiedSchedules before saving
+    if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
+      setModifiedSchedules((prev) => {
+        const updated = [...prev]
+        updated[currentDayIndex] = { ...scheduleEditor.schedule! }
+        return updated
+      })
+    }
 
     try {
       const response = await saveSchedule(scheduleEditor.schedule)
@@ -332,7 +410,6 @@ export function ScheduleEditor({
         scheduleEditor.setSchedule(response.schedule)
       }
 
-      console.log('Schedule saved successfully')
       setSaveSuccess(true)
 
       // Reset success state after 3 seconds
@@ -341,11 +418,10 @@ export function ScheduleEditor({
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to save schedule'
       setError(errorMessage)
-      console.error('Error saving schedule:', err)
     } finally {
       setIsSaving(false)
     }
-  }, [scheduleEditor])
+  }, [scheduleEditor, currentDayIndex, modifiedSchedules.length])
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event
@@ -372,7 +448,6 @@ export function ScheduleEditor({
 
         if (!success) {
           // Handle failed drop (show notification, etc.)
-          console.warn('Could not place talk at this time due to conflicts')
         }
       }
 
@@ -401,6 +476,41 @@ export function ScheduleEditor({
   const handleHideAddTrackModal = useCallback(() => {
     setShowAddTrackModal(false)
   }, [])
+
+  const handleDayChange = useCallback(
+    (dayIndex: number) => {
+      if (dayIndex >= 0 && dayIndex < modifiedSchedules.length) {
+        // Save current editor state before switching days
+        if (
+          scheduleEditor.schedule &&
+          currentDayIndex >= 0 &&
+          currentDayIndex < modifiedSchedules.length
+        ) {
+          setModifiedSchedules((prev) => {
+            const updated = [...prev]
+            updated[currentDayIndex] = { ...scheduleEditor.schedule! }
+            return updated
+          })
+        }
+
+        setCurrentDayIndex(dayIndex)
+        // Reset save success state when switching days
+        setSaveSuccess(false)
+        setError(null)
+      }
+    },
+    [
+      currentDayIndex,
+      modifiedSchedules,
+      scheduleEditor.schedule,
+      setModifiedSchedules,
+      setSaveSuccess,
+      setError,
+    ],
+  )
+
+  // Remove automatic sync effect - it causes race conditions
+  // Manual sync happens only during save to preserve schedule data integrity
 
   const handleUpdateTrack = useCallback(
     (index: number, track: ScheduleTrack) => {
@@ -455,9 +565,6 @@ export function ScheduleEditor({
 
       if (conflictingTracks.length > 0) {
         // Show warning but still allow duplication
-        console.warn(
-          `Service session conflicts with existing content in tracks: ${conflictingTracks.map((i) => i + 1).join(', ')}`,
-        )
       }
 
       // Duplicate to all other tracks
@@ -507,8 +614,11 @@ export function ScheduleEditor({
         {/* Main schedule area */}
         <div className={LAYOUT_CLASSES.mainArea}>
           {/* Header with actions */}
-          <HeaderSection
-            schedule={schedule}
+          <MemoizedHeaderSection
+            schedule={scheduleEditor.schedule}
+            schedules={modifiedSchedules}
+            currentDayIndex={currentDayIndex}
+            onDayChange={handleDayChange}
             onAddTrack={handleShowAddTrackModal}
             onSave={handleSave}
             isSaving={isSaving}
@@ -521,7 +631,7 @@ export function ScheduleEditor({
           {/* Schedule tracks */}
           <div className={LAYOUT_CLASSES.content}>
             {hasTracks ? (
-              <TracksGrid
+              <MemoizedTracksGrid
                 tracks={schedule!.tracks!}
                 onUpdateTrack={handleUpdateTrack}
                 onRemoveTrack={handleRemoveTrack}

@@ -16,6 +16,7 @@ import {
   DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline'
 import { useState, useMemo, useCallback, useEffect } from 'react'
+import React from 'react'
 
 interface DroppableTrackProps {
   track: ScheduleTrack
@@ -200,7 +201,6 @@ const ServiceSessionModal = ({
 const ServiceSession = ({
   talk,
   talkIndex,
-  trackIndex,
   onRemoveTalk,
   onUpdateSession,
   onRenameSession,
@@ -208,7 +208,6 @@ const ServiceSession = ({
 }: {
   talk: TrackTalk
   talkIndex: number
-  trackIndex: number
   onRemoveTalk: (index: number) => void
   onUpdateSession: (index: number, newDuration: number) => void
   onRenameSession: (index: number, newTitle: string) => void
@@ -495,11 +494,9 @@ const TimeSlotDropZone = ({
     return baseClasses
   }, [isOver, canDrop])
 
-  const handleCreateServiceSession = useCallback(() => {
-    if (!isOccupied && !activeDragItem) {
-      onCreateServiceSession(timeSlot.time)
-    }
-  }, [isOccupied, activeDragItem, onCreateServiceSession, timeSlot.time])
+  const handleAddServiceSession = useCallback(() => {
+    onCreateServiceSession(timeSlot.time)
+  }, [onCreateServiceSession, timeSlot.time])
 
   return (
     <div
@@ -516,12 +513,14 @@ const TimeSlotDropZone = ({
       {/* Add service session button - only show when not occupied and not dragging */}
       {!isOccupied && !activeDragItem && (
         <button
-          onClick={handleCreateServiceSession}
-          className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={handleAddServiceSession}
+          className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-all duration-200 group-hover:opacity-100 hover:z-20"
           title="Create service session"
           type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center gap-1 rounded bg-gray-600 px-2 py-1 text-xs text-white">
+          <div className="pointer-events-none flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white shadow-lg">
             <PlusIcon className="h-3 w-3" />
             Service
           </div>
@@ -675,7 +674,7 @@ const TrackHeader = ({
   )
 }
 
-export function DroppableTrack({
+function DroppableTrack({
   track,
   trackIndex,
   onUpdateTrack,
@@ -884,7 +883,6 @@ export function DroppableTrack({
                 key={`service-${talk.startTime}-${talkIndex}`}
                 talk={talk}
                 talkIndex={talkIndex}
-                trackIndex={trackIndex}
                 onRemoveTalk={onRemoveTalk}
                 onUpdateSession={handleUpdateServiceSession}
                 onRenameSession={handleRenameServiceSession}
@@ -925,3 +923,8 @@ export function DroppableTrack({
     </div>
   )
 }
+
+// Export memoized version for better performance
+export const MemoizedDroppableTrack = React.memo(DroppableTrack)
+MemoizedDroppableTrack.displayName = 'MemoizedDroppableTrack'
+export { MemoizedDroppableTrack as DroppableTrack }
