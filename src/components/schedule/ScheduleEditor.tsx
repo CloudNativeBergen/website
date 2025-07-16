@@ -376,10 +376,25 @@ export function ScheduleEditor({
       !hasInitialized.current ||
       scheduleEditor.schedule?._id !== currentSchedule?._id
     ) {
-      scheduleEditor.setInitialData(currentSchedule, initialProposals)
+      scheduleEditor.setInitialData(
+        currentSchedule,
+        initialProposals,
+        modifiedSchedules,
+      )
       hasInitialized.current = true
     }
-  }, [currentSchedule, initialProposals, currentDayIndex]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentSchedule, initialProposals, currentDayIndex, modifiedSchedules]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Recalculate unassigned proposals whenever any schedule changes
+  useEffect(() => {
+    if (hasInitialized.current) {
+      scheduleEditor.setInitialData(
+        currentSchedule,
+        initialProposals,
+        modifiedSchedules,
+      )
+    }
+  }, [modifiedSchedules, currentSchedule, initialProposals, scheduleEditor])
 
   // Memoized event handlers
   const handleSave = useCallback(async () => {
@@ -446,14 +461,27 @@ export function ScheduleEditor({
           timeSlot: dropData.timeSlot,
         })
 
-        if (!success) {
+        if (success) {
+          // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
+          if (
+            currentDayIndex >= 0 &&
+            currentDayIndex < modifiedSchedules.length &&
+            scheduleEditor.schedule
+          ) {
+            setModifiedSchedules((prev) => {
+              const updated = [...prev]
+              updated[currentDayIndex] = { ...scheduleEditor.schedule! }
+              return updated
+            })
+          }
+        } else {
           // Handle failed drop (show notification, etc.)
         }
       }
 
       setActiveItem(null)
     },
-    [scheduleEditor],
+    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
   )
 
   const handleAddTrack = useCallback(
@@ -464,9 +492,29 @@ export function ScheduleEditor({
         talks: [],
       }
       scheduleEditor.addTrack(newTrack)
+
+      // Update the current day's schedule in modifiedSchedules
+      if (
+        currentDayIndex >= 0 &&
+        currentDayIndex < modifiedSchedules.length &&
+        scheduleEditor.schedule
+      ) {
+        setModifiedSchedules((prev) => {
+          const updated = [...prev]
+          const currentSchedule = updated[currentDayIndex]
+          if (currentSchedule) {
+            updated[currentDayIndex] = {
+              ...currentSchedule,
+              tracks: [...(currentSchedule.tracks || []), newTrack],
+            }
+          }
+          return updated
+        })
+      }
+
       setShowAddTrackModal(false)
     },
-    [scheduleEditor],
+    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
   )
 
   const handleShowAddTrackModal = useCallback(() => {
@@ -515,22 +563,78 @@ export function ScheduleEditor({
   const handleUpdateTrack = useCallback(
     (index: number, track: ScheduleTrack) => {
       scheduleEditor.updateTrack(index, track)
+
+      // Update the current day's schedule in modifiedSchedules
+      if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
+        setModifiedSchedules((prev) => {
+          const updated = [...prev]
+          const currentSchedule = updated[currentDayIndex]
+          if (currentSchedule?.tracks) {
+            const updatedTracks = [...currentSchedule.tracks]
+            updatedTracks[index] = track
+            updated[currentDayIndex] = {
+              ...currentSchedule,
+              tracks: updatedTracks,
+            }
+          }
+          return updated
+        })
+      }
     },
-    [scheduleEditor],
+    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
   )
 
   const handleRemoveTrack = useCallback(
     (index: number) => {
       scheduleEditor.removeTrack(index)
+
+      // Update the current day's schedule in modifiedSchedules
+      if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
+        setModifiedSchedules((prev) => {
+          const updated = [...prev]
+          const currentSchedule = updated[currentDayIndex]
+          if (currentSchedule?.tracks) {
+            const updatedTracks = currentSchedule.tracks.filter(
+              (_, i) => i !== index,
+            )
+            updated[currentDayIndex] = {
+              ...currentSchedule,
+              tracks: updatedTracks,
+            }
+          }
+          return updated
+        })
+      }
     },
-    [scheduleEditor],
+    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
   )
 
   const handleRemoveTalk = useCallback(
     (trackIndex: number, talkIndex: number) => {
       scheduleEditor.removeTalkFromSchedule(trackIndex, talkIndex)
+
+      // Update the current day's schedule in modifiedSchedules
+      if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
+        setModifiedSchedules((prev) => {
+          const updated = [...prev]
+          const currentSchedule = updated[currentDayIndex]
+          if (currentSchedule?.tracks?.[trackIndex]) {
+            const updatedTracks = [...currentSchedule.tracks]
+            const updatedTrack = { ...updatedTracks[trackIndex] }
+            updatedTrack.talks = updatedTrack.talks.filter(
+              (_, i) => i !== talkIndex,
+            )
+            updatedTracks[trackIndex] = updatedTrack
+            updated[currentDayIndex] = {
+              ...currentSchedule,
+              tracks: updatedTracks,
+            }
+          }
+          return updated
+        })
+      }
     },
-    [scheduleEditor],
+    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
   )
 
   // Memoized data

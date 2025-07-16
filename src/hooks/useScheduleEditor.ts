@@ -24,6 +24,7 @@ export interface UseScheduleEditorReturn {
   setInitialData: (
     schedule: ConferenceSchedule | null,
     proposals: ProposalExisting[],
+    allSchedules?: ConferenceSchedule[],
   ) => void
   setSchedule: (schedule: ConferenceSchedule) => void
 }
@@ -38,6 +39,7 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
     (
       initialSchedule: ConferenceSchedule | null,
       proposals: ProposalExisting[],
+      allSchedules?: ConferenceSchedule[],
     ) => {
       // Only update if the schedule has actually changed
       setSchedule((prevSchedule) => {
@@ -47,11 +49,18 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         return initialSchedule
       })
 
-      if (initialSchedule?.tracks) {
-        // Filter out proposals that are already scheduled
+      // Calculate unassigned proposals based on ALL schedules, not just current one
+      const schedulesToCheck =
+        allSchedules || (initialSchedule ? [initialSchedule] : [])
+
+      if (schedulesToCheck.length > 0) {
+        // Filter out proposals that are already scheduled in ANY day
         const scheduledProposalIds = new Set(
-          initialSchedule.tracks.flatMap((track) =>
-            track.talks.map((talk) => talk.talk?._id).filter(Boolean),
+          schedulesToCheck.flatMap(
+            (schedule) =>
+              schedule.tracks?.flatMap((track) =>
+                track.talks.map((talk) => talk.talk?._id).filter(Boolean),
+              ) || [],
           ),
         )
 
@@ -70,7 +79,7 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
           return unscheduled
         })
       } else {
-        // Only update if the proposals have actually changed
+        // No schedules available, show all proposals as unassigned
         setUnassignedProposals((prevProposals) => {
           if (
             prevProposals.length === proposals.length &&
