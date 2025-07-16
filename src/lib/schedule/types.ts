@@ -56,7 +56,7 @@ export function getProposalDurationMinutes(proposal: ProposalExisting): number {
 export function generateTimeSlots(
   startTime: string = '09:00',
   endTime: string = '17:00',
-  intervalMinutes: number = 10,
+  intervalMinutes: number = 5,
 ): TimeSlot[] {
   const slots: TimeSlot[] = []
   const start = new Date(`2000-01-01T${startTime}:00`)

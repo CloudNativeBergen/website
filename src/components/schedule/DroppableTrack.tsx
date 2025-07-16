@@ -67,17 +67,25 @@ function TimeSlotDropZone({
       })()
     : true
 
+  // Helper function to determine if we should show the time label (every 15 minutes)
+  const shouldShowTimeLabel = (time: string): boolean => {
+    const [hours, minutes] = time.split(':').map(Number)
+    return minutes % 15 === 0
+  }
+
   return (
     <div
       ref={setNodeRef}
-      className={`absolute right-0 left-0 h-6 border-b border-gray-100 ${isOver && canDrop ? 'border-blue-300 bg-blue-100' : ''} ${isOver && !canDrop ? 'border-red-300 bg-red-100' : ''} `}
+      className={`absolute right-0 left-0 h-3 border-b border-gray-100 ${isOver && canDrop ? 'border-blue-300 bg-blue-100' : ''} ${isOver && !canDrop ? 'border-red-300 bg-red-100' : ''} `}
       style={{
         top: `${calculateTimePosition(timeSlot.time)}px`,
       }}
     >
-      <div className="absolute top-1 left-2 text-xs text-gray-400">
-        {timeSlot.displayTime}
-      </div>
+      {shouldShowTimeLabel(timeSlot.time) && (
+        <div className="absolute -top-0.5 left-2 text-xs text-gray-400">
+          {timeSlot.displayTime}
+        </div>
+      )}
     </div>
   )
 }
@@ -86,7 +94,7 @@ function calculateTimePosition(time: string): number {
   const [hours, minutes] = time.split(':').map(Number)
   const startHour = 9 // 09:00
   const totalMinutes = (hours - startHour) * 60 + minutes
-  return Math.max(0, totalMinutes * 2.4) // 2.4px per minute (24px per 10-minute slot)
+  return Math.max(0, totalMinutes * 2.4) // 2.4px per minute (12px per 5-minute slot)
 }
 
 function calculateTalkPosition(talk: TrackTalk): {
@@ -115,8 +123,8 @@ export function DroppableTrack({
   const [editTitle, setEditTitle] = useState(track.trackTitle)
   const [editDescription, setEditDescription] = useState(track.trackDescription)
 
-  const timeSlots = generateTimeSlots('09:00', '17:00', 10)
-  const trackHeight = timeSlots.length * 24 // 24px per 10-minute slot (reduced from 32px to accommodate more slots)
+  const timeSlots = generateTimeSlots('09:00', '17:00', 5)
+  const trackHeight = timeSlots.length * 12 // 12px per 5-minute slot
 
   const { setNodeRef, isOver } = useDroppable({
     id: `track-${trackIndex}`,
