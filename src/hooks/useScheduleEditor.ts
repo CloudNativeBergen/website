@@ -25,6 +25,7 @@ export interface UseScheduleEditorReturn {
     schedule: ConferenceSchedule | null,
     proposals: ProposalExisting[],
   ) => void
+  setSchedule: (schedule: ConferenceSchedule) => void
 }
 
 export function useScheduleEditor(): UseScheduleEditorReturn {
@@ -264,5 +265,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
     moveTalkToTrack,
     removeTalkFromSchedule,
     setInitialData,
+    setSchedule,
   }
 }

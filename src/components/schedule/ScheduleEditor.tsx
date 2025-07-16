@@ -19,7 +19,12 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
 import { DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
-import { PlusIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { saveSchedule } from '@/lib/schedule/client'
+import {
+  PlusIcon,
+  BookmarkIcon,
+  CheckCircleIcon,
+} from '@heroicons/react/24/outline'
 
 interface ScheduleEditorProps {
   initialSchedule: ConferenceSchedule | null
@@ -54,11 +59,13 @@ const HeaderSection = ({
   onAddTrack,
   onSave,
   isSaving,
+  saveSuccess,
 }: {
   schedule: ConferenceSchedule | null
   onAddTrack: () => void
   onSave: () => void
   isSaving: boolean
+  saveSuccess: boolean
 }) => {
   const trackCount = useMemo(
     () => schedule?.tracks?.length || 0,
@@ -93,11 +100,24 @@ const HeaderSection = ({
           <button
             onClick={onSave}
             disabled={isSaving}
-            className={BUTTON_STYLES.primary}
+            className={`${BUTTON_STYLES.primary} transition-all duration-300 ${
+              saveSuccess
+                ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
+                : ''
+            }`}
             type="button"
           >
-            <ArrowDownTrayIcon className="h-4 w-4" />
-            {isSaving ? 'Saving...' : 'Save Schedule'}
+            {saveSuccess ? (
+              <>
+                <CheckCircleIcon className="h-4 w-4 animate-pulse" />
+                Saved!
+              </>
+            ) : (
+              <>
+                <BookmarkIcon className="h-4 w-4" />
+                {isSaving ? 'Saving...' : 'Save Schedule'}
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -275,6 +295,7 @@ export function ScheduleEditor({
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const hasInitialized = useRef(false)
 
@@ -297,29 +318,34 @@ export function ScheduleEditor({
 
     setIsSaving(true)
     setError(null)
+    setSaveSuccess(false)
 
     try {
-      const response = await fetch('/api/schedule', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(scheduleEditor.schedule),
-      })
+      const response = await saveSchedule(scheduleEditor.schedule)
 
-      if (!response.ok) {
-        throw new Error('Failed to save schedule')
+      if (response.status !== 200 || response.error) {
+        throw new Error(response.error?.message || 'Failed to save schedule')
       }
 
-      // Optionally show success message
+      // Update the schedule with the saved version (in case _id was added)
+      if (response.schedule) {
+        scheduleEditor.setSchedule(response.schedule)
+      }
+
       console.log('Schedule saved successfully')
+      setSaveSuccess(true)
+
+      // Reset success state after 3 seconds
+      setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
-      setError('Failed to save schedule')
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to save schedule'
+      setError(errorMessage)
       console.error('Error saving schedule:', err)
     } finally {
       setIsSaving(false)
     }
-  }, [scheduleEditor.schedule])
+  }, [scheduleEditor])
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event
@@ -486,6 +512,7 @@ export function ScheduleEditor({
             onAddTrack={handleShowAddTrackModal}
             onSave={handleSave}
             isSaving={isSaving}
+            saveSuccess={saveSuccess}
           />
 
           {/* Error display */}

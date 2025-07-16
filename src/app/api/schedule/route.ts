@@ -1,6 +1,7 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { saveScheduleToSanity } from '@/lib/schedule/sanity'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,11 +40,21 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // TODO: Implement saving to Sanity
-    // For now, just return the schedule back
-    console.log('Schedule to save:', schedule)
+    console.log('Saving schedule to Sanity:', schedule)
 
-    return NextResponse.json({ schedule })
+    const { schedule: savedSchedule, error: saveError } =
+      await saveScheduleToSanity(schedule, conference)
+
+    if (saveError || !savedSchedule) {
+      return NextResponse.json(
+        { error: { message: saveError || 'Failed to save schedule' } },
+        { status: 500 },
+      )
+    }
+
+    console.log('Schedule saved successfully:', savedSchedule._id)
+
+    return NextResponse.json({ schedule: savedSchedule })
   } catch (error) {
     console.error('Error saving schedule:', error)
     return NextResponse.json(
