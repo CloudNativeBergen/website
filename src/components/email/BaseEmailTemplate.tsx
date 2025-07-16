@@ -118,10 +118,10 @@ export function BaseEmailTemplate({
   const socialLinkStyle: React.CSSProperties = {
     color: '#1D4ED8',
     textDecoration: 'none',
-    fontWeight: '500',
-    fontSize: '14px',
-    marginRight: '16px',
+    fontSize: '0', // Hide any text content
+    marginRight: '12px',
     display: 'inline-block',
+    padding: '4px',
   }
 
   const socialContainerStyle: React.CSSProperties = {
@@ -198,20 +198,22 @@ export function BaseEmailTemplate({
                       const iconElement = iconForLink(link, 'h-4 w-4')
                       const title = titleForLink(link)
                       return (
-                        <a key={index} href={link} style={socialLinkStyle}>
+                        <a
+                          key={index}
+                          href={link}
+                          style={socialLinkStyle}
+                          title={title}
+                          aria-label={title}
+                        >
                           <span
                             style={{
                               display: 'inline-block',
-                              marginRight: '6px',
                               verticalAlign: 'middle',
-                              width: '16px',
-                              height: '16px',
+                              width: '20px',
+                              height: '20px',
                             }}
                           >
                             {iconElement}
-                          </span>
-                          <span style={{ verticalAlign: 'middle' }}>
-                            {title}
                           </span>
                         </a>
                       )
