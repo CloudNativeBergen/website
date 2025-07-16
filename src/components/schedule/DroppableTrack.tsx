@@ -244,7 +244,7 @@ export function DroppableTrack({
           return (
             <div
               key={`${talk.talk._id}-${talk.startTime}`}
-              className="absolute right-2 left-2 z-10"
+              className="group absolute right-2 left-2 z-10"
               style={{
                 top: `${position.top}px`,
                 height: `${position.height}px`,
@@ -258,7 +258,7 @@ export function DroppableTrack({
                 />
                 <button
                   onClick={() => onRemoveTalk(talkIndex)}
-                  className="absolute top-1 right-1 rounded-full bg-red-100 p-1 text-red-600 opacity-0 transition-opacity hover:opacity-100"
+                  className="absolute top-0.5 right-0.5 z-20 rounded-full bg-red-100 p-0.5 text-red-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-200 hover:opacity-100"
                   title="Remove from schedule"
                 >
                   <TrashIcon className="h-3 w-3" />
