@@ -203,6 +203,7 @@ const ServiceSession = ({
   trackIndex,
   onRemoveTalk,
   onUpdateSession,
+  onRenameSession,
   onDuplicate,
 }: {
   talk: TrackTalk
@@ -210,9 +211,12 @@ const ServiceSession = ({
   trackIndex: number
   onRemoveTalk: (index: number) => void
   onUpdateSession: (index: number, newDuration: number) => void
+  onRenameSession: (index: number, newTitle: string) => void
   onDuplicate: (talk: TrackTalk) => void
 }) => {
   const [isResizing, setIsResizing] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(talk.placeholder || '')
   const [startY, setStartY] = useState(0)
   const [startHeight, setStartHeight] = useState(0)
 
@@ -225,6 +229,36 @@ const ServiceSession = ({
   const handleDuplicate = useCallback(() => {
     onDuplicate(talk)
   }, [onDuplicate, talk])
+
+  const handleStartEdit = useCallback(() => {
+    setIsEditing(true)
+    setEditTitle(talk.placeholder || '')
+  }, [talk.placeholder])
+
+  const handleSaveEdit = useCallback(() => {
+    if (editTitle.trim()) {
+      onRenameSession(talkIndex, editTitle.trim())
+      setIsEditing(false)
+    }
+  }, [editTitle, onRenameSession, talkIndex])
+
+  const handleCancelEdit = useCallback(() => {
+    setEditTitle(talk.placeholder || '')
+    setIsEditing(false)
+  }, [talk.placeholder])
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        handleSaveEdit()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        handleCancelEdit()
+      }
+    },
+    [handleSaveEdit, handleCancelEdit],
+  )
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -312,9 +346,39 @@ const ServiceSession = ({
       >
         <div className="flex h-full flex-col">
           <div className="flex-1">
-            <h4 className="truncate text-sm font-medium text-gray-700">
-              {talk.placeholder}
-            </h4>
+            {isEditing ? (
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  onBlur={handleSaveEdit}
+                  className="w-full rounded border border-blue-300 bg-white px-1 py-0.5 text-xs font-medium text-gray-700 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  autoFocus
+                />
+                <div className="flex gap-1">
+                  <button
+                    onClick={handleSaveEdit}
+                    className="rounded px-1 py-0.5 text-xs text-blue-600 hover:bg-blue-100"
+                    type="button"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="rounded px-1 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <h4 className="truncate text-sm font-medium text-gray-700">
+                {talk.placeholder}
+              </h4>
+            )}
             <p className="text-xs text-gray-500">{duration} minutes</p>
           </div>
 
@@ -338,6 +402,14 @@ const ServiceSession = ({
 
         {/* Action buttons */}
         <div className="absolute top-0.5 right-0.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            onClick={handleStartEdit}
+            className="rounded-full bg-gray-100 p-0.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100"
+            title="Rename session"
+            type="button"
+          >
+            <PencilIcon className="h-3 w-3" />
+          </button>
           <button
             onClick={handleDuplicate}
             className="rounded-full bg-blue-100 p-0.5 text-blue-600 transition-colors hover:bg-blue-200 hover:opacity-100"
@@ -727,6 +799,26 @@ export function DroppableTrack({
     [track, onUpdateTrack],
   )
 
+  const handleRenameServiceSession = useCallback(
+    (index: number, newTitle: string) => {
+      const updatedTalks = [...track.talks]
+      const talk = updatedTalks[index]
+
+      if (talk.placeholder) {
+        updatedTalks[index] = {
+          ...talk,
+          placeholder: newTitle,
+        }
+
+        onUpdateTrack({
+          ...track,
+          talks: updatedTalks,
+        })
+      }
+    },
+    [track, onUpdateTrack],
+  )
+
   const handleDuplicateServiceSession = useCallback(
     (serviceSession: TrackTalk) => {
       if (onDuplicateServiceSession) {
@@ -795,6 +887,7 @@ export function DroppableTrack({
                 trackIndex={trackIndex}
                 onRemoveTalk={onRemoveTalk}
                 onUpdateSession={handleUpdateServiceSession}
+                onRenameSession={handleRenameServiceSession}
                 onDuplicate={handleDuplicateServiceSession}
               />
             )
