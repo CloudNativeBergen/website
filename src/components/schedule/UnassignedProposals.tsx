@@ -44,7 +44,7 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
   }, [proposals])
 
   return (
-    <div className="flex h-full w-80 flex-col border-r border-gray-200 bg-white">
+    <div className="flex h-full w-80 flex-col overflow-x-hidden border-r border-gray-200 bg-white">
       {/* Header */}
       <div className="border-b border-gray-200 p-4">
         <h2 className="mb-3 text-lg font-semibold text-gray-900">
@@ -114,10 +114,12 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
       </div>
 
       {/* Proposals list */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="space-y-3">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto p-4">
+        <div className="max-w-full space-y-3">
           {filteredProposals.map((proposal) => (
-            <DraggableProposal key={proposal._id} proposal={proposal} />
+            <div key={proposal._id} className="max-w-full overflow-hidden">
+              <DraggableProposal proposal={proposal} />
+            </div>
           ))}
         </div>
 

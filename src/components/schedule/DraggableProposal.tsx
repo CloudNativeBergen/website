@@ -4,7 +4,7 @@ import { useDraggable } from '@dnd-kit/core'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { levels, formats } from '@/lib/proposal/types'
 import { getProposalDurationMinutes } from '@/lib/schedule/types'
-import { ClockIcon, UserIcon } from '@heroicons/react/24/outline'
+import { ClockIcon, UserIcon, Bars3Icon } from '@heroicons/react/24/outline'
 import './schedule.css'
 
 interface DraggableProposalProps {
@@ -28,7 +28,13 @@ export function DraggableProposal({
   const isMediumTalk = durationMinutes <= 45 // 25-45 min talks
   // 120+ min talks get full details
 
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging: isBeingDragged,
+  } = useDraggable({
     id: `${dragType}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`,
     data: {
       type: dragType,
@@ -38,11 +44,12 @@ export function DraggableProposal({
     },
   })
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-      }
-    : undefined
+  const style =
+    transform && !isBeingDragged
+      ? {
+          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        }
+      : undefined
 
   const getLevelColor = (level: string) => {
     switch (level) {
@@ -64,13 +71,20 @@ export function DraggableProposal({
         ...style,
         height: `${durationMinutes * 2.4}px`, // Exact height based on duration (2.4px per minute)
       }}
-      className={`relative cursor-grab rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md active:cursor-grabbing ${isDragging ? 'opacity-50' : ''} ${sourceTrackIndex !== undefined ? 'border-l-4 border-l-blue-500' : ''} ${isShortTalk ? 'p-2' : 'p-3'}`}
-      {...listeners}
+      className={`relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md ${isBeingDragged ? 'opacity-30' : ''} ${isDragging ? 'opacity-50' : ''} ${sourceTrackIndex !== undefined ? 'border-l-4 border-l-blue-500' : ''} ${isShortTalk ? 'p-2' : 'p-3'}`}
       {...attributes}
     >
+      {/* Drag handle */}
+      <div
+        className="absolute top-1 right-1 z-10 cursor-grab rounded p-1 hover:cursor-grabbing hover:bg-gray-100"
+        {...listeners}
+      >
+        <Bars3Icon className="h-3 w-3 text-gray-400" />
+      </div>
+
       {/* Duration indicator */}
       <div
-        className={`absolute top-1 right-1 flex items-center gap-1 text-gray-500 ${isShortTalk ? 'text-xs' : 'text-xs'}`}
+        className={`absolute top-1 right-8 flex items-center gap-1 text-gray-500 ${isShortTalk ? 'text-xs' : 'text-xs'}`}
       >
         <ClockIcon className={`${isShortTalk ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />
         {durationMinutes}m
