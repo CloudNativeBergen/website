@@ -59,13 +59,14 @@ export function ProposalAcceptTemplate({
       )}
 
       <EmailSection
-        background="linear-gradient(135deg, #FACC15, #EAB308)"
+        backgroundColor="#FEF3C7"
         borderColor="#F59E0B"
+        borderLeftColor="#D97706"
       >
-        <EmailSectionHeader color="#92400E">
+        <EmailSectionHeader color="#1F2937">
           ⚠️ Action Required
         </EmailSectionHeader>
-        <EmailText color="#92400E" weight="500">
+        <EmailText color="#1F2937" weight="600">
           Please confirm your participation by clicking the button below:
         </EmailText>
       </EmailSection>
