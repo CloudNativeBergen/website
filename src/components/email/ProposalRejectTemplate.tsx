@@ -33,9 +33,9 @@ export function ProposalRejectTemplate({
         color: '#334155',
       }}
     >
-      After careful consideration, we regret to inform you that we won't be able
-      to include your proposal in this year's program. This decision was
-      difficult to make given the high quality of submissions we received.
+      After careful consideration, we regret to inform you that we won&apos;t be
+      able to include your proposal in this year&apos;s program. This decision
+      was difficult to make given the high quality of submissions we received.
     </p>
   )
 

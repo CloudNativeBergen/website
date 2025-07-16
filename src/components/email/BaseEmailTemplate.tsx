@@ -145,7 +145,9 @@ export function BaseEmailTemplate({
 
               <p style={paragraphStyle}>
                 Thank you for submitting your proposal{' '}
-                <strong style={{ color: '#1D4ED8' }}>"{proposalTitle}"</strong>{' '}
+                <strong style={{ color: '#1D4ED8' }}>
+                  &quot;{proposalTitle}&quot;
+                </strong>{' '}
                 for {eventName}.
               </p>
 

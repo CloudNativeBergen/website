@@ -5,31 +5,40 @@ This document outlines the migration from SendGrid to Resend for email notificat
 ## Changes Made
 
 ### 1. Email Templates
+
 Created React-based email templates in `/src/components/email/`:
-- `ProposalAcceptTemplate.tsx` - For accepted proposals 
+
+- `ProposalAcceptTemplate.tsx` - For accepted proposals
 - `ProposalRejectTemplate.tsx` - For rejected proposals
 - `index.ts` - Export file for templates
 
 ### 2. Notification System Refactor
+
 Updated `/src/lib/proposal/notification.ts`:
+
 - Replaced SendGrid client with Resend client
 - Removed template ID dependencies (now using React components)
 - Updated function signature to return Resend response format
 - Added proper error handling for Resend API
 
 ### 3. Environment Variables
+
 **Required Environment Variables:**
+
 - `RESEND_API_KEY` - Your Resend API key
 - `RESEND_FROM_EMAIL` - The verified sender email address
 
 **Removed Environment Variables:**
+
 - `SENDGRID_API_KEY` (no longer needed)
 - `SENDGRID_FROM_EMAIL` (replaced by `RESEND_FROM_EMAIL`)
 - `SENDGRID_TEMPALTE_ID_CFP_ACCEPT` (no longer needed)
 - `SENDGRID_TEMPALTE_ID_CFP_REJECT` (no longer needed)
 
 ### 4. Test Updates
+
 Updated `/src/app/api/proposal/[id]/action/route.test.ts`:
+
 - Replaced SendGrid mocks with Resend mocks
 - Updated test expectations to match new email format
 - Simplified test structure by mocking the notification function directly
@@ -61,6 +70,7 @@ Updated `/src/app/api/proposal/[id]/action/route.test.ts`:
 ## Rollback Plan
 
 If issues arise, the migration can be rolled back by:
+
 1. Reverting the code changes
 2. Restoring SendGrid environment variables
 3. Redeploying the previous version

@@ -40,8 +40,8 @@ export function ProposalAcceptTemplate({
         color: '#334155',
       }}
     >
-      Congratulations! We're excited to inform you that your proposal has been
-      accepted for {eventName}.
+      Congratulations! We&apos;re excited to inform you that your proposal has
+      been accepted for {eventName}.
     </p>
   )
 
