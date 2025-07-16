@@ -45,8 +45,26 @@ function TimeSlotDropZone({
 
   // Check if the current drag item can be dropped at this time slot
   const canDrop = activeDragItem
-    ? findAvailableTimeSlot(track, activeDragItem.proposal, timeSlot.time) ===
-      timeSlot.time
+    ? (() => {
+        // If moving a scheduled talk within the same track, exclude it from conflict detection
+        const excludeTalk =
+          activeDragItem.type === 'scheduled-talk' &&
+          activeDragItem.sourceTrackIndex === trackIndex
+            ? {
+                talkId: activeDragItem.proposal._id,
+                startTime: activeDragItem.sourceTimeSlot!,
+              }
+            : undefined
+
+        return (
+          findAvailableTimeSlot(
+            track,
+            activeDragItem.proposal,
+            timeSlot.time,
+            excludeTalk,
+          ) === timeSlot.time
+        )
+      })()
     : true
 
   return (

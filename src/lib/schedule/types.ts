@@ -104,6 +104,7 @@ export function findAvailableTimeSlot(
   track: ScheduleTrack,
   proposal: ProposalExisting,
   preferredStartTime?: string,
+  excludeTalk?: { talkId: string; startTime: string },
 ): string | null {
   const durationMinutes = getProposalDurationMinutes(proposal)
   const startTime = preferredStartTime || '09:00'
@@ -112,6 +113,16 @@ export function findAvailableTimeSlot(
   // Check if proposed time conflicts with existing talks
   const hasConflict = track.talks.some((talk) => {
     if (!talk.talk) return false
+
+    // Exclude the talk being moved to prevent self-conflict
+    if (
+      excludeTalk &&
+      talk.talk._id === excludeTalk.talkId &&
+      talk.startTime === excludeTalk.startTime
+    ) {
+      return false
+    }
+
     return timesOverlap(
       startTime,
       proposalEndTime,

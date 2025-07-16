@@ -23,7 +23,10 @@ export function DraggableProposal({
   const dragType =
     sourceTrackIndex !== undefined ? 'scheduled-talk' : 'proposal'
   const durationMinutes = getProposalDurationMinutes(proposal)
-  const isShortTalk = durationMinutes <= 20
+  const isVeryShortTalk = durationMinutes <= 10 // 10 min talks
+  const isShortTalk = durationMinutes <= 20 // 10-20 min talks
+  const isMediumTalk = durationMinutes <= 45 // 25-45 min talks
+  // 120+ min talks get full details
 
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: `${dragType}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`,
@@ -73,23 +76,39 @@ export function DraggableProposal({
         {durationMinutes}m
       </div>
 
-      {/* For short talks (≤20 min), only show title */}
-      {isShortTalk ? (
+      {/* Very short talks (≤10 min): Only title, truncated */}
+      {isVeryShortTalk ? (
         <>
-          {/* Title only - smaller text and reduced line height */}
+          <h3 className="line-clamp-1 pr-8 text-xs leading-tight font-medium text-gray-900">
+            {proposal.title}
+          </h3>
+        </>
+      ) : /* Short talks (11-20 min): Title only, 2 lines */ isShortTalk ? (
+        <>
           <h3 className="line-clamp-2 pr-8 text-xs leading-tight font-medium text-gray-900">
             {proposal.title}
           </h3>
         </>
-      ) : (
+      ) : /* Medium talks (21-45 min): Title + speaker */ isMediumTalk ? (
         <>
-          {/* Level badge */}
-          <div
-            className={`mb-2 inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getLevelColor(proposal.level)}`}
-          >
-            {levels.get(proposal.level) || proposal.level}
-          </div>
+          {/* Title */}
+          <h3 className="mb-1 line-clamp-2 text-sm font-semibold text-gray-900">
+            {proposal.title}
+          </h3>
 
+          {/* Speaker */}
+          {proposal.speaker &&
+            typeof proposal.speaker === 'object' &&
+            'name' in proposal.speaker && (
+              <div className="flex items-center gap-1 text-xs text-gray-600">
+                <UserIcon className="h-3 w-3" />
+                <span className="truncate">{proposal.speaker.name}</span>
+              </div>
+            )}
+        </>
+      ) : (
+        /* Long talks (46+ min): Full details */
+        <>
           {/* Title */}
           <h3 className="mb-1 line-clamp-2 text-sm font-semibold text-gray-900">
             {proposal.title}

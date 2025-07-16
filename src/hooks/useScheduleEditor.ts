@@ -128,10 +128,17 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       const endTime = calculateEndTime(timeSlot, durationMinutes)
 
       // Check for conflicts
+      const excludeTalk =
+        dragItem.type === 'scheduled-talk' &&
+        dragItem.sourceTrackIndex === trackIndex
+          ? { talkId: proposal._id, startTime: dragItem.sourceTimeSlot! }
+          : undefined
+
       const availableTime = findAvailableTimeSlot(
         targetTrack,
         proposal,
         timeSlot,
+        excludeTalk,
       )
       if (!availableTime || availableTime !== timeSlot) {
         return false // Cannot place here due to conflict
