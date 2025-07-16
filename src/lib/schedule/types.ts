@@ -28,30 +28,17 @@ export const MINUTES_TO_PIXELS = 2.4
 
 // Helper to get proposal duration in minutes
 export function getProposalDurationMinutes(proposal: ProposalExisting): number {
-  switch (proposal.format) {
-    case 'lightning_10':
-      return 10
-    case 'presentation_20':
-      return 20
-    case 'presentation_25':
-      return 25
-    case 'presentation_40':
-      return 40
-    case 'presentation_45':
-      return 45
-    case 'workshop_120':
-      return 120
-    case 'workshop_240':
-      return 240
-    default:
-      return 25 // Default duration
-  }
+  const split = proposal.format.split('_')
+  if (split.length < 2) return 25
+
+  const duration = parseInt(split[1], 10)
+  return isNaN(duration) ? 25 : duration
 }
 
 // Helper to generate time slots for a day
 export function generateTimeSlots(
-  startTime: string = '09:00',
-  endTime: string = '17:00',
+  startTime: string = '08:00',
+  endTime: string = '21:00',
   intervalMinutes: number = 5,
 ): TimeSlot[] {
   const slots: TimeSlot[] = []
@@ -103,7 +90,7 @@ export function findAvailableTimeSlot(
   excludeTalk?: { talkId: string; startTime: string },
 ): string | null {
   const durationMinutes = getProposalDurationMinutes(proposal)
-  const startTime = preferredStartTime || '09:00'
+  const startTime = preferredStartTime || '08:00'
   const proposalEndTime = calculateEndTime(startTime, durationMinutes)
 
   // Check if proposed time conflicts with existing talks

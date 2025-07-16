@@ -8,7 +8,11 @@ import {
   pointerWithin,
 } from '@dnd-kit/core'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
-import { ScheduleTrack, ConferenceSchedule } from '@/lib/conference/types'
+import {
+  ScheduleTrack,
+  ConferenceSchedule,
+  TrackTalk,
+} from '@/lib/conference/types'
 import { DragItem } from '@/lib/schedule/types'
 import { useScheduleEditor } from '@/hooks/useScheduleEditor'
 import { ProposalExisting } from '@/lib/proposal/types'
@@ -131,12 +135,17 @@ const TracksGrid = ({
   onUpdateTrack,
   onRemoveTrack,
   onRemoveTalk,
+  onDuplicateServiceSession,
   activeItem,
 }: {
   tracks: ScheduleTrack[]
   onUpdateTrack: (index: number, track: ScheduleTrack) => void
   onRemoveTrack: (index: number) => void
   onRemoveTalk: (trackIndex: number, talkIndex: number) => void
+  onDuplicateServiceSession: (
+    serviceSession: TrackTalk,
+    sourceTrackIndex: number,
+  ) => void
   activeItem: DragItem | null
 }) => {
   return (
@@ -150,6 +159,7 @@ const TracksGrid = ({
             onUpdateTrack={(updatedTrack) => onUpdateTrack(index, updatedTrack)}
             onRemoveTrack={() => onRemoveTrack(index)}
             onRemoveTalk={(talkIndex) => onRemoveTalk(index, talkIndex)}
+            onDuplicateServiceSession={onDuplicateServiceSession}
             activeDragItem={activeItem}
           />
         ))}
@@ -390,6 +400,65 @@ export function ScheduleEditor({
   // Memoized data
   const { schedule, unassignedProposals } = scheduleEditor
 
+  const handleDuplicateServiceSession = useCallback(
+    (serviceSession: TrackTalk, sourceTrackIndex: number) => {
+      if (!schedule?.tracks) return
+
+      // Check if the service session conflicts with existing talks in other tracks
+      const conflictingTracks: number[] = []
+
+      schedule.tracks.forEach((track, trackIndex) => {
+        if (trackIndex === sourceTrackIndex) return // Skip source track
+
+        const hasConflict = track.talks.some((talk) => {
+          // Check if times overlap
+          const sessionStart = new Date(
+            `2000-01-01T${serviceSession.startTime}:00`,
+          )
+          const sessionEnd = new Date(`2000-01-01T${serviceSession.endTime}:00`)
+          const talkStart = new Date(`2000-01-01T${talk.startTime}:00`)
+          const talkEnd = new Date(`2000-01-01T${talk.endTime}:00`)
+
+          return sessionStart < talkEnd && talkStart < sessionEnd
+        })
+
+        if (hasConflict) {
+          conflictingTracks.push(trackIndex)
+        }
+      })
+
+      if (conflictingTracks.length > 0) {
+        // Show warning but still allow duplication
+        console.warn(
+          `Service session conflicts with existing content in tracks: ${conflictingTracks.map((i) => i + 1).join(', ')}`,
+        )
+      }
+
+      // Duplicate to all other tracks
+      const updatedTracks = schedule.tracks.map((track, trackIndex) => {
+        if (trackIndex === sourceTrackIndex) return track // Skip source track
+
+        // Add the service session to this track
+        const newTrack = {
+          ...track,
+          talks: [...track.talks, { ...serviceSession }].sort((a, b) => {
+            return a.startTime.localeCompare(b.startTime)
+          }),
+        }
+
+        return newTrack
+      })
+
+      // Update all tracks
+      updatedTracks.forEach((track, index) => {
+        if (index !== sourceTrackIndex) {
+          scheduleEditor.updateTrack(index, track)
+        }
+      })
+    },
+    [schedule, scheduleEditor],
+  )
+
   const hasTracks = useMemo(() => {
     return schedule?.tracks && schedule.tracks.length > 0
   }, [schedule?.tracks])
@@ -430,6 +499,7 @@ export function ScheduleEditor({
                 onUpdateTrack={handleUpdateTrack}
                 onRemoveTrack={handleRemoveTrack}
                 onRemoveTalk={handleRemoveTalk}
+                onDuplicateServiceSession={handleDuplicateServiceSession}
                 activeItem={activeItem}
               />
             ) : (
