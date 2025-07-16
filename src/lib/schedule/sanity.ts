@@ -8,6 +8,13 @@ export interface SaveScheduleResult {
 }
 
 /**
+ * Generate a unique key for Sanity array items
+ */
+function generateKey(prefix: string = 'item'): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+/**
  * Save schedule to Sanity and link it to the conference
  */
 export async function saveScheduleToSanity(
@@ -17,14 +24,18 @@ export async function saveScheduleToSanity(
   try {
     console.log('Saving schedule to Sanity:', schedule)
 
-    // Transform tracks to match Sanity schema
-    const sanitizedTracks = schedule.tracks.map((track) => ({
+    // Transform tracks to match Sanity schema with required _key properties
+    const sanitizedTracks = schedule.tracks.map((track, trackIndex) => ({
+      _key: generateKey(`track-${trackIndex}`),
       trackTitle: track.trackTitle,
       trackDescription: track.trackDescription,
-      talks: track.talks.map((talk) => {
+      talks: track.talks.map((talk, talkIndex) => {
+        const baseKey = `talk-${trackIndex}-${talkIndex}-${talk.startTime.replace(':', '')}`
+
         // For service sessions (placeholder text), don't include talk reference
         if (talk.placeholder) {
           return {
+            _key: generateKey(`${baseKey}-service`),
             placeholder: talk.placeholder,
             startTime: talk.startTime,
             endTime: talk.endTime,
@@ -34,6 +45,7 @@ export async function saveScheduleToSanity(
         // For regular talks, save as reference
         if (talk.talk) {
           return {
+            _key: generateKey(`${baseKey}-${talk.talk._id}`),
             talk: {
               _type: 'reference',
               _ref: talk.talk._id,
@@ -45,6 +57,7 @@ export async function saveScheduleToSanity(
 
         // Fallback - this shouldn't happen in normal usage
         return {
+          _key: generateKey(`${baseKey}-fallback`),
           startTime: talk.startTime,
           endTime: talk.endTime,
         }
