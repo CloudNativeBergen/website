@@ -57,6 +57,10 @@ export function ProposalList({
   const success = searchParams.get('success') ?? undefined
   const confirm = searchParams.get('confirm') ?? ''
 
+  // Get current domain for warning purposes
+  const currentDomain =
+    typeof window !== 'undefined' ? window.location.hostname : ''
+
   const [showSuccessMessage, setShowSuccessMessage] =
     useState<boolean>(!!success)
   const [actionOpen, setActionOpen] = useState<boolean>(false)
@@ -148,6 +152,7 @@ export function ProposalList({
             close={actionCloseHandler}
             proposal={actionProposal}
             onAction={actionUpdateHandler}
+            domain={currentDomain}
           />
           <div className="mx-auto mt-6 max-w-2xl lg:max-w-4xl">
             {/* Group proposals by conference */}

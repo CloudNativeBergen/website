@@ -80,6 +80,7 @@ export function ProposalActionModal({
   action,
   adminUI,
   onAction,
+  domain,
 }: {
   open: boolean
   close: () => void
@@ -87,6 +88,7 @@ export function ProposalActionModal({
   action: Action
   adminUI?: boolean
   onAction: (id: string, status: Status) => void
+  domain?: string
 }) {
   const [error, setError] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
@@ -173,6 +175,36 @@ export function ProposalActionModal({
                         </p>
                       </div>
                     )}
+                    {domain &&
+                      domain.includes('localhost') &&
+                      (action === Action.accept ||
+                        action === Action.remind ||
+                        action === Action.reject) &&
+                      notify && (
+                        <div className="mt-2 rounded-md bg-yellow-50 p-4">
+                          <div className="flex">
+                            <div className="flex-shrink-0">
+                              <BellIcon
+                                className="h-5 w-5 text-yellow-400"
+                                aria-hidden="true"
+                              />
+                            </div>
+                            <div className="ml-3">
+                              <h3 className="text-sm font-medium text-yellow-800">
+                                Development Environment Warning
+                              </h3>
+                              <div className="mt-2 text-sm text-yellow-700">
+                                <p>
+                                  You are running on localhost. Email
+                                  notifications will contain invalid links
+                                  pointing to localhost URLs that speakers
+                                  cannot access.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     {adminUI ? (
                       <div className="mt-2">
                         <p className="text-sm/6 text-gray-600">

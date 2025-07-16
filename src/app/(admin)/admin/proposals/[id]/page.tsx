@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { ClockIcon } from '@heroicons/react/20/solid'
 import { getProposal } from '@/lib/proposal/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   ProposalDetail,
   ErrorDisplay,
@@ -28,6 +29,7 @@ export default async function ProposalDetailPage({
   const session = await auth()
 
   try {
+    const { domain } = await getConferenceForCurrentDomain({})
     const { proposal, proposalError } = await getProposal({
       id,
       speakerId: '', // For admin view, we don't need to filter by speaker
@@ -85,6 +87,7 @@ export default async function ProposalDetailPage({
             proposalId={proposal._id}
             initialReviews={proposal.reviews || []}
             currentUser={session?.speaker}
+            domain={domain}
           />
         </div>
       </div>
