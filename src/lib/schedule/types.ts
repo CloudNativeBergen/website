@@ -1,7 +1,4 @@
-import {
-  ConferenceSchedule,
-  ScheduleTrack,
-} from '@/lib/conference/types'
+import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 
 export interface DropPosition {

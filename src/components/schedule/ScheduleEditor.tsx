@@ -31,13 +31,15 @@ export function ScheduleEditor({
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const hasInitialized = useRef(false)
-  
+
   const scheduleEditor = useScheduleEditor()
 
   // Initialize data when component mounts or when initial data changes
   useEffect(() => {
-    if (!hasInitialized.current || 
-        scheduleEditor.schedule?._id !== initialSchedule?._id) {
+    if (
+      !hasInitialized.current ||
+      scheduleEditor.schedule?._id !== initialSchedule?._id
+    ) {
       scheduleEditor.setInitialData(initialSchedule, initialProposals)
       hasInitialized.current = true
     }
@@ -48,7 +50,7 @@ export function ScheduleEditor({
 
     setIsSaving(true)
     setError(null)
-    
+
     try {
       const response = await fetch('/api/schedule', {
         method: 'POST',

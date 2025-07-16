@@ -6,9 +6,10 @@ import { Status } from '@/lib/proposal/types'
 
 export default async function AdminSchedule() {
   // Fetch conference with schedule first
-  const { conference, error: conferenceError } = await getConferenceForCurrentDomain({ 
-    schedule: true 
-  })
+  const { conference, error: conferenceError } =
+    await getConferenceForCurrentDomain({
+      schedule: true,
+    })
 
   if (conferenceError) {
     return (
@@ -29,9 +30,7 @@ export default async function AdminSchedule() {
 
         <div className="mt-8">
           <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-            <p className="text-red-800">
-              {conferenceError.message}
-            </p>
+            <p className="text-red-800">{conferenceError.message}</p>
           </div>
         </div>
       </div>
@@ -39,14 +38,14 @@ export default async function AdminSchedule() {
   }
 
   // Fetch confirmed proposals for this conference
-  const { proposals, proposalsError } = await getProposals({ 
+  const { proposals, proposalsError } = await getProposals({
     conferenceId: conference._id,
-    returnAll: true 
+    returnAll: true,
   })
 
   // Filter confirmed proposals
   const confirmedProposals = proposals.filter(
-    proposal => proposal.status === Status.confirmed
+    (proposal) => proposal.status === Status.confirmed,
   )
 
   // Extract schedule from conference
@@ -71,9 +70,7 @@ export default async function AdminSchedule() {
 
         <div className="mt-8">
           <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-            <p className="text-red-800">
-              {proposalsError.message}
-            </p>
+            <p className="text-red-800">{proposalsError.message}</p>
           </div>
         </div>
       </div>

@@ -12,9 +12,10 @@ export interface ScheduleData {
 export async function getScheduleData(): Promise<ScheduleData> {
   try {
     // Fetch conference with schedule data
-    const { conference, error: conferenceError } = await getConferenceForCurrentDomain({
-      schedule: true,
-    })
+    const { conference, error: conferenceError } =
+      await getConferenceForCurrentDomain({
+        schedule: true,
+      })
 
     if (conferenceError || !conference) {
       return {

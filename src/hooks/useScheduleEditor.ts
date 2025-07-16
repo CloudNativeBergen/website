@@ -39,7 +39,7 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       proposals: ProposalExisting[],
     ) => {
       // Only update if the schedule has actually changed
-      setSchedule(prevSchedule => {
+      setSchedule((prevSchedule) => {
         if (prevSchedule?._id === initialSchedule?._id) {
           return prevSchedule
         }
@@ -57,20 +57,24 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         const unscheduled = proposals.filter(
           (p) => !scheduledProposalIds.has(p._id),
         )
-        
+
         // Only update if the proposals have actually changed
-        setUnassignedProposals(prevProposals => {
-          if (prevProposals.length === unscheduled.length && 
-              prevProposals.every((p, i) => p._id === unscheduled[i]?._id)) {
+        setUnassignedProposals((prevProposals) => {
+          if (
+            prevProposals.length === unscheduled.length &&
+            prevProposals.every((p, i) => p._id === unscheduled[i]?._id)
+          ) {
             return prevProposals
           }
           return unscheduled
         })
       } else {
         // Only update if the proposals have actually changed
-        setUnassignedProposals(prevProposals => {
-          if (prevProposals.length === proposals.length && 
-              prevProposals.every((p, i) => p._id === proposals[i]?._id)) {
+        setUnassignedProposals((prevProposals) => {
+          if (
+            prevProposals.length === proposals.length &&
+            prevProposals.every((p, i) => p._id === proposals[i]?._id)
+          ) {
             return prevProposals
           }
           return proposals
