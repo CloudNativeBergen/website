@@ -95,6 +95,76 @@ export default defineType({
       to: [{ type: 'speaker' }],
     }),
     defineField({
+      name: 'coSpeakers',
+      title: 'Co-Speakers',
+      description: 'Additional speakers for this talk (not allowed for lightning talks)',
+      type: 'array',
+      of: [
+        {
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+        },
+      ],
+      validation: (Rule) =>
+        Rule.custom((coSpeakers, context) => {
+          const format = context.document?.format
+          if (format === 'lightning_10' && coSpeakers && coSpeakers.length > 0) {
+            return 'Lightning talks (10 min) cannot have co-speakers'
+          }
+          return true
+        }),
+    }),
+    defineField({
+      name: 'coSpeakerInvitations',
+      title: 'Co-Speaker Invitations',
+      description: 'Pending invitations for co-speakers',
+      type: 'array',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            {
+              name: 'email',
+              title: 'Email',
+              type: 'string',
+              validation: (Rule) => Rule.email(),
+            },
+            {
+              name: 'status',
+              title: 'Status',
+              type: 'string',
+              options: {
+                list: [
+                  { value: 'pending', title: 'Pending' },
+                  { value: 'accepted', title: 'Accepted' },
+                  { value: 'rejected', title: 'Rejected' },
+                  { value: 'expired', title: 'Expired' },
+                ],
+              },
+              initialValue: 'pending',
+            },
+            {
+              name: 'invitedAt',
+              title: 'Invited At',
+              type: 'datetime',
+            },
+            {
+              name: 'respondedAt',
+              title: 'Responded At',
+              type: 'datetime',
+            },
+            {
+              name: 'token',
+              title: 'Invitation Token',
+              type: 'string',
+              description: 'Unique token for invitation link',
+            },
+          ],
+        },
+      ],
+      hidden: true, // Hide from studio UI as this is managed through the application
+    }),
+    defineField({
       name: 'conference',
       title: 'Conference',
       type: 'reference',
@@ -118,12 +188,17 @@ export default defineType({
     select: {
       title: 'title',
       speaker: 'speaker.name',
+      coSpeaker0: 'coSpeakers.0.name',
+      coSpeaker1: 'coSpeakers.1.name',
+      coSpeaker2: 'coSpeakers.2.name',
     },
     prepare(selection) {
-      const { title, speaker } = selection
+      const { title, speaker, coSpeaker0, coSpeaker1, coSpeaker2 } = selection
+      const coSpeakers = [coSpeaker0, coSpeaker1, coSpeaker2].filter(Boolean)
+      const speakerList = [speaker, ...coSpeakers].filter(Boolean).join(', ')
       return {
         ...selection,
-        title: `${title} (${speaker})`,
+        title: `${title} (${speakerList})`,
       }
     },
   },

@@ -58,3 +58,9 @@ export interface SpeakerResponse {
   error?: FormError
   status: number
 }
+
+export interface SpeakerListResponse {
+  speakers?: Speaker[]
+  error?: FormError
+  status: number
+}

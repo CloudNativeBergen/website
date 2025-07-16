@@ -35,6 +35,7 @@ export async function getProposal(id?: string): Promise<ProposalResponse> {
 export async function postProposal(
   proposal: ProposalInput,
   id?: string,
+  pendingCoSpeakerEmails?: string[],
 ): Promise<ProposalResponse> {
   if (id === 'new') id = undefined
 
@@ -52,7 +53,10 @@ export async function postProposal(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(proposal),
+    body: JSON.stringify({
+      ...proposal,
+      pendingCoSpeakerEmails: pendingCoSpeakerEmails || []
+    }),
   })
 
   return (await res.json()) as ProposalResponse

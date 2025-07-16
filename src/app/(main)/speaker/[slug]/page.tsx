@@ -8,7 +8,7 @@ import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { Button } from '@/components/Button'
 import { BackLink } from '@/components/BackButton'
 import { ShowMore } from '@/components/ShowMore'
-import { UserIcon } from '@heroicons/react/24/solid'
+import { UserIcon, UserGroupIcon } from '@heroicons/react/24/solid'
 import { sanityImage } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
 import { getConferenceForCurrentDomain } from '../../../../lib/conference/sanity'
@@ -245,85 +245,134 @@ export default async function Profile({ params }: Props) {
                       {talks.length === 1 ? 'Presentation' : 'Presentations'}
                     </h2>
                     <div className="space-y-6">
-                      {talks.map((talk) => (
-                        <div
-                          key={talk._id}
-                          className="rounded-xl bg-white p-6 shadow-sm transition-all hover:shadow-md"
-                        >
-                          {/* Talk Header */}
-                          <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-brand-slate-gray">
-                                {talk.title}
-                              </h3>
-                              <div className="flex flex-wrap gap-3">
-                                {/* Format */}
-                                {talk.format && (
-                                  <span className="inline-flex items-center rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-sm font-medium text-brand-cloud-blue">
-                                    {formats.get(talk.format)}
-                                  </span>
+                      {talks.map((talk) => {
+                        const isPrimary = (talk as any).isPrimarySpeaker
+                        
+                        return (
+                          <div
+                            key={talk._id}
+                            className="rounded-xl bg-white p-6 shadow-sm transition-all hover:shadow-md"
+                          >
+                            {/* Talk Header */}
+                            <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <div className="mb-2 flex items-start gap-3">
+                                  <h3 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray">
+                                    {talk.title}
+                                  </h3>
+                                  {!isPrimary && (
+                                    <span className="inline-flex items-center rounded-full bg-brand-fresh-green/10 px-2 py-0.5 text-xs font-medium text-brand-fresh-green">
+                                      Co-Speaker
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* All Speakers */}
+                                {((talk as any).speaker || (talk as any).coSpeakers?.length > 0) && (
+                                  <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                                    <UserGroupIcon className="h-4 w-4 text-gray-400" />
+                                    <span>Speakers:</span>
+                                    {(talk as any).speaker && (
+                                      <a
+                                        href={`/speaker/${(talk as any).speaker.slug}`}
+                                        className={`font-medium hover:text-brand-cloud-blue ${
+                                          (talk as any).speaker._id === speaker._id
+                                            ? 'text-brand-cloud-blue'
+                                            : 'text-gray-700'
+                                        }`}
+                                      >
+                                        {(talk as any).speaker.name}
+                                        {(talk as any).speaker._id === speaker._id && ' (You)'}
+                                      </a>
+                                    )}
+                                    {(talk as any).coSpeakers?.map((coSpeaker: any, index: number) => (
+                                      <span key={coSpeaker._id}>
+                                        {index === 0 && (talk as any).speaker ? ',' : ''}
+                                        <a
+                                          href={`/speaker/${coSpeaker.slug}`}
+                                          className={`ml-1 font-medium hover:text-brand-cloud-blue ${
+                                            coSpeaker._id === speaker._id
+                                              ? 'text-brand-cloud-blue'
+                                              : 'text-gray-700'
+                                          }`}
+                                        >
+                                          {coSpeaker.name}
+                                          {coSpeaker._id === speaker._id && ' (You)'}
+                                        </a>
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
-                                {/* Level */}
-                                {talk.level && (
-                                  <span className="inline-flex items-center rounded-full bg-brand-fresh-green/10 px-3 py-1 text-sm font-medium text-brand-fresh-green">
-                                    {levels.get(talk.level)}
-                                  </span>
-                                )}
-                                {/* Language */}
-                                {talk.language && (
-                                  <span className="inline-flex items-center rounded-full bg-accent-purple/10 px-3 py-1 text-sm font-medium text-accent-purple">
-                                    {languages.get(talk.language)}
-                                  </span>
-                                )}
+                                
+                                <div className="flex flex-wrap gap-3">
+                                  {/* Format */}
+                                  {talk.format && (
+                                    <span className="inline-flex items-center rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-sm font-medium text-brand-cloud-blue">
+                                      {formats.get(talk.format)}
+                                    </span>
+                                  )}
+                                  {/* Level */}
+                                  {talk.level && (
+                                    <span className="inline-flex items-center rounded-full bg-brand-fresh-green/10 px-3 py-1 text-sm font-medium text-brand-fresh-green">
+                                      {levels.get(talk.level)}
+                                    </span>
+                                  )}
+                                  {/* Language */}
+                                  {talk.language && (
+                                    <span className="inline-flex items-center rounded-full bg-accent-purple/10 px-3 py-1 text-sm font-medium text-accent-purple">
+                                      {languages.get(talk.language)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
+
+                              {/* Schedule Info - Only show if available */}
                             </div>
 
-                            {/* Schedule Info - Only show if available */}
+                            {/* Talk Description */}
+                            {talk.description && (
+                              <div className="mb-4">
+                                <div className="font-inter prose prose-gray max-w-none text-gray-700 [&>p]:mb-4 [&>p]:leading-relaxed">
+                                  {typeof talk.description === 'string' ? (
+                                    <p>{talk.description}</p>
+                                  ) : (
+                                    <PortableText value={talk.description} />
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Topics */}
+                            {talk.topics && talk.topics.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {talk.topics.map((topic, index) => {
+                                  // Type guard to check if topic is a Topic object (not a Reference)
+                                  const isTopicObject = (
+                                    t: unknown,
+                                  ): t is Topic =>
+                                    t !== null &&
+                                    typeof t === 'object' &&
+                                    '_id' in t &&
+                                    'title' in t
+
+                                  const topicObj = isTopicObject(topic)
+                                    ? topic
+                                    : null
+
+                                  return (
+                                    <span
+                                      key={topicObj?._id || `topic-${index}`}
+                                      className="rounded-md bg-brand-sky-mist px-2 py-1 text-xs font-medium text-brand-slate-gray"
+                                    >
+                                      {topicObj?.title || 'Topic'}
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
-
-                          {/* Talk Description */}
-                          {talk.description && (
-                            <div className="mb-4">
-                              <div className="font-inter prose prose-gray max-w-none text-gray-700 [&>p]:mb-4 [&>p]:leading-relaxed">
-                                {typeof talk.description === 'string' ? (
-                                  <p>{talk.description}</p>
-                                ) : (
-                                  <PortableText value={talk.description} />
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Topics */}
-                          {talk.topics && talk.topics.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {talk.topics.map((topic, index) => {
-                                // Type guard to check if topic is a Topic object (not a Reference)
-                                const isTopicObject = (
-                                  t: unknown,
-                                ): t is Topic =>
-                                  t !== null &&
-                                  typeof t === 'object' &&
-                                  '_id' in t &&
-                                  'title' in t
-
-                                const topicObj = isTopicObject(topic)
-                                  ? topic
-                                  : null
-
-                                return (
-                                  <span
-                                    key={topicObj?._id || `topic-${index}`}
-                                    className="rounded-md bg-brand-sky-mist px-2 py-1 text-xs font-medium text-brand-slate-gray"
-                                  >
-                                    {topicObj?.title || 'Topic'}
-                                  </span>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}

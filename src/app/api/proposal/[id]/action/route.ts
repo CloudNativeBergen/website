@@ -13,7 +13,7 @@ import {
   updateProposalStatus,
 } from '@/lib/proposal/sanity'
 import { actionStateMachine } from '@/lib/proposal/states'
-import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
+import { sendAcceptRejectNotificationToAllSpeakers } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
@@ -121,9 +121,8 @@ export const POST = auth(
         action === Action.reject ||
         action === Action.remind)
     ) {
-      await sendAcceptRejectNotification({
+      await sendAcceptRejectNotificationToAllSpeakers({
         action,
-        speaker: proposal.speaker as Speaker,
         proposal: proposal,
         comment: comment || '',
         event: {

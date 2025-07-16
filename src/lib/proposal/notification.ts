@@ -70,3 +70,68 @@ export async function sendAcceptRejectNotification({
 
   return await sgMail.send(msg)
 }
+
+/**
+ * Send notifications to all speakers (primary and co-speakers) on a proposal
+ */
+export async function sendAcceptRejectNotificationToAllSpeakers({
+  action,
+  proposal,
+  event,
+  comment = '',
+}: {
+  action: Action
+  proposal: ProposalExisting
+  event: { location: string; date: string; name: string; url: string }
+  comment: string
+}): Promise<void> {
+  const templateId = getTemplate(action)
+
+  if (!templateId) {
+    throw new Error(`Template not found for action: ${action}`)
+  }
+
+  // Collect all speakers to notify
+  const speakersToNotify: Speaker[] = []
+
+  // Add primary speaker if populated
+  if (proposal.speaker && typeof proposal.speaker === 'object' && '_id' in proposal.speaker) {
+    speakersToNotify.push(proposal.speaker as Speaker)
+  }
+
+  // Add co-speakers if populated
+  if (proposal.coSpeakers && Array.isArray(proposal.coSpeakers)) {
+    for (const coSpeaker of proposal.coSpeakers) {
+      if (typeof coSpeaker === 'object' && '_id' in coSpeaker) {
+        speakersToNotify.push(coSpeaker as Speaker)
+      }
+    }
+  }
+
+  // Send emails to all speakers
+  const emailPromises = speakersToNotify.map(speaker => {
+    const msg = {
+      to: speaker.email,
+      from: fromEmail,
+      templateId: templateId,
+      dynamicTemplateData: {
+        speaker: {
+          name: speaker.name,
+        },
+        proposal: {
+          title: proposal.title,
+          confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${proposal._id}`,
+          comment,
+        },
+        event,
+      },
+    }
+
+    return sgMail.send(msg).catch(error => {
+      console.error(`Failed to send email to ${speaker.email}:`, error)
+      // Don't throw to allow other emails to be sent
+    })
+  })
+
+  await Promise.all(emailPromises)
+}

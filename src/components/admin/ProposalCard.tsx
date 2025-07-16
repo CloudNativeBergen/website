@@ -5,6 +5,7 @@ import {
   ClockIcon,
   StarIcon,
   UserPlusIcon,
+  UserGroupIcon,
   MapPinIcon,
   HeartIcon,
 } from '@heroicons/react/24/outline'
@@ -54,6 +55,13 @@ export function ProposalCard({
   const reviewCount = proposal.reviews?.length || 0
   const requiresTravelFunding =
     speaker?.flags?.includes(Flags.requiresTravelFunding) || false
+
+  // Count co-speakers and pending invitations
+  const coSpeakerCount = proposal.coSpeakers?.length || 0
+  const pendingInvitationCount = proposal.coSpeakerInvitations?.filter(
+    inv => inv.status === 'pending'
+  ).length || 0
+  const totalCoSpeakers = coSpeakerCount + pendingInvitationCount
 
   // Speaker indicators
   const isSeasonedSpeaker =
@@ -107,12 +115,42 @@ export function ProposalCard({
             <div className="flex min-w-0 flex-1 items-center">
               <span className="truncate font-medium">
                 {speaker?.name || 'Unknown Speaker'}
+                {totalCoSpeakers > 0 && (
+                  <>
+                    {' & '}
+                    {totalCoSpeakers === 1
+                      ? coSpeakerCount === 1
+                        ? (proposal.coSpeakers?.[0] as any)?.name || '1 co-speaker'
+                        : '1 invited'
+                      : `${totalCoSpeakers} ${coSpeakerCount > 0 && pendingInvitationCount > 0
+                          ? 'co-speakers'
+                          : coSpeakerCount > 0
+                            ? 'co-speakers'
+                            : 'invited'}`}
+                  </>
+                )}
               </span>
             </div>
 
             {/* Speaker Indicators */}
             {speaker && (
               <div className="ml-2 flex items-center gap-1">
+                {totalCoSpeakers > 0 && (
+                  <div
+                    className={`flex h-5 w-5 items-center justify-center rounded-full ${
+                      pendingInvitationCount > 0 && coSpeakerCount === 0
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-indigo-100 text-indigo-700'
+                    }`}
+                    title={`${coSpeakerCount} co-speaker${coSpeakerCount !== 1 ? 's' : ''}${
+                      pendingInvitationCount > 0
+                        ? `, ${pendingInvitationCount} pending invitation${pendingInvitationCount !== 1 ? 's' : ''}`
+                        : ''
+                    }`}
+                  >
+                    <UserGroupIcon className="h-3 w-3" />
+                  </div>
+                )}
                 {isSeasonedSpeaker && (
                   <div
                     className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-100 text-yellow-700"

@@ -60,13 +60,30 @@ export enum Action {
   delete = 'delete',
 }
 
+export enum CoSpeakerInvitationStatus {
+  pending = 'pending',
+  accepted = 'accepted',
+  rejected = 'rejected',
+  expired = 'expired',
+}
+
 export interface ActionInput {
   action: Action
   notify?: boolean
   comment?: string
 }
 
-interface Proposal {
+export interface CoSpeakerInvitation {
+  email: string
+  name?: string
+  status: CoSpeakerInvitationStatus
+  invitedAt: string
+  respondedAt?: string
+  token: string
+  expiresAt: string
+}
+
+export interface Proposal {
   title: string
   description: PortableTextBlock[]
   language: Language
@@ -77,6 +94,8 @@ interface Proposal {
   topics?: Topic[] | Reference[]
   tos: boolean
   video?: string
+  coSpeakers?: Speaker[] | Reference[]
+  coSpeakerInvitations?: CoSpeakerInvitation[]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -166,3 +185,19 @@ export const formats = new Map([
   [Format.workshop_120, 'Workshop (2 hours)'],
   [Format.workshop_240, 'Workshop (4 hours)'],
 ])
+
+
+export interface CoSpeakerListResponse extends ProposalBaseResponse {
+  coSpeakers?: Speaker[]
+  error?: FormError
+}
+
+export interface CoSpeakerInviteResponse extends ProposalBaseResponse {
+  invitation?: CoSpeakerInvitation
+  error?: FormError
+}
+
+export interface CoSpeakerDeleteResponse extends ProposalBaseResponse {
+  success?: boolean
+  error?: FormError
+}

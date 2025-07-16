@@ -7,6 +7,7 @@ import {
   PencilIcon,
   TrashIcon,
   UserCircleIcon,
+  UserGroupIcon,
   XMarkIcon,
 } from '@heroicons/react/24/solid'
 import { SpinnerIcon } from './SocialIcons'
@@ -80,6 +81,14 @@ export function ProposalCard({
 }) {
   const actions: ProposalButtonAction[] = []
 
+  // Always show view button first
+  actions.push({
+    label: Action.view,
+    icon: BookOpenIcon,
+    link: `/cfp/proposal/${proposal._id}`,
+  })
+
+  // Show edit button for draft and submitted proposals
   if (
     proposal.status === Status.draft ||
     proposal.status === Status.submitted
@@ -87,12 +96,6 @@ export function ProposalCard({
     actions.push({
       label: Action.edit,
       icon: PencilIcon,
-      link: `/cfp/submit?id=${proposal._id}`,
-    })
-  } else {
-    actions.push({
-      label: Action.view,
-      icon: BookOpenIcon,
       link: `/cfp/submit?id=${proposal._id}`,
     })
   }
@@ -173,29 +176,36 @@ export function ProposalCard({
             )}
           </p>
         </div>
-        {proposal.speaker && 'image' in proposal.speaker ? (
-          <img
-            className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-300"
-            src={
-              proposal.speaker.image
-                ? sanityImage(proposal.speaker.image)
-                    .width(80)
-                    .height(80)
-                    .fit('crop')
-                    .url()
-                : 'https://placehold.co/80x80/e5e7eb/6b7280?text=Speaker'
-            }
-            alt="Speaker Image"
-            width={40}
-            height={40}
-            loading="lazy"
-          />
-        ) : (
-          <UserCircleIcon
-            className="h-10 w-10 flex-shrink-0 rounded-full bg-brand-cloud-gray/20"
-            aria-hidden="true"
-          />
-        )}
+        <div className="relative">
+          {proposal.speaker && 'image' in proposal.speaker ? (
+            <img
+              className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-300"
+              src={
+                proposal.speaker.image
+                  ? sanityImage(proposal.speaker.image)
+                      .width(80)
+                      .height(80)
+                      .fit('crop')
+                      .url()
+                  : 'https://placehold.co/80x80/e5e7eb/6b7280?text=Speaker'
+              }
+              alt="Speaker Image"
+              width={40}
+              height={40}
+              loading="lazy"
+            />
+          ) : (
+            <UserCircleIcon
+              className="h-10 w-10 flex-shrink-0 rounded-full bg-brand-cloud-gray/20"
+              aria-hidden="true"
+            />
+          )}
+          {proposal.coSpeakers && proposal.coSpeakers.length > 0 && (
+            <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-brand-cloud-blue text-white">
+              <UserGroupIcon className="h-3 w-3" aria-hidden="true" />
+            </div>
+          )}
+        </div>
       </div>
       {!readOnly && actions.length > 0 && (
         <div>

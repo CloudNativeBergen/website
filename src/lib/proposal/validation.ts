@@ -5,6 +5,7 @@ import {
   FormValidationError,
   ProposalInput,
   Audience,
+  CoSpeakerInvitation,
 } from '@/lib/proposal/types'
 import { PortableTextBlock } from '@portabletext/editor'
 import { Reference } from 'sanity'
@@ -30,6 +31,13 @@ export function convertJsonToProposal(json: any): ProposalInput {
         ?.map((topic: any) => convertTopicJsonToReference(topic))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((topic: any) => topic !== null) || [],
+    coSpeakers:
+      json.coSpeakers
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ?.map((speaker: any) => convertSpeakerJsonToReference(speaker))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .filter((speaker: any) => speaker !== null) || [],
+    coSpeakerInvitations: json.coSpeakerInvitations || [],
   } satisfies ProposalInput
 }
 
@@ -76,6 +84,24 @@ function convertTopicJsonToReference(topic: any): Reference | null {
       _type: 'reference',
       _ref: topic._id,
       _key: topic._key || generateUniqueKey(),
+    }
+  }
+  return null
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertSpeakerJsonToReference(speaker: any): Reference | null {
+  if (speaker._type === 'reference' && speaker._ref) {
+    return {
+      _type: 'reference',
+      _ref: speaker._ref,
+      _key: speaker._key || generateUniqueKey(),
+    }
+  } else if (speaker._id) {
+    return {
+      _type: 'reference',
+      _ref: speaker._id,
+      _key: speaker._key || generateUniqueKey(),
     }
   }
   return null
@@ -171,5 +197,53 @@ export function validateProposal(
     })
   }
 
+  // Validate co-speakers based on format
+  if (proposal.format === Format.lightning_10 && proposal.coSpeakers && proposal.coSpeakers.length > 0) {
+    validationErrors.push({
+      message: 'Lightning talks (10 min) cannot have co-speakers',
+      field: 'coSpeakers',
+    })
+  }
+
+  // Validate co-speaker invitations
+  if (proposal.coSpeakerInvitations && proposal.coSpeakerInvitations.length > 0) {
+    proposal.coSpeakerInvitations.forEach((invitation: CoSpeakerInvitation, index: number) => {
+      if (!invitation.email) {
+        validationErrors.push({
+          message: `Co-speaker invitation ${index + 1} is missing email`,
+          field: `coSpeakerInvitations[${index}].email`,
+        })
+      } else if (!isValidEmail(invitation.email)) {
+        validationErrors.push({
+          message: `Co-speaker invitation ${index + 1} has invalid email format`,
+          field: `coSpeakerInvitations[${index}].email`,
+        })
+      }
+    })
+  }
+
   return validationErrors
+}
+
+export function isValidEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase()
+}
+
+export function validateCoSpeakerEmail(email: string): boolean {
+  return isValidEmail(email)
+}
+
+export function isValidInvitationToken(token: string): boolean {
+  // UUID v4 format validation
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  return uuidRegex.test(token)
+}
+
+export function canHaveCoSpeakers(proposal: { format?: Format }): boolean {
+  return proposal.format !== undefined && proposal.format !== Format.lightning_10
 }
