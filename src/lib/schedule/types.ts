@@ -1,7 +1,6 @@
 import {
   ConferenceSchedule,
   ScheduleTrack,
-  TrackTalk,
 } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 

@@ -5,31 +5,72 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  closestCenter,
   pointerWithin,
 } from '@dnd-kit/core'
-import { useState } from 'react'
-import { ScheduleTrack } from '@/lib/conference/types'
+import { useEffect, useState, useRef } from 'react'
+import { ScheduleTrack, ConferenceSchedule } from '@/lib/conference/types'
 import { DragItem } from '@/lib/schedule/types'
-import { UseScheduleEditorReturn } from '@/hooks/useScheduleEditor'
+import { useScheduleEditor } from '@/hooks/useScheduleEditor'
+import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
 import { DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
 import { PlusIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 
 interface ScheduleEditorProps {
-  scheduleEditor: UseScheduleEditorReturn
-  onSave: () => void
-  isSaving: boolean
+  initialSchedule: ConferenceSchedule | null
+  initialProposals: ProposalExisting[]
 }
 
 export function ScheduleEditor({
-  scheduleEditor,
-  onSave,
-  isSaving,
+  initialSchedule,
+  initialProposals,
 }: ScheduleEditorProps) {
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const hasInitialized = useRef(false)
+  
+  const scheduleEditor = useScheduleEditor()
+
+  // Initialize data when component mounts or when initial data changes
+  useEffect(() => {
+    if (!hasInitialized.current || 
+        scheduleEditor.schedule?._id !== initialSchedule?._id) {
+      scheduleEditor.setInitialData(initialSchedule, initialProposals)
+      hasInitialized.current = true
+    }
+  }, [initialSchedule, initialProposals]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = async () => {
+    if (!scheduleEditor.schedule) return
+
+    setIsSaving(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(scheduleEditor.schedule),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to save schedule')
+      }
+
+      // Optionally show success message
+      console.log('Schedule saved successfully')
+    } catch (err) {
+      setError('Failed to save schedule')
+      console.error('Error saving schedule:', err)
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const {
     schedule,
@@ -119,7 +160,7 @@ export function ScheduleEditor({
                   Add Track
                 </button>
                 <button
-                  onClick={onSave}
+                  onClick={handleSave}
                   disabled={isSaving}
                   className="inline-flex items-center gap-2 rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                 >
@@ -129,6 +170,13 @@ export function ScheduleEditor({
               </div>
             </div>
           </div>
+
+          {/* Error display */}
+          {error && (
+            <div className="border-b border-red-200 bg-red-50 p-4">
+              <p className="text-red-800">{error}</p>
+            </div>
+          )}
 
           {/* Schedule tracks */}
           <div className="flex-1 overflow-auto">

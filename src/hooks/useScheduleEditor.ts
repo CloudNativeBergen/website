@@ -38,9 +38,15 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       initialSchedule: ConferenceSchedule | null,
       proposals: ProposalExisting[],
     ) => {
-      setSchedule(initialSchedule)
+      // Only update if the schedule has actually changed
+      setSchedule(prevSchedule => {
+        if (prevSchedule?._id === initialSchedule?._id) {
+          return prevSchedule
+        }
+        return initialSchedule
+      })
 
-      if (initialSchedule && initialSchedule.tracks) {
+      if (initialSchedule?.tracks) {
         // Filter out proposals that are already scheduled
         const scheduledProposalIds = new Set(
           initialSchedule.tracks.flatMap((track) =>
@@ -51,9 +57,24 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         const unscheduled = proposals.filter(
           (p) => !scheduledProposalIds.has(p._id),
         )
-        setUnassignedProposals(unscheduled)
+        
+        // Only update if the proposals have actually changed
+        setUnassignedProposals(prevProposals => {
+          if (prevProposals.length === unscheduled.length && 
+              prevProposals.every((p, i) => p._id === unscheduled[i]?._id)) {
+            return prevProposals
+          }
+          return unscheduled
+        })
       } else {
-        setUnassignedProposals(proposals)
+        // Only update if the proposals have actually changed
+        setUnassignedProposals(prevProposals => {
+          if (prevProposals.length === proposals.length && 
+              prevProposals.every((p, i) => p._id === proposals[i]?._id)) {
+            return prevProposals
+          }
+          return proposals
+        })
       }
     },
     [],

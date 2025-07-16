@@ -69,7 +69,7 @@ function TimeSlotDropZone({
 
   // Helper function to determine if we should show the time label (every 15 minutes)
   const shouldShowTimeLabel = (time: string): boolean => {
-    const [hours, minutes] = time.split(':').map(Number)
+    const [, minutes] = time.split(':').map(Number)
     return minutes % 15 === 0
   }
 

@@ -1,8 +1,9 @@
-import { ProposalExisting, Status } from '@/lib/proposal/types'
+import { ProposalExisting } from '@/lib/proposal/types'
+import { ConferenceSchedule } from '@/lib/conference/types'
 
 export interface ScheduleResponse {
   status: number
-  schedule?: any
+  schedule?: ConferenceSchedule
   error?: { message: string }
 }
 
@@ -62,7 +63,7 @@ export async function fetchSchedule(): Promise<ScheduleResponse> {
 }
 
 // Save schedule
-export async function saveSchedule(schedule: any): Promise<ScheduleResponse> {
+export async function saveSchedule(schedule: ConferenceSchedule): Promise<ScheduleResponse> {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_URL}/api/schedule`, {
       method: 'POST',
