@@ -29,9 +29,12 @@ function getEmailTemplate(
   switch (action) {
     case Action.accept:
     case Action.remind:
+      if (!templateProps.confirmUrl) {
+        throw new Error(`Missing confirmUrl for action: ${action}`)
+      }
       return ProposalAcceptTemplate({
         ...templateProps,
-        confirmUrl: templateProps.confirmUrl || '',
+        confirmUrl: templateProps.confirmUrl,
       })
     case Action.reject:
       return ProposalRejectTemplate(templateProps)
