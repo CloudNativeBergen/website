@@ -123,14 +123,21 @@ export const POST = auth(
     ) {
       await sendAcceptRejectNotification({
         action,
-        speaker: proposal.speaker as Speaker,
-        proposal: proposal,
+        speaker: {
+          name: (proposal.speaker as Speaker).name,
+          email: (proposal.speaker as Speaker).email,
+        },
+        proposal: {
+          _id: proposal._id,
+          title: proposal.title,
+        },
         comment: comment || '',
         event: {
           location: conference.city,
           date: formatDate(conference.start_date),
           name: conference.title,
           url: conference.domains?.[0] ?? '',
+          socialLinks: conference.social_links,
         },
       })
     }

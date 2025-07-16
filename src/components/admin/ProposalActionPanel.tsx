@@ -20,12 +20,14 @@ interface ProposalActionPanelProps {
   proposal: ProposalExisting
   initialReviews: Review[]
   currentUser?: Speaker
+  domain?: string
 }
 
 export function ProposalActionPanel({
   proposal,
   initialReviews,
   currentUser,
+  domain,
 }: ProposalActionPanelProps) {
   const [reviews, setReviews] = useState<Review[]>(initialReviews || [])
   const [actionModalOpen, setActionModalOpen] = useState(false)
@@ -238,6 +240,7 @@ export function ProposalActionPanel({
           action={selectedAction}
           adminUI={true}
           onAction={handleActionComplete}
+          domain={domain}
         />
       </div>
     </div>
