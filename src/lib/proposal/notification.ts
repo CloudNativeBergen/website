@@ -1,34 +1,55 @@
-import sgMail from '@sendgrid/mail'
+import { Resend } from 'resend'
 import assert from 'assert'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
+import {
+  ProposalAcceptTemplate,
+  ProposalRejectTemplate,
+} from '@/components/email'
 
-assert(process.env.SENDGRID_API_KEY, 'SENDGRID_API_KEY is not set')
-assert(process.env.SENDGRID_FROM_EMAIL, 'SENDGRID_FROM_EMAIL is not set')
-assert(
-  process.env.SENDGRID_TEMPALTE_ID_CFP_ACCEPT,
-  'SENDGRID_TEMPALTE_ID_CFP_ACCEPT is not set',
-)
-assert(
-  process.env.SENDGRID_TEMPALTE_ID_CFP_REJECT,
-  'SENDGRID_TEMPALTE_ID_CFP_REJECT is not set',
-)
+assert(process.env.RESEND_API_KEY, 'RESEND_API_KEY is not set')
+assert(process.env.RESEND_FROM_EMAIL, 'RESEND_FROM_EMAIL is not set')
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY as string)
+const resend = new Resend(process.env.RESEND_API_KEY as string)
+const fromEmail = process.env.RESEND_FROM_EMAIL as string
 
-const fromEmail = process.env.SENDGRID_FROM_EMAIL as string
-const templateAccept = process.env.SENDGRID_TEMPALTE_ID_CFP_ACCEPT as string
-const templateReject = process.env.SENDGRID_TEMPALTE_ID_CFP_REJECT as string
-
-function getTemplate(action: Action) {
+function getEmailTemplate(
+  action: Action,
+  templateProps: {
+    speakerName: string
+    proposalTitle: string
+    eventName: string
+    eventLocation: string
+    eventDate: string
+    eventUrl: string
+    confirmUrl?: string
+    comment?: string
+  },
+) {
   switch (action) {
     case Action.accept:
     case Action.remind:
-      return templateAccept
+      return ProposalAcceptTemplate({
+        ...templateProps,
+        confirmUrl: templateProps.confirmUrl || '',
+      })
     case Action.reject:
-      return templateReject
+      return ProposalRejectTemplate(templateProps)
     default:
-      return ''
+      throw new Error(`No template found for action: ${action}`)
+  }
+}
+
+function getEmailSubject(action: Action, eventName: string): string {
+  switch (action) {
+    case Action.accept:
+      return `🎉 Your proposal has been accepted for ${eventName}`
+    case Action.remind:
+      return `⏰ Reminder: Please confirm your participation in ${eventName}`
+    case Action.reject:
+      return `Thank you for your proposal submission to ${eventName}`
+    default:
+      return `Update on your proposal for ${eventName}`
   }
 }
 
@@ -44,29 +65,40 @@ export async function sendAcceptRejectNotification({
   proposal: ProposalExisting
   event: { location: string; date: string; name: string; url: string }
   comment: string
-}): Promise<[sgMail.ClientResponse, object]> {
-  const templateId = getTemplate(action)
-
-  if (!templateId) {
-    throw new Error(`Template not found for action: ${action}`)
+}) {
+  if (
+    !action ||
+    (action !== Action.accept &&
+      action !== Action.remind &&
+      action !== Action.reject)
+  ) {
+    throw new Error(`Invalid action for notification: ${action}`)
   }
 
-  const msg = {
-    to: speaker.email,
+  const templateProps = {
+    speakerName: speaker.name,
+    proposalTitle: proposal.title,
+    eventName: event.name,
+    eventLocation: event.location,
+    eventDate: event.date,
+    eventUrl: event.url,
+    confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${proposal._id}`,
+    comment,
+  }
+
+  const subject = getEmailSubject(action, event.name)
+  const template = getEmailTemplate(action, templateProps)
+
+  const { data, error } = await resend.emails.send({
     from: fromEmail,
-    templateId: templateId,
-    dynamicTemplateData: {
-      speaker: {
-        name: speaker.name,
-      },
-      proposal: {
-        title: proposal.title,
-        confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${proposal._id}`,
-        comment,
-      },
-      event,
-    },
+    to: [speaker.email],
+    subject: subject,
+    react: template,
+  })
+
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return await sgMail.send(msg)
+  return data
 }

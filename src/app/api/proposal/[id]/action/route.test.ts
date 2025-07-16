@@ -2,9 +2,25 @@
  * @jest-environment node
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+// All mocks must be declared before any imports that use them
+const mockSendAcceptRejectNotification = jest.fn() as jest.MockedFunction<
+  typeof import('@/lib/proposal/notification').sendAcceptRejectNotification
+>
+const mockGetConferenceForCurrentDomain = jest.fn() as jest.MockedFunction<
+  typeof import('@/lib/conference/sanity').getConferenceForCurrentDomain
+>
+
+jest.mock('@/lib/proposal/notification', () => ({
+  sendAcceptRejectNotification: mockSendAcceptRejectNotification,
+}))
+jest.mock('@/lib/conference/sanity', () => ({
+  getConferenceForCurrentDomain: mockGetConferenceForCurrentDomain,
+}))
+jest.mock('resend')
+
 import { jest, it, describe, expect, beforeAll, afterEach } from '@jest/globals'
 import { testApiHandler } from 'next-test-api-route-handler'
-import * as appHandler from './route'
 import { actionStateMachine } from '@/lib/proposal/states'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
@@ -16,8 +32,51 @@ import {
   organizer,
 } from '../../../../../../__tests__/testdata/speakers'
 import { Action, Status } from '@/lib/proposal/types'
-import sgMail from '@sendgrid/mail'
-import { ClientResponse } from '@sendgrid/mail'
+
+// Import the route handler after mocks are set up
+import * as appHandler from './route'
+
+// Import mocked functions - they should now be properly mocked
+import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+
+// Debug: Let's see what the imported functions are
+console.log('sendAcceptRejectNotification:', sendAcceptRejectNotification)
+console.log(
+  'sendAcceptRejectNotification type:',
+  typeof sendAcceptRejectNotification,
+)
+console.log('getConferenceForCurrentDomain:', getConferenceForCurrentDomain)
+console.log(
+  'getConferenceForCurrentDomain type:',
+  typeof getConferenceForCurrentDomain,
+)
+
+// These should now be the mock functions we created above
+console.log(
+  'mockSendAcceptRejectNotification:',
+  mockSendAcceptRejectNotification,
+)
+console.log(
+  'mockSendAcceptRejectNotification type:',
+  typeof mockSendAcceptRejectNotification,
+)
+console.log(
+  'mockSendAcceptRejectNotification.mockClear:',
+  mockSendAcceptRejectNotification.mockClear,
+)
+console.log(
+  'mockGetConferenceForCurrentDomain:',
+  mockGetConferenceForCurrentDomain,
+)
+console.log(
+  'mockGetConferenceForCurrentDomain type:',
+  typeof mockGetConferenceForCurrentDomain,
+)
+console.log(
+  'mockGetConferenceForCurrentDomain.mockResolvedValue:',
+  mockGetConferenceForCurrentDomain.mockResolvedValue,
+)
 
 beforeAll(async () => {
   try {
@@ -47,6 +106,8 @@ beforeAll(async () => {
 
 afterEach(async () => {
   jest.restoreAllMocks()
+  mockSendAcceptRejectNotification.mockClear()
+  mockGetConferenceForCurrentDomain.mockClear()
 })
 
 describe('actionStateMachine', () => {
@@ -149,6 +210,33 @@ describe('POST /api/proposal/[id]/action', () => {
   })
 
   it('requires a valid action', async () => {
+    // Mock conference response
+    mockGetConferenceForCurrentDomain.mockResolvedValue({
+      conference: {
+        _id: 'conference-2024',
+        title: 'Cloud Native Day Bergen 2024',
+        organizer: 'Cloud Native Bergen',
+        city: 'Bergen',
+        country: 'Norway',
+        venue_name: 'Kvarteret',
+        venue_address: 'Kvarteret, Bergen, Norway',
+        start_date: '2024-10-30',
+        end_date: '2024-10-30',
+        cfp_start_date: '2024-07-01',
+        cfp_end_date: '2024-09-15',
+        cfp_notify_date: '2024-09-30',
+        program_date: '2024-10-15',
+        registration_enabled: true,
+        contact_email: 'info@cloudnativebergen.no',
+        organizers: [],
+        domains: ['cloudnativeday.no'],
+        formats: [],
+        topics: [],
+      },
+      domain: 'cloudnativeday.no',
+      error: null,
+    })
+
     // Sanity is caching stuff, so let's mock the fetch to return the proposal
     clientReadUncached.fetch = jest.fn<() => Promise<any>>().mockResolvedValue({
       ...draftProposal,
@@ -181,19 +269,36 @@ describe('POST /api/proposal/[id]/action', () => {
   })
 
   it('sends an email notification when the action is accept', async () => {
-    const sendMock = jest
-      .spyOn(sgMail, 'send')
-      .mockImplementation((emailMsg): any => {
-        expect(emailMsg).toBeDefined()
-        return Promise.resolve([
-          {
-            statusCode: 202,
-            body: 'Accepted',
-            headers: {},
-          } as unknown as ClientResponse,
-          {},
-        ])
-      })
+    // Mock conference response
+    mockGetConferenceForCurrentDomain.mockResolvedValue({
+      conference: {
+        _id: 'conference-2024',
+        title: 'Cloud Native Day Bergen 2024',
+        organizer: 'Cloud Native Bergen',
+        city: 'Bergen',
+        country: 'Norway',
+        venue_name: 'Kvarteret',
+        venue_address: 'Kvarteret, Bergen, Norway',
+        start_date: '2024-10-30',
+        end_date: '2024-10-30',
+        cfp_start_date: '2024-07-01',
+        cfp_end_date: '2024-09-15',
+        cfp_notify_date: '2024-09-30',
+        program_date: '2024-10-15',
+        registration_enabled: true,
+        contact_email: 'info@cloudnativebergen.no',
+        organizers: [],
+        domains: ['cloudnativeday.no'],
+        formats: [],
+        topics: [],
+      },
+      domain: 'cloudnativeday.no',
+      error: null,
+    })
+
+    mockSendAcceptRejectNotification.mockResolvedValue({
+      id: 'test-email-id',
+    })
 
     // Sanity is caching stuff, so let's mock the fetch to return the proposal
     clientReadUncached.fetch = jest.fn<() => Promise<any>>().mockResolvedValue({
@@ -223,26 +328,23 @@ describe('POST /api/proposal/[id]/action', () => {
         expect(doc).not.toBeNull()
         expect(doc!.status).toBe(Status.accepted)
 
-        expect(sendMock).toHaveBeenCalledWith(
+        expect(mockSendAcceptRejectNotification).toHaveBeenCalledWith(
           expect.objectContaining({
-            to: speaker.email,
-            from: process.env.SENDGRID_FROM_EMAIL,
-            templateId: process.env.SENDGRID_TEMPALTE_ID_CFP_ACCEPT,
-            dynamicTemplateData: expect.objectContaining({
-              speaker: expect.objectContaining({
-                name: speaker.name,
-              }),
-              proposal: expect.objectContaining({
-                title: submittedProposal.title,
-                confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${submittedProposal._id}`,
-                comment: 'this is the comment',
-              }),
-              event: expect.objectContaining({
-                location: 'Kvarteret, Bergen, Norway',
-                date: '30 October 2024',
-                name: 'Cloud Native Day Bergen 2024',
-              }),
+            action: Action.accept,
+            speaker: expect.objectContaining({
+              name: speaker.name,
+              email: speaker.email,
             }),
+            proposal: expect.objectContaining({
+              title: submittedProposal.title,
+              _id: submittedProposal._id,
+            }),
+            event: expect.objectContaining({
+              location: 'Kvarteret, Bergen, Norway',
+              date: '30 October 2024',
+              name: 'Cloud Native Day Bergen 2024',
+            }),
+            comment: 'this is the comment',
           }),
         )
       },
@@ -250,19 +352,36 @@ describe('POST /api/proposal/[id]/action', () => {
   })
 
   it('sends an email notification when the action is reject', async () => {
-    const sendMock = jest
-      .spyOn(sgMail, 'send')
-      .mockImplementation((emailMsg): any => {
-        expect(emailMsg).toBeDefined()
-        return Promise.resolve([
-          {
-            statusCode: 202,
-            body: 'Accepted',
-            headers: {},
-          } as unknown as ClientResponse,
-          {},
-        ])
-      })
+    // Mock conference response
+    mockGetConferenceForCurrentDomain.mockResolvedValue({
+      conference: {
+        _id: 'conference-2024',
+        title: 'Cloud Native Day Bergen 2024',
+        organizer: 'Cloud Native Bergen',
+        city: 'Bergen',
+        country: 'Norway',
+        venue_name: 'Kvarteret',
+        venue_address: 'Kvarteret, Bergen, Norway',
+        start_date: '2024-10-30',
+        end_date: '2024-10-30',
+        cfp_start_date: '2024-07-01',
+        cfp_end_date: '2024-09-15',
+        cfp_notify_date: '2024-09-30',
+        program_date: '2024-10-15',
+        registration_enabled: true,
+        contact_email: 'info@cloudnativebergen.no',
+        organizers: [],
+        domains: ['cloudnativeday.no'],
+        formats: [],
+        topics: [],
+      },
+      domain: 'cloudnativeday.no',
+      error: null,
+    })
+
+    mockSendAcceptRejectNotification.mockResolvedValue({
+      id: 'test-email-id',
+    })
 
     // Sanity is caching stuff, so let's mock the fetch to return the proposal
     clientReadUncached.fetch = jest.fn<() => Promise<any>>().mockResolvedValue({
@@ -292,26 +411,23 @@ describe('POST /api/proposal/[id]/action', () => {
         expect(doc).not.toBeNull()
         expect(doc!.status).toBe(Status.rejected)
 
-        expect(sendMock).toHaveBeenCalledWith(
+        expect(mockSendAcceptRejectNotification).toHaveBeenCalledWith(
           expect.objectContaining({
-            to: speaker.email,
-            from: process.env.SENDGRID_FROM_EMAIL,
-            templateId: process.env.SENDGRID_TEMPALTE_ID_CFP_REJECT,
-            dynamicTemplateData: expect.objectContaining({
-              speaker: expect.objectContaining({
-                name: speaker.name,
-              }),
-              proposal: expect.objectContaining({
-                title: submittedProposal.title,
-                confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${submittedProposal._id}`,
-                comment: 'this is the comment',
-              }),
-              event: expect.objectContaining({
-                location: 'Kvarteret, Bergen, Norway',
-                date: '30 October 2024',
-                name: 'Cloud Native Day Bergen 2024',
-              }),
+            action: Action.reject,
+            speaker: expect.objectContaining({
+              name: speaker.name,
+              email: speaker.email,
             }),
+            proposal: expect.objectContaining({
+              title: submittedProposal.title,
+              _id: submittedProposal._id,
+            }),
+            event: expect.objectContaining({
+              location: 'Kvarteret, Bergen, Norway',
+              date: '30 October 2024',
+              name: 'Cloud Native Day Bergen 2024',
+            }),
+            comment: 'this is the comment',
           }),
         )
       },
