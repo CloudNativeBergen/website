@@ -1,11 +1,16 @@
 import { Resend } from 'resend'
 import assert from 'assert'
-import { ProposalExisting, Action } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
+import { Action } from '@/lib/proposal/types'
 import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
 } from '@/components/email'
+import {
+  NotificationParams,
+  createTemplateProps,
+  type ProposalAcceptTemplateProps,
+  type ProposalRejectTemplateProps,
+} from './email-types'
 
 assert(process.env.RESEND_API_KEY, 'RESEND_API_KEY is not set')
 assert(process.env.RESEND_FROM_EMAIL, 'RESEND_FROM_EMAIL is not set')
@@ -15,27 +20,17 @@ const fromEmail = process.env.RESEND_FROM_EMAIL as string
 
 function getEmailTemplate(
   action: Action,
-  templateProps: {
-    speakerName: string
-    proposalTitle: string
-    eventName: string
-    eventLocation: string
-    eventDate: string
-    eventUrl: string
-    confirmUrl?: string
-    comment?: string
-  },
+  templateProps: ProposalAcceptTemplateProps | ProposalRejectTemplateProps,
 ) {
   switch (action) {
     case Action.accept:
     case Action.remind:
-      if (!templateProps.confirmUrl) {
+      if (!('confirmUrl' in templateProps) || !templateProps.confirmUrl) {
         throw new Error(`Missing confirmUrl for action: ${action}`)
       }
-      return ProposalAcceptTemplate({
-        ...templateProps,
-        confirmUrl: templateProps.confirmUrl,
-      })
+      return ProposalAcceptTemplate(
+        templateProps as ProposalAcceptTemplateProps,
+      )
     case Action.reject:
       return ProposalRejectTemplate(templateProps)
     default:
@@ -56,19 +51,9 @@ function getEmailSubject(action: Action, eventName: string): string {
   }
 }
 
-export async function sendAcceptRejectNotification({
-  action,
-  speaker,
-  proposal,
-  event,
-  comment = '',
-}: {
-  action: Action
-  speaker: Speaker
-  proposal: ProposalExisting
-  event: { location: string; date: string; name: string; url: string }
-  comment: string
-}) {
+export async function sendAcceptRejectNotification(params: NotificationParams) {
+  const { action } = params
+
   if (
     !action ||
     (action !== Action.accept &&
@@ -78,23 +63,15 @@ export async function sendAcceptRejectNotification({
     throw new Error(`Invalid action for notification: ${action}`)
   }
 
-  const templateProps = {
-    speakerName: speaker.name,
-    proposalTitle: proposal.title,
-    eventName: event.name,
-    eventLocation: event.location,
-    eventDate: event.date,
-    eventUrl: event.url,
-    confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${proposal._id}`,
-    comment,
-  }
+  const confirmUrl = `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${params.proposal._id}`
+  const templateProps = createTemplateProps(params, confirmUrl)
 
-  const subject = getEmailSubject(action, event.name)
+  const subject = getEmailSubject(action, params.event.name)
   const template = getEmailTemplate(action, templateProps)
 
   const { data, error } = await resend.emails.send({
     from: fromEmail,
-    to: [speaker.email],
+    to: [params.speaker.email],
     subject: subject,
     react: template,
   })

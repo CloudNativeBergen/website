@@ -6,18 +6,7 @@ import {
   EmailText,
   EmailButton,
 } from './EmailComponents'
-
-interface ProposalAcceptTemplateProps {
-  speakerName: string
-  proposalTitle: string
-  eventName: string
-  eventLocation: string
-  eventDate: string
-  eventUrl: string
-  confirmUrl: string
-  comment?: string
-  socialLinks?: string[]
-}
+import { ProposalAcceptTemplateProps } from '@/lib/proposal/email-types'
 
 export function ProposalAcceptTemplate({
   speakerName,

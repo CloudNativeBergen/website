@@ -1,17 +1,7 @@
 import * as React from 'react'
 import { BaseEmailTemplate } from './BaseEmailTemplate'
 import { EmailSection, EmailSectionHeader, EmailText } from './EmailComponents'
-
-interface ProposalRejectTemplateProps {
-  speakerName: string
-  proposalTitle: string
-  eventName: string
-  eventLocation: string
-  eventDate: string
-  eventUrl: string
-  comment?: string
-  socialLinks?: string[]
-}
+import { ProposalRejectTemplateProps } from '@/lib/proposal/email-types'
 
 export function ProposalRejectTemplate({
   speakerName,
