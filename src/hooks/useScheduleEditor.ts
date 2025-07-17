@@ -19,7 +19,10 @@ export interface UseScheduleEditorReturn {
   addTrack: (track: ScheduleTrack) => void
   removeTrack: (trackIndex: number) => void
   updateTrack: (trackIndex: number, track: ScheduleTrack) => void
-  moveTalkToTrack: (dragItem: DragItem, dropPosition: DropPosition) => boolean
+  moveTalkToTrack: (
+    dragItem: DragItem,
+    dropPosition: DropPosition,
+  ) => { success: boolean; updatedSchedule?: ConferenceSchedule }
   removeTalkFromSchedule: (trackIndex: number, talkIndex: number) => void
   setInitialData: (
     schedule: ConferenceSchedule | null,
@@ -116,14 +119,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       if (!prev || trackIndex < 0 || trackIndex >= prev.tracks.length)
         return prev
 
-      // Move talks from removed track back to unassigned
-      const removedTrack = prev.tracks[trackIndex]
-      const talksToUnassign = removedTrack.talks
-        .map((talk) => talk.talk)
-        .filter(Boolean) as ProposalExisting[]
-
-      setUnassignedProposals((current) => [...current, ...talksToUnassign])
-
       return {
         ...prev,
         tracks: prev.tracks.filter((_, index) => index !== trackIndex),
@@ -150,13 +145,17 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
   )
 
   const moveTalkToTrack = useCallback(
-    (dragItem: DragItem, dropPosition: DropPosition): boolean => {
-      if (!schedule) return false
+    (
+      dragItem: DragItem,
+      dropPosition: DropPosition,
+    ): { success: boolean; updatedSchedule?: ConferenceSchedule } => {
+      if (!schedule) return { success: false }
 
       const { proposal } = dragItem
       const { trackIndex, timeSlot } = dropPosition
 
-      if (trackIndex < 0 || trackIndex >= schedule.tracks.length) return false
+      if (trackIndex < 0 || trackIndex >= schedule.tracks.length)
+        return { success: false }
 
       const targetTrack = schedule.tracks[trackIndex]
       const durationMinutes = getProposalDurationMinutes(proposal)
@@ -176,8 +175,10 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         excludeTalk,
       )
       if (!availableTime || availableTime !== timeSlot) {
-        return false // Cannot place here due to conflict
+        return { success: false } // Cannot place here due to conflict
       }
+
+      let updatedSchedule: ConferenceSchedule | null = null
 
       setSchedule((prev) => {
         if (!prev) return prev
@@ -221,17 +222,11 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         }
 
         newSchedule.tracks = newTracks
+        updatedSchedule = newSchedule
         return newSchedule
       })
 
-      // Remove from unassigned if it was there
-      if (dragItem.type === 'proposal') {
-        setUnassignedProposals((prev) =>
-          prev.filter((p) => p._id !== proposal._id),
-        )
-      }
-
-      return true
+      return { success: true, updatedSchedule: updatedSchedule || undefined }
     },
     [schedule],
   )
@@ -244,11 +239,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
 
         const track = prev.tracks[trackIndex]
         if (talkIndex < 0 || talkIndex >= track.talks.length) return prev
-
-        const removedTalk = track.talks[talkIndex]
-        if (removedTalk.talk) {
-          setUnassignedProposals((current) => [...current, removedTalk.talk!])
-        }
 
         const newTracks = [...prev.tracks]
         newTracks[trackIndex] = {

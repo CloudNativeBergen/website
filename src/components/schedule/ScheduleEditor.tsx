@@ -456,23 +456,27 @@ export function ScheduleEditor({
       const dropData = over.data.current
 
       if (dropData?.type === 'time-slot') {
-        const success = scheduleEditor.moveTalkToTrack(dragItem, {
+        const result = scheduleEditor.moveTalkToTrack(dragItem, {
           trackIndex: dropData.trackIndex,
           timeSlot: dropData.timeSlot,
         })
 
-        if (success) {
+        if (result.success && result.updatedSchedule) {
           // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
           if (
             currentDayIndex >= 0 &&
-            currentDayIndex < modifiedSchedules.length &&
-            scheduleEditor.schedule
+            currentDayIndex < modifiedSchedules.length
           ) {
-            setModifiedSchedules((prev) => {
-              const updated = [...prev]
-              updated[currentDayIndex] = { ...scheduleEditor.schedule! }
-              return updated
-            })
+            const updatedSchedules = [...modifiedSchedules]
+            updatedSchedules[currentDayIndex] = { ...result.updatedSchedule }
+            setModifiedSchedules(updatedSchedules)
+
+            // Force immediate recalculation of unassigned proposals
+            scheduleEditor.setInitialData(
+              result.updatedSchedule,
+              initialProposals,
+              updatedSchedules,
+            )
           }
         } else {
           // Handle failed drop (show notification, etc.)
@@ -566,19 +570,24 @@ export function ScheduleEditor({
 
       // Update the current day's schedule in modifiedSchedules
       if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
-        setModifiedSchedules((prev) => {
-          const updated = [...prev]
-          const currentSchedule = updated[currentDayIndex]
-          if (currentSchedule?.tracks) {
-            const updatedTracks = [...currentSchedule.tracks]
-            updatedTracks[index] = track
-            updated[currentDayIndex] = {
-              ...currentSchedule,
-              tracks: updatedTracks,
-            }
+        const updatedSchedules = [...modifiedSchedules]
+        const currentSchedule = updatedSchedules[currentDayIndex]
+        if (currentSchedule?.tracks) {
+          const updatedTracks = [...currentSchedule.tracks]
+          updatedTracks[index] = track
+          updatedSchedules[currentDayIndex] = {
+            ...currentSchedule,
+            tracks: updatedTracks,
           }
-          return updated
-        })
+          setModifiedSchedules(updatedSchedules)
+
+          // Force immediate recalculation of unassigned proposals
+          scheduleEditor.setInitialData(
+            updatedSchedules[currentDayIndex],
+            initialProposals,
+            updatedSchedules,
+          )
+        }
       }
     },
     [scheduleEditor, currentDayIndex, modifiedSchedules.length],
@@ -590,20 +599,25 @@ export function ScheduleEditor({
 
       // Update the current day's schedule in modifiedSchedules
       if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
-        setModifiedSchedules((prev) => {
-          const updated = [...prev]
-          const currentSchedule = updated[currentDayIndex]
-          if (currentSchedule?.tracks) {
-            const updatedTracks = currentSchedule.tracks.filter(
-              (_, i) => i !== index,
-            )
-            updated[currentDayIndex] = {
-              ...currentSchedule,
-              tracks: updatedTracks,
-            }
+        const updatedSchedules = [...modifiedSchedules]
+        const currentSchedule = updatedSchedules[currentDayIndex]
+        if (currentSchedule?.tracks) {
+          const updatedTracks = currentSchedule.tracks.filter(
+            (_, i) => i !== index,
+          )
+          updatedSchedules[currentDayIndex] = {
+            ...currentSchedule,
+            tracks: updatedTracks,
           }
-          return updated
-        })
+          setModifiedSchedules(updatedSchedules)
+
+          // Force immediate recalculation of unassigned proposals
+          scheduleEditor.setInitialData(
+            updatedSchedules[currentDayIndex],
+            initialProposals,
+            updatedSchedules,
+          )
+        }
       }
     },
     [scheduleEditor, currentDayIndex, modifiedSchedules.length],
