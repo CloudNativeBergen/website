@@ -1,4 +1,8 @@
-import { SponsorTierInput, SponsorTierValidationError } from './types'
+import {
+  SponsorTierInput,
+  SponsorTierValidationError,
+  SponsorInput,
+} from './types'
 
 export function validateSponsorTier(
   data: SponsorTierInput & { conference?: string },
@@ -74,6 +78,42 @@ export function validateSponsorTier(
       field: 'conference',
       message: 'Conference reference is required',
     })
+  }
+
+  return errors
+}
+
+export function validateSponsor(
+  data: SponsorInput,
+): SponsorTierValidationError[] {
+  const errors: SponsorTierValidationError[] = []
+
+  // Validate name
+  if (!data.name || data.name.trim().length === 0) {
+    errors.push({ field: 'name', message: 'Name is required' })
+  } else if (data.name.length > 100) {
+    errors.push({
+      field: 'name',
+      message: 'Name must be 100 characters or less',
+    })
+  }
+
+  // Validate website
+  if (!data.website || data.website.trim().length === 0) {
+    errors.push({ field: 'website', message: 'Website is required' })
+  } else {
+    try {
+      new URL(data.website)
+    } catch {
+      errors.push({ field: 'website', message: 'Website must be a valid URL' })
+    }
+  }
+
+  // Validate logo (SVG content)
+  if (!data.logo || data.logo.trim().length === 0) {
+    errors.push({ field: 'logo', message: 'Logo is required' })
+  } else if (!data.logo.trim().startsWith('<svg')) {
+    errors.push({ field: 'logo', message: 'Logo must be valid SVG content' })
   }
 
   return errors

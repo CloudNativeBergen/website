@@ -19,6 +19,11 @@ import {
 import { StarIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { SponsorTierInput, SponsorTierExisting } from '@/lib/sponsor/types'
+import {
+  createSponsorTier,
+  updateSponsorTier,
+  deleteSponsorTier,
+} from '@/lib/sponsor/client'
 import { formatCurrency } from '@/lib/format'
 
 interface SponsorTierProps {
@@ -99,31 +104,18 @@ function SponsorTierModal({
     setIsSubmitting(true)
 
     try {
-      const url = tier
-        ? `/admin/api/sponsor/tier/${tier._id}`
-        : '/admin/api/sponsor/tier'
-      const method = tier ? 'PUT' : 'POST'
+      let savedTier: SponsorTierExisting
 
-      const body = tier ? formData : { ...formData, conference: conferenceId }
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error?.message || 'Failed to save sponsor tier')
+      if (tier) {
+        // Update existing tier
+        savedTier = await updateSponsorTier(tier._id, formData)
+      } else {
+        // Create new tier
+        savedTier = await createSponsorTier(formData, conferenceId)
       }
 
-      if (result.sponsorTier) {
-        onSave(result.sponsorTier)
-        handleClose()
-      }
+      onSave(savedTier)
+      handleClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -136,17 +128,7 @@ function SponsorTierModal({
 
     setIsSubmitting(true)
     try {
-      const response = await fetch(`/admin/api/sponsor/tier/${tier._id}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        const result = await response.json()
-        throw new Error(
-          result.error?.message || 'Failed to delete sponsor tier',
-        )
-      }
-
+      await deleteSponsorTier(tier._id)
       onDelete(tier._id)
       handleClose()
     } catch (err) {
@@ -316,7 +298,7 @@ function SponsorTierModal({
                     ) : (
                       <form onSubmit={handleSubmit} className="mt-6 space-y-8">
                         {/* Basic Information */}
-                        <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2">
+                        <div className="space-y-6">
                           <div>
                             <label
                               htmlFor="title"
@@ -350,9 +332,9 @@ function SponsorTierModal({
                               Tagline *
                             </label>
                             <div className="mt-2">
-                              <input
-                                type="text"
+                              <textarea
                                 id="tagline"
+                                rows={3}
                                 value={formData.tagline || ''}
                                 onChange={(e) =>
                                   setFormData((prev) => ({
@@ -362,7 +344,7 @@ function SponsorTierModal({
                                 }
                                 required
                                 className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                placeholder="e.g., Premium sponsorship tier"
+                                placeholder="e.g., Premium sponsorship tier with enhanced visibility and networking opportunities"
                               />
                             </div>
                           </div>
@@ -650,7 +632,7 @@ function SponsorTierModal({
   )
 }
 
-export default function SponsorTier({
+export default function SponsorTierEditor({
   conferenceId,
   sponsorTiers: initialSponsorTiers,
   onTierUpdate,
