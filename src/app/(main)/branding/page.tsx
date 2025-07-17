@@ -49,6 +49,10 @@ import { colorPalette, typography } from '@/lib/branding/data'
 
 import { TalkPromotion } from '@/components/TalkPromotion'
 import { SpeakerPromotion } from '@/components/SpeakerPromotion'
+import {
+  ProposalAcceptTemplate,
+  ProposalRejectTemplate,
+} from '@/components/email'
 import { CallToAction } from '@/components/CallToAction'
 import { Format } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
@@ -59,7 +63,7 @@ export const metadata: Metadata = {
 }
 
 export default async function BrandingPage() {
-  const { conference } = await getConferenceForCurrentDomain({
+  const { conference, domain } = await getConferenceForCurrentDomain({
     featuredSpeakers: true,
   })
 
@@ -132,6 +136,12 @@ export default async function BrandingPage() {
                 className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
               >
                 Call to Action
+              </a>
+              <a
+                href="#email-templates"
+                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
+              >
+                Email Templates
               </a>
             </div>
           </div>
@@ -2162,6 +2172,306 @@ export default async function BrandingPage() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      {/* Email Templates */}
+      <section id="email-templates" className="bg-brand-glacier-white py-20">
+        <Container>
+          <div className="mb-16 text-center">
+            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue">
+              Email Templates
+            </h2>
+            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
+              Professional email templates for proposal responses that maintain
+              consistent branding and provide clear communication to speakers
+              about their submission status.
+            </p>
+          </div>
+
+          {/* Side-by-side Email Templates */}
+          <div className="mb-16">
+            <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
+              Template Comparison
+            </h3>
+            <p className="font-inter mb-12 text-center text-lg text-brand-slate-gray">
+              Compare the acceptance and rejection email templates side by side
+              to see how they maintain consistent branding while adapting their
+              tone and messaging appropriately.
+            </p>
+
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              {/* Proposal Acceptance Email */}
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-fresh-green">
+                  ✅ Proposal Acceptance Email
+                </h4>
+                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
+                  Celebratory tone with clear next steps and confirmation
+                  requirements.
+                </p>
+
+                {/* Email Client Frame */}
+                <div className="rounded-xl bg-gray-100 shadow-2xl">
+                  {/* Email Client Header */}
+                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="font-inter text-sm font-medium text-gray-600">
+                        Mail
+                      </div>
+                      <div className="w-16"></div>
+                    </div>
+                  </div>
+
+                  {/* Email Header Bar */}
+                  <div className="border-b border-gray-200 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-4">
+                        <span className="font-semibold text-gray-900">
+                          From:
+                        </span>
+                        <span className="text-gray-600">
+                          {conference.contact_email}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">Today 2:30 PM</div>
+                    </div>
+                    <div className="mt-1 flex items-center space-x-4 text-sm">
+                      <span className="font-semibold text-gray-900">To:</span>
+                      <span className="text-gray-600">
+                        alex.johnson@example.com
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <h5 className="font-semibold text-gray-900">
+                        🎉 Your proposal has been accepted!
+                      </h5>
+                    </div>
+                  </div>
+
+                  {/* Email Content */}
+                  <div className="rounded-b-lg bg-white p-6">
+                    <ProposalAcceptTemplate
+                      speakerName="Alex Johnson"
+                      proposalTitle="Building Resilient Microservices with Kubernetes"
+                      eventName={conference.title}
+                      eventLocation={`${conference.city}, ${conference.country}`}
+                      eventDate="June 15, 2025"
+                      eventUrl={`https://${domain}/`}
+                      confirmUrl={`https://${domain}/confirm/abc123`}
+                      comment="We were particularly impressed with your hands-on approach and real-world examples. We'd love to have you present in the main auditorium."
+                      socialLinks={conference.social_links}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Proposal Rejection Email */}
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-slate-gray">
+                  📧 Proposal Rejection Email
+                </h4>
+                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
+                  Professional and encouraging tone while maintaining community
+                  connection.
+                </p>
+
+                {/* Email Client Frame */}
+                <div className="rounded-xl bg-gray-100 shadow-2xl">
+                  {/* Email Client Header */}
+                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="font-inter text-sm font-medium text-gray-600">
+                        Mail
+                      </div>
+                      <div className="w-16"></div>
+                    </div>
+                  </div>
+
+                  {/* Email Header Bar */}
+                  <div className="border-b border-gray-200 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-4">
+                        <span className="font-semibold text-gray-900">
+                          From:
+                        </span>
+                        <span className="text-gray-600">
+                          {conference.contact_email}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Today 10:15 AM
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center space-x-4 text-sm">
+                      <span className="font-semibold text-gray-900">To:</span>
+                      <span className="text-gray-600">
+                        sarah.chen@example.com
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <h5 className="font-semibold text-gray-900">
+                        Thank you for your proposal submission
+                      </h5>
+                    </div>
+                  </div>
+
+                  {/* Email Content */}
+                  <div className="rounded-b-lg bg-white p-6">
+                    <ProposalRejectTemplate
+                      speakerName="Sarah Chen"
+                      proposalTitle="Advanced Container Security Patterns"
+                      eventName={conference.title}
+                      eventLocation={`${conference.city}, ${conference.country}`}
+                      eventDate="June 15, 2025"
+                      eventUrl={`https://${domain}/`}
+                      comment="Your proposal showed great depth in security practices. While we couldn't include it this year due to similar topics already selected, we encourage you to submit for our next event."
+                      socialLinks={conference.social_links}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Individual Template Details */}
+          <div className="mb-16">
+            <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
+              Template Details
+            </h3>
+
+            <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
+              {/* Acceptance Email Details */}
+              <div className="rounded-xl bg-white p-8 shadow-lg">
+                <h4 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-fresh-green">
+                  Acceptance Email Features
+                </h4>
+                <ul className="font-inter space-y-3 text-brand-slate-gray">
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                    <span>
+                      <strong>Celebratory tone</strong> with emoji and positive
+                      language
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                    <span>
+                      <strong>Clear call-to-action</strong> with prominent
+                      confirmation button
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                    <span>
+                      <strong>Organizer comments</strong> section for
+                      personalized feedback
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                    <span>
+                      <strong>Action required</strong> alert to ensure speaker
+                      response
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                    <span>
+                      <strong>Brand gradient button</strong> for maximum
+                      visibility
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Rejection Email Details */}
+              <div className="rounded-xl bg-white p-8 shadow-lg">
+                <h4 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                  Rejection Email Features
+                </h4>
+                <ul className="font-inter space-y-3 text-brand-slate-gray">
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
+                    <span>
+                      <strong>Respectful tone</strong> acknowledging effort and
+                      quality
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
+                    <span>
+                      <strong>Constructive feedback</strong> section for
+                      improvement suggestions
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
+                    <span>
+                      <strong>Community encouragement</strong> to maintain
+                      engagement
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
+                    <span>
+                      <strong>Future opportunities</strong> messaging for
+                      continued participation
+                    </span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
+                    <span>
+                      <strong>Warm closing</strong> from the organizing team
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Usage Guidelines */}
+          <div className="rounded-xl bg-white p-8 shadow-lg">
+            <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+              Email Template Guidelines
+            </h3>
+            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                  Design Principles
+                </h4>
+                <ul className="font-inter space-y-2 text-brand-slate-gray">
+                  <li>• Clear visual hierarchy with consistent typography</li>
+                  <li>• Brand colors used strategically for emphasis</li>
+                  <li>• Responsive design that works across email clients</li>
+                  <li>• Accessible color contrast ratios</li>
+                  <li>• Professional yet welcoming tone</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                  Content Strategy
+                </h4>
+                <ul className="font-inter space-y-2 text-brand-slate-gray">
+                  <li>• Personalized greetings and proposal references</li>
+                  <li>• Clear next steps and action items</li>
+                  <li>• Optional organizer comments for context</li>
+                  <li>• Community encouragement and future opportunities</li>
+                  <li>• Consistent branding and contact information</li>
+                </ul>
               </div>
             </div>
           </div>

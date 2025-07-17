@@ -1,5 +1,36 @@
 import { GlobeAltIcon } from '@heroicons/react/24/solid'
 
+export function titleForLink(link: string) {
+  let hostname = ''
+
+  try {
+    hostname = new URL(link).hostname
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (error) {}
+
+  switch (hostname) {
+    case 'twitter.com':
+    case 'www.twitter.com':
+    case 'x.com':
+    case 'www.x.com':
+      return 'Twitter'
+    case 'linkedin.com':
+    case 'www.linkedin.com':
+      return 'LinkedIn'
+    case 'github.com':
+    case 'www.github.com':
+      return 'GitHub'
+    case 'bsky.app':
+    case 'www.bsky.app':
+      return 'Bluesky'
+    case 'instagram.com':
+    case 'www.instagram.com':
+      return 'Instagram'
+    default:
+      return hostname || link
+  }
+}
+
 export function iconForLink(link: string, className = 'h-10 w-10') {
   let hostname = ''
 

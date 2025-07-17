@@ -49,16 +49,19 @@ export default async function Home() {
     <>
       <Hero conference={conference} />
 
-      {hasScheduledSpeakers ? (
-        <Speakers tracks={currentSchedule!.tracks} />
-      ) : (
-        <FeaturedSpeakers
-          speakers={displaySpeakers}
-          isOrganizers={isOrganizers}
-        />
-      )}
+      <FeaturedSpeakers
+        speakers={displaySpeakers}
+        isOrganizers={isOrganizers}
+      />
 
-      {currentSchedule && <Schedule schedule={currentSchedule} />}
+      {hasScheduledSpeakers &&
+        new Date() >= new Date(conference.program_date) && (
+          <Speakers tracks={currentSchedule!.tracks} />
+        )}
+
+      {currentSchedule && new Date() >= new Date(conference.program_date) && (
+        <Schedule schedule={currentSchedule} />
+      )}
 
       <Sponsors sponsors={conference.sponsors || []} />
     </>

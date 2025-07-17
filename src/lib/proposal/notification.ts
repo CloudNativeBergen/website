@@ -1,74 +1,86 @@
-import sgMail from '@sendgrid/mail'
+import { Resend } from 'resend'
 import assert from 'assert'
-import { ProposalExisting, Action } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
+import { Action } from '@/lib/proposal/types'
+import {
+  ProposalAcceptTemplate,
+  ProposalRejectTemplate,
+} from '@/components/email'
+import {
+  NotificationParams,
+  createTemplateProps,
+  type ProposalAcceptTemplateProps,
+  type ProposalRejectTemplateProps,
+} from './email-types'
 
-assert(process.env.SENDGRID_API_KEY, 'SENDGRID_API_KEY is not set')
-assert(process.env.SENDGRID_FROM_EMAIL, 'SENDGRID_FROM_EMAIL is not set')
-assert(
-  process.env.SENDGRID_TEMPALTE_ID_CFP_ACCEPT,
-  'SENDGRID_TEMPALTE_ID_CFP_ACCEPT is not set',
-)
-assert(
-  process.env.SENDGRID_TEMPALTE_ID_CFP_REJECT,
-  'SENDGRID_TEMPALTE_ID_CFP_REJECT is not set',
-)
+assert(process.env.RESEND_API_KEY, 'RESEND_API_KEY is not set')
+assert(process.env.RESEND_FROM_EMAIL, 'RESEND_FROM_EMAIL is not set')
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY as string)
+const resend = new Resend(process.env.RESEND_API_KEY as string)
+const fromEmail = process.env.RESEND_FROM_EMAIL as string
 
-const fromEmail = process.env.SENDGRID_FROM_EMAIL as string
-const templateAccept = process.env.SENDGRID_TEMPALTE_ID_CFP_ACCEPT as string
-const templateReject = process.env.SENDGRID_TEMPALTE_ID_CFP_REJECT as string
-
-function getTemplate(action: Action) {
+function getEmailTemplate(
+  action: Action,
+  templateProps: ProposalAcceptTemplateProps | ProposalRejectTemplateProps,
+) {
   switch (action) {
     case Action.accept:
     case Action.remind:
-      return templateAccept
+      if (!('confirmUrl' in templateProps) || !templateProps.confirmUrl) {
+        throw new Error(`Missing confirmUrl for action: ${action}`)
+      }
+      return ProposalAcceptTemplate(
+        templateProps as ProposalAcceptTemplateProps,
+      )
     case Action.reject:
-      return templateReject
+      return ProposalRejectTemplate(templateProps)
     default:
-      return ''
+      throw new Error(`No template found for action: ${action}`)
   }
 }
 
-export async function sendAcceptRejectNotification({
-  action,
-  speaker,
-  proposal,
-  event,
-  comment = '',
-}: {
-  action: Action
-  speaker: Speaker
-  proposal: ProposalExisting
-  event: { location: string; date: string; name: string; url: string }
-  comment: string
-}): Promise<[sgMail.ClientResponse, object]> {
-  const templateId = getTemplate(action)
+function getEmailSubject(action: Action, eventName: string): string {
+  switch (action) {
+    case Action.accept:
+      return `🎉 Your proposal has been accepted for ${eventName}`
+    case Action.remind:
+      return `⏰ Reminder: Please confirm your participation in ${eventName}`
+    case Action.reject:
+      return `Thank you for your proposal submission to ${eventName}`
+    default:
+      return `Update on your proposal for ${eventName}`
+  }
+}
 
-  if (!templateId) {
-    throw new Error(`Template not found for action: ${action}`)
+export async function sendAcceptRejectNotification(params: NotificationParams) {
+  const { action } = params
+
+  if (
+    !action ||
+    (action !== Action.accept &&
+      action !== Action.remind &&
+      action !== Action.reject)
+  ) {
+    throw new Error(`Invalid action for notification: ${action}`)
   }
 
-  const msg = {
-    to: speaker.email,
+  const confirmUrl = `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${params.proposal._id}`
+  const templateProps = createTemplateProps(params, confirmUrl)
+
+  const subject = getEmailSubject(action, params.event.name)
+  const template = getEmailTemplate(action, templateProps)
+
+  const { data, error } = await resend.emails.send({
     from: fromEmail,
-    templateId: templateId,
-    dynamicTemplateData: {
-      speaker: {
-        name: speaker.name,
-      },
-      proposal: {
-        title: proposal.title,
-        confirmUrl: `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${proposal._id}`,
-        comment,
-      },
-      event,
-    },
+    to: [params.speaker.email],
+    subject: subject,
+    react: template,
+  })
+
+  if (error) {
+    throw new Error(`Failed to send email: ${error.message}`)
   }
 
-  return await sgMail.send(msg)
+  return data
 }
 
 /**
