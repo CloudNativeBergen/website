@@ -485,7 +485,7 @@ export function ScheduleEditor({
 
       setActiveItem(null)
     },
-    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
+    [scheduleEditor, currentDayIndex, modifiedSchedules, initialProposals],
   )
 
   const handleAddTrack = useCallback(
@@ -590,7 +590,7 @@ export function ScheduleEditor({
         }
       }
     },
-    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
+    [scheduleEditor, currentDayIndex, modifiedSchedules, initialProposals],
   )
 
   const handleRemoveTrack = useCallback(
@@ -620,7 +620,7 @@ export function ScheduleEditor({
         }
       }
     },
-    [scheduleEditor, currentDayIndex, modifiedSchedules.length],
+    [scheduleEditor, currentDayIndex, modifiedSchedules, initialProposals],
   )
 
   const handleRemoveTalk = useCallback(

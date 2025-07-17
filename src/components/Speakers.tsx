@@ -55,7 +55,7 @@ function ImageClipPaths({
 }
 
 export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
-  let id = useId()
+  const id = useId()
   const [tabOrientation, setTabOrientation] = useState('horizontal')
   const [selectedTabIndex, setSelectedTabIndex] = useState(0)
 
