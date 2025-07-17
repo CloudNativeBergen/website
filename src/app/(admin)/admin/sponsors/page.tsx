@@ -1,5 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
+import SponsorTier from '@/components/admin/SponsorTier'
 import {
   BuildingOffice2Icon,
   GlobeAltIcon,
@@ -144,74 +145,13 @@ export default async function AdminSponsors() {
         </div>
       )}
 
-      {/* Sponsor Tiers Overview */}
-      {sponsorTiers.length > 0 && (
-        <div className="mt-8">
-          <h2 className="mb-4 text-lg font-medium text-gray-900">
-            Sponsorship Tiers
-          </h2>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {sponsorTiers
-              .sort((a, b) => {
-                // Sort by cheapest first
-                const maxPriceA = Math.max(...a.price.map((p) => p.amount))
-                const maxPriceB = Math.max(...b.price.map((p) => p.amount))
-                return maxPriceA - maxPriceB
-              })
-              .map((tier, index) => (
-                <div
-                  key={index}
-                  className={`relative rounded-lg border bg-white px-6 py-5 shadow-sm ${
-                    tier.most_popular
-                      ? 'border-indigo-500 ring-2 ring-indigo-500'
-                      : 'border-gray-300'
-                  }`}
-                >
-                  {tier.most_popular && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 transform">
-                      <span className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white">
-                        Most Popular
-                      </span>
-                    </div>
-                  )}
-                  <div className="text-center">
-                    <h3 className="text-lg font-medium text-gray-900">
-                      {tier.title}
-                    </h3>
-                    <p className="mt-1 text-sm text-gray-500">{tier.tagline}</p>
-                    <div className="mt-4">
-                      {tier.price.map((price, priceIndex) => (
-                        <div
-                          key={priceIndex}
-                          className="text-2xl font-bold text-gray-900"
-                        >
-                          {price.amount.toLocaleString()} {price.currency}
-                        </div>
-                      ))}
-                    </div>
-                    {tier.sold_out && (
-                      <div className="mt-2">
-                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                          Sold Out
-                        </span>
-                      </div>
-                    )}
-                    <div className="mt-4 text-left">
-                      <ul className="space-y-2">
-                        {tier.perks.map((perk, perkIndex) => (
-                          <li key={perkIndex} className="text-sm text-gray-600">
-                            <span className="font-medium">{perk.label}:</span>{' '}
-                            {perk.description}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
+      {/* Editable Sponsor Tiers */}
+      <div className="mt-8">
+        <SponsorTier
+          conferenceId={conference?._id || ''}
+          sponsorTiers={sponsorTiers}
+        />
+      </div>
 
       {/* Current Sponsors */}
       <div className="mt-12">
