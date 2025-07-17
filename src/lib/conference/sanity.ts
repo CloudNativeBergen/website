@@ -132,7 +132,10 @@ export async function getConferenceForDomain(
       }
       ${
         sponsorTiers
-          ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id]{
+          ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id] | order(price[0].amount desc){
+      _id,
+      _createdAt,
+      _updatedAt,
       title,
       tagline,
       price[]{

@@ -43,6 +43,9 @@ export interface ConferenceSponsor {
 }
 
 export interface SponsorTier {
+  _id: string
+  _createdAt: string
+  _updatedAt: string
   title: string
   tagline: string
   price: Array<{
