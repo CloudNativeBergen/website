@@ -74,13 +74,26 @@ export default function SponsorAddModal({
   const [error, setError] = useState('')
   const [isCreatingNew, setIsCreatingNew] = useState(false)
   const [isLoadingSponsors, setIsLoadingSponsors] = useState(false)
+  const [hasLoadedSponsors, setHasLoadedSponsors] = useState(false)
 
   // Load sponsors on mount
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !hasLoadedSponsors) {
+      const loadSponsors = async () => {
+        setIsLoadingSponsors(true)
+        try {
+          const sponsorsData = await fetchSponsors()
+          setSponsors(sponsorsData)
+          setHasLoadedSponsors(true)
+        } catch (error) {
+          console.error('Failed to load sponsors:', error)
+        } finally {
+          setIsLoadingSponsors(false)
+        }
+      }
       loadSponsors()
     }
-  }, [isOpen])
+  }, [isOpen, hasLoadedSponsors])
 
   // Filter sponsors based on query
   useEffect(() => {
