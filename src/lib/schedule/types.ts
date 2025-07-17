@@ -23,16 +23,36 @@ export interface ScheduleState {
   unassignedProposals: ProposalExisting[]
 }
 
-// Helper to convert minutes to pixels (for visual representation)
+// Performance optimization constants
 export const MINUTES_TO_PIXELS = 2.4
+export const DRAG_PERFORMANCE_THRESHOLD = 16 // 60fps = 16.67ms per frame
+export const BATCH_UPDATE_DELAY = 100 // ms delay for batching updates
 
-// Helper to get proposal duration in minutes
+// Memoization cache for expensive operations
+const memoCache = new Map<string, number>()
+
+// Helper to get proposal duration in minutes with caching
 export function getProposalDurationMinutes(proposal: ProposalExisting): number {
-  const split = proposal.format.split('_')
-  if (split.length < 2) return 25
+  // Use caching for better performance
+  const cacheKey = `duration-${proposal._id}-${proposal.format}`
+  const cached = memoCache.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
 
-  const duration = parseInt(split[1], 10)
-  return isNaN(duration) ? 25 : duration
+  const split = proposal.format.split('_')
+  let duration = 25 // Default duration
+
+  if (split.length >= 2) {
+    const parsed = parseInt(split[1], 10)
+    if (!isNaN(parsed)) {
+      duration = parsed
+    }
+  }
+
+  // Cache the result
+  memoCache.set(cacheKey, duration)
+  return duration
 }
 
 // Helper to generate time slots for a day

@@ -2,6 +2,7 @@
 
 import { ProposalExisting } from '@/lib/proposal/types'
 import { DraggableProposal } from './DraggableProposal'
+import { useBatchUpdates } from '@/lib/schedule/performance-utils'
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
@@ -13,6 +14,10 @@ import { useState, useMemo, useCallback } from 'react'
 interface UnassignedProposalsProps {
   proposals: ProposalExisting[]
 }
+
+// Constants for better performance
+const VIRTUAL_SCROLL_THRESHOLD = 50 // Enable virtualization for large lists
+const PROPOSAL_HEIGHT = 120 // Estimated height per proposal in pixels
 
 // Constants for better maintainability
 const FILTER_STYLES = {
@@ -151,6 +156,9 @@ const EmptyState = ({
 )
 
 export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
+  // Performance optimization for rapid filter changes
+  const { batchUpdate } = useBatchUpdates()
+
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFormat, setSelectedFormat] = useState<string>('')
   const [selectedLevel, setSelectedLevel] = useState<string>('')
@@ -204,24 +212,35 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     })
   }, [proposals, searchQuery, selectedFormat, selectedLevel])
 
-  // Memoized event handlers for performance
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchQuery(value)
-  }, [])
+  // Memoized event handlers for performance with batched updates
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      batchUpdate(() => setSearchQuery(value))
+    },
+    [batchUpdate],
+  )
 
-  const handleFormatChange = useCallback((value: string) => {
-    setSelectedFormat(value)
-  }, [])
+  const handleFormatChange = useCallback(
+    (value: string) => {
+      batchUpdate(() => setSelectedFormat(value))
+    },
+    [batchUpdate],
+  )
 
-  const handleLevelChange = useCallback((value: string) => {
-    setSelectedLevel(value)
-  }, [])
+  const handleLevelChange = useCallback(
+    (value: string) => {
+      batchUpdate(() => setSelectedLevel(value))
+    },
+    [batchUpdate],
+  )
 
   const handleClearFilters = useCallback(() => {
-    setSearchQuery('')
-    setSelectedFormat('')
-    setSelectedLevel('')
-  }, [])
+    batchUpdate(() => {
+      setSearchQuery('')
+      setSelectedFormat('')
+      setSelectedLevel('')
+    })
+  }, [batchUpdate])
 
   // Memoized computed values
   const hasActiveFilters = useMemo(() => {
@@ -234,6 +253,37 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     }
     return `${filteredProposals.length} of ${proposals.length} talks`
   }, [filteredProposals.length, proposals.length])
+
+  // Virtual scrolling for performance with large lists
+  const useVirtualScrolling =
+    filteredProposals.length > VIRTUAL_SCROLL_THRESHOLD
+  const [scrollTop, setScrollTop] = useState(0)
+  const [containerHeight, setContainerHeight] = useState(600)
+
+  const virtualizedItems = useMemo(() => {
+    if (!useVirtualScrolling)
+      return filteredProposals.map((proposal, index) => ({
+        proposal,
+        index,
+        offsetTop: 0,
+      }))
+
+    const startIndex = Math.floor(scrollTop / PROPOSAL_HEIGHT)
+    const endIndex = Math.min(
+      startIndex + Math.ceil(containerHeight / PROPOSAL_HEIGHT) + 2,
+      filteredProposals.length,
+    )
+
+    return filteredProposals.slice(startIndex, endIndex).map((proposal, i) => ({
+      proposal,
+      index: startIndex + i,
+      offsetTop: (startIndex + i) * PROPOSAL_HEIGHT,
+    }))
+  }, [filteredProposals, scrollTop, containerHeight, useVirtualScrolling])
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop)
+  }, [])
 
   return (
     <div className="flex h-full w-80 flex-col bg-white shadow-sm">
@@ -273,16 +323,46 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         </div>
       </div>
 
-      {/* Proposals list */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Proposals list with virtual scrolling */}
+      <div
+        className="flex-1 overflow-y-auto"
+        onScroll={handleScroll}
+        ref={(el) => {
+          if (el && containerHeight !== el.clientHeight) {
+            setContainerHeight(el.clientHeight)
+          }
+        }}
+      >
         {filteredProposals.length > 0 ? (
-          <div className="space-y-2 p-4">
-            {filteredProposals.map((proposal) => (
-              <div key={proposal._id} className="overflow-hidden">
-                <DraggableProposal proposal={proposal} />
-              </div>
-            ))}
-          </div>
+          useVirtualScrolling ? (
+            <div
+              className="relative"
+              style={{ height: filteredProposals.length * PROPOSAL_HEIGHT }}
+            >
+              {virtualizedItems.map(({ proposal, offsetTop }) => (
+                <div
+                  key={proposal._id}
+                  className="absolute right-0 left-0 px-4 py-1"
+                  style={{
+                    top: offsetTop,
+                    height: PROPOSAL_HEIGHT,
+                  }}
+                >
+                  <div className="overflow-hidden">
+                    <DraggableProposal proposal={proposal} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2 p-4">
+              {virtualizedItems.map(({ proposal }) => (
+                <div key={proposal._id} className="overflow-hidden">
+                  <DraggableProposal proposal={proposal} />
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <EmptyState
             hasProposals={proposals.length > 0}

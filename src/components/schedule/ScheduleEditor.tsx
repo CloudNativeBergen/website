@@ -19,9 +19,17 @@ import { DragItem } from '@/lib/schedule/types'
 import { useScheduleEditor } from '@/hooks/useScheduleEditor'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
-import { DroppableTrack } from './DroppableTrack'
+import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
 import { saveSchedule } from '@/lib/schedule/client'
+import {
+  usePerformanceTimer,
+  performanceMonitor,
+} from '@/lib/schedule/performance'
+import {
+  useDragPerformance,
+  useBatchUpdates,
+} from '@/lib/schedule/performance-utils'
 import {
   PlusIcon,
   BookmarkIcon,
@@ -354,6 +362,15 @@ export function ScheduleEditor({
   conference: _,
   initialProposals,
 }: ScheduleEditorProps) {
+  // Performance monitoring setup
+  const dragTimer = usePerformanceTimer('ScheduleEditor', 'drag-operation')
+  const saveTimer = usePerformanceTimer('ScheduleEditor', 'save-operation')
+  const dayChangeTimer = usePerformanceTimer('ScheduleEditor', 'day-change')
+
+  // Performance optimization hooks
+  const { scheduleDragUpdate, cancelUpdates } = useDragPerformance()
+  const { batchUpdate, flushUpdates } = useBatchUpdates()
+
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -400,6 +417,7 @@ export function ScheduleEditor({
   const handleSave = useCallback(async () => {
     if (!scheduleEditor.schedule) return
 
+    saveTimer.start()
     setIsSaving(true)
     setError(null)
     setSaveSuccess(false)
@@ -426,6 +444,16 @@ export function ScheduleEditor({
       }
 
       setSaveSuccess(true)
+      const saveDuration = saveTimer.end()
+
+      // Log save performance
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Schedule save completed:', {
+          duration: saveDuration,
+          scheduleId: scheduleEditor.schedule._id,
+          tracksCount: scheduleEditor.schedule.tracks.length,
+        })
+      }
 
       // Reset success state after 3 seconds
       setTimeout(() => setSaveSuccess(false), 3000)
@@ -433,15 +461,20 @@ export function ScheduleEditor({
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to save schedule'
       setError(errorMessage)
+      saveTimer.end()
     } finally {
       setIsSaving(false)
     }
-  }, [scheduleEditor, currentDayIndex, modifiedSchedules.length])
+  }, [scheduleEditor, currentDayIndex, modifiedSchedules.length, saveTimer])
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    const { active } = event
-    setActiveItem(active.data.current as DragItem)
-  }, [])
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      dragTimer.start()
+      const { active } = event
+      setActiveItem(active.data.current as DragItem)
+    },
+    [dragTimer],
+  )
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -449,6 +482,8 @@ export function ScheduleEditor({
 
       if (!over || !active.data.current) {
         setActiveItem(null)
+        cancelUpdates() // Cancel any pending drag updates
+        dragTimer.end()
         return
       }
 
@@ -456,36 +491,62 @@ export function ScheduleEditor({
       const dropData = over.data.current
 
       if (dropData?.type === 'time-slot') {
-        const result = scheduleEditor.moveTalkToTrack(dragItem, {
-          trackIndex: dropData.trackIndex,
-          timeSlot: dropData.timeSlot,
-        })
+        // Use performance-optimized drag update scheduling
+        scheduleDragUpdate(() => {
+          const result = scheduleEditor.moveTalkToTrack(dragItem, {
+            trackIndex: dropData.trackIndex,
+            timeSlot: dropData.timeSlot,
+          })
 
-        if (result.success && result.updatedSchedule) {
-          // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
-          if (
-            currentDayIndex >= 0 &&
-            currentDayIndex < modifiedSchedules.length
-          ) {
-            const updatedSchedules = [...modifiedSchedules]
-            updatedSchedules[currentDayIndex] = { ...result.updatedSchedule }
-            setModifiedSchedules(updatedSchedules)
+          if (result.success && result.updatedSchedule) {
+            // Batch state updates to reduce re-renders
+            batchUpdate(() => {
+              // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
+              if (
+                currentDayIndex >= 0 &&
+                currentDayIndex < modifiedSchedules.length &&
+                result.updatedSchedule
+              ) {
+                const updatedSchedules = [...modifiedSchedules]
+                updatedSchedules[currentDayIndex] = result.updatedSchedule
+                setModifiedSchedules(updatedSchedules)
 
-            // Force immediate recalculation of unassigned proposals
-            scheduleEditor.setInitialData(
-              result.updatedSchedule,
-              initialProposals,
-              updatedSchedules,
-            )
+                // Force immediate recalculation of unassigned proposals
+                scheduleEditor.setInitialData(
+                  result.updatedSchedule,
+                  initialProposals,
+                  updatedSchedules,
+                )
+              }
+            })
+          } else {
+            // Handle failed drop (show notification, etc.)
           }
-        } else {
-          // Handle failed drop (show notification, etc.)
-        }
+        })
       }
 
       setActiveItem(null)
+      const dragDuration = dragTimer.end()
+
+      // Log performance metrics for slow drags
+      if (dragDuration && dragDuration > 100) {
+        console.warn('Slow drag operation detected:', {
+          duration: dragDuration,
+          operation: 'drag-and-drop',
+          component: 'ScheduleEditor',
+        })
+      }
     },
-    [scheduleEditor, currentDayIndex, modifiedSchedules, initialProposals],
+    [
+      scheduleEditor,
+      currentDayIndex,
+      modifiedSchedules,
+      initialProposals,
+      dragTimer,
+      scheduleDragUpdate,
+      cancelUpdates,
+      batchUpdate,
+    ],
   )
 
   const handleAddTrack = useCallback(
@@ -532,6 +593,8 @@ export function ScheduleEditor({
   const handleDayChange = useCallback(
     (dayIndex: number) => {
       if (dayIndex >= 0 && dayIndex < modifiedSchedules.length) {
+        dayChangeTimer.start()
+
         // Save current editor state before switching days
         if (
           scheduleEditor.schedule &&
@@ -549,6 +612,21 @@ export function ScheduleEditor({
         // Reset save success state when switching days
         setSaveSuccess(false)
         setError(null)
+
+        const dayChangeDuration = dayChangeTimer.end()
+
+        // Log slow day changes in development
+        if (
+          process.env.NODE_ENV === 'development' &&
+          dayChangeDuration &&
+          dayChangeDuration > 200
+        ) {
+          console.warn('Slow day change detected:', {
+            duration: dayChangeDuration,
+            fromDay: currentDayIndex,
+            toDay: dayIndex,
+          })
+        }
       }
     },
     [
@@ -558,8 +636,55 @@ export function ScheduleEditor({
       setModifiedSchedules,
       setSaveSuccess,
       setError,
+      dayChangeTimer,
     ],
   )
+
+  // Development performance metrics display
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const interval = setInterval(() => {
+        const metrics = performanceMonitor.getMetrics()
+        if (metrics.length > 0) {
+          const avgDragTime = performanceMonitor.getAverageTime(
+            'drag-operation',
+            'ScheduleEditor',
+          )
+          const avgSaveTime = performanceMonitor.getAverageTime(
+            'save-operation',
+            'ScheduleEditor',
+          )
+          const avgDayChangeTime = performanceMonitor.getAverageTime(
+            'day-change',
+            'ScheduleEditor',
+          )
+
+          console.log('ScheduleEditor Performance Metrics:', {
+            totalOperations: metrics.length,
+            averageDragTime: avgDragTime
+              ? `${avgDragTime.toFixed(2)}ms`
+              : 'N/A',
+            averageSaveTime: avgSaveTime
+              ? `${avgSaveTime.toFixed(2)}ms`
+              : 'N/A',
+            averageDayChangeTime: avgDayChangeTime
+              ? `${avgDayChangeTime.toFixed(2)}ms`
+              : 'N/A',
+          })
+        }
+      }, 30000) // Log every 30 seconds
+
+      return () => clearInterval(interval)
+    }
+  }, [])
+
+  // Cleanup performance utilities on unmount
+  useEffect(() => {
+    return () => {
+      cancelUpdates()
+      flushUpdates()
+    }
+  }, [cancelUpdates, flushUpdates])
 
   // Remove automatic sync effect - it causes race conditions
   // Manual sync happens only during save to preserve schedule data integrity
