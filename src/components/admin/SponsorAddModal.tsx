@@ -134,19 +134,6 @@ export default function SponsorAddModal({
     }
   }, [preselectedTierId, isOpen, formData.tierId])
 
-  const loadSponsors = async () => {
-    setIsLoadingSponsors(true)
-    try {
-      const sponsors = await fetchSponsors()
-      setSponsors(sponsors)
-    } catch (err) {
-      console.error('Failed to load sponsors:', err)
-      setSponsors([])
-    } finally {
-      setIsLoadingSponsors(false)
-    }
-  }
-
   const handleSponsorSelect = (sponsor: SponsorExisting | null) => {
     setSelectedSponsor(sponsor)
     if (sponsor) {
