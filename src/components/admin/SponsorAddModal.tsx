@@ -57,12 +57,6 @@ export default function SponsorAddModal({
   preselectedTierId,
   onSponsorAdded,
 }: AddSponsorModalProps) {
-  console.log(
-    'Modal component rendered with preselectedTierId:',
-    preselectedTierId,
-    'isOpen:',
-    isOpen,
-  )
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
     website: '',
@@ -104,12 +98,6 @@ export default function SponsorAddModal({
   useEffect(() => {
     if (isOpen) {
       const selectedTierId = preselectedTierId || sponsorTiers[0]?._id || ''
-      console.log(
-        'Modal opened with preselectedTierId:',
-        preselectedTierId,
-        'selectedTierId:',
-        selectedTierId,
-      )
       setFormData({
         name: '',
         website: '',
@@ -126,12 +114,6 @@ export default function SponsorAddModal({
   // Update tierId when preselectedTierId changes (even if modal is already open)
   useEffect(() => {
     if (isOpen && preselectedTierId && preselectedTierId !== formData.tierId) {
-      console.log(
-        'Updating tierId from',
-        formData.tierId,
-        'to',
-        preselectedTierId,
-      )
       setFormData((prev) => ({
         ...prev,
         tierId: preselectedTierId,
@@ -504,7 +486,6 @@ export default function SponsorAddModal({
                               id="tier"
                               value={formData.tierId}
                               onChange={(e) => {
-                                console.log('Tier changed to:', e.target.value)
                                 setFormData((prev) => ({
                                   ...prev,
                                   tierId: e.target.value,
