@@ -11,7 +11,7 @@ export async function saveSchedule(
   schedule: ConferenceSchedule,
 ): Promise<ScheduleResponse> {
   try {
-    const res = await fetch(`/api/schedule`, {
+    const res = await fetch(`/admin/api/schedule`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

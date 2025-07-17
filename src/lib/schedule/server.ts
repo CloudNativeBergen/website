@@ -54,15 +54,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
       conference.end_date,
     )
 
-    console.log(
-      'Conference dates generated:',
-      conferenceDates,
-      'from',
-      conference.start_date,
-      'to',
-      conference.end_date,
-    )
-
     // Ensure we have a schedule for each conference day
     const existingDates = new Set(schedules.map((s) => s.date))
 

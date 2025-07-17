@@ -1,4 +1,5 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
+import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { saveScheduleToSanity } from '@/lib/schedule/sanity'
@@ -6,18 +7,10 @@ import { saveScheduleToSanity } from '@/lib/schedule/sanity'
 export const dynamic = 'force-dynamic'
 
 export const POST = auth(async (req: NextAuthRequest) => {
-  if (
-    !req.auth ||
-    !req.auth.user ||
-    !req.auth.speaker ||
-    !req.auth.speaker._id ||
-    !req.auth.account ||
-    !req.auth.speaker.is_organizer
-  ) {
-    return NextResponse.json(
-      { error: { message: 'Unauthorized' } },
-      { status: 401 },
-    )
+  // Check organizer access
+  const accessError = checkOrganizerAccess(req)
+  if (accessError) {
+    return accessError
   }
 
   try {
