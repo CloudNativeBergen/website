@@ -8,6 +8,7 @@ import {
   CurrencyDollarIcon,
   PlusIcon,
   TrashIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 import { ConferenceSponsor } from '@/lib/conference/types'
 import { SponsorTierExisting } from '@/lib/sponsor/types'
@@ -118,6 +119,27 @@ export default function SponsorTierManagement({
     }
   }
 
+  const handleDownloadSvg = (sponsorName: string, svgContent: string) => {
+    // Create blob with SVG content
+    const blob = new Blob([svgContent], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+
+    // Create and trigger download
+    const link = document.createElement('a')
+    const fileName = `${sponsorName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-logo.svg`
+
+    link.href = url
+    link.download = fileName
+    link.style.display = 'none'
+
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    // Cleanup
+    setTimeout(() => URL.revokeObjectURL(url), 100)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -207,7 +229,18 @@ export default function SponsorTierManagement({
                         key={`${sponsor.name}-${index}`}
                         className="group relative rounded-lg border border-gray-300 bg-white p-4 shadow-sm hover:border-gray-400 sm:p-6"
                       >
-                        <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100">
+                        <div className="absolute top-2 right-2 flex space-x-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          {sponsor.logo && (
+                            <button
+                              onClick={() =>
+                                handleDownloadSvg(sponsor.name, sponsor.logo)
+                              }
+                              className="rounded-md bg-blue-50 p-1.5 text-blue-600 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                              title="Download SVG logo"
+                            >
+                              <ArrowDownTrayIcon className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() =>
                               handleRemoveSponsor(sponsor.name, sponsor.name)
