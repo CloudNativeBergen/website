@@ -26,10 +26,7 @@ import {
   usePerformanceTimer,
   performanceMonitor,
 } from '@/lib/schedule/performance'
-import {
-  useDragPerformance,
-  useBatchUpdates,
-} from '@/lib/schedule/performance-utils'
+import { useDragPerformance } from '@/lib/schedule/performance-utils'
 import {
   PlusIcon,
   BookmarkIcon,
@@ -368,8 +365,7 @@ export function ScheduleEditor({
   const dayChangeTimer = usePerformanceTimer('ScheduleEditor', 'day-change')
 
   // Performance optimization hooks
-  const { scheduleDragUpdate, cancelUpdates } = useDragPerformance()
-  const { batchUpdate, flushUpdates } = useBatchUpdates()
+  const { cancelUpdates } = useDragPerformance()
 
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const [showAddTrackModal, setShowAddTrackModal] = useState(false)
@@ -491,38 +487,34 @@ export function ScheduleEditor({
       const dropData = over.data.current
 
       if (dropData?.type === 'time-slot') {
-        // Use performance-optimized drag update scheduling
-        scheduleDragUpdate(() => {
-          const result = scheduleEditor.moveTalkToTrack(dragItem, {
-            trackIndex: dropData.trackIndex,
-            timeSlot: dropData.timeSlot,
-          })
-
-          if (result.success && result.updatedSchedule) {
-            // Batch state updates to reduce re-renders
-            batchUpdate(() => {
-              // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
-              if (
-                currentDayIndex >= 0 &&
-                currentDayIndex < modifiedSchedules.length &&
-                result.updatedSchedule
-              ) {
-                const updatedSchedules = [...modifiedSchedules]
-                updatedSchedules[currentDayIndex] = result.updatedSchedule
-                setModifiedSchedules(updatedSchedules)
-
-                // Force immediate recalculation of unassigned proposals
-                scheduleEditor.setInitialData(
-                  result.updatedSchedule,
-                  initialProposals,
-                  updatedSchedules,
-                )
-              }
-            })
-          } else {
-            // Handle failed drop (show notification, etc.)
-          }
+        // Process drop immediately for proper drag feedback
+        const result = scheduleEditor.moveTalkToTrack(dragItem, {
+          trackIndex: dropData.trackIndex,
+          timeSlot: dropData.timeSlot,
         })
+
+        if (result.success && result.updatedSchedule) {
+          // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
+          if (
+            currentDayIndex >= 0 &&
+            currentDayIndex < modifiedSchedules.length &&
+            result.updatedSchedule
+          ) {
+            const updatedSchedules = [...modifiedSchedules]
+            updatedSchedules[currentDayIndex] = result.updatedSchedule
+            setModifiedSchedules(updatedSchedules)
+
+            // Force immediate recalculation of unassigned proposals
+            scheduleEditor.setInitialData(
+              result.updatedSchedule,
+              initialProposals,
+              updatedSchedules,
+            )
+          }
+        } else {
+          // Handle failed drop (show notification, etc.)
+          console.warn('Failed to drop proposal:', dragItem.proposal.title)
+        }
       }
 
       setActiveItem(null)
@@ -543,9 +535,7 @@ export function ScheduleEditor({
       modifiedSchedules,
       initialProposals,
       dragTimer,
-      scheduleDragUpdate,
       cancelUpdates,
-      batchUpdate,
     ],
   )
 
@@ -682,9 +672,8 @@ export function ScheduleEditor({
   useEffect(() => {
     return () => {
       cancelUpdates()
-      flushUpdates()
     }
-  }, [cancelUpdates, flushUpdates])
+  }, [cancelUpdates])
 
   // Remove automatic sync effect - it causes race conditions
   // Manual sync happens only during save to preserve schedule data integrity
