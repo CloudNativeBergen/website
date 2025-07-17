@@ -294,7 +294,11 @@ const ServiceSession = ({
     setIsResizing(false)
   }, [])
 
-  // Add global mouse listeners for resizing
+  // Add global mouse listeners for resizing:
+  // These listeners are necessary to track mouse movements and actions outside the component
+  // during resizing, ensuring the resizing logic works even if the cursor leaves the component's bounds.
+  // Potential side effects include interference with other global listeners and performance overhead.
+  // Cleanup is handled in the useEffect cleanup function to prevent memory leaks or unintended behavior.
   useEffect(() => {
     if (isResizing) {
       const handleMouseMoveGlobal = (e: MouseEvent) => handleMouseMove(e)
