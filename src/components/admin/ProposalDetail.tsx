@@ -28,6 +28,18 @@ interface ProposalDetailProps {
 }
 
 /**
+ * Type guard to check if a topic is a Topic object (not a Reference)
+ */
+function isTopicObject(topic: unknown): topic is Topic {
+  return (
+    topic !== null &&
+    typeof topic === 'object' &&
+    '_id' in topic &&
+    'title' in topic
+  )
+}
+
+/**
  * Detailed view component for individual proposals
  * Used in admin proposal detail pages
  */
@@ -156,15 +168,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                             {talk.topics && talk.topics.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-1">
                                 {talk.topics.map((topic) => {
-                                  // Type guard to check if topic is a Topic object (not a Reference)
-                                  const isTopicObject = (
-                                    t: unknown,
-                                  ): t is Topic =>
-                                    t !== null &&
-                                    typeof t === 'object' &&
-                                    '_id' in t &&
-                                    'title' in t
-
                                   if (!isTopicObject(topic)) return null
 
                                   return (
@@ -240,15 +243,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                             {talk.topics && talk.topics.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-1">
                                 {talk.topics.map((topic) => {
-                                  // Type guard to check if topic is a Topic object (not a Reference)
-                                  const isTopicObject = (
-                                    t: unknown,
-                                  ): t is Topic =>
-                                    t !== null &&
-                                    typeof t === 'object' &&
-                                    '_id' in t &&
-                                    'title' in t
-
                                   if (!isTopicObject(topic)) return null
 
                                   return (

@@ -34,6 +34,13 @@ const sizeClasses = {
   },
 }
 
+// Image dimensions for retina/high DPI screens (2x the display size)
+const imageDimensions = {
+  sm: { width: 64, height: 64 },
+  md: { width: 96, height: 96 },
+  lg: { width: 128, height: 128 },
+}
+
 /**
  * Component to display multiple speakers with overlapping circular profile images
  */
@@ -73,8 +80,8 @@ export function SpeakerAvatars({
           {speaker.image ? (
             <img
               src={sanityImage(speaker.image)
-                .width(size === 'sm' ? 64 : size === 'md' ? 96 : 128)
-                .height(size === 'sm' ? 64 : size === 'md' ? 96 : 128)
+                .width(imageDimensions[size].width)
+                .height(imageDimensions[size].height)
                 .fit('crop')
                 .url()}
               alt={speaker.name}
