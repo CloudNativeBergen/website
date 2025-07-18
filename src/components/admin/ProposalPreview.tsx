@@ -29,9 +29,9 @@ import {
 import { Flags } from '@/lib/speaker/types'
 import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
+import { SpeakerAvatarsWithNames } from '../SpeakerAvatars'
 import { calculateAverageRating } from './hooks'
 import { formatDateSafe } from '@/lib/time'
-import { sanityImage } from '@/lib/sanity/client'
 
 interface ProposalPreviewProps {
   proposal: ProposalExisting
@@ -105,41 +105,33 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
       >
         <div className="space-y-6">
           {/* Speaker Info */}
-          {primarySpeaker && (
-            <div className="flex items-center space-x-3">
-              {primarySpeaker.image && (
-                <img
-                  src={sanityImage(primarySpeaker.image)
-                    .width(96)
-                    .height(96)
-                    .fit('crop')
-                    .url()}
-                  alt={primarySpeaker.name}
-                  width={48}
-                  height={48}
-                  className="h-12 w-12 rounded-full object-cover"
-                  loading="lazy"
-                />
-              )}
-              <div className="min-w-0 flex-1">
+          {proposal.speakers &&
+          Array.isArray(proposal.speakers) &&
+          proposal.speakers.length > 0 ? (
+            <div className="space-y-3">
+              <SpeakerAvatarsWithNames
+                speakers={proposal.speakers}
+                size="md"
+                maxVisible={3}
+              />
+              {requiresTravelFunding && (
                 <div className="flex items-center space-x-2">
-                  <p className="text-sm font-medium text-gray-900">
-                    {primarySpeaker.name}
+                  <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
+                  <p className="text-sm text-gray-500">
+                    Requires travel funding
                   </p>
-                  {requiresTravelFunding && (
-                    <div
-                      className="flex items-center"
-                      title="Requires travel funding"
-                    >
-                      <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
-                    </div>
-                  )}
                 </div>
-                {primarySpeaker.bio && (
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-500">
-                    {primarySpeaker.bio}
-                  </p>
-                )}
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center space-x-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                <UserIcon className="h-6 w-6 text-gray-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900">
+                  Unknown Speaker
+                </p>
               </div>
             </div>
           )}

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
-import { sanityImage } from '@/lib/sanity/client'
+import { SpeakerAvatars } from '../SpeakerAvatars'
 import { UserIcon } from '@heroicons/react/24/outline'
 import { getStatusBadgeStyle } from './utils'
 
@@ -102,15 +102,13 @@ export function SearchResults({
                     }`}
                   >
                     <div className="flex items-center">
-                      {primarySpeaker?.image ? (
-                        <img
-                          src={sanityImage(primarySpeaker.image)
-                            .width(64)
-                            .height(64)
-                            .fit('crop')
-                            .url()}
-                          alt={primarySpeaker.name || 'Speaker'}
-                          className="size-6 flex-none rounded-full object-cover"
+                      {proposal.speakers &&
+                      Array.isArray(proposal.speakers) &&
+                      proposal.speakers.length > 0 ? (
+                        <SpeakerAvatars
+                          speakers={proposal.speakers}
+                          size="sm"
+                          maxVisible={1}
                         />
                       ) : (
                         <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200">
@@ -121,7 +119,9 @@ export function SearchResults({
                         <div className="font-medium">{proposal.title}</div>
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-gray-500">
-                            by {primarySpeaker?.name || 'Unknown Speaker'}
+                            by{' '}
+                            {speakers.map((s) => s.name).join(', ') ||
+                              'Unknown Speaker'}
                           </div>
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}

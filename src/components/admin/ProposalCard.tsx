@@ -22,9 +22,9 @@ import {
   audiences,
 } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { SpeakerAvatars } from '../SpeakerAvatars'
 import { getStatusBadgeStyle } from './utils'
 import { calculateAverageRating } from './hooks'
-import { sanityImage } from '@/lib/sanity/client'
 
 interface ProposalCardProps {
   proposal: ProposalExisting
@@ -84,18 +84,13 @@ export function ProposalCard({
   const CardContent = () => (
     <div className="flex items-start space-x-4">
       <div className="flex-shrink-0">
-        {primarySpeaker?.image ? (
-          <img
-            src={sanityImage(primarySpeaker.image)
-              .width(96)
-              .height(96)
-              .fit('crop')
-              .url()}
-            alt={primarySpeaker.name || 'Speaker'}
-            width={48}
-            height={48}
-            className="h-12 w-12 rounded-full object-cover"
-            loading="lazy"
+        {proposal.speakers &&
+        Array.isArray(proposal.speakers) &&
+        proposal.speakers.length > 0 ? (
+          <SpeakerAvatars
+            speakers={proposal.speakers}
+            size="md"
+            maxVisible={3}
           />
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
