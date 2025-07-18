@@ -139,13 +139,21 @@ export function useProposalFiltering(
           break
         case 'speaker':
           aValue = (
-            typeof a.speaker === 'object' && a.speaker && 'name' in a.speaker
-              ? (a.speaker as Speaker).name
+            a.speakers &&
+            a.speakers.length > 0 &&
+            typeof a.speakers[0] === 'object' &&
+            a.speakers[0] &&
+            'name' in a.speakers[0]
+              ? (a.speakers[0] as Speaker).name
               : 'Unknown'
           ).toLowerCase()
           bValue = (
-            typeof b.speaker === 'object' && b.speaker && 'name' in b.speaker
-              ? (b.speaker as Speaker).name
+            b.speakers &&
+            b.speakers.length > 0 &&
+            typeof b.speakers[0] === 'object' &&
+            b.speakers[0] &&
+            'name' in b.speakers[0]
+              ? (b.speakers[0] as Speaker).name
               : 'Unknown'
           ).toLowerCase()
           break

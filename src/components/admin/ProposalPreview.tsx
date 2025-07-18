@@ -26,7 +26,6 @@ import {
   Language,
   Audience,
 } from '@/lib/proposal/types'
-import type { Speaker } from '@/lib/speaker/types'
 import { Flags } from '@/lib/speaker/types'
 import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
@@ -60,22 +59,22 @@ function formatAudience(audience: Audience[]): string {
   return audience.map((a) => audiences.get(a) || a).join(', ')
 }
 
-function isSpeaker(speaker: Speaker | unknown): speaker is Speaker {
-  return (
-    speaker !== null &&
-    typeof speaker === 'object' &&
-    speaker !== undefined &&
-    'name' in speaker
-  )
-}
-
 export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const speaker = isSpeaker(proposal.speaker) ? proposal.speaker : null
+  const speakers =
+    proposal.speakers && Array.isArray(proposal.speakers)
+      ? proposal.speakers.filter(
+          (speaker) =>
+            typeof speaker === 'object' && speaker && 'name' in speaker,
+        )
+      : []
+  const primarySpeaker = speakers.length > 0 ? speakers[0] : null
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
   const requiresTravelFunding =
-    speaker?.flags?.includes(Flags.requiresTravelFunding) || false
+    speakers.some((speaker) =>
+      speaker?.flags?.includes(Flags.requiresTravelFunding),
+    ) || false
 
   // Scroll to top when proposal changes
   useEffect(() => {
@@ -106,27 +105,27 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
       >
         <div className="space-y-6">
           {/* Speaker Info */}
-          {speaker && (
-            <div className="flex items-center space-x-4">
-              {speaker.image && (
+          {primarySpeaker && (
+            <div className="flex items-center space-x-3">
+              {primarySpeaker.image && (
                 <img
-                  src={sanityImage(speaker.image)
+                  src={sanityImage(primarySpeaker.image)
                     .width(96)
                     .height(96)
                     .fit('crop')
                     .url()}
-                  alt={speaker.name}
+                  alt={primarySpeaker.name}
                   width={48}
                   height={48}
                   className="h-12 w-12 rounded-full object-cover"
                   loading="lazy"
                 />
               )}
-              <div>
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-sm font-medium text-gray-900">
-                    {speaker.name}
-                  </h3>
+                  <p className="text-sm font-medium text-gray-900">
+                    {primarySpeaker.name}
+                  </p>
                   {requiresTravelFunding && (
                     <div
                       className="flex items-center"
@@ -136,9 +135,9 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                     </div>
                   )}
                 </div>
-                {speaker.bio && (
-                  <p className="line-clamp-2 text-sm text-gray-500">
-                    {speaker.bio}
+                {primarySpeaker.bio && (
+                  <p className="mt-1 line-clamp-2 text-sm text-gray-500">
+                    {primarySpeaker.bio}
                   </p>
                 )}
               </div>

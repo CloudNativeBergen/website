@@ -187,9 +187,14 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         const titleMatch = proposal.title.toLowerCase().includes(query)
 
         const speakerMatch =
-          typeof proposal.speaker === 'object' &&
-          'name' in proposal.speaker &&
-          proposal.speaker.name.toLowerCase().includes(query)
+          proposal.speakers &&
+          Array.isArray(proposal.speakers) &&
+          proposal.speakers.some(
+            (speaker) =>
+              typeof speaker === 'object' &&
+              'name' in speaker &&
+              speaker.name.toLowerCase().includes(query),
+          )
 
         const formatMatch = proposal.format.toLowerCase().includes(query)
 

@@ -48,10 +48,13 @@ export function DraggableProposal({
 
       // Extract speaker info if available
       const speaker =
-        proposal.speaker &&
-        typeof proposal.speaker === 'object' &&
-        'name' in proposal.speaker
-          ? proposal.speaker.name
+        proposal.speakers &&
+        Array.isArray(proposal.speakers) &&
+        proposal.speakers.length > 0 &&
+        proposal.speakers[0] &&
+        typeof proposal.speakers[0] === 'object' &&
+        'name' in proposal.speakers[0]
+          ? proposal.speakers[0].name
           : null
 
       return {

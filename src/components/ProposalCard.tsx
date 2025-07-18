@@ -173,12 +173,16 @@ export function ProposalCard({
             )}
           </p>
         </div>
-        {proposal.speaker && 'image' in proposal.speaker ? (
+        {proposal.speakers &&
+        Array.isArray(proposal.speakers) &&
+        proposal.speakers.length > 0 &&
+        proposal.speakers[0] &&
+        'image' in proposal.speakers[0] ? (
           <img
             className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-300"
             src={
-              proposal.speaker.image
-                ? sanityImage(proposal.speaker.image)
+              proposal.speakers[0].image
+                ? sanityImage(proposal.speakers[0].image)
                     .width(80)
                     .height(80)
                     .fit('crop')

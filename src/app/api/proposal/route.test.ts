@@ -10,14 +10,18 @@ import { describe } from 'node:test'
 import { testApiHandler } from 'next-test-api-route-handler'
 import { Speaker } from '@/lib/speaker/types'
 
-const speaker = proposals[0].speaker! as Speaker
+const speaker = proposals[0].speakers![0] as Speaker
 
 beforeEach(() => {
   clientReadUncached.fetch = jest
     .fn<() => Promise<any>>()
     .mockResolvedValue(
       proposals.filter(
-        (p) => p.speaker && '_id' in p.speaker && p.speaker._id === speaker._id,
+        (p) =>
+          p.speakers &&
+          p.speakers.length > 0 &&
+          '_id' in p.speakers[0] &&
+          p.speakers[0]._id === speaker._id,
       ),
     )
 })

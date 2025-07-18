@@ -43,40 +43,55 @@ export function ProposalCard({
   onSelect,
   isSelected = false,
 }: ProposalCardProps) {
-  const speaker =
-    typeof proposal.speaker === 'object' &&
-    proposal.speaker &&
-    'name' in proposal.speaker
-      ? (proposal.speaker as SpeakerWithReviewInfo)
-      : null
+  const speakers =
+    proposal.speakers && Array.isArray(proposal.speakers)
+      ? proposal.speakers
+          .filter(
+            (speaker) =>
+              typeof speaker === 'object' && speaker && 'name' in speaker,
+          )
+          .map((speaker) => speaker as SpeakerWithReviewInfo)
+      : []
 
+  const primarySpeaker = speakers.length > 0 ? speakers[0] : null
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
   const requiresTravelFunding =
-    speaker?.flags?.includes(Flags.requiresTravelFunding) || false
+    speakers.some((speaker) =>
+      speaker?.flags?.includes(Flags.requiresTravelFunding),
+    ) || false
 
   // Speaker indicators
-  const isSeasonedSpeaker =
-    speaker?.previousAcceptedTalks && speaker.previousAcceptedTalks.length > 0
+  const isSeasonedSpeaker = speakers.some(
+    (speaker) =>
+      speaker?.previousAcceptedTalks &&
+      speaker.previousAcceptedTalks.length > 0,
+  )
   const isNewSpeaker =
-    !speaker?.previousAcceptedTalks ||
-    speaker.previousAcceptedTalks.length === 0
-  const isLocalSpeaker = speaker?.flags?.includes(Flags.localSpeaker)
-  const isUnderrepresentedSpeaker = speaker?.flags?.includes(
-    Flags.diverseSpeaker,
+    speakers.length === 0 ||
+    speakers.every(
+      (speaker) =>
+        !speaker?.previousAcceptedTalks ||
+        speaker.previousAcceptedTalks.length === 0,
+    )
+  const isLocalSpeaker = speakers.some((speaker) =>
+    speaker?.flags?.includes(Flags.localSpeaker),
+  )
+  const isUnderrepresentedSpeaker = speakers.some((speaker) =>
+    speaker?.flags?.includes(Flags.diverseSpeaker),
   )
 
   const CardContent = () => (
     <div className="flex items-start space-x-4">
       <div className="flex-shrink-0">
-        {speaker?.image ? (
+        {primarySpeaker?.image ? (
           <img
-            src={sanityImage(speaker.image)
+            src={sanityImage(primarySpeaker.image)
               .width(96)
               .height(96)
               .fit('crop')
               .url()}
-            alt={speaker.name || 'Speaker'}
+            alt={primarySpeaker.name || 'Speaker'}
             width={48}
             height={48}
             className="h-12 w-12 rounded-full object-cover"
@@ -106,12 +121,14 @@ export function ProposalCard({
           <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
             <div className="flex min-w-0 flex-1 items-center">
               <span className="truncate font-medium">
-                {speaker?.name || 'Unknown Speaker'}
+                {speakers.length > 0
+                  ? speakers.map((s) => s.name).join(', ')
+                  : 'Unknown Speaker'}
               </span>
             </div>
 
             {/* Speaker Indicators */}
-            {speaker && (
+            {speakers.length > 0 && (
               <div className="ml-2 flex items-center gap-1">
                 {isSeasonedSpeaker && (
                   <div

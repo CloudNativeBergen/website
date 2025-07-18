@@ -73,8 +73,19 @@ export default async function Submit({
         loadingError = { type: 'Not Found', message: 'Proposal not found.' }
       } else {
         proposal = fetchedProposal
-        if (fetchedProposal.speaker && 'name' in fetchedProposal.speaker) {
-          speaker = fetchedProposal.speaker as Speaker
+        if (
+          fetchedProposal.speakers &&
+          Array.isArray(fetchedProposal.speakers) &&
+          fetchedProposal.speakers.length > 0
+        ) {
+          const primarySpeaker = fetchedProposal.speakers[0]
+          if (
+            typeof primarySpeaker === 'object' &&
+            primarySpeaker &&
+            'name' in primarySpeaker
+          ) {
+            speaker = primarySpeaker as Speaker
+          }
         }
       }
     } else {

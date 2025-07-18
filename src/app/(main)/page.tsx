@@ -15,7 +15,10 @@ export const revalidate = 300 // 5 minutes
 function schedulesHasSpeakers(schedules: ConferenceSchedule[]) {
   return schedules.some((schedule) =>
     schedule.tracks.some((track: ScheduleTrack) =>
-      track.talks.some((talk: TrackTalk) => !!talk.talk?.speaker),
+      track.talks.some(
+        (talk: TrackTalk) =>
+          !!talk.talk?.speakers && talk.talk.speakers.length > 0,
+      ),
     ),
   )
 }

@@ -55,22 +55,28 @@ async function sendSlackMessage(message: SlackMessage) {
 }
 
 export async function notifyNewProposal(proposal: ProposalExisting) {
-  // Fetch speaker details if it's a reference
-  let speakerName = 'Unknown'
+  // Fetch speakers details if they are references
+  let speakerNames = 'Unknown'
 
-  if (proposal.speaker && '_ref' in proposal.speaker) {
-    const { speaker, err } = await getSpeaker(proposal.speaker._ref)
-    if (!err && speaker && speaker.name) {
-      speakerName = speaker.name
-    } else {
-      console.log('Could not set speaker name. Conditions:', {
-        hasError: !!err,
-        hasSpeaker: !!speaker,
-        hasName: speaker?.name ? true : false,
-      })
-    }
+  if (
+    proposal.speakers &&
+    Array.isArray(proposal.speakers) &&
+    proposal.speakers.length > 0
+  ) {
+    const speakerPromises = proposal.speakers.map(async (speaker) => {
+      if (speaker && '_ref' in speaker) {
+        const { speaker: speakerData, err } = await getSpeaker(speaker._ref)
+        if (!err && speakerData && speakerData.name) {
+          return speakerData.name
+        }
+      }
+      return 'Unknown'
+    })
+
+    const resolvedSpeakers = await Promise.all(speakerPromises)
+    speakerNames = resolvedSpeakers.join(', ')
   } else {
-    console.log('Speaker is not a reference or is missing')
+    console.log('Speakers are not references or missing')
   }
 
   const message = {
@@ -92,7 +98,7 @@ export async function notifyNewProposal(proposal: ProposalExisting) {
           },
           {
             type: 'mrkdwn',
-            text: `*Speaker:*\n${speakerName}`,
+            text: `*Speaker:*\n${speakerNames}`,
           },
         ],
       },
@@ -135,13 +141,25 @@ export async function notifyProposalStatusChange(
   proposal: ProposalExisting,
   action: Action,
 ) {
-  // Fetch speaker details if it's a reference
-  let speakerName = 'Unknown'
-  if (proposal.speaker && '_ref' in proposal.speaker) {
-    const { speaker, err } = await getSpeaker(proposal.speaker._ref)
-    if (!err && speaker && speaker.name) {
-      speakerName = speaker.name
-    }
+  // Fetch speakers details if they are references
+  let speakerNames = 'Unknown'
+  if (
+    proposal.speakers &&
+    Array.isArray(proposal.speakers) &&
+    proposal.speakers.length > 0
+  ) {
+    const speakerPromises = proposal.speakers.map(async (speaker) => {
+      if (speaker && '_ref' in speaker) {
+        const { speaker: speakerData, err } = await getSpeaker(speaker._ref)
+        if (!err && speakerData && speakerData.name) {
+          return speakerData.name
+        }
+      }
+      return 'Unknown'
+    })
+
+    const resolvedSpeakers = await Promise.all(speakerPromises)
+    speakerNames = resolvedSpeakers.join(', ')
   }
 
   const getEmoji = (action: Action) => {
@@ -185,7 +203,7 @@ export async function notifyProposalStatusChange(
           },
           {
             type: 'mrkdwn',
-            text: `*Speaker:*\n${speakerName}`,
+            text: `*Speaker:*\n${speakerNames}`,
           },
         ],
       },

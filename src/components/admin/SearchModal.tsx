@@ -116,7 +116,17 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                 )
 
                 const renderProposalOption = (proposal: ProposalExisting) => {
-                  const speaker = proposal.speaker as Speaker
+                  const speakers =
+                    proposal.speakers && Array.isArray(proposal.speakers)
+                      ? proposal.speakers.filter(
+                          (speaker) =>
+                            typeof speaker === 'object' &&
+                            speaker &&
+                            'name' in speaker,
+                        )
+                      : []
+                  const primarySpeaker =
+                    speakers.length > 0 ? (speakers[0] as Speaker) : null
                   return (
                     <ComboboxOption
                       as="li"
@@ -125,14 +135,14 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                       className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden"
                     >
                       <div className="flex-shrink-0">
-                        {speaker?.image ? (
+                        {primarySpeaker?.image ? (
                           <img
-                            src={sanityImage(speaker.image)
+                            src={sanityImage(primarySpeaker.image)
                               .width(64)
                               .height(64)
                               .fit('crop')
                               .url()}
-                            alt={speaker.name || 'Speaker'}
+                            alt={primarySpeaker.name || 'Speaker'}
                             className="size-6 flex-none rounded-full object-cover"
                           />
                         ) : (
@@ -145,7 +155,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                         <div className="font-medium">{proposal.title}</div>
                         <div className="flex items-center justify-between">
                           <div className="text-xs text-gray-500 group-data-focus:text-white/70">
-                            by {speaker?.name || 'Unknown Speaker'}
+                            by {primarySpeaker?.name || 'Unknown Speaker'}
                           </div>
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}

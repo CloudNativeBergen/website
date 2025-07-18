@@ -188,10 +188,11 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                     .reduce((acc, talk) => {
                       if (
                         talk.talk &&
-                        talk.talk.speaker &&
-                        'slug' in talk.talk.speaker
+                        talk.talk.speakers &&
+                        talk.talk.speakers.length > 0 &&
+                        'slug' in talk.talk.speakers[0]
                       ) {
-                        const speaker = talk.talk.speaker
+                        const speaker = talk.talk.speakers[0]
                         // Convert speaker to SpeakerWithTalks format
                         const speakerWithTalks: SpeakerWithTalks = {
                           ...speaker,

@@ -149,18 +149,19 @@ function YouTubeEmbed({ url }: { url: string }) {
 }
 
 function TalkTimeSlot({ date, talk }: { date: string; talk: TrackTalk }) {
+  const primarySpeaker = talk.talk?.speakers?.[0]
   return (
     <div className="relative block">
       {!talk.talk ||
-      !talk.talk.speaker ||
-      !(talk.talk.speaker && 'slug' in talk.talk.speaker) ? (
+      !primarySpeaker ||
+      !(primarySpeaker && 'slug' in primarySpeaker) ? (
         <h4 className="text-lg font-semibold tracking-tight text-blue-900">
           {talk.talk?.title || talk.placeholder || 'TBD'}
         </h4>
       ) : (
-        <Link href={`/speaker/${talk.talk.speaker.slug}`} className="block">
+        <Link href={`/speaker/${primarySpeaker.slug}`} className="block">
           <h4 className="text-lg font-semibold tracking-tight text-blue-900">
-            {talk.talk.speaker.name}
+            {primarySpeaker.name}
           </h4>
           <p className="mt-1 tracking-tight text-blue-900">{talk.talk.title}</p>
         </Link>
