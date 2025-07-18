@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     }
 
     const speakers: Speaker[] = await clientRead.fetch(
-      `*[_type == "speaker" && (name match "*${searchQuery}*" || email match "*${searchQuery}*" || title match "*${searchQuery}*")] | order(name asc) [0...20] {
+      `*[_type == "speaker" && (name match $searchQuery || email match $searchQuery || title match $searchQuery)] | order(name asc) [0...20] {
         _id,
         name,
         email,
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
         "slug": slug.current,
         flags
       }`,
-      {},
+      { searchQuery: `*${searchQuery}*` },
       { cache: 'no-store' },
     )
 
