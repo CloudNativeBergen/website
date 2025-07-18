@@ -18,7 +18,6 @@ import {
 import { useState, useEffect } from 'react'
 import { useProposalSearch } from './hooks/useProposalSearch'
 import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
 import { SpeakerAvatars } from '../SpeakerAvatars'
 import { getStatusBadgeStyle } from './utils'
 
@@ -125,8 +124,6 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                             'name' in speaker,
                         )
                       : []
-                  const primarySpeaker =
-                    speakers.length > 0 ? (speakers[0] as Speaker) : null
                   return (
                     <ComboboxOption
                       as="li"

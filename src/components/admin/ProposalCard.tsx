@@ -53,7 +53,6 @@ export function ProposalCard({
           .map((speaker) => speaker as SpeakerWithReviewInfo)
       : []
 
-  const primarySpeaker = speakers.length > 0 ? speakers[0] : null
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
   const requiresTravelFunding =

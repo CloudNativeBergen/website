@@ -68,7 +68,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             typeof speaker === 'object' && speaker && 'name' in speaker,
         )
       : []
-  const primarySpeaker = speakers.length > 0 ? speakers[0] : null
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
   const requiresTravelFunding =

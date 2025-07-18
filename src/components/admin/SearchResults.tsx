@@ -2,7 +2,6 @@
 
 import { useEffect, useRef } from 'react'
 import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
 import { SpeakerAvatars } from '../SpeakerAvatars'
 import { UserIcon } from '@heroicons/react/24/outline'
 import { getStatusBadgeStyle } from './utils'
@@ -85,8 +84,6 @@ export function SearchResults({
                           'name' in speaker,
                       )
                     : []
-                const primarySpeaker =
-                  speakers.length > 0 ? (speakers[0] as Speaker) : null
                 const isSelected = globalIndex === selectedIndex
 
                 return (
