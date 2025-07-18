@@ -16,7 +16,7 @@ function ProposalSuccessMessage({
   onDismiss: () => void
 }) {
   return showMessage ? (
-    <div className="mx-auto mt-6 flex max-w-2xl flex-col rounded-md bg-brand-fresh-green/10 p-4 lg:max-w-4xl lg:px-12">
+    <div className="mx-auto mt-6 flex max-w-2xl flex-col rounded-md bg-brand-fresh-green/10 p-4 lg:max-w-6xl lg:px-12">
       <div className="flex">
         <div className="flex-shrink-0">
           <CheckCircleIcon
@@ -126,7 +126,7 @@ export function ProposalList({
         onDismiss={dismissSuccessMessage}
       />
       {proposals.length === 0 ? (
-        <div className="mx-auto mt-12 flex max-w-2xl flex-col items-center rounded-lg border-2 border-dashed border-brand-cloud-blue bg-white p-6 lg:max-w-4xl lg:px-12">
+        <div className="mx-auto mt-12 flex max-w-2xl flex-col items-center rounded-lg border-2 border-dashed border-brand-cloud-blue bg-white p-6 lg:max-w-6xl lg:px-12">
           <p className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
             You have no proposals yet.
           </p>
@@ -154,7 +154,7 @@ export function ProposalList({
             onAction={actionUpdateHandler}
             domain={currentDomain}
           />
-          <div className="mx-auto mt-6 max-w-2xl lg:max-w-4xl">
+          <div className="mx-auto mt-6 max-w-2xl lg:max-w-6xl">
             {/* Group proposals by conference */}
             {Object.entries(
               proposals.reduce(

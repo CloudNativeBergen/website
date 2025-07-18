@@ -13,7 +13,7 @@ import {
 } from '@portabletext/editor'
 import { EventListenerPlugin } from '@portabletext/editor/plugins'
 import { HelpText } from './Form'
-import { ReactNode, useId } from 'react'
+import { ReactNode, useId, useEffect, useState } from 'react'
 import './PortableTextEditor.css'
 import {
   BoldIcon,
@@ -235,6 +235,29 @@ export function PortableTextEditor({
   helpText?: ReactNode
 }) {
   const id = useId()
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  if (!isClient) {
+    // Show a placeholder during server-side rendering
+    return (
+      <div>
+        <label
+          htmlFor={id}
+          className="block text-sm/6 font-medium text-gray-900"
+        >
+          {label}
+        </label>
+        <div className="block min-h-60 w-full rounded-md bg-gray-50 p-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6">
+          <div className="text-sm text-gray-500">Loading editor...</div>
+        </div>
+        {helpText && <HelpText>{helpText}</HelpText>}
+      </div>
+    )
+  }
 
   return (
     <>

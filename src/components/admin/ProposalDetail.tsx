@@ -20,7 +20,6 @@ import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { sanityImage } from '@/lib/sanity/client'
-import { SpeakerAvatarsWithNames } from '../SpeakerAvatars'
 import { getStatusBadgeStyle } from './utils'
 
 interface ProposalDetailProps {
@@ -273,15 +272,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               </h2>
               {speakers.length > 0 ? (
                 <div className="space-y-6">
-                  {/* Speaker avatars overview */}
-                  <div className="mb-4">
-                    <SpeakerAvatarsWithNames
-                      speakers={proposal.speakers || []}
-                      size="lg"
-                      maxVisible={5}
-                    />
-                  </div>
-
                   {/* Individual speaker details */}
                   {speakers.map((speaker, index) => (
                     <div

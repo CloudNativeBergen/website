@@ -16,6 +16,7 @@ const sizeClasses = {
     image: 'h-8 w-8',
     icon: 'h-4 w-4',
     spacing: '-ml-2',
+    spacingCompact: '-ml-4',
     text: 'text-xs',
   },
   md: {
@@ -23,6 +24,7 @@ const sizeClasses = {
     image: 'h-12 w-12',
     icon: 'h-6 w-6',
     spacing: '-ml-3',
+    spacingCompact: '-ml-6',
     text: 'text-sm',
   },
   lg: {
@@ -30,6 +32,7 @@ const sizeClasses = {
     image: 'h-16 w-16',
     icon: 'h-8 w-8',
     spacing: '-ml-4',
+    spacingCompact: '-ml-8',
     text: 'text-base',
   },
 }
@@ -67,14 +70,44 @@ export function SpeakerAvatars({
   const visibleSpeakers = populatedSpeakers.slice(0, maxVisible)
   const remainingCount = populatedSpeakers.length - maxVisible
 
+  // Define spread distances for each size
+  const spreadDistances = {
+    sm: [16, 24, 32, 40],
+    md: [24, 36, 48, 60],
+    lg: [32, 48, 64, 80],
+  }
+
   return (
-    <div className="flex items-center">
+    <div
+      className="group flex items-center"
+      style={
+        {
+          '--spread-2': `${spreadDistances[size][0]}px`,
+          '--spread-3': `${spreadDistances[size][1]}px`,
+          '--spread-4': `${spreadDistances[size][2]}px`,
+          '--spread-5': `${spreadDistances[size][3]}px`,
+        } as React.CSSProperties
+      }
+    >
       {visibleSpeakers.map((speaker, index) => (
         <div
           key={speaker._id || index}
           className={`${classes.container} ${
-            index > 0 ? classes.spacing : ''
-          } relative rounded-full border-2 border-white bg-gray-100 shadow-sm`}
+            index > 0 ? classes.spacingCompact : ''
+          } relative rounded-full border-2 border-white bg-gray-100 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
+            index === 1
+              ? 'group-hover:translate-x-[var(--spread-2)]'
+              : index === 2
+                ? 'group-hover:translate-x-[var(--spread-3)]'
+                : index === 3
+                  ? 'group-hover:translate-x-[var(--spread-4)]'
+                  : index === 4
+                    ? 'group-hover:translate-x-[var(--spread-5)]'
+                    : ''
+          }`}
+          style={{
+            zIndex: visibleSpeakers.length - index,
+          }}
           title={showTooltip ? speaker.name : undefined}
         >
           {speaker.image ? (
@@ -99,7 +132,18 @@ export function SpeakerAvatars({
 
       {remainingCount > 0 && (
         <div
-          className={`${classes.container} ${classes.spacing} relative flex items-center justify-center rounded-full border-2 border-white bg-gray-300 shadow-sm`}
+          className={`${classes.container} ${classes.spacingCompact} relative flex items-center justify-center rounded-full border-2 border-white bg-gray-300 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
+            visibleSpeakers.length === 1
+              ? 'group-hover:translate-x-[var(--spread-2)]'
+              : visibleSpeakers.length === 2
+                ? 'group-hover:translate-x-[var(--spread-3)]'
+                : visibleSpeakers.length === 3
+                  ? 'group-hover:translate-x-[var(--spread-4)]'
+                  : 'group-hover:translate-x-[var(--spread-5)]'
+          }`}
+          style={{
+            zIndex: 0,
+          }}
           title={showTooltip ? `+${remainingCount} more speakers` : undefined}
         >
           <span className={`${classes.text} font-medium text-gray-600`}>
