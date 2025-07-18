@@ -30,6 +30,7 @@ export function convertJsonToProposal(json: any): ProposalInput {
         ?.map((topic: any) => convertTopicJsonToReference(topic))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((topic: any) => topic !== null) || [],
+    speakers: json.speakers as Reference[] | undefined,
   } satisfies ProposalInput
 }
 

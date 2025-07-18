@@ -1,4 +1,3 @@
-import { FormatStatus } from '@/lib/proposal/format'
 import { Action, ProposalExisting, Status } from '@/lib/proposal/types'
 import {
   BookOpenIcon,
@@ -27,6 +26,50 @@ import Link from 'next/link'
 
 function capitalizeFirstLetter(string: string) {
   return string.charAt(0).toUpperCase() + string.slice(1)
+}
+
+function StatusBadge({ status }: { status: string }) {
+  let text: string
+  let colorClasses: string
+
+  switch (status) {
+    case Status.draft:
+      text = 'Draft'
+      colorClasses = 'bg-yellow-100 text-yellow-800'
+      break
+    case Status.submitted:
+      text = 'Submitted'
+      colorClasses = 'bg-blue-100 text-blue-800'
+      break
+    case Status.accepted:
+      text = 'Accepted'
+      colorClasses = 'bg-green-100 text-green-800'
+      break
+    case Status.rejected:
+      text = 'Rejected'
+      colorClasses = 'bg-red-100 text-red-800'
+      break
+    case Status.confirmed:
+      text = 'Confirmed'
+      colorClasses = 'bg-green-100 text-green-800'
+      break
+    case Status.withdrawn:
+      text = 'Withdrawn'
+      colorClasses = 'bg-gray-100 text-gray-800'
+      break
+    default:
+      text = 'Unknown'
+      colorClasses = 'bg-gray-100 text-gray-800'
+      break
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${colorClasses}`}
+    >
+      {text}
+    </span>
+  )
 }
 
 function ProposalActionLink({ action }: { action: ProposalButtonAction }) {
@@ -151,42 +194,50 @@ export function ProposalCard({
     <li
       key={proposal._id}
       className={clsx(
-        proposal.status === Status.accepted
-          ? 'border-2 border-brand-fresh-green/50'
-          : '',
         'col-span-1 divide-y divide-brand-cloud-gray/20 rounded-lg bg-white shadow',
+        // Status-based styling
+        {
+          'border-l-4 border-l-green-500': proposal.status === Status.accepted,
+          'border-l-4 border-l-blue-500': proposal.status === Status.submitted,
+          'border-l-4 border-l-yellow-500': proposal.status === Status.draft,
+          'border-l-4 border-l-green-600': proposal.status === Status.confirmed,
+          'border-l-4 border-l-red-500': proposal.status === Status.rejected,
+          'border-l-4 border-l-gray-500': proposal.status === Status.withdrawn,
+        },
       )}
     >
-      <div className="flex w-full items-center justify-between space-x-6 p-6">
-        <div className="flex-1 truncate">
-          <div className="flex items-center space-x-3">
+      <div className="p-6">
+        <div className="mb-3 flex w-full items-start justify-between space-x-6">
+          <div className="flex-1">
+            <div className="mb-2">
+              <StatusBadge status={proposal.status} />
+            </div>
             <h3 className="font-space-grotesk truncate text-sm font-medium text-brand-slate-gray">
               {proposal.title}
             </h3>
-            <FormatStatus status={proposal.status} />
           </div>
-          <p className="font-inter mt-1 truncate text-sm text-brand-cloud-gray">
-            {proposal.status === Status.accepted ? (
-              <>Your proposal has been accepted.</>
-            ) : (
-              <>{portableTextToString(proposal.description)}</>
-            )}
-          </p>
+          {proposal.speakers &&
+          Array.isArray(proposal.speakers) &&
+          proposal.speakers.length > 0 ? (
+            <SpeakerAvatars
+              speakers={proposal.speakers}
+              size="md"
+              maxVisible={3}
+            />
+          ) : (
+            <UserCircleIcon
+              className="h-10 w-10 flex-shrink-0 rounded-full bg-brand-cloud-gray/20"
+              aria-hidden="true"
+            />
+          )}
         </div>
-        {proposal.speakers &&
-        Array.isArray(proposal.speakers) &&
-        proposal.speakers.length > 0 ? (
-          <SpeakerAvatars
-            speakers={proposal.speakers}
-            size="md"
-            maxVisible={3}
-          />
-        ) : (
-          <UserCircleIcon
-            className="h-10 w-10 flex-shrink-0 rounded-full bg-brand-cloud-gray/20"
-            aria-hidden="true"
-          />
-        )}
+        <p className="font-inter text-sm text-brand-cloud-gray">
+          {proposal.status === Status.accepted ? (
+            <>Your proposal has been accepted.</>
+          ) : (
+            <>{portableTextToString(proposal.description)}</>
+          )}
+        </p>
       </div>
       {!readOnly && actions.length > 0 && (
         <div>

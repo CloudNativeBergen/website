@@ -206,10 +206,22 @@ export async function updateProposal(
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
 
+  // Process speakers field to ensure proper format
+  const speakers = proposal.speakers
+    ? proposal.speakers.map((speaker) =>
+        typeof speaker === 'object' && '_id' in speaker
+          ? { _type: 'reference', _ref: speaker._id }
+          : (speaker as Reference),
+      )
+    : undefined
+
   try {
     updatedProposal = await clientWrite
       .patch(proposalId)
-      .set({ ...proposal })
+      .set({
+        ...proposal,
+        ...(speakers && { speakers }), // Only include speakers if defined
+      })
       .commit()
   } catch (error) {
     err = error as Error
@@ -261,7 +273,16 @@ export async function createProposal(
   const _type = 'talk'
   const _id = randomUUID().toString()
   const status = Status.submitted
-  const speakers: Reference[] = [{ _type: 'reference', _ref: speakerId }]
+
+  // Use speakers from proposal input if provided, otherwise fallback to single speaker
+  const speakers: Reference[] = proposal.speakers
+    ? proposal.speakers.map((speaker) =>
+        typeof speaker === 'object' && '_id' in speaker
+          ? { _type: 'reference', _ref: speaker._id }
+          : (speaker as Reference),
+      )
+    : [{ _type: 'reference', _ref: speakerId }]
+
   const conference: Reference = { _type: 'reference', _ref: conferenceId }
 
   try {

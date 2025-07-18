@@ -79,8 +79,9 @@ interface Proposal {
   video?: string
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface ProposalInput extends Proposal {}
+export interface ProposalInput extends Proposal {
+  speakers?: Speaker[] | Reference[]
+}
 
 export interface ProposalExisting extends Proposal {
   _id: string

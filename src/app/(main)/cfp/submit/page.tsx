@@ -43,6 +43,7 @@ export default async function Submit({
   }
   let speaker = { name: '', email: '' }
   let loadingError: FormError | null = null
+  let currentUserSpeaker: Speaker | null = null
 
   const { conference, error } = await getConferenceForCurrentDomain({
     topics: true,
@@ -53,6 +54,33 @@ export default async function Submit({
     loadingError = {
       type: 'Server Error',
       message: 'Failed to load conference.',
+    }
+  }
+
+  // Always fetch the current user speaker for the form
+  try {
+    const { speaker: fetchedSpeaker, err } = await getSpeaker(
+      session.speaker._id,
+    )
+    if (err) {
+      console.error('Error loading current user speaker:', err)
+      loadingError = {
+        type: 'Server Error',
+        message: 'Failed to load current user information.',
+      }
+    } else if (!fetchedSpeaker) {
+      loadingError = {
+        type: 'Not Found',
+        message: 'Current user speaker not found.',
+      }
+    } else {
+      currentUserSpeaker = fetchedSpeaker
+    }
+  } catch (error) {
+    console.error('Error loading current user speaker:', error)
+    loadingError = {
+      type: 'Server Error',
+      message: 'Failed to load current user information.',
     }
   }
 
@@ -88,21 +116,9 @@ export default async function Submit({
           }
         }
       }
-    } else {
-      const { speaker: fetchedSpeaker, err } = await getSpeaker(
-        session.speaker._id,
-      )
-      if (err) {
-        console.error('Error loading speaker:', err)
-        loadingError = {
-          type: 'Server Error',
-          message: 'Failed to load speaker.',
-        }
-      } else if (!fetchedSpeaker) {
-        loadingError = { type: 'Not Found', message: 'Speaker not found.' }
-      } else {
-        speaker = fetchedSpeaker
-      }
+    } else if (currentUserSpeaker) {
+      // For new proposals, use the current user speaker
+      speaker = currentUserSpeaker
     }
   } catch (error) {
     console.error('Error loading data:', error)
@@ -146,16 +162,19 @@ export default async function Submit({
               </div>
             </div>
           )}
-          <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12">
-            <ProposalForm
-              initialProposal={proposal}
-              initialSpeaker={speaker}
-              proposalId={proposalId}
-              userEmail={session.speaker.email}
-              conference={conference}
-              allowedFormats={conference.formats}
-            />
-          </div>
+          {!loadingError && currentUserSpeaker && (
+            <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12">
+              <ProposalForm
+                initialProposal={proposal}
+                initialSpeaker={speaker}
+                proposalId={proposalId}
+                userEmail={session.speaker.email}
+                conference={conference}
+                allowedFormats={conference.formats}
+                currentUserSpeaker={currentUserSpeaker}
+              />
+            </div>
+          )}
         </Container>
       </div>
     </>

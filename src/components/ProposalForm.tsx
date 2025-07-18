@@ -21,7 +21,7 @@ import {
   levels,
   ProposalInput,
 } from '@/lib/proposal/types'
-import { Flags, SpeakerInput } from '@/lib/speaker/types'
+import { Flags, SpeakerInput, Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { UserCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { PortableTextBlock } from '@portabletext/editor'
@@ -39,6 +39,7 @@ import {
   Textarea,
 } from './Form'
 import { PortableTextEditor } from './PortableTextEditor'
+import { CoSpeakerSelector } from './CoSpeakerSelector'
 import Link from 'next/link'
 
 export function ProposalForm({
@@ -48,6 +49,7 @@ export function ProposalForm({
   userEmail,
   conference,
   allowedFormats,
+  currentUserSpeaker,
 }: {
   initialProposal: ProposalInput
   initialSpeaker: SpeakerInput
@@ -55,9 +57,23 @@ export function ProposalForm({
   userEmail: string
   conference: Conference
   allowedFormats: Format[]
+  currentUserSpeaker: Speaker
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
+  // Initialize co-speakers from existing proposal (exclude current user)
+  const [coSpeakers, setCoSpeakers] = useState<Speaker[]>(() => {
+    if (initialProposal.speakers && Array.isArray(initialProposal.speakers)) {
+      return initialProposal.speakers.filter(
+        (s): s is Speaker =>
+          typeof s === 'object' &&
+          s &&
+          '_id' in s &&
+          s._id !== currentUserSpeaker._id,
+      )
+    }
+    return []
+  })
 
   const buttonPrimary = proposalId ? 'Update' : 'Submit'
   const buttonPrimaryLoading = proposalId ? 'Updating...' : 'Submitting...'
@@ -85,11 +101,19 @@ export function ProposalForm({
     event.preventDefault()
     setIsSubmitting(true)
 
-    const proposalRes = await postProposal(proposal, proposalId)
+    // Create the proposal with speakers array (current user first, then co-speakers)
+    const allSpeakers = [currentUserSpeaker, ...coSpeakers]
+    const proposalWithSpeakers = {
+      ...proposal,
+      speakers: allSpeakers.map((s) => ({ _type: 'reference', _ref: s._id })),
+    }
+
+    const proposalRes = await postProposal(proposalWithSpeakers, proposalId)
     if (proposalRes.error) {
       setProposalSubmitError(proposalRes.error)
       setIsSubmitting(false)
       window.scrollTo(0, 0)
+      return
     }
 
     const speakerRes = await putProfile(speaker)
@@ -97,6 +121,7 @@ export function ProposalForm({
       setProposalSubmitError(speakerRes.error)
       setIsSubmitting(false)
       window.scrollTo(0, 0)
+      return
     }
 
     if (!proposalRes.error && !speakerRes.error) {
@@ -141,6 +166,14 @@ export function ProposalForm({
           conference={conference}
           allowedFormats={allowedFormats}
         />
+        <div className="border-b border-brand-frosted-steel pb-12">
+          <CoSpeakerSelector
+            selectedSpeakers={coSpeakers}
+            onSpeakersChange={setCoSpeakers}
+            currentUserSpeaker={currentUserSpeaker}
+            format={proposal.format}
+          />
+        </div>
         <SpeakerDetailsForm
           speaker={speaker}
           setSpeaker={setSpeaker}

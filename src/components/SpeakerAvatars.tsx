@@ -16,6 +16,7 @@ const sizeClasses = {
     image: 'h-8 w-8',
     icon: 'h-4 w-4',
     spacing: '-ml-2',
+    spacingCompact: '-ml-4',
     text: 'text-xs',
   },
   md: {
@@ -23,6 +24,7 @@ const sizeClasses = {
     image: 'h-12 w-12',
     icon: 'h-6 w-6',
     spacing: '-ml-3',
+    spacingCompact: '-ml-6',
     text: 'text-sm',
   },
   lg: {
@@ -30,6 +32,7 @@ const sizeClasses = {
     image: 'h-16 w-16',
     icon: 'h-8 w-8',
     spacing: '-ml-4',
+    spacingCompact: '-ml-8',
     text: 'text-base',
   },
 }
@@ -68,46 +71,72 @@ export function SpeakerAvatars({
   const remainingCount = populatedSpeakers.length - maxVisible
 
   return (
-    <div className="flex items-center">
-      {visibleSpeakers.map((speaker, index) => (
-        <div
-          key={speaker._id || index}
-          className={`${classes.container} ${
-            index > 0 ? classes.spacing : ''
-          } relative rounded-full border-2 border-white bg-gray-100 shadow-sm`}
-          title={showTooltip ? speaker.name : undefined}
-        >
-          {speaker.image ? (
-            <img
-              src={sanityImage(speaker.image)
-                .width(imageDimensions[size].width)
-                .height(imageDimensions[size].height)
-                .fit('crop')
-                .url()}
-              alt={speaker.name}
-              className={`${classes.image} rounded-full object-cover`}
-            />
-          ) : (
-            <div
-              className={`${classes.image} flex items-center justify-center rounded-full bg-gray-200`}
-            >
-              <UserIcon className={`${classes.icon} text-gray-400`} />
-            </div>
-          )}
-        </div>
-      ))}
+    <>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+          .avatar-group:hover .avatar-item:nth-child(2) {
+            transform: translateX(${size === 'sm' ? '16px' : size === 'md' ? '24px' : '32px'});
+          }
+          .avatar-group:hover .avatar-item:nth-child(3) {
+            transform: translateX(${size === 'sm' ? '24px' : size === 'md' ? '36px' : '48px'});
+          }
+          .avatar-group:hover .avatar-item:nth-child(4) {
+            transform: translateX(${size === 'sm' ? '32px' : size === 'md' ? '48px' : '64px'});
+          }
+          .avatar-group:hover .avatar-item:nth-child(5) {
+            transform: translateX(${size === 'sm' ? '40px' : size === 'md' ? '60px' : '80px'});
+          }
+        `,
+        }}
+      />
+      <div className="avatar-group flex items-center">
+        {visibleSpeakers.map((speaker, index) => (
+          <div
+            key={speaker._id || index}
+            className={`${classes.container} ${
+              index > 0 ? classes.spacingCompact : ''
+            } avatar-item relative rounded-full border-2 border-white bg-gray-100 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110`}
+            style={{
+              zIndex: visibleSpeakers.length - index,
+            }}
+            title={showTooltip ? speaker.name : undefined}
+          >
+            {speaker.image ? (
+              <img
+                src={sanityImage(speaker.image)
+                  .width(imageDimensions[size].width)
+                  .height(imageDimensions[size].height)
+                  .fit('crop')
+                  .url()}
+                alt={speaker.name}
+                className={`${classes.image} rounded-full object-cover`}
+              />
+            ) : (
+              <div
+                className={`${classes.image} flex items-center justify-center rounded-full bg-gray-200`}
+              >
+                <UserIcon className={`${classes.icon} text-gray-400`} />
+              </div>
+            )}
+          </div>
+        ))}
 
-      {remainingCount > 0 && (
-        <div
-          className={`${classes.container} ${classes.spacing} relative flex items-center justify-center rounded-full border-2 border-white bg-gray-300 shadow-sm`}
-          title={showTooltip ? `+${remainingCount} more speakers` : undefined}
-        >
-          <span className={`${classes.text} font-medium text-gray-600`}>
-            +{remainingCount}
-          </span>
-        </div>
-      )}
-    </div>
+        {remainingCount > 0 && (
+          <div
+            className={`${classes.container} ${classes.spacingCompact} avatar-item relative flex items-center justify-center rounded-full border-2 border-white bg-gray-300 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110`}
+            style={{
+              zIndex: 0,
+            }}
+            title={showTooltip ? `+${remainingCount} more speakers` : undefined}
+          >
+            <span className={`${classes.text} font-medium text-gray-600`}>
+              +{remainingCount}
+            </span>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
