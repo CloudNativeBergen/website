@@ -9,6 +9,11 @@ import {
 } from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from './SpeakerAvatars'
 
+// Constants for better maintainability
+const DEFAULT_CO_SPEAKER_LIMIT = 1
+const SEARCH_DEBOUNCE_MS = 300
+const BLUR_DELAY_MS = 200
+
 // Helper function to get co-speaker limits based on format
 function getCoSpeakerLimit(format: Format): number {
   switch (format) {
@@ -18,12 +23,12 @@ function getCoSpeakerLimit(format: Format): number {
     case Format.presentation_25:
     case Format.presentation_40:
     case Format.presentation_45:
-      return 1 // One co-speaker for presentations
+      return DEFAULT_CO_SPEAKER_LIMIT // One co-speaker for presentations
     case Format.workshop_120:
     case Format.workshop_240:
       return 3 // Three co-speakers for workshops
     default:
-      return 1 // Default to one co-speaker
+      return DEFAULT_CO_SPEAKER_LIMIT // Default to one co-speaker
   }
 }
 
@@ -103,7 +108,7 @@ export function CoSpeakerSelector({
         setSearchResults([])
         setShowResults(false)
       }
-    }, 300)
+    }, SEARCH_DEBOUNCE_MS)
 
     return () => clearTimeout(timeoutId)
   }, [searchQuery])
@@ -134,7 +139,7 @@ export function CoSpeakerSelector({
 
   const handleSearchBlur = () => {
     // Delay hiding results to allow for clicks
-    setTimeout(() => setShowResults(false), 200)
+    setTimeout(() => setShowResults(false), BLUR_DELAY_MS)
   }
 
   return (
