@@ -194,7 +194,7 @@ export default function SponsorTierManagement({
                         {tierSponsors.length} sponsor
                         {tierSponsors.length !== 1 ? 's' : ''}
                       </span>
-                      {tier && tier.price.length > 0 && (
+                      {tier && tier.price && tier.price.length > 0 && (
                         <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
                           <CurrencyDollarIcon className="mr-1 h-3 w-3" />
                           {formatCurrency(
@@ -336,7 +336,7 @@ export default function SponsorTierManagement({
                       <span className="mt-1 block text-xs text-gray-500 sm:text-sm">
                         {tier.tagline}
                       </span>
-                      {tier.price.length > 0 && (
+                      {tier.price && tier.price.length > 0 && (
                         <span className="mt-2 inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
                           <CurrencyDollarIcon className="mr-1 h-3 w-3" />
                           {formatCurrency(

@@ -39,6 +39,7 @@ export interface ConferenceSponsor {
   tier: {
     title: string
     tagline: string
+    tier_type?: 'standard' | 'special'
   }
 }
 
@@ -48,11 +49,12 @@ export interface SponsorTier {
   _updatedAt: string
   title: string
   tagline: string
-  price: Array<{
+  tier_type: 'standard' | 'special'
+  price?: Array<{
     amount: number
     currency: string
   }>
-  perks: Array<{
+  perks?: Array<{
     label: string
     description: string
   }>

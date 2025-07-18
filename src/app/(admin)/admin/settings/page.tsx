@@ -424,7 +424,7 @@ export default async function AdminSettings() {
                       {tier.price.map((price, pidx) => (
                         <span key={pidx}>
                           {price.amount} {price.currency}
-                          {pidx < tier.price.length - 1 && ', '}
+                          {pidx < tier.price!.length - 1 && ', '}
                         </span>
                       ))}
                     </div>

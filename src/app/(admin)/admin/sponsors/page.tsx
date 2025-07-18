@@ -51,19 +51,30 @@ export default async function AdminSponsors() {
     const tierA = sponsorTiers.find((tier) => tier.title === a)
     const tierB = sponsorTiers.find((tier) => tier.title === b)
 
+    // Handle special sponsors separately
+    if (tierA?.tier_type === 'special' && tierB?.tier_type === 'special') {
+      return a.localeCompare(b)
+    }
+    if (tierA?.tier_type === 'special') return 1 // Special sponsors go last
+    if (tierB?.tier_type === 'special') return -1
+
     // Get the maximum price for each tier (in case there are multiple currencies)
-    const maxPriceA = tierA ? Math.max(...tierA.price.map((p) => p.amount)) : 0
-    const maxPriceB = tierB ? Math.max(...tierB.price.map((p) => p.amount)) : 0
+    const maxPriceA = tierA?.price
+      ? Math.max(...tierA.price.map((p) => p.amount))
+      : 0
+    const maxPriceB = tierB?.price
+      ? Math.max(...tierB.price.map((p) => p.amount))
+      : 0
 
     // Sort by highest value first
     return maxPriceB - maxPriceA
   })
 
-  // Calculate total sponsorship value
+  // Calculate total sponsorship value (only from standard sponsors with pricing)
   const totalSponsorshipValue = sponsors.reduce((total, sponsorData) => {
-    if (sponsorData.tier) {
+    if (sponsorData.tier && sponsorData.tier.tier_type !== 'special') {
       const tier = sponsorTiers.find((t) => t.title === sponsorData.tier?.title)
-      if (tier && tier.price.length > 0) {
+      if (tier && tier.price && tier.price.length > 0) {
         // Use the first price entry or the maximum price
         const tierValue = Math.max(...tier.price.map((p) => p.amount))
         return total + tierValue
@@ -73,9 +84,9 @@ export default async function AdminSponsors() {
   }, 0)
 
   // Get the primary currency (most common currency in sponsor tiers)
-  const currencies = sponsorTiers.flatMap((tier) =>
-    tier.price.map((p) => p.currency),
-  )
+  const currencies = sponsorTiers
+    .filter((tier) => tier.price)
+    .flatMap((tier) => tier.price!.map((p) => p.currency))
   const primaryCurrency =
     currencies.length > 0
       ? currencies.reduce((a, b, i, arr) =>

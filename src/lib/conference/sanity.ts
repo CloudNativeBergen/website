@@ -117,7 +117,7 @@ export async function getConferenceForDomain(
       }
       ${
         sponsors
-          ? `sponsors[]{
+          ? `sponsors[] | order(tier->tier_type asc, tier->title asc){
       sponsor->{
         name,
         website,
@@ -125,19 +125,21 @@ export async function getConferenceForDomain(
       },
       tier->{
         title,
-        tagline
+        tagline,
+        tier_type
       }
       },`
           : ''
       }
       ${
         sponsorTiers
-          ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id] | order(price[0].amount desc){
+          ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id] | order(tier_type asc, title asc, price[0].amount desc){
       _id,
       _createdAt,
       _updatedAt,
       title,
       tagline,
+      tier_type,
       price[]{
         amount,
         currency

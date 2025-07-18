@@ -3,11 +3,12 @@ import { SponsorTier } from '@/lib/conference/types'
 export interface SponsorTierInput {
   title: string
   tagline: string
-  price: Array<{
+  tier_type: 'standard' | 'special'
+  price?: Array<{
     amount: number
     currency: string
   }>
-  perks: Array<{
+  perks?: Array<{
     label: string
     description: string
   }>

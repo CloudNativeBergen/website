@@ -54,6 +54,7 @@ function SponsorTierModal({
   const [formData, setFormData] = useState<SponsorTierInput>({
     title: '',
     tagline: '',
+    tier_type: 'standard',
     price: [{ amount: 0, currency: 'NOK' }],
     perks: [{ label: '', description: '' }],
     sold_out: false,
@@ -68,6 +69,7 @@ function SponsorTierModal({
       setFormData({
         title: tier.title || '',
         tagline: tier.tagline || '',
+        tier_type: tier.tier_type || 'standard',
         price:
           tier.price && tier.price.length > 0
             ? tier.price
@@ -83,6 +85,7 @@ function SponsorTierModal({
       setFormData({
         title: '',
         tagline: '',
+        tier_type: 'standard',
         price: [{ amount: 0, currency: 'NOK' }],
         perks: [{ label: '', description: '' }],
         sold_out: false,
@@ -141,15 +144,15 @@ function SponsorTierModal({
   const addPrice = () => {
     setFormData((prev) => ({
       ...prev,
-      price: [...prev.price, { amount: 0, currency: 'NOK' }],
+      price: [...(prev.price || []), { amount: 0, currency: 'NOK' }],
     }))
   }
 
   const removePrice = (index: number) => {
-    if (formData.price.length > 1) {
+    if (formData.price && formData.price.length > 1) {
       setFormData((prev) => ({
         ...prev,
-        price: prev.price.filter((_, i) => i !== index),
+        price: prev.price?.filter((_, i) => i !== index),
       }))
     }
   }
@@ -161,7 +164,7 @@ function SponsorTierModal({
   ) => {
     setFormData((prev) => ({
       ...prev,
-      price: prev.price.map((price, i) =>
+      price: prev.price?.map((price, i) =>
         i === index
           ? { ...price, [field]: field === 'amount' ? Number(value) : value }
           : price,
@@ -172,15 +175,15 @@ function SponsorTierModal({
   const addPerk = () => {
     setFormData((prev) => ({
       ...prev,
-      perks: [...prev.perks, { label: '', description: '' }],
+      perks: [...(prev.perks || []), { label: '', description: '' }],
     }))
   }
 
   const removePerk = (index: number) => {
-    if (formData.perks.length > 1) {
+    if (formData.perks && formData.perks.length > 1) {
       setFormData((prev) => ({
         ...prev,
-        perks: prev.perks.filter((_, i) => i !== index),
+        perks: prev.perks?.filter((_, i) => i !== index),
       }))
     }
   }
@@ -192,7 +195,7 @@ function SponsorTierModal({
   ) => {
     setFormData((prev) => ({
       ...prev,
-      perks: prev.perks.map((perk, i) =>
+      perks: prev.perks?.map((perk, i) =>
         i === index ? { ...perk, [field]: value } : perk,
       ),
     }))
@@ -326,6 +329,71 @@ function SponsorTierModal({
 
                           <div>
                             <label
+                              htmlFor="tier_type"
+                              className="block text-sm/6 font-medium text-gray-900"
+                            >
+                              Tier Type *
+                            </label>
+                            <div className="mt-2">
+                              <div className="grid grid-cols-1">
+                                <select
+                                  id="tier_type"
+                                  value={formData.tier_type}
+                                  onChange={(e) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      tier_type: e.target.value as
+                                        | 'standard'
+                                        | 'special',
+                                      // Reset optional fields when switching types
+                                      price:
+                                        e.target.value === 'standard'
+                                          ? prev.price || [
+                                              { amount: 0, currency: 'NOK' },
+                                            ]
+                                          : undefined,
+                                      perks:
+                                        e.target.value === 'standard'
+                                          ? prev.perks || [
+                                              { label: '', description: '' },
+                                            ]
+                                          : prev.perks,
+                                    }))
+                                  }
+                                  className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                >
+                                  <option value="standard">
+                                    Standard Sponsor
+                                  </option>
+                                  <option value="special">
+                                    Special Sponsor (Media, Community, etc.)
+                                  </option>
+                                </select>
+                                <svg
+                                  fill="none"
+                                  viewBox="0 0 20 20"
+                                  strokeWidth={1.5}
+                                  stroke="currentColor"
+                                  aria-hidden="true"
+                                  className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="m19.5 8.25-7.5 7.5-7.5-7.5"
+                                  />
+                                </svg>
+                              </div>
+                            </div>
+                            <p className="mt-2 text-sm text-gray-600">
+                              {formData.tier_type === 'standard'
+                                ? 'Standard sponsors require pricing and perks'
+                                : "Special sponsors (like Media or Community partners) are shown separately and don't require pricing"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <label
                               htmlFor="tagline"
                               className="block text-sm/6 font-medium text-gray-900"
                             >
@@ -350,99 +418,107 @@ function SponsorTierModal({
                           </div>
                         </div>
 
-                        {/* Pricing */}
-                        <div>
-                          <div className="flex items-center justify-between">
-                            <label className="block text-sm/6 font-medium text-gray-900">
-                              Pricing *
-                            </label>
-                            <button
-                              type="button"
-                              onClick={addPrice}
-                              className="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                            >
-                              <PlusIcon className="mr-1 inline h-3 w-3" />
-                              Add Price
-                            </button>
-                          </div>
-                          <div className="mt-2 space-y-3">
-                            {formData.price.map((price, index) => (
-                              <div
-                                key={index}
-                                className="flex items-center gap-x-3"
+                        {/* Pricing - Only for Standard Sponsors */}
+                        {formData.tier_type === 'standard' && (
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <label className="block text-sm/6 font-medium text-gray-900">
+                                Pricing *
+                              </label>
+                              <button
+                                type="button"
+                                onClick={addPrice}
+                                className="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
                               >
-                                <div className="flex-1">
-                                  <input
-                                    type="number"
-                                    value={price.amount || 0}
-                                    onChange={(e) =>
-                                      updatePrice(
-                                        index,
-                                        'amount',
-                                        e.target.value,
-                                      )
-                                    }
-                                    min="0"
-                                    step="1"
-                                    required
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                    placeholder="Amount"
-                                  />
-                                </div>
-                                <div className="w-24">
-                                  <div className="grid grid-cols-1">
-                                    <select
-                                      value={price.currency || 'NOK'}
+                                <PlusIcon className="mr-1 inline h-3 w-3" />
+                                Add Price
+                              </button>
+                            </div>
+                            <div className="mt-2 space-y-3">
+                              {(formData.price || []).map((price, index) => (
+                                <div
+                                  key={index}
+                                  className="flex items-center gap-x-3"
+                                >
+                                  <div className="flex-1">
+                                    <input
+                                      type="number"
+                                      value={price.amount || 0}
                                       onChange={(e) =>
                                         updatePrice(
                                           index,
-                                          'currency',
+                                          'amount',
                                           e.target.value,
                                         )
                                       }
-                                      className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                    >
-                                      {CURRENCY_OPTIONS.map((currency) => (
-                                        <option key={currency} value={currency}>
-                                          {currency}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <svg
-                                      fill="none"
-                                      viewBox="0 0 20 20"
-                                      strokeWidth={1.5}
-                                      stroke="currentColor"
-                                      aria-hidden="true"
-                                      className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        d="m19.5 8.25-7.5 7.5-7.5-7.5"
-                                      />
-                                    </svg>
+                                      min="0"
+                                      step="1"
+                                      required
+                                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                      placeholder="Amount"
+                                    />
                                   </div>
+                                  <div className="w-24">
+                                    <div className="grid grid-cols-1">
+                                      <select
+                                        value={price.currency || 'NOK'}
+                                        onChange={(e) =>
+                                          updatePrice(
+                                            index,
+                                            'currency',
+                                            e.target.value,
+                                          )
+                                        }
+                                        className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                      >
+                                        {CURRENCY_OPTIONS.map((currency) => (
+                                          <option
+                                            key={currency}
+                                            value={currency}
+                                          >
+                                            {currency}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <svg
+                                        fill="none"
+                                        viewBox="0 0 20 20"
+                                        strokeWidth={1.5}
+                                        stroke="currentColor"
+                                        aria-hidden="true"
+                                        className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+                                      >
+                                        <path
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                          d="m19.5 8.25-7.5 7.5-7.5-7.5"
+                                        />
+                                      </svg>
+                                    </div>
+                                  </div>
+                                  {(formData.price || []).length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => removePrice(index)}
+                                      className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
+                                    >
+                                      <TrashIcon className="h-4 w-4" />
+                                    </button>
+                                  )}
                                 </div>
-                                {formData.price.length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => removePrice(index)}
-                                    className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
-                                  >
-                                    <TrashIcon className="h-4 w-4" />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
 
-                        {/* Perks */}
+                        {/* Perks - Optional for Special Sponsors */}
                         <div>
                           <div className="flex items-center justify-between">
                             <label className="block text-sm/6 font-medium text-gray-900">
-                              Perks *
+                              Perks{' '}
+                              {formData.tier_type === 'standard'
+                                ? '*'
+                                : '(Optional)'}
                             </label>
                             <button
                               type="button"
@@ -454,7 +530,7 @@ function SponsorTierModal({
                             </button>
                           </div>
                           <div className="mt-2 space-y-3">
-                            {formData.perks.map((perk, index) => (
+                            {(formData.perks || []).map((perk, index) => (
                               <div
                                 key={index}
                                 className="flex items-start gap-x-3"
@@ -466,7 +542,7 @@ function SponsorTierModal({
                                     onChange={(e) =>
                                       updatePerk(index, 'label', e.target.value)
                                     }
-                                    required
+                                    required={formData.tier_type === 'standard'}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
                                     placeholder="Perk name"
                                   />
@@ -480,12 +556,12 @@ function SponsorTierModal({
                                         e.target.value,
                                       )
                                     }
-                                    required
+                                    required={formData.tier_type === 'standard'}
                                     className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
                                     placeholder="Perk description"
                                   />
                                 </div>
-                                {formData.perks.length > 1 && (
+                                {(formData.perks || []).length > 1 && (
                                   <button
                                     type="button"
                                     onClick={() => removePerk(index)}
@@ -718,9 +794,20 @@ export default function SponsorTierEditor({
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {sponsorTiers
             .sort((a, b) => {
-              // Sort by highest price first
-              const maxPriceA = Math.max(...a.price.map((p) => p.amount))
-              const maxPriceB = Math.max(...b.price.map((p) => p.amount))
+              // Sort standard tiers by price (highest first), special tiers by title
+              if (a.tier_type === 'special' && b.tier_type === 'special') {
+                return a.title.localeCompare(b.title)
+              }
+              if (a.tier_type === 'special') return 1 // Special tiers go last
+              if (b.tier_type === 'special') return -1 // Standard tiers go first
+
+              // Both are standard tiers, sort by highest price first
+              const maxPriceA = a.price
+                ? Math.max(...a.price.map((p) => p.amount))
+                : 0
+              const maxPriceB = b.price
+                ? Math.max(...b.price.map((p) => p.amount))
+                : 0
               return maxPriceB - maxPriceA
             })
             .map((tier) => (
@@ -748,16 +835,26 @@ export default function SponsorTierEditor({
                   </h3>
                   <p className="mt-2 text-sm text-gray-500">{tier.tagline}</p>
 
-                  <div className="mt-4">
-                    {tier.price.map((price, priceIndex) => (
-                      <div
-                        key={priceIndex}
-                        className="text-2xl font-bold text-gray-900"
-                      >
-                        {formatCurrency(price.amount, price.currency)}
-                      </div>
-                    ))}
-                  </div>
+                  {tier.tier_type === 'special' && (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
+                        Special Sponsor
+                      </span>
+                    </div>
+                  )}
+
+                  {tier.price && tier.price.length > 0 && (
+                    <div className="mt-4">
+                      {tier.price.map((price, priceIndex) => (
+                        <div
+                          key={priceIndex}
+                          className="text-2xl font-bold text-gray-900"
+                        >
+                          {formatCurrency(price.amount, price.currency)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {tier.sold_out && (
                     <div className="mt-2">
@@ -767,16 +864,18 @@ export default function SponsorTierEditor({
                     </div>
                   )}
 
-                  <div className="mt-4 text-left">
-                    <ul className="space-y-2">
-                      {tier.perks.map((perk, perkIndex) => (
-                        <li key={perkIndex} className="text-sm text-gray-600">
-                          <span className="font-medium">{perk.label}:</span>{' '}
-                          {perk.description}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {tier.perks && tier.perks.length > 0 && (
+                    <div className="mt-4 text-left">
+                      <ul className="space-y-2">
+                        {tier.perks.map((perk, perkIndex) => (
+                          <li key={perkIndex} className="text-sm text-gray-600">
+                            <span className="font-medium">{perk.label}:</span>{' '}
+                            {perk.description}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-6 flex justify-center">

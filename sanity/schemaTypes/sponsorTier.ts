@@ -1,4 +1,3 @@
-import { define } from 'nock'
 import { defineField, defineType } from 'sanity'
 
 export default defineType({
@@ -19,13 +18,32 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'tier_type',
+      title: 'Tier Type',
+      type: 'string',
+      options: {
+        list: [
+          { title: 'Standard Sponsor', value: 'standard' },
+          {
+            title: 'Special Sponsor (Media, Community, etc.)',
+            value: 'special',
+          },
+        ],
+        layout: 'radio',
+      },
+      initialValue: 'standard',
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
       name: 'price',
       title: 'Price',
-      description: 'Sponsor tier price without vat',
+      description:
+        'Sponsor tier price without vat (not required for special sponsors)',
       type: 'array',
       of: [
         {
           type: 'object',
+          name: 'priceItem',
           fields: [
             { name: 'amount', title: 'Amount', type: 'number' },
             {
@@ -46,7 +64,15 @@ export default defineType({
       options: {
         layout: 'tags',
       },
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) =>
+        Rule.custom((price, context) => {
+          const tierType = context.document?.tier_type
+          if (tierType === 'standard' && (!price || price.length === 0)) {
+            return 'Price is required for standard sponsor tiers'
+          }
+          return true
+        }),
+      hidden: ({ document }) => document?.tier_type === 'special',
     }),
     defineField({
       name: 'perks',
@@ -55,6 +81,7 @@ export default defineType({
       of: [
         {
           type: 'object',
+          name: 'perkItem',
           fields: [
             { name: 'label', title: 'Label', type: 'string' },
             { name: 'description', title: 'Description', type: 'string' },
@@ -70,7 +97,14 @@ export default defineType({
       options: {
         layout: 'tags',
       },
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) =>
+        Rule.custom((perks, context) => {
+          const tierType = context.document?.tier_type
+          if (tierType === 'standard' && (!perks || perks.length === 0)) {
+            return 'Perks are required for standard sponsor tiers'
+          }
+          return true
+        }),
     }),
     defineField({
       name: 'conference',
@@ -103,13 +137,16 @@ export default defineType({
   preview: {
     select: {
       title: 'title',
+      tierType: 'tier_type',
       price: 'price.0.amount',
       currency: 'price.0.currency',
       subtitle: 'conference.title',
     },
-    prepare({ title, price, currency, subtitle }) {
+    prepare({ title, tierType, price, currency, subtitle }) {
+      const priceDisplay =
+        tierType === 'special' ? 'Special' : `${price} ${currency}`
       return {
-        title: `${title} (${price} ${currency})`,
+        title: `${title} (${priceDisplay})`,
         subtitle: `${subtitle}`,
       }
     },
@@ -120,6 +157,16 @@ export default defineType({
       name: 'conference',
       by: [
         { field: 'conference.title', direction: 'desc' },
+        { field: 'tier_type', direction: 'asc' },
+        { field: 'title', direction: 'asc' },
+      ],
+    },
+    {
+      title: 'Type and Order',
+      name: 'typeAndOrder',
+      by: [
+        { field: 'tier_type', direction: 'asc' },
+        { field: 'price.0.amount', direction: 'desc' },
         { field: 'title', direction: 'asc' },
       ],
     },
