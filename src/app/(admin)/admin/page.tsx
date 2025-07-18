@@ -51,10 +51,15 @@ export default async function AdminDashboard() {
   // Speaker stats
   const uniqueSpeakers = new Set(
     proposals
-      .map((p) =>
-        typeof p.speaker === 'object' && p.speaker && '_id' in p.speaker
-          ? p.speaker._id
-          : null,
+      .flatMap((p) =>
+        p.speakers && Array.isArray(p.speakers)
+          ? p.speakers
+              .filter(
+                (speaker) =>
+                  typeof speaker === 'object' && speaker && '_id' in speaker,
+              )
+              .map((speaker) => speaker._id)
+          : [],
       )
       .filter(Boolean),
   ).size
@@ -505,12 +510,17 @@ export default async function AdminDashboard() {
               )
               .slice(0, 5)
               .map((proposal, idx) => {
-                const speaker =
-                  typeof proposal.speaker === 'object' &&
-                  proposal.speaker &&
-                  'name' in proposal.speaker
-                    ? (proposal.speaker as Speaker)
-                    : null
+                const speakers =
+                  proposal.speakers && Array.isArray(proposal.speakers)
+                    ? proposal.speakers.filter(
+                        (speaker) =>
+                          typeof speaker === 'object' &&
+                          speaker &&
+                          'name' in speaker,
+                      )
+                    : []
+                const primarySpeaker =
+                  speakers.length > 0 ? (speakers[0] as Speaker) : null
                 const isLast = idx === Math.min(proposals.length - 1, 4)
 
                 return (
@@ -552,7 +562,7 @@ export default async function AdminDashboard() {
                               </Link>{' '}
                               by{' '}
                               <span className="font-medium text-gray-900">
-                                {speaker?.name || 'Unknown Speaker'}
+                                {primarySpeaker?.name || 'Unknown Speaker'}
                               </span>
                             </p>
                             <p className="mt-1 text-xs text-gray-400">

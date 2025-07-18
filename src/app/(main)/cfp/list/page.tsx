@@ -103,20 +103,26 @@ export default async function SpeakerDashboard() {
                     <div className="space-y-6">
                       {confirmedProposals.map((proposal) => {
                         // Extract speaker data safely
-                        const speaker =
-                          typeof proposal.speaker === 'object' &&
-                          proposal.speaker
-                            ? (proposal.speaker as Speaker)
-                            : null
+                        const speakers =
+                          proposal.speakers && Array.isArray(proposal.speakers)
+                            ? proposal.speakers.filter(
+                                (speaker) =>
+                                  typeof speaker === 'object' &&
+                                  speaker &&
+                                  'name' in speaker,
+                              )
+                            : []
+                        const primarySpeaker =
+                          speakers.length > 0 ? (speakers[0] as Speaker) : null
 
-                        return speaker ? (
+                        return primarySpeaker ? (
                           <div
                             key={proposal._id}
                             className="flex flex-col items-center"
                           >
                             <SpeakerSharingActions
-                              filename={`${speaker.slug || speaker.name?.replace(/\s+/g, '-').toLowerCase()}-speaker-card`}
-                              speakerUrl={`https://${domain}/speaker/${speaker.slug}`}
+                              filename={`${primarySpeaker.slug || primarySpeaker.name?.replace(/\s+/g, '-').toLowerCase()}-speaker-card`}
+                              speakerUrl={`https://${domain}/speaker/${primarySpeaker.slug}`}
                               talkTitle={proposal.title}
                               eventName={
                                 conference?.title || 'Cloud Native Bergen'
@@ -124,7 +130,7 @@ export default async function SpeakerDashboard() {
                             >
                               <SpeakerPromotion
                                 speaker={{
-                                  ...speaker,
+                                  ...primarySpeaker,
                                   talks: [proposal], // Include the confirmed proposal as a talk
                                 }}
                                 variant="speaker-share"
@@ -132,7 +138,7 @@ export default async function SpeakerDashboard() {
                                   conference?.title || 'Cloud Native Bergen'
                                 }
                                 ctaText="View Profile"
-                                ctaUrl={`https://${domain}/speaker/${speaker.slug}`}
+                                ctaUrl={`https://${domain}/speaker/${primarySpeaker.slug}`}
                                 className="w-full max-w-xs"
                               />
                             </SpeakerSharingActions>

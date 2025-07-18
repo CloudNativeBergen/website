@@ -54,7 +54,12 @@ function scheduleToSlots(schedule: ConferenceSchedule) {
       if (previousItem) {
         if (itemIndex === 0) {
           currentSlotIndex = 0
-        } else if (!item.talk?.speaker || !previousItem.talk?.speaker) {
+        } else if (
+          !item.talk?.speakers ||
+          item.talk.speakers.length === 0 ||
+          !previousItem.talk?.speakers ||
+          previousItem.talk.speakers.length === 0
+        ) {
           currentSlotIndex++
         } else if (item.startTime !== previousItem.endTime) {
           const timeDifference = timeDiff(previousItem.endTime, item.startTime)
@@ -76,7 +81,7 @@ function scheduleToSlots(schedule: ConferenceSchedule) {
           tracks: [],
         }
 
-        if (!item.talk?.speaker) {
+        if (!item.talk?.speakers || item.talk.speakers.length === 0) {
           slots[currentSlotIndex].title = item.talk?.title
           slots[currentSlotIndex].start_time = item.startTime
           slots[currentSlotIndex].end_time = item.endTime
@@ -186,7 +191,7 @@ export default async function Info() {
                           <p>{talk.startTime}</p>
                           <p>
                             <Link
-                              href={`/speaker/${talk.talk!.speaker && 'slug' in talk.talk!.speaker ? talk.talk!.speaker.slug : ''}`}
+                              href={`/speaker/${talk.talk!.speakers && talk.talk!.speakers.length > 0 && 'slug' in talk.talk!.speakers[0] ? talk.talk!.speakers[0].slug : ''}`}
                               className="hover:underline"
                             >
                               <span className="font-semibold">
@@ -202,8 +207,10 @@ export default async function Info() {
                           </p>
                           <p className="text-gray-500">
                             by{' '}
-                            {talk.talk!.speaker && 'name' in talk.talk!.speaker
-                              ? talk.talk!.speaker.name
+                            {talk.talk!.speakers &&
+                            talk.talk!.speakers.length > 0 &&
+                            'name' in talk.talk!.speakers[0]
+                              ? talk.talk!.speakers[0].name
                               : ''}
                           </p>
                         </div>

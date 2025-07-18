@@ -90,9 +90,26 @@ export default defineType({
     }),
     defineField({
       name: 'speaker',
-      title: 'Speaker',
+      title: 'Speaker (Deprecated)',
       type: 'reference',
       to: [{ type: 'speaker' }],
+      deprecated: {
+        reason: 'Use speakers array instead of single speaker reference',
+      },
+      hidden: true,
+    }),
+    defineField({
+      name: 'speakers',
+      title: 'Speakers',
+      type: 'array',
+      of: [
+        {
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+        },
+      ],
+      validation: (Rule) =>
+        Rule.min(1).max(3).error('Please select 1-3 speakers'),
     }),
     defineField({
       name: 'conference',
@@ -117,13 +134,16 @@ export default defineType({
   preview: {
     select: {
       title: 'title',
-      speaker: 'speaker.name',
+      speakers: 'speakers',
     },
     prepare(selection) {
-      const { title, speaker } = selection
+      const { title, speakers } = selection
+      const speakerNames =
+        speakers?.map((speaker: any) => speaker.name).join(', ') ||
+        'No speakers'
       return {
         ...selection,
-        title: `${title} (${speaker})`,
+        title: `${title} (${speakerNames})`,
       }
     },
   },

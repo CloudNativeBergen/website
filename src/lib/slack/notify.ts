@@ -1,4 +1,10 @@
-import { ProposalExisting } from '@/lib/proposal/types'
+import {
+  ProposalExisting,
+  formats,
+  levels,
+  languages,
+  audiences,
+} from '@/lib/proposal/types'
 import { PortableTextBlock } from 'sanity'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { Action } from '@/lib/proposal/types'
@@ -45,33 +51,55 @@ async function sendSlackMessage(message: SlackMessage) {
     })
 
     if (!response.ok) {
-      throw new Error(
-        `Failed to send Slack notification: ${response.statusText}`,
-      )
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
   } catch (error) {
     console.error('Error sending Slack notification:', error)
   }
 }
 
-export async function notifyNewProposal(proposal: ProposalExisting) {
-  // Fetch speaker details if it's a reference
-  let speakerName = 'Unknown'
-
-  if (proposal.speaker && '_ref' in proposal.speaker) {
-    const { speaker, err } = await getSpeaker(proposal.speaker._ref)
-    if (!err && speaker && speaker.name) {
-      speakerName = speaker.name
-    } else {
-      console.log('Could not set speaker name. Conditions:', {
-        hasError: !!err,
-        hasSpeaker: !!speaker,
-        hasName: speaker?.name ? true : false,
-      })
-    }
-  } else {
-    console.log('Speaker is not a reference or is missing')
+async function resolveSpeakerNames(
+  proposal: ProposalExisting,
+): Promise<string> {
+  if (
+    !proposal.speakers ||
+    !Array.isArray(proposal.speakers) ||
+    proposal.speakers.length === 0
+  ) {
+    return 'Unknown'
   }
+
+  const speakerPromises = proposal.speakers.map(async (speaker) => {
+    if (speaker && '_ref' in speaker) {
+      const { speaker: speakerData, err } = await getSpeaker(speaker._ref)
+      if (!err && speakerData?.name) {
+        return speakerData.name
+      }
+    }
+    return 'Unknown'
+  })
+
+  const resolvedSpeakers = await Promise.all(speakerPromises)
+  return resolvedSpeakers.join(', ')
+}
+
+function formatDescription(
+  description: PortableTextBlock[] | undefined,
+): string {
+  if (!description || description.length === 0) {
+    return 'No description provided'
+  }
+
+  return description
+    .map((block: PortableTextBlock) => {
+      const children = block.children as { text: string }[] | undefined
+      return children?.[0]?.text || ''
+    })
+    .join('\n')
+}
+
+export async function notifyNewProposal(proposal: ProposalExisting) {
+  const speakerNames = await resolveSpeakerNames(proposal)
 
   const message = {
     blocks: [
@@ -92,7 +120,7 @@ export async function notifyNewProposal(proposal: ProposalExisting) {
           },
           {
             type: 'mrkdwn',
-            text: `*Speaker:*\n${speakerName}`,
+            text: `*Speaker:*\n${speakerNames}`,
           },
         ],
       },
@@ -101,11 +129,24 @@ export async function notifyNewProposal(proposal: ProposalExisting) {
         fields: [
           {
             type: 'mrkdwn',
-            text: `*Format:*\n${proposal.format}`,
+            text: `*Format:*\n${formats.get(proposal.format) || proposal.format}`,
           },
           {
             type: 'mrkdwn',
-            text: `*Level:*\n${proposal.level}`,
+            text: `*Level:*\n${levels.get(proposal.level) || proposal.level}`,
+          },
+        ],
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Language:*\n${languages.get(proposal.language) || proposal.language}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Audience:*\n${proposal.audiences ? proposal.audiences.map((aud) => audiences.get(aud) || aud).join(', ') : 'Not specified'}`,
           },
         ],
       },
@@ -113,16 +154,7 @@ export async function notifyNewProposal(proposal: ProposalExisting) {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Description:*\n${
-            proposal.description
-              ?.map((block: PortableTextBlock) => {
-                const children = block.children as
-                  | { text: string }[]
-                  | undefined
-                return children?.[0]?.text || ''
-              })
-              .join('\n') || 'No description provided'
-          }`,
+          text: `*Description:*\n${formatDescription(proposal.description)}`,
         },
       },
     ],
@@ -131,40 +163,33 @@ export async function notifyNewProposal(proposal: ProposalExisting) {
   await sendSlackMessage(message)
 }
 
+function getActionEmoji(action: Action): string {
+  switch (action) {
+    case Action.confirm:
+      return '✅'
+    case Action.withdraw:
+      return '🚫'
+    default:
+      return '📝'
+  }
+}
+
+function getActionText(action: Action): string {
+  switch (action) {
+    case Action.confirm:
+      return 'Confirmed'
+    case Action.withdraw:
+      return 'Withdrawn'
+    default:
+      return 'Status Changed'
+  }
+}
+
 export async function notifyProposalStatusChange(
   proposal: ProposalExisting,
   action: Action,
 ) {
-  // Fetch speaker details if it's a reference
-  let speakerName = 'Unknown'
-  if (proposal.speaker && '_ref' in proposal.speaker) {
-    const { speaker, err } = await getSpeaker(proposal.speaker._ref)
-    if (!err && speaker && speaker.name) {
-      speakerName = speaker.name
-    }
-  }
-
-  const getEmoji = (action: Action) => {
-    switch (action) {
-      case Action.confirm:
-        return '✅'
-      case Action.withdraw:
-        return '🚫'
-      default:
-        return '📝'
-    }
-  }
-
-  const getStatusText = (action: Action) => {
-    switch (action) {
-      case Action.confirm:
-        return 'Confirmed'
-      case Action.withdraw:
-        return 'Withdrawn'
-      default:
-        return 'Status Changed'
-    }
-  }
+  const speakerNames = await resolveSpeakerNames(proposal)
 
   const message = {
     blocks: [
@@ -172,7 +197,7 @@ export async function notifyProposalStatusChange(
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `${getEmoji(action)} Talk ${getStatusText(action)}`,
+          text: `${getActionEmoji(action)} Talk ${getActionText(action)}`,
           emoji: true,
         },
       },
@@ -185,7 +210,7 @@ export async function notifyProposalStatusChange(
           },
           {
             type: 'mrkdwn',
-            text: `*Speaker:*\n${speakerName}`,
+            text: `*Speaker:*\n${speakerNames}`,
           },
         ],
       },

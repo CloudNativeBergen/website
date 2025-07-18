@@ -7,7 +7,7 @@ import { getAverageScore } from '@/utils/reviewUtils'
 // Define the sort fields and their types
 export type SortField =
   | 'title'
-  | 'speaker'
+  | 'speakers'
   | 'format'
   | 'language'
   | 'level'
@@ -36,15 +36,31 @@ export function useProposalSort(initialProposals: ProposalExisting[]) {
     if (!sortConfig) return initialProposals
 
     return [...initialProposals].sort((a, b) => {
-      // Special case for speaker field which needs to extract the name
-      if (sortConfig.field === 'speaker') {
-        const speakerA =
-          a.speaker && 'name' in a.speaker ? a.speaker.name : 'Unknown'
-        const speakerB =
-          b.speaker && 'name' in b.speaker ? b.speaker.name : 'Unknown'
+      // Special case for speakers field which needs to extract the names
+      if (sortConfig.field === 'speakers') {
+        const speakersA =
+          a.speakers && Array.isArray(a.speakers)
+            ? a.speakers
+                .map((speaker) =>
+                  typeof speaker === 'object' && 'name' in speaker
+                    ? speaker.name
+                    : 'Unknown',
+                )
+                .join(', ')
+            : 'Unknown'
+        const speakersB =
+          b.speakers && Array.isArray(b.speakers)
+            ? b.speakers
+                .map((speaker) =>
+                  typeof speaker === 'object' && 'name' in speaker
+                    ? speaker.name
+                    : 'Unknown',
+                )
+                .join(', ')
+            : 'Unknown'
         return sortConfig.direction === 'asc'
-          ? speakerA.localeCompare(speakerB)
-          : speakerB.localeCompare(speakerA)
+          ? speakersA.localeCompare(speakersB)
+          : speakersB.localeCompare(speakersA)
       }
 
       // Special case for score field which needs numerical comparison

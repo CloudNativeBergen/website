@@ -31,19 +31,19 @@ export async function getProposal({
   let proposalError = null
   let proposal: ProposalExisting = {} as ProposalExisting
 
-  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId'
+  const speakerFilter = isOrganizer ? '' : `"${speakerId}" in speakers[]._ref`
 
   try {
     const query = groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
       ...,
-      speaker-> {
+      speakers[]-> {
         ...,
         "image": image.asset->url,
         ${
           isOrganizer && includeSubmittedTalks
             ? `"submittedTalks": *[
             _type == "talk"
-            && speaker._ref == ^._id
+            && ^._id in speakers[]._ref
             && conference._ref == ^.^.conference._ref
             && _id != ^.^._id
             && status != "draft"
@@ -57,7 +57,7 @@ export async function getProposal({
           isOrganizer && includePreviousAcceptedTalks
             ? `"previousAcceptedTalks": *[
             _type == "talk"
-            && speaker._ref == ^._id
+            && ^._id in speakers[]._ref
             && conference._ref != ^.^.conference._ref
             && (status == "accepted" || status == "confirmed")
           ]{
@@ -127,7 +127,7 @@ export async function getProposals({
     returnAll
       ? `status != "${Status.draft}"`
       : speakerId
-        ? `speaker._ref == $speakerId`
+        ? `"${speakerId}" in speakers[]._ref`
         : null,
     conferenceId ? `conference._ref == $conferenceId` : null,
   ]
@@ -136,13 +136,13 @@ export async function getProposals({
 
   const query = groq`*[${filters}]{
     ...,
-    speaker-> {
+    speakers[]-> {
       _id, name, email, providers, "image": image.asset->url, flags, "slug": slug.current,
       ${
         includePreviousAcceptedTalks
           ? `"previousAcceptedTalks": *[
           _type == "talk"
-          && speaker._ref == ^._id
+          && ^._id in speakers[]._ref
           && conference._ref != ^.^.conference._ref
           && (status == "accepted" || status == "confirmed")
         ]{
@@ -261,7 +261,7 @@ export async function createProposal(
   const _type = 'talk'
   const _id = randomUUID().toString()
   const status = Status.submitted
-  const speaker: Reference = { _type: 'reference', _ref: speakerId }
+  const speakers: Reference[] = [{ _type: 'reference', _ref: speakerId }]
   const conference: Reference = { _type: 'reference', _ref: conferenceId }
 
   try {
@@ -270,7 +270,7 @@ export async function createProposal(
       _type,
       _id,
       status,
-      speaker,
+      speakers,
       conference,
     })) as ProposalExisting
   } catch (error) {
@@ -312,7 +312,7 @@ export async function fetchNextUnreviewedProposal({
       _id,
       title,
       status,
-      speaker->{ _id, name }
+      speakers[]->{ _id, name }
     } | order(_createdAt asc)[0...1]
   `
 
@@ -372,14 +372,14 @@ export async function searchProposals({
       || format match $searchTerm
       || level match $searchTerm
       || audiences[] match $searchTerm
-      || speaker->name match $searchTerm
-      || speaker->bio match $searchTerm
-      || speaker->title match $searchTerm
+      || speakers[]->name match $searchTerm
+      || speakers[]->bio match $searchTerm
+      || speakers[]->title match $searchTerm
       || topics[]->title match $searchTerm
       || topics[]->description match $searchTerm)]
     {
       ...,
-      speaker-> {
+      speakers[]-> {
         _id,
         name,
         title,
@@ -394,7 +394,7 @@ export async function searchProposals({
             ? `,
         "previousAcceptedTalks": *[
           _type == "talk"
-          && speaker._ref == ^._id
+          && ^._id in speakers[]._ref
           && conference._ref != ^.^.conference._ref
           && (status == "accepted" || status == "confirmed")
         ]{

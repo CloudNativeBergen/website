@@ -121,11 +121,20 @@ export const POST = auth(
         action === Action.reject ||
         action === Action.remind)
     ) {
+      if (!proposal.speakers || proposal.speakers.length === 0) {
+        console.error('No speakers found for the proposal.')
+        return proposalResponseError({
+          message: 'No speakers found for the proposal.',
+          type: 'validation_error',
+          status: 400,
+        })
+      }
+      const primarySpeaker = proposal.speakers[0] as Speaker
       await sendAcceptRejectNotification({
         action,
         speaker: {
-          name: (proposal.speaker as Speaker).name,
-          email: (proposal.speaker as Speaker).email,
+          name: primarySpeaker.name,
+          email: primarySpeaker.email,
         },
         proposal: {
           _id: proposal._id,

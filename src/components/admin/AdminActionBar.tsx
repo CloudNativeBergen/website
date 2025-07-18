@@ -31,18 +31,35 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
     proposal.status === 'submitted' || proposal.status === 'accepted'
 
   // Get speaker information for indicators
-  const speaker = proposal.speaker as SpeakerWithReviewInfo
-  const isSeasonedSpeaker =
-    speaker?.previousAcceptedTalks && speaker.previousAcceptedTalks.length > 0
-  const isNewSpeaker =
-    !speaker?.previousAcceptedTalks ||
-    speaker.previousAcceptedTalks.length === 0
-  const isLocalSpeaker = speaker?.flags?.includes(Flags.localSpeaker)
-  const isUnderrepresentedSpeaker = speaker?.flags?.includes(
-    Flags.diverseSpeaker,
+  const speakers =
+    proposal.speakers && Array.isArray(proposal.speakers)
+      ? proposal.speakers
+          .filter(
+            (speaker) =>
+              typeof speaker === 'object' && speaker && 'name' in speaker,
+          )
+          .map((speaker) => speaker as SpeakerWithReviewInfo)
+      : []
+  const isSeasonedSpeaker = speakers.some(
+    (speaker) =>
+      speaker?.previousAcceptedTalks &&
+      speaker.previousAcceptedTalks.length > 0,
   )
-  const requiresTravelSupport = speaker?.flags?.includes(
-    Flags.requiresTravelFunding,
+  const isNewSpeaker =
+    speakers.length === 0 ||
+    speakers.every(
+      (speaker) =>
+        !speaker?.previousAcceptedTalks ||
+        speaker.previousAcceptedTalks.length === 0,
+    )
+  const isLocalSpeaker = speakers.some((speaker) =>
+    speaker?.flags?.includes(Flags.localSpeaker),
+  )
+  const isUnderrepresentedSpeaker = speakers.some((speaker) =>
+    speaker?.flags?.includes(Flags.diverseSpeaker),
+  )
+  const requiresTravelSupport = speakers.some((speaker) =>
+    speaker?.flags?.includes(Flags.requiresTravelFunding),
   )
 
   return (
@@ -95,7 +112,7 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
           )}
 
           {/* Speaker Indicators */}
-          {speaker && (
+          {speakers.length > 0 && (
             <div className="flex flex-shrink-0 items-center gap-2">
               <span className="text-sm font-medium text-gray-600">
                 Speaker:

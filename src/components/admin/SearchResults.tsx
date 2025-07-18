@@ -2,8 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
-import { sanityImage } from '@/lib/sanity/client'
+import { SpeakerAvatars } from '../SpeakerAvatars'
 import { UserIcon } from '@heroicons/react/24/outline'
 import { getStatusBadgeStyle } from './utils'
 
@@ -76,7 +75,15 @@ export function SearchResults({
             ) => {
               return proposals.map((proposal, index) => {
                 const globalIndex = startIndex + index
-                const speaker = proposal.speaker as Speaker
+                const speakers =
+                  proposal.speakers && Array.isArray(proposal.speakers)
+                    ? proposal.speakers.filter(
+                        (speaker) =>
+                          typeof speaker === 'object' &&
+                          speaker &&
+                          'name' in speaker,
+                      )
+                    : []
                 const isSelected = globalIndex === selectedIndex
 
                 return (
@@ -91,39 +98,30 @@ export function SearchResults({
                       isSelected ? 'bg-blue-50 ring-1 ring-blue-500' : ''
                     }`}
                   >
-                    <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0">
-                        {speaker?.image ? (
-                          <img
-                            src={sanityImage(speaker.image)
-                              .width(64)
-                              .height(64)
-                              .fit('crop')
-                              .url()}
-                            alt={speaker.name || 'Speaker'}
-                            width={32}
-                            height={32}
-                            className="h-8 w-8 rounded-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
-                            <UserIcon className="h-4 w-4 text-gray-400" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900">
-                              {proposal.title}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              by {speaker?.name || 'Unknown Speaker'}
-                            </p>
+                    <div className="flex items-center">
+                      {proposal.speakers &&
+                      Array.isArray(proposal.speakers) &&
+                      proposal.speakers.length > 0 ? (
+                        <SpeakerAvatars
+                          speakers={proposal.speakers}
+                          size="sm"
+                          maxVisible={1}
+                        />
+                      ) : (
+                        <div className="flex size-6 flex-none items-center justify-center rounded-full bg-gray-200">
+                          <UserIcon className="size-4 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="ml-3 flex-auto truncate">
+                        <div className="font-medium">{proposal.title}</div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs text-gray-500">
+                            by{' '}
+                            {speakers.map((s) => s.name).join(', ') ||
+                              'Unknown Speaker'}
                           </div>
                           <span
-                            className={`ml-2 inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}
                           >
                             {statuses.get(proposal.status) || proposal.status}
                           </span>

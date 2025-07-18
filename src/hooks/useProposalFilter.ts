@@ -31,9 +31,15 @@ export function useProposalFilter(proposals: ProposalExisting[]) {
     const speakerSet = new Set<string>()
     const stats = proposals.reduce(
       (acc, proposal) => {
-        // Add speaker to the set
-        if (proposal.speaker && 'name' in proposal.speaker) {
-          speakerSet.add(proposal.speaker.name)
+        // Add speakers to the set
+        if (proposal.speakers && Array.isArray(proposal.speakers)) {
+          proposal.speakers.forEach((speaker) => {
+            if (typeof speaker === 'object' && 'name' in speaker) {
+              speakerSet.add(speaker.name)
+            } else {
+              speakerSet.add('Unknown author')
+            }
+          })
         } else {
           speakerSet.add('Unknown author')
         }

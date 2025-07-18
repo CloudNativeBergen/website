@@ -26,13 +26,12 @@ import {
   Language,
   Audience,
 } from '@/lib/proposal/types'
-import type { Speaker } from '@/lib/speaker/types'
 import { Flags } from '@/lib/speaker/types'
 import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
+import { SpeakerAvatarsWithNames } from '../SpeakerAvatars'
 import { calculateAverageRating } from './hooks'
 import { formatDateSafe } from '@/lib/time'
-import { sanityImage } from '@/lib/sanity/client'
 
 interface ProposalPreviewProps {
   proposal: ProposalExisting
@@ -60,22 +59,21 @@ function formatAudience(audience: Audience[]): string {
   return audience.map((a) => audiences.get(a) || a).join(', ')
 }
 
-function isSpeaker(speaker: Speaker | unknown): speaker is Speaker {
-  return (
-    speaker !== null &&
-    typeof speaker === 'object' &&
-    speaker !== undefined &&
-    'name' in speaker
-  )
-}
-
 export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const speaker = isSpeaker(proposal.speaker) ? proposal.speaker : null
+  const speakers =
+    proposal.speakers && Array.isArray(proposal.speakers)
+      ? proposal.speakers.filter(
+          (speaker) =>
+            typeof speaker === 'object' && speaker && 'name' in speaker,
+        )
+      : []
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
   const requiresTravelFunding =
-    speaker?.flags?.includes(Flags.requiresTravelFunding) || false
+    speakers.some((speaker) =>
+      speaker?.flags?.includes(Flags.requiresTravelFunding),
+    ) || false
 
   // Scroll to top when proposal changes
   useEffect(() => {
@@ -106,41 +104,33 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
       >
         <div className="space-y-6">
           {/* Speaker Info */}
-          {speaker && (
-            <div className="flex items-center space-x-4">
-              {speaker.image && (
-                <img
-                  src={sanityImage(speaker.image)
-                    .width(96)
-                    .height(96)
-                    .fit('crop')
-                    .url()}
-                  alt={speaker.name}
-                  width={48}
-                  height={48}
-                  className="h-12 w-12 rounded-full object-cover"
-                  loading="lazy"
-                />
-              )}
-              <div>
+          {proposal.speakers &&
+          Array.isArray(proposal.speakers) &&
+          proposal.speakers.length > 0 ? (
+            <div className="space-y-3">
+              <SpeakerAvatarsWithNames
+                speakers={proposal.speakers}
+                size="md"
+                maxVisible={3}
+              />
+              {requiresTravelFunding && (
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-sm font-medium text-gray-900">
-                    {speaker.name}
-                  </h3>
-                  {requiresTravelFunding && (
-                    <div
-                      className="flex items-center"
-                      title="Requires travel funding"
-                    >
-                      <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
-                    </div>
-                  )}
-                </div>
-                {speaker.bio && (
-                  <p className="line-clamp-2 text-sm text-gray-500">
-                    {speaker.bio}
+                  <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
+                  <p className="text-sm text-gray-500">
+                    Requires travel funding
                   </p>
-                )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center space-x-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                <UserIcon className="h-6 w-6 text-gray-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900">
+                  Unknown Speaker
+                </p>
               </div>
             </div>
           )}

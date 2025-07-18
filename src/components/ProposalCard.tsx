@@ -12,7 +12,7 @@ import {
 import { SpinnerIcon } from './SocialIcons'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
-import { sanityImage } from '@/lib/sanity/client'
+import { SpeakerAvatars } from './SpeakerAvatars'
 
 interface ProposalButtonAction {
   label: Action
@@ -173,22 +173,13 @@ export function ProposalCard({
             )}
           </p>
         </div>
-        {proposal.speaker && 'image' in proposal.speaker ? (
-          <img
-            className="h-10 w-10 flex-shrink-0 rounded-full bg-gray-300"
-            src={
-              proposal.speaker.image
-                ? sanityImage(proposal.speaker.image)
-                    .width(80)
-                    .height(80)
-                    .fit('crop')
-                    .url()
-                : 'https://placehold.co/80x80/e5e7eb/6b7280?text=Speaker'
-            }
-            alt="Speaker Image"
-            width={40}
-            height={40}
-            loading="lazy"
+        {proposal.speakers &&
+        Array.isArray(proposal.speakers) &&
+        proposal.speakers.length > 0 ? (
+          <SpeakerAvatars
+            speakers={proposal.speakers}
+            size="md"
+            maxVisible={3}
           />
         ) : (
           <UserCircleIcon

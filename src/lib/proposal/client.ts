@@ -85,10 +85,10 @@ export interface NextUnreviewedProposalResponse {
     _id: string
     title: string
     status: string
-    speaker?: {
+    speakers?: {
       _id: string
       name: string
-    }
+    }[]
   } | null
   error?: string
 }

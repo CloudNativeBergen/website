@@ -23,7 +23,7 @@ const proposals: ProposalExisting[] = [
     status: Status.draft,
     outline: '',
     tos: true,
-    speaker: speakers[0],
+    speakers: [speakers[0]],
   },
   {
     _id: '6e57c550-2c6f-45bc-bf9b-65e8be5f02ee',
@@ -39,7 +39,7 @@ const proposals: ProposalExisting[] = [
     status: Status.submitted,
     outline: '',
     tos: true,
-    speaker: speakers[0],
+    speakers: [speakers[0]],
   },
   {
     _id: '7915e7a0-d312-4225-af28-9a9efb00903f',
@@ -54,7 +54,7 @@ const proposals: ProposalExisting[] = [
     level: Level.beginner,
     outline: '',
     tos: true,
-    speaker: speakers[1],
+    speakers: [speakers[1]],
   },
   {
     _id: '35a99161-1754-474d-840e-3d1c4f5b6c07',
@@ -69,7 +69,7 @@ const proposals: ProposalExisting[] = [
     level: Level.beginner,
     outline: '',
     tos: true,
-    speaker: speakers[1],
+    speakers: [speakers[1]],
   },
   {
     _id: '7e5e24ab-5290-4d38-b10b-ce65482562b2',
@@ -84,7 +84,7 @@ const proposals: ProposalExisting[] = [
     level: Level.beginner,
     outline: '',
     tos: true,
-    speaker: speakers[0],
+    speakers: [speakers[0]],
   },
   {
     _id: '0a5f4493-53e3-4542-a2de-64825cb29c13',
@@ -99,7 +99,7 @@ const proposals: ProposalExisting[] = [
     level: Level.beginner,
     outline: '',
     tos: true,
-    speaker: speakers[0],
+    speakers: [speakers[0]],
   },
   {
     _id: '68da5b0c-ea76-4e3a-afa2-3407007ef022',
@@ -114,7 +114,7 @@ const proposals: ProposalExisting[] = [
     level: Level.beginner,
     outline: '',
     tos: true,
-    speaker: speakers[1],
+    speakers: [speakers[1]],
   },
 ] as ProposalExisting[]
 

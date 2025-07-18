@@ -13,12 +13,14 @@ export function useProposalSearch(proposals: ProposalExisting[]) {
       filtered = filtered.filter(
         (proposal) =>
           proposal.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (proposal.speaker &&
-            typeof proposal.speaker === 'object' &&
-            'name' in proposal.speaker &&
-            proposal.speaker.name
-              .toLowerCase()
-              .includes(searchQuery.toLowerCase())),
+          (proposal.speakers &&
+            Array.isArray(proposal.speakers) &&
+            proposal.speakers.some(
+              (speaker) =>
+                typeof speaker === 'object' &&
+                'name' in speaker &&
+                speaker.name.toLowerCase().includes(searchQuery.toLowerCase()),
+            )),
       )
     }
 
