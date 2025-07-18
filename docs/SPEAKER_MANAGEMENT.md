@@ -16,10 +16,12 @@ The speaker management page provides administrators with a comprehensive view of
   - Talk title (truncated with tooltip showing full title)
   - Format and language using proper human-readable labels (with tooltips showing full details)
   - Status badges with consistent admin interface colors
+  - Co-speaker information when applicable
 - **Status Summary**: Quick overview showing:
   - Total number of speakers
   - Number with confirmed talks
   - Number with accepted talks
+  - Co-speaker relationships
 
 ### Data Sources
 
@@ -56,11 +58,26 @@ Generic function to fetch speakers based on talk proposal statuses.
 **Returns:**
 
 - Array of speakers with their associated proposals
+- Includes both primary speaker and co-speaker relationships
 - Error handling for failed queries
 
 #### `getSpeakersWithAcceptedTalks(conferenceId?: string)`
 
 Legacy wrapper function that calls `getSpeakers` with accepted and confirmed statuses.
+
+#### `getPublicSpeaker(slug: string)`
+
+Fetches a single speaker's public profile including their talks where they are either the primary speaker or a co-speaker.
+
+**Parameters:**
+
+- `slug`: The speaker's URL slug
+
+**Returns:**
+
+- Speaker information with associated talks
+- Includes `isPrimarySpeaker` flag for each talk
+- Error handling for missing speakers
 
 ## Usage
 
@@ -121,9 +138,57 @@ New speakers created through authentication will automatically get slugs generat
 
 The migration is located at `migrations/ensure-speaker-slugs/index.ts` and uses Sanity's official migration system for safe, atomic updates to your dataset.
 
+## Co-Speaker Management
+
+### Overview
+
+The system supports multiple speakers per proposal for all formats except lightning talks (10 min). This allows for collaborative presentations and workshops.
+
+### Features
+
+- **Co-Speaker Invitations**: Primary speakers can invite co-speakers via email
+- **Invitation Workflow**:
+  - Email-based invitations with 7-day expiry
+  - Accept/reject functionality with automatic notifications
+  - Automatic speaker profile creation for new co-speakers
+- **Access Control**:
+  - Only primary speakers can add/remove co-speakers
+  - Co-speakers can remove themselves
+  - Both primary and co-speakers can edit proposals
+- **Display**:
+  - Co-speakers shown on speaker profiles with "Co-Speaker" badge
+  - All speakers listed on proposal cards and admin views
+  - Proper navigation links between co-speaker profiles
+
+### API Endpoints
+
+- `GET /api/proposal/[id]/co-speakers` - List co-speakers and invitations
+- `POST /api/proposal/[id]/co-speakers` - Send co-speaker invitation
+- `DELETE /api/proposal/[id]/co-speakers` - Remove co-speaker or cancel invitation
+- `GET /api/proposal/invite/[token]` - Get invitation details
+- `POST /api/proposal/invite/[token]` - Accept/reject invitation
+
+### Data Migration
+
+To ensure all proposals have the required co-speaker fields:
+
+```bash
+# Run the co-speaker migration
+npm run migrate:co-speakers
+
+# Or with dry run to preview changes
+npm run migrate:co-speakers -- --dry-run
+```
+
+The migration will:
+- Add empty `coSpeakers` array to proposals without it
+- Add empty `coSpeakerInvitations` array to proposals without it
+- Skip proposals that already have these fields
+
 ## Future Enhancements
 
 - Speaker detail view for individual speaker management
 - Bulk actions for speaker communication
 - Export functionality for speaker lists
 - Integration with email communication tools
+- Co-speaker statistics and analytics

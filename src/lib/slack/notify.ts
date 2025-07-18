@@ -135,14 +135,35 @@ export async function notifyProposalStatusChange(
   proposal: ProposalExisting,
   action: Action,
 ) {
-  // Fetch speaker details if it's a reference
-  let speakerName = 'Unknown'
+  // Fetch all speaker details
+  const speakerNames: string[] = []
+
+  // Primary speaker
   if (proposal.speaker && '_ref' in proposal.speaker) {
     const { speaker, err } = await getSpeaker(proposal.speaker._ref)
     if (!err && speaker && speaker.name) {
-      speakerName = speaker.name
+      speakerNames.push(speaker.name)
+    }
+  } else if (proposal.speaker && typeof proposal.speaker === 'object' && 'name' in proposal.speaker) {
+    speakerNames.push(proposal.speaker.name)
+  }
+
+  // Co-speakers
+  if (proposal.coSpeakers && Array.isArray(proposal.coSpeakers)) {
+    for (const coSpeaker of proposal.coSpeakers) {
+      if ('_ref' in coSpeaker) {
+        const { speaker, err } = await getSpeaker(coSpeaker._ref)
+        if (!err && speaker && speaker.name) {
+          speakerNames.push(speaker.name)
+        }
+      } else if (typeof coSpeaker === 'object' && 'name' in coSpeaker) {
+        speakerNames.push(coSpeaker.name)
+      }
     }
   }
+
+  const speakerText = speakerNames.length > 0 ? speakerNames.join(', ') : 'Unknown'
+  const speakerLabel = speakerNames.length > 1 ? 'Speakers' : 'Speaker'
 
   const getEmoji = (action: Action) => {
     switch (action) {
@@ -185,7 +206,7 @@ export async function notifyProposalStatusChange(
           },
           {
             type: 'mrkdwn',
-            text: `*Speaker:*\n${speakerName}`,
+            text: `*${speakerLabel}:*\n${speakerText}`,
           },
         ],
       },

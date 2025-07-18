@@ -13,7 +13,8 @@
     "test:watch": "jest --watch",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate:co-speakers": "tsx scripts/migrate-co-speakers.ts"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {

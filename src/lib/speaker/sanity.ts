@@ -46,7 +46,7 @@ async function findSpeakerByProvider(
   return { speaker, err }
 }
 
-async function findSpeakerByEmail(
+export async function findSpeakerByEmail(
   email: string,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   let speaker = {} as Speaker
@@ -182,10 +182,21 @@ export async function getPublicSpeaker(
 
   try {
     data = await clientReadCached.fetch(
-      `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
+      `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && (speaker._ref == ^._id || ^._id in coSpeakers[]._ref) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
         name, title, bio, links, flags, "image": image.asset->url,
-        "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
+        "talks": *[_type == "talk" && (speaker._ref == ^._id || ^._id in coSpeakers[]._ref) && status == "confirmed" && conference._ref == $conferenceId]{
           _id, title, description, language, level, format, audiences,
+          "isPrimarySpeaker": speaker._ref == ^._id,
+          speaker-> {
+            _id,
+            name,
+            "slug": slug.current
+          },
+          coSpeakers[]-> {
+            _id,
+            name,
+            "slug": slug.current
+          },
           topics[]-> {
             _id, title, "slug": slug.current
           },
@@ -221,10 +232,21 @@ export async function getPublicSpeakers(
 
   try {
     speakers = await clientReadCached.fetch(
-      `*[ _type == "speaker" && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0]{
+      `*[ _type == "speaker" && count(*[_type == "talk" && (speaker._ref == ^._id || ^._id in coSpeakers[]._ref) && status == "confirmed" && conference._ref == $conferenceId]) > 0]{
         _id, name, "slug": slug.current, title, bio, links, flags, "image": image.asset->url,
-        "talks": *[_type == "talk" && speaker._ref == ^._id && status == "confirmed" && conference._ref == $conferenceId] {
+        "talks": *[_type == "talk" && (speaker._ref == ^._id || ^._id in coSpeakers[]._ref) && status == "confirmed" && conference._ref == $conferenceId] {
           _id, title, description, language, level, format, audiences,
+          "isPrimarySpeaker": speaker._ref == ^._id,
+          speaker-> {
+            _id,
+            name,
+            "slug": slug.current
+          },
+          coSpeakers[]-> {
+            _id,
+            name,
+            "slug": slug.current
+          },
           topics[]-> {
             _id,
             title,
@@ -297,11 +319,11 @@ export async function getSpeakers(
       : ''
     const statusFilter = statuses.map((status) => `"${status}"`).join(', ')
 
-    const query = groq`*[_type == "speaker" && count(*[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
+    const query = groq`*[_type == "speaker" && count(*[_type == "talk" && (speaker._ref == ^._id || ^._id in coSpeakers[]._ref) && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
       ...,
       "slug": slug.current,
       "image": image.asset->url,
-      "proposals": *[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}] {
+      "proposals": *[_type == "talk" && (speaker._ref == ^._id || ^._id in coSpeakers[]._ref) && status in [${statusFilter}] ${conferenceFilter}] {
         _id,
         title,
         status,
@@ -309,6 +331,17 @@ export async function getSpeakers(
         language,
         level,
         audiences,
+        "isPrimarySpeaker": speaker._ref == ^._id,
+        speaker-> {
+          _id,
+          name,
+          "slug": slug.current
+        },
+        coSpeakers[]-> {
+          _id,
+          name,
+          "slug": slug.current
+        },
         conference-> {
           _id,
           title,
@@ -342,4 +375,45 @@ export async function getSpeakersWithAcceptedTalks(
   err: Error | null
 }> {
   return getSpeakers(conferenceId, [Status.accepted, Status.confirmed])
+}
+
+/**
+ * Search for speakers by name or email
+ */
+export async function searchSpeakers(
+  query: string,
+  excludeSpeakerIds: string[] = [],
+): Promise<{
+  speakers: Speaker[]
+  err: Error | null
+}> {
+  let speakers: Speaker[] = []
+  let err = null
+
+  try {
+    const excludeFilter = excludeSpeakerIds.length > 0
+      ? `&& !(_id in $excludeIds)`
+      : ''
+    
+    const searchQuery = `*${query}*`
+    
+    speakers = await clientRead.fetch(
+      groq`*[_type == "speaker" && (
+        name match $searchQuery
+        || email match $searchQuery
+      ) ${excludeFilter}] | order(name asc) [0...20] {
+        ...,
+        "slug": slug.current,
+        "image": image.asset->url
+      }`,
+      excludeSpeakerIds.length > 0
+        ? { searchQuery, excludeIds: excludeSpeakerIds }
+        : { searchQuery },
+      { cache: 'no-store' },
+    )
+  } catch (error) {
+    err = error as Error
+  }
+
+  return { speakers, err }
 }

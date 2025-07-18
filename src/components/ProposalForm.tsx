@@ -10,8 +10,16 @@ import {
 import { ProfileEmail } from '@/lib/profile/types'
 import { postProposal } from '@/lib/proposal/client'
 import {
+  addCoSpeaker,
+  getCoSpeakers,
+  removeCoSpeaker,
+  sendCoSpeakerInvite,
+} from '@/lib/proposal/co-speaker-client'
+import {
   Audience,
   audiences as audiencesMap,
+  CoSpeakerInvitation,
+  CoSpeakerInvitationStatus,
   Format,
   formats,
   FormError,
@@ -21,9 +29,20 @@ import {
   levels,
   ProposalInput,
 } from '@/lib/proposal/types'
-import { Flags, SpeakerInput } from '@/lib/speaker/types'
+import { Flags, Speaker, SpeakerInput } from '@/lib/speaker/types'
+import { isValidEmail, normalizeEmail } from '@/lib/proposal/validation'
 import { Topic } from '@/lib/topic/types'
-import { UserCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
+import {
+  UserCircleIcon,
+  XCircleIcon,
+  UserGroupIcon,
+  EnvelopeIcon,
+  PlusCircleIcon,
+  MinusCircleIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/solid'
 import { PortableTextBlock } from '@portabletext/editor'
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
@@ -58,6 +77,9 @@ export function ProposalForm({
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
+  const [coSpeakers, setCoSpeakers] = useState<Speaker[]>([])
+  const [coSpeakerInvitations, setCoSpeakerInvitations] = useState<CoSpeakerInvitation[]>([])
+  const [pendingCoSpeakerEmails, setPendingCoSpeakerEmails] = useState<string[]>([])
 
   const buttonPrimary = proposalId ? 'Update' : 'Submit'
   const buttonPrimaryLoading = proposalId ? 'Updating...' : 'Submitting...'
@@ -68,6 +90,8 @@ export function ProposalForm({
   )
 
   const [emails, setEmails] = useState<ProfileEmail[]>([])
+  
+  // Fetch emails on mount
   useEffect(() => {
     const fetchEmails = async () => {
       const emailResponse = await getEmails()
@@ -81,11 +105,36 @@ export function ProposalForm({
     fetchEmails()
   }, [])
 
+  // Fetch co-speakers if editing existing proposal
+  useEffect(() => {
+    if (proposalId) {
+      fetchCoSpeakers()
+    }
+  }, [proposalId])
+
+  const fetchCoSpeakers = async () => {
+    if (!proposalId) return
+    
+    const res = await getCoSpeakers(proposalId)
+    if (!res.error && res.coSpeakers) {
+      setCoSpeakers(res.coSpeakers)
+    }
+    // Also fetch invitations from the proposal data if available
+    // This would come from the initial proposal data
+    if (initialProposal.coSpeakerInvitations) {
+      setCoSpeakerInvitations(initialProposal.coSpeakerInvitations)
+    }
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setIsSubmitting(true)
 
-    const proposalRes = await postProposal(proposal, proposalId)
+    const proposalRes = await postProposal(
+      proposal,
+      proposalId,
+      !proposalId ? pendingCoSpeakerEmails : undefined
+    )
     if (proposalRes.error) {
       setProposalSubmitError(proposalRes.error)
       setIsSubmitting(false)
@@ -140,6 +189,15 @@ export function ProposalForm({
           setProposal={setProposal}
           conference={conference}
           allowedFormats={allowedFormats}
+        />
+        <CoSpeakersSection
+          proposalId={proposalId}
+          format={proposal.format || Format.lightning_10}
+          coSpeakers={coSpeakers}
+          coSpeakerInvitations={coSpeakerInvitations}
+          onUpdate={fetchCoSpeakers}
+          pendingInvites={pendingCoSpeakerEmails}
+          onPendingInvitesChange={setPendingCoSpeakerEmails}
         />
         <SpeakerDetailsForm
           speaker={speaker}
@@ -693,5 +751,347 @@ function DescriptionField({
         </>
       }
     />
+  )
+}
+
+function CoSpeakersSection({
+  proposalId,
+  format,
+  coSpeakers,
+  coSpeakerInvitations,
+  onUpdate,
+  pendingInvites,
+  onPendingInvitesChange,
+}: {
+  proposalId?: string
+  format: Format
+  coSpeakers?: Speaker[]
+  coSpeakerInvitations?: CoSpeakerInvitation[]
+  onUpdate: () => void
+  pendingInvites?: string[]
+  onPendingInvitesChange?: (emails: string[]) => void
+}) {
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteName, setInviteName] = useState('')
+  const [isInviting, setIsInviting] = useState(false)
+  const [inviteError, setInviteError] = useState('')
+  const [speakerError, setSpeakerError] = useState('')
+
+  const canHaveCoSpeakers = format !== Format.lightning_10
+
+  async function handleInvite() {
+    if (!inviteName.trim()) {
+      setInviteError('Please enter the co-speaker\'s name')
+      return
+    }
+
+    if (!isValidEmail(inviteEmail)) {
+      setInviteError('Please enter a valid email address')
+      return
+    }
+
+    const normalizedEmail = normalizeEmail(inviteEmail)
+
+    // If we don't have a proposalId yet, collect emails for later
+    if (!proposalId) {
+      if (pendingInvites && onPendingInvitesChange) {
+        // Check if email is already in pending invites
+        if (pendingInvites.includes(normalizedEmail)) {
+          setInviteError('This email is already in the list')
+          return
+        }
+        // Store both name and email for pending invites
+        onPendingInvitesChange([...pendingInvites, `${inviteName.trim()}:${normalizedEmail}`])
+        setInviteEmail('')
+        setInviteName('')
+        setInviteError('')
+      }
+      return
+    }
+
+    setIsInviting(true)
+    setInviteError('')
+
+    const res = await sendCoSpeakerInvite(proposalId, normalizedEmail, inviteName.trim())
+    
+    if (res.error) {
+      setInviteError(res.error.message)
+    } else {
+      setInviteEmail('')
+      setInviteName('')
+      onUpdate()
+    }
+    
+    setIsInviting(false)
+  }
+
+  function handleRemovePendingInvite(email: string) {
+    if (pendingInvites && onPendingInvitesChange) {
+      onPendingInvitesChange(pendingInvites.filter(e => e !== email))
+    }
+  }
+
+  async function handleRemoveCoSpeaker(speakerId: string) {
+    if (!proposalId) return
+
+    const res = await removeCoSpeaker(proposalId, speakerId)
+    if (res.error) {
+      setSpeakerError(res.error.message)
+    } else {
+      onUpdate()
+    }
+  }
+
+  if (!canHaveCoSpeakers) {
+    return null
+  }
+
+  return (
+    <div className="border-b border-brand-frosted-steel pb-12">
+      <h2 className="font-space-grotesk text-lg leading-7 font-semibold text-brand-slate-gray flex items-center gap-2">
+        <UserGroupIcon className="h-5 w-5" />
+        Co-Speakers
+      </h2>
+      <p className="font-inter mt-1 text-sm leading-6 text-brand-cloud-gray">
+        {proposalId
+          ? 'Invite other speakers to present with you. They will receive an email invitation.'
+          : 'Add co-speaker emails below. Invitations will be sent after you submit the proposal.'
+        }
+      </p>
+
+      {speakerError && (
+        <div className="mt-4 rounded-md bg-red-50 p-4">
+          <div className="flex">
+            <XCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
+            <div className="ml-3">
+              <p className="font-inter text-sm text-red-800">{speakerError}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6 space-y-6">
+        {/* Existing Co-Speakers */}
+        {coSpeakers && coSpeakers.length > 0 && (
+          <div>
+            <h3 className="font-inter text-sm font-medium text-brand-slate-gray mb-3">
+              Current Co-Speakers
+            </h3>
+            <div className="space-y-3">
+              {coSpeakers.map((speaker) => (
+                <div
+                  key={speaker._id}
+                  className="flex items-center justify-between rounded-lg border border-brand-frosted-steel bg-white p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    {speaker.image ? (
+                      <Image
+                        src={`${speaker.image}?w=48&h=48&fit=crop`}
+                        alt={speaker.name}
+                        width={48}
+                        height={48}
+                        className="h-12 w-12 rounded-full"
+                      />
+                    ) : (
+                      <UserCircleIcon className="h-12 w-12 text-gray-300" />
+                    )}
+                    <div>
+                      <p className="font-space-grotesk font-medium text-brand-slate-gray">
+                        {speaker.name}
+                      </p>
+                      {speaker.title && (
+                        <p className="font-inter text-sm text-brand-cloud-gray">
+                          {speaker.title}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveCoSpeaker(speaker._id)}
+                    className="flex items-center gap-1.5 rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100 transition-colors"
+                  >
+                    <MinusCircleIcon className="h-4 w-4" />
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* All Invitations */}
+        {coSpeakerInvitations && coSpeakerInvitations.length > 0 && (
+          <div>
+            <h3 className="font-inter text-sm font-medium text-brand-slate-gray mb-3">
+              Co-Speaker Invitations
+            </h3>
+            <div className="space-y-3">
+              {coSpeakerInvitations.map((invitation) => (
+                <div
+                  key={invitation.email}
+                  className={`flex items-center justify-between rounded-lg border p-4 ${
+                    invitation.status === CoSpeakerInvitationStatus.pending
+                      ? 'border-brand-frosted-steel bg-brand-arctic-mist'
+                      : invitation.status === CoSpeakerInvitationStatus.accepted
+                      ? 'border-green-200 bg-green-50'
+                      : invitation.status === CoSpeakerInvitationStatus.rejected
+                      ? 'border-red-200 bg-red-50'
+                      : 'border-gray-200 bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {invitation.status === CoSpeakerInvitationStatus.accepted ? (
+                      <CheckCircleIcon className="h-5 w-5 text-green-600" />
+                    ) : invitation.status === CoSpeakerInvitationStatus.rejected ? (
+                      <XCircleIcon className="h-5 w-5 text-red-600" />
+                    ) : invitation.status === CoSpeakerInvitationStatus.expired ? (
+                      <ClockIcon className="h-5 w-5 text-gray-500" />
+                    ) : (
+                      <EnvelopeIcon className="h-5 w-5 text-brand-cloud-gray" />
+                    )}
+                    <div>
+                      <p className="font-inter text-sm text-brand-slate-gray">
+                        {invitation.name ? (
+                          <>
+                            <span className="font-medium">{invitation.name}</span>
+                            <span className="text-brand-cloud-gray"> ({invitation.email})</span>
+                          </>
+                        ) : (
+                          invitation.email
+                        )}
+                      </p>
+                      <p className="font-inter text-xs text-brand-cloud-gray flex items-center gap-1">
+                        <ClockIcon className="h-3 w-3" />
+                        Sent {new Date(invitation.invitedAt).toLocaleDateString()}
+                        {invitation.respondedAt && (
+                          <> • Responded {new Date(invitation.respondedAt).toLocaleDateString()}</>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  {invitation.status === CoSpeakerInvitationStatus.pending ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                      <ClockIcon className="h-3 w-3" />
+                      Pending
+                    </span>
+                  ) : invitation.status === CoSpeakerInvitationStatus.accepted ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                      <CheckCircleIcon className="h-3 w-3" />
+                      Accepted
+                    </span>
+                  ) : invitation.status === CoSpeakerInvitationStatus.rejected ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                      <XCircleIcon className="h-3 w-3" />
+                      Declined
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                      <ClockIcon className="h-3 w-3" />
+                      Expired
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Pending Invitations (before proposal is saved) */}
+        {!proposalId && pendingInvites && pendingInvites.length > 0 && (
+          <div>
+            <h3 className="font-inter text-sm font-medium text-brand-slate-gray mb-3">
+              Pending Co-Speaker Invitations
+            </h3>
+            <div className="space-y-3">
+              {pendingInvites.map((nameEmail) => {
+                const [name, email] = nameEmail.split(':')
+                return (
+                  <div
+                    key={nameEmail}
+                    className="flex items-center justify-between rounded-lg border border-brand-frosted-steel bg-brand-arctic-mist p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <EnvelopeIcon className="h-5 w-5 text-brand-cloud-gray" />
+                      <div>
+                        <p className="font-inter text-sm text-brand-slate-gray">
+                          <span className="font-medium">{name}</span>
+                          <span className="text-brand-cloud-gray"> ({email})</span>
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePendingInvite(nameEmail)}
+                      className="text-brand-cloud-gray hover:text-red-600 transition-colors"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                )
+              })}
+              <p className="font-inter text-xs text-brand-cloud-gray">
+                These invitations will be sent after you submit the proposal.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Invite New Co-Speaker */}
+        <div>
+          <h3 className="font-inter text-sm font-medium text-brand-slate-gray mb-3">
+            {proposalId ? 'Invite Co-Speaker' : 'Add Co-Speaker'}
+          </h3>
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Input
+                  name="co_speaker_name"
+                  label="Name"
+                  value={inviteName}
+                  setValue={setInviteName}
+                />
+              </div>
+              <div>
+                <Input
+                  name="co_speaker_email"
+                  label="Email"
+                  type="email"
+                  value={inviteEmail}
+                  setValue={setInviteEmail}
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleInvite}
+              disabled={!inviteEmail || !inviteName || isInviting || !!coSpeakers?.length}
+              className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 flex items-center gap-2"
+            >
+              {isInviting ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-t-2 border-b-2 border-white"></div>
+                  {proposalId ? 'Sending...' : 'Adding...'}
+                </>
+              ) : (
+                <>
+                  <PlusCircleIcon className="h-4 w-4" />
+                  {proposalId ? 'Send Invite' : 'Add Co-Speaker'}
+                </>
+              )}
+            </button>
+          </div>
+          {inviteError && (
+            <ErrorText>{inviteError}</ErrorText>
+          )}
+          <HelpText>
+            {proposalId
+              ? 'Enter the name and email address of the person you want to invite as a co-speaker. They will receive an invitation to join your proposal.'
+              : 'Enter the name and email address of the person you want to invite as a co-speaker. The invitation will be sent after you submit the proposal.'
+            }
+          </HelpText>
+        </div>
+      </div>
+    </div>
   )
 }

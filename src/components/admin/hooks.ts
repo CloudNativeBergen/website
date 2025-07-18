@@ -53,6 +53,34 @@ export function useProposalFiltering(
 ) {
   return useMemo(() => {
     const filtered = proposals.filter((proposal) => {
+      // Filter by speaker search (includes co-speakers)
+      if (filters.speakerSearch && filters.speakerSearch.trim() !== '') {
+        const searchLower = filters.speakerSearch.toLowerCase().trim()
+        
+        // Check primary speaker
+        const primarySpeaker = typeof proposal.speaker === 'object' &&
+          proposal.speaker &&
+          'name' in proposal.speaker
+            ? (proposal.speaker as Speaker)
+            : null
+        
+        const primaryMatch = primarySpeaker?.name?.toLowerCase().includes(searchLower)
+        
+        // Check co-speakers
+        const coSpeakerMatch = proposal.coSpeakers?.some((coSpeaker) => {
+          const speaker = typeof coSpeaker === 'object' &&
+            coSpeaker &&
+            'name' in coSpeaker
+              ? (coSpeaker as Speaker)
+              : null
+          return speaker?.name?.toLowerCase().includes(searchLower)
+        })
+        
+        if (!primaryMatch && !coSpeakerMatch) {
+          return false
+        }
+      }
+
       // Filter by status
       if (
         filters.status.length > 0 &&
@@ -209,6 +237,10 @@ export function useFilterState(initialFilters: FilterState) {
     setFilters((prev) => ({ ...prev, sortBy }))
   }
 
+  const setSpeakerSearch = (speakerSearch: string) => {
+    setFilters((prev) => ({ ...prev, speakerSearch }))
+  }
+
   const toggleSortOrder = () => {
     setFilters((prev) => ({
       ...prev,
@@ -226,6 +258,7 @@ export function useFilterState(initialFilters: FilterState) {
       reviewStatus: ReviewStatus.all,
       sortBy: 'created',
       sortOrder: 'desc',
+      speakerSearch: '',
     })
   } // Count active filters, excluding default status filters
   const defaultStatusFilters = [
@@ -245,19 +278,23 @@ export function useFilterState(initialFilters: FilterState) {
   const reviewStatusFilterCount =
     filters.reviewStatus !== ReviewStatus.all ? 1 : 0
 
+  const speakerSearchCount = filters.speakerSearch?.trim() ? 1 : 0
+  
   const activeFilterCount =
     statusFilterCount +
     filters.format.length +
     filters.level.length +
     filters.language.length +
     filters.audience.length +
-    reviewStatusFilterCount
+    reviewStatusFilterCount +
+    speakerSearchCount
 
   return {
     filters,
     toggleFilter,
     setReviewStatus,
     setSortBy,
+    setSpeakerSearch,
     toggleSortOrder,
     clearAllFilters,
     activeFilterCount,
@@ -344,6 +381,14 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     [filters, updateFilters],
   )
 
+  const setSpeakerSearch = useCallback(
+    (speakerSearch: string) => {
+      const newFilters = { ...filters, speakerSearch }
+      updateFilters(newFilters)
+    },
+    [filters, updateFilters],
+  )
+
   const toggleSortOrder = useCallback(() => {
     const newFilters: FilterState = {
       ...filters,
@@ -374,19 +419,23 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
   const reviewStatusFilterCount =
     filters.reviewStatus !== ReviewStatus.all ? 1 : 0
 
+  const speakerSearchCount = filters.speakerSearch?.trim() ? 1 : 0
+  
   const activeFilterCount =
     statusFilterCount +
     filters.format.length +
     filters.level.length +
     filters.language.length +
     filters.audience.length +
-    reviewStatusFilterCount
+    reviewStatusFilterCount +
+    speakerSearchCount
 
   return {
     filters,
     toggleFilter,
     setReviewStatus,
     setSortBy,
+    setSpeakerSearch,
     toggleSortOrder,
     clearAllFilters,
     activeFilterCount,
@@ -478,6 +527,12 @@ function parseFiltersFromURL(
     filters.sortOrder = sortOrderParam as 'asc' | 'desc'
   }
 
+  // Parse speaker search
+  const speakerSearchParam = searchParams.get('speakerSearch')
+  if (speakerSearchParam) {
+    filters.speakerSearch = speakerSearchParam
+  }
+
   return filters
 }
 
@@ -534,6 +589,10 @@ function serializeFiltersToURL(
 
   if (filters.sortOrder !== defaultFilters.sortOrder) {
     params.set('sortOrder', filters.sortOrder)
+  }
+
+  if (filters.speakerSearch && filters.speakerSearch.trim() !== '') {
+    params.set('speakerSearch', filters.speakerSearch)
   }
 
   return params

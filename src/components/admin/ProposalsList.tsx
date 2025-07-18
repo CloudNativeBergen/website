@@ -37,6 +37,7 @@ export function ProposalsList({
     reviewStatus: ReviewStatus.all,
     sortBy: 'created',
     sortOrder: 'desc',
+    speakerSearch: '',
   }
 
   const {
@@ -44,6 +45,7 @@ export function ProposalsList({
     toggleFilter,
     setReviewStatus,
     setSortBy,
+    setSpeakerSearch,
     toggleSortOrder,
     clearAllFilters,
     activeFilterCount,
@@ -81,6 +83,7 @@ export function ProposalsList({
           onReviewStatusChange={setReviewStatus}
           onSortChange={setSortBy}
           onSortOrderToggle={toggleSortOrder}
+          onSpeakerSearchChange={setSpeakerSearch}
           onClearAll={clearAllFilters}
           activeFilterCount={activeFilterCount}
           currentUserId={currentUserId}

@@ -1,6 +1,6 @@
 'use client'
 
-import { FunnelIcon } from '@heroicons/react/20/solid'
+import { FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/20/solid'
 import {
   Status,
   Format,
@@ -29,6 +29,7 @@ export interface FilterState {
   reviewStatus: ReviewStatus
   sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating'
   sortOrder: 'asc' | 'desc'
+  speakerSearch: string
 }
 
 interface ProposalsFilterProps {
@@ -40,6 +41,7 @@ interface ProposalsFilterProps {
   onReviewStatusChange: (reviewStatus: ReviewStatus) => void
   onSortChange: (sortBy: FilterState['sortBy']) => void
   onSortOrderToggle: () => void
+  onSpeakerSearchChange: (search: string) => void
   onClearAll: () => void
   activeFilterCount: number
   currentUserId?: string
@@ -56,6 +58,7 @@ export function ProposalsFilter({
   onReviewStatusChange,
   onSortChange,
   onSortOrderToggle,
+  onSpeakerSearchChange,
   onClearAll,
   activeFilterCount,
   currentUserId,
@@ -63,6 +66,22 @@ export function ProposalsFilter({
 }: ProposalsFilterProps) {
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      {/* Speaker Search Bar */}
+      <div className="mb-4">
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            value={filters.speakerSearch}
+            onChange={(e) => onSpeakerSearchChange(e.target.value)}
+            className="block w-full rounded-md border-gray-300 pl-10 pr-3 py-2 text-sm placeholder-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            placeholder="Search by speaker name (includes co-speakers)..."
+          />
+        </div>
+      </div>
+      
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center space-x-2">

@@ -77,7 +77,7 @@ The content for the website is managed in Sanity.io. The core schema types are d
 - **`conference.ts`**: Defines the main conference object, including details like title, dates, venue, organizers, associated domains, sponsors, schedules, and feature flags.
 - **`speaker.ts`**: Represents a speaker or organizer, containing their name, bio, photo, social links, etc.
 - **`schedule.ts`**: Defines the structure for a conference day's schedule, containing multiple tracks.
-- **`talk.ts`**: Represents a talk or session within the schedule, linked to a speaker and containing details like title, abstract, and duration.
+- **`talk.ts`**: Represents a talk or session within the schedule, linked to a speaker and containing details like title, abstract, and duration. Supports co-speakers for all formats except lightning talks.
 - **`sponsor.ts`**: Defines a sponsor entity with name, website, and logo.
 - **`sponsorTier.ts`**: Represents different sponsorship levels (e.g., Gold, Silver) that can be associated with sponsors within a specific conference.
 
@@ -146,6 +146,21 @@ To associate a schedule with an event, the `conference` document has a `schedule
 
 The frontend component (`src/components/Schedule.tsx`) fetches the relevant schedule data for the current conference and renders it, adapting the layout for different screen sizes.
 
+### Co-Speaker Feature
+
+The system supports multiple speakers per proposal for collaborative presentations:
+
+1. **Supported Formats**: All presentation formats except lightning talks (10 min) can have co-speakers.
+2. **Invitation System**: Primary speakers can invite co-speakers via email through the proposal form.
+3. **Access Control**:
+   - Only primary speakers can add/remove co-speakers
+   - Co-speakers can remove themselves
+   - Both primary and co-speakers can edit proposals
+4. **Speaker Profiles**: Co-speakers are displayed on speaker profile pages with appropriate badges and navigation links.
+
+For detailed information about speaker and co-speaker management, see the [Speaker Management Documentation](./SPEAKER_MANAGEMENT.md).
+
 ## Additional Documentation
 
 - **[Query Parameters for Proposal Filters](./QUERY_PARAMETERS.md)** - Guide to using URL query parameters for filtering proposals in the admin interface
+- **[Speaker Management](./SPEAKER_MANAGEMENT.md)** - Comprehensive guide to managing speakers and co-speakers

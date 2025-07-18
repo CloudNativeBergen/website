@@ -2,9 +2,14 @@
 
 import {
   UserIcon,
+  UserGroupIcon,
   ClockIcon,
   CalendarIcon,
   TagIcon,
+  EnvelopeIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  ExclamationCircleIcon as ExclamationCircleOutlineIcon,
 } from '@heroicons/react/24/outline'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { PortableText } from '@portabletext/react'
@@ -15,6 +20,7 @@ import {
   levels,
   languages,
   audiences,
+  CoSpeakerInvitationStatus,
 } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
@@ -249,11 +255,16 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
           <div className="space-y-6">
             {/* Speaker Information */}
             <div className="rounded-lg bg-gray-50 p-6">
-              <h2 className="mb-4 text-lg font-medium text-gray-900">
-                Speaker
+              <h2 className="mb-4 flex items-center text-lg font-medium text-gray-900">
+                Speaker{proposal.coSpeakers && proposal.coSpeakers.length > 0 && 's'}
+                {proposal.coSpeakers && proposal.coSpeakers.length > 0 && (
+                  <UserGroupIcon className="ml-2 h-5 w-5 text-gray-400" />
+                )}
               </h2>
               {speaker ? (
-                <div className="flex items-start space-x-4">
+                <div className="space-y-4">
+                  {/* Primary Speaker */}
+                  <div className="flex items-start space-x-4">
                   <div className="flex-shrink-0">
                     {speaker.image ? (
                       <img
@@ -321,6 +332,164 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                     )}
                   </div>
                 </div>
+                
+                {/* Co-Speakers and Invitations */}
+                {((proposal.coSpeakers && proposal.coSpeakers.length > 0) ||
+                  (proposal.coSpeakerInvitations && proposal.coSpeakerInvitations.length > 0)) && (
+                  <>
+                    <div className="border-t border-gray-200 pt-4">
+                      <h3 className="mb-3 text-sm font-medium text-gray-700">Co-Speakers</h3>
+                      
+                      {/* Accepted Co-Speakers */}
+                      {proposal.coSpeakers && proposal.coSpeakers.length > 0 && (
+                        <div className="space-y-3">
+                          {proposal.coSpeakers.map((coSpeaker, index) => {
+                            const speakerObj = coSpeaker as SpeakerWithReviewInfo
+                            if (!speakerObj || !speakerObj.name) return null
+                            
+                            return (
+                              <div key={speakerObj._id || index} className="flex items-start space-x-3">
+                                <div className="flex-shrink-0">
+                                  {speakerObj.image ? (
+                                    <img
+                                      src={sanityImage(speakerObj.image)
+                                        .width(80)
+                                        .height(80)
+                                        .fit('crop')
+                                        .url()}
+                                      alt={speakerObj.name}
+                                      width={40}
+                                      height={40}
+                                      className="h-10 w-10 rounded-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  ) : (
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
+                                      <UserIcon className="h-5 w-5 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium text-gray-900">
+                                      {speakerObj.name}
+                                    </p>
+                                    <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">
+                                      <CheckCircleIcon className="mr-1 h-3 w-3" />
+                                      Accepted
+                                    </span>
+                                  </div>
+                                  {speakerObj.email && (
+                                    <p className="text-xs text-gray-500">
+                                      {speakerObj.email}
+                                    </p>
+                                  )}
+                                  {speakerObj.title && (
+                                    <p className="text-xs text-gray-500">
+                                      {speakerObj.title}
+                                    </p>
+                                  )}
+                                  {speakerObj.links && speakerObj.links.length > 0 && (
+                                    <div className="mt-1 flex flex-wrap gap-2">
+                                      {speakerObj.links.map((link, linkIndex) => (
+                                        <a
+                                          key={linkIndex}
+                                          href={link}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                                          title={link}
+                                        >
+                                          {new URL(link).hostname}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                      
+                      {/* Co-Speaker Invitations */}
+                      {proposal.coSpeakerInvitations && proposal.coSpeakerInvitations.length > 0 && (
+                        <>
+                          {proposal.coSpeakers && proposal.coSpeakers.length > 0 && (
+                            <h3 className="mb-3 mt-4 text-sm font-medium text-gray-700">Pending Invitations</h3>
+                          )}
+                          <div className="space-y-3">
+                            {proposal.coSpeakerInvitations.map((invitation, index) => {
+                              const getStatusIcon = () => {
+                                switch (invitation.status) {
+                                  case CoSpeakerInvitationStatus.pending:
+                                    return <EnvelopeIcon className="h-3 w-3" />
+                                  case CoSpeakerInvitationStatus.accepted:
+                                    return <CheckCircleIcon className="h-3 w-3" />
+                                  case CoSpeakerInvitationStatus.rejected:
+                                    return <XCircleIcon className="h-3 w-3" />
+                                  case CoSpeakerInvitationStatus.expired:
+                                    return <ExclamationCircleOutlineIcon className="h-3 w-3" />
+                                  default:
+                                    return null
+                                }
+                              }
+                              
+                              const getStatusStyle = () => {
+                                switch (invitation.status) {
+                                  case CoSpeakerInvitationStatus.pending:
+                                    return 'bg-yellow-50 text-yellow-700 ring-yellow-600/20'
+                                  case CoSpeakerInvitationStatus.accepted:
+                                    return 'bg-green-50 text-green-700 ring-green-600/20'
+                                  case CoSpeakerInvitationStatus.rejected:
+                                    return 'bg-red-50 text-red-700 ring-red-600/20'
+                                  case CoSpeakerInvitationStatus.expired:
+                                    return 'bg-gray-50 text-gray-700 ring-gray-600/20'
+                                  default:
+                                    return 'bg-gray-50 text-gray-700 ring-gray-600/20'
+                                }
+                              }
+                              
+                              return (
+                                <div key={index} className="flex items-start space-x-3">
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-200">
+                                    <EnvelopeIcon className="h-5 w-5 text-gray-400" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-medium text-gray-900">
+                                        {invitation.name || 'Unknown'}
+                                      </p>
+                                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusStyle()}`}>
+                                        {getStatusIcon()}
+                                        <span className="ml-1">
+                                          {invitation.status === CoSpeakerInvitationStatus.pending ? 'Pending' :
+                                           invitation.status === CoSpeakerInvitationStatus.accepted ? 'Accepted' :
+                                           invitation.status === CoSpeakerInvitationStatus.rejected ? 'Declined' :
+                                           invitation.status === CoSpeakerInvitationStatus.expired ? 'Expired' :
+                                           'Unknown'}
+                                        </span>
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500">
+                                      {invitation.email}
+                                    </p>
+                                    {invitation.invitedAt && (
+                                      <p className="text-xs text-gray-400">
+                                        Invited {formatDateSafe(invitation.invitedAt)}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
               ) : (
                 <p className="text-sm text-gray-500 italic">
                   Speaker information not available

@@ -14,11 +14,8 @@ export default async function Speakers() {
     console.error(err)
   }
 
-  // Transform speakers to SpeakerWithTalks format for SpeakerPromotion component
-  const speakersWithTalks: SpeakerWithTalks[] = speakers.map((speaker) => ({
-    ...speaker,
-    talks: [], // We'll fetch talks separately if needed, for now empty array
-  }))
+  // Speakers already include talks data from getPublicSpeakers
+  const speakersWithTalks: SpeakerWithTalks[] = speakers
 
   return (
     <>

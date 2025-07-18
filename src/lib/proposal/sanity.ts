@@ -31,13 +31,16 @@ export async function getProposal({
   let proposalError = null
   let proposal: ProposalExisting = {} as ProposalExisting
 
-  const speakerFilter = isOrganizer ? '' : 'speaker._ref == $speakerId'
+  const speakerFilter = isOrganizer
+    ? ''
+    : '(speaker._ref == $speakerId || $speakerId in coSpeakers[]._ref)'
 
   try {
     const query = groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
       ...,
       speaker-> {
         ...,
+        "slug": slug.current,
         "image": image.asset->url,
         ${
           isOrganizer && includeSubmittedTalks
@@ -68,6 +71,27 @@ export async function getProposal({
             : ''
         }
       },
+      coSpeakers[]-> {
+        _id, name, email, title, bio, providers,
+        "slug": slug.current,
+        "image": image.asset->url,
+        flags,
+        ${
+          includePreviousAcceptedTalks
+            ? `"previousAcceptedTalks": *[
+            _type == "talk"
+            && speaker._ref == ^._id
+            && conference._ref != ^.^.conference._ref
+            && (status == "accepted" || status == "confirmed")
+          ]{
+            _id, title, status, _createdAt,
+            conference-> { _id, title, start_date },
+            topics[]-> { _id, title, color }
+          }`
+            : ''
+        }
+      },
+      coSpeakerInvitations,
       conference-> {
         _id, title, start_date, end_date
       },
@@ -127,7 +151,7 @@ export async function getProposals({
     returnAll
       ? `status != "${Status.draft}"`
       : speakerId
-        ? `speaker._ref == $speakerId`
+        ? `(speaker._ref == $speakerId || $speakerId in coSpeakers[]._ref)`
         : null,
     conferenceId ? `conference._ref == $conferenceId` : null,
   ]
@@ -153,6 +177,27 @@ export async function getProposals({
           : ''
       }
     },
+    coSpeakers[]-> {
+      _id, name, email, title, bio, providers,
+      "slug": slug.current,
+      "image": image.asset->url,
+      flags,
+      ${
+        includePreviousAcceptedTalks
+          ? `"previousAcceptedTalks": *[
+          _type == "talk"
+          && speaker._ref == ^._id
+          && conference._ref != ^.^.conference._ref
+          && (status == "accepted" || status == "confirmed")
+        ]{
+          _id, title, status, _createdAt,
+          conference-> { _id, title, start_date },
+          topics[]-> { _id, title, color }
+        }`
+          : ''
+      }
+    },
+    coSpeakerInvitations,
     conference-> {
       _id, title, start_date, end_date
     },
@@ -375,6 +420,9 @@ export async function searchProposals({
       || speaker->name match $searchTerm
       || speaker->bio match $searchTerm
       || speaker->title match $searchTerm
+      || coSpeakers[]->name match $searchTerm
+      || coSpeakers[]->bio match $searchTerm
+      || coSpeakers[]->title match $searchTerm
       || topics[]->title match $searchTerm
       || topics[]->description match $searchTerm)]
     {
@@ -405,6 +453,33 @@ export async function searchProposals({
             : ''
         }
       },
+      coSpeakers[]-> {
+        _id,
+        name,
+        title,
+        email,
+        providers,
+        bio,
+        "image": image.asset->url,
+        flags,
+        "slug": slug.current
+        ${
+          includePreviousAcceptedTalks
+            ? `,
+        "previousAcceptedTalks": *[
+          _type == "talk"
+          && speaker._ref == ^._id
+          && conference._ref != ^.^.conference._ref
+          && (status == "accepted" || status == "confirmed")
+        ]{
+          _id, title, status, _createdAt,
+          conference-> { _id, title, start_date },
+          topics[]-> { _id, title, color }
+        }`
+            : ''
+        }
+      },
+      coSpeakerInvitations,
       conference-> {
         _id, title, start_date, end_date
       },
