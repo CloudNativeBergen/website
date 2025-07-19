@@ -2,6 +2,7 @@ import { Reference, TypedObject } from 'sanity'
 import { Format, ProposalExisting } from '@/lib/proposal/types'
 import { Speaker, SpeakerWithTalks } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
+import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 
 export interface ConferenceProposals {
   conference: Conference | Reference
@@ -28,38 +29,6 @@ export interface ConferenceSchedule {
 export interface ConferenceVanityMetric {
   label: string
   value: string
-}
-
-export interface ConferenceSponsor {
-  sponsor: {
-    name: string
-    website: string
-    logo: string
-  }
-  tier: {
-    title: string
-    tagline: string
-    tier_type?: 'standard' | 'special'
-  }
-}
-
-export interface SponsorTier {
-  _id: string
-  _createdAt: string
-  _updatedAt: string
-  title: string
-  tagline: string
-  tier_type: 'standard' | 'special'
-  price?: Array<{
-    amount: number
-    currency: string
-  }>
-  perks?: Array<{
-    label: string
-    description: string
-  }>
-  sold_out: boolean
-  most_popular: boolean
 }
 
 export interface Conference {

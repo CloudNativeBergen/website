@@ -10,8 +10,7 @@ import {
   TrashIcon,
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
-import { ConferenceSponsor } from '@/lib/conference/types'
-import { SponsorTierExisting } from '@/lib/sponsor/types'
+import { ConferenceSponsor, SponsorTierExisting } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
 import { removeSponsorFromConference } from '@/lib/sponsor/client'
 import SponsorAddModal from './SponsorAddModal'

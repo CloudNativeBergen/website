@@ -2,7 +2,7 @@
 // Use client due to the use of InlineSvgPreviewComponent that renders SVGs
 
 import { Container } from '@/components/Container'
-import { ConferenceSponsor } from '@/lib/conference/types'
+import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
 import Link from 'next/link'
 

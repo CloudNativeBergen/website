@@ -24,8 +24,42 @@ interface SponsorReference {
 /**
  * Generate a unique key for Sanity array items
  */
-function generateKey(prefix: string = 'sponsor'): string {
+function generateKey(prefix: string = 'item'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+/**
+ * Add _key properties to array items if they don't exist
+ */
+function ensureArrayKeys<T extends Record<string, unknown>>(
+  array: T[],
+  prefix: string = 'item',
+): Array<T & { _key: string }> {
+  if (!Array.isArray(array)) return array as Array<T & { _key: string }>
+  return array.map((item) => ({
+    ...item,
+    _key: (item._key as string) || generateKey(prefix),
+  }))
+}
+
+/**
+ * Prepare price array with _key properties
+ */
+function preparePriceArray(
+  price?: Array<{ amount: number; currency: string }>,
+): Array<{ _key: string; amount: number; currency: string }> | undefined {
+  if (!price || !Array.isArray(price)) return undefined
+  return ensureArrayKeys(price, 'price')
+}
+
+/**
+ * Prepare perks array with _key properties
+ */
+function preparePerksArray(
+  perks?: Array<{ label: string; description: string }>,
+): Array<{ _key: string; label: string; description: string }> | undefined {
+  if (!perks || !Array.isArray(perks)) return undefined
+  return ensureArrayKeys(perks, 'perk')
 }
 
 export async function createSponsorTier(
@@ -37,8 +71,11 @@ export async function createSponsorTier(
       title: data.title,
       tagline: data.tagline,
       tier_type: data.tier_type,
-      price: data.tier_type === 'standard' ? data.price : undefined,
-      perks: data.perks,
+      price:
+        data.tier_type === 'standard'
+          ? preparePriceArray(data.price)
+          : undefined,
+      perks: preparePerksArray(data.perks),
       sold_out: data.sold_out,
       most_popular: data.most_popular,
       conference: {
@@ -77,8 +114,11 @@ export async function updateSponsorTier(
         title: data.title,
         tagline: data.tagline,
         tier_type: data.tier_type,
-        price: data.tier_type === 'standard' ? data.price : undefined,
-        perks: data.perks,
+        price:
+          data.tier_type === 'standard'
+            ? preparePriceArray(data.price)
+            : undefined,
+        perks: preparePerksArray(data.perks),
         sold_out: data.sold_out,
         most_popular: data.most_popular,
       })
@@ -126,8 +166,16 @@ export async function getSponsorTier(
         title,
         tagline,
         tier_type,
-        price,
-        perks,
+        price[]{
+          _key,
+          amount,
+          currency
+        },
+        perks[]{
+          _key,
+          label,
+          description
+        },
         sold_out,
         most_popular
       }`,
@@ -311,14 +359,14 @@ export async function addSponsorToConference(
     // Ensure all existing sponsors have _key properties
     const sponsorsWithKeys = existingSponsors.map((s: SponsorReference) => ({
       ...s,
-      _key: s._key || generateKey(),
+      _key: s._key || generateKey('sponsor'),
     }))
 
     // Add the new sponsor
     const updatedSponsors = [
       ...sponsorsWithKeys,
       {
-        _key: generateKey(),
+        _key: generateKey('sponsor'),
         sponsor: {
           _type: 'reference',
           _ref: sponsorId,
@@ -365,7 +413,7 @@ export async function removeSponsorFromConference(
       .filter((s: SponsorReference) => s.sponsor?._ref !== sponsorId)
       .map((s: SponsorReference) => ({
         ...s,
-        _key: s._key || generateKey(),
+        _key: s._key || generateKey('sponsor'),
       }))
 
     await clientWrite
@@ -400,7 +448,7 @@ export async function fixSponsorKeys(
     const existingSponsors = conference.sponsors || []
     const sponsorsWithKeys = existingSponsors.map((s: SponsorReference) => ({
       ...s,
-      _key: s._key || generateKey(),
+      _key: s._key || generateKey('sponsor'),
     }))
 
     // Update the conference with sponsors that have keys
@@ -410,6 +458,83 @@ export async function fixSponsorKeys(
       .commit()
 
     return {}
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function fixSponsorTierArrayKeys(): Promise<{
+  error?: Error
+  fixed?: number
+}> {
+  try {
+    // Get all sponsor tiers
+    const sponsorTiers = await clientWrite.fetch(`
+      *[_type == "sponsorTier"]{
+        _id,
+        price,
+        perks
+      }
+    `)
+
+    let fixedCount = 0
+
+    // Fix each sponsor tier
+    for (const tier of sponsorTiers) {
+      let needsUpdate = false
+      const updates: {
+        price?: Array<{ _key: string; amount: number; currency: string }>
+        perks?: Array<{ _key: string; label: string; description: string }>
+      } = {}
+
+      // Check and fix price array
+      if (tier.price && Array.isArray(tier.price)) {
+        const priceWithKeys = ensureArrayKeys(
+          tier.price as Array<{
+            amount: number
+            currency: string
+            _key?: string
+          }>,
+          'price',
+        ) as Array<{ _key: string; amount: number; currency: string }>
+        const hasChanges = priceWithKeys.some(
+          (item, index) =>
+            !tier.price[index]._key || tier.price[index]._key !== item._key,
+        )
+        if (hasChanges) {
+          updates.price = priceWithKeys
+          needsUpdate = true
+        }
+      }
+
+      // Check and fix perks array
+      if (tier.perks && Array.isArray(tier.perks)) {
+        const perksWithKeys = ensureArrayKeys(
+          tier.perks as Array<{
+            label: string
+            description: string
+            _key?: string
+          }>,
+          'perk',
+        ) as Array<{ _key: string; label: string; description: string }>
+        const hasChanges = perksWithKeys.some(
+          (item, index) =>
+            !tier.perks[index]._key || tier.perks[index]._key !== item._key,
+        )
+        if (hasChanges) {
+          updates.perks = perksWithKeys
+          needsUpdate = true
+        }
+      }
+
+      // Update if needed
+      if (needsUpdate) {
+        await clientWrite.patch(tier._id).set(updates).commit()
+        fixedCount++
+      }
+    }
+
+    return { fixed: fixedCount }
   } catch (error) {
     return { error: error as Error }
   }

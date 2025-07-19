@@ -141,10 +141,12 @@ export async function getConferenceForDomain(
       tagline,
       tier_type,
       price[]{
+        _key,
         amount,
         currency
       },
       perks[]{
+        _key,
         label,
         description
       },

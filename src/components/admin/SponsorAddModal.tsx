@@ -20,8 +20,8 @@ import {
   ChevronUpDownIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline'
-import { ConferenceSponsor } from '@/lib/conference/types'
 import {
+  ConferenceSponsor,
   SponsorExisting,
   SponsorInput,
   SponsorTierExisting,

@@ -1,14 +1,36 @@
-import { SponsorTier } from '@/lib/conference/types'
+// Core sponsor types
+export interface SponsorTier {
+  _id: string
+  _createdAt: string
+  _updatedAt: string
+  title: string
+  tagline: string
+  tier_type: 'standard' | 'special'
+  price?: Array<{
+    _key: string
+    amount: number
+    currency: string
+  }>
+  perks?: Array<{
+    _key: string
+    label: string
+    description: string
+  }>
+  sold_out: boolean
+  most_popular: boolean
+}
 
 export interface SponsorTierInput {
   title: string
   tagline: string
   tier_type: 'standard' | 'special'
   price?: Array<{
+    _key?: string
     amount: number
     currency: string
   }>
   perks?: Array<{
+    _key?: string
     label: string
     description: string
   }>
@@ -17,6 +39,19 @@ export interface SponsorTierInput {
 }
 
 export type SponsorTierExisting = SponsorTier
+
+export interface ConferenceSponsor {
+  sponsor: {
+    name: string
+    website: string
+    logo: string
+  }
+  tier: {
+    title: string
+    tagline: string
+    tier_type?: 'standard' | 'special'
+  }
+}
 
 export interface SponsorTierResponse {
   sponsorTier?: SponsorTierExisting

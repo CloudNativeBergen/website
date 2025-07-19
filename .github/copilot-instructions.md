@@ -38,6 +38,11 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Document any significant changes or features in the project README or relevant files under the /docs directory.
 - Prioritize performance and accessibility.
 - Use Vercel for deployment previews and production hosting.
+- **JSX/TSX Content:** Use HTML entities (`&apos;` for apostrophes and `&quot;` for quotes) instead of raw quotes in JSX/TSX content to comply with linting rules.
+
+### Sanity CMS Requirements
+
+- **Array Items:** All array items in Sanity documents must include a `_key` property. When creating or updating documents with arrays, ensure each array item has a unique `_key` field to prevent validation errors and maintain data integrity.
 
 ### Commands
 
