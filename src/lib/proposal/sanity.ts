@@ -8,6 +8,12 @@ import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
 import { convertStringToPortableTextBlocks } from './validation'
 import { Review } from '@/lib/review/types'
+import {
+  prepareReferenceArray,
+  createReference,
+  createReferenceWithKey,
+  fixArrayKeys,
+} from '@/lib/sanity/helpers'
 
 export async function getProposal({
   id,
@@ -206,14 +212,11 @@ export async function updateProposal(
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
 
-  // Process speakers field to ensure proper format
-  const speakers = proposal.speakers
-    ? proposal.speakers.map((speaker) =>
-        typeof speaker === 'object' && '_id' in speaker
-          ? { _type: 'reference', _ref: speaker._id }
-          : (speaker as Reference),
-      )
-    : undefined
+  // Process speakers field to ensure proper format with _key attributes
+  const speakers = prepareReferenceArray(
+    proposal.speakers as Array<Reference | { _id: string }>,
+    'speaker',
+  )
 
   try {
     updatedProposal = await clientWrite
@@ -275,15 +278,14 @@ export async function createProposal(
   const status = Status.submitted
 
   // Use speakers from proposal input if provided, otherwise fallback to single speaker
-  const speakers: Reference[] = proposal.speakers
-    ? proposal.speakers.map((speaker) =>
-        typeof speaker === 'object' && '_id' in speaker
-          ? { _type: 'reference', _ref: speaker._id }
-          : (speaker as Reference),
+  const speakers = proposal.speakers
+    ? prepareReferenceArray(
+        proposal.speakers as Array<Reference | { _id: string }>,
+        'speaker',
       )
-    : [{ _type: 'reference', _ref: speakerId }]
+    : [createReferenceWithKey(speakerId, 'speaker')]
 
-  const conference: Reference = { _type: 'reference', _ref: conferenceId }
+  const conference = createReference(conferenceId)
 
   try {
     createdProposal = (await clientWrite.create({
@@ -470,4 +472,14 @@ export async function searchProposals({
   })
 
   return { proposals, proposalsError }
+}
+
+/**
+ * Fix missing _key attributes in speakers arrays for existing proposals
+ */
+export async function fixProposalSpeakerKeys(): Promise<{
+  error?: Error
+  fixed?: number
+}> {
+  return await fixArrayKeys('talk', [{ field: 'speakers', prefix: 'speaker' }])
 }

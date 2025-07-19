@@ -8,7 +8,6 @@ import { groq } from 'next-sanity'
 import { v4 as randomUUID } from 'uuid'
 import { Account, User } from 'next-auth'
 import { ProposalExisting, Status } from '../proposal/types'
-
 export function providerAccount(
   provider: string,
   providerAccountId: string,

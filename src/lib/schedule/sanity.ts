@@ -1,17 +1,11 @@
 import { clientWrite } from '@/lib/sanity/client'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import { Conference } from '@/lib/conference/types'
+import { generateKey, createReference } from '@/lib/sanity/helpers'
 
 export interface SaveScheduleResult {
   schedule?: ConferenceSchedule
   error?: string
-}
-
-/**
- * Generate a unique key for Sanity array items
- */
-function generateKey(prefix: string = 'item'): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
 /**
@@ -46,10 +40,7 @@ export async function saveScheduleToSanity(
         if (talk.talk) {
           return {
             _key: generateKey(`${baseKey}-${talk.talk._id}`),
-            talk: {
-              _type: 'reference',
-              _ref: talk.talk._id,
-            },
+            talk: createReference(talk.talk._id),
             startTime: talk.startTime,
             endTime: talk.endTime,
           }
@@ -100,9 +91,7 @@ export async function saveScheduleToSanity(
         await clientWrite
           .patch(conference._id)
           .setIfMissing({ schedules: [] })
-          .append('schedules', [
-            { _type: 'reference', _ref: savedSchedule._id },
-          ])
+          .append('schedules', [createReference(savedSchedule._id)])
           .commit()
       }
     }

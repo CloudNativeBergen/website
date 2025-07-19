@@ -1,5 +1,6 @@
 import { clientWrite } from '../sanity/client'
 import { ProfileImage } from './types'
+import { createReference } from '@/lib/sanity/helpers'
 
 export async function updateProfileEmail(
   email: string,
@@ -27,10 +28,7 @@ export async function uploadProfileImage(
       .set({
         image: {
           _type: 'image',
-          asset: {
-            _type: 'reference',
-            _ref: asset._id,
-          },
+          asset: createReference(asset._id),
         },
       })
       .commit()
