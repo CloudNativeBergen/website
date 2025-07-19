@@ -2,8 +2,9 @@ const CHECKIN_API_URL = 'https://api.checkin.no/graphql'
 const CHECKIN_API_KEY = process.env.CHECKIN_API_KEY
 const CHECKIN_API_SECRET = process.env.CHECKIN_API_SECRET
 
-interface EventTicket {
+export interface EventTicket {
   id: number
+  order_id: number
   category: string
   customer_name: string | null
   numberOfTickets: number
@@ -15,6 +16,16 @@ interface EventTicket {
     last_name: string
     email: string
   }
+}
+
+export interface GroupedOrder {
+  order_id: number
+  tickets: EventTicket[]
+  totalTickets: number
+  totalAmount: number
+  amountLeft: number
+  categories: string[]
+  fields: { key: string; value: string }[]
 }
 
 interface EventTicketsResponse {
@@ -31,6 +42,7 @@ export async function fetchEventTickets(
     query FetchEventTickets($customerId: Int!, $eventId: Int!) {
       eventTickets(customer_id: $customerId, id: $eventId) {
         id
+        order_id
         category
         customer_name
         numberOfTickets
@@ -79,4 +91,34 @@ export async function fetchEventTickets(
   }
 
   return responseData.data.eventTickets
+}
+
+export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
+  const ordersMap = new Map<number, GroupedOrder>()
+
+  tickets.forEach((ticket) => {
+    const orderId = ticket.order_id
+
+    if (!ordersMap.has(orderId)) {
+      ordersMap.set(orderId, {
+        order_id: orderId,
+        tickets: [],
+        totalTickets: ticket.numberOfTickets, // numberOfTickets is the total for the order
+        totalAmount: parseFloat(ticket.sum) || 0, // sum is the total amount for the order
+        amountLeft: parseFloat(ticket.sum_left) || 0, // sum_left is the outstanding amount for the order
+        categories: [],
+        fields: ticket.fields,
+      })
+    }
+
+    const order = ordersMap.get(orderId)!
+    order.tickets.push(ticket)
+
+    // Add unique categories
+    if (!order.categories.includes(ticket.category)) {
+      order.categories.push(ticket.category)
+    }
+  })
+
+  return Array.from(ordersMap.values())
 }
