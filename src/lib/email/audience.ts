@@ -66,7 +66,14 @@ export async function getOrCreateConferenceAudience(
 
     return { audienceId: audienceResponse.data!.id }
   } catch (error) {
-    console.error('Failed to get or create conference audience:', error)
+    // Don't spam logs for rate limit errors that have already been handled by retry logic
+    if (isRateLimitError(error)) {
+      console.warn(
+        `Conference audience could not be created/accessed due to persistent rate limiting`,
+      )
+    } else {
+      console.error('Failed to get or create conference audience:', error)
+    }
     return { audienceId: '', error: error as Error }
   }
 }
@@ -104,7 +111,14 @@ export async function addSpeakerToAudience(
 
     return { success: true }
   } catch (error) {
-    console.error('Failed to add speaker to audience:', error)
+    // Don't spam logs for rate limit errors that have already been handled by retry logic
+    if (isRateLimitError(error)) {
+      console.warn(
+        `Speaker ${speaker.name} could not be added to audience due to persistent rate limiting`,
+      )
+    } else {
+      console.error('Failed to add speaker to audience:', error)
+    }
     return { success: false, error: error as Error }
   }
 }
@@ -154,7 +168,14 @@ export async function removeSpeakerFromAudience(
 
     return { success: true }
   } catch (error) {
-    console.error('Failed to remove speaker from audience:', error)
+    // Don't spam logs for rate limit errors that have already been handled by retry logic
+    if (isRateLimitError(error)) {
+      console.warn(
+        `Speaker with email ${speakerEmail} could not be removed from audience due to persistent rate limiting`,
+      )
+    } else {
+      console.error('Failed to remove speaker from audience:', error)
+    }
     return { success: false, error: error as Error }
   }
 }
@@ -183,20 +204,39 @@ const retryWithBackoff = async <T>(
   apiCall: () => Promise<T>,
   maxRetries: number = 3,
 ): Promise<T> => {
+  let lastError: any = null
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await apiCall()
     } catch (error) {
+      lastError = error
+
       if (isRateLimitError(error) && attempt < maxRetries - 1) {
         const backoffDelay = RATE_LIMIT_DELAY * Math.pow(2, attempt)
-        console.log(`Rate limit hit, retrying in ${backoffDelay}ms...`)
+        // Only log on the first retry attempt to reduce noise
+        if (attempt === 0) {
+          console.log(`Rate limit hit, implementing backoff strategy...`)
+        }
         await delay(backoffDelay)
         continue
       }
-      throw error
+
+      // If it's not a rate limit error, don't retry
+      if (!isRateLimitError(error)) {
+        throw error
+      }
     }
   }
-  throw new Error('Max retries exceeded')
+
+  // If we get here, we exhausted all retries for rate limit errors
+  if (isRateLimitError(lastError)) {
+    console.error(
+      `Rate limit backoff exhausted after ${maxRetries} attempts. This may indicate sustained high API usage.`,
+    )
+  }
+
+  throw lastError
 }
 
 /**
