@@ -13,7 +13,10 @@ class InMemoryEventBus {
     if (!this.handlers.has(eventType)) {
       this.handlers.set(eventType, new Set())
     }
-    this.handlers.get(eventType)!.add(handler)
+    const eventHandlers = this.handlers.get(eventType)
+    if (eventHandlers) {
+      eventHandlers.add(handler)
+    }
   }
 
   unsubscribe(eventType: string, handler: EventHandlerFunction): void {
