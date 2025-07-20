@@ -67,22 +67,6 @@ export function ProposalRejectTemplate({
         We appreciate your interest in contributing to our community and hope to
         see you at future events.
       </p>
-
-      <p
-        style={{
-          fontSize: '16px',
-          color: '#334155',
-          lineHeight: '1.6',
-          marginBottom: '24px',
-          marginTop: '0',
-        }}
-      >
-        Best regards,
-        <br />
-        <strong style={{ color: '#1D4ED8' }}>
-          The Cloud Native Bergen Team
-        </strong>
-      </p>
     </>
   )
 

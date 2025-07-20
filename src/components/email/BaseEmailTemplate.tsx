@@ -2,17 +2,21 @@ import * as React from 'react'
 import { iconForLink, titleForLink } from '../SocialIcons'
 
 interface BaseEmailTemplateProps {
-  title: string
+  title?: string
   titleColor?: string
   speakerName: string
   proposalTitle: string
-  eventName: string
-  eventLocation: string
-  eventDate: string
-  eventUrl: string
+  eventName?: string
+  eventLocation?: string
+  eventDate?: string
+  eventUrl?: string
   socialLinks?: string[]
-  children: React.ReactNode
+  children?: React.ReactNode
   footer?: React.ReactNode
+  customContent?: {
+    heading?: string
+    body?: React.ReactNode
+  }
 }
 
 export function BaseEmailTemplate({
@@ -20,13 +24,14 @@ export function BaseEmailTemplate({
   titleColor = '#334155',
   speakerName,
   proposalTitle,
-  eventName,
-  eventLocation,
-  eventDate,
-  eventUrl,
+  eventName = 'Cloud Native Bergen Conference',
+  eventLocation = 'Bergen, Norway',
+  eventDate = 'TBA',
+  eventUrl = 'https://cloudnativebergen.no',
   socialLinks = [],
   children,
   footer,
+  customContent,
 }: BaseEmailTemplateProps) {
   // Email-safe styles - using tables for layout and inline styles for maximum compatibility
   const containerStyle: React.CSSProperties = {
@@ -139,41 +144,51 @@ export function BaseEmailTemplate({
         <tbody>
           <tr>
             <td>
-              <h1 style={headerStyle}>{title}</h1>
+              <h1 style={headerStyle}>{customContent?.heading || title}</h1>
 
               <p style={paragraphStyle}>Dear {speakerName},</p>
 
-              <p style={paragraphStyle}>
-                Thank you for submitting your proposal{' '}
-                <strong style={{ color: '#1D4ED8' }}>
-                  &quot;{proposalTitle}&quot;
-                </strong>{' '}
-                for {eventName}.
-              </p>
+              {customContent?.body ? (
+                customContent.body
+              ) : (
+                <>
+                  {proposalTitle && (
+                    <p style={paragraphStyle}>
+                      Thank you for submitting your proposal{' '}
+                      <strong style={{ color: '#1D4ED8' }}>
+                        &quot;{proposalTitle}&quot;
+                      </strong>{' '}
+                      for {eventName}.
+                    </p>
+                  )}
 
-              {children}
+                  {children}
+                </>
+              )}
 
-              {/* Event Details Section */}
-              <div style={eventDetailsStyle}>
-                <h3 style={eventDetailsHeaderStyle}>Event Details:</h3>
-                <ul style={listStyle}>
-                  <li style={listItemStyle}>
-                    <strong>Event:</strong> {eventName}
-                  </li>
-                  <li style={listItemStyle}>
-                    <strong>Location:</strong> {eventLocation}
-                  </li>
-                  <li style={listItemStyle}>
-                    <strong>Date:</strong> {eventDate}
-                  </li>
-                  <li style={{ marginBottom: '0' }}>
-                    <strong>Website:</strong>{' '}
-                    <a href={eventUrl} style={linkStyle}>
-                      {eventUrl}
-                    </a>
-                  </li>
-                </ul>
-              </div>
+              {/* Event Details Section - only show if we have event info and not using custom content */}
+              {!customContent && eventName && (
+                <div style={eventDetailsStyle}>
+                  <h3 style={eventDetailsHeaderStyle}>Event Details:</h3>
+                  <ul style={listStyle}>
+                    <li style={listItemStyle}>
+                      <strong>Event:</strong> {eventName}
+                    </li>
+                    <li style={listItemStyle}>
+                      <strong>Location:</strong> {eventLocation}
+                    </li>
+                    <li style={listItemStyle}>
+                      <strong>Date:</strong> {eventDate}
+                    </li>
+                    <li style={{ marginBottom: '0' }}>
+                      <strong>Website:</strong>{' '}
+                      <a href={eventUrl} style={linkStyle}>
+                        {eventUrl}
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+              )}
 
               {footer}
 

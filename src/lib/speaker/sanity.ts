@@ -68,6 +68,8 @@ async function findSpeakerByEmail(
   return { speaker, err }
 }
 
+export { findSpeakerByEmail }
+
 export async function getOrCreateSpeaker(
   user: User,
   account: Account,

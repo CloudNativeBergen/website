@@ -30,6 +30,7 @@ export { ProposalActionModal } from './ProposalActionModal'
 
 // Speaker Management Components
 export { SpeakerTable } from './SpeakerTable'
+export { BroadcastEmailModal } from './BroadcastEmailModal'
 
 // Sponsor Management Components
 export { default as SponsorTierEditor } from './SponsorTierEditor'

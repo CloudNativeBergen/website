@@ -23,6 +23,7 @@
     "@heroicons/react": "^2.2.0",
     "@portabletext/editor": "^1.58.0",
     "@portabletext/react": "^3.2.1",
+    "@portabletext/to-html": "^2.0.14",
     "@sanity/image-url": "^1.1.0",
     "@sanity/types": "^3.99.0",
     "@sanity/vision": "^4.0.0",
