@@ -71,29 +71,33 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     switch (type) {
       case 'success':
         return {
-          container: 'border-green-200 bg-green-50',
-          icon: 'text-green-400',
-          title: 'text-green-800',
-          message: 'text-green-700',
+          container:
+            'border-brand-fresh-green/30 bg-gradient-to-r from-brand-glacier-white to-green-50/50 backdrop-blur-sm',
+          icon: 'text-brand-fresh-green',
+          title: 'text-brand-slate-gray',
+          message: 'text-brand-slate-gray/80',
         }
       case 'error':
         return {
-          container: 'border-red-200 bg-red-50',
-          icon: 'text-red-400',
-          title: 'text-red-800',
-          message: 'text-red-700',
+          container:
+            'border-red-300/50 bg-gradient-to-r from-brand-glacier-white to-red-50/50 backdrop-blur-sm',
+          icon: 'text-red-500',
+          title: 'text-brand-slate-gray',
+          message: 'text-brand-slate-gray/80',
         }
       case 'warning':
         return {
-          container: 'border-yellow-200 bg-yellow-50',
-          icon: 'text-yellow-400',
-          title: 'text-yellow-800',
-          message: 'text-yellow-700',
+          container:
+            'border-brand-sunbeam-yellow/40 bg-gradient-to-r from-brand-glacier-white to-yellow-50/50 backdrop-blur-sm',
+          icon: 'text-brand-sunbeam-yellow',
+          title: 'text-brand-slate-gray',
+          message: 'text-brand-slate-gray/80',
         }
       case 'info':
       default:
         return {
-          container: 'border-brand-cloud-blue/20 bg-brand-sky-mist',
+          container:
+            'border-brand-cloud-blue/30 bg-gradient-to-r from-brand-glacier-white to-brand-sky-mist/70 backdrop-blur-sm',
           icon: 'text-brand-cloud-blue',
           title: 'text-brand-slate-gray',
           message: 'text-brand-slate-gray/80',
@@ -108,7 +112,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       {children}
 
       {/* Notification Container */}
-      <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-end justify-start space-y-4 p-6">
+      <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-end justify-start space-y-6 p-6 pt-20 pr-8">
         {notifications.map((notification) => {
           const Icon = getIcon(notification.type)
           const styles = getStyles(notification.type)
@@ -117,19 +121,19 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             <div
               key={notification.id}
               className={clsx(
-                'pointer-events-auto max-w-sm transform rounded-xl border p-4 shadow-lg transition-all duration-300 ease-in-out',
+                'pointer-events-auto w-full max-w-sm transform rounded-2xl border-2 p-5 shadow-2xl ring-1 ring-black/5 transition-all duration-300 ease-in-out sm:max-w-md md:max-w-lg',
                 styles.container,
                 'animate-in slide-in-from-right-2 fade-in-0',
               )}
             >
               <div className="flex">
                 <div className="flex-shrink-0">
-                  <Icon className={clsx('h-5 w-5', styles.icon)} />
+                  <Icon className={clsx('h-6 w-6', styles.icon)} />
                 </div>
-                <div className="ml-3 w-0 flex-1">
+                <div className="ml-4 w-0 flex-1">
                   <p
                     className={clsx(
-                      'font-space-grotesk text-sm font-medium',
+                      'font-space-grotesk text-base leading-tight font-semibold',
                       styles.title,
                     )}
                   >
@@ -138,7 +142,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
                   {notification.message && (
                     <p
                       className={clsx(
-                        'font-inter mt-1 text-sm',
+                        'font-inter mt-2 text-sm leading-relaxed',
                         styles.message,
                       )}
                     >
@@ -149,13 +153,13 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
                 <div className="ml-4 flex flex-shrink-0">
                   <button
                     className={clsx(
-                      'inline-flex rounded-md p-1.5 transition-colors hover:bg-black/10',
+                      'inline-flex rounded-xl p-2 transition-all duration-200 hover:bg-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
                       styles.icon,
                     )}
                     onClick={() => removeNotification(notification.id)}
                   >
                     <span className="sr-only">Dismiss</span>
-                    <XMarkIcon className="h-4 w-4" />
+                    <XMarkIcon className="h-5 w-5" />
                   </button>
                 </div>
               </div>

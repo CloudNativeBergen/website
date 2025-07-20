@@ -5,13 +5,18 @@ import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import { Button } from '@/components/Button'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
 import { useNotification } from './NotificationProvider'
-import { XMarkIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
+import {
+  XMarkIcon,
+  EnvelopeIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/outline'
 import { PortableTextBlock } from '@portabletext/editor'
 
 interface BroadcastEmailModalProps {
   isOpen: boolean
   onClose: () => void
   onSend: (subject: string, content: PortableTextBlock[]) => Promise<void>
+  onSyncContacts: () => Promise<void>
   speakerCount: number
 }
 
@@ -19,11 +24,28 @@ export function BroadcastEmailModal({
   isOpen,
   onClose,
   onSend,
+  onSyncContacts,
   speakerCount,
 }: BroadcastEmailModalProps) {
   const [subject, setSubject] = useState('')
-  const [content, setContent] = useState<PortableTextBlock[]>([])
+  const [content, setContent] = useState<PortableTextBlock[]>([
+    {
+      _key: 'default-greeting',
+      _type: 'block',
+      style: 'normal',
+      children: [
+        {
+          _key: 'default-text',
+          _type: 'span',
+          text: 'Hi {{{FIRST_NAME|there}}},\n\n',
+          marks: [],
+        },
+      ],
+      markDefs: [],
+    },
+  ])
   const [isLoading, setIsLoading] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const { showNotification } = useNotification()
 
   const handleSend = async () => {
@@ -40,7 +62,22 @@ export function BroadcastEmailModal({
     try {
       await onSend(subject, content)
       setSubject('')
-      setContent([])
+      setContent([
+        {
+          _key: 'default-greeting',
+          _type: 'block',
+          style: 'normal',
+          children: [
+            {
+              _key: 'default-text',
+              _type: 'span',
+              text: 'Hi {{{FIRST_NAME|there}}},\n\n',
+              marks: [],
+            },
+          ],
+          markDefs: [],
+        },
+      ])
       onClose()
     } catch (error) {
       console.error('Failed to send broadcast email:', error)
@@ -51,6 +88,15 @@ export function BroadcastEmailModal({
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleSyncContacts = async () => {
+    setIsSyncing(true)
+    try {
+      await onSyncContacts()
+    } finally {
+      setIsSyncing(false)
     }
   }
 
@@ -72,12 +118,26 @@ export function BroadcastEmailModal({
           </div>
 
           <div className="font-inter rounded-xl border border-primary-200 bg-brand-sky-mist p-4 text-sm text-brand-slate-gray">
-            <div className="flex items-center gap-2">
-              <EnvelopeIcon className="h-4 w-4 text-brand-cloud-blue" />
-              <span className="font-medium">
-                This email will be sent to {speakerCount} confirmed and accepted
-                speakers.
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <EnvelopeIcon className="h-4 w-4 text-brand-cloud-blue" />
+                <span className="font-medium">
+                  This email will be sent to {speakerCount} confirmed and
+                  accepted speakers.
+                </span>
+              </div>
+              <Button
+                onClick={handleSyncContacts}
+                disabled={isSyncing}
+                variant="outline"
+                size="sm"
+                className="font-space-grotesk flex items-center gap-2 rounded-lg transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ArrowPathIcon
+                  className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`}
+                />
+                {isSyncing ? 'Syncing...' : 'Sync Contacts'}
+              </Button>
             </div>
           </div>
 
@@ -96,7 +156,7 @@ export function BroadcastEmailModal({
                 onChange={(e) => setSubject(e.target.value)}
                 className="font-inter w-full rounded-xl border border-brand-frosted-steel bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:border-brand-cloud-blue focus:ring-2 focus:ring-brand-cloud-blue"
                 placeholder="Enter email subject..."
-                disabled={isLoading}
+                disabled={isLoading || isSyncing}
               />
             </div>
 
@@ -118,14 +178,19 @@ export function BroadcastEmailModal({
             <Button
               variant="outline"
               onClick={onClose}
-              disabled={isLoading}
+              disabled={isLoading || isSyncing}
               className="font-space-grotesk rounded-xl border-brand-frosted-steel px-6 py-3 text-brand-slate-gray transition-all duration-200 hover:bg-brand-sky-mist"
             >
               Cancel
             </Button>
             <Button
               onClick={handleSend}
-              disabled={isLoading || !subject.trim() || content.length === 0}
+              disabled={
+                isLoading ||
+                isSyncing ||
+                !subject.trim() ||
+                content.length === 0
+              }
               className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-white transition-all duration-200 hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? (

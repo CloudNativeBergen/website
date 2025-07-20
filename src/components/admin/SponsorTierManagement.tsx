@@ -13,6 +13,8 @@ import {
 import { ConferenceSponsor, SponsorTierExisting } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
 import { removeSponsorFromConference } from '@/lib/sponsor/client'
+import { useNotification } from './NotificationProvider'
+import { ConfirmationModal } from './ConfirmationModal'
 import SponsorAddModal from './SponsorAddModal'
 
 interface SponsorManagementProps {
@@ -38,6 +40,12 @@ export default function SponsorTierManagement({
   const [removingSponsors, setRemovingSponsors] = useState<Set<string>>(
     new Set(),
   )
+  const [confirmationModal, setConfirmationModal] = useState<{
+    isOpen: boolean
+    sponsorName: string
+    sponsorRef: string
+  }>({ isOpen: false, sponsorName: '', sponsorRef: '' })
+  const { showNotification } = useNotification()
 
   const addSponsorToState = (newSponsor: ConferenceSponsor) => {
     // Add to sponsors array
@@ -61,6 +69,13 @@ export default function SponsorTierManagement({
       }
       return prev
     })
+
+    // Show success notification
+    showNotification({
+      type: 'success',
+      title: 'Sponsor added successfully',
+      message: `${newSponsor.sponsor.name} has been added to the ${newSponsor.tier.title} tier.`,
+    })
   }
 
   const openAddModal = (tierId?: string) => {
@@ -75,12 +90,16 @@ export default function SponsorTierManagement({
     sponsorName: string,
     sponsorRef: string,
   ) => {
-    const confirmMessage = `Are you sure you want to remove "${sponsorName}" from this conference? This action cannot be undone.`
+    setConfirmationModal({
+      isOpen: true,
+      sponsorName,
+      sponsorRef,
+    })
+  }
 
-    if (!confirm(confirmMessage)) {
-      return
-    }
-
+  const confirmRemoveSponsor = async () => {
+    const { sponsorName, sponsorRef } = confirmationModal
+    setConfirmationModal({ isOpen: false, sponsorName: '', sponsorRef: '' })
     setRemovingSponsors((prev) => new Set(prev).add(sponsorRef))
 
     try {
@@ -106,9 +125,21 @@ export default function SponsorTierManagement({
         (tierName) => newSponsorsByTier[tierName]?.length > 0,
       )
       setSortedTierNames(newSortedTierNames)
+
+      showNotification({
+        type: 'success',
+        title: 'Sponsor removed',
+        message: `${sponsorName} has been successfully removed from the conference.`,
+      })
     } catch (error) {
       console.error('Failed to remove sponsor:', error)
-      alert(error instanceof Error ? error.message : 'Failed to remove sponsor')
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to remove sponsor'
+      showNotification({
+        type: 'error',
+        title: 'Failed to remove sponsor',
+        message: errorMessage,
+      })
     } finally {
       setRemovingSponsors((prev) => {
         const newSet = new Set(prev)
@@ -366,6 +397,23 @@ export default function SponsorTierManagement({
         sponsorTiers={sponsorTiers}
         preselectedTierId={modalState.preselectedTierId}
         onSponsorAdded={addSponsorToState}
+      />
+
+      <ConfirmationModal
+        isOpen={confirmationModal.isOpen}
+        onClose={() =>
+          setConfirmationModal({
+            isOpen: false,
+            sponsorName: '',
+            sponsorRef: '',
+          })
+        }
+        onConfirm={confirmRemoveSponsor}
+        title="Remove Sponsor"
+        message={`Are you sure you want to remove "${confirmationModal.sponsorName}" from this conference? This action cannot be undone.`}
+        confirmButtonText="Remove"
+        variant="danger"
+        isLoading={removingSponsors.has(confirmationModal.sponsorRef)}
       />
     </div>
   )

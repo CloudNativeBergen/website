@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/Button'
 import { BroadcastEmailModal } from '@/components/admin'
 import { useNotification } from './NotificationProvider'
-import { EnvelopeIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import { EnvelopeIcon } from '@heroicons/react/24/outline'
 import { PortableTextBlock } from '@portabletext/editor'
 
 interface SpeakerActionsProps {
@@ -13,7 +13,6 @@ interface SpeakerActionsProps {
 
 export function SpeakerActions({ eligibleSpeakersCount }: SpeakerActionsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [syncLoading, setSyncLoading] = useState(false)
   const { showNotification } = useNotification()
 
   const handleSendBroadcast = async (
@@ -46,8 +45,7 @@ export function SpeakerActions({ eligibleSpeakersCount }: SpeakerActionsProps) {
     }
   }
 
-  const handleSyncAudience = async () => {
-    setSyncLoading(true)
+  const handleSyncContacts = async () => {
     try {
       const response = await fetch('/admin/api/speakers/email/audience/sync', {
         method: 'POST',
@@ -59,13 +57,13 @@ export function SpeakerActions({ eligibleSpeakersCount }: SpeakerActionsProps) {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to sync audience')
+        throw new Error(result.error || 'Failed to sync contacts')
       }
 
       showNotification({
         type: 'success',
-        title: 'Audience synced successfully!',
-        message: `Successfully synced ${result.syncedCount} speakers with the email audience.`,
+        title: 'Contacts synced successfully!',
+        message: `Successfully synced ${result.syncedCount} speakers with the email contacts.`,
       })
     } catch (error: unknown) {
       console.error('Sync error:', error)
@@ -73,31 +71,20 @@ export function SpeakerActions({ eligibleSpeakersCount }: SpeakerActionsProps) {
         error instanceof Error ? error.message : 'Unknown error'
       showNotification({
         type: 'error',
-        title: 'Failed to sync audience',
+        title: 'Failed to sync contacts',
         message: errorMessage,
       })
-    } finally {
-      setSyncLoading(false)
     }
   }
 
   return (
     <>
-      <div className="flex gap-2">
-        <Button
-          onClick={handleSyncAudience}
-          disabled={syncLoading || eligibleSpeakersCount === 0}
-          className="font-space-grotesk flex items-center gap-2 rounded-xl border border-brand-frosted-steel px-4 py-2 text-brand-slate-gray transition-colors duration-200 hover:bg-brand-sky-mist disabled:opacity-50"
-        >
-          <ArrowPathIcon
-            className={`h-4 w-4 ${syncLoading ? 'animate-spin' : ''}`}
-          />
-          {syncLoading ? 'Syncing...' : 'Sync Audience'}
-        </Button>
-
+      <div className="flex gap-3">
         <Button
           onClick={() => setIsModalOpen(true)}
-          className="font-space-grotesk flex items-center gap-2 rounded-xl bg-brand-cloud-blue px-4 py-2 text-white transition-colors duration-200 hover:bg-primary-700"
+          variant="primary"
+          size="md"
+          className="font-space-grotesk flex items-center gap-2 rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={eligibleSpeakersCount === 0}
         >
           <EnvelopeIcon className="h-4 w-4" />
@@ -109,6 +96,7 @@ export function SpeakerActions({ eligibleSpeakersCount }: SpeakerActionsProps) {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSend={handleSendBroadcast}
+        onSyncContacts={handleSyncContacts}
         speakerCount={eligibleSpeakersCount}
       />
     </>

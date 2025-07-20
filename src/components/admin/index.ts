@@ -11,6 +11,10 @@ export { AdminActionBar } from './AdminActionBar'
 export { SearchResults } from './SearchResults'
 export { SearchModal } from './SearchModal'
 
+// Notification Components
+export { NotificationProvider, useNotification } from './NotificationProvider'
+export { ConfirmationModal } from './ConfirmationModal'
+
 // Proposal Management Components
 export { ProposalsList } from './ProposalsList'
 export { ProposalCard } from './ProposalCard'
