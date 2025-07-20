@@ -1,155 +1,51 @@
-'use client'
-
-import { useEffect, useState } from 'react'
-import {
-  ErrorDisplay,
-  SpeakerTable,
-  BroadcastEmailModal,
-} from '@/components/admin'
-import { Button } from '@/components/Button'
-import {
-  UserGroupIcon,
-  EnvelopeIcon,
-  ArrowPathIcon,
-} from '@heroicons/react/24/outline'
-import { PortableTextBlock } from '@portabletext/editor'
+import { ErrorDisplay, SpeakerTable, SpeakerActions } from '@/components/admin'
+import { UserGroupIcon } from '@heroicons/react/24/outline'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getSpeakers } from '@/lib/speaker/sanity'
+import { Status } from '@/lib/proposal/types'
 
-interface Conference {
-  _id: string
-  title: string
-}
+export default async function AdminSpeakers() {
+  try {
+    // Get conference
+    const { conference, error: conferenceError } =
+      await getConferenceForCurrentDomain()
 
-export default function AdminSpeakers() {
-  const [conference, setConference] = useState<Conference | null>(null)
-  const [speakers, setSpeakers] = useState<
-    (Speaker & { proposals: ProposalExisting[] })[]
-  >([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [syncLoading, setSyncLoading] = useState(false)
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const response = await fetch('/admin/api/speakers')
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || 'Failed to load data')
-        }
-
-        const { conference: conf, speakers: speakerData } =
-          await response.json()
-        setConference(conf)
-        setSpeakers(speakerData)
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Failed to load data')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadData()
-  }, [])
-
-  const handleSendBroadcast = async (
-    subject: string,
-    content: PortableTextBlock[],
-  ) => {
-    try {
-      const response = await fetch('/admin/api/speakers/broadcast', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ subject, content }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to send broadcast email')
-      }
-
-      alert(`Email successfully sent to ${result.recipientCount} speakers!`)
-    } catch (error: unknown) {
-      console.error('Broadcast error:', error)
-      throw error // Re-throw to be handled by the modal
-    }
-  }
-
-  const handleSyncAudience = async () => {
-    setSyncLoading(true)
-    try {
-      const response = await fetch('/admin/api/speakers/audience/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to sync audience')
-      }
-
-      alert(
-        `Successfully synced ${result.syncedCount} speakers with the email audience!`,
+    if (conferenceError || !conference) {
+      return (
+        <ErrorDisplay
+          title="Conference Not Found"
+          message={conferenceError?.message || 'Could not load conference data'}
+        />
       )
-    } catch (error: unknown) {
-      console.error('Sync error:', error)
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error'
-      alert(`Failed to sync audience: ${errorMessage}`)
-    } finally {
-      setSyncLoading(false)
     }
-  }
 
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-7xl">
-        <div className="animate-pulse">
-          <div className="mb-4 h-8 w-1/3 rounded-xl bg-brand-sky-mist"></div>
-          <div className="mb-8 h-4 w-2/3 rounded-lg bg-brand-sky-mist"></div>
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 rounded-xl bg-brand-sky-mist"></div>
-            ))}
-          </div>
-        </div>
-      </div>
+    // Get speakers
+    const { speakers, err: speakersError } = await getSpeakers(conference._id, [
+      Status.accepted,
+      Status.confirmed,
+    ])
+
+    if (speakersError) {
+      return (
+        <ErrorDisplay
+          title="Error Loading Speakers"
+          message={speakersError.message}
+        />
+      )
+    }
+
+    const eligibleSpeakers = speakers.filter(
+      (speaker: Speaker & { proposals: ProposalExisting[] }) =>
+        speaker.email &&
+        speaker.proposals?.some(
+          (proposal: ProposalExisting) =>
+            proposal.status === 'accepted' || proposal.status === 'confirmed',
+        ),
     )
-  }
 
-  if (error) {
-    return <ErrorDisplay title="Error Loading Data" message={error} />
-  }
-
-  if (!conference || !speakers) {
     return (
-      <ErrorDisplay
-        title="Data Not Found"
-        message="Could not load conference or speaker data"
-      />
-    )
-  }
-
-  const eligibleSpeakers = speakers.filter(
-    (speaker) =>
-      speaker.email &&
-      speaker.proposals?.some(
-        (proposal) =>
-          proposal.status === 'accepted' || proposal.status === 'confirmed',
-      ),
-  )
-
-  return (
-    <>
       <div className="mx-auto max-w-7xl">
         <div className="border-b border-brand-frosted-steel pb-6">
           <div className="flex items-center justify-between">
@@ -168,27 +64,7 @@ export default function AdminSpeakers() {
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <Button
-                onClick={handleSyncAudience}
-                disabled={syncLoading || eligibleSpeakers.length === 0}
-                className="font-space-grotesk flex items-center gap-2 rounded-xl border border-brand-frosted-steel px-4 py-2 text-brand-slate-gray transition-colors duration-200 hover:bg-brand-sky-mist disabled:opacity-50"
-              >
-                <ArrowPathIcon
-                  className={`h-4 w-4 ${syncLoading ? 'animate-spin' : ''}`}
-                />
-                {syncLoading ? 'Syncing...' : 'Sync Audience'}
-              </Button>
-
-              <Button
-                onClick={() => setIsModalOpen(true)}
-                className="font-space-grotesk flex items-center gap-2 rounded-xl bg-brand-cloud-blue px-4 py-2 text-white transition-colors duration-200 hover:bg-primary-700"
-                disabled={eligibleSpeakers.length === 0}
-              >
-                <EnvelopeIcon className="h-4 w-4" />
-                Email Speakers
-              </Button>
-            </div>
+            <SpeakerActions eligibleSpeakersCount={eligibleSpeakers.length} />
           </div>
 
           <div className="font-inter mt-4 flex items-center gap-4 text-sm text-brand-slate-gray">
@@ -225,13 +101,14 @@ export default function AdminSpeakers() {
           <SpeakerTable speakers={speakers} />
         </div>
       </div>
-
-      <BroadcastEmailModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSend={handleSendBroadcast}
-        speakerCount={eligibleSpeakers.length}
+    )
+  } catch (error) {
+    console.error('Speakers page error:', error)
+    return (
+      <ErrorDisplay
+        title="Error Loading Page"
+        message="An unexpected error occurred while loading the speakers page"
       />
-    </>
-  )
+    )
+  }
 }

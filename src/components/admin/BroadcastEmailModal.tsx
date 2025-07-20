@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import { Button } from '@/components/Button'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
+import { useNotification } from './NotificationProvider'
 import { XMarkIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
 import { PortableTextBlock } from '@portabletext/editor'
 
@@ -23,10 +24,15 @@ export function BroadcastEmailModal({
   const [subject, setSubject] = useState('')
   const [content, setContent] = useState<PortableTextBlock[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const { showNotification } = useNotification()
 
   const handleSend = async () => {
     if (!subject.trim() || content.length === 0) {
-      alert('Please provide both subject and content for the email.')
+      showNotification({
+        type: 'warning',
+        title: 'Missing information',
+        message: 'Please provide both subject and content for the email.',
+      })
       return
     }
 
@@ -38,7 +44,11 @@ export function BroadcastEmailModal({
       onClose()
     } catch (error) {
       console.error('Failed to send broadcast email:', error)
-      alert('Failed to send email. Please try again.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to send email',
+        message: 'Failed to send email. Please try again.',
+      })
     } finally {
       setIsLoading(false)
     }
