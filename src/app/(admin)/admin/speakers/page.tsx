@@ -78,6 +78,13 @@ export default async function AdminSpeakers() {
           </div>
 
           <div className="font-inter mt-4 flex items-center gap-4 text-sm text-brand-slate-gray">
+            <span>
+              Total speakers: <strong>{speakers.length}</strong>
+            </span>
+            <span>
+              With accepted/confirmed talks:{' '}
+              <strong>{eligibleSpeakers.length}</strong>
+            </span>
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-brand-fresh-green"></div>
               <span>

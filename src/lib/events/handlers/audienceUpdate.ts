@@ -1,6 +1,5 @@
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import {
-  handleSpeakerStatusChange,
   getOrCreateConferenceAudience,
   addSpeakerToAudience,
   removeSpeakerFromAudience,
@@ -10,11 +9,17 @@ import { Action, Status } from '@/lib/proposal/types'
 /**
  * Helper function to check if an error is a rate limit error
  */
-const isRateLimitError = (error: any): boolean => {
+const isRateLimitError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const err = error as { message?: string; status?: number }
   return (
-    error?.message?.includes('Too many requests') ||
-    error?.message?.includes('rate limit') ||
-    error?.status === 429
+    (typeof err.message === 'string' &&
+      err.message.includes('Too many requests')) ||
+    (typeof err.message === 'string' && err.message.includes('rate limit')) ||
+    err.status === 429
   )
 }
 

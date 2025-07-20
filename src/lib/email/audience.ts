@@ -189,11 +189,17 @@ const RATE_LIMIT_DELAY = 500 // 500ms delay = 2 requests per second
 /**
  * Check if error is a rate limit error
  */
-const isRateLimitError = (error: any): boolean => {
+const isRateLimitError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const err = error as { message?: string; status?: number }
   return (
-    error?.message?.includes('Too many requests') ||
-    error?.message?.includes('rate limit') ||
-    error?.status === 429
+    (typeof err.message === 'string' &&
+      err.message.includes('Too many requests')) ||
+    (typeof err.message === 'string' && err.message.includes('rate limit')) ||
+    err.status === 429
   )
 }
 
@@ -204,7 +210,7 @@ const retryWithBackoff = async <T>(
   apiCall: () => Promise<T>,
   maxRetries: number = 3,
 ): Promise<T> => {
-  let lastError: any = null
+  let lastError: unknown = null
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
