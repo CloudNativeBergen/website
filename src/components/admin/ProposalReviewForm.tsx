@@ -6,6 +6,7 @@ import { PaperAirplaneIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
 import { Review, ReviewBase } from '@/lib/review/types'
 import { postReview } from '@/lib/review/client'
 import { fetchNextUnreviewedProposal } from '@/lib/proposal/client'
+import { useNotification } from './NotificationProvider'
 import { useRouter } from 'next/navigation'
 
 interface ProposalReviewFormProps {
@@ -22,6 +23,7 @@ export function ProposalReviewForm({
   onReviewSubmit,
 }: ProposalReviewFormProps) {
   const router = useRouter()
+  const { showNotification } = useNotification()
   const [ratings, setRatings] = useState<{
     content: number
     relevance: number
@@ -73,7 +75,11 @@ export function ProposalReviewForm({
 
       if (error) {
         console.error('Error fetching next unreviewed proposal:', error)
-        alert('Failed to fetch next unreviewed proposal.')
+        showNotification({
+          type: 'error',
+          title: 'Failed to load next proposal',
+          message: 'There was an error fetching the next unreviewed proposal.',
+        })
         setIsLoadingNext(false)
         return
       }
@@ -83,12 +89,20 @@ export function ProposalReviewForm({
         router.push(`/admin/proposals/${nextProposal._id}`)
       } else {
         // Show notification that there are no more unreviewed proposals
-        alert('No more unreviewed proposals available.')
+        showNotification({
+          type: 'info',
+          title: 'All proposals reviewed',
+          message: 'No more unreviewed proposals available.',
+        })
         setIsLoadingNext(false)
       }
     } catch (error) {
       console.error('Error fetching next unreviewed proposal:', error)
-      alert('Failed to fetch next unreviewed proposal.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to load next proposal',
+        message: 'There was an error fetching the next unreviewed proposal.',
+      })
       setIsLoadingNext(false)
     }
   }

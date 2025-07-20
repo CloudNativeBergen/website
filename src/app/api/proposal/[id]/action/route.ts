@@ -1,5 +1,4 @@
 import {
-  Action,
   ActionInput,
   ProposalActionResponse,
   Status,
@@ -13,11 +12,12 @@ import {
   updateProposalStatus,
 } from '@/lib/proposal/sanity'
 import { actionStateMachine } from '@/lib/proposal/states'
-import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
 import { Speaker } from '@/lib/speaker/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { formatDate } from '@/lib/time'
-import { notifyProposalStatusChange } from '@/lib/slack/notify'
+import { eventBus } from '@/lib/events/bus'
+import { ProposalStatusChangeEvent } from '@/lib/events/types'
+// Import to register event handlers
+import '@/lib/events/registry'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,46 +115,30 @@ export const POST = auth(
       })
     }
 
-    if (
-      notify &&
-      (action === Action.accept ||
-        action === Action.reject ||
-        action === Action.remind)
-    ) {
-      if (!proposal.speakers || proposal.speakers.length === 0) {
-        console.error('No speakers found for the proposal.')
-        return proposalResponseError({
-          message: 'No speakers found for the proposal.',
-          type: 'validation_error',
-          status: 400,
-        })
-      }
-      const primarySpeaker = proposal.speakers[0] as Speaker
-      await sendAcceptRejectNotification({
-        action,
-        speaker: {
-          name: primarySpeaker.name,
-          email: primarySpeaker.email,
+    // Publish proposal status change event - all integrations run in parallel
+    const statusChangeEvent: ProposalStatusChangeEvent = {
+      eventType: 'proposal.status.changed',
+      timestamp: new Date(),
+      proposal: updatedProposal,
+      previousStatus: proposal.status,
+      newStatus: status,
+      action,
+      conference,
+      speakers: proposal.speakers as Speaker[],
+      metadata: {
+        triggeredBy: {
+          speakerId: req.auth.speaker._id,
+          isOrganizer: req.auth.speaker.is_organizer,
         },
-        proposal: {
-          _id: proposal._id,
-          title: proposal.title,
-        },
-        comment: comment || '',
-        event: {
-          location: conference.city,
-          date: formatDate(conference.start_date),
-          name: conference.title,
-          url: conference.domains?.[0] ?? '',
-          socialLinks: conference.social_links,
-        },
-      })
+        shouldNotify: notify,
+        comment,
+      },
     }
 
-    // Send Slack notification for confirm/withdraw actions
-    if (action === Action.confirm || action === Action.withdraw) {
-      await notifyProposalStatusChange(updatedProposal, action)
-    }
+    // Fire and forget - don't block the response
+    eventBus.publish(statusChangeEvent).catch((error) => {
+      console.error('Failed to publish status change event:', error)
+    })
 
     return new NextResponse(
       JSON.stringify({

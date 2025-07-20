@@ -1,3 +1,5 @@
+'use client'
+
 import * as selectors from '@portabletext/editor/selectors'
 import {
   defineSchema,

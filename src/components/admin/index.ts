@@ -11,6 +11,10 @@ export { AdminActionBar } from './AdminActionBar'
 export { SearchResults } from './SearchResults'
 export { SearchModal } from './SearchModal'
 
+// Notification Components
+export { NotificationProvider, useNotification } from './NotificationProvider'
+export { ConfirmationModal } from './ConfirmationModal'
+
 // Proposal Management Components
 export { ProposalsList } from './ProposalsList'
 export { ProposalCard } from './ProposalCard'
@@ -30,6 +34,8 @@ export { ProposalActionModal } from './ProposalActionModal'
 
 // Speaker Management Components
 export { SpeakerTable } from './SpeakerTable'
+export { BroadcastEmailModal } from './BroadcastEmailModal'
+export { SpeakerActions } from './SpeakerActions'
 
 // Sponsor Management Components
 export { default as SponsorTierEditor } from './SponsorTierEditor'
