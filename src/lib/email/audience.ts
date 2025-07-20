@@ -29,11 +29,12 @@ export interface SpeakerAudienceManager {
 export async function getOrCreateConferenceAudience(
   conference: Conference,
 ): Promise<{ audienceId: string; error?: Error }> {
-  try {
-    const audienceName = `${conference.title} - Speakers`
+  const audienceName = `${conference.title} Speakers`
 
-    // First, try to find existing audience
-    const existingAudiences = await resend.audiences.list()
+  try {
+    const existingAudiences = await retryWithBackoff(() =>
+      resend.audiences.list(),
+    )
 
     if (existingAudiences.error) {
       throw new Error(
@@ -49,10 +50,13 @@ export async function getOrCreateConferenceAudience(
       return { audienceId: existingAudience.id }
     }
 
-    // Create new audience if not found
-    const audienceResponse = await resend.audiences.create({
-      name: audienceName,
-    })
+    // Create new audience if not found with rate limiting
+    await delay(500)
+    const audienceResponse = await retryWithBackoff(() =>
+      resend.audiences.create({
+        name: audienceName,
+      }),
+    )
 
     if (audienceResponse.error) {
       throw new Error(
@@ -79,13 +83,16 @@ export async function addSpeakerToAudience(
       throw new Error('Speaker email is required')
     }
 
-    const contactResponse = await resend.contacts.create({
-      audienceId,
-      email: speaker.email,
-      firstName: speaker.name.split(' ')[0] || '',
-      lastName: speaker.name.split(' ').slice(1).join(' ') || '',
-      unsubscribed: false,
-    })
+    const contactResponse = await retryWithBackoff(
+      async () =>
+        await resend.contacts.create({
+          audienceId,
+          email: speaker.email,
+          firstName: speaker.name.split(' ')[0] || '',
+          lastName: speaker.name.split(' ').slice(1).join(' ') || '',
+          unsubscribed: false,
+        }),
+    )
 
     if (contactResponse.error) {
       // If contact already exists, that's okay
@@ -110,8 +117,10 @@ export async function removeSpeakerFromAudience(
   speakerEmail: string,
 ): Promise<{ success: boolean; error?: Error }> {
   try {
-    // First, find the contact by email
-    const contactsResponse = await resend.contacts.list({ audienceId })
+    // First, find the contact by email with retry
+    const contactsResponse = await retryWithBackoff(
+      async () => await resend.contacts.list({ audienceId }),
+    )
 
     if (contactsResponse.error) {
       throw new Error(
@@ -128,11 +137,14 @@ export async function removeSpeakerFromAudience(
       return { success: true }
     }
 
-    // Remove the contact
-    const removeResponse = await resend.contacts.remove({
-      audienceId,
-      id: contact.id,
-    })
+    // Remove the contact with retry
+    const removeResponse = await retryWithBackoff(
+      async () =>
+        await resend.contacts.remove({
+          audienceId,
+          id: contact.id,
+        }),
+    )
 
     if (removeResponse.error) {
       throw new Error(
@@ -145,6 +157,46 @@ export async function removeSpeakerFromAudience(
     console.error('Failed to remove speaker from audience:', error)
     return { success: false, error: error as Error }
   }
+}
+
+/**
+ * Add a delay to respect rate limits (500ms = 2 requests per second max)
+ */
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const RATE_LIMIT_DELAY = 500 // 500ms delay = 2 requests per second
+
+/**
+ * Check if error is a rate limit error
+ */
+const isRateLimitError = (error: any): boolean => {
+  return (
+    error?.message?.includes('Too many requests') ||
+    error?.message?.includes('rate limit') ||
+    error?.status === 429
+  )
+}
+
+/**
+ * Retry API call with exponential backoff for rate limit errors
+ */
+const retryWithBackoff = async <T>(
+  apiCall: () => Promise<T>,
+  maxRetries: number = 3,
+): Promise<T> => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await apiCall()
+    } catch (error) {
+      if (isRateLimitError(error) && attempt < maxRetries - 1) {
+        const backoffDelay = RATE_LIMIT_DELAY * Math.pow(2, attempt)
+        console.log(`Rate limit hit, retrying in ${backoffDelay}ms...`)
+        await delay(backoffDelay)
+        continue
+      }
+      throw error
+    }
+  }
+  throw new Error('Max retries exceeded')
 }
 
 /**
@@ -168,8 +220,10 @@ export async function syncConferenceAudience(
       throw audienceError || new Error('Failed to get audience ID')
     }
 
-    // Get current contacts in the audience
-    const contactsResponse = await resend.contacts.list({ audienceId })
+    // Get current contacts in the audience with retry
+    const contactsResponse = await retryWithBackoff(
+      async () => await resend.contacts.list({ audienceId }),
+    )
 
     if (contactsResponse.error) {
       throw new Error(
@@ -183,7 +237,7 @@ export async function syncConferenceAudience(
       eligibleSpeakers.filter((s) => s.email).map((s) => s.email!),
     )
 
-    // Add new speakers
+    // Add new speakers with rate limiting
     let addedCount = 0
     for (const speaker of eligibleSpeakers) {
       if (speaker.email && !existingEmails.has(speaker.email)) {
@@ -191,10 +245,12 @@ export async function syncConferenceAudience(
         if (success) {
           addedCount++
         }
+        // Add delay to respect rate limits
+        await delay(RATE_LIMIT_DELAY)
       }
     }
 
-    // Remove speakers who are no longer eligible
+    // Remove speakers who are no longer eligible with rate limiting
     let removedCount = 0
     for (const contact of existingContacts) {
       if (!currentSpeakerEmails.has(contact.email)) {
@@ -205,6 +261,8 @@ export async function syncConferenceAudience(
         if (success) {
           removedCount++
         }
+        // Add delay to respect rate limits
+        await delay(RATE_LIMIT_DELAY)
       }
     }
 

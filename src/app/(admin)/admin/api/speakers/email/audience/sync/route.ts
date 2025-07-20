@@ -28,9 +28,8 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: conferenceError.message }, { status: 500 })
     }
 
-    // Get all confirmed and accepted speakers
+    // Get only confirmed speakers (not just accepted)
     const { speakers, err } = await getSpeakers(conference._id, [
-      Status.accepted,
       Status.confirmed,
     ])
 
@@ -46,8 +45,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       (speaker: Speaker & { proposals: ProposalExisting[] }) =>
         speaker.email &&
         speaker.proposals?.some(
-          (proposal: ProposalExisting) =>
-            proposal.status === 'accepted' || proposal.status === 'confirmed',
+          (proposal: ProposalExisting) => proposal.status === 'confirmed',
         ),
     )
 

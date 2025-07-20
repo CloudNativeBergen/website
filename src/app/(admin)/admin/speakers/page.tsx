@@ -45,6 +45,15 @@ export default async function AdminSpeakers() {
         ),
     )
 
+    // Only count confirmed speakers for email operations
+    const confirmedSpeakers = speakers.filter(
+      (speaker: Speaker & { proposals: ProposalExisting[] }) =>
+        speaker.email &&
+        speaker.proposals?.some(
+          (proposal: ProposalExisting) => proposal.status === 'confirmed',
+        ),
+    )
+
     return (
       <div className="mx-auto max-w-7xl">
         <div className="border-b border-brand-frosted-steel pb-6">
@@ -60,11 +69,12 @@ export default async function AdminSpeakers() {
                   <span className="font-medium text-brand-cloud-blue">
                     {conference.title}
                   </span>
+                  . Emails are sent only to speakers with confirmed talks.
                 </p>
               </div>
             </div>
 
-            <SpeakerActions eligibleSpeakersCount={eligibleSpeakers.length} />
+            <SpeakerActions eligibleSpeakersCount={confirmedSpeakers.length} />
           </div>
 
           <div className="font-inter mt-4 flex items-center gap-4 text-sm text-brand-slate-gray">

@@ -122,8 +122,8 @@ export function BroadcastEmailModal({
               <div className="flex items-center gap-2">
                 <EnvelopeIcon className="h-4 w-4 text-brand-cloud-blue" />
                 <span className="font-medium">
-                  This email will be sent to {speakerCount} confirmed and
-                  accepted speakers.
+                  This email will be sent to {speakerCount} speakers with
+                  confirmed talks.
                 </span>
               </div>
               <Button

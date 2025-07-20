@@ -112,7 +112,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       {children}
 
       {/* Notification Container */}
-      <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-end justify-start space-y-6 p-6 pt-20 pr-8">
+      <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-end justify-end space-y-6 p-6 pr-8 pb-8">
         {notifications.map((notification) => {
           const Icon = getIcon(notification.type)
           const styles = getStyles(notification.type)
@@ -121,16 +121,16 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             <div
               key={notification.id}
               className={clsx(
-                'pointer-events-auto w-full max-w-sm transform rounded-2xl border-2 p-5 shadow-2xl ring-1 ring-black/5 transition-all duration-300 ease-in-out sm:max-w-md md:max-w-lg',
+                'pointer-events-auto w-full max-w-sm transform rounded-lg border-2 p-6 shadow-2xl ring-1 ring-black/5 transition-all duration-300 ease-in-out sm:max-w-md md:max-w-lg',
                 styles.container,
                 'animate-in slide-in-from-right-2 fade-in-0',
               )}
             >
-              <div className="flex">
+              <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
-                  <Icon className={clsx('h-6 w-6', styles.icon)} />
+                  <Icon className={clsx('mt-0.5 h-6 w-6', styles.icon)} />
                 </div>
-                <div className="ml-4 w-0 flex-1">
+                <div className="min-w-0 flex-1">
                   <p
                     className={clsx(
                       'font-space-grotesk text-base leading-tight font-semibold',
@@ -150,10 +150,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
                     </p>
                   )}
                 </div>
-                <div className="ml-4 flex flex-shrink-0">
+                <div className="flex-shrink-0">
                   <button
                     className={clsx(
-                      'inline-flex rounded-xl p-2 transition-all duration-200 hover:bg-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
+                      'inline-flex rounded-md p-1.5 transition-all duration-200 hover:bg-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
                       styles.icon,
                     )}
                     onClick={() => removeNotification(notification.id)}
