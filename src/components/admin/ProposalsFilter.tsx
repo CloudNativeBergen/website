@@ -27,6 +27,7 @@ export interface FilterState {
   language: Language[]
   audience: Audience[]
   reviewStatus: ReviewStatus
+  hideMultipleTalks: boolean
   sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating'
   sortOrder: 'asc' | 'desc'
 }
@@ -38,6 +39,7 @@ interface ProposalsFilterProps {
     value: Status | Format | Level | Language | Audience,
   ) => void
   onReviewStatusChange: (reviewStatus: ReviewStatus) => void
+  onMultipleTalksFilterChange: (hideMultipleTalks: boolean) => void
   onSortChange: (sortBy: FilterState['sortBy']) => void
   onSortOrderToggle: () => void
   onClearAll: () => void
@@ -54,6 +56,7 @@ export function ProposalsFilter({
   filters,
   onFilterChange,
   onReviewStatusChange,
+  onMultipleTalksFilterChange,
   onSortChange,
   onSortOrderToggle,
   onClearAll,
@@ -129,6 +132,36 @@ export function ProposalsFilter({
                 {levels.get(level)}
               </FilterOption>
             ))}
+          </FilterDropdown>
+
+          {/* Hide Multiple Talks Filter */}
+          <FilterDropdown
+            label={
+              filters.hideMultipleTalks
+                ? 'Speaker Filter: Active'
+                : 'Speaker Filter'
+            }
+            activeCount={filters.hideMultipleTalks ? 1 : 0}
+            keepOpen
+          >
+            <FilterOption
+              onClick={() =>
+                onMultipleTalksFilterChange(!filters.hideMultipleTalks)
+              }
+              checked={filters.hideMultipleTalks}
+              type="checkbox"
+              keepOpen
+            >
+              <div className="flex flex-col space-y-1 text-left">
+                <span className="font-medium text-gray-900">
+                  Hide speakers with accepted talks
+                </span>
+                <span className="max-w-xs text-xs leading-relaxed text-gray-500">
+                  Only show submitted proposals from speakers who don&apos;t
+                  already have accepted or confirmed talks
+                </span>
+              </div>
+            </FilterOption>
           </FilterDropdown>
         </div>
 

@@ -52,7 +52,50 @@ export function useProposalFiltering(
   currentUserId?: string,
 ) {
   return useMemo(() => {
+    // First, identify speakers who already have accepted or confirmed talks
+    const speakersWithAcceptedTalks = new Set<string>()
+
+    if (filters.hideMultipleTalks) {
+      proposals.forEach((proposal) => {
+        if (
+          proposal.status === Status.accepted ||
+          proposal.status === Status.confirmed
+        ) {
+          if (proposal.speakers && Array.isArray(proposal.speakers)) {
+            proposal.speakers.forEach((speaker) => {
+              if (typeof speaker === 'object' && 'name' in speaker) {
+                speakersWithAcceptedTalks.add(speaker.name)
+              } else if (typeof speaker === 'string') {
+                speakersWithAcceptedTalks.add(speaker)
+              }
+            })
+          }
+        }
+      })
+    }
+
     const filtered = proposals.filter((proposal) => {
+      // Filter out proposals from speakers with accepted/confirmed talks (unless this proposal is already accepted/confirmed)
+      if (filters.hideMultipleTalks && proposal.status === Status.submitted) {
+        if (proposal.speakers && Array.isArray(proposal.speakers)) {
+          const hasSpeakerWithAcceptedTalk = proposal.speakers.some(
+            (speaker) => {
+              const speakerName =
+                typeof speaker === 'object' && 'name' in speaker
+                  ? speaker.name
+                  : speaker
+              return (
+                typeof speakerName === 'string' &&
+                speakersWithAcceptedTalks.has(speakerName)
+              )
+            },
+          )
+          if (hasSpeakerWithAcceptedTalk) {
+            return false
+          }
+        }
+      }
+
       // Filter by status
       if (
         filters.status.length > 0 &&
@@ -213,6 +256,10 @@ export function useFilterState(initialFilters: FilterState) {
     setFilters((prev) => ({ ...prev, reviewStatus }))
   }
 
+  const setHideMultipleTalks = (hideMultipleTalks: boolean) => {
+    setFilters((prev) => ({ ...prev, hideMultipleTalks }))
+  }
+
   const setSortBy = (sortBy: FilterState['sortBy']) => {
     setFilters((prev) => ({ ...prev, sortBy }))
   }
@@ -232,6 +279,7 @@ export function useFilterState(initialFilters: FilterState) {
       language: [],
       audience: [],
       reviewStatus: ReviewStatus.all,
+      hideMultipleTalks: false,
       sortBy: 'created',
       sortOrder: 'desc',
     })
@@ -253,18 +301,22 @@ export function useFilterState(initialFilters: FilterState) {
   const reviewStatusFilterCount =
     filters.reviewStatus !== ReviewStatus.all ? 1 : 0
 
+  const multipleTalksFilterCount = filters.hideMultipleTalks ? 1 : 0
+
   const activeFilterCount =
     statusFilterCount +
     filters.format.length +
     filters.level.length +
     filters.language.length +
     filters.audience.length +
-    reviewStatusFilterCount
+    reviewStatusFilterCount +
+    multipleTalksFilterCount
 
   return {
     filters,
     toggleFilter,
     setReviewStatus,
+    setHideMultipleTalks,
     setSortBy,
     toggleSortOrder,
     clearAllFilters,
@@ -344,6 +396,14 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     [filters, updateFilters],
   )
 
+  const setHideMultipleTalks = useCallback(
+    (hideMultipleTalks: boolean) => {
+      const newFilters = { ...filters, hideMultipleTalks }
+      updateFilters(newFilters)
+    },
+    [filters, updateFilters],
+  )
+
   const setSortBy = useCallback(
     (sortBy: FilterState['sortBy']) => {
       const newFilters = { ...filters, sortBy }
@@ -382,18 +442,22 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
   const reviewStatusFilterCount =
     filters.reviewStatus !== ReviewStatus.all ? 1 : 0
 
+  const multipleTalksFilterCount = filters.hideMultipleTalks ? 1 : 0
+
   const activeFilterCount =
     statusFilterCount +
     filters.format.length +
     filters.level.length +
     filters.language.length +
     filters.audience.length +
-    reviewStatusFilterCount
+    reviewStatusFilterCount +
+    multipleTalksFilterCount
 
   return {
     filters,
     toggleFilter,
     setReviewStatus,
+    setHideMultipleTalks,
     setSortBy,
     toggleSortOrder,
     clearAllFilters,
@@ -472,6 +536,12 @@ function parseFiltersFromURL(
     filters.reviewStatus = reviewStatusParam as ReviewStatus
   }
 
+  // Parse hideMultipleTalks
+  const hideMultipleTalksParam = searchParams.get('hideMultipleTalks')
+  if (hideMultipleTalksParam === 'true') {
+    filters.hideMultipleTalks = true
+  }
+
   // Parse sort options
   const sortByParam = searchParams.get('sortBy')
   if (
@@ -534,6 +604,10 @@ function serializeFiltersToURL(
 
   if (filters.reviewStatus !== defaultFilters.reviewStatus) {
     params.set('reviewStatus', filters.reviewStatus)
+  }
+
+  if (filters.hideMultipleTalks !== defaultFilters.hideMultipleTalks) {
+    params.set('hideMultipleTalks', filters.hideMultipleTalks.toString())
   }
 
   if (filters.sortBy !== defaultFilters.sortBy) {

@@ -35,6 +35,7 @@ export function ProposalsList({
     language: [],
     audience: [],
     reviewStatus: ReviewStatus.all,
+    hideMultipleTalks: false,
     sortBy: 'created',
     sortOrder: 'desc',
   }
@@ -43,6 +44,7 @@ export function ProposalsList({
     filters,
     toggleFilter,
     setReviewStatus,
+    setHideMultipleTalks,
     setSortBy,
     toggleSortOrder,
     clearAllFilters,
@@ -79,6 +81,7 @@ export function ProposalsList({
           filters={filters}
           onFilterChange={toggleFilter}
           onReviewStatusChange={setReviewStatus}
+          onMultipleTalksFilterChange={setHideMultipleTalks}
           onSortChange={setSortBy}
           onSortOrderToggle={toggleSortOrder}
           onClearAll={clearAllFilters}
