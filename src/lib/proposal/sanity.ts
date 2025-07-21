@@ -356,7 +356,7 @@ export async function fetchNextUnreviewedProposal({
 
     // Find the index of the current proposal
     const currentIndex = unreviewedProposals.findIndex(
-      (p: any) => p._id === currentProposalId,
+      (p: { _id: string }) => p._id === currentProposalId,
     )
 
     // If current proposal not found in unreviewed list, return the first one
