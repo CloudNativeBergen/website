@@ -91,7 +91,7 @@ export function SpeakerAvatars({
     >
       {visibleSpeakers.map((speaker, index) => (
         <div
-          key={speaker._id || index}
+          key={`${speaker._id || 'speaker'}-${index}`}
           className={`${classes.container} ${
             index > 0 ? classes.spacingCompact : ''
           } relative rounded-full border-2 border-white bg-gray-100 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
