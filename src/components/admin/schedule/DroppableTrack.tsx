@@ -331,10 +331,6 @@ const ServiceSession = ({
 
   if (!talk.placeholder) return null
 
-  const duration = Math.round(
-    position.height / SCHEDULE_CONFIG.PIXELS_PER_MINUTE,
-  )
-
   return (
     <div
       className="group absolute right-2 left-2 z-10"
