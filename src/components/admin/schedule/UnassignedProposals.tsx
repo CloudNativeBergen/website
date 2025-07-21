@@ -291,7 +291,10 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
   }, [])
 
   return (
-    <div className="flex h-full w-80 flex-col bg-white shadow-sm">
+    <div
+      className="sticky flex h-full w-80 flex-col bg-white shadow-sm"
+      style={{ top: '80px' }}
+    >
       {/* Header */}
       <div className="relative border-b border-gray-200 bg-gray-50/50 p-4">
         <div className="mb-4">

@@ -1,5 +1,6 @@
 'use client'
 
+import './schedule.css'
 import {
   DndContext,
   DragEndEvent,
