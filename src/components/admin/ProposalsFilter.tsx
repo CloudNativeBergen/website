@@ -136,11 +136,7 @@ export function ProposalsFilter({
 
           {/* Hide Multiple Talks Filter */}
           <FilterDropdown
-            label={
-              filters.hideMultipleTalks
-                ? 'Speaker Filter: Active'
-                : 'Speaker Filter'
-            }
+            label="Speakers"
             activeCount={filters.hideMultipleTalks ? 1 : 0}
             keepOpen
           >
@@ -169,7 +165,7 @@ export function ProposalsFilter({
           {/* Review Status Filter - only show if user is logged in */}
           {currentUserId && (
             <FilterDropdown
-              label={`My Reviews: ${filters.reviewStatus === ReviewStatus.unreviewed ? 'Todo' : filters.reviewStatus === ReviewStatus.reviewed ? 'Done' : 'All'}`}
+              label="Reviews"
               activeCount={filters.reviewStatus !== ReviewStatus.all ? 1 : 0}
               position="right"
               width="wide"
@@ -193,7 +189,7 @@ export function ProposalsFilter({
 
           {/* Sort Options */}
           <FilterDropdown
-            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy}`}
+            label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy === 'title' ? 'Title' : 'Status'}`}
             activeCount={0}
             position="right"
           >
