@@ -63,7 +63,7 @@ export async function sendAcceptRejectNotification(params: NotificationParams) {
     throw new Error(`Invalid action for notification: ${action}`)
   }
 
-  const confirmUrl = `${process.env.NEXT_PUBLIC_URL}/cfp/list?confirm=${params.proposal._id}`
+  const confirmUrl = `/cfp/list?confirm=${params.proposal._id}`
   const templateProps = createTemplateProps(params, confirmUrl)
 
   const subject = getEmailSubject(action, params.event.name)

@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { StarIcon } from '@heroicons/react/24/solid'
 import { PaperAirplaneIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
 import { Review, ReviewBase } from '@/lib/review/types'
-import { postReview } from '@/lib/review/client'
-import { fetchNextUnreviewedProposal } from '@/lib/proposal/client'
+import { adminPostReview } from '@/lib/review/client'
+import { adminFetchNextUnreviewedProposal } from '@/lib/proposal/client'
 import { useNotification } from './NotificationProvider'
 import { useRouter } from 'next/navigation'
 
@@ -52,7 +52,7 @@ export function ProposalReviewForm({
     }
 
     try {
-      const res = await postReview(proposalId, reviewData)
+      const res = await adminPostReview(proposalId, reviewData)
 
       if (res.reviewError || !res.review) {
         console.error('Error submitting review:', res.reviewError)
@@ -71,7 +71,7 @@ export function ProposalReviewForm({
     setIsLoadingNext(true)
     try {
       const { nextProposal, error } =
-        await fetchNextUnreviewedProposal(proposalId)
+        await adminFetchNextUnreviewedProposal(proposalId)
 
       if (error) {
         console.error('Error fetching next unreviewed proposal:', error)

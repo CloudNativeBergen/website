@@ -2,14 +2,14 @@ import { SpeakerInput, SpeakerResponse } from '@/lib/speaker/types'
 import { ProfileEmailResponse, ProfileImageResponse } from './types'
 
 export async function getEmails(): Promise<ProfileEmailResponse> {
-  const url = `${process.env.NEXT_PUBLIC_URL}/api/profile/emails`
+  const url = `/api/profile/emails`
 
   const res = await fetch(url)
   return (await res.json()) as ProfileEmailResponse
 }
 
 export async function putEmail(email: string): Promise<ProfileEmailResponse> {
-  const url = `${process.env.NEXT_PUBLIC_URL}/api/profile/emails`
+  const url = `/api/profile/emails`
 
   const res = await fetch(url, {
     next: { revalidate: 0 },
@@ -25,7 +25,7 @@ export async function putEmail(email: string): Promise<ProfileEmailResponse> {
 }
 
 export async function getProfile(): Promise<SpeakerResponse> {
-  const url = `${process.env.NEXT_PUBLIC_URL}/api/profile`
+  const url = `/api/profile`
 
   const res = await fetch(url, { cache: 'no-store', next: { revalidate: 0 } })
   return (await res.json()) as SpeakerResponse
@@ -34,7 +34,7 @@ export async function getProfile(): Promise<SpeakerResponse> {
 export async function putProfile(
   speaker: SpeakerInput,
 ): Promise<SpeakerResponse> {
-  const url = `${process.env.NEXT_PUBLIC_URL}/api/profile`
+  const url = `/api/profile`
 
   const res = await fetch(url, {
     next: { revalidate: 0 },
@@ -50,7 +50,7 @@ export async function putProfile(
 }
 
 export async function postImage(file: File): Promise<ProfileImageResponse> {
-  const url = `${process.env.NEXT_PUBLIC_URL}/api/profile/image`
+  const url = `/api/profile/image`
 
   const formData = new FormData()
   formData.append('files', file)

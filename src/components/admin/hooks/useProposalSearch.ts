@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { searchProposals } from '@/lib/proposal/client'
+import { adminSearchProposals } from '@/lib/proposal/client'
 import { ProposalExisting } from '@/lib/proposal/types'
 
 export function useProposalSearch() {
@@ -25,7 +25,7 @@ export function useProposalSearch() {
     setSelectedIndex(-1)
 
     try {
-      const response = await searchProposals(query)
+      const response = await adminSearchProposals(query)
 
       if (response.error) {
         setSearchError(response.error.message)

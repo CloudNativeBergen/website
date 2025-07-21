@@ -1,4 +1,5 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
+import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { fetchNextUnreviewedProposal } from '@/lib/proposal/sanity'
 import { NextResponse } from 'next/server'
@@ -6,11 +7,13 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 export const GET = auth(async (req: NextAuthRequest) => {
-  if (!req.auth || !req.auth.speaker || !req.auth.speaker._id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Check organizer access
+  const accessError = checkOrganizerAccess(req)
+  if (accessError) {
+    return accessError
   }
 
-  const reviewerId = req.auth.speaker._id
+  const reviewerId = req.auth!.speaker._id
   const currentProposalId =
     req.nextUrl.searchParams.get('currentProposalId') || undefined
 

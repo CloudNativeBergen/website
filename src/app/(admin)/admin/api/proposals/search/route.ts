@@ -1,25 +1,22 @@
-import { NextRequest } from 'next/server'
+import { NextAuthRequest, auth } from '@/lib/auth'
+import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { searchProposals } from '@/lib/proposal/sanity'
 import {
   proposalListResponse,
   proposalListResponseError,
 } from '@/lib/proposal/server'
-import { auth } from '@/lib/auth'
 
-export async function GET(request: NextRequest) {
-  const session = await auth()
+export const dynamic = 'force-dynamic'
 
-  if (!session?.speaker?.is_organizer) {
-    return proposalListResponseError(
-      new Error('Unauthorized'),
-      'Access denied',
-      'client',
-      403,
-    )
+export const GET = auth(async (req: NextAuthRequest) => {
+  // Check organizer access
+  const accessError = checkOrganizerAccess(req)
+  if (accessError) {
+    return accessError
   }
 
-  const { searchParams } = new URL(request.url)
+  const { searchParams } = new URL(req.url)
   const query = searchParams.get('q')
 
   if (!query) {
@@ -60,4 +57,4 @@ export async function GET(request: NextRequest) {
   }
 
   return proposalListResponse(proposals)
-}
+})

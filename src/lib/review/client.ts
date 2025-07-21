@@ -1,7 +1,7 @@
 import { Review, ReviewBase } from '@/lib/review/types'
 
-export async function postReview(proposalId: string, review: ReviewBase) {
-  const res = await fetch(`/api/proposal/${proposalId}/review`, {
+export async function adminPostReview(proposalId: string, review: ReviewBase) {
+  const res = await fetch(`/admin/api/proposals/${proposalId}/review`, {
     next: { revalidate: 0 },
     cache: 'no-store',
     method: 'POST',

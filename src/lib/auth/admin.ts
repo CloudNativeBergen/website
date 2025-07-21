@@ -1,5 +1,5 @@
 import { NextAuthRequest } from '@/lib/auth'
-import { sponsorTierResponseError } from '@/lib/sponsor/server'
+import { NextResponse } from 'next/server'
 
 /**
  * Check if the authenticated user is an organizer
@@ -15,20 +15,34 @@ export function checkOrganizerAccess(req: NextAuthRequest) {
     !req.auth.speaker._id ||
     !req.auth.account
   ) {
-    return sponsorTierResponseError({
-      message: 'Unauthorized - Authentication required',
-      type: 'authentication',
-      status: 401,
-    })
+    const response = new NextResponse(
+      JSON.stringify({
+        error: {
+          message: 'Unauthorized - Authentication required',
+          type: 'authentication',
+        },
+        status: 401,
+      }),
+      { status: 401 },
+    )
+    response.headers.set('cache-control', 'no-store')
+    return response
   }
 
   // Check if user is an organizer
   if (!req.auth.speaker.is_organizer) {
-    return sponsorTierResponseError({
-      message: 'Forbidden - Organizer access required',
-      type: 'authorization',
-      status: 403,
-    })
+    const response = new NextResponse(
+      JSON.stringify({
+        error: {
+          message: 'Forbidden - Organizer access required',
+          type: 'authorization',
+        },
+        status: 403,
+      }),
+      { status: 403 },
+    )
+    response.headers.set('cache-control', 'no-store')
+    return response
   }
 
   return null

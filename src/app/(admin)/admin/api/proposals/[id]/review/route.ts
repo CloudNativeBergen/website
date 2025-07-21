@@ -1,4 +1,5 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
+import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getProposal } from '@/lib/proposal/sanity'
 import { proposalResponseError } from '@/lib/proposal/server'
 import { ReviewBase } from '@/lib/review/types'
@@ -16,19 +17,10 @@ export const POST = auth(
     // https://stackoverflow.com/questions/79145063/params-should-be-awaited-nextjs15
     const { id } = await context.params
 
-    if (
-      !req.auth ||
-      !req.auth.user ||
-      !req.auth.speaker ||
-      !req.auth.speaker._id ||
-      !req.auth.speaker.is_organizer ||
-      !req.auth.account
-    ) {
-      return proposalResponseError({
-        message: 'Unauthorized',
-        type: 'authentication',
-        status: 401,
-      })
+    // Check organizer access
+    const accessError = checkOrganizerAccess(req)
+    if (accessError) {
+      return accessError
     }
 
     const data = (await req.json()) as ReviewBase
@@ -36,8 +28,8 @@ export const POST = auth(
     const { proposal: existingProposal, proposalError: checkErr } =
       await getProposal({
         id: id as string,
-        speakerId: req.auth.speaker._id,
-        isOrganizer: req.auth.speaker.is_organizer,
+        speakerId: req.auth!.speaker._id,
+        isOrganizer: req.auth!.speaker.is_organizer,
         includeReviews: true,
       })
     if (checkErr || !existingProposal) {
@@ -66,8 +58,8 @@ export const POST = auth(
     )
 
     const reviewOperation = userReview
-      ? updateReview(userReview._id, req.auth.speaker._id, data)
-      : createReview(existingProposal._id, req.auth.speaker._id, data)
+      ? updateReview(userReview._id, req.auth!.speaker._id, data)
+      : createReview(existingProposal._id, req.auth!.speaker._id, data)
 
     const { review, reviewError } = await reviewOperation
 
