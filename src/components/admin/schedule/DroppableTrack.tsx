@@ -9,6 +9,7 @@ import {
   findAvailableTimeSlot,
 } from '@/lib/schedule/types'
 import { DraggableProposal } from './DraggableProposal'
+import { DraggableServiceSession } from './DraggableServiceSession'
 import {
   PencilIcon,
   TrashIcon,
@@ -197,10 +198,11 @@ const ServiceSessionModal = ({
   )
 }
 
-// Service Session Component with resize handle
+// Service Session Component with resize handle and drag functionality
 const ServiceSession = ({
   talk,
   talkIndex,
+  trackIndex,
   onRemoveTalk,
   onUpdateSession,
   onRenameSession,
@@ -208,6 +210,7 @@ const ServiceSession = ({
 }: {
   talk: TrackTalk
   talkIndex: number
+  trackIndex: number
   onRemoveTalk: (index: number) => void
   onUpdateSession: (index: number, newDuration: number) => void
   onRenameSession: (index: number, newTitle: string) => void
@@ -340,71 +343,66 @@ const ServiceSession = ({
         height: `${position.height}px`,
       }}
     >
-      <div
-        className={`relative h-full rounded-md border p-2 ${
-          isResizing
-            ? 'border-blue-400 bg-blue-50 shadow-lg'
-            : 'border-gray-300 bg-gray-100'
-        }`}
-      >
-        <div className="flex h-full flex-col">
-          <div className="flex-1">
-            {isEditing ? (
-              <div className="space-y-1">
-                <input
-                  type="text"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onBlur={handleSaveEdit}
-                  className="w-full rounded border border-blue-300 bg-white px-1 py-0.5 text-xs font-medium text-gray-700 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  autoFocus
-                />
-                <div className="flex gap-1">
-                  <button
-                    onClick={handleSaveEdit}
-                    className="rounded px-1 py-0.5 text-xs text-blue-600 hover:bg-blue-100"
-                    type="button"
-                  >
-                    Save
-                  </button>
-                  <button
-                    onClick={handleCancelEdit}
-                    className="rounded px-1 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
-                    type="button"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <h4 className="truncate text-sm font-medium text-gray-700">
-                {talk.placeholder}
-              </h4>
-            )}
-            <p className="text-xs text-gray-500">{duration} minutes</p>
-          </div>
+      <div className="relative h-full">
+        {/* Use DraggableServiceSession for the main content */}
+        <DraggableServiceSession
+          serviceSession={talk}
+          sourceTrackIndex={trackIndex}
+          sourceTimeSlot={talk.startTime}
+        />
 
-          {/* Resize handle */}
-          <div
-            className={`absolute right-0 bottom-0 left-0 h-2 cursor-ns-resize border-t transition-all ${
-              isResizing
-                ? 'border-blue-400 bg-blue-200 opacity-100'
-                : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100'
-            }`}
-            onMouseDown={handleMouseDown}
-            title="Drag to resize"
-          >
-            <div
-              className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${
-                isResizing ? 'bg-blue-500' : 'bg-gray-400'
-              }`}
-            ></div>
+        {/* Editing overlay */}
+        {isEditing && (
+          <div className="absolute inset-0 z-30 rounded-md border-2 border-blue-400 bg-blue-50 p-2">
+            <div className="space-y-1">
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSaveEdit}
+                className="w-full rounded border border-blue-300 bg-white px-1 py-0.5 text-xs font-medium text-gray-700 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                autoFocus
+              />
+              <div className="flex gap-1">
+                <button
+                  onClick={handleSaveEdit}
+                  className="rounded px-1 py-0.5 text-xs text-blue-600 hover:bg-blue-100"
+                  type="button"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="rounded px-1 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* Resize handle */}
+        <div
+          className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
+            isResizing
+              ? 'border-blue-400 bg-blue-200 opacity-100'
+              : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100'
+          }`}
+          onMouseDown={handleMouseDown}
+          title="Drag to resize"
+        >
+          <div
+            className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${
+              isResizing ? 'bg-blue-500' : 'bg-gray-400'
+            }`}
+          ></div>
         </div>
 
         {/* Action buttons */}
-        <div className="absolute top-0.5 right-0.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="absolute top-0.5 right-0.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             onClick={handleStartEdit}
             className="rounded-full bg-gray-100 p-0.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100"
@@ -455,6 +453,9 @@ const TimeSlotDropZone = ({
   // Memoize canDrop calculation
   const canDrop = useMemo(() => {
     if (!activeDragItem) return true
+
+    // Only check conflicts for proposals (talks), not service sessions
+    if (!activeDragItem.proposal) return true
 
     // If moving a scheduled talk within the same track, exclude it from conflict detection
     const excludeTalk =
@@ -887,6 +888,7 @@ function DroppableTrack({
                 key={`service-${talk.startTime}-${talkIndex}`}
                 talk={talk}
                 talkIndex={talkIndex}
+                trackIndex={trackIndex}
                 onRemoveTalk={onRemoveTalk}
                 onUpdateSession={handleUpdateServiceSession}
                 onRenameSession={handleRenameServiceSession}

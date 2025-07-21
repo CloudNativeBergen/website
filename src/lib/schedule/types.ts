@@ -7,8 +7,13 @@ export interface DropPosition {
 }
 
 export interface DragItem {
-  type: 'proposal' | 'scheduled-talk'
-  proposal: ProposalExisting
+  type: 'proposal' | 'scheduled-talk' | 'service-session' | 'scheduled-service'
+  proposal?: ProposalExisting
+  serviceSession?: {
+    placeholder: string
+    startTime: string
+    endTime: string
+  }
   sourceTrackIndex?: number
   sourceTimeSlot?: string
 }

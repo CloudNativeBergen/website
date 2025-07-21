@@ -23,6 +23,10 @@ export interface UseScheduleEditorReturn {
     dragItem: DragItem,
     dropPosition: DropPosition,
   ) => { success: boolean; updatedSchedule?: ConferenceSchedule }
+  moveServiceSessionToTrack: (
+    dragItem: DragItem,
+    dropPosition: DropPosition,
+  ) => { success: boolean; updatedSchedule?: ConferenceSchedule }
   removeTalkFromSchedule: (trackIndex: number, talkIndex: number) => void
   setInitialData: (
     schedule: ConferenceSchedule | null,
@@ -149,7 +153,7 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       dragItem: DragItem,
       dropPosition: DropPosition,
     ): { success: boolean; updatedSchedule?: ConferenceSchedule } => {
-      if (!schedule) return { success: false }
+      if (!schedule || !dragItem.proposal) return { success: false }
 
       const { proposal } = dragItem
       const { trackIndex, timeSlot } = dropPosition
@@ -231,6 +235,79 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
     [schedule],
   )
 
+  const moveServiceSessionToTrack = useCallback(
+    (
+      dragItem: DragItem,
+      dropPosition: DropPosition,
+    ): { success: boolean; updatedSchedule?: ConferenceSchedule } => {
+      if (!schedule || !dragItem.serviceSession) return { success: false }
+
+      const { serviceSession } = dragItem
+      const { trackIndex, timeSlot } = dropPosition
+
+      if (trackIndex < 0 || trackIndex >= schedule.tracks.length)
+        return { success: false }
+
+      // Calculate end time based on the service session duration
+      const startTime = new Date(`2000-01-01T${serviceSession.startTime}:00`)
+      const endTime = new Date(`2000-01-01T${serviceSession.endTime}:00`)
+      const durationMinutes =
+        (endTime.getTime() - startTime.getTime()) / (1000 * 60)
+      const newEndTime = calculateEndTime(timeSlot, durationMinutes)
+
+      let updatedSchedule: ConferenceSchedule | null = null
+
+      setSchedule((prev) => {
+        if (!prev) return prev
+
+        const newSchedule = { ...prev }
+        const newTracks = [...newSchedule.tracks]
+
+        // If moving from another track, remove from source
+        if (
+          dragItem.type === 'scheduled-service' &&
+          dragItem.sourceTrackIndex !== undefined &&
+          dragItem.sourceTimeSlot !== undefined
+        ) {
+          const sourceTrack = newTracks[dragItem.sourceTrackIndex]
+          const newSourceTalks = sourceTrack.talks.filter(
+            (talk) =>
+              !(
+                talk.placeholder === serviceSession.placeholder &&
+                talk.startTime === dragItem.sourceTimeSlot
+              ),
+          )
+          newTracks[dragItem.sourceTrackIndex] = {
+            ...sourceTrack,
+            talks: newSourceTalks,
+          }
+        }
+
+        // Add to target track
+        const targetTrack = newTracks[trackIndex]
+        const newServiceSession: TrackTalk = {
+          placeholder: serviceSession.placeholder,
+          startTime: timeSlot,
+          endTime: newEndTime,
+        }
+
+        newTracks[trackIndex] = {
+          ...targetTrack,
+          talks: [...targetTrack.talks, newServiceSession].sort((a, b) =>
+            a.startTime.localeCompare(b.startTime),
+          ),
+        }
+
+        newSchedule.tracks = newTracks
+        updatedSchedule = newSchedule
+        return newSchedule
+      })
+
+      return { success: true, updatedSchedule: updatedSchedule || undefined }
+    },
+    [schedule],
+  )
+
   const removeTalkFromSchedule = useCallback(
     (trackIndex: number, talkIndex: number) => {
       setSchedule((prev) => {
@@ -262,6 +339,7 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
     removeTrack,
     updateTrack,
     moveTalkToTrack,
+    moveServiceSessionToTrack,
     removeTalkFromSchedule,
     setInitialData,
     setSchedule,

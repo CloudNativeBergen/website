@@ -21,6 +21,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { UnassignedProposals } from './UnassignedProposals'
 import { MemoizedDroppableTrack as DroppableTrack } from './DroppableTrack'
 import { DraggableProposal } from './DraggableProposal'
+import { DraggableServiceSession } from './DraggableServiceSession'
 import { saveSchedule } from '@/lib/schedule/client'
 import {
   usePerformanceTimer,
@@ -487,33 +488,68 @@ export function ScheduleEditor({
       const dropData = over.data.current
 
       if (dropData?.type === 'time-slot') {
-        // Process drop immediately for proper drag feedback
-        const result = scheduleEditor.moveTalkToTrack(dragItem, {
-          trackIndex: dropData.trackIndex,
-          timeSlot: dropData.timeSlot,
-        })
+        // Handle proposal drops
+        if (dragItem.proposal) {
+          const result = scheduleEditor.moveTalkToTrack(dragItem, {
+            trackIndex: dropData.trackIndex,
+            timeSlot: dropData.timeSlot,
+          })
 
-        if (result.success && result.updatedSchedule) {
-          // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
-          if (
-            currentDayIndex >= 0 &&
-            currentDayIndex < modifiedSchedules.length &&
-            result.updatedSchedule
-          ) {
-            const updatedSchedules = [...modifiedSchedules]
-            updatedSchedules[currentDayIndex] = result.updatedSchedule
-            setModifiedSchedules(updatedSchedules)
+          if (result.success && result.updatedSchedule) {
+            // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
+            if (
+              currentDayIndex >= 0 &&
+              currentDayIndex < modifiedSchedules.length &&
+              result.updatedSchedule
+            ) {
+              const updatedSchedules = [...modifiedSchedules]
+              updatedSchedules[currentDayIndex] = result.updatedSchedule
+              setModifiedSchedules(updatedSchedules)
 
-            // Force immediate recalculation of unassigned proposals
-            scheduleEditor.setInitialData(
-              result.updatedSchedule,
-              initialProposals,
-              updatedSchedules,
+              // Force immediate recalculation of unassigned proposals
+              scheduleEditor.setInitialData(
+                result.updatedSchedule,
+                initialProposals,
+                updatedSchedules,
+              )
+            }
+          } else {
+            // Handle failed drop (show notification, etc.)
+            console.warn('Failed to drop proposal:', dragItem.proposal.title)
+          }
+        }
+        // Handle service session drops
+        else if (dragItem.serviceSession) {
+          const result = scheduleEditor.moveServiceSessionToTrack(dragItem, {
+            trackIndex: dropData.trackIndex,
+            timeSlot: dropData.timeSlot,
+          })
+
+          if (result.success && result.updatedSchedule) {
+            // Update the current day's schedule in modifiedSchedules
+            if (
+              currentDayIndex >= 0 &&
+              currentDayIndex < modifiedSchedules.length &&
+              result.updatedSchedule
+            ) {
+              const updatedSchedules = [...modifiedSchedules]
+              updatedSchedules[currentDayIndex] = result.updatedSchedule
+              setModifiedSchedules(updatedSchedules)
+
+              // Force immediate recalculation
+              scheduleEditor.setInitialData(
+                result.updatedSchedule,
+                initialProposals,
+                updatedSchedules,
+              )
+            }
+          } else {
+            // Handle failed drop
+            console.warn(
+              'Failed to drop service session:',
+              dragItem.serviceSession.placeholder,
             )
           }
-        } else {
-          // Handle failed drop (show notification, etc.)
-          console.warn('Failed to drop proposal:', dragItem.proposal.title)
         }
       }
 
@@ -830,7 +866,19 @@ export function ScheduleEditor({
 
   const dragOverlay = useMemo(() => {
     if (!activeItem) return null
-    return <DraggableProposal proposal={activeItem.proposal} isDragging />
+
+    if (activeItem.proposal) {
+      return <DraggableProposal proposal={activeItem.proposal} isDragging />
+    } else if (activeItem.serviceSession) {
+      return (
+        <DraggableServiceSession
+          serviceSession={activeItem.serviceSession}
+          isDragging
+        />
+      )
+    }
+
+    return null
   }, [activeItem])
 
   return (
