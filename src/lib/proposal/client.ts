@@ -76,11 +76,20 @@ export interface NextUnreviewedProposalResponse {
 
 export async function adminFetchNextUnreviewedProposal(
   currentProposalId?: string,
+  visitedIds: string[] = [],
 ): Promise<NextUnreviewedProposalResponse> {
   let url = `/admin/api/proposals/next-unreviewed`
 
+  const params = new URLSearchParams()
   if (currentProposalId) {
-    url += `?currentProposalId=${encodeURIComponent(currentProposalId)}`
+    params.append('currentProposalId', currentProposalId)
+  }
+  if (visitedIds.length > 0) {
+    params.append('visitedIds', visitedIds.join(','))
+  }
+
+  if (params.toString()) {
+    url += `?${params.toString()}`
   }
 
   const res = await fetch(url, {

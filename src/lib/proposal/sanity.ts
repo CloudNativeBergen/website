@@ -321,42 +321,56 @@ export async function fetchNextUnreviewedProposal({
   } | null
   error: Error | null
 }> {
-  let error = null
-  let nextProposal = null
-
-  const query = groq`
-    *[
-      _type == "talk" &&
-      conference._ref == $conferenceId &&
-      status == "${Status.submitted}" &&
-      !(_id in *[_type == "review" && reviewer._ref == $reviewerId].proposal._ref) &&
-      _id != $currentProposalId
-    ] {
-      _id,
-      title,
-      status,
-      speakers[]->{ _id, name }
-    } | order(_createdAt asc)[0...1]
-  `
-
   try {
-    const proposals = await clientRead.fetch(
+    // Get all unreviewed proposals for this reviewer
+    // A proposal is unreviewed if this reviewer hasn't created a review for it
+    const query = groq`
+      *[
+        _type == "talk" &&
+        conference._ref == $conferenceId &&
+        status == "${Status.submitted}" &&
+        !(_id in *[_type == "review" && reviewer._ref == $reviewerId].proposal._ref)
+      ] {
+        _id,
+        title,
+        status,
+        speakers[]->{ _id, name },
+        _createdAt
+      } | order(_createdAt asc)
+    `
+
+    const unreviewedProposals = await clientRead.fetch(
       query,
-      { conferenceId, reviewerId, currentProposalId },
+      { conferenceId, reviewerId },
       { cache: 'no-store' },
     )
 
-    if (!proposals || proposals.length === 0) {
+    if (!unreviewedProposals || unreviewedProposals.length === 0) {
       return { nextProposal: null, error: null }
     }
 
-    nextProposal = proposals[0]
+    // If no current proposal, return the first one
+    if (!currentProposalId) {
+      return { nextProposal: unreviewedProposals[0], error: null }
+    }
+
+    // Find the index of the current proposal
+    const currentIndex = unreviewedProposals.findIndex(
+      (p: any) => p._id === currentProposalId,
+    )
+
+    // If current proposal not found in unreviewed list, return the first one
+    if (currentIndex === -1) {
+      return { nextProposal: unreviewedProposals[0], error: null }
+    }
+
+    // Get the next proposal, wrapping around to the beginning if needed
+    const nextIndex = (currentIndex + 1) % unreviewedProposals.length
+    return { nextProposal: unreviewedProposals[nextIndex], error: null }
   } catch (err) {
     console.error('Error finding next unreviewed proposal:', err)
-    error = err as Error
+    return { nextProposal: null, error: err as Error }
   }
-
-  return { nextProposal, error }
 }
 
 export async function searchProposals({

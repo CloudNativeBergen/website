@@ -1,7 +1,6 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getProposal } from '@/lib/proposal/sanity'
-import { proposalResponseError } from '@/lib/proposal/server'
 import { ReviewBase } from '@/lib/review/types'
 import { createReview, updateReview } from '@/lib/review/sanity'
 import { NextResponse } from 'next/server'
