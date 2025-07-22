@@ -6,11 +6,14 @@ import { getProposal } from '@/lib/proposal/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { SingleSpeakerEmailTemplate } from '@/components/email'
 
-assert(process.env.RESEND_API_KEY, 'RESEND_API_KEY is not set')
-assert(process.env.RESEND_FROM_EMAIL, 'RESEND_FROM_EMAIL is not set')
+// Only assert in non-test environments
+if (process.env.NODE_ENV !== 'test') {
+  assert(process.env.RESEND_API_KEY, 'RESEND_API_KEY is not set')
+  assert(process.env.RESEND_FROM_EMAIL, 'RESEND_FROM_EMAIL is not set')
+}
 
-const resend = new Resend(process.env.RESEND_API_KEY as string)
-const fromEmail = process.env.RESEND_FROM_EMAIL as string
+const resend = new Resend(process.env.RESEND_API_KEY || 'test_key')
+const fromEmail = process.env.RESEND_FROM_EMAIL || 'test@cloudnativebergen.no'
 
 interface EmailSpeakerRequest {
   proposalId: string
