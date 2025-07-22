@@ -37,6 +37,7 @@ export { ProposalActionModal } from './ProposalActionModal'
 export { SpeakerTable } from './SpeakerTable'
 export { BroadcastEmailModal } from './BroadcastEmailModal'
 export { SingleSpeakerEmailModal } from './SingleSpeakerEmailModal'
+export { EmailModal } from './EmailModal'
 export { SpeakerActions } from './SpeakerActions'
 
 // Sponsor Management Components
