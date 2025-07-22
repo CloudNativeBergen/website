@@ -1,8 +1,58 @@
 /* Schedule editor specific styles */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Topic color border utilities - reliable approach using pseudo-elements */
+.topic-border-single {
+  position: relative;
+}
+
+.topic-border-single::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: var(--topic-1-color);
+  z-index: 1;
+}
+
+.topic-border-gradient {
+  position: relative;
+}
+
+.topic-border-gradient::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: linear-gradient(
+    45deg,
+    var(--topic-1-color) 50%,
+    var(--topic-2-color) 50%
+  );
+  z-index: 1;
+}
+
+/* Ensure the main content stays above the pseudo-element */
+.topic-border-single > *,
+.topic-border-gradient > * {
+  position: relative;
+  z-index: 2;
 }

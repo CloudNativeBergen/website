@@ -103,6 +103,15 @@ export async function getConferenceForDomain(
           title,
           description,
           format,
+          level,
+          audiences,
+          topics[]-> {
+            _id,
+            title,
+            color,
+            slug,
+            description
+          },
           speaker->{
           name,
           "slug": slug.current,

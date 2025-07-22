@@ -1,6 +1,8 @@
 'use client'
 
 import { ProposalExisting } from '@/lib/proposal/types'
+import { LevelIndicator } from '@/lib/proposal/level-indicator'
+import { Level } from '@/lib/proposal/types'
 import { DraggableProposal } from './DraggableProposal'
 import { useBatchUpdates } from '@/lib/schedule/performance-utils'
 import {
@@ -377,6 +379,34 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
             hasActiveFilters={hasActiveFilters}
           />
         )}
+      </div>
+
+      {/* Legend */}
+      <div className="border-t border-gray-200 bg-gray-50/50 p-3">
+        <h3 className="mb-2 text-xs font-medium text-gray-700">Legend</h3>
+        <div className="space-y-1.5 text-xs text-gray-600">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-700">Level:</span>
+            <LevelIndicator level={Level.beginner} size="sm" />
+            <span>Beginner</span>
+            <LevelIndicator level={Level.intermediate} size="sm" />
+            <span>Intermediate</span>
+            <LevelIndicator level={Level.advanced} size="sm" />
+            <span>Advanced</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-700">Border:</span>
+            <div className="h-2 w-3 border-l-4 border-blue-500"></div>
+            <span>Topic colors</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-700">Audience:</span>
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs">
+              DEV +2
+            </span>
+            <span>Primary + count</span>
+          </div>
+        </div>
       </div>
     </div>
   )
