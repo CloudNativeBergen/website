@@ -35,6 +35,7 @@ export function ProposalsList({
     level: [],
     language: [],
     audience: [],
+    speakerFlags: [],
     reviewStatus: ReviewStatus.all,
     hideMultipleTalks: false,
     sortBy: 'created',

@@ -11,6 +11,7 @@ import {
   formats,
   levels,
 } from '@/lib/proposal/types'
+import { Flags } from '@/lib/speaker/types'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
 import { getStatusBadgeStyle } from './utils'
 
@@ -26,6 +27,7 @@ export interface FilterState {
   level: Level[]
   language: Language[]
   audience: Audience[]
+  speakerFlags: Flags[]
   reviewStatus: ReviewStatus
   hideMultipleTalks: boolean
   sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating'
@@ -36,7 +38,7 @@ interface ProposalsFilterProps {
   filters: FilterState
   onFilterChange: (
     filterType: keyof FilterState,
-    value: Status | Format | Level | Language | Audience,
+    value: Status | Format | Level | Language | Audience | Flags,
   ) => void
   onReviewStatusChange: (reviewStatus: ReviewStatus) => void
   onMultipleTalksFilterChange: (hideMultipleTalks: boolean) => void
@@ -137,8 +139,11 @@ export function ProposalsFilter({
           {/* Hide Multiple Talks Filter */}
           <FilterDropdown
             label="Speakers"
-            activeCount={filters.hideMultipleTalks ? 1 : 0}
+            activeCount={
+              (filters.hideMultipleTalks ? 1 : 0) + filters.speakerFlags.length
+            }
             keepOpen
+            width="wider"
           >
             <FilterOption
               onClick={() =>
@@ -147,6 +152,7 @@ export function ProposalsFilter({
               checked={filters.hideMultipleTalks}
               type="checkbox"
               keepOpen
+              className="text-left"
             >
               <div className="flex flex-col space-y-1 text-left">
                 <span className="font-medium text-gray-900">
@@ -157,6 +163,53 @@ export function ProposalsFilter({
                   already have accepted or confirmed talks
                 </span>
               </div>
+            </FilterOption>
+
+            <hr className="my-2" />
+
+            <FilterOption
+              onClick={() =>
+                onFilterChange('speakerFlags', Flags.diverseSpeaker)
+              }
+              checked={filters.speakerFlags.includes(Flags.diverseSpeaker)}
+              type="checkbox"
+              keepOpen
+              className="text-left"
+            >
+              Underrepresented speakers
+            </FilterOption>
+            <FilterOption
+              onClick={() =>
+                onFilterChange('speakerFlags', Flags.firstTimeSpeaker)
+              }
+              checked={filters.speakerFlags.includes(Flags.firstTimeSpeaker)}
+              type="checkbox"
+              keepOpen
+              className="text-left"
+            >
+              New speakers
+            </FilterOption>
+            <FilterOption
+              onClick={() => onFilterChange('speakerFlags', Flags.localSpeaker)}
+              checked={filters.speakerFlags.includes(Flags.localSpeaker)}
+              type="checkbox"
+              keepOpen
+              className="text-left"
+            >
+              Local speakers
+            </FilterOption>
+            <FilterOption
+              onClick={() =>
+                onFilterChange('speakerFlags', Flags.requiresTravelFunding)
+              }
+              checked={filters.speakerFlags.includes(
+                Flags.requiresTravelFunding,
+              )}
+              type="checkbox"
+              keepOpen
+              className="text-left"
+            >
+              Requires travel funding
             </FilterOption>
           </FilterDropdown>
         </div>

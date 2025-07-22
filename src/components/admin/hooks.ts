@@ -10,7 +10,7 @@ import {
   Language,
   Audience,
 } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
+import { Speaker, Flags } from '@/lib/speaker/types'
 import { Review } from '@/lib/review/types'
 import { FilterState, ReviewStatus } from './ProposalsFilter'
 
@@ -135,6 +135,22 @@ export function useProposalFiltering(
         }
       }
 
+      // Filter by speaker flags
+      if (filters.speakerFlags.length > 0) {
+        const hasMatchingSpeakerFlag = proposal.speakers?.some((speaker) => {
+          if (typeof speaker === 'object' && 'flags' in speaker) {
+            const speakerObj = speaker as Speaker
+            return speakerObj.flags?.some((flag) =>
+              filters.speakerFlags.includes(flag),
+            )
+          }
+          return false
+        })
+        if (!hasMatchingSpeakerFlag) {
+          return false
+        }
+      }
+
       // Filter by review status (only if currentUserId is provided)
       if (currentUserId && filters.reviewStatus !== ReviewStatus.all) {
         const hasUserReview = proposal.reviews?.some((review) => {
@@ -231,7 +247,7 @@ export function useFilterState(initialFilters: FilterState) {
 
   const toggleFilter = (
     filterType: keyof FilterState,
-    value: Status | Format | Level | Language | Audience,
+    value: Status | Format | Level | Language | Audience | Flags,
   ) => {
     setFilters((prev) => {
       const currentValues = prev[filterType] as (
@@ -240,6 +256,7 @@ export function useFilterState(initialFilters: FilterState) {
         | Level
         | Language
         | Audience
+        | Flags
       )[]
       const newValues = currentValues.includes(value)
         ? currentValues.filter((v) => v !== value)
@@ -278,6 +295,7 @@ export function useFilterState(initialFilters: FilterState) {
       level: [],
       language: [],
       audience: [],
+      speakerFlags: [],
       reviewStatus: ReviewStatus.all,
       hideMultipleTalks: false,
       sortBy: 'created',
@@ -309,6 +327,7 @@ export function useFilterState(initialFilters: FilterState) {
     filters.level.length +
     filters.language.length +
     filters.audience.length +
+    filters.speakerFlags.length +
     reviewStatusFilterCount +
     multipleTalksFilterCount
 
@@ -339,6 +358,8 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     return {
       ...initialFilters,
       ...urlFilters,
+      // Ensure speakerFlags is always defined
+      speakerFlags: urlFilters.speakerFlags || [],
     }
   })
 
@@ -366,7 +387,7 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
   const toggleFilter = useCallback(
     (
       filterType: keyof FilterState,
-      value: Status | Format | Level | Language | Audience,
+      value: Status | Format | Level | Language | Audience | Flags,
     ) => {
       const newFilters = {
         ...filters,
@@ -377,6 +398,7 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
             | Level
             | Language
             | Audience
+            | Flags
           )[]
           return currentValues.includes(value)
             ? currentValues.filter((v) => v !== value)
@@ -450,6 +472,7 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     filters.level.length +
     filters.language.length +
     filters.audience.length +
+    filters.speakerFlags.length +
     reviewStatusFilterCount +
     multipleTalksFilterCount
 
@@ -527,6 +550,15 @@ function parseFiltersFromURL(
     filters.audience = parseArrayParam(audienceParam, Object.values(Audience))
   }
 
+  // Parse speaker flags filter
+  const speakerFlagsParam = searchParams.get('speakerFlags')
+  if (speakerFlagsParam) {
+    filters.speakerFlags = parseArrayParam(
+      speakerFlagsParam,
+      Object.values(Flags),
+    )
+  }
+
   // Parse review status
   const reviewStatusParam = searchParams.get('reviewStatus')
   if (
@@ -600,6 +632,11 @@ function serializeFiltersToURL(
   if (filters.audience.length > 0) {
     const audienceParam = serializeArrayParam(filters.audience)
     if (audienceParam) params.set('audience', audienceParam)
+  }
+
+  if (filters.speakerFlags.length > 0) {
+    const speakerFlagsParam = serializeArrayParam(filters.speakerFlags)
+    if (speakerFlagsParam) params.set('speakerFlags', speakerFlagsParam)
   }
 
   if (filters.reviewStatus !== defaultFilters.reviewStatus) {
