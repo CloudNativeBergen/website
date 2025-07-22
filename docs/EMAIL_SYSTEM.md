@@ -51,7 +51,8 @@ export const resend = new Resend(EMAIL_CONFIG.RESEND_API_KEY)
 // Configuration constants
 export const EMAIL_CONFIG = {
   RESEND_API_KEY: process.env.RESEND_API_KEY || 'test_key',
-  RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL || 'test@cloudnativebergen.no',
+  RESEND_FROM_EMAIL:
+    process.env.RESEND_FROM_EMAIL || 'test@cloudnativebergen.no',
   RATE_LIMIT_DELAY: 500, // 500ms delay = 2 requests per second max
   MAX_RETRIES: 3,
 }
@@ -107,16 +108,18 @@ await sendAcceptRejectNotification({
     location: 'Bergen',
     date: '2025-09-15',
     url: 'cloudnativebergen.no',
-    socialLinks: ['https://twitter.com/cloudnativebergen']
-  }
+    socialLinks: ['https://twitter.com/cloudnativebergen'],
+  },
 })
 ```
 
 **Templates Used**:
+
 - `ProposalAcceptTemplate` - For acceptances and reminders
 - `ProposalRejectTemplate` - For rejections
 
 **Triggers**:
+
 - Admin action on proposal (approve/reject/remind)
 - Automated reminder systems
 
@@ -148,6 +151,7 @@ if (result.error) {
 **Template Used**: `SingleSpeakerEmailTemplate`
 
 **Features**:
+
 - Custom subject and message
 - Automatic proposal context inclusion
 - Optional audience list integration
@@ -160,10 +164,10 @@ if (result.error) {
 **Implementation**: `/lib/email/audience.ts`
 
 ```typescript
-import { 
+import {
   getOrCreateConferenceAudience,
   addSpeakerToAudience,
-  syncConferenceAudience 
+  syncConferenceAudience,
 } from '@/lib/email/audience'
 
 // Create/get conference audience
@@ -177,6 +181,7 @@ await syncConferenceAudience(conference, eligibleSpeakers)
 ```
 
 **Features**:
+
 - Automatic audience creation per conference
 - Speaker synchronization based on proposal status
 - Rate-limited operations for large audiences
@@ -201,6 +206,7 @@ const emailResult = await retryWithBackoff(async () => {
 ```
 
 **Benefits**:
+
 - Handles temporary service outages
 - Respects API rate limits (2 requests/second)
 - Exponential backoff prevents overwhelming the service
@@ -257,10 +263,11 @@ RESEND_FROM_EMAIL=test@cloudnativebergen.no
 **Authentication**: Requires organizer access
 
 **Request Body**:
+
 ```json
 {
   "proposalId": "string",
-  "speakerId": "string", 
+  "speakerId": "string",
   "subject": "string",
   "message": "string",
   "addToAudience": "boolean (optional)"
@@ -268,6 +275,7 @@ RESEND_FROM_EMAIL=test@cloudnativebergen.no
 ```
 
 **Response**:
+
 ```json
 {
   "message": "Email sent successfully",
@@ -278,6 +286,7 @@ RESEND_FROM_EMAIL=test@cloudnativebergen.no
 ```
 
 **Error Responses**:
+
 - `400`: Invalid request (missing fields, empty content)
 - `404`: Conference, proposal, or speaker not found
 - `500`: Email sending failure or server error
@@ -291,7 +300,7 @@ Reusable modal for email composition:
 ```tsx
 import { EmailModal } from '@/components/admin/EmailModal'
 
-<EmailModal
+;<EmailModal
   isOpen={showModal}
   onClose={() => setShowModal(false)}
   title="Email Speaker"
@@ -303,7 +312,7 @@ import { EmailModal } from '@/components/admin/EmailModal'
   submitButtonText="Send Email"
   placeholder={{
     subject: 'Enter email subject...',
-    message: 'Type your message...'
+    message: 'Type your message...',
   }}
 />
 ```
@@ -314,14 +323,16 @@ Email functionality is integrated into the admin interface:
 
 ```tsx
 // In AdminActionBar.tsx
-{speakers.map(speaker => (
-  <button
-    onClick={() => handleEmailSpeaker(speaker)}
-    className="email-button"
-  >
-    📧 Email {speaker.name}
-  </button>
-))}
+{
+  speakers.map((speaker) => (
+    <button
+      onClick={() => handleEmailSpeaker(speaker)}
+      className="email-button"
+    >
+      📧 Email {speaker.name}
+    </button>
+  ))
+}
 ```
 
 ## Testing
@@ -348,7 +359,7 @@ npm test
 
 2. **Proposal Notifications**:
    - [ ] Accept proposal and verify email sent
-   - [ ] Reject proposal and verify email sent  
+   - [ ] Reject proposal and verify email sent
    - [ ] Test reminder functionality
 
 3. **Audience Management**:
@@ -387,12 +398,12 @@ All email operations include comprehensive logging:
 // Success logging
 console.log(`Email sent successfully to ${recipient} (ID: ${emailId})`)
 
-// Error logging  
+// Error logging
 console.error('Email sending failed:', {
   error: error.message,
   recipient,
   proposalId,
-  timestamp: new Date().toISOString()
+  timestamp: new Date().toISOString(),
 })
 
 // Rate limiting warnings
@@ -410,6 +421,7 @@ console.warn('Rate limit encountered, implementing backoff strategy')
 ### Resend Dashboard
 
 Monitor email delivery through the Resend dashboard:
+
 - Delivery status and bounce rates
 - API usage and rate limit status
 - Email performance analytics
