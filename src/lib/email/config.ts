@@ -12,7 +12,8 @@ if (process.env.NODE_ENV !== 'test') {
  */
 export const EMAIL_CONFIG = {
   RESEND_API_KEY: process.env.RESEND_API_KEY || 'test_key',
-  RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL || 'test@cloudnativebergen.no',
+  RESEND_FROM_EMAIL:
+    process.env.RESEND_FROM_EMAIL || 'test@cloudnativebergen.no',
   RATE_LIMIT_DELAY: 500, // 500ms delay = 2 requests per second max
   MAX_RETRIES: 3,
 } as const
@@ -62,7 +63,8 @@ export async function retryWithBackoff<T>(
       lastError = error
 
       if (isRateLimitError(error) && attempt < maxRetries - 1) {
-        const backoffDelay = EMAIL_CONFIG.RATE_LIMIT_DELAY * Math.pow(2, attempt)
+        const backoffDelay =
+          EMAIL_CONFIG.RATE_LIMIT_DELAY * Math.pow(2, attempt)
         // Only log on the first retry attempt to reduce noise
         if (attempt === 0) {
           console.log(`Rate limit hit, implementing backoff strategy...`)
@@ -116,7 +118,10 @@ export type EmailResult<T = EmailResponse> = {
 /**
  * Create a standardized email error response
  */
-export function createEmailError(message: string, status: number = 500): EmailError {
+export function createEmailError(
+  message: string,
+  status: number = 500,
+): EmailError {
   return { error: message, status }
 }
 

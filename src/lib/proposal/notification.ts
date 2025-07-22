@@ -3,10 +3,7 @@ import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
 } from '@/components/email'
-import {
-  resend,
-  EMAIL_CONFIG,
-} from '@/lib/email/config'
+import { resend, EMAIL_CONFIG } from '@/lib/email/config'
 import {
   NotificationParams,
   createTemplateProps,

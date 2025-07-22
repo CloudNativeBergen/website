@@ -14,7 +14,7 @@ import {
 } from '@heroicons/react/20/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
-import { SingleSpeakerEmailModal } from './SingleSpeakerEmailModal'
+import { SpeakerEmailModal } from './SpeakerEmailModal'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
@@ -22,11 +22,13 @@ interface AdminActionBarProps {
 
 export function AdminActionBar({ proposal }: AdminActionBarProps) {
   const [showEmailModal, setShowEmailModal] = useState(false)
-  const [selectedSpeaker, setSelectedSpeaker] = useState<{
-    id: string
-    name: string
-    email: string
-  } | null>(null)
+  const [speakersWithEmail, setSpeakersWithEmail] = useState<
+    {
+      id: string
+      name: string
+      email: string
+    }[]
+  >([])
 
   const handleAction = (action: Action) => {
     const event = new CustomEvent('proposalAction', {
@@ -35,13 +37,18 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
     window.dispatchEvent(event)
   }
 
-  const handleEmailSpeaker = (speaker: SpeakerWithReviewInfo) => {
-    if (speaker.email) {
-      setSelectedSpeaker({
+  const handleEmailSpeakers = () => {
+    // Get all speakers with email addresses
+    const speakersWithValidEmail = speakers
+      .filter((speaker) => speaker.email)
+      .map((speaker) => ({
         id: speaker._id,
         name: speaker.name,
         email: speaker.email,
-      })
+      }))
+
+    if (speakersWithValidEmail.length > 0) {
+      setSpeakersWithEmail(speakersWithValidEmail)
       setShowEmailModal(true)
     }
   }
@@ -187,56 +194,17 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
         {/* Right side - Compact Action Buttons */}
         <div className="flex flex-shrink-0 items-center gap-2">
           {/* Email Speaker Button - Show if there's at least one speaker with email */}
-          {speakers.length > 0 && speakers.some(speaker => speaker.email) && (
-            <div className="relative">
-              {speakers.length === 1 ? (
-                // Single speaker - direct email button
-                <button
-                  onClick={() => handleEmailSpeaker(speakers[0])}
-                  className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
-                  title={`Email ${speakers[0].name}`}
-                >
-                  <EnvelopeIcon className="h-3 w-3" />
-                  Email
-                </button>
-              ) : (
-                // Multiple speakers - dropdown menu
-                <div className="inline-block">
-                  <select
-                    onChange={(e) => {
-                      const speakerId = e.target.value
-                      if (speakerId) {
-                        const speaker = speakers.find(s => s._id === speakerId)
-                        if (speaker) {
-                          handleEmailSpeaker(speaker)
-                        }
-                      }
-                      e.target.value = '' // Reset selection
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 border-0 cursor-pointer"
-                    defaultValue=""
-                  >
-                    <option value="" disabled>
-                      📧 Email Speaker
-                    </option>
-                    {speakers
-                      .filter(speaker => speaker.email)
-                      .map(speaker => (
-                        <option 
-                          key={speaker._id} 
-                          value={speaker._id}
-                          className="text-black"
-                        >
-                          {speaker.name}
-                        </option>
-                      ))
-                    }
-                  </select>
-                </div>
-              )}
-            </div>
+          {speakers.length > 0 && speakers.some((speaker) => speaker.email) && (
+            <button
+              onClick={handleEmailSpeakers}
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+              title={`Email ${speakers.length === 1 ? speakers.filter((s) => s.email)[0]?.name : `${speakers.filter((s) => s.email).length} speakers`}`}
+            >
+              <EnvelopeIcon className="h-3 w-3" />
+              Email
+            </button>
           )}
-          
+
           {canApprove && (
             <button
               onClick={() => handleAction(Action.accept)}
@@ -268,17 +236,15 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
       </div>
 
       {/* Email Modal */}
-      {showEmailModal && selectedSpeaker && (
-        <SingleSpeakerEmailModal
+      {showEmailModal && speakersWithEmail.length > 0 && (
+        <SpeakerEmailModal
           isOpen={showEmailModal}
           onClose={() => {
             setShowEmailModal(false)
-            setSelectedSpeaker(null)
+            setSpeakersWithEmail([])
           }}
           proposal={proposal}
-          speakerId={selectedSpeaker.id}
-          speakerName={selectedSpeaker.name}
-          speakerEmail={selectedSpeaker.email}
+          speakers={speakersWithEmail}
         />
       )}
     </div>

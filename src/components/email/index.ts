@@ -3,9 +3,9 @@ export { ProposalRejectTemplate } from './ProposalRejectTemplate'
 export { SpeakerBroadcastTemplate } from './SpeakerBroadcastTemplate'
 export { BroadcastEmailTemplate } from './BroadcastEmailTemplate'
 export { BaseEmailTemplate } from './BaseEmailTemplate'
-export { SingleSpeakerEmailTemplate } from './SingleSpeakerEmailTemplate'
+export { SpeakerEmailTemplate } from './SpeakerEmailTemplate'
 export type { SpeakerBroadcastTemplateProps } from './SpeakerBroadcastTemplate'
-export type { SingleSpeakerEmailTemplateProps } from './SingleSpeakerEmailTemplate'
+export type { SpeakerEmailTemplateProps } from './SpeakerEmailTemplate'
 export {
   EmailSection,
   EmailSectionHeader,

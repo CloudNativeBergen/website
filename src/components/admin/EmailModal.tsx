@@ -10,10 +10,11 @@ export interface EmailModalProps {
   isOpen: boolean
   onClose: () => void
   title: string
-  recipientInfo: string
+  recipientInfo: string | React.ReactNode
   contextInfo?: string
   onSend: (data: { subject: string; message: string }) => Promise<void>
   submitButtonText?: string
+  helpText?: string
   placeholder?: {
     subject?: string
     message?: string
@@ -28,6 +29,7 @@ export function EmailModal({
   contextInfo,
   onSend,
   submitButtonText = 'Send Email',
+  helpText,
   placeholder = {},
 }: EmailModalProps) {
   const [subject, setSubject] = useState('')
@@ -59,7 +61,9 @@ export function EmailModal({
         type: 'error',
         title: 'Failed to send email',
         message:
-          error instanceof Error ? error.message : 'An unexpected error occurred',
+          error instanceof Error
+            ? error.message
+            : 'An unexpected error occurred',
       })
     } finally {
       setIsLoading(false)
@@ -93,9 +97,15 @@ export function EmailModal({
           </div>
 
           <div className="font-inter rounded-xl border border-primary-200 bg-brand-sky-mist p-4 text-sm text-brand-slate-gray">
-            <div className="flex items-center gap-2">
-              <EnvelopeIcon className="h-4 w-4 text-brand-cloud-blue" />
-              <span className="font-medium">{recipientInfo}</span>
+            <div className="flex items-start gap-2">
+              <EnvelopeIcon className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-cloud-blue" />
+              <div className="min-w-0 flex-1">
+                {typeof recipientInfo === 'string' ? (
+                  <span className="font-medium">{recipientInfo}</span>
+                ) : (
+                  recipientInfo
+                )}
+              </div>
             </div>
             {contextInfo && (
               <div className="mt-2 text-xs text-brand-slate-gray/70">
@@ -142,7 +152,8 @@ export function EmailModal({
                 disabled={isLoading}
               />
               <div className="mt-2 text-xs text-brand-slate-gray/70">
-                The email will include additional context and conference details.
+                {helpText ||
+                  'The email will include additional context and conference details.'}
               </div>
             </div>
           </div>

@@ -5,12 +5,12 @@ interface BaseEmailTemplateProps {
   title?: string
   titleColor?: string
   speakerName: string
-  proposalTitle: string
-  eventName?: string
-  eventLocation?: string
-  eventDate?: string
-  eventUrl?: string
-  socialLinks?: string[]
+  proposalTitle?: string
+  eventName: string
+  eventLocation: string
+  eventDate: string
+  eventUrl: string
+  socialLinks: string[]
   children?: React.ReactNode
   footer?: React.ReactNode
   customContent?: {
@@ -24,11 +24,11 @@ export function BaseEmailTemplate({
   titleColor = '#334155',
   speakerName,
   proposalTitle,
-  eventName = 'Cloud Native Bergen Conference',
-  eventLocation = 'Bergen, Norway',
-  eventDate = 'TBA',
-  eventUrl = 'https://cloudnativebergen.no',
-  socialLinks = [],
+  eventName,
+  eventLocation,
+  eventDate,
+  eventUrl,
+  socialLinks,
   children,
   footer,
   customContent,

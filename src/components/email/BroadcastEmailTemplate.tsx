@@ -15,6 +15,11 @@ export const BroadcastEmailTemplate = ({
     <BaseEmailTemplate
       speakerName={recipientName}
       proposalTitle=""
+      eventName="Cloud Native Bergen"
+      eventLocation="Bergen, Norway"
+      eventDate="TBA"
+      eventUrl="https://cloudnativebergen.no"
+      socialLinks={[]}
       customContent={{
         heading: subject,
         body: (

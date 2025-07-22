@@ -36,7 +36,7 @@ export { ProposalActionModal } from './ProposalActionModal'
 // Speaker Management Components
 export { SpeakerTable } from './SpeakerTable'
 export { BroadcastEmailModal } from './BroadcastEmailModal'
-export { SingleSpeakerEmailModal } from './SingleSpeakerEmailModal'
+export { SpeakerEmailModal } from './SpeakerEmailModal'
 export { EmailModal } from './EmailModal'
 export { SpeakerActions } from './SpeakerActions'
 
