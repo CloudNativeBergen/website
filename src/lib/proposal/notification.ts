@@ -1,22 +1,15 @@
-import { Resend } from 'resend'
-import assert from 'assert'
 import { Action } from '@/lib/proposal/types'
 import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
 } from '@/components/email'
+import { resend, EMAIL_CONFIG } from '@/lib/email/config'
 import {
   NotificationParams,
   createTemplateProps,
   type ProposalAcceptTemplateProps,
   type ProposalRejectTemplateProps,
 } from './email-types'
-
-assert(process.env.RESEND_API_KEY, 'RESEND_API_KEY is not set')
-assert(process.env.RESEND_FROM_EMAIL, 'RESEND_FROM_EMAIL is not set')
-
-const resend = new Resend(process.env.RESEND_API_KEY as string)
-const fromEmail = process.env.RESEND_FROM_EMAIL as string
 
 function getEmailTemplate(
   action: Action,
@@ -70,7 +63,7 @@ export async function sendAcceptRejectNotification(params: NotificationParams) {
   const template = getEmailTemplate(action, templateProps)
 
   const { data, error } = await resend.emails.send({
-    from: fromEmail,
+    from: EMAIL_CONFIG.RESEND_FROM_EMAIL,
     to: [params.speaker.email],
     subject: subject,
     react: template,

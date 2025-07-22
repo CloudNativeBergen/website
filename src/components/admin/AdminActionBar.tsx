@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   CheckIcon,
   XMarkIcon,
@@ -9,20 +10,47 @@ import {
   MapPinIcon,
   ExclamationTriangleIcon,
   HeartIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/20/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { SpeakerEmailModal } from './SpeakerEmailModal'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
 }
 
 export function AdminActionBar({ proposal }: AdminActionBarProps) {
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [speakersWithEmail, setSpeakersWithEmail] = useState<
+    {
+      id: string
+      name: string
+      email: string
+    }[]
+  >([])
+
   const handleAction = (action: Action) => {
     const event = new CustomEvent('proposalAction', {
       detail: { action, proposal },
     })
     window.dispatchEvent(event)
+  }
+
+  const handleEmailSpeakers = () => {
+    // Get all speakers with email addresses
+    const speakersWithValidEmail = speakers
+      .filter((speaker) => speaker.email)
+      .map((speaker) => ({
+        id: speaker._id,
+        name: speaker.name,
+        email: speaker.email,
+      }))
+
+    if (speakersWithValidEmail.length > 0) {
+      setSpeakersWithEmail(speakersWithValidEmail)
+      setShowEmailModal(true)
+    }
   }
 
   const canApprove = proposal.status === 'submitted'
@@ -165,6 +193,18 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
 
         {/* Right side - Compact Action Buttons */}
         <div className="flex flex-shrink-0 items-center gap-2">
+          {/* Email Speaker Button - Show if there's at least one speaker with email */}
+          {speakers.length > 0 && speakers.some((speaker) => speaker.email) && (
+            <button
+              onClick={handleEmailSpeakers}
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+              title={`Email ${speakers.length === 1 ? speakers.filter((s) => s.email)[0]?.name : `${speakers.filter((s) => s.email).length} speakers`}`}
+            >
+              <EnvelopeIcon className="h-3 w-3" />
+              Email
+            </button>
+          )}
+
           {canApprove && (
             <button
               onClick={() => handleAction(Action.accept)}
@@ -194,6 +234,19 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
           )}
         </div>
       </div>
+
+      {/* Email Modal */}
+      {showEmailModal && speakersWithEmail.length > 0 && (
+        <SpeakerEmailModal
+          isOpen={showEmailModal}
+          onClose={() => {
+            setShowEmailModal(false)
+            setSpeakersWithEmail([])
+          }}
+          proposal={proposal}
+          speakers={speakersWithEmail}
+        />
+      )}
     </div>
   )
 }

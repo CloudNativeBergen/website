@@ -52,6 +52,10 @@ import { SpeakerPromotion } from '@/components/SpeakerPromotion'
 import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
+  SpeakerBroadcastTemplate,
+  SpeakerEmailTemplate,
+  BroadcastEmailTemplate,
+  BaseEmailTemplate,
 } from '@/components/email'
 import { CallToAction } from '@/components/CallToAction'
 import { Format } from '@/lib/proposal/types'
@@ -2186,21 +2190,76 @@ export default async function BrandingPage() {
               Email Templates
             </h2>
             <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray">
-              Professional email templates for proposal responses that maintain
-              consistent branding and provide clear communication to speakers
-              about their submission status.
+              Professional email templates for all conference communications.
+              These templates maintain consistent branding, provide clear
+              communication, and ensure accessibility across different email
+              clients. Our template system includes automated proposal
+              responses, speaker communications, and community updates.
             </p>
           </div>
 
-          {/* Side-by-side Email Templates */}
+          {/* Template Architecture Overview */}
           <div className="mb-16">
             <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
-              Template Comparison
+              Template Architecture
+            </h3>
+            <div className="rounded-xl bg-white p-8 shadow-lg">
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+                <div className="text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-cloud-blue/20">
+                    <span className="text-2xl font-bold text-brand-cloud-blue">
+                      1
+                    </span>
+                  </div>
+                  <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
+                    Base Template
+                  </h4>
+                  <p className="font-inter text-sm text-brand-slate-gray">
+                    Foundation layout with consistent branding, responsive
+                    design, and email client compatibility.
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-fresh-green/20">
+                    <span className="text-2xl font-bold text-brand-fresh-green">
+                      2
+                    </span>
+                  </div>
+                  <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
+                    Specialized Templates
+                  </h4>
+                  <p className="font-inter text-sm text-brand-slate-gray">
+                    Purpose-built templates for proposals, speaker
+                    communications, and community broadcasts.
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent-purple/20">
+                    <span className="text-2xl font-bold text-accent-purple">
+                      3
+                    </span>
+                  </div>
+                  <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
+                    Automated System
+                  </h4>
+                  <p className="font-inter text-sm text-brand-slate-gray">
+                    Integrated with Resend service for reliable delivery, rate
+                    limiting, and audience management.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Proposal Response Templates */}
+          <div className="mb-16">
+            <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
+              Proposal Response Templates
             </h3>
             <p className="font-inter mb-12 text-center text-lg text-brand-slate-gray">
-              Compare the acceptance and rejection email templates side by side
-              to see how they maintain consistent branding while adapting their
-              tone and messaging appropriately.
+              Automated responses for Call for Papers submissions with
+              appropriate tone and clear next steps for both accepted and
+              rejected proposals.
             </p>
 
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
@@ -2347,131 +2406,764 @@ export default async function BrandingPage() {
             </div>
           </div>
 
-          {/* Individual Template Details */}
+          {/* Speaker Communication Templates */}
           <div className="mb-16">
             <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
-              Template Details
+              Speaker Communication Templates
             </h3>
+            <p className="font-inter mb-12 text-center text-lg text-brand-slate-gray">
+              Direct communication templates for individual speaker outreach and
+              speaker-specific broadcasts with rich content support.
+            </p>
 
-            <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
-              {/* Acceptance Email Details */}
-              <div className="rounded-xl bg-white p-8 shadow-lg">
-                <h4 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-fresh-green">
-                  Acceptance Email Features
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+              {/* Single Speaker Email */}
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-cloud-blue">
+                  📩 Individual Speaker Email
                 </h4>
-                <ul className="font-inter space-y-3 text-brand-slate-gray">
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                    <span>
-                      <strong>Celebratory tone</strong> with emoji and positive
-                      language
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                    <span>
-                      <strong>Clear call-to-action</strong> with prominent
-                      confirmation button
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                    <span>
-                      <strong>Organizer comments</strong> section for
-                      personalized feedback
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                    <span>
-                      <strong>Action required</strong> alert to ensure speaker
-                      response
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
-                    <span>
-                      <strong>Brand gradient button</strong> for maximum
-                      visibility
-                    </span>
-                  </li>
-                </ul>
+                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
+                  Personal communication for specific speaker questions,
+                  updates, or requests.
+                </p>
+
+                <div className="rounded-xl bg-gray-100 shadow-2xl">
+                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="font-inter text-sm font-medium text-gray-600">
+                        Mail
+                      </div>
+                      <div className="w-16"></div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-gray-200 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-4">
+                        <span className="font-semibold text-gray-900">
+                          From:
+                        </span>
+                        <span className="text-gray-600">
+                          {conference.contact_email}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">Today 1:45 PM</div>
+                    </div>
+                    <div className="mt-1 flex items-center space-x-4 text-sm">
+                      <span className="font-semibold text-gray-900">To:</span>
+                      <span className="text-gray-600">speaker@example.com</span>
+                    </div>
+                    <div className="mt-2">
+                      <h5 className="font-semibold text-gray-900">
+                        Update on your presentation setup
+                      </h5>
+                    </div>
+                  </div>
+
+                  <div className="rounded-b-lg bg-white p-6">
+                    <SpeakerEmailTemplate
+                      speakers={[
+                        {
+                          name: 'Dr. Maria Rodriguez',
+                          email: 'maria@example.com',
+                        },
+                      ]}
+                      proposalTitle="Observability Patterns in Kubernetes"
+                      proposalUrl={`https://${domain}/admin/proposals/123`}
+                      eventName={conference.title}
+                      eventLocation={`${conference.city}, ${conference.country}`}
+                      eventDate="June 15, 2025"
+                      eventUrl={`https://${domain}/`}
+                      subject="Update on your presentation setup"
+                      message="We wanted to confirm the technical requirements for your presentation. Based on your abstract, we've arranged for a demo environment with access to our Kubernetes cluster.\n\nPlease review your proposal details and let us know if you need any additional setup or have questions about the demo environment."
+                      senderName="Erik Hansen"
+                      socialLinks={conference.social_links || []}
+                    />
+                  </div>
+                </div>
               </div>
 
-              {/* Rejection Email Details */}
-              <div className="rounded-xl bg-white p-8 shadow-lg">
-                <h4 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
-                  Rejection Email Features
+              {/* Multi-Speaker Email */}
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-accent-purple">
+                  👥 Multi-Speaker Email
                 </h4>
-                <ul className="font-inter space-y-3 text-brand-slate-gray">
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
-                    <span>
-                      <strong>Respectful tone</strong> acknowledging effort and
-                      quality
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
-                    <span>
-                      <strong>Constructive feedback</strong> section for
-                      improvement suggestions
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
-                    <span>
-                      <strong>Community encouragement</strong> to maintain
-                      engagement
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
-                    <span>
-                      <strong>Future opportunities</strong> messaging for
-                      continued participation
-                    </span>
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-slate-gray"></span>
-                    <span>
-                      <strong>Warm closing</strong> from the organizing team
-                    </span>
-                  </li>
-                </ul>
+                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
+                  Efficient communication with all speakers on a proposal using
+                  CC functionality.
+                </p>
+
+                <div className="rounded-xl bg-gray-100 shadow-2xl">
+                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="font-inter text-sm font-medium text-gray-600">
+                        Mail
+                      </div>
+                      <div className="w-16"></div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-gray-200 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-4">
+                        <span className="font-semibold text-gray-900">
+                          From:
+                        </span>
+                        <span className="text-gray-600">
+                          {conference.contact_email}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">Today 3:20 PM</div>
+                    </div>
+                    <div className="mt-1 flex items-center space-x-4 text-sm">
+                      <span className="font-semibold text-gray-900">To:</span>
+                      <span className="text-gray-600">All Co-Speakers</span>
+                    </div>
+                    <div className="mt-2">
+                      <h5 className="font-semibold text-gray-900">
+                        Collaboration guidelines for your joint presentation
+                      </h5>
+                    </div>
+                  </div>
+
+                  <div className="rounded-b-lg bg-white p-6">
+                    <SpeakerEmailTemplate
+                      speakers={[
+                        { name: 'Alex Chen', email: 'alex.chen@example.com' },
+                        { name: 'Jordan Kim', email: 'jordan.kim@example.com' },
+                        { name: 'Sam Taylor', email: 'sam.taylor@example.com' },
+                      ]}
+                      proposalTitle="Building Cloud Native Applications with Microservices"
+                      proposalUrl={`https://${domain}/admin/proposals/456`}
+                      eventName={conference.title}
+                      eventLocation={`${conference.city}, ${conference.country}`}
+                      eventDate="June 15, 2025"
+                      eventUrl={`https://${domain}/`}
+                      subject="Collaboration guidelines for your joint presentation"
+                      message="Since you're presenting together, we wanted to share some guidelines for coordinating your presentation.\n\nPlease coordinate who will handle which sections and ensure your combined presentation fits within the allocated 45-minute slot including Q&A.\n\nWe've also arranged for a shared rehearsal space the day before the conference."
+                      senderName="Conference Team"
+                      socialLinks={conference.social_links || []}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Speaker Broadcast Email */}
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-fresh-green">
+                  📢 Speaker Broadcast Email
+                </h4>
+                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
+                  Rich content broadcasts to all confirmed speakers with
+                  conference updates and announcements.
+                </p>
+
+                <div className="rounded-xl bg-gray-100 shadow-2xl">
+                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="font-inter text-sm font-medium text-gray-600">
+                        Mail
+                      </div>
+                      <div className="w-16"></div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-gray-200 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-4">
+                        <span className="font-semibold text-gray-900">
+                          From:
+                        </span>
+                        <span className="text-gray-600">
+                          {conference.contact_email}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Yesterday 9:00 AM
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center space-x-4 text-sm">
+                      <span className="font-semibold text-gray-900">To:</span>
+                      <span className="text-gray-600">All Speakers</span>
+                    </div>
+                    <div className="mt-2">
+                      <h5 className="font-semibold text-gray-900">
+                        Speaker Dinner & Conference Updates
+                      </h5>
+                    </div>
+                  </div>
+
+                  <div className="rounded-b-lg bg-white p-6">
+                    <SpeakerBroadcastTemplate
+                      subject="Speaker Dinner & Conference Updates"
+                      speakerName="Fellow Speaker"
+                      eventName={conference.title}
+                      eventLocation={`${conference.city}, ${conference.country}`}
+                      eventDate="June 15, 2025"
+                      eventUrl={`https://${domain}/`}
+                      socialLinks={conference.social_links}
+                      content={
+                        <div>
+                          <p
+                            style={{
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                              marginBottom: '16px',
+                              marginTop: '0',
+                              color: '#334155',
+                            }}
+                          >
+                            We&apos;re excited to share some important updates
+                            as we approach the conference date!
+                          </p>
+
+                          <h3
+                            style={{
+                              color: '#1D4ED8',
+                              marginTop: '24px',
+                              marginBottom: '12px',
+                              fontFamily:
+                                '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                              fontSize: '18px',
+                              fontWeight: '600',
+                            }}
+                          >
+                            🍽️ Speaker Dinner - June 14th
+                          </h3>
+                          <p
+                            style={{
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                              marginBottom: '16px',
+                              marginTop: '0',
+                              color: '#334155',
+                            }}
+                          >
+                            Join us for an exclusive speaker dinner at Lysverket
+                            restaurant (19:00). This is a great opportunity to
+                            connect with fellow speakers before the conference.
+                            Please confirm your attendance by replying to this
+                            email.
+                          </p>
+
+                          <h3
+                            style={{
+                              color: '#1D4ED8',
+                              marginTop: '24px',
+                              marginBottom: '12px',
+                              fontFamily:
+                                '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                              fontSize: '18px',
+                              fontWeight: '600',
+                            }}
+                          >
+                            📋 Final Checklist
+                          </h3>
+                          <ul
+                            style={{
+                              margin: '0 0 16px 0',
+                              paddingLeft: '20px',
+                              color: '#334155',
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                            }}
+                          >
+                            <li style={{ marginBottom: '8px' }}>
+                              Test your slides with our AV team (contact details
+                              below)
+                            </li>
+                            <li style={{ marginBottom: '8px' }}>
+                              Review the updated schedule on our website
+                            </li>
+                            <li style={{ marginBottom: '8px' }}>
+                              Prepare for the speaker meet & greet (30 min
+                              before your talk)
+                            </li>
+                          </ul>
+                        </div>
+                      }
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Usage Guidelines */}
+          {/* General Communication Templates */}
+          <div className="mb-16">
+            <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
+              General Communication Templates
+            </h3>
+            <p className="font-inter mb-12 text-center text-lg text-brand-slate-gray">
+              Flexible templates for community announcements and general
+              broadcasts with customizable content and unsubscribe management.
+            </p>
+
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              {/* Broadcast Email Template */}
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-accent-purple">
+                  📻 Community Broadcast Email
+                </h4>
+                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
+                  General audience communications with rich HTML content and
+                  unsubscribe management.
+                </p>
+
+                <div className="rounded-xl bg-gray-100 shadow-2xl">
+                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="font-inter text-sm font-medium text-gray-600">
+                        Mail
+                      </div>
+                      <div className="w-16"></div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-gray-200 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-4">
+                        <span className="font-semibold text-gray-900">
+                          From:
+                        </span>
+                        <span className="text-gray-600">
+                          {conference.contact_email}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        2 days ago 10:00 AM
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center space-x-4 text-sm">
+                      <span className="font-semibold text-gray-900">To:</span>
+                      <span className="text-gray-600">Community Member</span>
+                    </div>
+                    <div className="mt-2">
+                      <h5 className="font-semibold text-gray-900">
+                        Early Bird Tickets Now Available!
+                      </h5>
+                    </div>
+                  </div>
+
+                  <div className="rounded-b-lg bg-white p-6">
+                    <BroadcastEmailTemplate
+                      subject="Early Bird Tickets Now Available!"
+                      recipientName="Community Member"
+                      content={`
+                        <p>We're thrilled to announce that early bird tickets for Cloud Native Bergen 2025 are now available!</p>
+
+                        <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎟️ Ticket Information</h2>
+                        <ul>
+                          <li><strong>Early Bird Price:</strong> 299 NOK (Regular: 499 NOK)</li>
+                          <li><strong>Available Until:</strong> March 31st, 2025</li>
+                          <li><strong>Includes:</strong> Full conference access, lunch, and networking reception</li>
+                        </ul>
+
+                        <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎤 Confirmed Speakers</h2>
+                        <p>We have an amazing lineup including experts from Google, Microsoft, and the Cloud Native Computing Foundation.</p>
+
+                        <div style="text-align: center; margin: 32px 0;">
+                          <a href="https://tickets.cloudnativebergen.no" style="background: linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">Get Your Ticket</a>
+                        </div>
+                      `}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Base Email Template Preview */}
+              <div>
+                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-slate-gray">
+                  🏗️ Base Email Template
+                </h4>
+                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
+                  Foundation template providing consistent structure, branding,
+                  and email client compatibility.
+                </p>
+
+                <div className="rounded-xl bg-gray-100 shadow-2xl">
+                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="font-inter text-sm font-medium text-gray-600">
+                        Mail
+                      </div>
+                      <div className="w-16"></div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-gray-200 bg-white px-4 py-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center space-x-4">
+                        <span className="font-semibold text-gray-900">
+                          From:
+                        </span>
+                        <span className="text-gray-600">
+                          {conference.contact_email}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        1 week ago 3:15 PM
+                      </div>
+                    </div>
+                    <div className="mt-1 flex items-center space-x-4 text-sm">
+                      <span className="font-semibold text-gray-900">To:</span>
+                      <span className="text-gray-600">
+                        recipient@example.com
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <h5 className="font-semibold text-gray-900">
+                        Welcome to Cloud Native Bergen
+                      </h5>
+                    </div>
+                  </div>
+
+                  <div className="rounded-b-lg bg-white p-6">
+                    <BaseEmailTemplate
+                      title="Welcome to Cloud Native Bergen"
+                      speakerName="Taylor Johnson"
+                      proposalTitle="Getting Started with Cloud Native Development"
+                      eventName={conference.title}
+                      eventLocation={`${conference.city}, ${conference.country}`}
+                      eventDate="June 15, 2025"
+                      eventUrl={`https://${domain}/`}
+                      socialLinks={conference.social_links || []}
+                    >
+                      <p
+                        style={{
+                          fontSize: '16px',
+                          lineHeight: '1.6',
+                          marginBottom: '16px',
+                          marginTop: '0',
+                          color: '#334155',
+                        }}
+                      >
+                        Thank you for joining our cloud native community! This
+                        is the foundation template that provides consistent
+                        branding and structure for all our email communications.
+                      </p>
+                      <p
+                        style={{
+                          fontSize: '16px',
+                          lineHeight: '1.6',
+                          marginBottom: '16px',
+                          marginTop: '0',
+                          color: '#334155',
+                        }}
+                      >
+                        This template includes responsive design, social links,
+                        event details, and accessibility features that work
+                        across all major email clients.
+                      </p>
+                    </BaseEmailTemplate>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Template Comparison Grid */}
+          <div className="mb-16">
+            <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
+              Template Feature Comparison
+            </h3>
+
+            <div className="overflow-x-auto">
+              <table className="w-full rounded-lg bg-white shadow-lg">
+                <thead>
+                  <tr className="bg-brand-sky-mist">
+                    <th className="px-6 py-4 text-left">
+                      <span className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+                        Template
+                      </span>
+                    </th>
+                    <th className="px-6 py-4 text-left">
+                      <span className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+                        Purpose
+                      </span>
+                    </th>
+                    <th className="px-6 py-4 text-left">
+                      <span className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+                        Key Features
+                      </span>
+                    </th>
+                    <th className="px-6 py-4 text-left">
+                      <span className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+                        Automation
+                      </span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-brand-cloud-blue">
+                        Base Template
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        Foundation for all emails
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>Responsive layout</li>
+                        <li>Brand consistency</li>
+                        <li>Social links</li>
+                        <li>Event details</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-800">
+                        Manual
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-brand-fresh-green">
+                        Proposal Accept
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        CFP acceptance notifications
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>Celebration tone</li>
+                        <li>Confirmation button</li>
+                        <li>Next steps</li>
+                        <li>Organizer comments</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                        Automated
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-brand-slate-gray">
+                        Proposal Reject
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        CFP rejection notifications
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>Professional tone</li>
+                        <li>Constructive feedback</li>
+                        <li>Future opportunities</li>
+                        <li>Community connection</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                        Automated
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-brand-cloud-blue">
+                        Single Speaker
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        Individual speaker outreach
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>Personal messaging</li>
+                        <li>Proposal context</li>
+                        <li>Direct communication</li>
+                        <li>Action buttons</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                        Admin Tool
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-accent-purple">
+                        Multi-Speaker
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        CC all speakers on proposal
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>CC all participants</li>
+                        <li>Shared context</li>
+                        <li>Collaboration focused</li>
+                        <li>Speaker list display</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                        Admin Tool
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-brand-fresh-green">
+                        Speaker Broadcast
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        Speaker group communications
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>Rich content support</li>
+                        <li>Group messaging</li>
+                        <li>Speaker-specific info</li>
+                        <li>Event updates</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                        Admin Tool
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-accent-purple">
+                        General Broadcast
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        Community announcements
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>HTML content support</li>
+                        <li>Unsubscribe management</li>
+                        <li>General audience</li>
+                        <li>Marketing campaigns</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                        Admin Tool
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Technical Implementation */}
           <div className="rounded-xl bg-white p-8 shadow-lg">
             <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
-              Email Template Guidelines
+              Technical Implementation
             </h3>
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <div>
                 <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
-                  Design Principles
+                  Email Service Integration
                 </h4>
                 <ul className="font-inter space-y-2 text-brand-slate-gray">
-                  <li>• Clear visual hierarchy with consistent typography</li>
-                  <li>• Brand colors used strategically for emphasis</li>
-                  <li>• Responsive design that works across email clients</li>
-                  <li>• Accessible color contrast ratios</li>
-                  <li>• Professional yet welcoming tone</li>
+                  <li>• Resend service for reliable delivery</li>
+                  <li>• Rate limiting and retry logic</li>
+                  <li>• Audience management and segmentation</li>
+                  <li>• Bounce and unsubscribe handling</li>
+                  <li>• Template validation and testing</li>
                 </ul>
               </div>
               <div>
                 <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
-                  Content Strategy
+                  Design Standards
                 </h4>
                 <ul className="font-inter space-y-2 text-brand-slate-gray">
-                  <li>• Personalized greetings and proposal references</li>
-                  <li>• Clear next steps and action items</li>
-                  <li>• Optional organizer comments for context</li>
-                  <li>• Community encouragement and future opportunities</li>
-                  <li>• Consistent branding and contact information</li>
+                  <li>• Responsive table-based layouts</li>
+                  <li>• Email client compatibility testing</li>
+                  <li>• Accessible color contrast ratios</li>
+                  <li>• Consistent typography hierarchy</li>
+                  <li>• Brand-aligned visual elements</li>
                 </ul>
+              </div>
+            </div>
+
+            <div className="mt-8 rounded-lg bg-brand-sky-mist p-6">
+              <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                Development Guidelines
+              </h4>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+                    Component Architecture
+                  </h5>
+                  <p className="font-inter text-sm text-brand-slate-gray">
+                    Modular React components with TypeScript props for type
+                    safety and reusability across different email contexts.
+                  </p>
+                </div>
+                <div>
+                  <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+                    Testing Strategy
+                  </h5>
+                  <p className="font-inter text-sm text-brand-slate-gray">
+                    Comprehensive testing across email clients, accessibility
+                    validation, and content rendering verification.
+                  </p>
+                </div>
+                <div>
+                  <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+                    Maintenance
+                  </h5>
+                  <p className="font-inter text-sm text-brand-slate-gray">
+                    Centralized configuration, shared components, and
+                    documentation for consistent updates and brand evolution.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

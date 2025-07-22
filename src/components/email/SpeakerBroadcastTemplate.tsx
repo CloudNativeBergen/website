@@ -39,7 +39,7 @@ export function SpeakerBroadcastTemplate({
       eventLocation={eventLocation}
       eventDate={eventDate}
       eventUrl={eventUrl}
-      socialLinks={socialLinks}
+      socialLinks={socialLinks || []}
     >
       <div style={contentStyle}>{content}</div>
     </BaseEmailTemplate>

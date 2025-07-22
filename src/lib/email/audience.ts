@@ -1,9 +1,13 @@
-import { Resend } from 'resend'
 import { Conference } from '@/lib/conference/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
-
-const resend = new Resend(process.env.RESEND_API_KEY)
+import {
+  resend,
+  retryWithBackoff,
+  delay,
+  isRateLimitError,
+  EMAIL_CONFIG,
+} from './config'
 
 export interface SpeakerAudienceManager {
   getOrCreateAudience: (
@@ -51,7 +55,7 @@ export async function getOrCreateConferenceAudience(
     }
 
     // Create new audience if not found with rate limiting
-    await delay(500)
+    await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
     const audienceResponse = await retryWithBackoff(() =>
       resend.audiences.create({
         name: audienceName,
@@ -181,71 +185,6 @@ export async function removeSpeakerFromAudience(
 }
 
 /**
- * Add a delay to respect rate limits (500ms = 2 requests per second max)
- */
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-const RATE_LIMIT_DELAY = 500 // 500ms delay = 2 requests per second
-
-/**
- * Check if error is a rate limit error
- */
-const isRateLimitError = (error: unknown): boolean => {
-  if (!error || typeof error !== 'object') {
-    return false
-  }
-
-  const err = error as { message?: string; status?: number }
-  return (
-    (typeof err.message === 'string' &&
-      err.message.includes('Too many requests')) ||
-    (typeof err.message === 'string' && err.message.includes('rate limit')) ||
-    err.status === 429
-  )
-}
-
-/**
- * Retry API call with exponential backoff for rate limit errors
- */
-const retryWithBackoff = async <T>(
-  apiCall: () => Promise<T>,
-  maxRetries: number = 3,
-): Promise<T> => {
-  let lastError: unknown = null
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await apiCall()
-    } catch (error) {
-      lastError = error
-
-      if (isRateLimitError(error) && attempt < maxRetries - 1) {
-        const backoffDelay = RATE_LIMIT_DELAY * Math.pow(2, attempt)
-        // Only log on the first retry attempt to reduce noise
-        if (attempt === 0) {
-          console.log(`Rate limit hit, implementing backoff strategy...`)
-        }
-        await delay(backoffDelay)
-        continue
-      }
-
-      // If it's not a rate limit error, don't retry
-      if (!isRateLimitError(error)) {
-        throw error
-      }
-    }
-  }
-
-  // If we get here, we exhausted all retries for rate limit errors
-  if (isRateLimitError(lastError)) {
-    console.error(
-      `Rate limit backoff exhausted after ${maxRetries} attempts. This may indicate sustained high API usage.`,
-    )
-  }
-
-  throw lastError
-}
-
-/**
  * Sync the conference audience with current confirmed/accepted speakers
  */
 export async function syncConferenceAudience(
@@ -292,7 +231,7 @@ export async function syncConferenceAudience(
           addedCount++
         }
         // Add delay to respect rate limits
-        await delay(RATE_LIMIT_DELAY)
+        await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       }
     }
 
@@ -308,7 +247,7 @@ export async function syncConferenceAudience(
           removedCount++
         }
         // Add delay to respect rate limits
-        await delay(RATE_LIMIT_DELAY)
+        await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       }
     }
 
