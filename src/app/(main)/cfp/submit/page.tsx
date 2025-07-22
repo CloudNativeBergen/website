@@ -7,8 +7,12 @@ import {
   Level,
   FormError,
   ProposalInput,
+  MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE,
 } from '@/lib/proposal/types'
-import { getProposal } from '@/lib/proposal/sanity'
+import {
+  getProposal,
+  countProposalsForSpeakerInConference,
+} from '@/lib/proposal/sanity'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalForm } from '@/components/ProposalForm'
 import { auth } from '@/lib/auth'
@@ -44,6 +48,8 @@ export default async function Submit({
   let speaker = { name: '', email: '' }
   let loadingError: FormError | null = null
   let currentUserSpeaker: Speaker | null = null
+  let proposalCount = 0
+  let isAtProposalLimit = false
 
   const { conference, error } = await getConferenceForCurrentDomain({
     topics: true,
@@ -81,6 +87,28 @@ export default async function Submit({
     loadingError = {
       type: 'Server Error',
       message: 'Failed to load current user information.',
+    }
+  }
+
+  // Check current proposal count for this speaker in this conference
+  // Only check if creating a new proposal (not editing existing)
+  if (conference && currentUserSpeaker && !proposalId) {
+    try {
+      const { count, error: countError } =
+        await countProposalsForSpeakerInConference({
+          speakerId: session.speaker._id,
+          conferenceId: conference._id,
+        })
+      if (countError) {
+        console.error('Error loading proposal count:', countError)
+        // Don't set loadingError for count issues, just log it
+      } else {
+        proposalCount = count
+        isAtProposalLimit = count >= MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE
+      }
+    } catch (error) {
+      console.error('Error loading proposal count:', error)
+      // Don't set loadingError for count issues, just log it
     }
   }
 
@@ -162,8 +190,66 @@ export default async function Submit({
               </div>
             </div>
           )}
-          {!loadingError && currentUserSpeaker && (
+          {!loadingError && isAtProposalLimit && !proposalId && (
+            <div className="mx-auto mt-12 max-w-2xl rounded-lg border border-brand-sunbeam-yellow/40 bg-gradient-to-r from-brand-glacier-white to-yellow-50/50 p-6 backdrop-blur-sm lg:max-w-4xl lg:px-12">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <XCircleIcon
+                    className="h-6 w-6 text-brand-sunbeam-yellow"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="ml-4">
+                  <h3 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+                    Proposal Limit Reached
+                  </h3>
+                  <div className="font-inter mt-2 text-brand-slate-gray">
+                    <p>
+                      You have submitted {proposalCount} out of{' '}
+                      {MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE} allowed
+                      proposals for this conference.
+                    </p>
+                    <p className="mt-2">
+                      To submit a new proposal, you can either edit one of your
+                      existing proposals or contact the organizers if you need
+                      to submit additional proposals.
+                    </p>
+                    <div className="mt-4">
+                      <a
+                        href="/cfp"
+                        className="font-semibold text-brand-cloud-blue underline hover:text-brand-cloud-blue/80"
+                      >
+                        View your existing proposals
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          {!loadingError && !isAtProposalLimit && currentUserSpeaker && (
             <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12">
+              {!proposalId && proposalCount > 0 && (
+                <div className="mb-6 rounded-lg border border-brand-cloud-blue/30 bg-gradient-to-r from-brand-glacier-white to-brand-sky-mist/70 p-4 backdrop-blur-sm">
+                  <div className="flex">
+                    <div className="ml-3">
+                      <p className="font-inter text-sm text-brand-slate-gray">
+                        <span className="font-semibold">Note:</span> You have
+                        submitted {proposalCount} out of{' '}
+                        {MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE} allowed
+                        proposals for this conference.
+                        {proposalCount ===
+                          MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE - 1 && (
+                          <span className="mt-1 block font-semibold text-brand-cloud-blue">
+                            This will be your final proposal for this
+                            conference.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               <ProposalForm
                 initialProposal={proposal}
                 initialSpeaker={speaker}
