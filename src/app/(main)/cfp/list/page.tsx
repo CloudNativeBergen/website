@@ -43,7 +43,6 @@ export default async function SpeakerDashboard() {
 
   const { proposals: initialProposals, proposalsError } = await getProposals({
     speakerId: session.speaker._id,
-    conferenceId: conference?._id,
     returnAll: false,
   })
 
