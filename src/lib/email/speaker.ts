@@ -1,25 +1,25 @@
-import { Resend } from 'resend'
-import assert from 'assert'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposal } from '@/lib/proposal/sanity'
 import { SingleSpeakerEmailTemplate } from '@/components/email'
 import { Conference } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
-
-// Only assert in non-test environments
-if (process.env.NODE_ENV !== 'test') {
-  assert(process.env.RESEND_API_KEY, 'RESEND_API_KEY is not set')
-  assert(process.env.RESEND_FROM_EMAIL, 'RESEND_FROM_EMAIL is not set')
-}
-
-const resend = new Resend(process.env.RESEND_API_KEY || 'test_key')
-const fromEmail = process.env.RESEND_FROM_EMAIL || 'test@cloudnativebergen.no'
+import { Speaker } from '@/lib/speaker/types'
+import { addSpeakerToAudience, getOrCreateConferenceAudience } from './audience'
+import {
+  resend,
+  EMAIL_CONFIG,
+  retryWithBackoff,
+  createEmailError,
+  type EmailResult,
+} from './config'
 
 export interface SpeakerEmailRequest {
   proposalId: string
   speakerId: string
   subject: string
   message: string
+  /** Whether to add the speaker to the conference audience for future broadcasts */
+  addToAudience?: boolean
 }
 
 export interface SpeakerEmailResponse {
@@ -43,20 +43,15 @@ export async function sendSpeakerEmail({
   subject,
   message,
   senderName,
-}: SpeakerEmailRequest & { senderName: string }): Promise<{
-  data?: SpeakerEmailResponse
-  error?: SpeakerEmailError
-}> {
+  addToAudience = false,
+}: SpeakerEmailRequest & { senderName: string }): Promise<EmailResult<SpeakerEmailResponse>> {
   try {
     // Get the conference details
     const { conference } = await getConferenceForCurrentDomain({})
 
     if (!conference) {
       return {
-        error: {
-          error: 'Conference not found',
-          status: 404,
-        },
+        error: createEmailError('Conference not found', 404),
       }
     }
 
@@ -72,19 +67,13 @@ export async function sendSpeakerEmail({
 
     if (proposalError) {
       return {
-        error: {
-          error: `Failed to fetch proposal: ${proposalError.message}`,
-          status: 500,
-        },
+        error: createEmailError(`Failed to fetch proposal: ${proposalError.message}`, 500),
       }
     }
 
     if (!proposal) {
       return {
-        error: {
-          error: 'Proposal not found',
-          status: 404,
-        },
+        error: createEmailError('Proposal not found', 404),
       }
     }
 
@@ -102,14 +91,11 @@ export async function sendSpeakerEmail({
 
     if (!speaker || !speaker.email) {
       return {
-        error: {
-          error: 'Speaker not found or speaker has no email',
-          status: 404,
-        },
+        error: createEmailError('Speaker not found or speaker has no email', 404),
       }
     }
 
-    // Send the email
+    // Send the email with rate limiting and retry logic
     const emailResult = await sendFormattedSpeakerEmail({
       speaker,
       proposal,
@@ -123,6 +109,26 @@ export async function sendSpeakerEmail({
       return { error: emailResult.error }
     }
 
+    // Optionally add speaker to conference audience for future communications
+    if (addToAudience) {
+      try {
+        const { audienceId, error: audienceError } = await getOrCreateConferenceAudience(conference)
+        if (!audienceError && audienceId) {
+          // Create a minimal Speaker object for audience management
+          const speakerForAudience: Partial<Speaker> & Pick<Speaker, '_id' | 'name' | 'email'> = {
+            _id: speaker._id,
+            name: speaker.name,
+            email: speaker.email,
+          }
+          await addSpeakerToAudience(audienceId, speakerForAudience as Speaker)
+          console.log(`Speaker ${speaker.name} added to conference audience`)
+        }
+      } catch (error) {
+        // Don't fail the email if audience sync fails
+        console.warn('Failed to add speaker to audience:', error)
+      }
+    }
+
     return {
       data: {
         message: 'Email sent successfully',
@@ -134,10 +140,7 @@ export async function sendSpeakerEmail({
   } catch (error) {
     console.error('Error sending speaker email:', error)
     return {
-      error: {
-        error: 'Internal server error',
-        status: 500,
-      },
+      error: createEmailError('Internal server error', 500),
     }
   }
 }
@@ -159,10 +162,7 @@ export async function sendFormattedSpeakerEmail({
   subject: string
   message: string
   senderName: string
-}): Promise<{
-  data?: { emailId: string }
-  error?: SpeakerEmailError
-}> {
+}): Promise<EmailResult<{ emailId: string }>> {
   try {
     // Create the proposal URL
     const proposalUrl = `${conference.domains[0]}/cfp/admin/proposals/${proposal._id}`
@@ -182,36 +182,31 @@ export async function sendFormattedSpeakerEmail({
       socialLinks: conference.social_links || [],
     })
 
-    // Send the email
-    const { data, error } = await resend.emails.send({
-      from: fromEmail,
-      to: [speaker.email],
-      subject: subject,
-      react: emailTemplate,
-    })
+    // Send the email with retry logic for production reliability
+    const emailResult = await retryWithBackoff(async () => {
+      const result = await resend.emails.send({
+        from: EMAIL_CONFIG.RESEND_FROM_EMAIL,
+        to: [speaker.email],
+        subject: subject,
+        react: emailTemplate,
+      })
 
-    if (error) {
-      console.error('Failed to send email:', error)
-      return {
-        error: {
-          error: `Failed to send email: ${error.message}`,
-          status: 500,
-        },
+      if (result.error) {
+        throw new Error(`Failed to send email: ${result.error.message}`)
       }
-    }
+
+      return result
+    })
 
     return {
       data: {
-        emailId: data?.id || '',
+        emailId: emailResult.data?.id || '',
       },
     }
   } catch (error) {
     console.error('Error sending formatted speaker email:', error)
     return {
-      error: {
-        error: 'Failed to send email',
-        status: 500,
-      },
+      error: createEmailError('Failed to send email', 500),
     }
   }
 }
