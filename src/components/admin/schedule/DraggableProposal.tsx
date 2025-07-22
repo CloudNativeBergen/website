@@ -3,7 +3,7 @@
 import { useDraggable } from '@dnd-kit/core'
 import { useMemo } from 'react'
 import { ProposalExisting } from '@/lib/proposal/types'
-import { formats, levels, audiences } from '@/lib/proposal/types'
+import { formats, audiences } from '@/lib/proposal/types'
 import { getProposalDurationMinutes } from '@/lib/schedule/types'
 import { Topic } from '@/lib/topic/types'
 import { LevelIndicator, useLevelConfig } from '@/lib/proposal/level-indicator'
@@ -49,12 +49,19 @@ const AUDIENCE_CONFIG = {
   devopsEngineer: { abbr: 'DEVOPS', icon: CogIcon },
 } as const
 
+// Helper function to format color values (ensure # prefix)
+const formatTopicColor = (color: string): string =>
+  color.startsWith('#') ? color : `#${color}`
+
 export function DraggableProposal({
   proposal,
   sourceTrackIndex,
   sourceTimeSlot,
   isDragging = false,
 }: DraggableProposalProps) {
+  // Get level configuration using the utility hook
+  const levelConfig = useLevelConfig(proposal.level)
+
   // Memoize expensive calculations
   const { dragType, durationMinutes, talkSize, dragId, speakerInfo } =
     useMemo(() => {
@@ -90,83 +97,27 @@ export function DraggableProposal({
       }
     }, [proposal, sourceTrackIndex, sourceTimeSlot])
 
-  // Process topics and determine styling based on proposal data
-  const styling = useMemo(() => {
-    // Process topics for color coding - use direct inline styles for reliability
+  // Process topics and determine styling - optimized approach
+  const topicStyling = useMemo(() => {
     const topics = proposal.topics as Topic[]
-    if (topics && topics.length > 0) {
-      // Helper function to ensure color has # prefix
-      const formatColor = (color: string) =>
-        color.startsWith('#') ? color : `#${color}`
+    if (!topics || topics.length === 0) return { styles: {}, className: '' }
 
-      // Use CSS custom properties for the pseudo-elements
-      const styles: React.CSSProperties & Record<string, string> = {
-        '--topic-1-color': formatColor(topics[0].color),
-        position: 'relative' as const,
-      }
+    const color1 = formatTopicColor(topics[0].color)
+    const color2 = topics.length >= 2 ? formatTopicColor(topics[1].color) : ''
 
-      if (topics.length >= 2) {
-        styles['--topic-2-color'] = formatColor(topics[1].color)
-      }
-
-      return styles
+    // Use CSS custom properties for better performance
+    const styles: React.CSSProperties & Record<string, string> = {
+      '--topic-1-color': color1,
+      '--topic-2-color': color2,
+      position: 'relative' as const,
     }
-    return { position: 'relative' as const }
+
+    // Determine which CSS class to use
+    const className =
+      topics.length === 1 ? 'topic-border-single' : 'topic-border-gradient'
+
+    return { styles, className }
   }, [proposal.topics])
-
-  // Create a simple style element for this specific component
-  const topicStyleElement = useMemo(() => {
-    const topics = proposal.topics as Topic[]
-    if (!topics || topics.length === 0) return null
-
-    const uniqueId = `proposal-${proposal._id}`
-    let cssContent = ''
-
-    // Helper function to ensure color has # prefix
-    const formatColor = (color: string) =>
-      color.startsWith('#') ? color : `#${color}`
-
-    if (topics.length === 1) {
-      const color1 = formatColor(topics[0].color)
-      cssContent = `
-        .${uniqueId}::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 0;
-          bottom: 0;
-          width: 4px;
-          background-color: ${color1};
-          z-index: 1;
-        }
-        .${uniqueId} > * {
-          position: relative;
-          z-index: 2;
-        }
-      `
-    } else if (topics.length >= 2) {
-      const color1 = formatColor(topics[0].color)
-      const color2 = formatColor(topics[1].color)
-      cssContent = `
-        .${uniqueId}::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 0;
-          bottom: 0;
-          width: 4px;
-          background: linear-gradient(45deg, ${color1} 50%, ${color2} 50%);
-          z-index: 1;
-        }
-        .${uniqueId} > * {
-          position: relative;
-          z-index: 2;
-        }
-      `
-    }
-
-    return { uniqueId, cssContent }
-  }, [proposal.topics, proposal._id])
 
   // Enhanced background styling based on topics
   const backgroundStyle = useMemo(() => {
@@ -181,9 +132,6 @@ export function DraggableProposal({
     }
     return {}
   }, [proposal.topics])
-
-  // Get level configuration using the utility hook
-  const levelConfig = useLevelConfig(proposal.level)
 
   // Process audiences
   const { primaryAudience, audienceCount } = useMemo(() => {
@@ -220,7 +168,7 @@ export function DraggableProposal({
     }
   }, [transform, isBeingDragged])
 
-  // Memoize class names
+  // Memoize class names with topic styling
   const containerClasses = useMemo(() => {
     const baseClasses =
       'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md'
@@ -233,10 +181,8 @@ export function DraggableProposal({
     const paddingClass =
       talkSize === 'short' || talkSize === 'very-short' ? 'p-1' : 'p-2'
 
-    return `${baseClasses} ${opacityClass} ${paddingClass}`.trim()
-  }, [isBeingDragged, isDragging, talkSize])
-
-  // Title component based on talk size
+    return `${baseClasses} ${opacityClass} ${topicStyling.className} ${paddingClass}`.trim()
+  }, [isBeingDragged, isDragging, talkSize, topicStyling.className]) // Title component based on talk size
   const TitleComponent = useMemo(() => {
     const titleClasses = 'pr-1 text-gray-900 truncate'
 
@@ -319,7 +265,7 @@ export function DraggableProposal({
           {displayTopics.map((topic, index) => (
             <span
               key={topic._id || index}
-              className="h-3 w-3 flex-shrink-0 rounded-full"
+              className="h-3 w-3 flex-shrink-0 rounded-sm"
               style={{ backgroundColor: formatColor(topic.color) }}
               title={topic.title}
             />
@@ -379,19 +325,12 @@ export function DraggableProposal({
 
   return (
     <>
-      {/* Inject dynamic topic color styles */}
-      {topicStyleElement && (
-        <style key={`topic-style-${proposal._id}`}>
-          {topicStyleElement.cssContent}
-        </style>
-      )}
-
       <div
         ref={setNodeRef}
-        className={`${containerClasses} ${topicStyleElement?.uniqueId || ''}`}
+        className={containerClasses}
         style={{
           ...transformStyle,
-          ...styling,
+          ...topicStyling.styles,
           ...backgroundStyle,
           height: `${durationMinutes * MINUTES_TO_PIXELS}px`,
         }}

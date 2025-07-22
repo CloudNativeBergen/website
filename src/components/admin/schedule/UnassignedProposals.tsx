@@ -387,22 +387,29 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         <div className="space-y-1.5 text-xs text-gray-600">
           <div className="flex items-center gap-2">
             <span className="font-medium text-gray-700">Level:</span>
-            <LevelIndicator level={Level.beginner} size="sm" />
+            <LevelIndicator level={Level.beginner} size="xs" />
             <span>Beginner</span>
-            <LevelIndicator level={Level.intermediate} size="sm" />
+            <LevelIndicator level={Level.intermediate} size="xs" />
             <span>Intermediate</span>
-            <LevelIndicator level={Level.advanced} size="sm" />
+            <LevelIndicator level={Level.advanced} size="xs" />
             <span>Advanced</span>
           </div>
           <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-700">Topics:</span>
+            <div className="h-3 w-3 rounded-sm bg-blue-500"></div>
+            <span>Square indicators</span>
+          </div>
+          <div className="flex items-center gap-2">
             <span className="font-medium text-gray-700">Border:</span>
-            <div className="h-2 w-3 border-l-4 border-blue-500"></div>
-            <span>Topic colors</span>
+            <div className="h-3 w-4 border-l-4 border-blue-500"></div>
+            <span>Single topic</span>
+            <div className="h-3 w-4 border-l-4 border-orange-500"></div>
+            <span>Multiple topics</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="font-medium text-gray-700">Audience:</span>
             <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs">
-              DEV +2
+              DEV +1
             </span>
             <span>Primary + count</span>
           </div>
