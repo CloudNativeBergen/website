@@ -75,7 +75,7 @@ export default async function ProposalDetailPage({
                 </div>
               </div>
               {/* Enhanced Admin Action Bar */}
-              <AdminActionBar proposal={proposal} />
+              <AdminActionBar proposal={proposal} domain={domain} />
             </div>
 
             <ProposalDetail proposal={proposal} />

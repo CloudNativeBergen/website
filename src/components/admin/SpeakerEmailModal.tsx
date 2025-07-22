@@ -1,5 +1,6 @@
 'use client'
 
+import { BellIcon } from '@heroicons/react/20/solid'
 import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { ProposalExisting } from '@/lib/proposal/types'
@@ -13,6 +14,7 @@ interface SpeakerEmailModalProps {
     name: string
     email: string
   }>
+  domain?: string
 }
 
 export function SpeakerEmailModal({
@@ -20,6 +22,7 @@ export function SpeakerEmailModal({
   onClose,
   proposal,
   speakers,
+  domain,
 }: SpeakerEmailModalProps) {
   const { showNotification } = useNotification()
 
@@ -86,6 +89,29 @@ export function SpeakerEmailModal({
     })
   }
 
+  const localhostWarning =
+    domain && domain.includes('localhost') ? (
+      <div className="rounded-md bg-yellow-50 p-4">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <BellIcon className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+          </div>
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-yellow-800">
+              Development Environment Warning
+            </h3>
+            <div className="mt-2 text-sm text-yellow-700">
+              <p>
+                You are running on localhost. Email notifications will contain
+                invalid links pointing to localhost URLs that speakers cannot
+                access.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    ) : undefined
+
   return (
     <EmailModal
       isOpen={isOpen}
@@ -95,6 +121,7 @@ export function SpeakerEmailModal({
       contextInfo={`Proposal: ${proposal.title}`}
       onSend={handleSend}
       submitButtonText="Send Email"
+      warningContent={localhostWarning}
       placeholder={{
         subject: 'Enter email subject...',
         message: `Your message will appear after "Dear ${greetingNames}"...`,

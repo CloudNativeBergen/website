@@ -15,6 +15,7 @@ export interface EmailModalProps {
   onSend: (data: { subject: string; message: string }) => Promise<void>
   submitButtonText?: string
   helpText?: string
+  warningContent?: React.ReactNode
   placeholder?: {
     subject?: string
     message?: string
@@ -30,6 +31,7 @@ export function EmailModal({
   onSend,
   submitButtonText = 'Send Email',
   helpText,
+  warningContent,
   placeholder = {},
 }: EmailModalProps) {
   const [subject, setSubject] = useState('')
@@ -95,6 +97,8 @@ export function EmailModal({
               <XMarkIcon className="h-5 w-5 text-brand-slate-gray" />
             </button>
           </div>
+
+          {warningContent && <div className="space-y-4">{warningContent}</div>}
 
           <div className="font-inter rounded-xl border border-primary-200 bg-brand-sky-mist p-4 text-sm text-brand-slate-gray">
             <div className="flex items-start gap-2">

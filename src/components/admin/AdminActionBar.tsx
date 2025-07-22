@@ -18,9 +18,10 @@ import { SpeakerEmailModal } from './SpeakerEmailModal'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
+  domain?: string
 }
 
-export function AdminActionBar({ proposal }: AdminActionBarProps) {
+export function AdminActionBar({ proposal, domain }: AdminActionBarProps) {
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [speakersWithEmail, setSpeakersWithEmail] = useState<
     {
@@ -245,6 +246,7 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
           }}
           proposal={proposal}
           speakers={speakersWithEmail}
+          domain={domain}
         />
       )}
     </div>
