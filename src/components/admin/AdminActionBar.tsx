@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import {
   CheckIcon,
   XMarkIcon,
@@ -9,20 +10,40 @@ import {
   MapPinIcon,
   ExclamationTriangleIcon,
   HeartIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/20/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { SingleSpeakerEmailModal } from './SingleSpeakerEmailModal'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
 }
 
 export function AdminActionBar({ proposal }: AdminActionBarProps) {
+  const [showEmailModal, setShowEmailModal] = useState(false)
+  const [selectedSpeaker, setSelectedSpeaker] = useState<{
+    id: string
+    name: string
+    email: string
+  } | null>(null)
+
   const handleAction = (action: Action) => {
     const event = new CustomEvent('proposalAction', {
       detail: { action, proposal },
     })
     window.dispatchEvent(event)
+  }
+
+  const handleEmailSpeaker = (speaker: SpeakerWithReviewInfo) => {
+    if (speaker.email) {
+      setSelectedSpeaker({
+        id: speaker._id,
+        name: speaker.name,
+        email: speaker.email,
+      })
+      setShowEmailModal(true)
+    }
   }
 
   const canApprove = proposal.status === 'submitted'
@@ -165,6 +186,57 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
 
         {/* Right side - Compact Action Buttons */}
         <div className="flex flex-shrink-0 items-center gap-2">
+          {/* Email Speaker Button - Show if there's at least one speaker with email */}
+          {speakers.length > 0 && speakers.some(speaker => speaker.email) && (
+            <div className="relative">
+              {speakers.length === 1 ? (
+                // Single speaker - direct email button
+                <button
+                  onClick={() => handleEmailSpeaker(speakers[0])}
+                  className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                  title={`Email ${speakers[0].name}`}
+                >
+                  <EnvelopeIcon className="h-3 w-3" />
+                  Email
+                </button>
+              ) : (
+                // Multiple speakers - dropdown menu
+                <div className="inline-block">
+                  <select
+                    onChange={(e) => {
+                      const speakerId = e.target.value
+                      if (speakerId) {
+                        const speaker = speakers.find(s => s._id === speakerId)
+                        if (speaker) {
+                          handleEmailSpeaker(speaker)
+                        }
+                      }
+                      e.target.value = '' // Reset selection
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 border-0 cursor-pointer"
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      📧 Email Speaker
+                    </option>
+                    {speakers
+                      .filter(speaker => speaker.email)
+                      .map(speaker => (
+                        <option 
+                          key={speaker._id} 
+                          value={speaker._id}
+                          className="text-black"
+                        >
+                          {speaker.name}
+                        </option>
+                      ))
+                    }
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+          
           {canApprove && (
             <button
               onClick={() => handleAction(Action.accept)}
@@ -194,6 +266,21 @@ export function AdminActionBar({ proposal }: AdminActionBarProps) {
           )}
         </div>
       </div>
+
+      {/* Email Modal */}
+      {showEmailModal && selectedSpeaker && (
+        <SingleSpeakerEmailModal
+          isOpen={showEmailModal}
+          onClose={() => {
+            setShowEmailModal(false)
+            setSelectedSpeaker(null)
+          }}
+          proposal={proposal}
+          speakerId={selectedSpeaker.id}
+          speakerName={selectedSpeaker.name}
+          speakerEmail={selectedSpeaker.email}
+        />
+      )}
     </div>
   )
 }
