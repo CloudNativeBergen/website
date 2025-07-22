@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ProposalExisting, Status, Format } from '@/lib/proposal/types'
 import { ProposalCard } from './ProposalCard'
 import { ProposalsFilter, FilterState, ReviewStatus } from './ProposalsFilter'
+import { ProposalStatistics } from './ProposalStatistics'
 import { useProposalFiltering, useFilterStateWithURL } from './hooks'
 
 interface ProposalsListProps {
@@ -89,6 +90,11 @@ export function ProposalsList({
           currentUserId={currentUserId}
           allowedFormats={allowedFormats}
         />
+      </div>
+
+      {/* Statistics Overview */}
+      <div className="mt-6">
+        <ProposalStatistics proposals={filteredProposals} />
       </div>
 
       {/* Proposals Grid */}

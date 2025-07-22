@@ -22,6 +22,7 @@ export { ProposalDetail } from './ProposalDetail'
 export { ProposalPreview } from './ProposalPreview'
 export { ProposalsPageClient } from './ProposalsPageClient'
 export { ProposalsFilter } from './ProposalsFilter'
+export { ProposalStatistics } from './ProposalStatistics'
 export { FilterDropdown } from './FilterDropdown'
 export { BackToProposalsButton } from './BackToProposalsButton'
 
