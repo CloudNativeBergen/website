@@ -8,7 +8,11 @@ import { SpeakerPromotion } from '@/components/SpeakerPromotion'
 import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { Status } from '@/lib/proposal/types'
+import {
+  Status,
+  MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE,
+  doesProposalCountTowardsLimit,
+} from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import Link from 'next/link'
 
@@ -52,6 +56,14 @@ export default async function SpeakerDashboard() {
     return <ErrorDisplay message="Error fetching proposals" />
   }
 
+  // Count proposals that contribute to the limit (exclude draft and deleted)
+  const proposalCount = initialProposals.filter((proposal) =>
+    doesProposalCountTowardsLimit(proposal.status),
+  ).length
+
+  const isAtProposalLimit =
+    proposalCount >= MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE
+
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
       <BackgroundImage className="-top-36 -bottom-14" />
@@ -59,17 +71,38 @@ export default async function SpeakerDashboard() {
         <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
           <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
             Speaker Dashboard
-            {cfpIsOpen && (
+            {cfpIsOpen && !isAtProposalLimit && (
               <Link href="/cfp/submit">
                 <PlusCircleIcon className="ml-6 inline-block h-12 w-12 text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80" />
               </Link>
             )}
           </h1>
-          <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700">
+          <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-brand-slate-gray">
             <p>
               Thank you for your interest in submitting a presentation to our
               conference.
             </p>
+            {proposalCount > 0 && (
+              <div className="rounded-lg border border-brand-frosted-steel bg-brand-glacier-white p-4">
+                <p className="text-base text-brand-slate-gray">
+                  <span className="font-semibold">Proposals submitted:</span>{' '}
+                  {proposalCount} of {MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE}{' '}
+                  allowed
+                  {isAtProposalLimit && (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-brand-sunbeam-yellow px-2.5 py-0.5 text-xs font-medium text-black">
+                      Limit reached
+                    </span>
+                  )}
+                </p>
+                {isAtProposalLimit && cfpIsOpen && (
+                  <p className="mt-2 text-sm text-brand-slate-gray">
+                    You have reached the maximum number of proposals for this
+                    conference. You can edit your existing proposals or contact
+                    the organizers if you need to submit additional proposals.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

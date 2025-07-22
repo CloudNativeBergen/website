@@ -491,6 +491,50 @@ export async function searchProposals({
 /**
  * Fix missing _key attributes in speakers arrays for existing proposals
  */
+/**
+ * Count the number of proposals submitted by a speaker for a specific conference
+ */
+export async function countProposalsForSpeakerInConference({
+  speakerId,
+  conferenceId,
+}: {
+  speakerId: string
+  conferenceId: string
+}): Promise<{ count: number; error: Error | null }> {
+  try {
+    // Count proposals that contribute to the limit
+    // Uses the same logic as doesProposalCountTowardsLimit function
+    const query = groq`count(*[
+      _type == "talk" &&
+      $speakerId in speakers[]._ref &&
+      conference._ref == $conferenceId &&
+      status != $draftStatus &&
+      status != $deletedStatus &&
+      status != $withdrawnStatus
+    ])`
+
+    const count = await clientRead.fetch(
+      query,
+      {
+        speakerId,
+        conferenceId,
+        draftStatus: Status.draft,
+        deletedStatus: Status.deleted,
+        withdrawnStatus: Status.withdrawn,
+      },
+      { cache: 'no-store' },
+    )
+
+    return { count: count || 0, error: null }
+  } catch (error) {
+    console.error('Error counting proposals for speaker in conference:', error)
+    return { count: 0, error: error as Error }
+  }
+}
+
+/**
+ * Fix missing _key attributes in speakers arrays for existing proposals
+ */
 export async function fixProposalSpeakerKeys(): Promise<{
   error?: Error
   fixed?: number

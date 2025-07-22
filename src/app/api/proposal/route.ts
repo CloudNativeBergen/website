@@ -1,4 +1,7 @@
-import { ProposalInput } from '@/lib/proposal/types'
+import {
+  ProposalInput,
+  MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE,
+} from '@/lib/proposal/types'
 import {
   convertJsonToProposal,
   validateProposal,
@@ -10,7 +13,11 @@ import {
   proposalResponse,
   proposalResponseError,
 } from '@/lib/proposal/server'
-import { createProposal, getProposals } from '@/lib/proposal/sanity'
+import {
+  createProposal,
+  getProposals,
+  countProposalsForSpeakerInConference,
+} from '@/lib/proposal/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notifyNewProposal } from '@/lib/slack/notify'
 
@@ -62,6 +69,17 @@ export const POST = auth(async (req: NextAuthRequest) => {
   const data = (await req.json()) as ProposalInput
   const proposal = convertJsonToProposal(data)
 
+  // Validate proposal first (cheapest check)
+  const validationErrors = validateProposal(proposal)
+  if (validationErrors.length > 0) {
+    return proposalResponseError({
+      message: 'Proposal contains invalid fields',
+      validationErrors,
+      type: 'validation',
+      status: 400,
+    })
+  }
+
   const { conference, error } = await getConferenceForCurrentDomain()
   if (error || !conference) {
     return proposalResponseError({
@@ -74,13 +92,27 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
   // @TODO check if conference is open for proposals
 
-  const validationErrors = validateProposal(proposal)
-  if (validationErrors.length > 0) {
+  // Check if speaker has reached the proposal limit for this conference
+  const { count: proposalCount, error: countError } =
+    await countProposalsForSpeakerInConference({
+      speakerId: req.auth.speaker._id,
+      conferenceId: conference._id,
+    })
+
+  if (countError) {
     return proposalResponseError({
-      message: 'Proposal contains invalid fields',
-      validationErrors,
-      type: 'validation',
-      status: 400,
+      error: countError,
+      message: 'Failed to check proposal limit',
+      type: 'server',
+      status: 500,
+    })
+  }
+
+  if (proposalCount >= MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE) {
+    return proposalResponseError({
+      message: `You have reached the maximum limit of ${MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE} proposals per conference. Please edit your existing proposals or contact the organizers if you need to submit additional proposals.`,
+      type: 'proposal_limit_exceeded',
+      status: 429,
     })
   }
 

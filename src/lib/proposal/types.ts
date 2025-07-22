@@ -167,3 +167,15 @@ export const formats = new Map([
   [Format.workshop_120, 'Workshop (2 hours)'],
   [Format.workshop_240, 'Workshop (4 hours)'],
 ])
+
+// Maximum number of proposals a speaker can submit per conference
+export const MAX_PROPOSALS_PER_SPEAKER_PER_CONFERENCE = 3
+
+// Helper function to check if a proposal counts towards the speaker limit
+export function doesProposalCountTowardsLimit(status: Status): boolean {
+  return (
+    status !== Status.draft &&
+    status !== Status.deleted &&
+    status !== Status.withdrawn
+  )
+}
