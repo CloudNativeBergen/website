@@ -28,6 +28,11 @@ function capitalizeFirstLetter(string: string) {
   return string.charAt(0).toUpperCase() + string.slice(1)
 }
 
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength).replace(/\s+\S*$/, '') + '...'
+}
+
 function StatusBadge({ status }: { status: string }) {
   let text: string
   let colorClasses: string
@@ -212,7 +217,7 @@ export function ProposalCard({
             <div className="mb-2">
               <StatusBadge status={proposal.status} />
             </div>
-            <h3 className="font-space-grotesk truncate text-sm font-medium text-brand-slate-gray">
+            <h3 className="font-space-grotesk line-clamp-2 text-sm font-medium text-brand-slate-gray">
               {proposal.title}
             </h3>
           </div>
@@ -231,11 +236,11 @@ export function ProposalCard({
             />
           )}
         </div>
-        <p className="font-inter text-sm text-brand-cloud-gray">
+        <p className="font-inter line-clamp-3 text-sm text-brand-cloud-gray">
           {proposal.status === Status.accepted ? (
             <>Your proposal has been accepted.</>
           ) : (
-            <>{portableTextToString(proposal.description)}</>
+            <>{truncateText(portableTextToString(proposal.description), 150)}</>
           )}
         </p>
       </div>
