@@ -10,6 +10,7 @@ import {
   AdminActionBar,
 } from '@/components/admin'
 import { auth } from '@/lib/auth'
+import { EMAIL_CONFIG } from '@/lib/email/config'
 
 interface ProposalDetailPageProps {
   params: Promise<{
@@ -75,7 +76,11 @@ export default async function ProposalDetailPage({
                 </div>
               </div>
               {/* Enhanced Admin Action Bar */}
-              <AdminActionBar proposal={proposal} domain={domain} />
+              <AdminActionBar
+                proposal={proposal}
+                domain={domain}
+                fromEmail={EMAIL_CONFIG.RESEND_FROM_EMAIL}
+              />
             </div>
 
             <ProposalDetail proposal={proposal} />

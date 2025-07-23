@@ -38,17 +38,6 @@ export function SpeakerEmailTemplate({
   senderName,
   socialLinks = [],
 }: SpeakerEmailTemplateProps) {
-  // Create speaker names list for the greeting
-  const speakerNames = speakers.map((s) => s.name)
-  const speakersGreeting =
-    speakerNames.length === 1
-      ? speakerNames[0]
-      : speakerNames.length === 2
-        ? speakerNames.join(' and ')
-        : speakerNames.slice(0, -1).join(', ') +
-          ', and ' +
-          speakerNames[speakerNames.length - 1]
-
   const proposalSection = (
     <EmailSection backgroundColor="#F8FAFC" borderColor="#E5E7EB">
       <EmailSectionHeader>Your Proposal</EmailSectionHeader>
@@ -116,17 +105,22 @@ export function SpeakerEmailTemplate({
   return (
     <BaseEmailTemplate
       title={subject}
-      speakerName={speakersGreeting}
-      proposalTitle={message ? undefined : proposalTitle} // Don't show default proposal text if we have a custom message
+      // Remove speakerName prop since greeting is now in the message
+      proposalTitle={undefined} // Don't show default proposal text since message includes greeting
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks}
-    >
-      {messageSection}
-      {proposalSection}
-      {proposalLink}
-    </BaseEmailTemplate>
+      customContent={{
+        body: (
+          <>
+            {messageSection}
+            {proposalSection}
+            {proposalLink}
+          </>
+        ),
+      }}
+    />
   )
 }

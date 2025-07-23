@@ -13,7 +13,7 @@ if (process.env.NODE_ENV !== 'test') {
 export const EMAIL_CONFIG = {
   RESEND_API_KEY: process.env.RESEND_API_KEY || 'test_key',
   RESEND_FROM_EMAIL:
-    process.env.RESEND_FROM_EMAIL || 'test@cloudnativebergen.no',
+    process.env.RESEND_FROM_EMAIL || 'contact@cloudnativebergen.dev',
   RATE_LIMIT_DELAY: 500, // 500ms delay = 2 requests per second max
   MAX_RETRIES: 3,
 } as const

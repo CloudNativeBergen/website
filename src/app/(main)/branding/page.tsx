@@ -2480,7 +2480,7 @@ export default async function BrandingPage() {
                       eventDate="June 15, 2025"
                       eventUrl={`https://${domain}/`}
                       subject="Update on your presentation setup"
-                      message="We wanted to confirm the technical requirements for your presentation. Based on your abstract, we've arranged for a demo environment with access to our Kubernetes cluster.\n\nPlease review your proposal details and let us know if you need any additional setup or have questions about the demo environment."
+                      message="Dear Dr. Maria Rodriguez,\n\nWe wanted to confirm the technical requirements for your presentation. Based on your abstract, we've arranged for a demo environment with access to our Kubernetes cluster.\n\nPlease review your proposal details and let us know if you need any additional setup or have questions about the demo environment."
                       senderName="Erik Hansen"
                       socialLinks={conference.social_links || []}
                     />
@@ -2550,7 +2550,7 @@ export default async function BrandingPage() {
                       eventDate="June 15, 2025"
                       eventUrl={`https://${domain}/`}
                       subject="Collaboration guidelines for your joint presentation"
-                      message="Since you're presenting together, we wanted to share some guidelines for coordinating your presentation.\n\nPlease coordinate who will handle which sections and ensure your combined presentation fits within the allocated 45-minute slot including Q&A.\n\nWe've also arranged for a shared rehearsal space the day before the conference."
+                      message="Dear Alex Chen, Jordan Kim, and Sam Taylor,\n\nSince you're presenting together, we wanted to share some guidelines for coordinating your presentation.\n\nPlease coordinate who will handle which sections and ensure your combined presentation fits within the allocated 45-minute slot including Q&A.\n\nWe've also arranged for a shared rehearsal space the day before the conference."
                       senderName="Conference Team"
                       socialLinks={conference.social_links || []}
                     />
@@ -2783,7 +2783,7 @@ export default async function BrandingPage() {
                         <p>We have an amazing lineup including experts from Google, Microsoft, and the Cloud Native Computing Foundation.</p>
 
                         <div style="text-align: center; margin: 32px 0;">
-                          <a href="https://tickets.cloudnativebergen.no" style="background: linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">Get Your Ticket</a>
+                          <a href="https://tickets.cloudnativebergen.dev" style="background: linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">Get Your Ticket</a>
                         </div>
                       `}
                     />

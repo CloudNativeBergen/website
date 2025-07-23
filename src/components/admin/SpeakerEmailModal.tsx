@@ -1,9 +1,11 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { BellIcon } from '@heroicons/react/20/solid'
 import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { ProposalExisting } from '@/lib/proposal/types'
+import { SpeakerEmailTemplate } from '@/components/email/SpeakerEmailTemplate'
 
 interface SpeakerEmailModalProps {
   isOpen: boolean
@@ -15,6 +17,7 @@ interface SpeakerEmailModalProps {
     email: string
   }>
   domain?: string
+  fromEmail: string
 }
 
 export function SpeakerEmailModal({
@@ -23,27 +26,25 @@ export function SpeakerEmailModal({
   proposal,
   speakers,
   domain,
+  fromEmail,
 }: SpeakerEmailModalProps) {
   const { showNotification } = useNotification()
-
-  const formattedRecipients = speakers.map((s) => `${s.name} <${s.email}>`)
+  const [initialMessage, setInitialMessage] = useState('')
 
   const recipientDisplay = (
-    <div className="space-y-1">
-      <div className="text-sm font-medium text-brand-slate-gray">
-        Sending email to:
-      </div>
-      <div className="space-y-1">
-        {formattedRecipients.map((recipient, index) => (
-          <div key={index} className="text-sm text-brand-slate-gray/80">
-            {recipient}
-          </div>
-        ))}
-      </div>
+    <div className="flex flex-wrap gap-2">
+      {speakers.map((speaker, index) => (
+        <span
+          key={index}
+          className="font-inter rounded-full bg-brand-sky-mist px-3 py-1 text-sm text-brand-slate-gray"
+        >
+          {speaker.name} &lt;{speaker.email}&gt;
+        </span>
+      ))}
     </div>
   )
 
-  // Generate greeting for placeholder
+  // Generate greeting for the message
   const speakerNames = speakers.map((s) => s.name)
   const greetingNames =
     speakerNames.length === 1
@@ -53,6 +54,22 @@ export function SpeakerEmailModal({
         : speakerNames.slice(0, -1).join(', ') +
           ', and ' +
           speakerNames[speakerNames.length - 1]
+
+  // Set initial message with greeting when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const greeting = `Dear ${greetingNames},\n\n`
+      setInitialMessage(greeting)
+    }
+  }, [isOpen, greetingNames])
+
+  // Generate default subject
+  const conference = proposal.conference
+  const conferenceName =
+    conference && typeof conference === 'object' && !('_ref' in conference)
+      ? conference.title
+      : 'our conference'
+  const defaultSubject = `Regarding your proposal for ${conferenceName}`
 
   const handleSend = async ({
     subject,
@@ -112,21 +129,58 @@ export function SpeakerEmailModal({
       </div>
     ) : undefined
 
+  // Create preview component
+  const createPreview = ({
+    subject,
+    message,
+  }: {
+    subject: string
+    message: string
+  }) => {
+    // Extract conference information with type guard
+    const conference = proposal.conference
+    if (!conference || typeof conference !== 'object' || '_ref' in conference) {
+      return <div>Conference information not available for preview</div>
+    }
+
+    return (
+      <SpeakerEmailTemplate
+        speakers={speakers.map((s) => ({ name: s.name, email: s.email }))}
+        proposalTitle={proposal.title}
+        proposalUrl={`https://${domain}/admin/proposals/${proposal._id}`}
+        eventName={conference.title}
+        eventLocation={`${conference.city}, ${conference.country}`}
+        eventDate={conference.start_date || 'TBD'}
+        eventUrl={`https://${domain}/`}
+        subject={subject}
+        message={message}
+        senderName="Conference Team"
+        socialLinks={conference.social_links || []}
+      />
+    )
+  }
+
   return (
     <EmailModal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Email ${speakers.length > 1 ? 'All Speakers' : 'Speaker'}`}
+      title="Compose Email"
       recipientInfo={recipientDisplay}
-      contextInfo={`Proposal: ${proposal.title}`}
+      contextInfo={`Email about: ${proposal.title}`}
       onSend={handleSend}
       submitButtonText="Send Email"
       warningContent={localhostWarning}
+      previewComponent={createPreview}
+      fromAddress={fromEmail}
+      initialValues={{
+        subject: defaultSubject,
+        message: initialMessage,
+      }}
       placeholder={{
         subject: 'Enter email subject...',
-        message: `Your message will appear after "Dear ${greetingNames}"...`,
+        message: 'Enter your message here...',
       }}
-      helpText="The email will automatically include a greeting, proposal details, and conference information."
+      helpText="The email will automatically include proposal details and conference information."
     />
   )
 }

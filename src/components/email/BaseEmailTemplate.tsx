@@ -4,7 +4,7 @@ import { iconForLink, titleForLink } from '../SocialIcons'
 interface BaseEmailTemplateProps {
   title?: string
   titleColor?: string
-  speakerName: string
+  speakerName?: string
   proposalTitle?: string
   eventName: string
   eventLocation: string
@@ -146,7 +146,7 @@ export function BaseEmailTemplate({
             <td>
               <h1 style={headerStyle}>{customContent?.heading || title}</h1>
 
-              <p style={paragraphStyle}>Dear {speakerName},</p>
+              {speakerName && <p style={paragraphStyle}>Dear {speakerName},</p>}
 
               {customContent?.body ? (
                 customContent.body

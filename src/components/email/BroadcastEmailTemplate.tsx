@@ -18,7 +18,7 @@ export const BroadcastEmailTemplate = ({
       eventName="Cloud Native Bergen"
       eventLocation="Bergen, Norway"
       eventDate="TBA"
-      eventUrl="https://cloudnativebergen.no"
+      eventUrl="https://cloudnativebergen.dev"
       socialLinks={[]}
       customContent={{
         heading: subject,

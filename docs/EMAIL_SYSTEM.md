@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Cloud Native Bergen website features a comprehensive email system built on Resend that handles various types of email communications including proposal notifications, speaker emails, and audience management. The system is designed for production use with rate limiting, retry logic, and comprehensive error handling.
+The Cloud Native Bergen website features a comprehensive email system built on Resend that handles various types of email communications including proposal notifications, speaker emails, and audience management. The system is designed for production use with rate limiting, retry logic, comprehensive error handling, and a modern Gmail-style composition interface.
 
 ## Architecture
 
@@ -11,13 +11,14 @@ The Cloud Native Bergen website features a comprehensive email system built on R
 │                      Email System Architecture                  │
 ├─────────────────────────────────────────────────────────────────┤
 │  Frontend Components                                             │
-│  ├── EmailModal (shared modal component)                         │
-│  ├── SingleSpeakerEmailModal (individual speaker emails)         │
+│  ├── EmailModal (shared Gmail-style composition modal)           │
+│  ├── SpeakerEmailModal (speaker-specific email wrapper)          │
 │  └── AdminActionBar (email integration)                          │
 ├─────────────────────────────────────────────────────────────────┤
 │  API Routes                                                       │
-│  ├── /admin/api/speakers/email/single (single speaker emails)    │
-│  └── Future: /admin/api/speakers/email/bulk                      │
+│  ├── /admin/api/speakers/email/multi (multi-speaker emails)      │
+│  ├── /admin/api/speakers/email/broadcast (audience emails)       │
+│  └── /admin/api/speakers/email/audience/sync (audience sync)     │
 ├─────────────────────────────────────────────────────────────────┤
 │  Core Libraries                                                   │
 │  ├── /lib/email/config.ts (shared configuration & utilities)     │
@@ -27,10 +28,8 @@ The Cloud Native Bergen website features a comprehensive email system built on R
 ├─────────────────────────────────────────────────────────────────┤
 │  Email Templates                                                  │
 │  ├── BaseEmailTemplate (shared foundation)                       │
-│  ├── SingleSpeakerEmailTemplate (individual communications)      │
-│  ├── ProposalAcceptTemplate (acceptance notifications)           │
-│  ├── ProposalRejectTemplate (rejection notifications)            │
-│  ├── SpeakerBroadcastTemplate (mass communications)              │
+│  ├── SpeakerEmailTemplate (speaker communications)               │
+│  ├── BroadcastEmailTemplate (audience communications)            │
 │  └── EmailComponents (reusable UI elements)                      │
 ├─────────────────────────────────────────────────────────────────┤
 │  External Services                                                │
@@ -38,11 +37,42 @@ The Cloud Native Bergen website features a comprehensive email system built on R
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Core Features
+
+### Gmail-Style Email Composition
+
+The email system features a modern, intuitive composition interface that mirrors familiar email clients:
+
+- **Professional Layout**: Gmail-style header fields (To/From/Subject) with clean visual separation
+- **Responsive Design**: Optimized for desktop and mobile with adaptive button text and layouts
+- **Live Preview**: Toggle between composition and preview modes to see exactly how emails will appear
+- **Customizable Content**: Full control over greetings, subject lines, and message content
+- **Rich Context**: Automatic inclusion of proposal and conference information
+
+### Multi-Speaker Support
+
+The system handles both individual and group communications:
+
+- **Single Recipients**: Direct emails to individual speakers with personalized greetings
+- **Multiple Recipients**: Send to multiple speakers simultaneously with proper recipient display
+- **Smart Grouping**: Intelligent greeting generation for multiple recipients ("Dear Alex and Sarah" vs "Dear Alex, Sarah, and Mike")
+- **Context Preservation**: Maintains proposal and conference context across all communication types
+
+### Template System
+
+Flexible template architecture supporting various email types:
+
+- **Base Template**: Shared foundation ensuring consistent branding and layout
+- **Specialized Templates**: Purpose-built templates for different communication scenarios
+- **Email Client Compatibility**: Table-based layouts with inline styles for maximum compatibility
+- **Responsive Design**: Templates adapt to different screen sizes and email clients
+- **Accessibility**: Proper semantic markup and alt text for screen readers
+
 ## Core Components
 
-### Shared Configuration (`/lib/email/config.ts`)
+### Configuration Management (`/lib/email/config.ts`)
 
-The centralized configuration module provides:
+Centralized configuration system with production-ready features:
 
 ```typescript
 // Shared Resend instance
@@ -52,7 +82,7 @@ export const resend = new Resend(EMAIL_CONFIG.RESEND_API_KEY)
 export const EMAIL_CONFIG = {
   RESEND_API_KEY: process.env.RESEND_API_KEY || 'test_key',
   RESEND_FROM_EMAIL:
-    process.env.RESEND_FROM_EMAIL || 'test@cloudnativebergen.no',
+    process.env.RESEND_FROM_EMAIL || 'contact@cloudnativebergen.dev',
   RATE_LIMIT_DELAY: 500, // 500ms delay = 2 requests per second max
   MAX_RETRIES: 3,
 }
@@ -89,77 +119,58 @@ export function CustomEmailTemplate({
 
 ## Email Types and Use Cases
 
-### 1. Proposal Notifications
+### 1. Speaker Communications
 
-**Purpose**: Automated notifications for proposal status changes (accept/reject/remind)
+**Purpose**: Direct communications from organizers to speakers about proposals, logistics, and conference details
 
-**Implementation**: `/lib/proposal/notification.ts`
+**Key Features**:
+
+- Gmail-style composition interface with live preview
+- Customizable greetings that adapt to single or multiple recipients
+- Automatic proposal and conference context inclusion
+- Responsive email templates optimized for all devices
+- Real-time validation and error handling
+
+**Implementation**: Multi-speaker email API with comprehensive validation
 
 ```typescript
-import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
-
-await sendAcceptRejectNotification({
-  action: Action.accept, // accept | reject | remind
-  speaker: { name: 'John Doe', email: 'john@example.com' },
-  proposal: { _id: 'prop123', title: 'My Talk' },
-  comment: 'We loved your proposal!',
-  event: {
-    name: 'Cloud Native Bergen 2025',
-    location: 'Bergen',
-    date: '2025-09-15',
-    url: 'cloudnativebergen.no',
-    socialLinks: ['https://twitter.com/cloudnativebergen'],
-  },
+// Send email to one or more speakers
+const response = await fetch('/admin/api/speakers/email/multi', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    proposalId: 'proposal_id',
+    speakerIds: ['speaker1_id', 'speaker2_id'],
+    subject: 'Conference Update',
+    message: 'Dear speakers,\n\nWe have important updates...',
+  }),
 })
 ```
 
-**Templates Used**:
+**Supported Scenarios**:
 
-- `ProposalAcceptTemplate` - For acceptances and reminders
-- `ProposalRejectTemplate` - For rejections
+- Individual speaker communications
+- Co-speaker group messages
+- Proposal-specific discussions
+- Conference logistics and updates
+- Travel and accommodation information
 
-**Triggers**:
+### 2. Proposal Notifications
 
-- Admin action on proposal (approve/reject/remind)
-- Automated reminder systems
+**Purpose**: Automated notifications for proposal lifecycle events
 
-### 2. Individual Speaker Emails
+**Supported Actions**:
 
-**Purpose**: Custom emails from organizers to specific speakers
+- Proposal acceptance notifications
+- Proposal rejection communications
+- Deadline reminders and follow-ups
+- Status update notifications
 
-**Implementation**: `/lib/email/speaker.ts`
-
-```typescript
-import { sendSpeakerEmail } from '@/lib/email/speaker'
-
-const result = await sendSpeakerEmail({
-  proposalId: 'proposal_id',
-  speakerId: 'speaker_id',
-  subject: 'Travel Information Update',
-  message: 'Hello! We have updates about your travel arrangements...',
-  senderName: 'Conference Organizer',
-  addToAudience: true, // Optional: add to mailing list
-})
-
-if (result.error) {
-  console.error('Email failed:', result.error)
-} else {
-  console.log('Email sent to:', result.data.recipient)
-}
-```
-
-**Template Used**: `SingleSpeakerEmailTemplate`
-
-**Features**:
-
-- Custom subject and message
-- Automatic proposal context inclusion
-- Optional audience list integration
-- Admin UI integration
+**Templates**: Specialized templates for each notification type with consistent branding
 
 ### 3. Audience Management
 
-**Purpose**: Manage mailing lists for conference communications
+**Purpose**: Maintain organized communication lists for conference-wide announcements
 
 **Implementation**: `/lib/email/audience.ts`
 
@@ -247,18 +258,18 @@ Required environment variables:
 ```bash
 # Production
 RESEND_API_KEY=re_your_api_key_here
-RESEND_FROM_EMAIL=noreply@cloudnativebergen.no
+RESEND_FROM_EMAIL=noreply@cloudnativebergen.dev
 
 # Development
 RESEND_API_KEY=test_key
-RESEND_FROM_EMAIL=test@cloudnativebergen.no
+RESEND_FROM_EMAIL=contact@cloudnativebergen.dev
 ```
 
 ## API Endpoints
 
-### Single Speaker Email
+### Multi-Speaker Email
 
-**Endpoint**: `POST /admin/api/speakers/email/single`
+**Endpoint**: `POST /admin/api/speakers/email/multi`
 
 **Authentication**: Requires organizer access
 
@@ -267,10 +278,9 @@ RESEND_FROM_EMAIL=test@cloudnativebergen.no
 ```json
 {
   "proposalId": "string",
-  "speakerId": "string",
+  "speakerIds": ["string"],
   "subject": "string",
-  "message": "string",
-  "addToAudience": "boolean (optional)"
+  "message": "string"
 }
 ```
 
@@ -280,60 +290,63 @@ RESEND_FROM_EMAIL=test@cloudnativebergen.no
 {
   "message": "Email sent successfully",
   "emailId": "resend_email_id",
-  "recipient": "speaker@example.com",
+  "recipients": ["speaker1@example.com", "speaker2@example.com"],
   "proposalTitle": "Speaker's Proposal Title"
 }
 ```
 
 **Error Responses**:
 
-- `400`: Invalid request (missing fields, empty content)
-- `404`: Conference, proposal, or speaker not found
+- `400`: Invalid request (missing fields, empty content, invalid speaker IDs)
+- `404`: Conference, proposal, or speakers not found
 - `500`: Email sending failure or server error
+
+### Audience Management
+
+**Endpoint**: `POST /admin/api/speakers/email/audience/sync`
+
+**Purpose**: Synchronize conference audience lists with current speaker roster
+
+**Authentication**: Requires organizer access
 
 ## Frontend Integration
 
-### Email Modal Component
+### Email Composition Interface
 
-Reusable modal for email composition:
+Modern Gmail-style email composition with production-ready features:
 
 ```tsx
 import { EmailModal } from '@/components/admin/EmailModal'
+import { SpeakerEmailModal } from '@/components/admin/SpeakerEmailModal'
 
-;<EmailModal
-  isOpen={showModal}
-  onClose={() => setShowModal(false)}
-  title="Email Speaker"
-  recipientInfo="Sending to John Doe (john@example.com)"
-  contextInfo="Proposal: My Amazing Talk"
-  onSend={async ({ subject, message }) => {
-    // Handle email sending
-  }}
-  submitButtonText="Send Email"
-  placeholder={{
-    subject: 'Enter email subject...',
-    message: 'Type your message...',
-  }}
+// Usage in admin components
+;<SpeakerEmailModal
+  isOpen={showEmailModal}
+  onClose={() => setShowEmailModal(false)}
+  proposal={proposal}
+  speakers={selectedSpeakers}
+  domain={domain}
+  fromEmail={emailConfig.fromAddress}
 />
 ```
 
+**Key Features**:
+
+- **Server-Side Configuration**: Email addresses and configuration loaded server-side for security
+- **Responsive Design**: Adaptive layouts for desktop and mobile devices
+- **Live Preview**: Toggle between composition and preview modes
+- **Real-Time Validation**: Immediate feedback on required fields and content
+- **Loading States**: Clear indication of email sending progress
+- **Error Handling**: User-friendly error messages and retry capabilities
+
 ### Admin Integration
 
-Email functionality is integrated into the admin interface:
+Seamlessly integrated into the admin workflow:
 
-```tsx
-// In AdminActionBar.tsx
-{
-  speakers.map((speaker) => (
-    <button
-      onClick={() => handleEmailSpeaker(speaker)}
-      className="email-button"
-    >
-      📧 Email {speaker.name}
-    </button>
-  ))
-}
-```
+- **Proposal Context**: Email functionality embedded directly in proposal management
+- **Speaker Selection**: Support for single and multiple speaker selection
+- **Conference Awareness**: Automatic inclusion of conference details and branding
+- **Notification System**: Success and error notifications integrated with admin UI
 
 ## Testing
 
@@ -351,42 +364,53 @@ npm test
 
 ### Manual Testing Checklist
 
-1. **Single Speaker Emails**:
-   - [ ] Send email to speaker with valid proposal
-   - [ ] Verify email delivery in Resend dashboard
-   - [ ] Test error handling (invalid speaker, missing proposal)
-   - [ ] Test audience integration toggle
+1. **Email Composition Interface**:
+   - [ ] Gmail-style interface renders correctly on desktop and mobile
+   - [ ] Preview mode toggles and displays formatted email correctly
+   - [ ] Required field validation works (subject, message)
+   - [ ] Loading states display during email sending
+   - [ ] Error handling shows appropriate user messages
 
-2. **Proposal Notifications**:
-   - [ ] Accept proposal and verify email sent
-   - [ ] Reject proposal and verify email sent
-   - [ ] Test reminder functionality
+2. **Multi-Speaker Communications**:
+   - [ ] Single speaker emails send successfully with proper greeting
+   - [ ] Multiple speaker emails generate correct group greetings
+   - [ ] Recipient display shows proper formatting for all scenarios
+   - [ ] Conference and proposal context included automatically
 
-3. **Audience Management**:
-   - [ ] Verify audience creation for new conference
-   - [ ] Test speaker addition/removal
-   - [ ] Test bulk synchronization
+3. **Template Rendering**:
+   - [ ] Email templates render correctly across major email clients
+   - [ ] Responsive design works on mobile email apps
+   - [ ] Social links and branding display properly
+   - [ ] All dynamic content populates correctly
 
-## Security Considerations
+4. **Error Scenarios**:
+   - [ ] Invalid recipient handling
+   - [ ] Missing proposal or conference data
+   - [ ] Network failures and retry logic
+   - [ ] Rate limiting behavior
+
+## Security and Production Readiness
 
 ### Authentication and Authorization
 
-- All email endpoints require authenticated organizer access
-- Server-side validation of all requests
-- Proper session management via NextAuth
+- **Organizer-Only Access**: All email endpoints require authenticated organizer privileges
+- **Server-Side Validation**: Comprehensive request validation on all API endpoints
+- **Session Management**: Secure session handling via NextAuth.js integration
+- **Input Sanitization**: Proper escaping and validation of all user-provided content
+
+### Configuration Security
+
+- **Environment Variables**: Email configuration stored securely in environment variables
+- **Server-Side Only**: Email API keys and sensitive configuration never exposed to client
+- **Fallback Handling**: Graceful degradation when configuration is missing or invalid
+- **Development Warnings**: Clear notifications when running in development environments
 
 ### Data Protection
 
-- Email addresses are validated before sending
-- No sensitive data in error messages
-- Input sanitization for display content
-- Rate limiting prevents abuse
-
-### Email Content Safety
-
-- HTML content is properly escaped
-- Template injection protection
-- Sender verification through Resend
+- **Email Validation**: Comprehensive validation of recipient email addresses
+- **Content Safety**: HTML content properly escaped and sanitized
+- **Error Message Safety**: No sensitive information exposed in error responses
+- **Rate Limiting**: Built-in protection against email abuse and spam
 
 ## Monitoring and Observability
 
@@ -412,11 +436,13 @@ console.warn('Rate limit encountered, implementing backoff strategy')
 
 ### Metrics to Monitor
 
-- **Email Delivery Rate**: Track successful vs failed sends
-- **Rate Limiting Events**: Monitor API limit encounters
-- **Error Patterns**: Watch for recurring issues
-- **Response Times**: Email API performance
-- **Audience Growth**: Track speaker list growth
+- **Email Delivery Success Rate**: Track successful sends vs failures across all email types
+- **User Interface Performance**: Monitor composition interface load times and responsiveness
+- **Template Rendering**: Track successful template generation and any rendering failures
+- **API Response Times**: Monitor email sending API performance and latency
+- **Rate Limiting Events**: Watch for API limit encounters and backoff strategy effectiveness
+- **Error Patterns**: Identify recurring issues for proactive fixes
+- **User Engagement**: Track email composition completion rates and preview usage
 
 ### Resend Dashboard
 
@@ -431,24 +457,25 @@ Monitor email delivery through the Resend dashboard:
 
 ### Common Issues
 
-1. **"RESEND_API_KEY is not set"**
-   - Verify environment variable configuration
-   - Check API key validity in Resend dashboard
+1. **"fromEmail prop is required"**
+   - Verify server component is passing EMAIL_CONFIG.RESEND_FROM_EMAIL
+   - Check environment variable configuration in server components
+   - Ensure client components receive fromEmail as prop
 
-2. **Rate Limiting Errors**
-   - Monitor request frequency in logs
-   - Consider increasing `RATE_LIMIT_DELAY` for high volume
-   - Check for concurrent email operations
+2. **Gmail Interface Not Responding**
+   - Check for JavaScript errors in browser console
+   - Verify all required props are provided to EmailModal
+   - Test preview toggle functionality
 
 3. **Template Rendering Issues**
-   - Verify all template props are provided
+   - Verify all template props are provided and typed correctly
    - Check for React component errors in logs
-   - Test templates in isolation
+   - Test templates in isolation with mock data
 
-4. **Delivery Failures**
-   - Check recipient email validity
-   - Verify sender domain configuration
-   - Monitor Resend service status
+4. **Multi-Speaker Greeting Problems**
+   - Verify speaker data includes proper name fields
+   - Check greeting generation logic for edge cases
+   - Test with various speaker count scenarios
 
 ### Debug Mode
 
@@ -470,46 +497,49 @@ The system includes automatic recovery mechanisms:
 
 ### Planned Features
 
-- [ ] **Bulk Email Operations**: Send emails to multiple speakers
-- [ ] **Email Templates Library**: Pre-defined templates for common scenarios
-- [ ] **Delivery Tracking**: Real-time delivery status updates
-- [ ] **Email Analytics**: Open rates, click tracking, engagement metrics
-- [ ] **Scheduled Emails**: Queue emails for future delivery
-- [ ] **Email Workflows**: Automated email sequences
+- [ ] **Email Templates Library**: Pre-defined templates for common communication scenarios
+- [ ] **Scheduled Email Delivery**: Queue emails for future sending with timezone support
+- [ ] **Email Analytics**: Track delivery rates, open rates, and engagement metrics
+- [ ] **Advanced Composition**: Rich text editing, attachments, and formatting options
+- [ ] **Email Workflows**: Automated email sequences and drip campaigns
+- [ ] **Delivery Tracking**: Real-time delivery status updates and notifications
 
 ### Integration Opportunities
 
-- [ ] **Calendar Integration**: Event reminders and scheduling
-- [ ] **CRM Integration**: Speaker relationship management
-- [ ] **Analytics Platform**: Email performance tracking
-- [ ] **Notification System**: Real-time email status updates
+- [ ] **Calendar Integration**: Automatic event reminders and schedule synchronization
+- [ ] **CRM Platform**: Enhanced speaker relationship management and communication history
+- [ ] **Analytics Dashboard**: Comprehensive email performance and engagement tracking
+- [ ] **Mobile App**: Native mobile interface for email composition and management
+- [ ] **AI Assistance**: Smart content suggestions and automated response generation
 
 ## Development Guidelines
 
 ### Adding New Email Types
 
-1. Create template component in `/components/email/`
-2. Add business logic in `/lib/email/`
-3. Create API endpoint if needed
-4. Add frontend integration
-5. Write tests and documentation
-6. Update this documentation
+1. **Create Template Component**: Design email template in `/components/email/`
+2. **Implement Business Logic**: Add email handling logic in `/lib/email/`
+3. **Add API Endpoint**: Create secure API route with proper validation
+4. **Update Frontend**: Integrate with Gmail-style composition interface
+5. **Security Review**: Ensure proper authentication and input validation
+6. **Testing**: Write comprehensive tests and manual testing scenarios
+7. **Documentation**: Update this documentation with new capabilities
 
 ### Code Standards
 
-- Use shared configuration from `/lib/email/config.ts`
-- Include comprehensive error handling
-- Add rate limiting for bulk operations
-- Follow existing TypeScript patterns
-- Include proper logging and monitoring
+- **Configuration**: Always use shared configuration from `/lib/email/config.ts`
+- **Error Handling**: Include comprehensive error handling with user-friendly messages
+- **Rate Limiting**: Implement rate limiting for any bulk operations
+- **TypeScript**: Follow existing TypeScript patterns and interfaces
+- **Security**: Server-side validation for all email operations
+- **Logging**: Include proper logging and monitoring for debugging
 
-### Testing Requirements
+### Architecture Principles
 
-- Unit tests for validation logic
-- Integration tests for API endpoints
-- Manual testing in staging environment
-- Error scenario coverage
-- Performance testing for bulk operations
+- **Server-Client Separation**: Keep email configuration and sensitive operations server-side
+- **Component Reusability**: Use shared EmailModal for consistent UI across email types
+- **Template Consistency**: Extend BaseEmailTemplate for visual consistency
+- **Progressive Enhancement**: Ensure email functionality works without JavaScript
+- **Accessibility**: Follow accessibility best practices in email composition interfaces
 
 ## References
 

@@ -126,7 +126,7 @@ const variantConfig: Record<
 async function generateQRCode(url: string): Promise<string> {
   const fullUrl = url.startsWith('http')
     ? url
-    : `https://cloudnativebergen.no${url}`
+    : `https://cloudnativebergen.dev${url}`
 
   // Check cache first
   if (qrCodeCache.has(fullUrl)) {

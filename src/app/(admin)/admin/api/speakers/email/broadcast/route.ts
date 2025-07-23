@@ -112,7 +112,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
     // Send broadcast email
     const broadcastResponse = await resend.broadcasts.create({
       audienceId,
-      from: 'Cloud Native Bergen <noreply@cloudnativebergen.no>',
+      from: 'Cloud Native Bergen <noreply@cloudnativebergen.dev>',
       subject,
       html: emailHtml,
     })
