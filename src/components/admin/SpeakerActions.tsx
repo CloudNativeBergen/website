@@ -5,27 +5,31 @@ import { Button } from '@/components/Button'
 import { BroadcastEmailModal } from '@/components/admin'
 import { useNotification } from './NotificationProvider'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
-import { PortableTextBlock } from '@portabletext/editor'
+
+import { Conference } from '@/lib/conference/types'
 
 interface SpeakerActionsProps {
   eligibleSpeakersCount: number
+  fromEmail: string
+  conference: Conference
 }
 
-export function SpeakerActions({ eligibleSpeakersCount }: SpeakerActionsProps) {
+export function SpeakerActions({
+  eligibleSpeakersCount,
+  fromEmail,
+  conference,
+}: SpeakerActionsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const { showNotification } = useNotification()
 
-  const handleSendBroadcast = async (
-    subject: string,
-    content: PortableTextBlock[],
-  ) => {
+  const handleSendBroadcast = async (subject: string, message: string) => {
     try {
       const response = await fetch('/admin/api/speakers/email/broadcast', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ subject, content }),
+        body: JSON.stringify({ subject, message }),
       })
 
       const result = await response.json()
@@ -98,6 +102,16 @@ export function SpeakerActions({ eligibleSpeakersCount }: SpeakerActionsProps) {
         onSend={handleSendBroadcast}
         onSyncContacts={handleSyncContacts}
         speakerCount={eligibleSpeakersCount}
+        fromEmail={fromEmail}
+        eventName={conference.title}
+        eventLocation={`${conference.city}, ${conference.country}`}
+        eventDate={new Date(conference.start_date).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })}
+        eventUrl={`https://${conference.domains[0]}`}
+        socialLinks={conference.social_links || []}
       />
     </>
   )

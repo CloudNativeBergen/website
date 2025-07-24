@@ -5,6 +5,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
+import { EMAIL_CONFIG } from '@/lib/email/config'
 
 export default async function AdminSpeakers() {
   try {
@@ -74,7 +75,11 @@ export default async function AdminSpeakers() {
               </div>
             </div>
 
-            <SpeakerActions eligibleSpeakersCount={confirmedSpeakers.length} />
+            <SpeakerActions
+              eligibleSpeakersCount={confirmedSpeakers.length}
+              fromEmail={EMAIL_CONFIG.RESEND_FROM_EMAIL}
+              conference={conference}
+            />
           </div>
 
           <div className="font-inter mt-4 flex items-center gap-4 text-sm text-brand-slate-gray">

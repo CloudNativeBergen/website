@@ -1,23 +1,24 @@
 'use client'
 
-import { useState } from 'react'
-import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
-import { Button } from '@/components/Button'
-import { PortableTextEditor } from '@/components/PortableTextEditor'
+import { useMemo } from 'react'
 import { useNotification } from './NotificationProvider'
-import {
-  XMarkIcon,
-  EnvelopeIcon,
-  ArrowPathIcon,
-} from '@heroicons/react/24/outline'
-import { PortableTextBlock } from '@portabletext/editor'
+import { EmailModal } from './EmailModal'
+import { SpeakerBroadcastTemplate } from '@/components/email/SpeakerBroadcastTemplate'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { ArrowPathIcon } from '@heroicons/react/24/outline'
 
 interface BroadcastEmailModalProps {
   isOpen: boolean
   onClose: () => void
-  onSend: (subject: string, content: PortableTextBlock[]) => Promise<void>
+  onSend: (subject: string, message: string) => Promise<void>
   onSyncContacts: () => Promise<void>
   speakerCount: number
+  fromEmail: string
+  eventName: string
+  eventLocation: string
+  eventDate: string
+  eventUrl: string
+  socialLinks: string[]
 }
 
 export function BroadcastEmailModal({
@@ -26,185 +27,111 @@ export function BroadcastEmailModal({
   onSend,
   onSyncContacts,
   speakerCount,
+  fromEmail,
+  eventName,
+  eventLocation,
+  eventDate,
+  eventUrl,
+  socialLinks,
 }: BroadcastEmailModalProps) {
-  const [subject, setSubject] = useState('')
-  const [content, setContent] = useState<PortableTextBlock[]>([
-    {
-      _key: 'default-greeting',
-      _type: 'block',
-      style: 'normal',
-      children: [
-        {
-          _key: 'default-text',
-          _type: 'span',
-          text: 'Hi {{{FIRST_NAME|there}}},\n\n',
-          marks: [],
-        },
-      ],
-      markDefs: [],
-    },
-  ])
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
   const { showNotification } = useNotification()
 
-  const handleSend = async () => {
-    if (!subject.trim() || content.length === 0) {
-      showNotification({
-        type: 'warning',
-        title: 'Missing information',
-        message: 'Please provide both subject and content for the email.',
-      })
-      return
-    }
+  // Memoize initial values to prevent unnecessary re-renders and form resets
+  const initialValues = useMemo(
+    () => ({
+      subject: '',
+      message: convertStringToPortableTextBlocks(
+        'Hi {{{FIRST_NAME|here}}},\n\n',
+      ),
+    }),
+    [], // Empty dependency array since these values should be static
+  )
 
-    setIsLoading(true)
+  const handleSend = async ({
+    subject,
+    messageHTML,
+  }: {
+    subject: string
+    message: string
+    messageHTML: string
+  }) => {
     try {
-      await onSend(subject, content)
-      setSubject('')
-      setContent([
-        {
-          _key: 'default-greeting',
-          _type: 'block',
-          style: 'normal',
-          children: [
-            {
-              _key: 'default-text',
-              _type: 'span',
-              text: 'Hi {{{FIRST_NAME|there}}},\n\n',
-              marks: [],
-            },
-          ],
-          markDefs: [],
-        },
-      ])
-      onClose()
-    } catch (error) {
-      console.error('Failed to send broadcast email:', error)
+      await onSend(subject, messageHTML) // Use HTML version for email
       showNotification({
-        type: 'error',
-        title: 'Failed to send email',
-        message: 'Failed to send email. Please try again.',
+        type: 'success',
+        title: 'Email sent',
+        message: `Email sent to ${speakerCount} speakers`,
       })
-    } finally {
-      setIsLoading(false)
+    } catch (error) {
+      throw error // Let EmailModal handle the error
     }
   }
 
-  const handleSyncContacts = async () => {
-    setIsSyncing(true)
-    try {
-      await onSyncContacts()
-    } finally {
-      setIsSyncing(false)
-    }
+  // Custom recipient display with sync button
+  const recipientDisplay = (
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-gray-600">
+        {speakerCount} confirmed speakers
+      </span>
+      <button
+        type="button"
+        onClick={onSyncContacts}
+        className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-200"
+      >
+        <ArrowPathIcon className="h-3 w-3" />
+        Sync
+      </button>
+    </div>
+  )
+
+  // Create preview component
+  const createPreview = ({
+    subject,
+    messageHTML,
+  }: {
+    subject: string
+    message: string
+    messageHTML: string
+  }) => {
+    return (
+      <SpeakerBroadcastTemplate
+        content={
+          <div
+            style={{
+              fontSize: '16px',
+              lineHeight: '1.6',
+              color: '#334155',
+            }}
+            dangerouslySetInnerHTML={{ __html: messageHTML }}
+          />
+        }
+        subject={subject}
+        speakerName="" // Empty to avoid showing hard-coded greeting
+        eventName={eventName}
+        eventLocation={eventLocation}
+        eventDate={eventDate}
+        eventUrl={eventUrl}
+        socialLinks={socialLinks}
+      />
+    )
   }
 
   return (
-    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-brand-slate-gray/60 backdrop-blur-sm" />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className="w-full max-w-4xl space-y-6 rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white p-8 shadow-2xl">
-          <div className="flex items-center justify-between border-b border-brand-frosted-steel pb-4">
-            <DialogTitle className="font-space-grotesk text-xl font-semibold text-brand-slate-gray">
-              Send Email to Speakers
-            </DialogTitle>
-            <button
-              onClick={onClose}
-              className="rounded-xl p-2 transition-colors duration-200 hover:bg-brand-sky-mist"
-            >
-              <XMarkIcon className="h-5 w-5 text-brand-slate-gray" />
-            </button>
-          </div>
-
-          <div className="font-inter rounded-xl border border-primary-200 bg-brand-sky-mist p-4 text-sm text-brand-slate-gray">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <EnvelopeIcon className="h-4 w-4 text-brand-cloud-blue" />
-                <span className="font-medium">
-                  This email will be sent to {speakerCount} speakers with
-                  confirmed talks.
-                </span>
-              </div>
-              <Button
-                onClick={handleSyncContacts}
-                disabled={isSyncing}
-                variant="outline"
-                size="sm"
-                className="font-space-grotesk flex items-center gap-2 rounded-lg transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <ArrowPathIcon
-                  className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`}
-                />
-                {isSyncing ? 'Syncing...' : 'Sync Contacts'}
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div>
-              <label
-                htmlFor="subject"
-                className="font-space-grotesk mb-2 block text-sm font-medium text-brand-slate-gray"
-              >
-                Subject
-              </label>
-              <input
-                id="subject"
-                type="text"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="font-inter w-full rounded-xl border border-brand-frosted-steel bg-white px-4 py-3 shadow-sm transition-all duration-200 focus:border-brand-cloud-blue focus:ring-2 focus:ring-brand-cloud-blue"
-                placeholder="Enter email subject..."
-                disabled={isLoading || isSyncing}
-              />
-            </div>
-
-            <div>
-              <label className="font-space-grotesk mb-2 block text-sm font-medium text-brand-slate-gray">
-                Message
-              </label>
-              <div className="overflow-hidden rounded-xl border border-brand-frosted-steel bg-white">
-                <PortableTextEditor
-                  label=""
-                  value={content}
-                  onChange={setContent}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-4 border-t border-brand-frosted-steel pt-6">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              disabled={isLoading || isSyncing}
-              className="font-space-grotesk rounded-xl border-brand-frosted-steel px-6 py-3 text-brand-slate-gray transition-all duration-200 hover:bg-brand-sky-mist"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSend}
-              disabled={
-                isLoading ||
-                isSyncing ||
-                !subject.trim() ||
-                content.length === 0
-              }
-              className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-white transition-all duration-200 hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Sending...
-                </div>
-              ) : (
-                `Send to ${speakerCount} speakers`
-              )}
-            </Button>
-          </div>
-        </DialogPanel>
-      </div>
-    </Dialog>
+    <EmailModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Send Broadcast Email"
+      recipientInfo={recipientDisplay}
+      onSend={handleSend}
+      submitButtonText={`Send to ${speakerCount} speakers`}
+      previewComponent={createPreview}
+      fromAddress={fromEmail}
+      initialValues={initialValues}
+      placeholder={{
+        subject: 'Enter broadcast subject...',
+        message: 'Enter your message here...',
+      }}
+      helpText="Use {{{FIRST_NAME|there}}} to personalize the greeting. This will be replaced with each speaker's first name or 'there' as a fallback."
+    />
   )
 }

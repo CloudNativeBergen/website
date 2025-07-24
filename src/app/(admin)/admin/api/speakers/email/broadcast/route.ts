@@ -2,9 +2,10 @@ import { NextAuthRequest, auth } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakers } from '@/lib/speaker/sanity'
-import { BroadcastEmailTemplate } from '@/components/email'
+import { SpeakerBroadcastTemplate } from '@/components/email/SpeakerBroadcastTemplate'
 import { render } from '@react-email/render'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import React from 'react'
 import {
   getOrCreateConferenceAudience,
   syncConferenceAudience,
@@ -102,10 +103,22 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     // Render the email template
     const emailHtml = await render(
-      BroadcastEmailTemplate({
+      React.createElement(SpeakerBroadcastTemplate, {
         subject,
-        content: htmlContent,
-        recipientName: '{{{FIRST_NAME|Speaker}}}', // Resend personalization token with fallback
+        speakerName: '{{{FIRST_NAME|Speaker}}}', // Resend personalization token with fallback
+        eventName: conference.title,
+        eventLocation: `${conference.city}, ${conference.country}`,
+        eventDate: new Date(conference.start_date).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        }),
+        eventUrl: `https://${conference.domains[0]}`,
+        socialLinks: conference.social_links || [],
+        unsubscribeUrl: '{{{RESEND_UNSUBSCRIBE_URL}}}', // Resend unsubscribe token
+        content: React.createElement('div', {
+          dangerouslySetInnerHTML: { __html: htmlContent },
+        }),
       }),
     )
 

@@ -1,10 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogPanel, DialogTitle } from '@headlessui/react'
 import { Button } from '@/components/Button'
 import { useNotification } from './NotificationProvider'
 import { XMarkIcon, EyeIcon } from '@heroicons/react/24/outline'
+import { PortableTextEditor } from '@/components/PortableTextEditor'
+import { PortableTextBlock } from '@portabletext/editor'
+import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 
 export interface EmailModalProps {
   isOpen: boolean
@@ -12,7 +17,11 @@ export interface EmailModalProps {
   title: string
   recipientInfo: string | React.ReactNode
   contextInfo?: string
-  onSend: (data: { subject: string; message: string }) => Promise<void>
+  onSend: (data: {
+    subject: string
+    message: string
+    messageHTML: string
+  }) => Promise<void>
   submitButtonText?: string
   helpText?: string
   warningContent?: React.ReactNode
@@ -22,11 +31,12 @@ export interface EmailModalProps {
   }
   initialValues?: {
     subject?: string
-    message?: string
+    message?: string | PortableTextBlock[]
   }
   previewComponent?: (data: {
     subject: string
     message: string
+    messageHTML: string
   }) => React.ReactNode
   fromAddress: string
 }
@@ -47,21 +57,66 @@ export function EmailModal({
   fromAddress,
 }: EmailModalProps) {
   const [subject, setSubject] = useState('')
-  const [message, setMessage] = useState('')
+  const [richTextValue, setRichTextValue] = useState<PortableTextBlock[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const { showNotification } = useNotification()
+  const initializedRef = useRef(false)
 
-  // Set initial values when modal opens
+  // Set initial values when modal opens - only once per modal session
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !initializedRef.current) {
       setSubject(initialValues.subject || '')
-      setMessage(initialValues.message || '')
+      // Handle both string and PortableTextBlock[] initial values
+      const initialMessage = initialValues.message
+      if (Array.isArray(initialMessage)) {
+        // It's already PortableTextBlock[]
+        setRichTextValue(initialMessage)
+      } else if (initialMessage) {
+        // It's a string, convert to PortableTextBlock[]
+        setRichTextValue(convertStringToPortableTextBlocks(initialMessage))
+      } else {
+        setRichTextValue([])
+      }
+      initializedRef.current = true
+    } else if (!isOpen) {
+      // Reset the initialized flag when modal closes
+      initializedRef.current = false
     }
-  }, [isOpen, initialValues])
+  }, [isOpen, initialValues.subject, initialValues.message])
+
+  // Helper function to convert PortableText to plain text for fallback
+  const convertPortableTextToString = (blocks: PortableTextBlock[]): string => {
+    return blocks
+      .map((block) => {
+        if (block._type === 'block' && Array.isArray(block.children)) {
+          return block.children
+            .map((child: { _type: string; text?: string }) =>
+              child._type === 'span' ? child.text || '' : '',
+            )
+            .join('')
+        }
+        return ''
+      })
+      .join('\n\n')
+  }
+
+  // Get both plain text and HTML versions of the message
+  const getCurrentMessage = (): string => {
+    return convertPortableTextToString(richTextValue)
+  }
+
+  const getCurrentMessageHTML = (): string => {
+    // The PortableTextBlock from @portabletext/editor is compatible with @portabletext/types
+    // but TypeScript needs help understanding this
+    return portableTextToHTML(richTextValue as PortableTextBlockForHTML[])
+  }
 
   const handleSend = async () => {
-    if (!subject.trim() || !message.trim()) {
+    const currentMessage = getCurrentMessage()
+    const currentMessageHTML = getCurrentMessageHTML()
+
+    if (!subject.trim() || !currentMessage.trim()) {
       showNotification({
         type: 'warning',
         title: 'Missing information',
@@ -72,11 +127,16 @@ export function EmailModal({
 
     setIsLoading(true)
     try {
-      await onSend({ subject, message })
+      await onSend({
+        subject,
+        message: currentMessage,
+        messageHTML: currentMessageHTML,
+      })
 
       // Reset form and close modal on success
       setSubject('')
-      setMessage('')
+      setRichTextValue([])
+      initializedRef.current = false // Reset initialization flag
       onClose()
     } catch (error) {
       console.error('Failed to send email:', error)
@@ -96,7 +156,8 @@ export function EmailModal({
   const handleClose = () => {
     if (!isLoading) {
       setSubject('')
-      setMessage('')
+      setRichTextValue([])
+      initializedRef.current = false // Reset initialization flag
       onClose()
     }
   }
@@ -149,7 +210,11 @@ export function EmailModal({
                   </Button>
                 </div>
                 <div className="rounded-xl border border-brand-frosted-steel bg-white p-6">
-                  {previewComponent({ subject, message })}
+                  {previewComponent({
+                    subject,
+                    message: getCurrentMessage(),
+                    messageHTML: getCurrentMessageHTML(),
+                  })}
                 </div>
               </div>
             ) : (
@@ -213,22 +278,12 @@ export function EmailModal({
 
                 {/* Message Body */}
                 <div className="p-6">
-                  <textarea
-                    id="message"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    rows={7}
-                    className="font-inter w-full resize-none border-none bg-transparent px-0 py-0 text-sm placeholder-brand-slate-gray/50 focus:ring-0 focus:outline-none"
-                    placeholder={
-                      placeholder.message || 'Type your message here...'
-                    }
-                    disabled={isLoading}
+                  <PortableTextEditor
+                    label=""
+                    value={richTextValue}
+                    onChange={setRichTextValue}
+                    helpText={helpText}
                   />
-                  {helpText && (
-                    <div className="mt-4 border-t border-brand-frosted-steel/50 pt-4 text-xs text-brand-slate-gray/70">
-                      💡 {helpText}
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -239,7 +294,9 @@ export function EmailModal({
                 <Button
                   variant="outline"
                   onClick={() => setShowPreview(!showPreview)}
-                  disabled={isLoading || !subject.trim() || !message.trim()}
+                  disabled={
+                    isLoading || !subject.trim() || !getCurrentMessage().trim()
+                  }
                   className={`font-space-grotesk flex items-center gap-2 rounded-xl ${showPreview ? 'border-brand-cloud-blue bg-brand-sky-mist' : ''}`}
                 >
                   <EyeIcon className="h-4 w-4" />
@@ -260,7 +317,9 @@ export function EmailModal({
               </Button>
               <Button
                 onClick={handleSend}
-                disabled={isLoading || !subject.trim() || !message.trim()}
+                disabled={
+                  isLoading || !subject.trim() || !getCurrentMessage().trim()
+                }
                 className="font-space-grotesk rounded-xl bg-brand-cloud-blue text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isLoading ? (

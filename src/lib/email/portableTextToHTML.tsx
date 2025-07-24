@@ -46,15 +46,15 @@ export function portableTextToHTML(blocks: PortableTextBlock[]): string {
       },
       list: {
         bullet: ({ children }) =>
-          `<ul style="margin: 0 0 16px 0; padding-left: 20px;">${children}</ul>`,
+          `<ul style="margin: 0 0 16px 0; padding-left: 20px; list-style-type: disc; list-style-position: outside;">${children}</ul>`,
         number: ({ children }) =>
-          `<ol style="margin: 0 0 16px 0; padding-left: 20px;">${children}</ol>`,
+          `<ol style="margin: 0 0 16px 0; padding-left: 20px; list-style-type: decimal; list-style-position: outside;">${children}</ol>`,
       },
       listItem: {
         bullet: ({ children }) =>
-          `<li style="margin-bottom: 8px;">${children}</li>`,
+          `<li style="margin-bottom: 8px; display: list-item;">${children}</li>`,
         number: ({ children }) =>
-          `<li style="margin-bottom: 8px;">${children}</li>`,
+          `<li style="margin-bottom: 8px; display: list-item;">${children}</li>`,
       },
     },
   })

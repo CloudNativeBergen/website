@@ -39,7 +39,7 @@ describe('Speaker Email System', () => {
 
       const result = validateMultiSpeakerEmailRequest(request)
       expect(result.isValid).toBe(false)
-      expect(result.error).toBe('At least one speaker ID is required')
+      expect(result.error).toBe('speakerIds must be a non-empty array')
     })
 
     it('should reject request with empty subject', () => {

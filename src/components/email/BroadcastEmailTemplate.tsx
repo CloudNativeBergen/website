@@ -1,68 +1,65 @@
 import { BaseEmailTemplate } from './BaseEmailTemplate'
+import * as React from 'react'
 
 interface BroadcastEmailTemplateProps {
   subject: string
   content: string
-  recipientName: string
+  recipientName?: string // Optional for general broadcasts
+  eventName: string
+  eventLocation: string
+  eventDate: string
+  eventUrl: string
+  socialLinks: string[]
+  unsubscribeUrl?: string // Optional unsubscribe URL for Resend broadcasts
 }
 
 export const BroadcastEmailTemplate = ({
   subject,
   content,
   recipientName,
+  eventName,
+  eventLocation,
+  eventDate,
+  eventUrl,
+  socialLinks,
+  unsubscribeUrl,
 }: BroadcastEmailTemplateProps) => {
+  // Email-safe list styles for bullets
+  const emailContentStyle = {
+    fontSize: '16px',
+    lineHeight: '1.6',
+    color: '#334155',
+    marginBottom: '24px',
+  }
+
+  // Process content to add list styles for email clients
+  const processedContent = content
+    .replace(
+      /<ul>/g,
+      '<ul style="margin: 16px 0; padding-left: 20px; list-style-type: disc;">',
+    )
+    .replace(
+      /<ol>/g,
+      '<ol style="margin: 16px 0; padding-left: 20px; list-style-type: decimal;">',
+    )
+    .replace(/<li>/g, '<li style="margin-bottom: 8px; display: list-item;">')
+
   return (
     <BaseEmailTemplate
+      title={subject}
       speakerName={recipientName}
       proposalTitle=""
-      eventName="Cloud Native Bergen"
-      eventLocation="Bergen, Norway"
-      eventDate="TBA"
-      eventUrl="https://cloudnativebergen.dev"
-      socialLinks={[]}
-      customContent={{
-        heading: subject,
-        body: (
-          <div>
-            <div
-              style={{
-                fontSize: '16px',
-                lineHeight: '1.6',
-                color: '#334155',
-                marginBottom: '24px',
-              }}
-              dangerouslySetInnerHTML={{ __html: content }}
-            />
-            <hr
-              style={{
-                border: 'none',
-                borderTop: '1px solid #CBD5E1',
-                margin: '32px 0',
-              }}
-            />
-            <div
-              style={{
-                textAlign: 'center' as const,
-                fontSize: '14px',
-                color: '#64748B',
-              }}
-            >
-              <p>
-                You received this email because you are a confirmed or accepted
-                speaker at Cloud Native Bergen.
-              </p>
-              <p>
-                <a
-                  href="{{{RESEND_UNSUBSCRIBE_URL}}}"
-                  style={{ color: '#64748B', textDecoration: 'underline' }}
-                >
-                  Unsubscribe from these emails
-                </a>
-              </p>
-            </div>
-          </div>
-        ),
-      }}
-    />
+      eventName={eventName}
+      eventLocation={eventLocation}
+      eventDate={eventDate}
+      eventUrl={eventUrl}
+      socialLinks={socialLinks}
+      unsubscribeUrl={unsubscribeUrl}
+    >
+      <div
+        style={emailContentStyle}
+        dangerouslySetInnerHTML={{ __html: processedContent }}
+      />
+    </BaseEmailTemplate>
   )
 }

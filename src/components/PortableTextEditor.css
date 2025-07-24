@@ -9,53 +9,66 @@
     list-level-6 list-level-7 list-level-8 list-level-9 list-level-10;
 }
 
+/* Add spacing between text blocks that are not list items */
+[role='textbox'] > div:not(.pt-list-item) {
+  margin-bottom: 0.75rem;
+}
+
+/* Remove bottom margin from the last element */
+[role='textbox'] > div:last-child {
+  margin-bottom: 0;
+}
+
 .pt-list-item {
   position: relative;
+  margin-bottom: 8px; /* Match email template list item spacing */
+  list-style: disc; /* Use standard bullet */
+  list-style-position: outside;
+  margin-left: 20px; /* Match email template padding-left */
+  padding-left: 0;
+  font-size: 16px; /* Match email template font size */
+  line-height: 1.6; /* Match email template line height */
+  color: #334155; /* Match email template color */
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif; /* Match email template font family */
 }
+
+/* Remove the custom bullet pseudo-elements entirely */
 .pt-list-item:before {
-  position: absolute;
+  display: none;
 }
+
 .pt-list-item-bullet:before {
-  content: '●';
+  display: none;
 }
+
 .pt-list-item-number:before {
-  content: counter(list-level-1) '.';
+  display: none;
 }
 
 .pt-list-item-level-1 {
-  padding-left: 1rem;
+  margin-left: 20px; /* Match email template padding-left */
   counter-increment: list-level-1;
-}
-.pt-list-item-level-1:before {
-  left: 0;
+  list-style-type: disc;
 }
 
 .pt-list-item-level-2 {
-  padding-left: 24px;
+  margin-left: 40px; /* Increased for proper nesting */
   counter-increment: list-level-2;
-}
-.pt-list-item-level-2:before {
-  left: 8px;
-}
-.pt-list-item-number.pt-list-item-level-2:before {
-  content: counter(list-level-2) '.';
-}
-.pt-list-item-bullet.pt-list-item-level-2:before {
-  content: '○';
+  list-style-type: circle;
 }
 
 .pt-list-item-level-3 {
-  padding-left: 32px;
+  margin-left: 60px; /* Increased for proper nesting */
   counter-increment: list-level-3;
-}
-.pt-list-item-level-3:before {
-  left: 16px;
-}
-.pt-list-item-number.pt-list-item-level-3:before {
-  content: counter(list-level-3) '.';
-}
-.pt-list-item-bullet.pt-list-item-level-3:before {
-  content: '■';
+  list-style-type: square;
 }
 
 .pt-list-item-level-4 {

@@ -46,32 +46,80 @@ type List = Schema['lists'][number]
 type ListName = List[keyof List]
 
 const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
-  const elementType = schemaType.value as StyleName | 'normal'
+  const style = schemaType.value as StyleName | 'normal'
 
-  switch (elementType) {
+  switch (style) {
     case 'h1':
       return (
-        <h1 className="text-1.5xl mt-2 mb-6 leading-9 font-bold text-gray-900 sm:text-4xl">
+        <h1
+          style={{
+            fontSize: '28px',
+            fontWeight: '700',
+            lineHeight: '1.2',
+            marginTop: '0',
+            marginBottom: '24px',
+            color: '#334155',
+            fontFamily:
+              '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          }}
+        >
           {children}
         </h1>
       )
 
     case 'h2':
       return (
-        <h2 className="text-1xl mt-1.5 mb-4 leading-8 text-gray-900 sm:text-3xl">
+        <h2
+          style={{
+            fontSize: '22px',
+            fontWeight: '600',
+            lineHeight: '1.3',
+            marginTop: '0',
+            marginBottom: '20px',
+            color: '#334155',
+            fontFamily:
+              '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          }}
+        >
           {children}
         </h2>
       )
 
     case 'h3':
       return (
-        <h3 className="mt-1 mb-2 text-lg leading-7 text-gray-900 sm:text-2xl">
+        <h3
+          style={{
+            fontSize: '18px',
+            fontWeight: '600',
+            lineHeight: '1.4',
+            marginTop: '0',
+            marginBottom: '16px',
+            color: '#334155',
+            fontFamily:
+              '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          }}
+        >
           {children}
         </h3>
       )
 
     case 'normal': {
-      return <p className="text-md mb-3">{children}</p>
+      // Use div instead of p to avoid nesting issues
+      return (
+        <div
+          style={{
+            fontSize: '16px',
+            lineHeight: '1.6',
+            marginBottom: '16px',
+            marginTop: '0',
+            color: '#334155',
+            fontFamily:
+              'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          }}
+        >
+          {children}
+        </div>
+      )
     }
   }
 }
@@ -91,8 +139,15 @@ const renderDecorator: RenderDecoratorFunction = ({ schemaType, children }) => {
   }
 }
 
-const renderListItem: RenderListItemFunction = ({ children }) => {
-  return <p className="text-md mb-0.75">{children}</p>
+const renderListItem: RenderListItemFunction = ({ children, schemaType }) => {
+  const listType = schemaType.value as ListName
+  return (
+    <li
+      className={`pt-list-item pt-list-item-${listType} pt-list-item-level-1`}
+    >
+      {children}
+    </li>
+  )
 }
 
 const styleIcons = {
@@ -288,7 +343,14 @@ export function PortableTextEditor({
 
         <PortableTextEditable
           id={id}
-          className="block min-h-60 w-full rounded-md bg-white p-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+          className="block min-h-60 w-full rounded-md bg-white p-3 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+          style={{
+            fontSize: '16px',
+            lineHeight: '1.6',
+            color: '#334155',
+            fontFamily:
+              'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          }}
           renderStyle={renderStyle}
           renderDecorator={renderDecorator}
           renderBlock={({ children }) => {

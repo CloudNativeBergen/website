@@ -13,6 +13,7 @@ interface BaseEmailTemplateProps {
   socialLinks: string[]
   children?: React.ReactNode
   footer?: React.ReactNode
+  unsubscribeUrl?: string // Optional unsubscribe URL for broadcasts
   customContent?: {
     heading?: string
     body?: React.ReactNode
@@ -31,6 +32,7 @@ export function BaseEmailTemplate({
   socialLinks,
   children,
   footer,
+  unsubscribeUrl,
   customContent,
 }: BaseEmailTemplateProps) {
   // Email-safe styles - using tables for layout and inline styles for maximum compatibility
@@ -146,7 +148,10 @@ export function BaseEmailTemplate({
             <td>
               <h1 style={headerStyle}>{customContent?.heading || title}</h1>
 
-              {speakerName && <p style={paragraphStyle}>Dear {speakerName},</p>}
+              {/* Only show greeting for non-custom content (i.e., not broadcast emails) */}
+              {speakerName && !customContent && (
+                <p style={paragraphStyle}>Dear {speakerName},</p>
+              )}
 
               {customContent?.body ? (
                 customContent.body
@@ -192,61 +197,78 @@ export function BaseEmailTemplate({
 
               {footer}
 
-              <hr style={hrStyle} />
+              {/* Only show default footer if no custom footer is provided */}
+              {!footer && (
+                <>
+                  <hr style={hrStyle} />
 
-              {/* Social Links Section */}
-              {socialLinks.length > 0 && (
-                <div style={socialContainerStyle}>
-                  <p
-                    style={{
-                      fontSize: '16px',
-                      color: '#334155',
-                      marginBottom: '12px',
-                      marginTop: '0',
-                      fontWeight: '600',
-                    }}
-                  >
-                    Follow Cloud Native Bergen:
-                  </p>
-                  <div>
-                    {socialLinks.map((link, index) => {
-                      const iconElement = iconForLink(link, 'h-4 w-4')
-                      const title = titleForLink(link)
-                      return (
+                  {/* Social Links Section */}
+                  {socialLinks.length > 0 && (
+                    <div style={socialContainerStyle}>
+                      <p
+                        style={{
+                          fontSize: '16px',
+                          color: '#334155',
+                          marginBottom: '12px',
+                          marginTop: '0',
+                          fontWeight: '600',
+                        }}
+                      >
+                        Follow Cloud Native Bergen:
+                      </p>
+                      <div>
+                        {socialLinks.map((link, index) => {
+                          const iconElement = iconForLink(link, 'h-4 w-4')
+                          const title = titleForLink(link)
+                          return (
+                            <a
+                              key={index}
+                              href={link}
+                              style={socialLinkStyle}
+                              title={title}
+                              aria-label={title}
+                            >
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  verticalAlign: 'middle',
+                                  width: '20px',
+                                  height: '20px',
+                                }}
+                              >
+                                {iconElement}
+                              </span>
+                            </a>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={footerStyle}>
+                    <p style={footerTextStyle}>
+                      This email was sent by{' '}
+                      <strong style={{ color: '#1D4ED8' }}>
+                        Cloud Native Bergen
+                      </strong>
+                      .<br />
+                      {unsubscribeUrl ? (
                         <a
-                          key={index}
-                          href={link}
-                          style={socialLinkStyle}
-                          title={title}
-                          aria-label={title}
+                          href={unsubscribeUrl}
+                          style={{
+                            color: '#1D4ED8',
+                            textDecoration: 'underline',
+                          }}
                         >
-                          <span
-                            style={{
-                              display: 'inline-block',
-                              verticalAlign: 'middle',
-                              width: '20px',
-                              height: '20px',
-                            }}
-                          >
-                            {iconElement}
-                          </span>
+                          Unsubscribe from these emails
                         </a>
-                      )
-                    })}
+                      ) : (
+                        'If you have any questions, please contact the organizers.'
+                      )}
+                    </p>
                   </div>
-                </div>
+                </>
               )}
-
-              <div style={footerStyle}>
-                <p style={footerTextStyle}>
-                  This email was sent by{' '}
-                  <strong style={{ color: '#1D4ED8' }}>
-                    Cloud Native Bergen
-                  </strong>
-                  .<br />
-                  If you have any questions, please contact the organizers.
-                </p>
-              </div>
             </td>
           </tr>
         </tbody>

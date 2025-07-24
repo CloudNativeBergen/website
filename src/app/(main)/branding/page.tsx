@@ -2412,90 +2412,19 @@ export default async function BrandingPage() {
               Speaker Communication Templates
             </h3>
             <p className="font-inter mb-12 text-center text-lg text-brand-slate-gray">
-              Direct communication templates for individual speaker outreach and
+              Direct communication templates for speaker outreach and
               speaker-specific broadcasts with rich content support.
             </p>
 
-            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-              {/* Single Speaker Email */}
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              {/* Speaker Email */}
               <div>
                 <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-cloud-blue">
-                  📩 Individual Speaker Email
+                  📩 Speaker Email
                 </h4>
                 <p className="font-inter mb-6 text-sm text-brand-slate-gray">
-                  Personal communication for specific speaker questions,
-                  updates, or requests.
-                </p>
-
-                <div className="rounded-xl bg-gray-100 shadow-2xl">
-                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      </div>
-                      <div className="font-inter text-sm font-medium text-gray-600">
-                        Mail
-                      </div>
-                      <div className="w-16"></div>
-                    </div>
-                  </div>
-
-                  <div className="border-b border-gray-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-gray-900">
-                          From:
-                        </span>
-                        <span className="text-gray-600">
-                          {conference.contact_email}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">Today 1:45 PM</div>
-                    </div>
-                    <div className="mt-1 flex items-center space-x-4 text-sm">
-                      <span className="font-semibold text-gray-900">To:</span>
-                      <span className="text-gray-600">speaker@example.com</span>
-                    </div>
-                    <div className="mt-2">
-                      <h5 className="font-semibold text-gray-900">
-                        Update on your presentation setup
-                      </h5>
-                    </div>
-                  </div>
-
-                  <div className="rounded-b-lg bg-white p-6">
-                    <SpeakerEmailTemplate
-                      speakers={[
-                        {
-                          name: 'Dr. Maria Rodriguez',
-                          email: 'maria@example.com',
-                        },
-                      ]}
-                      proposalTitle="Observability Patterns in Kubernetes"
-                      proposalUrl={`https://${domain}/admin/proposals/123`}
-                      eventName={conference.title}
-                      eventLocation={`${conference.city}, ${conference.country}`}
-                      eventDate="June 15, 2025"
-                      eventUrl={`https://${domain}/`}
-                      subject="Update on your presentation setup"
-                      message="Dear Dr. Maria Rodriguez,\n\nWe wanted to confirm the technical requirements for your presentation. Based on your abstract, we've arranged for a demo environment with access to our Kubernetes cluster.\n\nPlease review your proposal details and let us know if you need any additional setup or have questions about the demo environment."
-                      senderName="Erik Hansen"
-                      socialLinks={conference.social_links || []}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Multi-Speaker Email */}
-              <div>
-                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-accent-purple">
-                  👥 Multi-Speaker Email
-                </h4>
-                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
-                  Efficient communication with all speakers on a proposal using
-                  CC functionality.
+                  Direct communication with speakers on their proposals,
+                  supporting both individual and multi-speaker conversations.
                 </p>
 
                 <div className="rounded-xl bg-gray-100 shadow-2xl">
@@ -2527,11 +2456,11 @@ export default async function BrandingPage() {
                     </div>
                     <div className="mt-1 flex items-center space-x-4 text-sm">
                       <span className="font-semibold text-gray-900">To:</span>
-                      <span className="text-gray-600">All Co-Speakers</span>
+                      <span className="text-gray-600">All Speakers</span>
                     </div>
                     <div className="mt-2">
                       <h5 className="font-semibold text-gray-900">
-                        Collaboration guidelines for your joint presentation
+                        Collaboration guidelines for your presentation
                       </h5>
                     </div>
                   </div>
@@ -2549,7 +2478,7 @@ export default async function BrandingPage() {
                       eventLocation={`${conference.city}, ${conference.country}`}
                       eventDate="June 15, 2025"
                       eventUrl={`https://${domain}/`}
-                      subject="Collaboration guidelines for your joint presentation"
+                      subject="Collaboration guidelines for your presentation"
                       message="Dear Alex Chen, Jordan Kim, and Sam Taylor,\n\nSince you're presenting together, we wanted to share some guidelines for coordinating your presentation.\n\nPlease coordinate who will handle which sections and ensure your combined presentation fits within the allocated 45-minute slot including Q&A.\n\nWe've also arranged for a shared rehearsal space the day before the conference."
                       senderName="Conference Team"
                       socialLinks={conference.social_links || []}
@@ -2769,8 +2698,20 @@ export default async function BrandingPage() {
                     <BroadcastEmailTemplate
                       subject="Early Bird Tickets Now Available!"
                       recipientName="Community Member"
+                      eventName={conference.title}
+                      eventLocation={`${conference.city}, ${conference.country}`}
+                      eventDate={new Date(
+                        conference.start_date,
+                      ).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                      eventUrl={`https://${conference.domains[0]}`}
+                      socialLinks={conference.social_links || []}
+                      unsubscribeUrl="https://example.com/unsubscribe" // Example unsubscribe URL for demo
                       content={`
-                        <p>We're thrilled to announce that early bird tickets for Cloud Native Bergen 2025 are now available!</p>
+                        <p>We're thrilled to announce that early bird tickets for ${conference.title} are now available!</p>
 
                         <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎟️ Ticket Information</h2>
                         <ul>

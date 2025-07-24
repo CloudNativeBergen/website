@@ -6,6 +6,8 @@ import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { SpeakerEmailTemplate } from '@/components/email/SpeakerEmailTemplate'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { PortableTextBlock } from '@portabletext/editor'
 
 interface SpeakerEmailModalProps {
   isOpen: boolean
@@ -29,7 +31,7 @@ export function SpeakerEmailModal({
   fromEmail,
 }: SpeakerEmailModalProps) {
   const { showNotification } = useNotification()
-  const [initialMessage, setInitialMessage] = useState('')
+  const [initialMessage, setInitialMessage] = useState<PortableTextBlock[]>([])
 
   const recipientDisplay = (
     <div className="flex flex-wrap gap-2">
@@ -59,7 +61,8 @@ export function SpeakerEmailModal({
   useEffect(() => {
     if (isOpen) {
       const greeting = `Dear ${greetingNames},\n\n`
-      setInitialMessage(greeting)
+      const portableTextBlocks = convertStringToPortableTextBlocks(greeting)
+      setInitialMessage(portableTextBlocks)
     }
   }, [isOpen, greetingNames])
 
@@ -73,10 +76,11 @@ export function SpeakerEmailModal({
 
   const handleSend = async ({
     subject,
-    message,
+    messageHTML,
   }: {
     subject: string
     message: string
+    messageHTML: string
   }) => {
     // Use the multi-speaker endpoint for all cases
     const response = await fetch('/admin/api/speakers/email/multi', {
@@ -88,7 +92,7 @@ export function SpeakerEmailModal({
         proposalId: proposal._id,
         speakerIds: speakers.map((s) => s.id),
         subject,
-        message,
+        message: messageHTML, // Use the HTML version for email
       }),
     })
 
@@ -132,10 +136,11 @@ export function SpeakerEmailModal({
   // Create preview component
   const createPreview = ({
     subject,
-    message,
+    messageHTML,
   }: {
     subject: string
     message: string
+    messageHTML: string
   }) => {
     // Extract conference information with type guard
     const conference = proposal.conference
@@ -153,7 +158,7 @@ export function SpeakerEmailModal({
         eventDate={conference.start_date || 'TBD'}
         eventUrl={`https://${domain}/`}
         subject={subject}
-        message={message}
+        message={messageHTML} // Use the HTML version for proper formatting
         senderName="Conference Team"
         socialLinks={conference.social_links || []}
       />

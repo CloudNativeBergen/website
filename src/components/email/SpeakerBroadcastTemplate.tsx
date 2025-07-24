@@ -9,6 +9,7 @@ export interface SpeakerBroadcastTemplateProps {
   eventDate: string
   eventUrl: string
   socialLinks?: string[]
+  unsubscribeUrl?: string // Optional unsubscribe URL for Resend broadcasts
   content: React.ReactNode // Rich text content from PortableText
 }
 
@@ -20,6 +21,7 @@ export function SpeakerBroadcastTemplate({
   eventDate,
   eventUrl,
   socialLinks,
+  unsubscribeUrl,
   content,
 }: SpeakerBroadcastTemplateProps) {
   const contentStyle: React.CSSProperties = {
@@ -40,6 +42,7 @@ export function SpeakerBroadcastTemplate({
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks || []}
+      unsubscribeUrl={unsubscribeUrl}
     >
       <div style={contentStyle}>{content}</div>
     </BaseEmailTemplate>
