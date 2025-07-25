@@ -153,17 +153,12 @@ export default async function Profile({ params }: Props) {
                     )}
                   </div>
 
-                  {/* Speaker Flags */}
-                  {speaker.flags && speaker.flags.length > 0 && (
-                    <div className="mb-6 flex flex-wrap justify-center gap-2 lg:justify-start">
-                      {speaker.flags.map((flag) => (
-                        <span
-                          key={flag}
-                          className="rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-xs font-medium text-brand-cloud-blue"
-                        >
-                          {flags.get(flag as Flags)}
-                        </span>
-                      ))}
+                  {/* Local Speaker Flag */}
+                  {speaker.flags?.includes(Flags.localSpeaker) && (
+                    <div className="mb-6 flex justify-center lg:justify-start">
+                      <span className="rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-xs font-medium text-brand-cloud-blue">
+                        {flags.get(Flags.localSpeaker)}
+                      </span>
                     </div>
                   )}
 
