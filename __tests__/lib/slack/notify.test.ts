@@ -72,7 +72,7 @@ describe('Slack Notifications', () => {
 
     // Mock getSpeaker to return test data
     mockGetSpeaker.mockResolvedValue({
-      speaker: { 
+      speaker: {
         _id: 'test-speaker',
         _rev: 'test-rev',
         _createdAt: '2024-01-01T00:00:00Z',
