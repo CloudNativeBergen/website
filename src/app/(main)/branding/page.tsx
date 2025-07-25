@@ -44,6 +44,7 @@ import {
   PatternExample,
   ButtonShowcase,
   DownloadSpeakerImage,
+  ExpandableEmailTemplate,
 } from '@/components/branding'
 import { colorPalette, typography } from '@/lib/branding/data'
 
@@ -53,10 +54,10 @@ import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
   SpeakerBroadcastTemplate,
-  SpeakerEmailTemplate,
   BroadcastEmailTemplate,
   BaseEmailTemplate,
 } from '@/components/email'
+import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { CallToAction } from '@/components/CallToAction'
 import { Format } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
@@ -1786,7 +1787,7 @@ export default async function BrandingPage() {
                   <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                     <TalkPromotion
                       title="Building Resilient Microservices"
-                      speaker="Dr. Sarah Chen"
+                      speaker="Dr. Example McDemo"
                       format={Format.presentation_45}
                       level="intermediate"
                       topic="Architecture"
@@ -1822,7 +1823,7 @@ export default async function BrandingPage() {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                     <TalkPromotion
                       title="CI/CD in 10 Minutes"
-                      speaker="Alex Kim"
+                      speaker="Demo Testberg"
                       format={Format.lightning_10}
                       level="beginner"
                       variant="compact"
@@ -1876,7 +1877,7 @@ export default async function BrandingPage() {
                     title="The Future of Cloud Native Computing"
                     speaker="Dr. Kubernetes Expert"
                     format={Format.presentation_45}
-                    date="March 15, 2025"
+                    date="Example Day, 30th Fictionary 2099"
                     time="14:00 - 14:45"
                     location="Main Stage"
                     description="Explore the next generation of cloud native technologies and their impact on modern software development. This keynote will cover emerging trends in container orchestration, serverless computing, and edge computing."
@@ -1895,7 +1896,7 @@ export default async function BrandingPage() {
                       title="Workshop: GitOps with ArgoCD"
                       speaker="DevOps Specialist"
                       format={Format.workshop_120}
-                      date="March 16, 2025"
+                      date="Demo Day, 31st Examplery 2099"
                       time="09:00 - 11:00"
                       location="Workshop Room A"
                       description="Hands-on workshop covering GitOps principles and practical implementation with ArgoCD."
@@ -1906,7 +1907,7 @@ export default async function BrandingPage() {
                       title="Lightning: WebAssembly & Cloud"
                       speaker="WASM Enthusiast"
                       format={Format.lightning_10}
-                      date="March 15, 2025"
+                      date="Sample Day, 1st Testuary 2099"
                       time="16:30 - 16:40"
                       location="Lightning Stage"
                       description="Quick dive into how WebAssembly is changing cloud computing."
@@ -1917,7 +1918,7 @@ export default async function BrandingPage() {
                       title="Observability at Scale"
                       speaker="SRE Lead"
                       format={Format.presentation_25}
-                      date="March 15, 2025"
+                      date="Mock Day, 15th Demober 2099"
                       location="Tech Stage"
                       description="Learn to monitor and observe large-scale distributed systems effectively."
                       variant="social"
@@ -2264,145 +2265,51 @@ export default async function BrandingPage() {
 
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
               {/* Proposal Acceptance Email */}
-              <div>
-                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-fresh-green">
-                  ✅ Proposal Acceptance Email
-                </h4>
-                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
-                  Celebratory tone with clear next steps and confirmation
-                  requirements.
-                </p>
-
-                {/* Email Client Frame */}
-                <div className="rounded-xl bg-gray-100 shadow-2xl">
-                  {/* Email Client Header */}
-                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      </div>
-                      <div className="font-inter text-sm font-medium text-gray-600">
-                        Mail
-                      </div>
-                      <div className="w-16"></div>
-                    </div>
-                  </div>
-
-                  {/* Email Header Bar */}
-                  <div className="border-b border-gray-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-gray-900">
-                          From:
-                        </span>
-                        <span className="text-gray-600">
-                          {conference.contact_email}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">Today 2:30 PM</div>
-                    </div>
-                    <div className="mt-1 flex items-center space-x-4 text-sm">
-                      <span className="font-semibold text-gray-900">To:</span>
-                      <span className="text-gray-600">
-                        alex.johnson@example.com
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <h5 className="font-semibold text-gray-900">
-                        🎉 Your proposal has been accepted!
-                      </h5>
-                    </div>
-                  </div>
-
-                  {/* Email Content */}
-                  <div className="rounded-b-lg bg-white p-6">
-                    <ProposalAcceptTemplate
-                      speakerName="Alex Johnson"
-                      proposalTitle="Building Resilient Microservices with Kubernetes"
-                      eventName={conference.title}
-                      eventLocation={`${conference.city}, ${conference.country}`}
-                      eventDate="June 15, 2025"
-                      eventUrl={`https://${domain}/`}
-                      confirmUrl={`https://${domain}/confirm/abc123`}
-                      comment="We were particularly impressed with your hands-on approach and real-world examples. We'd love to have you present in the main auditorium."
-                      socialLinks={conference.social_links}
-                    />
-                  </div>
-                </div>
-              </div>
+              <ExpandableEmailTemplate
+                title="✅ Proposal Acceptance Email"
+                description="Celebratory tone with clear next steps and confirmation requirements."
+                className="text-brand-fresh-green"
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="demo.speaker@example-demo.com"
+                emailSubject="🎉 Your proposal has been accepted!"
+                emailTime="Today 2:30 PM"
+              >
+                <ProposalAcceptTemplate
+                  speakerName="Demo Speaker"
+                  proposalTitle="Building Resilient Microservices with Kubernetes"
+                  eventName={conference.title}
+                  eventLocation="Example City, Fictionaland"
+                  eventDate="30th Fictionary 2099"
+                  eventUrl={`https://${domain}/`}
+                  confirmUrl={`https://${domain}/confirm/abc123`}
+                  comment="We were particularly impressed with your hands-on approach and real-world examples. We'd love to have you present in the main auditorium."
+                  socialLinks={conference.social_links}
+                />
+              </ExpandableEmailTemplate>
 
               {/* Proposal Rejection Email */}
-              <div>
-                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-slate-gray">
-                  📧 Proposal Rejection Email
-                </h4>
-                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
-                  Professional and encouraging tone while maintaining community
-                  connection.
-                </p>
-
-                {/* Email Client Frame */}
-                <div className="rounded-xl bg-gray-100 shadow-2xl">
-                  {/* Email Client Header */}
-                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      </div>
-                      <div className="font-inter text-sm font-medium text-gray-600">
-                        Mail
-                      </div>
-                      <div className="w-16"></div>
-                    </div>
-                  </div>
-
-                  {/* Email Header Bar */}
-                  <div className="border-b border-gray-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-gray-900">
-                          From:
-                        </span>
-                        <span className="text-gray-600">
-                          {conference.contact_email}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Today 10:15 AM
-                      </div>
-                    </div>
-                    <div className="mt-1 flex items-center space-x-4 text-sm">
-                      <span className="font-semibold text-gray-900">To:</span>
-                      <span className="text-gray-600">
-                        sarah.chen@example.com
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <h5 className="font-semibold text-gray-900">
-                        Thank you for your proposal submission
-                      </h5>
-                    </div>
-                  </div>
-
-                  {/* Email Content */}
-                  <div className="rounded-b-lg bg-white p-6">
-                    <ProposalRejectTemplate
-                      speakerName="Sarah Chen"
-                      proposalTitle="Advanced Container Security Patterns"
-                      eventName={conference.title}
-                      eventLocation={`${conference.city}, ${conference.country}`}
-                      eventDate="June 15, 2025"
-                      eventUrl={`https://${domain}/`}
-                      comment="Your proposal showed great depth in security practices. While we couldn't include it this year due to similar topics already selected, we encourage you to submit for our next event."
-                      socialLinks={conference.social_links}
-                    />
-                  </div>
-                </div>
-              </div>
+              <ExpandableEmailTemplate
+                title="📧 Proposal Rejection Email"
+                description="Professional and encouraging tone while maintaining community connection."
+                className="text-brand-slate-gray"
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="test.speaker@demo-examples.com"
+                emailSubject="Thank you for your proposal submission"
+                emailTime="Today 10:15 AM"
+              >
+                <ProposalRejectTemplate
+                  speakerName="Test McExample"
+                  proposalTitle="Advanced Container Security Patterns"
+                  eventName={conference.title}
+                  eventLocation={`${conference.city}, ${conference.country}`}
+                  eventDate="June 15, 2025"
+                  eventUrl={`https://${domain}/`}
+                  comment="Your proposal showed great depth in security practices. While we couldn't include it this year due to similar topics already selected, we encourage you to submit for our next event."
+                  socialLinks={conference.social_links}
+                />
+              </ExpandableEmailTemplate>
             </div>
           </div>
 
@@ -2418,136 +2325,28 @@ export default async function BrandingPage() {
 
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
               {/* Speaker Email */}
-              <div>
-                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-cloud-blue">
-                  📩 Speaker Email
-                </h4>
-                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
-                  Direct communication with speakers on their proposals,
-                  supporting both individual and multi-speaker conversations.
-                </p>
-
-                <div className="rounded-xl bg-gray-100 shadow-2xl">
-                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      </div>
-                      <div className="font-inter text-sm font-medium text-gray-600">
-                        Mail
-                      </div>
-                      <div className="w-16"></div>
-                    </div>
-                  </div>
-
-                  <div className="border-b border-gray-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-gray-900">
-                          From:
-                        </span>
-                        <span className="text-gray-600">
-                          {conference.contact_email}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">Today 3:20 PM</div>
-                    </div>
-                    <div className="mt-1 flex items-center space-x-4 text-sm">
-                      <span className="font-semibold text-gray-900">To:</span>
-                      <span className="text-gray-600">All Speakers</span>
-                    </div>
-                    <div className="mt-2">
-                      <h5 className="font-semibold text-gray-900">
-                        Collaboration guidelines for your presentation
-                      </h5>
-                    </div>
-                  </div>
-
-                  <div className="rounded-b-lg bg-white p-6">
-                    <SpeakerEmailTemplate
-                      speakers={[
-                        { name: 'Alex Chen', email: 'alex.chen@example.com' },
-                        { name: 'Jordan Kim', email: 'jordan.kim@example.com' },
-                        { name: 'Sam Taylor', email: 'sam.taylor@example.com' },
-                      ]}
-                      proposalTitle="Building Cloud Native Applications with Microservices"
-                      proposalUrl={`https://${domain}/admin/proposals/456`}
-                      eventName={conference.title}
-                      eventLocation={`${conference.city}, ${conference.country}`}
-                      eventDate="June 15, 2025"
-                      eventUrl={`https://${domain}/`}
-                      subject="Collaboration guidelines for your presentation"
-                      message="Dear Alex Chen, Jordan Kim, and Sam Taylor,\n\nSince you're presenting together, we wanted to share some guidelines for coordinating your presentation.\n\nPlease coordinate who will handle which sections and ensure your combined presentation fits within the allocated 45-minute slot including Q&A.\n\nWe've also arranged for a shared rehearsal space the day before the conference."
-                      senderName="Conference Team"
-                      socialLinks={conference.social_links || []}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Speaker Broadcast Email */}
-              <div>
-                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-fresh-green">
-                  📢 Speaker Broadcast Email
-                </h4>
-                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
-                  Rich content broadcasts to all confirmed speakers with
-                  conference updates and announcements.
-                </p>
-
-                <div className="rounded-xl bg-gray-100 shadow-2xl">
-                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      </div>
-                      <div className="font-inter text-sm font-medium text-gray-600">
-                        Mail
-                      </div>
-                      <div className="w-16"></div>
-                    </div>
-                  </div>
-
-                  <div className="border-b border-gray-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-gray-900">
-                          From:
-                        </span>
-                        <span className="text-gray-600">
-                          {conference.contact_email}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Yesterday 9:00 AM
-                      </div>
-                    </div>
-                    <div className="mt-1 flex items-center space-x-4 text-sm">
-                      <span className="font-semibold text-gray-900">To:</span>
-                      <span className="text-gray-600">All Speakers</span>
-                    </div>
-                    <div className="mt-2">
-                      <h5 className="font-semibold text-gray-900">
-                        Speaker Dinner & Conference Updates
-                      </h5>
-                    </div>
-                  </div>
-
-                  <div className="rounded-b-lg bg-white p-6">
-                    <SpeakerBroadcastTemplate
-                      subject="Speaker Dinner & Conference Updates"
-                      speakerName="Fellow Speaker"
-                      eventName={conference.title}
-                      eventLocation={`${conference.city}, ${conference.country}`}
-                      eventDate="June 15, 2025"
-                      eventUrl={`https://${domain}/`}
-                      socialLinks={conference.social_links}
-                      content={
-                        <div>
+              <ExpandableEmailTemplate
+                title="📩 Speaker Email"
+                description="Direct communication with speakers on their proposals, supporting both individual and multi-speaker conversations."
+                className="text-brand-cloud-blue"
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="All Speakers"
+                emailSubject="Collaboration guidelines for your presentation"
+                emailTime="Today 3:20 PM"
+              >
+                <BaseEmailTemplate
+                  title="Collaboration guidelines for your presentation"
+                  eventName={conference.title}
+                  eventLocation="Demo City, Sampleland"
+                  eventDate="31st Demober 2099"
+                  eventUrl={`https://${domain}/`}
+                  socialLinks={conference.social_links || []}
+                  customContent={{
+                    body: (
+                      <>
+                        {/* Rich PortableText Content Example */}
+                        <div style={{ marginBottom: '24px' }}>
                           <p
                             style={{
                               fontSize: '16px',
@@ -2557,8 +2356,25 @@ export default async function BrandingPage() {
                               color: '#334155',
                             }}
                           >
-                            We&apos;re excited to share some important updates
-                            as we approach the conference date!
+                            Dear Demo Testson, Sample McExample, and Fictitious
+                            Speaker,
+                          </p>
+
+                          <p
+                            style={{
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                              marginBottom: '16px',
+                              marginTop: '0',
+                              color: '#334155',
+                            }}
+                          >
+                            Since you&apos;re presenting together, we wanted to
+                            share some{' '}
+                            <strong style={{ color: '#1D4ED8' }}>
+                              important guidelines
+                            </strong>{' '}
+                            for coordinating your presentation.
                           </p>
 
                           <h3
@@ -2572,37 +2388,9 @@ export default async function BrandingPage() {
                               fontWeight: '600',
                             }}
                           >
-                            🍽️ Speaker Dinner - June 14th
+                            📋 Key Points to Consider
                           </h3>
-                          <p
-                            style={{
-                              fontSize: '16px',
-                              lineHeight: '1.6',
-                              marginBottom: '16px',
-                              marginTop: '0',
-                              color: '#334155',
-                            }}
-                          >
-                            Join us for an exclusive speaker dinner at Lysverket
-                            restaurant (19:00). This is a great opportunity to
-                            connect with fellow speakers before the conference.
-                            Please confirm your attendance by replying to this
-                            email.
-                          </p>
 
-                          <h3
-                            style={{
-                              color: '#1D4ED8',
-                              marginTop: '24px',
-                              marginBottom: '12px',
-                              fontFamily:
-                                '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                              fontSize: '18px',
-                              fontWeight: '600',
-                            }}
-                          >
-                            📋 Final Checklist
-                          </h3>
                           <ul
                             style={{
                               margin: '0 0 16px 0',
@@ -2613,23 +2401,526 @@ export default async function BrandingPage() {
                             }}
                           >
                             <li style={{ marginBottom: '8px' }}>
-                              Test your slides with our AV team (contact details
-                              below)
+                              Please coordinate who will handle which sections
                             </li>
                             <li style={{ marginBottom: '8px' }}>
-                              Review the updated schedule on our website
+                              Ensure your combined presentation fits within the
+                              allocated{' '}
+                              <strong style={{ color: '#1D4ED8' }}>
+                                45-minute slot
+                              </strong>{' '}
+                              including Q&A
                             </li>
                             <li style={{ marginBottom: '8px' }}>
-                              Prepare for the speaker meet & greet (30 min
-                              before your talk)
+                              Practice smooth transitions between speakers
                             </li>
                           </ul>
+
+                          <p
+                            style={{
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                              marginBottom: '16px',
+                              marginTop: '0',
+                              color: '#334155',
+                            }}
+                          >
+                            We&apos;ve also arranged for a{' '}
+                            <em style={{ color: '#7C3AED' }}>
+                              shared rehearsal space
+                            </em>{' '}
+                            the day before the conference.
+                          </p>
+
+                          <h4
+                            style={{
+                              color: '#1D4ED8',
+                              marginTop: '20px',
+                              marginBottom: '10px',
+                              fontFamily:
+                                '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                              fontSize: '16px',
+                              fontWeight: '600',
+                            }}
+                          >
+                            ⚙️ Technical Requirements
+                          </h4>
+
+                          <ol
+                            style={{
+                              margin: '0 0 16px 0',
+                              paddingLeft: '20px',
+                              color: '#334155',
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                            }}
+                          >
+                            <li style={{ marginBottom: '8px' }}>
+                              Each speaker should test their laptop with our AV
+                              equipment
+                            </li>
+                            <li style={{ marginBottom: '8px' }}>
+                              Have backup slides on a USB drive
+                            </li>
+                            <li style={{ marginBottom: '8px' }}>
+                              Consider using a shared slide deck for seamless
+                              transitions
+                            </li>
+                          </ol>
+
+                          <p
+                            style={{
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                              marginBottom: '16px',
+                              marginTop: '0',
+                              color: '#334155',
+                            }}
+                          >
+                            Looking forward to your presentation!
+                          </p>
+
+                          <p
+                            style={{
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                              marginBottom: '0',
+                              marginTop: '0',
+                              color: '#334155',
+                            }}
+                          >
+                            Best regards,
+                            <br />
+                            <strong>Conference Team</strong>
+                          </p>
                         </div>
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
+
+                        {/* Proposal Section */}
+                        <div
+                          style={{
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #E5E7EB',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            marginBottom: '24px',
+                          }}
+                        >
+                          <h4
+                            style={{
+                              color: '#1D4ED8',
+                              fontSize: '16px',
+                              fontWeight: '600',
+                              margin: '0 0 8px 0',
+                              fontFamily:
+                                '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                            }}
+                          >
+                            Your Proposal
+                          </h4>
+                          <p
+                            style={{
+                              fontSize: '16px',
+                              fontWeight: '600',
+                              color: '#334155',
+                              margin: '0 0 4px 0',
+                            }}
+                          >
+                            Building Cloud Native Applications with
+                            Microservices
+                          </p>
+                          <p
+                            style={{
+                              fontSize: '14px',
+                              color: '#64748B',
+                              margin: '0 0 8px 0',
+                            }}
+                          >
+                            Submitted for {conference.title}
+                          </p>
+                          <div style={{ marginTop: '8px' }}>
+                            <p
+                              style={{
+                                fontSize: '14px',
+                                color: '#64748B',
+                                margin: '0 0 4px 0',
+                              }}
+                            >
+                              <strong>All speakers:</strong>
+                            </p>
+                            <ul
+                              style={{
+                                margin: '4px 0 0 0',
+                                paddingLeft: '16px',
+                                color: '#64748B',
+                                fontSize: '14px',
+                              }}
+                            >
+                              <li style={{ marginBottom: '2px' }}>
+                                Demo Testson
+                                (demo.testson@fictional-examples.com)
+                              </li>
+                              <li style={{ marginBottom: '2px' }}>
+                                Sample McExample
+                                (sample.mcexample@demo-samples.com)
+                              </li>
+                              <li style={{ marginBottom: '2px' }}>
+                                Fictitious Speaker
+                                (fictitious.speaker@example-demo.com)
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        {/* Action Button */}
+                        <div
+                          style={{
+                            textAlign: 'center',
+                            marginTop: '24px',
+                            marginBottom: '24px',
+                          }}
+                        >
+                          <a
+                            href={`https://${domain}/admin/proposals/456`}
+                            style={{
+                              backgroundColor: '#1D4ED8',
+                              color: 'white',
+                              padding: '12px 24px',
+                              textDecoration: 'none',
+                              borderRadius: '8px',
+                              fontWeight: '600',
+                              display: 'inline-block',
+                              fontSize: '16px',
+                            }}
+                          >
+                            View Your Proposal
+                          </a>
+                        </div>
+                      </>
+                    ),
+                  }}
+                />
+              </ExpandableEmailTemplate>
+
+              {/* Speaker Broadcast Email */}
+              <ExpandableEmailTemplate
+                title="📢 Speaker Broadcast Email"
+                description="Rich content broadcasts to all confirmed speakers with conference updates and announcements."
+                className="text-brand-fresh-green"
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="All Speakers"
+                emailSubject="Speaker Dinner & Conference Updates"
+                emailTime="Yesterday 9:00 AM"
+              >
+                <SpeakerBroadcastTemplate
+                  subject="Speaker Dinner & Conference Updates"
+                  speakerName="Fellow Demo Speaker"
+                  eventName={conference.title}
+                  eventLocation="Sample City, Testlandia"
+                  eventDate="32nd Mockuary 2099"
+                  eventUrl={`https://${domain}/`}
+                  socialLinks={conference.social_links}
+                  content={
+                    <div>
+                      <div
+                        dangerouslySetInnerHTML={{
+                          __html: portableTextToHTML([
+                            {
+                              _type: 'block',
+                              _key: 'intro',
+                              style: 'normal',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'intro-text',
+                                  text: "We're excited to share some important updates as we approach the conference date! Thank you for being part of what promises to be an incredible event.",
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'dinner-heading',
+                              style: 'h3',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'dinner-emoji',
+                                  text: '🍽️ Speaker Dinner - June 14th',
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'dinner-info',
+                              style: 'normal',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'dinner-text1',
+                                  text: 'Join us for an exclusive speaker dinner at ',
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'dinner-text2',
+                                  text: 'Lysverket restaurant',
+                                  marks: ['strong'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'dinner-text3',
+                                  text: ' at ',
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'dinner-time',
+                                  text: '19:00',
+                                  marks: ['strong'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'dinner-text4',
+                                  text: '. This is a great opportunity to connect with fellow speakers before the conference.',
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'dinner-rsvp',
+                              style: 'normal',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'rsvp-text1',
+                                  text: 'Please ',
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'rsvp-text2',
+                                  text: 'confirm your attendance',
+                                  marks: ['strong'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'rsvp-text3',
+                                  text: ' by replying to this email or contacting us directly.',
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'checklist-heading',
+                              style: 'h3',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'checklist-emoji',
+                                  text: '📋 Final Checklist',
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'checklist-item1',
+                              style: 'normal',
+                              listItem: 'bullet',
+                              level: 1,
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'checklist-item1-text1',
+                                  text: 'Test your slides with our ',
+                                  marks: [],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'checklist-item1-text2',
+                                  text: 'AV team',
+                                  marks: ['strong'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'checklist-item1-text3',
+                                  text: ' (contact details below)',
+                                  marks: [],
+                                },
+                              ],
+                              markDefs: [],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'checklist-item2',
+                              style: 'normal',
+                              listItem: 'bullet',
+                              level: 1,
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'checklist-item2-text',
+                                  text: 'Review the updated schedule on our website',
+                                  marks: [],
+                                },
+                              ],
+                              markDefs: [],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'checklist-item3',
+                              style: 'normal',
+                              listItem: 'bullet',
+                              level: 1,
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'checklist-item3-text1',
+                                  text: 'Prepare for the speaker meet & greet (',
+                                  marks: [],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'checklist-item3-text2',
+                                  text: '30 minutes before your talk',
+                                  marks: ['em'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'checklist-item3-text3',
+                                  text: ')',
+                                  marks: [],
+                                },
+                              ],
+                              markDefs: [],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'venue-heading',
+                              style: 'h4',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'venue-emoji',
+                                  text: '📍 Venue Information',
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'venue-info',
+                              style: 'normal',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'venue-text1',
+                                  text: 'The conference will be held at ',
+                                  marks: [],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'venue-link',
+                                  text: 'Example Demo Center',
+                                  marks: ['venue-link'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'venue-text2',
+                                  text: '. Please arrive ',
+                                  marks: [],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'venue-time',
+                                  text: '30 minutes before your session',
+                                  marks: ['strong'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'venue-text3',
+                                  text: ' for a technical check.',
+                                  marks: [],
+                                },
+                              ],
+                              markDefs: [
+                                {
+                                  _key: 'venue-link',
+                                  _type: 'link',
+                                  href: 'https://fictional-venue-demo.example',
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'contact-heading',
+                              style: 'h4',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'contact-emoji',
+                                  text: '📞 Contact Information',
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'contact-info',
+                              style: 'normal',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'contact-text1',
+                                  text: 'If you have any questions, please reach out to our ',
+                                  marks: [],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'contact-text2',
+                                  text: 'speaker coordinator',
+                                  marks: ['strong'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'contact-text3',
+                                  text: ' at ',
+                                  marks: [],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'contact-email',
+                                  text: 'speakers@demo-examples.fictional',
+                                  marks: ['contact-email-link'],
+                                },
+                                {
+                                  _type: 'span',
+                                  _key: 'contact-text4',
+                                  text: '.',
+                                  marks: [],
+                                },
+                              ],
+                              markDefs: [
+                                {
+                                  _key: 'contact-email-link',
+                                  _type: 'link',
+                                  href: 'mailto:speakers@demo-examples.fictional',
+                                },
+                              ],
+                            },
+                            {
+                              _type: 'block',
+                              _key: 'closing',
+                              style: 'normal',
+                              children: [
+                                {
+                                  _type: 'span',
+                                  _key: 'closing-text',
+                                  text: 'Looking forward to seeing you soon and making this an unforgettable event together!',
+                                },
+                              ],
+                            },
+                          ]),
+                        }}
+                      />
+                    </div>
+                  }
+                />
+              </ExpandableEmailTemplate>
             </div>
           </div>
 
@@ -2645,186 +2936,101 @@ export default async function BrandingPage() {
 
             <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
               {/* Broadcast Email Template */}
-              <div>
-                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-accent-purple">
-                  📻 Community Broadcast Email
-                </h4>
-                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
-                  General audience communications with rich HTML content and
-                  unsubscribe management.
-                </p>
+              <ExpandableEmailTemplate
+                title="📻 Community Broadcast Email"
+                description="General audience communications with rich HTML content and unsubscribe management."
+                className="text-accent-purple"
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="Community Member"
+                emailSubject="Early Bird Tickets Now Available!"
+                emailTime="2 days ago 10:00 AM"
+              >
+                <BroadcastEmailTemplate
+                  subject="Early Bird Tickets Now Available!"
+                  recipientName="Community Member"
+                  eventName={conference.title}
+                  eventLocation={`${conference.city}, ${conference.country}`}
+                  eventDate={new Date(conference.start_date).toLocaleDateString(
+                    'en-US',
+                    {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    },
+                  )}
+                  eventUrl={`https://${conference.domains[0]}`}
+                  socialLinks={conference.social_links || []}
+                  unsubscribeUrl="https://example.com/unsubscribe" // Example unsubscribe URL for demo
+                  content={`
+                    <p>We're thrilled to announce that early bird tickets for ${conference.title} are now available!</p>
 
-                <div className="rounded-xl bg-gray-100 shadow-2xl">
-                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      </div>
-                      <div className="font-inter text-sm font-medium text-gray-600">
-                        Mail
-                      </div>
-                      <div className="w-16"></div>
+                    <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎟️ Ticket Information</h2>
+                    <ul>
+                      <li><strong>Early Bird Price:</strong> 299 NOK (Regular: 499 NOK)</li>
+                      <li><strong>Available Until:</strong> March 31st, 2025</li>
+                      <li><strong>Includes:</strong> Full conference access, lunch, and networking reception</li>
+                    </ul>
+
+                    <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎤 Confirmed Speakers</h2>
+                    <p>We have an amazing lineup including experts from Google, Microsoft, and the Cloud Native Computing Foundation.</p>
+
+                    <div style="text-align: center; margin: 32px 0;">
+                      <a href="https://tickets.demo-examples.fictional" style="background: linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">Get Your Ticket</a>
                     </div>
-                  </div>
-
-                  <div className="border-b border-gray-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-gray-900">
-                          From:
-                        </span>
-                        <span className="text-gray-600">
-                          {conference.contact_email}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        2 days ago 10:00 AM
-                      </div>
-                    </div>
-                    <div className="mt-1 flex items-center space-x-4 text-sm">
-                      <span className="font-semibold text-gray-900">To:</span>
-                      <span className="text-gray-600">Community Member</span>
-                    </div>
-                    <div className="mt-2">
-                      <h5 className="font-semibold text-gray-900">
-                        Early Bird Tickets Now Available!
-                      </h5>
-                    </div>
-                  </div>
-
-                  <div className="rounded-b-lg bg-white p-6">
-                    <BroadcastEmailTemplate
-                      subject="Early Bird Tickets Now Available!"
-                      recipientName="Community Member"
-                      eventName={conference.title}
-                      eventLocation={`${conference.city}, ${conference.country}`}
-                      eventDate={new Date(
-                        conference.start_date,
-                      ).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
-                      eventUrl={`https://${conference.domains[0]}`}
-                      socialLinks={conference.social_links || []}
-                      unsubscribeUrl="https://example.com/unsubscribe" // Example unsubscribe URL for demo
-                      content={`
-                        <p>We're thrilled to announce that early bird tickets for ${conference.title} are now available!</p>
-
-                        <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎟️ Ticket Information</h2>
-                        <ul>
-                          <li><strong>Early Bird Price:</strong> 299 NOK (Regular: 499 NOK)</li>
-                          <li><strong>Available Until:</strong> March 31st, 2025</li>
-                          <li><strong>Includes:</strong> Full conference access, lunch, and networking reception</li>
-                        </ul>
-
-                        <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎤 Confirmed Speakers</h2>
-                        <p>We have an amazing lineup including experts from Google, Microsoft, and the Cloud Native Computing Foundation.</p>
-
-                        <div style="text-align: center; margin: 32px 0;">
-                          <a href="https://tickets.cloudnativebergen.dev" style="background: linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">Get Your Ticket</a>
-                        </div>
-                      `}
-                    />
-                  </div>
-                </div>
-              </div>
+                  `}
+                />
+              </ExpandableEmailTemplate>
 
               {/* Base Email Template Preview */}
-              <div>
-                <h4 className="font-space-grotesk mb-4 text-xl font-semibold text-brand-slate-gray">
-                  🏗️ Base Email Template
-                </h4>
-                <p className="font-inter mb-6 text-sm text-brand-slate-gray">
-                  Foundation template providing consistent structure, branding,
-                  and email client compatibility.
-                </p>
-
-                <div className="rounded-xl bg-gray-100 shadow-2xl">
-                  <div className="rounded-t-lg bg-gray-200 px-4 py-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                        <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                      </div>
-                      <div className="font-inter text-sm font-medium text-gray-600">
-                        Mail
-                      </div>
-                      <div className="w-16"></div>
-                    </div>
-                  </div>
-
-                  <div className="border-b border-gray-200 bg-white px-4 py-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-4">
-                        <span className="font-semibold text-gray-900">
-                          From:
-                        </span>
-                        <span className="text-gray-600">
-                          {conference.contact_email}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        1 week ago 3:15 PM
-                      </div>
-                    </div>
-                    <div className="mt-1 flex items-center space-x-4 text-sm">
-                      <span className="font-semibold text-gray-900">To:</span>
-                      <span className="text-gray-600">
-                        recipient@example.com
-                      </span>
-                    </div>
-                    <div className="mt-2">
-                      <h5 className="font-semibold text-gray-900">
-                        Welcome to Cloud Native Bergen
-                      </h5>
-                    </div>
-                  </div>
-
-                  <div className="rounded-b-lg bg-white p-6">
-                    <BaseEmailTemplate
-                      title="Welcome to Cloud Native Bergen"
-                      speakerName="Taylor Johnson"
-                      proposalTitle="Getting Started with Cloud Native Development"
-                      eventName={conference.title}
-                      eventLocation={`${conference.city}, ${conference.country}`}
-                      eventDate="June 15, 2025"
-                      eventUrl={`https://${domain}/`}
-                      socialLinks={conference.social_links || []}
-                    >
-                      <p
-                        style={{
-                          fontSize: '16px',
-                          lineHeight: '1.6',
-                          marginBottom: '16px',
-                          marginTop: '0',
-                          color: '#334155',
-                        }}
-                      >
-                        Thank you for joining our cloud native community! This
-                        is the foundation template that provides consistent
-                        branding and structure for all our email communications.
-                      </p>
-                      <p
-                        style={{
-                          fontSize: '16px',
-                          lineHeight: '1.6',
-                          marginBottom: '16px',
-                          marginTop: '0',
-                          color: '#334155',
-                        }}
-                      >
-                        This template includes responsive design, social links,
-                        event details, and accessibility features that work
-                        across all major email clients.
-                      </p>
-                    </BaseEmailTemplate>
-                  </div>
-                </div>
-              </div>
+              <ExpandableEmailTemplate
+                title="🏗️ Base Email Template"
+                description="Foundation template providing consistent structure, branding, and email client compatibility."
+                className="text-brand-slate-gray"
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="recipient@example.com"
+                emailSubject="Welcome to Cloud Native Bergen"
+                emailTime="1 week ago 3:15 PM"
+              >
+                <BaseEmailTemplate
+                  title="Welcome to Cloud Native Bergen"
+                  speakerName="Taylor Johnson"
+                  proposalTitle="Getting Started with Cloud Native Development"
+                  eventName={conference.title}
+                  eventLocation={`${conference.city}, ${conference.country}`}
+                  eventDate="June 15, 2025"
+                  eventUrl={`https://${domain}/`}
+                  socialLinks={conference.social_links || []}
+                >
+                  <p
+                    style={{
+                      fontSize: '16px',
+                      lineHeight: '1.6',
+                      marginBottom: '16px',
+                      marginTop: '0',
+                      color: '#334155',
+                    }}
+                  >
+                    Thank you for joining our cloud native community! This is
+                    the foundation template that provides consistent branding
+                    and structure for all our email communications.
+                  </p>
+                  <p
+                    style={{
+                      fontSize: '16px',
+                      lineHeight: '1.6',
+                      marginBottom: '16px',
+                      marginTop: '0',
+                      color: '#334155',
+                    }}
+                  >
+                    This template includes responsive design, social links,
+                    event details, and accessibility features that work across
+                    all major email clients.
+                  </p>
+                </BaseEmailTemplate>
+              </ExpandableEmailTemplate>
             </div>
           </div>
 
