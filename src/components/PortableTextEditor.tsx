@@ -6,6 +6,7 @@ import {
   EditorProvider,
   PortableTextBlock,
   PortableTextEditable,
+  RenderAnnotationFunction,
   RenderDecoratorFunction,
   RenderListItemFunction,
   RenderStyleFunction,
@@ -23,6 +24,7 @@ import {
   H2Icon,
   H3Icon,
   ItalicIcon,
+  LinkIcon,
   ListBulletIcon,
   NumberedListIcon,
   UnderlineIcon,
@@ -32,18 +34,23 @@ const schemaDefinition = defineSchema({
   decorators: [{ name: 'strong' }, { name: 'em' }, { name: 'underline' }],
   styles: [{ name: 'h1' }, { name: 'h2' }, { name: 'h3' }],
   lists: [{ name: 'bullet' }, { name: 'number' }],
+  annotations: [
+    {
+      name: 'link',
+      type: 'object',
+      fields: [
+        {
+          name: 'href',
+          type: 'string',
+        },
+      ],
+    },
+  ],
 })
 
-type Schema = typeof schemaDefinition
-
-type Style = Schema['styles'][number]
-type StyleName = Style[keyof Style]
-
-type Decorator = Schema['decorators'][number]
-type DecoratorName = Decorator[keyof Decorator]
-
-type List = Schema['lists'][number]
-type ListName = List[keyof List]
+type StyleName = 'h1' | 'h2' | 'h3'
+type DecoratorName = 'strong' | 'em' | 'underline'
+type ListName = 'bullet' | 'number'
 
 const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
   const style = schemaType.value as StyleName | 'normal'
@@ -122,6 +129,31 @@ const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
       )
     }
   }
+}
+
+const renderAnnotation: RenderAnnotationFunction = ({
+  schemaType,
+  children,
+  value,
+}) => {
+  if (schemaType.name === 'link') {
+    const href = value?.href as string
+    return (
+      <a
+        href={href}
+        style={{
+          color: '#1D4ED8',
+          textDecoration: 'underline',
+          fontWeight: '500',
+        }}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {children}
+      </a>
+    )
+  }
+  return <>{children}</>
 }
 
 const renderDecorator: RenderDecoratorFunction = ({ schemaType, children }) => {
@@ -259,22 +291,79 @@ function ListButton({ listName }: { listName: ListName }) {
   )
 }
 
-function Toolbar() {
-  const styleButtons = schemaDefinition.styles.map(({ name }) => (
-    <StyleButton key={name} styleName={name} />
-  ))
+function LinkButton() {
+  const editor = useEditor() as Editor
+  const isSelectionCollapsed = useEditorSelector(
+    editor,
+    selectors.isSelectionCollapsed,
+  )
+  const isActive = useEditorSelector(
+    editor,
+    selectors.isActiveAnnotation('link'),
+  )
 
-  const decoratorButtons = schemaDefinition.decorators.map(({ name }) => (
-    <DecoratorButton key={name} decoratorName={name} />
-  ))
-  const listButtons = schemaDefinition.lists.map(({ name }) => (
-    <ListButton key={name} listName={name} />
-  ))
+  const handleLinkClick = () => {
+    if (isActive) {
+      // Remove existing link
+      editor.send({
+        type: 'annotation.remove',
+        annotation: {
+          name: 'link',
+        },
+      })
+      editor.send({ type: 'focus' })
+      return
+    }
+
+    // Check if text is selected for adding new link
+    if (isSelectionCollapsed) {
+      alert('Please select some text first before adding a link.')
+      return
+    }
+
+    const url = prompt('Enter URL:')
+    if (url && url.trim()) {
+      editor.send({
+        type: 'annotation.add',
+        annotation: {
+          name: 'link',
+          value: {
+            href: url.trim(),
+          },
+        },
+      })
+      editor.send({ type: 'focus' })
+    }
+  }
+
+  return (
+    <ToolbarButton isActive={isActive} onClick={handleLinkClick}>
+      <LinkIcon />
+    </ToolbarButton>
+  )
+}
+
+function Toolbar() {
+  const styleButtons =
+    schemaDefinition.styles?.map(({ name }) => (
+      <StyleButton key={name} styleName={name as StyleName} />
+    )) || []
+
+  const decoratorButtons =
+    schemaDefinition.decorators?.map(({ name }) => (
+      <DecoratorButton key={name} decoratorName={name as DecoratorName} />
+    )) || []
+
+  const listButtons =
+    schemaDefinition.lists?.map(({ name }) => (
+      <ListButton key={name} listName={name as ListName} />
+    )) || []
 
   return (
     <div className="my-2 flex gap-1">
       {styleButtons}
       {decoratorButtons}
+      <LinkButton />
       {listButtons}
     </div>
   )
@@ -353,6 +442,7 @@ export function PortableTextEditor({
           }}
           renderStyle={renderStyle}
           renderDecorator={renderDecorator}
+          renderAnnotation={renderAnnotation}
           renderBlock={({ children }) => {
             return <>{children}</>
           }}
