@@ -1,4 +1,4 @@
-import { Action } from '@/lib/proposal/types'
+import { Action } from '../types'
 import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
@@ -9,7 +9,7 @@ import {
   createTemplateProps,
   type ProposalAcceptTemplateProps,
   type ProposalRejectTemplateProps,
-} from './email-types'
+} from './types'
 
 function getEmailTemplate(
   action: Action,

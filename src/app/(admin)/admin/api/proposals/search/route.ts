@@ -1,7 +1,7 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { searchProposals } from '@/lib/proposal/sanity'
+import { searchProposals } from '@/lib/proposal/server'
 import {
   proposalListResponse,
   proposalListResponseError,

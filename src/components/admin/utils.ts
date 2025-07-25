@@ -1,11 +1,16 @@
 import { Status } from '@/lib/proposal/types'
 
 /**
- * Utility function to get consistent status badge styling across admin components
+ * Legacy utility function to get consistent status badge styling across admin components
+ * @deprecated Use getStatusBadgeConfig from @/lib/proposal/formatting instead
  * @param status - The proposal status
  * @returns CSS classes for status badge styling
  */
 export function getStatusBadgeStyle(status: Status): string {
+  console.warn(
+    'getStatusBadgeStyle is deprecated. Use getStatusBadgeConfig from @/lib/proposal/formatting instead.',
+  )
+
   switch (status) {
     case Status.accepted:
       return 'bg-green-100 text-green-800 ring-green-600/20'

@@ -5,7 +5,7 @@ import { StarIcon } from '@heroicons/react/24/solid'
 import { PaperAirplaneIcon, ArrowRightIcon } from '@heroicons/react/24/outline'
 import { Review, ReviewBase } from '@/lib/review/types'
 import { adminPostReview } from '@/lib/review/client'
-import { adminFetchNextUnreviewedProposal } from '@/lib/proposal/client'
+import { adminFetchNextUnreviewedProposal } from '@/lib/proposal'
 import { useNotification } from './NotificationProvider'
 import { useRouter } from 'next/navigation'
 

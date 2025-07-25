@@ -8,7 +8,7 @@ import {
   putProfile,
 } from '@/lib/profile/client'
 import { ProfileEmail } from '@/lib/profile/types'
-import { postProposal } from '@/lib/proposal/client'
+import { postProposal } from '@/lib/proposal'
 import {
   Audience,
   audiences as audiencesMap,

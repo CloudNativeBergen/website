@@ -17,7 +17,7 @@ import {
   BellIcon,
 } from '@heroicons/react/20/solid'
 import { Speaker } from '@/lib/speaker/types'
-import { postProposalAction } from '@/lib/proposal/client'
+import { postProposalAction } from '@/lib/proposal'
 import { TrashIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 

@@ -16,7 +16,7 @@ import {
 import Image from 'next/image'
 import { sanityImage } from '@/lib/sanity/client'
 import { Format } from '@/lib/proposal/types'
-import { formatConfig } from '@/lib/proposal/formatConfig'
+import { formatConfig } from '@/lib/proposal'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import Link from 'next/link'
 

@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { SpeakerBroadcastTemplate } from '@/components/email/SpeakerBroadcastTemplate'
-import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
 
 interface BroadcastEmailModalProps {

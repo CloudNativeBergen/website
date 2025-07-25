@@ -1,5 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getProposals } from '@/lib/proposal/sanity'
+import { getProposals } from '@/lib/proposal/server'
 import { Status, ProposalExisting } from '@/lib/proposal/types'
 import { ConferenceSchedule } from '@/lib/conference/types'
 import type { Conference } from '@/lib/conference/types'

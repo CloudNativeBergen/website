@@ -3,7 +3,7 @@
  * This ensures type consistency across the email system
  */
 
-import { Action } from './types'
+import { Action } from '../types'
 
 export interface BaseEmailTemplateProps {
   speakerName: string

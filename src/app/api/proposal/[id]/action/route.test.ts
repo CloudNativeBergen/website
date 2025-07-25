@@ -5,7 +5,7 @@
 
 // All mocks must be declared before any imports that use them
 const mockSendAcceptRejectNotification = jest.fn() as jest.MockedFunction<
-  typeof import('@/lib/proposal/notification').sendAcceptRejectNotification
+  typeof import('@/lib/proposal/server').sendAcceptRejectNotification
 >
 const mockGetConferenceForCurrentDomain = jest.fn() as jest.MockedFunction<
   typeof import('@/lib/conference/sanity').getConferenceForCurrentDomain
@@ -21,7 +21,7 @@ jest.mock('resend')
 
 import { jest, it, describe, expect, beforeAll, afterEach } from '@jest/globals'
 import { testApiHandler } from 'next-test-api-route-handler'
-import { actionStateMachine } from '@/lib/proposal/states'
+import { actionStateMachine } from '@/lib/proposal'
 import { clientReadUncached, clientWrite } from '@/lib/sanity/client'
 import {
   draftProposal,
@@ -37,7 +37,7 @@ import { Action, Status } from '@/lib/proposal/types'
 import * as appHandler from './route'
 
 // Import mocked functions - they should now be properly mocked
-import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
+import { sendAcceptRejectNotification } from '@/lib/proposal/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 // Debug: Let's see what the imported functions are

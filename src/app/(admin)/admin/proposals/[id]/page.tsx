@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { ClockIcon } from '@heroicons/react/20/solid'
-import { getProposal } from '@/lib/proposal/sanity'
+import { getProposalSanity } from '@/lib/proposal/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
   ProposalDetail,
@@ -31,7 +31,7 @@ export default async function ProposalDetailPage({
 
   try {
     const { domain } = await getConferenceForCurrentDomain({})
-    const { proposal, proposalError } = await getProposal({
+    const { proposal, proposalError } = await getProposalSanity({
       id,
       speakerId: '', // For admin view, we don't need to filter by speaker
       isOrganizer: true,

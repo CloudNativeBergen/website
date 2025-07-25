@@ -6,7 +6,7 @@ import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { SpeakerEmailTemplate } from '@/components/email/SpeakerEmailTemplate'
-import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
 
 interface SpeakerEmailModalProps {

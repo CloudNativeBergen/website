@@ -1,10 +1,7 @@
 import { ProposalInput } from '@/lib/proposal/types'
 import { NextAuthRequest, auth } from '@/lib/auth'
-import {
-  convertJsonToProposal,
-  validateProposal,
-} from '@/lib/proposal/validation'
-import { getProposal, updateProposal } from '@/lib/proposal/sanity'
+import { convertJsonToProposal, validateProposal } from '@/lib/proposal'
+import { getProposalSanity, updateProposal } from '@/lib/proposal/server'
 import { proposalResponse, proposalResponseError } from '@/lib/proposal/server'
 
 export const dynamic = 'force-dynamic'
@@ -33,7 +30,7 @@ export const GET = auth(
     }
 
     const { proposal: existingProposal, proposalError: error } =
-      await getProposal({
+      await getProposalSanity({
         id: id as string,
         speakerId: req.auth.speaker._id,
       })
@@ -97,10 +94,11 @@ export const PUT = auth(
       })
     }
 
-    const { proposal: existingProposal, proposalError } = await getProposal({
-      id: id as string,
-      speakerId: req.auth.speaker._id,
-    })
+    const { proposal: existingProposal, proposalError } =
+      await getProposalSanity({
+        id: id as string,
+        speakerId: req.auth.speaker._id,
+      })
     if (proposalError) {
       return proposalResponseError({
         error: proposalError,

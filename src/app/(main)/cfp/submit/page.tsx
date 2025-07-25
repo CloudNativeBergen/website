@@ -8,7 +8,7 @@ import {
   FormError,
   ProposalInput,
 } from '@/lib/proposal/types'
-import { getProposal } from '@/lib/proposal/sanity'
+import { getProposalSanity } from '@/lib/proposal/server'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalForm } from '@/components/ProposalForm'
 import { auth } from '@/lib/auth'
@@ -86,11 +86,12 @@ export default async function Submit({
 
   try {
     if (proposalId) {
-      const { proposal: fetchedProposal, proposalError } = await getProposal({
-        id: proposalId,
-        speakerId: session.speaker._id,
-        isOrganizer: false,
-      })
+      const { proposal: fetchedProposal, proposalError } =
+        await getProposalSanity({
+          id: proposalId,
+          speakerId: session.speaker._id,
+          isOrganizer: false,
+        })
       if (proposalError) {
         console.error('Error loading proposal:', proposalError)
         loadingError = {

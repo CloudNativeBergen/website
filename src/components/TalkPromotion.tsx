@@ -8,7 +8,7 @@ import {
   AcademicCapIcon,
 } from '@heroicons/react/24/outline'
 import { Format } from '@/lib/proposal/types'
-import { formatConfig } from '@/lib/proposal/formatConfig'
+import { formatConfig } from '@/lib/proposal'
 import { memo, useMemo } from 'react'
 import Link from 'next/link'
 

@@ -12,6 +12,7 @@ import { SpinnerIcon } from './SocialIcons'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
 import { SpeakerAvatars } from './SpeakerAvatars'
+import { StatusBadge } from '@/lib/proposal'
 
 interface ProposalButtonAction {
   label: Action
@@ -31,50 +32,6 @@ function capitalizeFirstLetter(string: string) {
 function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text
   return text.substring(0, maxLength).replace(/\s+\S*$/, '') + '...'
-}
-
-function StatusBadge({ status }: { status: string }) {
-  let text: string
-  let colorClasses: string
-
-  switch (status) {
-    case Status.draft:
-      text = 'Draft'
-      colorClasses = 'bg-yellow-100 text-yellow-800'
-      break
-    case Status.submitted:
-      text = 'Submitted'
-      colorClasses = 'bg-blue-100 text-blue-800'
-      break
-    case Status.accepted:
-      text = 'Accepted'
-      colorClasses = 'bg-green-100 text-green-800'
-      break
-    case Status.rejected:
-      text = 'Rejected'
-      colorClasses = 'bg-red-100 text-red-800'
-      break
-    case Status.confirmed:
-      text = 'Confirmed'
-      colorClasses = 'bg-green-100 text-green-800'
-      break
-    case Status.withdrawn:
-      text = 'Withdrawn'
-      colorClasses = 'bg-gray-100 text-gray-800'
-      break
-    default:
-      text = 'Unknown'
-      colorClasses = 'bg-gray-100 text-gray-800'
-      break
-  }
-
-  return (
-    <span
-      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${colorClasses}`}
-    >
-      {text}
-    </span>
-  )
 }
 
 function ProposalActionLink({ action }: { action: ProposalButtonAction }) {
@@ -199,15 +156,15 @@ export function ProposalCard({
     <li
       key={proposal._id}
       className={clsx(
-        'col-span-1 divide-y divide-brand-cloud-gray/20 rounded-lg bg-white shadow',
-        // Status-based styling
+        'col-span-1 divide-y divide-brand-cloud-gray/20 rounded-lg border-l-4 bg-white shadow',
+        // Status-based border styling using consistent configuration
         {
-          'border-l-4 border-l-green-500': proposal.status === Status.accepted,
-          'border-l-4 border-l-blue-500': proposal.status === Status.submitted,
-          'border-l-4 border-l-yellow-500': proposal.status === Status.draft,
-          'border-l-4 border-l-green-600': proposal.status === Status.confirmed,
-          'border-l-4 border-l-red-500': proposal.status === Status.rejected,
-          'border-l-4 border-l-gray-500': proposal.status === Status.withdrawn,
+          'border-l-green-500': proposal.status === Status.accepted,
+          'border-l-blue-500': proposal.status === Status.submitted,
+          'border-l-yellow-500': proposal.status === Status.draft,
+          'border-l-green-600': proposal.status === Status.confirmed,
+          'border-l-red-500': proposal.status === Status.rejected,
+          'border-l-gray-500': proposal.status === Status.withdrawn,
         },
       )}
     >

@@ -7,7 +7,7 @@ import {
   Status,
 } from '@/lib/proposal/types'
 import speakers from './speakers'
-import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 
 // Sample topics for testing
 const sampleTopics = [

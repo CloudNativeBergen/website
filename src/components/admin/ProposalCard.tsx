@@ -1,30 +1,24 @@
 'use client'
 
-import {
-  UserIcon,
-  ClockIcon,
-  StarIcon,
-  UserPlusIcon,
-  MapPinIcon,
-  HeartIcon,
-} from '@heroicons/react/24/outline'
-import {
-  ExclamationTriangleIcon,
-  StarIcon as StarIconSolid,
-} from '@heroicons/react/24/solid'
+import { UserIcon, ClockIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import {
   ProposalExisting,
-  statuses,
   formats,
   levels,
   languages,
   audiences,
 } from '@/lib/proposal/types'
-import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { SpeakerWithReviewInfo } from '@/lib/speaker/types'
 import { SpeakerAvatars } from '../SpeakerAvatars'
-import { getStatusBadgeStyle } from './utils'
-import { calculateAverageRating } from './hooks'
+import {
+  StatusBadge,
+  SpeakerIndicators,
+  RatingDisplay,
+  MetadataRow,
+  getProposalSpeakerNames,
+  calculateAverageRating,
+} from '@/lib/proposal'
 
 interface ProposalCardProps {
   proposal: ProposalExisting
@@ -55,30 +49,7 @@ export function ProposalCard({
 
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
-  const requiresTravelFunding =
-    speakers.some((speaker) =>
-      speaker?.flags?.includes(Flags.requiresTravelFunding),
-    ) || false
-
-  // Speaker indicators
-  const isSeasonedSpeaker = speakers.some(
-    (speaker) =>
-      speaker?.previousAcceptedTalks &&
-      speaker.previousAcceptedTalks.length > 0,
-  )
-  const isNewSpeaker =
-    speakers.length === 0 ||
-    speakers.every(
-      (speaker) =>
-        !speaker?.previousAcceptedTalks ||
-        speaker.previousAcceptedTalks.length === 0,
-    )
-  const isLocalSpeaker = speakers.some((speaker) =>
-    speaker?.flags?.includes(Flags.localSpeaker),
-  )
-  const isUnderrepresentedSpeaker = speakers.some((speaker) =>
-    speaker?.flags?.includes(Flags.diverseSpeaker),
-  )
+  const speakerNames = getProposalSpeakerNames(proposal)
 
   const CardContent = () => (
     <div className="flex items-start space-x-4">
@@ -97,6 +68,7 @@ export function ProposalCard({
           </div>
         )}
       </div>
+
       <div className="min-w-0 flex-1">
         <div className="focus:outline-none">
           {/* Header row with title and status */}
@@ -104,102 +76,46 @@ export function ProposalCard({
             <h3 className="line-clamp-2 flex-1 text-sm font-medium text-gray-900">
               {proposal.title}
             </h3>
-            <span
-              className={`inline-flex flex-shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeStyle(proposal.status)}`}
-            >
-              {statuses.get(proposal.status) || proposal.status || 'Unknown'}
-            </span>
+            <StatusBadge
+              status={proposal.status}
+              variant="compact"
+              className="flex-shrink-0"
+            />
           </div>
 
           {/* Speaker name with indicators */}
           <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
             <div className="flex min-w-0 flex-1 items-center">
-              <span className="truncate font-medium">
-                {speakers.length > 0
-                  ? speakers.map((s) => s.name).join(', ')
-                  : 'Unknown Speaker'}
-              </span>
+              <span className="truncate font-medium">{speakerNames}</span>
             </div>
 
             {/* Speaker Indicators */}
             {speakers.length > 0 && (
-              <div className="ml-2 flex items-center gap-1">
-                {isSeasonedSpeaker && (
-                  <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-100 text-yellow-700"
-                    title="Seasoned speaker - has previous accepted talks"
-                  >
-                    <StarIconSolid className="h-3 w-3" />
-                  </div>
-                )}
-                {isNewSpeaker && (
-                  <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700"
-                    title="New speaker - no previous accepted talks"
-                  >
-                    <UserPlusIcon className="h-3 w-3" />
-                  </div>
-                )}
-                {isLocalSpeaker && (
-                  <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
-                    title="Local speaker"
-                  >
-                    <MapPinIcon className="h-3 w-3" />
-                  </div>
-                )}
-                {isUnderrepresentedSpeaker && (
-                  <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-purple-700"
-                    title="Underrepresented speaker"
-                  >
-                    <HeartIcon className="h-3 w-3" />
-                  </div>
-                )}
-                {requiresTravelFunding && (
-                  <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-red-700"
-                    title="Requires travel funding"
-                  >
-                    <ExclamationTriangleIcon className="h-3 w-3" />
-                  </div>
-                )}
+              <div className="ml-2">
+                <SpeakerIndicators
+                  speakers={speakers}
+                  size="md"
+                  maxVisible={5}
+                />
               </div>
             )}
           </div>
 
           {/* Metadata in compact rows */}
           <div className="space-y-1">
-            <div className="flex items-center text-sm text-gray-500">
-              <ClockIcon className="mr-1 h-4 w-4 flex-shrink-0" />
-              <span className="truncate">
-                {formats.get(proposal.format) ||
-                  proposal.format ||
-                  'Not specified'}
-              </span>
-            </div>
+            <MetadataRow icon={ClockIcon}>
+              {formats.get(proposal.format) ||
+                proposal.format ||
+                'Not specified'}
+            </MetadataRow>
 
             {/* Rating display */}
-            {reviewCount > 0 && (
-              <div className="flex items-center text-sm text-gray-500">
-                <div className="mr-2 flex items-center">
-                  {[1, 2, 3, 4, 5].map((star) =>
-                    star <= Math.round(averageRating) ? (
-                      <StarIconSolid
-                        key={star}
-                        className="h-4 w-4 text-yellow-400"
-                      />
-                    ) : (
-                      <StarIcon key={star} className="h-4 w-4 text-gray-300" />
-                    ),
-                  )}
-                </div>
-                <span className="text-xs">
-                  {averageRating.toFixed(1)} ({reviewCount} review
-                  {reviewCount !== 1 ? 's' : ''})
-                </span>
-              </div>
-            )}
+            <RatingDisplay
+              rating={averageRating}
+              reviewCount={reviewCount}
+              size="md"
+              showText={true}
+            />
 
             <div className="text-xs text-gray-500">
               {levels.get(proposal.level) ||
@@ -210,6 +126,7 @@ export function ProposalCard({
                 proposal.language ||
                 'Language not specified'}
             </div>
+
             {proposal.audiences && proposal.audiences.length > 0 && (
               <div className="line-clamp-1 text-xs text-gray-500">
                 Audience:{' '}

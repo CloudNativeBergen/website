@@ -1,7 +1,7 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { fetchNextUnreviewedProposal } from '@/lib/proposal/sanity'
+import { fetchNextUnreviewedProposal } from '@/lib/proposal/server'
 import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'

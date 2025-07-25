@@ -1,6 +1,6 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
-import { getProposal } from '@/lib/proposal/sanity'
+import { getProposalSanity } from '@/lib/proposal/server'
 import { ReviewBase } from '@/lib/review/types'
 import { createReview, updateReview } from '@/lib/review/sanity'
 import { NextResponse } from 'next/server'
@@ -25,7 +25,7 @@ export const POST = auth(
     const data = (await req.json()) as ReviewBase
 
     const { proposal: existingProposal, proposalError: checkErr } =
-      await getProposal({
+      await getProposalSanity({
         id: id as string,
         speakerId: req.auth!.speaker._id,
         isOrganizer: req.auth!.speaker.is_organizer,

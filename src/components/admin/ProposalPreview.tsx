@@ -30,7 +30,7 @@ import { Flags } from '@/lib/speaker/types'
 import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
 import { SpeakerAvatarsWithNames } from '../SpeakerAvatars'
-import { calculateAverageRating } from './hooks'
+import { calculateAverageRating } from '@/lib/proposal'
 import { formatDateSafe } from '@/lib/time'
 
 interface ProposalPreviewProps {

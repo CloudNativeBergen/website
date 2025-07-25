@@ -1,7 +1,7 @@
 'use client'
 
 import { ProposalExisting } from '@/lib/proposal/types'
-import { LevelIndicator } from '@/lib/proposal/level-indicator'
+import { LevelIndicator } from '@/lib/proposal'
 import { Level } from '@/lib/proposal/types'
 import { DraggableProposal } from './DraggableProposal'
 import { useBatchUpdates } from '@/lib/schedule/performance-utils'

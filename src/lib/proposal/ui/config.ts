@@ -4,7 +4,7 @@ import {
   WrenchScrewdriverIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/solid'
-import { Format } from './types'
+import { Format } from '../types'
 
 /**
  * Comprehensive format configuration for visual components

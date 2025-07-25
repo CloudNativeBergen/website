@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { adminSearchProposals } from '@/lib/proposal/client'
+import { adminSearchProposals } from '@/lib/proposal'
 import { ProposalExisting } from '@/lib/proposal/types'
 
 export function useProposalSearch() {

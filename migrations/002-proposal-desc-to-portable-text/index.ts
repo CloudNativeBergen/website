@@ -7,7 +7,7 @@
  *    npx sanity@latest documents validate -y
  */
 
-import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
 import { at, defineMigration, set } from '@sanity/migrate'
 

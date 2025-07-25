@@ -1,5 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getProposals } from '@/lib/proposal/sanity'
+import { getProposals } from '@/lib/proposal/server'
 import { ErrorDisplay } from '@/components/admin'
 import { ProposalsPageClient } from '@/components/admin/ProposalsPageClient'
 import { auth } from '@/lib/auth'

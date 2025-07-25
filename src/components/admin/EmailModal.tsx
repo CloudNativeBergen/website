@@ -8,7 +8,7 @@ import { XMarkIcon, EyeIcon } from '@heroicons/react/24/outline'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
-import { convertStringToPortableTextBlocks } from '@/lib/proposal/validation'
+import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 
 export interface EmailModalProps {

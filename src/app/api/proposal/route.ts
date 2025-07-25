@@ -1,8 +1,5 @@
 import { ProposalInput } from '@/lib/proposal/types'
-import {
-  convertJsonToProposal,
-  validateProposal,
-} from '@/lib/proposal/validation'
+import { convertJsonToProposal, validateProposal } from '@/lib/proposal'
 import { NextAuthRequest, auth } from '@/lib/auth'
 import {
   proposalListResponse,
@@ -10,7 +7,7 @@ import {
   proposalResponse,
   proposalResponseError,
 } from '@/lib/proposal/server'
-import { createProposal, getProposals } from '@/lib/proposal/sanity'
+import { createProposal, getProposals } from '@/lib/proposal/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notifyNewProposal } from '@/lib/slack/notify'
 

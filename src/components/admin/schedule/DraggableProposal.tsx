@@ -6,7 +6,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { formats, audiences } from '@/lib/proposal/types'
 import { getProposalDurationMinutes } from '@/lib/schedule/types'
 import { Topic } from '@/lib/topic/types'
-import { LevelIndicator, useLevelConfig } from '@/lib/proposal/level-indicator'
+import { LevelIndicator, getLevelConfig } from '@/lib/proposal'
 import {
   ClockIcon,
   UserIcon,
@@ -60,7 +60,7 @@ export function DraggableProposal({
   isDragging = false,
 }: DraggableProposalProps) {
   // Get level configuration using the utility hook
-  const levelConfig = useLevelConfig(proposal.level)
+  const levelConfig = getLevelConfig(proposal.level)
 
   // Memoize expensive calculations
   const { dragType, durationMinutes, talkSize, dragId, speakerInfo } =

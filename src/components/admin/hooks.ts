@@ -13,34 +13,7 @@ import {
 import { Speaker, Flags } from '@/lib/speaker/types'
 import { Review } from '@/lib/review/types'
 import { FilterState, ReviewStatus } from './ProposalsFilter'
-
-/**
- * Calculate the average rating for a proposal based on its reviews
- */
-export function calculateAverageRating(proposal: ProposalExisting): number {
-  if (!proposal.reviews || proposal.reviews.length === 0) {
-    return 0
-  }
-
-  const totalScores = proposal.reviews.reduce((acc, review) => {
-    const reviewObj =
-      typeof review === 'object' && 'score' in review
-        ? (review as Review)
-        : null
-    if (reviewObj && reviewObj.score) {
-      return (
-        acc +
-        reviewObj.score.content +
-        reviewObj.score.relevance +
-        reviewObj.score.speaker
-      )
-    }
-    return acc
-  }, 0)
-
-  const totalPossibleScore = proposal.reviews.length * 15 // 3 scores * 5 max each
-  return totalPossibleScore > 0 ? (totalScores / totalPossibleScore) * 5 : 0
-}
+import { calculateAverageRating } from '@/lib/proposal'
 
 /**
  * Custom hook for filtering and sorting proposals

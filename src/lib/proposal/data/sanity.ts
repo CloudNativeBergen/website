@@ -6,7 +6,7 @@ import {
 import { groq } from 'next-sanity'
 import { Reference } from 'sanity'
 import { v4 as randomUUID } from 'uuid'
-import { convertStringToPortableTextBlocks } from './validation'
+import { convertStringToPortableTextBlocks } from '../utils/validation'
 import { Review } from '@/lib/review/types'
 import {
   prepareReferenceArray,

@@ -8,10 +8,10 @@ import { proposalResponseError } from '@/lib/proposal/server'
 import { NextResponse } from 'next/server'
 import {
   deleteProposal,
-  getProposal,
+  getProposalSanity,
   updateProposalStatus,
-} from '@/lib/proposal/sanity'
-import { actionStateMachine } from '@/lib/proposal/states'
+} from '@/lib/proposal/server'
+import { actionStateMachine } from '@/lib/proposal'
 import { Speaker } from '@/lib/speaker/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { eventBus } from '@/lib/events/bus'
@@ -54,7 +54,7 @@ export const POST = auth(
       })
     }
 
-    const { proposal, proposalError } = await getProposal({
+    const { proposal, proposalError } = await getProposalSanity({
       id,
       speakerId: req.auth.speaker._id,
       isOrganizer: req.auth.speaker.is_organizer,

@@ -1,5 +1,5 @@
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
-import { sendAcceptRejectNotification } from '@/lib/proposal/notification'
+import { sendAcceptRejectNotification } from '@/lib/proposal/server'
 import { Action } from '@/lib/proposal/types'
 import { formatDate } from '@/lib/time'
 

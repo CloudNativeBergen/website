@@ -1,5 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getProposal } from '@/lib/proposal/sanity'
+import { getProposalSanity as getProposal } from '@/lib/proposal/server'
 import { SpeakerEmailTemplate } from '@/components/email/SpeakerEmailTemplate'
 import { Conference } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
@@ -85,7 +85,7 @@ export async function sendSpeakerEmail({
     // Find the speaker in the proposal
     const speakers = Array.isArray(proposal.speakers)
       ? proposal.speakers.filter(
-          (speaker) =>
+          (speaker): speaker is Speaker =>
             typeof speaker === 'object' && speaker && '_id' in speaker,
         )
       : []
@@ -322,7 +322,7 @@ export async function sendMultiSpeakerEmail({
     // Find the speakers in the proposal
     const allSpeakers = Array.isArray(proposal.speakers)
       ? proposal.speakers.filter(
-          (speaker) =>
+          (speaker): speaker is Speaker =>
             typeof speaker === 'object' && speaker && '_id' in speaker,
         )
       : []
