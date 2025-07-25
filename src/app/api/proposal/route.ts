@@ -98,7 +98,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
   // Send Slack notification for new proposal
   if (created) {
-    await notifyNewProposal(created)
+    await notifyNewProposal(created, conference)
   }
 
   return proposalResponse(created)

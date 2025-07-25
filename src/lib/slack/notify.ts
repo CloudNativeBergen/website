@@ -8,6 +8,7 @@ import {
 import { PortableTextBlock } from 'sanity'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { Action } from '@/lib/proposal/types'
+import { Conference } from '@/lib/conference/types'
 
 type SlackBlock = {
   type: string
@@ -19,6 +20,16 @@ type SlackBlock = {
   fields?: Array<{
     type: string
     text: string
+  }>
+  elements?: Array<{
+    type: string
+    text: {
+      type: string
+      text: string
+      emoji?: boolean
+    }
+    url?: string
+    action_id?: string
   }>
 }
 
@@ -98,68 +109,117 @@ function formatDescription(
     .join('\n')
 }
 
-export async function notifyNewProposal(proposal: ProposalExisting) {
-  const speakerNames = await resolveSpeakerNames(proposal)
+function getDomainFromConference(conference: Conference): string | null {
+  return conference.domains && conference.domains.length > 0
+    ? conference.domains[0]
+    : null
+}
 
-  const message = {
-    blocks: [
+function createAdminButton(
+  proposal: ProposalExisting,
+  domain: string,
+  buttonText: string,
+  actionId: string,
+): SlackBlock {
+  const adminUrl = `https://${domain}/admin/proposals/${proposal._id}`
+  return {
+    type: 'actions',
+    elements: [
       {
-        type: 'header',
+        type: 'button',
         text: {
           type: 'plain_text',
-          text: '🎉 New CFP Submission',
+          text: buttonText,
           emoji: true,
         },
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Title:*\n${proposal.title}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Speaker:*\n${speakerNames}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Format:*\n${formats.get(proposal.format) || proposal.format}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Level:*\n${levels.get(proposal.level) || proposal.level}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Language:*\n${languages.get(proposal.language) || proposal.language}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Audience:*\n${proposal.audiences ? proposal.audiences.map((aud) => audiences.get(aud) || aud).join(', ') : 'Not specified'}`,
-          },
-        ],
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*Description:*\n${formatDescription(proposal.description)}`,
-        },
+        url: adminUrl,
+        action_id: actionId,
       },
     ],
   }
+}
 
+function createProposalInfoBlocks(
+  proposal: ProposalExisting,
+  speakerNames: string,
+): SlackBlock[] {
+  return [
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Title:*\n${proposal.title}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Speaker:*\n${speakerNames}`,
+        },
+      ],
+    },
+  ]
+}
+
+export async function notifyNewProposal(
+  proposal: ProposalExisting,
+  conference: Conference,
+) {
+  const speakerNames = await resolveSpeakerNames(proposal)
+  const domain = getDomainFromConference(conference)
+
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '🎉 New CFP Submission',
+        emoji: true,
+      },
+    },
+    ...createProposalInfoBlocks(proposal, speakerNames),
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Format:*\n${formats.get(proposal.format) || proposal.format}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Level:*\n${levels.get(proposal.level) || proposal.level}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Language:*\n${languages.get(proposal.language) || proposal.language}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Audience:*\n${proposal.audiences ? proposal.audiences.map((aud) => audiences.get(aud) || aud).join(', ') : 'Not specified'}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Description:*\n${formatDescription(proposal.description)}`,
+      },
+    },
+  ]
+
+  // Only add the admin button if we have a valid domain
+  if (domain) {
+    blocks.push(
+      createAdminButton(proposal, domain, 'Review in Admin', 'review_proposal'),
+    )
+  }
+
+  const message = { blocks }
   await sendSlackMessage(message)
 }
 
@@ -188,34 +248,30 @@ function getActionText(action: Action): string {
 export async function notifyProposalStatusChange(
   proposal: ProposalExisting,
   action: Action,
+  conference: Conference,
 ) {
   const speakerNames = await resolveSpeakerNames(proposal)
+  const domain = getDomainFromConference(conference)
 
-  const message = {
-    blocks: [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: `${getActionEmoji(action)} Talk ${getActionText(action)}`,
-          emoji: true,
-        },
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: `${getActionEmoji(action)} Talk ${getActionText(action)}`,
+        emoji: true,
       },
-      {
-        type: 'section',
-        fields: [
-          {
-            type: 'mrkdwn',
-            text: `*Title:*\n${proposal.title}`,
-          },
-          {
-            type: 'mrkdwn',
-            text: `*Speaker:*\n${speakerNames}`,
-          },
-        ],
-      },
-    ],
+    },
+    ...createProposalInfoBlocks(proposal, speakerNames),
+  ]
+
+  // Only add the admin button if we have a valid domain
+  if (domain) {
+    blocks.push(
+      createAdminButton(proposal, domain, 'View in Admin', 'view_proposal'),
+    )
   }
 
+  const message = { blocks }
   await sendSlackMessage(message)
 }

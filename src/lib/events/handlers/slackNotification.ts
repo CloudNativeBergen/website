@@ -13,7 +13,11 @@ export async function handleSlackNotification(
     return
   }
 
-  await notifyProposalStatusChange(event.proposal, event.action)
+  await notifyProposalStatusChange(
+    event.proposal,
+    event.action,
+    event.conference,
+  )
 
   console.log(`Slack notification sent for proposal ${event.proposal._id}`)
 }
