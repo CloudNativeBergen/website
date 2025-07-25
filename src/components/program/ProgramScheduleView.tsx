@@ -1,0 +1,325 @@
+import React, { useState, useEffect } from 'react'
+import { Tab } from '@headlessui/react'
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { FilteredProgramData } from '@/hooks/useProgramFilter'
+import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
+import { TalkCard } from './TalkCard'
+import clsx from 'clsx'
+
+interface ProgramScheduleViewProps {
+  data: FilteredProgramData
+}
+
+interface ScheduleTrackSummary extends ScheduleTrack {
+  name: React.ReactNode
+}
+
+// Get all unique time slots across all tracks
+const getAllTimeSlots = (tracks: ScheduleTrack[]) => {
+  const timeSlots = new Set<string>()
+  tracks.forEach((track) => {
+    track.talks.forEach((talk) => {
+      timeSlots.add(talk.startTime)
+    })
+  })
+  return Array.from(timeSlots).sort()
+}
+
+// Find talk at specific time for a track
+const getTalkAtTime = (track: ScheduleTrack, startTime: string) => {
+  return track.talks.find((talk) => talk.startTime === startTime)
+}
+
+function ScheduleTabbed({
+  tracks,
+  date,
+}: {
+  tracks: ScheduleTrack[]
+  date: string
+}) {
+  const [tabOrientation, setTabOrientation] = useState('horizontal')
+
+  useEffect(() => {
+    const smMediaQuery = window.matchMedia('(min-width: 640px)')
+
+    function onMediaQueryChange({ matches }: { matches: boolean }) {
+      setTabOrientation(matches ? 'vertical' : 'horizontal')
+    }
+
+    onMediaQueryChange(smMediaQuery)
+    smMediaQuery.addEventListener('change', onMediaQueryChange)
+
+    return () => {
+      smMediaQuery.removeEventListener('change', onMediaQueryChange)
+    }
+  }, [])
+
+  return (
+    <Tab.Group
+      as="div"
+      className="mx-auto grid max-w-2xl grid-cols-1 gap-y-4 sm:grid-cols-2 lg:hidden"
+      vertical={tabOrientation === 'vertical'}
+    >
+      <Tab.List className="-mx-4 flex gap-x-4 gap-y-6 overflow-x-auto pb-4 pl-4 sm:mx-0 sm:flex-col sm:pr-8 sm:pb-0 sm:pl-0">
+        {({ selectedIndex }) => (
+          <>
+            {tracks.map((track, trackIndex) => (
+              <div
+                key={`track-${trackIndex}`}
+                className={clsx(
+                  'relative w-3/4 flex-none pr-4 sm:w-auto sm:pr-0',
+                  trackIndex !== selectedIndex && 'opacity-70',
+                )}
+              >
+                <TrackSummary
+                  track={{
+                    ...track,
+                    name: (
+                      <Tab className="ui-not-focus-visible:outline-none">
+                        <span className="absolute inset-0" />
+                        {track.trackTitle}
+                      </Tab>
+                    ),
+                  }}
+                  date={date}
+                />
+              </div>
+            ))}
+          </>
+        )}
+      </Tab.List>
+      <Tab.Panels>
+        {tracks.map((track, trackIndex) => (
+          <Tab.Panel
+            key={`track-${trackIndex}`}
+            className="ui-not-focus-visible:outline-none"
+          >
+            <TimeSlots track={track} date={date} trackIndex={trackIndex} />
+          </Tab.Panel>
+        ))}
+      </Tab.Panels>
+    </Tab.Group>
+  )
+}
+
+function TrackSummary({
+  track,
+  date,
+}: {
+  track: ScheduleTrackSummary
+  date: string
+}) {
+  return (
+    <div className="rounded-lg border border-brand-frosted-steel bg-white p-4">
+      <h3 className="font-space-grotesk text-lg font-semibold text-brand-cloud-blue">
+        <time dateTime={date}>{track.name}</time>
+      </h3>
+      <p className="font-inter mt-1 text-sm text-brand-slate-gray">
+        {track.trackDescription}
+      </p>
+    </div>
+  )
+}
+
+function TimeSlots({
+  track,
+  date,
+  trackIndex,
+  className,
+}: {
+  track: ScheduleTrack
+  date: string
+  trackIndex: number
+  className?: string
+}) {
+  return (
+    <div
+      className={clsx(
+        className,
+        'space-y-1 rounded-lg border border-brand-frosted-steel bg-white/60 px-4 py-4 shadow-xl shadow-blue-900/5 backdrop-blur',
+      )}
+    >
+      {track.talks.map((talk) => {
+        return (
+          <div key={`${trackIndex}-${talk.startTime}`} className="mb-1">
+            <TalkCard
+              talk={{
+                ...talk,
+                scheduleDate: date,
+                trackTitle: track.trackTitle,
+                trackIndex,
+              }}
+              compact={true}
+              fixedHeight={false}
+            />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ScheduleStatic({
+  tracks,
+  date,
+}: {
+  tracks: ScheduleTrack[]
+  date: string
+}) {
+  const timeSlots = getAllTimeSlots(tracks)
+
+  return (
+    <div className="hidden lg:block">
+      {/* Track Headers */}
+      <div
+        className="mb-6 grid gap-x-4"
+        style={{
+          gridTemplateColumns: `120px repeat(${tracks.length}, minmax(0, 1fr))`,
+        }}
+      >
+        <div className="font-space-grotesk text-sm font-medium text-brand-slate-gray">
+          Time
+        </div>
+        {tracks.map((track, trackIndex) => (
+          <div
+            key={`header-${trackIndex}`}
+            className="rounded-lg border border-brand-frosted-steel bg-white p-3"
+          >
+            <h3 className="font-space-grotesk text-sm font-semibold text-brand-cloud-blue">
+              {track.trackTitle}
+            </h3>
+            {track.trackDescription && (
+              <p className="font-inter mt-1 line-clamp-2 text-xs text-brand-slate-gray">
+                {track.trackDescription}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Time-synchronized grid */}
+      <div className="space-y-2">
+        {timeSlots.map((timeSlot) => {
+          return (
+            <div
+              key={timeSlot}
+              className="grid items-start gap-x-4"
+              style={{
+                gridTemplateColumns: `120px repeat(${tracks.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {/* Time column */}
+              <div className="sticky left-0 bg-white p-2 text-center">
+                <div className="font-mono text-sm font-medium text-brand-slate-gray">
+                  {timeSlot}
+                </div>
+              </div>
+
+              {/* Track columns */}
+              {tracks.map((track, trackIndex) => {
+                const talk = getTalkAtTime(track, timeSlot)
+
+                return (
+                  <div
+                    key={`${timeSlot}-${trackIndex}`}
+                    className="min-h-[60px]"
+                  >
+                    {talk ? (
+                      <TalkCard
+                        talk={{
+                          ...talk,
+                          scheduleDate: date,
+                          trackTitle: track.trackTitle,
+                          trackIndex,
+                        }}
+                        compact={true}
+                        fixedHeight={false}
+                      />
+                    ) : (
+                      <div className="h-full min-h-[60px]" />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DaySchedule({ schedule }: { schedule: ConferenceSchedule }) {
+  if (schedule.tracks.length === 0) {
+    return (
+      <div className="py-12 text-center">
+        <MagnifyingGlassIcon className="mx-auto mb-4 h-12 w-12 text-gray-400" />
+        <p className="font-inter text-gray-600">
+          No talks scheduled for this day with current filters.
+        </p>
+      </div>
+    )
+  }
+
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Day Header */}
+      <div className="text-center">
+        <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
+          {formatDate(schedule.date)}
+        </h2>
+        <p className="font-inter mt-1 text-sm text-gray-600">
+          {schedule.tracks.length} track
+          {schedule.tracks.length !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      {/* Schedule */}
+      <div className="space-y-6">
+        <ScheduleTabbed tracks={schedule.tracks} date={schedule.date} />
+        <ScheduleStatic tracks={schedule.tracks} date={schedule.date} />
+      </div>
+    </div>
+  )
+}
+
+export const ProgramScheduleView = React.memo(function ProgramScheduleView({
+  data,
+}: ProgramScheduleViewProps) {
+  if (data.schedules.length === 0) {
+    return (
+      <div className="py-16 text-center">
+        <MagnifyingGlassIcon className="mx-auto mb-4 h-16 w-16 text-gray-400" />
+        <h3 className="font-space-grotesk mb-2 text-lg font-medium text-brand-slate-gray">
+          No scheduled content found
+        </h3>
+        <p className="font-inter text-gray-600">
+          Try adjusting your filters to see more content.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      {data.schedules.map((schedule, index) => (
+        <div key={schedule._id || `schedule-${index}`}>
+          <DaySchedule schedule={schedule} />
+          {index < data.schedules.length - 1 && (
+            <div className="mt-8 border-t border-brand-frosted-steel" />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+})

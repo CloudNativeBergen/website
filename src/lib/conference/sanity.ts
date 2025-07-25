@@ -112,7 +112,8 @@ export async function getConferenceForDomain(
             slug,
             description
           },
-          speaker->{
+          speakers[]->{
+          _id,
           name,
           "slug": slug.current,
           title,
@@ -121,7 +122,7 @@ export async function getConferenceForDomain(
         }
         }
       }
-      },`
+      } | order(date asc),`
           : ''
       }
       ${
