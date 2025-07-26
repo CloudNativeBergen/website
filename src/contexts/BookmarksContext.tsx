@@ -51,7 +51,7 @@ export function BookmarksProvider({ children }: BookmarksProviderProps) {
           setBookmarks(JSON.parse(stored))
         }
       } catch (error) {
-        // Silently handle localStorage errors
+        console.error('Failed to load bookmarks from localStorage:', error)
       } finally {
         setIsLoaded(true)
       }
@@ -64,7 +64,7 @@ export function BookmarksProvider({ children }: BookmarksProviderProps) {
       try {
         localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks))
       } catch (error) {
-        // Silently handle localStorage errors
+        console.error('Failed to save bookmarks to localStorage:', error)
       }
     }
   }, [bookmarks, isLoaded])

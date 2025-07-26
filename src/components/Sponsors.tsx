@@ -7,19 +7,16 @@ import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg
 import Link from 'next/link'
 
 export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
-  // Separate standard and special sponsors, then group by tier
-  const standardSponsors = sponsors.filter(
-    (sponsor) =>
-      sponsor.tier.tier_type === 'standard' || !sponsor.tier.tier_type,
-  )
-  const specialSponsors = sponsors.filter(
-    (sponsor) => sponsor.tier.tier_type === 'special',
-  )
+  // Early return if no sponsors
+  if (!sponsors || sponsors.length === 0) {
+    return null
+  }
 
-  // Group standard sponsors by tier
-  const standardSponsorsByTier = standardSponsors.reduce(
+  // Group sponsors by tier, but treat all special tiers as one "SPECIAL" group
+  const groupedSponsors = sponsors.reduce(
     (acc, sponsor) => {
-      const tierTitle = sponsor.tier.title
+      const tierTitle =
+        sponsor.tier.tier_type === 'special' ? 'SPECIAL' : sponsor.tier.title
       if (!acc[tierTitle]) {
         acc[tierTitle] = []
       }
@@ -29,102 +26,142 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
     {} as Record<string, ConferenceSponsor[]>,
   )
 
-  // Group special sponsors by tier
-  const specialSponsorsByTier = specialSponsors.reduce(
-    (acc, sponsor) => {
-      const tierTitle = sponsor.tier.title
-      if (!acc[tierTitle]) {
-        acc[tierTitle] = []
-      }
-      acc[tierTitle].push(sponsor)
-      return acc
-    },
-    {} as Record<string, ConferenceSponsor[]>,
-  )
+  // Sort tier names by hierarchy
+  const sortedTierNames = Object.keys(groupedSponsors).sort((a, b) => {
+    // Special group always goes last
+    if (a === 'SPECIAL' && b !== 'SPECIAL') return 1
+    if (b === 'SPECIAL' && a !== 'SPECIAL') return -1
+    if (a === 'SPECIAL' && b === 'SPECIAL') return 0
 
-  // Get tier names in order: standard first, then special
-  const standardTierNames = Object.keys(standardSponsorsByTier)
-  const specialTierNames = Object.keys(specialSponsorsByTier)
-  const allTierNames = [...standardTierNames, ...specialTierNames]
+    // For standard tiers, sort alphabetically
+    return a.localeCompare(b)
+  })
+
+  // Calculate tier positions (each tier starts a new row)
+  const tierPositions: { tier: string; rowStart: number }[] = []
+  let currentRow = 0
+
+  sortedTierNames.forEach((tierName) => {
+    tierPositions.push({ tier: tierName, rowStart: currentRow })
+    const tierSponsors = groupedSponsors[tierName]
+    const rowsNeeded = Math.ceil(tierSponsors.length / 6) // 6 columns max
+    currentRow += rowsNeeded
+  })
+
+  // Create flat array of sponsors with proper row breaks
+  const sponsorGrid: (ConferenceSponsor | null)[] = []
+  const tierRowMapping: { [tier: string]: number } = {} // Track actual row positions
+  let gridPosition = 0
+
+  sortedTierNames.forEach((tierName) => {
+    const tierSponsors = groupedSponsors[tierName]
+
+    // Start tier at beginning of new row
+    const currentRowPosition = gridPosition % 6
+    if (currentRowPosition !== 0) {
+      // Fill rest of current row with nulls
+      for (let i = currentRowPosition; i < 6; i++) {
+        sponsorGrid.push(null)
+        gridPosition++
+      }
+    }
+
+    // Record the actual row where this tier starts
+    tierRowMapping[tierName] = Math.floor(gridPosition / 6)
+
+    // Add tier sponsors
+    tierSponsors.forEach((sponsor) => {
+      sponsorGrid.push(sponsor)
+      gridPosition++
+    })
+  })
 
   return (
     <section id="sponsors" aria-label="Sponsors" className="py-20 sm:py-32">
       <Container>
-        <h2 className="font-display mx-auto max-w-4xl text-center text-4xl font-medium tracking-tighter text-blue-900 sm:text-5xl">
-          Fueling the cluster: Our sponsors keep the pods running!
-        </h2>
+        <div className="mb-20">
+          <div className="mx-auto max-w-2xl lg:mx-0">
+            <h2 className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl">
+              Our sponsors
+            </h2>
+            <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray">
+              Meet our sponsors who are fueling the cluster and keeping the pods
+              running!
+            </p>
+          </div>
+        </div>
 
-        <div className="mx-auto mt-20 space-y-16">
-          {allTierNames.map((tierName, tierIndex) => {
-            const tierSponsors =
-              standardSponsorsByTier[tierName] ||
-              specialSponsorsByTier[tierName]
-            const isFirstTier = tierIndex === 0
-            const isSpecialTier = tierSponsors[0]?.tier.tier_type === 'special'
+        <div className="relative">
+          {/* Tier labels positioned absolutely */}
+          <div className="absolute top-0 left-0 w-32">
+            {sortedTierNames.map((tier) => {
+              const actualRow = tierRowMapping[tier]
+              const topOffset = actualRow * 100 + 35 // Adjusted up from 50 to 35
 
-            // Smaller logo sizes: first tier slightly larger, others equal
-            const logoSize = isFirstTier ? 'h-16' : 'h-12'
-
-            // Center align if fewer than 3 sponsors
-            const shouldCenter = tierSponsors.length < 3
-
-            return (
-              <div key={tierName} className="text-center">
-                <h3 className="font-display mb-8 text-2xl font-semibold tracking-tight text-blue-900">
-                  {tierName}
-                  {isSpecialTier && (
-                    <span className="ml-3 inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
-                      Special Partners
-                    </span>
-                  )}
-                </h3>
-
+              return (
                 <div
-                  className={`mx-auto grid max-w-max grid-cols-1 place-content-center gap-x-16 gap-y-8 ${
-                    shouldCenter
-                      ? 'sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2'
-                      : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                  key={tier}
+                  className="absolute flex items-center gap-3"
+                  style={{ top: `${topOffset}px` }}
+                >
+                  <div className="h-0.5 w-4 bg-blue-900"></div>
+                  <h3 className="font-display text-lg font-bold tracking-wider whitespace-nowrap text-blue-900 uppercase">
+                    {tier}
+                  </h3>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Single unified sponsor grid */}
+          <div className="ml-40">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+              {sponsorGrid.map((sponsor, i) => (
+                <div
+                  key={sponsor ? `${sponsor.sponsor.name}-${i}` : `empty-${i}`}
+                  className={`flex min-h-[100px] items-center justify-center p-6 transition-colors ${
+                    sponsor
+                      ? 'border border-dashed border-gray-300 hover:bg-gray-50'
+                      : ''
                   }`}
                 >
-                  {tierSponsors.map((sponsor, i) => (
-                    <div
-                      key={`${sponsor.sponsor.name}-${i}`}
-                      className="flex items-center justify-center"
+                  {sponsor && (
+                    <a
+                      href={sponsor.sponsor.website}
+                      className="block rounded transition-opacity hover:opacity-75 focus:opacity-75 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Visit ${sponsor.sponsor.name} website`}
                     >
-                      <a
-                        href={sponsor.sponsor.website}
-                        className="cursor-pointer hover:opacity-80"
-                      >
-                        <InlineSvgPreviewComponent
-                          className={`${logoSize} cursor-pointer`}
-                          value={sponsor.sponsor.logo}
-                        />
-                      </a>
-                    </div>
-                  ))}
+                      <InlineSvgPreviewComponent
+                        className="h-8 w-auto max-w-full object-contain"
+                        value={sponsor.sponsor.logo}
+                      />
+                    </a>
+                  )}
                 </div>
-              </div>
-            )
-          })}
-
-          {/* Become a Sponsor Call-to-Action */}
-          <div className="text-center">
-            <div className="rounded-2xl bg-blue-50 px-6 py-12 sm:px-12">
-              <h3 className="font-display mb-4 text-2xl font-semibold tracking-tight text-blue-900">
-                Become a Sponsor
-              </h3>
-              <p className="mx-auto mb-8 max-w-2xl text-lg text-blue-700">
-                Join our community of sponsors and showcase your brand to
-                Bergen&apos;s cloud-native community. We have flexible
-                sponsorship packages to match your goals and budget.
-              </p>
-              <Link
-                href="/sponsor"
-                className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
-              >
-                View Sponsorship Packages
-              </Link>
+              ))}
             </div>
+          </div>
+        </div>
+
+        {/* Become a Sponsor Call-to-Action */}
+        <div className="mt-20 text-center">
+          <div className="rounded-2xl bg-blue-50 px-8 py-12 sm:px-12">
+            <h3 className="font-display mb-4 text-2xl font-bold tracking-tight text-blue-900">
+              Become a Sponsor
+            </h3>
+            <p className="mx-auto mb-8 max-w-2xl text-lg text-blue-700">
+              Join our community of sponsors and showcase your brand to
+              Bergen&apos;s cloud-native community. We have flexible sponsorship
+              packages to match your goals and budget.
+            </p>
+            <Link
+              href="/sponsor"
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+            >
+              View Sponsorship Packages
+            </Link>
           </div>
         </div>
       </Container>

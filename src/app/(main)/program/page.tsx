@@ -2,6 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProgramClient } from './ProgramClient'
+import { Sponsors } from '../../../components/Sponsors'
 
 export const revalidate = 3600
 
@@ -10,6 +11,7 @@ export default async function Program() {
     organizers: false,
     schedule: true,
     topics: true,
+    sponsors: true,
   })
 
   if (error || !conference) {
@@ -66,6 +68,8 @@ export default async function Program() {
           schedules={conference.schedules}
           conferenceTopics={conference.topics || []}
         />
+
+        <Sponsors sponsors={conference.sponsors || []} />
       </Container>
     </div>
   )
