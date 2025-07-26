@@ -14,7 +14,7 @@ export default async function Program() {
 
   if (error || !conference) {
     return (
-      <div className="py-20 sm:py-32">
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
         <Container>
           <div className="text-center">
             <h1 className="font-space-grotesk text-4xl font-bold tracking-tight text-brand-slate-gray sm:text-5xl">
@@ -31,7 +31,7 @@ export default async function Program() {
 
   if (!conference.schedules || conference.schedules.length === 0) {
     return (
-      <div className="py-20 sm:py-32">
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
         <BackgroundImage className="-top-40 -bottom-32" />
         <Container className="relative">
           <div className="text-center">
@@ -48,7 +48,7 @@ export default async function Program() {
   }
 
   return (
-    <div className="py-20 sm:py-32">
+    <div className="relative py-20 sm:pt-36 sm:pb-24">
       <BackgroundImage className="-top-40 -bottom-32" />
       <Container className="relative">
         <div className="mx-auto mb-16 max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useCallback, useMemo } from 'react'
 import {
   CalendarDaysIcon,
   Squares2X2Icon,
@@ -15,50 +15,81 @@ interface ViewModeSelectorProps {
   currentViewConfig: ViewModeConfig
 }
 
+// Constants for better performance
+const VIEW_MODE_ICONS = {
+  calendar: CalendarDaysIcon,
+  grid: Squares2X2Icon,
+  list: ListBulletIcon,
+  bookmark: BookmarkIcon,
+} as const
+
+const SHORT_LABELS = {
+  'Schedule View': 'Schedule',
+  'Card Grid': 'Card',
+  'List View': 'List',
+  'Personal Agenda': 'Personal',
+} as const
+
+const BUTTON_BASE_CLASSES =
+  'flex min-w-[2.5rem] items-center justify-center gap-1 rounded-md px-2 py-2 text-xs font-medium transition-all duration-200 sm:min-w-[unset] sm:justify-start sm:px-3 hover:shadow-sm focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-1 focus:outline-none'
+const ACTIVE_CLASSES = 'bg-brand-cloud-blue text-white shadow-sm'
+const INACTIVE_CLASSES =
+  'text-brand-slate-gray hover:bg-brand-sky-mist hover:text-brand-cloud-blue'
+
 const getViewModeIcon = (iconName: string) => {
-  switch (iconName) {
-    case 'calendar':
-      return CalendarDaysIcon
-    case 'grid':
-      return Squares2X2Icon
-    case 'list':
-      return ListBulletIcon
-    case 'bookmark':
-      return BookmarkIcon
-    default:
-      return CalendarDaysIcon
-  }
+  return (
+    VIEW_MODE_ICONS[iconName as keyof typeof VIEW_MODE_ICONS] ||
+    CalendarDaysIcon
+  )
 }
 
-export function ViewModeSelector({
+const getShortLabel = (label: string) => {
+  return SHORT_LABELS[label as keyof typeof SHORT_LABELS] || label
+}
+
+export const ViewModeSelector = React.memo(function ViewModeSelector({
   viewMode,
   viewModes,
   onViewModeChange,
 }: ViewModeSelectorProps) {
+  // Memoized view mode data to prevent recalculations
+  const viewModeData = useMemo(
+    () =>
+      viewModes.map((mode) => ({
+        ...mode,
+        Icon: getViewModeIcon(mode.icon),
+        shortLabel: getShortLabel(mode.label),
+        isActive: viewMode === mode.id,
+      })),
+    [viewModes, viewMode],
+  )
+
+  // Memoized click handlers to prevent recreation
+  const handleModeChange = useCallback(
+    (modeId: ProgramViewMode) => {
+      onViewModeChange(modeId)
+    },
+    [onViewModeChange],
+  )
+
   return (
     <div className="flex items-center gap-1 rounded-lg border border-brand-frosted-steel bg-white p-1">
-      {viewModes.map((mode) => {
-        const Icon = getViewModeIcon(mode.icon)
-        const isActive = viewMode === mode.id
-
-        return (
-          <button
-            key={mode.id}
-            onClick={() => onViewModeChange(mode.id)}
-            title={`${mode.label}: ${mode.description}`}
-            className={clsx(
-              'flex items-center gap-1 rounded-md px-3 py-2 text-xs font-medium transition-all duration-200',
-              'hover:shadow-sm focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-1 focus:outline-none',
-              isActive
-                ? 'bg-brand-cloud-blue text-white shadow-sm'
-                : 'text-brand-slate-gray hover:bg-brand-sky-mist hover:text-brand-cloud-blue',
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            <span className="hidden sm:inline">{mode.label}</span>
-          </button>
-        )
-      })}
+      {viewModeData.map((mode) => (
+        <button
+          key={mode.id}
+          onClick={() => handleModeChange(mode.id)}
+          title={`${mode.label}: ${mode.description}`}
+          className={clsx(
+            BUTTON_BASE_CLASSES,
+            mode.isActive ? ACTIVE_CLASSES : INACTIVE_CLASSES,
+          )}
+        >
+          <mode.Icon className="h-4 w-4" />
+          {/* Show short labels on medium screens, full labels on large screens */}
+          <span className="hidden sm:inline lg:hidden">{mode.shortLabel}</span>
+          <span className="hidden lg:inline">{mode.label}</span>
+        </button>
+      ))}
     </div>
   )
-}
+})

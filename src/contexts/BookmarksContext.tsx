@@ -1,6 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react'
 
 const BOOKMARKS_STORAGE_KEY = 'conference-bookmarks'
 
@@ -14,7 +20,25 @@ export interface BookmarkedTalk {
   speakers?: string[]
 }
 
-export function useBookmarks() {
+interface BookmarksContextType {
+  bookmarks: BookmarkedTalk[]
+  isBookmarked: (talkId: string) => boolean
+  addBookmark: (talk: BookmarkedTalk) => void
+  removeBookmark: (talkId: string) => void
+  toggleBookmark: (talk: BookmarkedTalk) => void
+  clearAllBookmarks: () => void
+  isLoaded: boolean
+}
+
+const BookmarksContext = createContext<BookmarksContextType | undefined>(
+  undefined,
+)
+
+interface BookmarksProviderProps {
+  children: ReactNode
+}
+
+export function BookmarksProvider({ children }: BookmarksProviderProps) {
   const [bookmarks, setBookmarks] = useState<BookmarkedTalk[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
 
@@ -38,9 +62,6 @@ export function useBookmarks() {
   useEffect(() => {
     if (isLoaded && typeof window !== 'undefined') {
       try {
-        console.log(
-          `[useBookmarks] Saving ${bookmarks.length} bookmarks to localStorage`,
-        )
         localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks))
       } catch (error) {
         console.error('Failed to save bookmarks:', error)
@@ -48,56 +69,29 @@ export function useBookmarks() {
     }
   }, [bookmarks, isLoaded])
 
-  // Debug effect to track bookmark changes
-  useEffect(() => {
-    console.log(`[useBookmarks] Bookmarks state changed:`, {
-      count: bookmarks.length,
-      bookmarks: bookmarks.map((b) => ({ talkId: b.talkId, title: b.title })),
-    })
-  }, [bookmarks])
-
   const isBookmarked = (talkId: string): boolean => {
     return bookmarks.some((bookmark) => bookmark.talkId === talkId)
   }
 
   const addBookmark = (talk: BookmarkedTalk) => {
-    console.log(`[useBookmarks] addBookmark called for: ${talk.talkId}`)
     setBookmarks((prev) => {
       if (prev.some((bookmark) => bookmark.talkId === talk.talkId)) {
-        console.log(`[useBookmarks] Already bookmarked, no change`)
         return prev // Already bookmarked
       }
-      const newBookmarks = [...prev, talk]
-      console.log(
-        `[useBookmarks] Added bookmark. New count: ${newBookmarks.length}`,
-      )
-      return newBookmarks
+      return [...prev, talk]
     })
   }
 
   const removeBookmark = (talkId: string) => {
-    console.log(`[useBookmarks] removeBookmark called for: ${talkId}`)
-    setBookmarks((prev) => {
-      const newBookmarks = prev.filter((bookmark) => bookmark.talkId !== talkId)
-      console.log(
-        `[useBookmarks] Removed bookmark. New count: ${newBookmarks.length}`,
-      )
-      return newBookmarks
-    })
+    setBookmarks((prev) =>
+      prev.filter((bookmark) => bookmark.talkId !== talkId),
+    )
   }
 
   const toggleBookmark = (talk: BookmarkedTalk) => {
-    console.log(`[useBookmarks] Toggle bookmark for "${talk.title}":`, {
-      talkId: talk.talkId,
-      currentlyBookmarked: isBookmarked(talk.talkId),
-      currentBookmarks: bookmarks.length,
-    })
-
     if (isBookmarked(talk.talkId)) {
-      console.log(`[useBookmarks] Removing bookmark for: ${talk.talkId}`)
       removeBookmark(talk.talkId)
     } else {
-      console.log(`[useBookmarks] Adding bookmark for: ${talk.talkId}`)
       addBookmark(talk)
     }
   }
@@ -106,7 +100,7 @@ export function useBookmarks() {
     setBookmarks([])
   }
 
-  return {
+  const value: BookmarksContextType = {
     bookmarks,
     isBookmarked,
     addBookmark,
@@ -115,4 +109,18 @@ export function useBookmarks() {
     clearAllBookmarks,
     isLoaded,
   }
+
+  return (
+    <BookmarksContext.Provider value={value}>
+      {children}
+    </BookmarksContext.Provider>
+  )
+}
+
+export function useBookmarks(): BookmarksContextType {
+  const context = useContext(BookmarksContext)
+  if (!context) {
+    throw new Error('useBookmarks must be used within a BookmarksProvider')
+  }
+  return context
 }

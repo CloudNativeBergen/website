@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Tab } from '@headlessui/react'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
@@ -10,12 +10,13 @@ interface ProgramScheduleViewProps {
   data: FilteredProgramData
 }
 
-interface ScheduleTrackSummary extends ScheduleTrack {
-  name: React.ReactNode
-}
+// Constants for better maintainability
+const SCROLL_THRESHOLD = 5
+const SCROLL_DELAY = 100
+const MOBILE_BREAKPOINT = '(min-width: 640px)'
 
-// Get all unique time slots across all tracks
-const getAllTimeSlots = (tracks: ScheduleTrack[]) => {
+// Memoized utility functions moved outside component to prevent recreation
+const getAllTimeSlots = (tracks: ScheduleTrack[]): string[] => {
   const timeSlots = new Set<string>()
   tracks.forEach((track) => {
     track.talks.forEach((talk) => {
@@ -25,12 +26,21 @@ const getAllTimeSlots = (tracks: ScheduleTrack[]) => {
   return Array.from(timeSlots).sort()
 }
 
-// Find talk at specific time for a track
 const getTalkAtTime = (track: ScheduleTrack, startTime: string) => {
   return track.talks.find((talk) => talk.startTime === startTime)
 }
 
-function ScheduleTabbed({
+const formatScheduleDate = (dateString: string): string => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+const ScheduleTabbed = React.memo(function ScheduleTabbed({
   tracks,
   date,
 }: {
@@ -38,11 +48,107 @@ function ScheduleTabbed({
   date: string
 }) {
   const [tabOrientation, setTabOrientation] = useState('horizontal')
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const tabListRef = useRef<HTMLDivElement>(null)
+  const hasUserInteracted = useRef(false)
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Memoize expensive calculations
+  const trackKeys = useMemo(
+    () => tracks.map((_, index) => `track-${index}`),
+    [tracks],
+  )
+
+  // Enhanced scroll function with error handling and cleanup
+  const scrollToSelectedTab = useCallback(
+    (index: number) => {
+      if (
+        tabOrientation !== 'horizontal' ||
+        !tabListRef.current ||
+        index < 0 ||
+        index >= tracks.length
+      ) {
+        return
+      }
+
+      const tabList = tabListRef.current
+      const selectedTab = tabList.children[index] as HTMLElement
+
+      if (!selectedTab) {
+        console.warn(`Tab at index ${index} not found`)
+        return
+      }
+
+      try {
+        // Clear any existing scroll timeout
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current)
+        }
+
+        // Horizontal scrolling with improved calculations
+        const containerScrollLeft = tabList.scrollLeft
+        const containerWidth = tabList.clientWidth
+        const tabLeft = selectedTab.offsetLeft
+        const tabWidth = selectedTab.offsetWidth
+
+        // Calculate the center position for the selected tab
+        const tabCenter = tabLeft + tabWidth / 2
+        const containerCenter = containerWidth / 2
+        const newScrollLeft = tabCenter - containerCenter
+
+        // Ensure we don't scroll beyond the boundaries
+        const maxScrollLeft = Math.max(0, tabList.scrollWidth - containerWidth)
+        const clampedScrollLeft = Math.max(
+          0,
+          Math.min(newScrollLeft, maxScrollLeft),
+        )
+
+        // Only scroll if the position would change significantly
+        if (
+          Math.abs(clampedScrollLeft - containerScrollLeft) > SCROLL_THRESHOLD
+        ) {
+          tabList.scrollTo({
+            left: clampedScrollLeft,
+            behavior: 'smooth',
+          })
+        }
+
+        // Vertical page scrolling with timeout cleanup
+        scrollTimeoutRef.current = setTimeout(() => {
+          const tabListTop =
+            tabList.getBoundingClientRect().top + window.scrollY
+          window.scrollTo({
+            top: tabListTop,
+            behavior: 'smooth',
+          })
+        }, SCROLL_DELAY)
+      } catch (error) {
+        console.error('Error during tab scrolling:', error)
+      }
+    },
+    [tabOrientation, tracks.length],
+  )
+
+  // Optimized tab click handler
+  const handleTabClick = useCallback(
+    (index: number) => {
+      hasUserInteracted.current = true
+      const wasAlreadySelected = selectedIndex === index
+      setSelectedIndex(index)
+
+      // Always scroll when user clicks, even if it's the same tab
+      if (wasAlreadySelected) {
+        scrollToSelectedTab(index)
+      }
+    },
+    [selectedIndex, scrollToSelectedTab],
+  )
+
+  // Media query effect with cleanup
   useEffect(() => {
-    const smMediaQuery = window.matchMedia('(min-width: 640px)')
+    const smMediaQuery = window.matchMedia(MOBILE_BREAKPOINT)
 
-    function onMediaQueryChange({ matches }: { matches: boolean }) {
+    const onMediaQueryChange = ({ matches }: { matches: boolean }) => {
       setTabOrientation(matches ? 'vertical' : 'horizontal')
     }
 
@@ -54,112 +160,93 @@ function ScheduleTabbed({
     }
   }, [])
 
+  // Scroll effect with cleanup
+  useEffect(() => {
+    if (!hasUserInteracted.current) {
+      return
+    }
+
+    scrollToSelectedTab(selectedIndex)
+
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
+    }
+  }, [selectedIndex, scrollToSelectedTab])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
+    }
+  }, [])
+
   return (
     <Tab.Group
       as="div"
       className="mx-auto grid max-w-2xl grid-cols-1 gap-y-4 sm:grid-cols-2 lg:hidden"
       vertical={tabOrientation === 'vertical'}
+      selectedIndex={selectedIndex}
+      onChange={handleTabClick}
     >
-      <Tab.List className="-mx-4 flex gap-x-4 gap-y-6 overflow-x-auto pb-4 pl-4 sm:mx-0 sm:flex-col sm:pr-8 sm:pb-0 sm:pl-0">
-        {({ selectedIndex }) => (
-          <>
-            {tracks.map((track, trackIndex) => (
-              <div
-                key={`track-${trackIndex}`}
-                className={clsx(
-                  'relative w-3/4 flex-none pr-4 sm:w-auto sm:pr-0',
-                  trackIndex !== selectedIndex && 'opacity-70',
-                )}
-              >
-                <TrackSummary
-                  track={{
-                    ...track,
-                    name: (
-                      <Tab className="ui-not-focus-visible:outline-none">
-                        <span className="absolute inset-0" />
-                        {track.trackTitle}
-                      </Tab>
-                    ),
-                  }}
-                  date={date}
-                />
-              </div>
-            ))}
-          </>
-        )}
+      <Tab.List
+        ref={tabListRef}
+        className="-mx-4 flex gap-x-4 gap-y-6 overflow-x-auto pb-4 pl-4 sm:mx-0 sm:flex-col sm:pr-8 sm:pb-0 sm:pl-0"
+      >
+        {tracks.map((track, trackIndex) => (
+          <div
+            key={trackKeys[trackIndex]}
+            className={clsx(
+              'relative w-3/4 flex-none pr-4 sm:w-auto sm:pr-0',
+              trackIndex !== selectedIndex && 'opacity-70',
+            )}
+          >
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-4">
+              <h3 className="font-space-grotesk text-lg font-semibold text-brand-cloud-blue">
+                <Tab className="ui-not-focus-visible:outline-none">
+                  <span className="absolute inset-0" />
+                  <time dateTime={date}>{track.trackTitle}</time>
+                </Tab>
+              </h3>
+              <p className="font-inter mt-1 text-sm text-brand-slate-gray">
+                {track.trackDescription}
+              </p>
+            </div>
+          </div>
+        ))}
       </Tab.List>
       <Tab.Panels>
         {tracks.map((track, trackIndex) => (
           <Tab.Panel
-            key={`track-${trackIndex}`}
+            key={trackKeys[trackIndex]}
             className="ui-not-focus-visible:outline-none"
           >
-            <TimeSlots track={track} date={date} trackIndex={trackIndex} />
+            <div className="space-y-3">
+              {track.talks.map((talk) => (
+                <TalkCard
+                  key={`${trackIndex}-${talk.startTime}`}
+                  talk={{
+                    ...talk,
+                    scheduleDate: date,
+                    trackTitle: track.trackTitle,
+                    trackIndex,
+                  }}
+                  compact={true}
+                  fixedHeight={false}
+                />
+              ))}
+            </div>
           </Tab.Panel>
         ))}
       </Tab.Panels>
     </Tab.Group>
   )
-}
+})
 
-function TrackSummary({
-  track,
-  date,
-}: {
-  track: ScheduleTrackSummary
-  date: string
-}) {
-  return (
-    <div className="rounded-lg border border-brand-frosted-steel bg-white p-4">
-      <h3 className="font-space-grotesk text-lg font-semibold text-brand-cloud-blue">
-        <time dateTime={date}>{track.name}</time>
-      </h3>
-      <p className="font-inter mt-1 text-sm text-brand-slate-gray">
-        {track.trackDescription}
-      </p>
-    </div>
-  )
-}
-
-function TimeSlots({
-  track,
-  date,
-  trackIndex,
-  className,
-}: {
-  track: ScheduleTrack
-  date: string
-  trackIndex: number
-  className?: string
-}) {
-  return (
-    <div
-      className={clsx(
-        className,
-        'space-y-1 rounded-lg border border-brand-frosted-steel bg-white/60 px-4 py-4 shadow-xl shadow-blue-900/5 backdrop-blur',
-      )}
-    >
-      {track.talks.map((talk) => {
-        return (
-          <div key={`${trackIndex}-${talk.startTime}`} className="mb-1">
-            <TalkCard
-              talk={{
-                ...talk,
-                scheduleDate: date,
-                trackTitle: track.trackTitle,
-                trackIndex,
-              }}
-              compact={true}
-              fixedHeight={false}
-            />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function ScheduleStatic({
+const ScheduleStatic = React.memo(function ScheduleStatic({
   tracks,
   date,
 }: {
@@ -247,9 +334,13 @@ function ScheduleStatic({
       </div>
     </div>
   )
-}
+})
 
-function DaySchedule({ schedule }: { schedule: ConferenceSchedule }) {
+const DaySchedule = React.memo(function DaySchedule({
+  schedule,
+}: {
+  schedule: ConferenceSchedule
+}) {
   if (schedule.tracks.length === 0) {
     return (
       <div className="py-12 text-center">
@@ -261,22 +352,12 @@ function DaySchedule({ schedule }: { schedule: ConferenceSchedule }) {
     )
   }
 
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  }
-
   return (
     <div className="space-y-6">
       {/* Day Header */}
       <div className="text-center">
         <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
-          {formatDate(schedule.date)}
+          {formatScheduleDate(schedule.date)}
         </h2>
         <p className="font-inter mt-1 text-sm text-gray-600">
           {schedule.tracks.length} track
@@ -291,7 +372,7 @@ function DaySchedule({ schedule }: { schedule: ConferenceSchedule }) {
       </div>
     </div>
   )
-}
+})
 
 export const ProgramScheduleView = React.memo(function ProgramScheduleView({
   data,
