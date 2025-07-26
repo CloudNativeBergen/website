@@ -15,7 +15,12 @@ export interface ViewModeConfig {
 // Constants
 const STORAGE_KEY = 'cnb-program-view-mode'
 const MOBILE_BREAKPOINT = 768
-const VALID_VIEW_MODES: readonly ProgramViewMode[] = ['grid', 'schedule', 'list', 'agenda'] as const
+const VALID_VIEW_MODES: readonly ProgramViewMode[] = [
+  'grid',
+  'schedule',
+  'list',
+  'agenda',
+] as const
 
 // Mobile detection keywords for better performance
 const MOBILE_KEYWORDS = [
@@ -40,30 +45,34 @@ function isValidViewMode(value: string): value is ProgramViewMode {
 const isMobileDevice = (() => {
   let cachedResult: boolean | null = null
   let cachedUserAgent: string | null = null
-  
+
   return (): boolean => {
     if (typeof window === 'undefined') return false
-    
+
     const currentUserAgent = window.navigator.userAgent.toLowerCase()
-    
+
     // Only recalculate if user agent changed (rare) or not cached
     if (cachedResult === null || cachedUserAgent !== currentUserAgent) {
       cachedUserAgent = currentUserAgent
-      
+
       // Check viewport width (mobile-first approach)
       const isMobileViewport = window.innerWidth <= MOBILE_BREAKPOINT
-      
+
       // Check user agent for mobile indicators
       const isMobileUserAgent = MOBILE_KEYWORDS.some((keyword) =>
         currentUserAgent.includes(keyword),
       )
-      
+
       // Check for touch support (additional indicator)
-      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0
-      
-      cachedResult = isMobileViewport || isMobileUserAgent || (isTouchDevice && isMobileViewport)
+      const isTouchDevice =
+        'ontouchstart' in window || navigator.maxTouchPoints > 0
+
+      cachedResult =
+        isMobileViewport ||
+        isMobileUserAgent ||
+        (isTouchDevice && isMobileViewport)
     }
-    
+
     return cachedResult
   }
 })()
@@ -72,13 +81,13 @@ const isMobileDevice = (() => {
 const storageOperations = {
   get(): ProgramViewMode | null {
     if (typeof window === 'undefined') return null
-    
+
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored && isValidViewMode(stored)) {
         return stored
       }
-      
+
       // Clean up invalid data
       if (stored) {
         localStorage.removeItem(STORAGE_KEY)
@@ -86,22 +95,28 @@ const storageOperations = {
     } catch (error) {
       // Silent fail for localStorage issues (private browsing, quota exceeded, etc.)
       if (process.env.NODE_ENV === 'development') {
-        console.warn('[useProgramViewMode] Failed to read from localStorage:', error)
+        console.warn(
+          '[useProgramViewMode] Failed to read from localStorage:',
+          error,
+        )
       }
     }
-    
+
     return null
   },
 
   set(mode: ProgramViewMode): void {
     if (typeof window === 'undefined') return
-    
+
     try {
       localStorage.setItem(STORAGE_KEY, mode)
     } catch (error) {
       // Silent fail for localStorage issues
       if (process.env.NODE_ENV === 'development') {
-        console.warn('[useProgramViewMode] Failed to write to localStorage:', error)
+        console.warn(
+          '[useProgramViewMode] Failed to write to localStorage:',
+          error,
+        )
       }
     }
   },
@@ -164,24 +179,30 @@ export function useProgramViewMode() {
   }, [])
 
   // Memoized view modes configuration (static data that never changes)
-  const viewModes = useMemo<ViewModeConfig[]>(() => VIEW_MODES as ViewModeConfig[], [])
+  const viewModes = useMemo<ViewModeConfig[]>(
+    () => VIEW_MODES as ViewModeConfig[],
+    [],
+  )
 
   // Optimized currentViewConfig with better fallback handling
   const currentViewConfig = useMemo(() => {
     // Use a more specific fallback strategy
     if (!viewMode) {
       // During loading, return schedule view config as default
-      return viewModes.find(mode => mode.id === 'schedule') || viewModes[0]
+      return viewModes.find((mode) => mode.id === 'schedule') || viewModes[0]
     }
-    
+
     return viewModes.find((mode) => mode.id === viewMode) || viewModes[0]
   }, [viewMode, viewModes])
 
   // Memoized return object to prevent unnecessary re-renders of consuming components
-  return useMemo(() => ({
-    viewMode: viewMode || 'schedule', // Fallback to schedule during initial load
-    setViewMode: handleSetViewMode,
-    viewModes,
-    currentViewConfig,
-  }), [viewMode, handleSetViewMode, viewModes, currentViewConfig])
+  return useMemo(
+    () => ({
+      viewMode: viewMode || 'schedule', // Fallback to schedule during initial load
+      setViewMode: handleSetViewMode,
+      viewModes,
+      currentViewConfig,
+    }),
+    [viewMode, handleSetViewMode, viewModes, currentViewConfig],
+  )
 }
