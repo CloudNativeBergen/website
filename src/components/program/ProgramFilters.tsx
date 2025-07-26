@@ -49,9 +49,9 @@ interface ProgramFiltersProps {
 
 // Constants for better performance
 const DEFAULT_SELECT_CLASSES =
-  'col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6'
+  'col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6'
 const CHEVRON_DOWN_CLASSES =
-  'pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4'
+  'pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 @sm:size-4'
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString)
@@ -169,7 +169,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
   )
 
   return (
-    <div className="space-y-4 rounded-lg border border-brand-frosted-steel bg-brand-glacier-white p-4">
+    <div className="@container space-y-4 rounded-lg border border-brand-frosted-steel bg-brand-glacier-white p-4">
       {/* Compact Header with View Mode Selector */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -179,8 +179,8 @@ export const ProgramFilters = React.memo(function ProgramFilters({
               Filters
             </h3>
           </div>
-          {/* Hide count on mobile and tablet (lg:block) to reduce clutter */}
-          <div className="hidden rounded-md bg-brand-sky-mist px-2 py-1 lg:block">
+          {/* Hide count on mobile and tablet (@lg:block) to reduce clutter */}
+          <div className="hidden rounded-md bg-brand-sky-mist px-2 py-1 @lg:block">
             <p className="font-inter text-xs text-brand-slate-gray">
               <span className="font-semibold text-brand-cloud-blue">
                 {filteredTalks}
@@ -206,22 +206,22 @@ export const ProgramFilters = React.memo(function ProgramFilters({
                 className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-brand-cloud-blue transition-colors hover:bg-brand-sky-mist"
               >
                 <XMarkIcon className="h-3 w-3" />
-                <span className="hidden sm:inline">Clear</span>
+                <span className="hidden @sm:inline">Clear</span>
               </button>
             )}
             <button
               onClick={handleToggleExpanded}
-              className="flex min-w-[60px] items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-sky-mist sm:min-w-[unset]"
+              className="flex min-w-[60px] items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-sky-mist @sm:min-w-[unset]"
             >
               {isExpanded ? (
                 <>
                   <ChevronUpIcon className="h-3 w-3" />
-                  <span className="hidden w-8 text-left sm:inline">Less</span>
+                  <span className="hidden w-8 text-left @sm:inline">Less</span>
                 </>
               ) : (
                 <>
                   <ChevronDownIcon className="h-3 w-3" />
-                  <span className="hidden w-8 text-left sm:inline">More</span>
+                  <span className="hidden w-8 text-left @sm:inline">More</span>
                 </>
               )}
             </button>
@@ -237,7 +237,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
           placeholder="Search talks, speakers, topics..."
           value={filters.searchQuery}
           onChange={handleSearchChange}
-          className="block w-full rounded-md bg-white py-1.5 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+          className="block w-full rounded-md bg-white py-1.5 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6"
         />
       </div>
 
@@ -245,7 +245,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
       {isExpanded && (
         <div className="space-y-4 border-t border-brand-frosted-steel pt-4">
           {/* Show talk count on mobile and tablet when expanded */}
-          <div className="lg:hidden">
+          <div className="@lg:hidden">
             <p className="font-inter text-center text-xs text-brand-slate-gray">
               Showing{' '}
               <span className="font-semibold text-brand-cloud-blue">
@@ -255,8 +255,8 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             </p>
           </div>
 
-          {/* Improved mobile layout: single column on mobile, 2 on tablet, 4 on desktop */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Container-responsive layout: adapts to filter container width */}
+          <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2 @lg:grid-cols-4">
             {/* Day Filter */}
             {availableFilters.days.length > 1 && (
               <div>
@@ -399,7 +399,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
 
             {/* Topic Filter */}
             {availableFilters.topics.length > 0 && (
-              <div className="sm:col-span-2 lg:col-span-2">
+              <div className="@sm:col-span-2 @lg:col-span-2">
                 <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray">
                   <TagIcon className="h-3 w-3" />
                   Topic

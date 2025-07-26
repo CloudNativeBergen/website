@@ -366,7 +366,7 @@ export async function SpeakerPromotion({
   if (variant === 'featured') {
     return (
       <div
-        className={`group relative overflow-hidden rounded-2xl bg-gradient-to-r ${config.gradient} border border-gray-200 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg md:p-8 ${className}`}
+        className={`group @container relative overflow-hidden rounded-2xl bg-gradient-to-r ${config.gradient} border border-gray-200 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg @md:p-8 ${className}`}
       >
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-10">
@@ -380,9 +380,9 @@ export async function SpeakerPromotion({
         </div>
 
         <div className="relative">
-          <div className="flex flex-col md:flex-row md:items-center md:space-x-8">
+          <div className="flex flex-col @md:flex-row @md:items-center @md:space-x-8">
             {/* Speaker Image & Badge */}
-            <div className="mb-6 md:mb-0 md:flex-shrink-0">
+            <div className="mb-6 @md:mb-0 @md:flex-shrink-0">
               <div className="relative">
                 <SpeakerImage
                   image={image}
@@ -412,7 +412,7 @@ export async function SpeakerPromotion({
 
               {/* Title & Company */}
               <div className="mb-4">
-                <h2 className="font-space-grotesk mb-2 text-2xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue md:text-3xl">
+                <h2 className="font-space-grotesk mb-2 text-2xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue @md:text-3xl">
                   {name}
                 </h2>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-700">
@@ -462,7 +462,7 @@ export async function SpeakerPromotion({
             </div>
 
             {/* CTA */}
-            <div className="mt-6 md:mt-0 md:flex-shrink-0">
+            <div className="mt-6 @md:mt-0 @md:flex-shrink-0">
               <Link
                 href={finalCtaUrl}
                 className="group font-inter inline-flex items-center space-x-2 rounded-lg bg-brand-cloud-blue px-6 py-3 font-semibold text-white transition-all hover:bg-brand-cloud-blue/90 hover:shadow-lg"

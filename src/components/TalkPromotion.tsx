@@ -53,9 +53,9 @@ const levelConfig = {
 const variantConfig = {
   banner: {
     containerClass:
-      'relative overflow-hidden rounded-2xl border border-gray-200 p-8 md:p-12',
+      'relative overflow-hidden rounded-2xl border border-gray-200 p-8 @md:p-12',
     titleClass:
-      'font-space-grotesk mb-3 text-3xl font-bold text-brand-slate-gray md:text-4xl',
+      'font-space-grotesk mb-3 text-3xl font-bold text-brand-slate-gray @md:text-4xl',
     speakerClass: 'font-inter mb-4 text-xl text-gray-700',
     showCTA: true,
     showEventDetails: true,
@@ -356,7 +356,7 @@ export const TalkPromotion = memo(function TalkPromotion({
     const lineClamp = variant === 'social' ? 'line-clamp-3' : ''
     const marginClass =
       variant === 'banner'
-        ? 'mb-6 lg:max-w-2xl'
+        ? 'mb-6 @lg:max-w-2xl'
         : variant === 'card'
           ? 'mb-6'
           : ''
@@ -376,7 +376,7 @@ export const TalkPromotion = memo(function TalkPromotion({
 
     if (variant === 'banner') {
       return (
-        <div className="lg:ml-8">
+        <div className="@lg:ml-8">
           <Link
             href={ctaUrl}
             className="group font-inter inline-flex items-center space-x-2 rounded-xl bg-brand-cloud-blue px-8 py-4 font-semibold text-white transition-all hover:bg-brand-cloud-blue/90 hover:shadow-lg"
@@ -402,13 +402,13 @@ export const TalkPromotion = memo(function TalkPromotion({
 
   // Main render logic using unified approach
   return (
-    <div className={computedValues.containerClassName}>
+    <div className={`@container ${computedValues.containerClassName}`}>
       {/* Content */}
       <div className="relative">
         {variant === 'banner' ? (
-          // Banner layout
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-            <div className="mb-6 lg:mb-0 lg:flex-1">
+          // Banner layout - responsive to container width
+          <div className="flex flex-col @lg:flex-row @lg:items-center @lg:justify-between">
+            <div className="mb-6 @lg:mb-0 @lg:flex-1">
               {renderFormatBadge()}
               <h2 className={variantSettings.titleClass}>{title}</h2>
               {renderSpeaker()}
