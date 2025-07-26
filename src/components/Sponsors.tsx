@@ -91,7 +91,8 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
           </div>
         </div>
 
-        <div className="relative">
+        {/* Desktop: Grid layout with absolute positioned labels */}
+        <div className="relative hidden lg:block">
           {/* Tier labels positioned absolutely */}
           <div className="absolute top-0 left-0 w-32">
             {sortedTierNames.map((tier) => {
@@ -115,13 +116,13 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
 
           {/* Single unified sponsor grid */}
           <div className="ml-40">
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+            <div className="grid grid-cols-5 xl:grid-cols-6">
               {sponsorGrid.map((sponsor, i) => (
                 <div
                   key={sponsor ? `${sponsor.sponsor.name}-${i}` : `empty-${i}`}
                   className={`flex min-h-[100px] items-center justify-center p-6 transition-colors ${
                     sponsor
-                      ? 'border border-dashed border-gray-300 hover:bg-gray-50'
+                      ? '-mr-px -mb-px border-2 border-dashed border-gray-400 hover:bg-gray-50'
                       : ''
                   }`}
                 >
@@ -143,6 +144,48 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Mobile & Tablet: Stacked tier sections */}
+        <div className="space-y-12 lg:hidden">
+          {sortedTierNames.map((tierName) => {
+            const tierSponsors = groupedSponsors[tierName]
+
+            return (
+              <div key={tierName} className="space-y-6">
+                {/* Tier header */}
+                <div className="flex items-center gap-3">
+                  <div className="h-0.5 w-4 bg-blue-900"></div>
+                  <h3 className="font-display text-lg font-bold tracking-wider text-blue-900 uppercase">
+                    {tierName}
+                  </h3>
+                </div>
+
+                {/* Tier sponsors grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3">
+                  {tierSponsors.map((sponsor, i) => (
+                    <div
+                      key={`${sponsor.sponsor.name}-${i}`}
+                      className="-mr-px -mb-px flex min-h-[100px] items-center justify-center border-2 border-dashed border-gray-400 p-6 transition-colors hover:bg-gray-50"
+                    >
+                      <a
+                        href={sponsor.sponsor.website}
+                        className="block rounded transition-opacity hover:opacity-75 focus:opacity-75 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Visit ${sponsor.sponsor.name} website`}
+                      >
+                        <InlineSvgPreviewComponent
+                          className="h-10 w-auto max-w-full object-contain"
+                          value={sponsor.sponsor.logo}
+                        />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
         {/* Become a Sponsor Call-to-Action */}
