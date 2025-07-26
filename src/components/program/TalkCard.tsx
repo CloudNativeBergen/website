@@ -166,7 +166,7 @@ export function TalkCard({
       className={clsx(
         'rounded-lg border transition-all duration-200 hover:shadow-md',
         isBookmarkedTalk
-          ? 'border-brand-cloud-blue bg-blue-50/50 hover:border-brand-cloud-blue/80'
+          ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80'
           : 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue',
         compact ? 'p-3' : 'p-6',
       )}
