@@ -27,8 +27,6 @@ export function DownloadSpeakerImage({
     const images = element.querySelectorAll('img')
     if (images.length === 0) return
 
-    console.log(`Waiting for ${images.length} images to load...`)
-
     await Promise.all(
       Array.from(images).map((img) => {
         return new Promise<void>((resolve) => {
@@ -46,8 +44,6 @@ export function DownloadSpeakerImage({
         })
       }),
     )
-
-    console.log('All images loaded')
   }
 
   /**
@@ -56,8 +52,6 @@ export function DownloadSpeakerImage({
   const generateCanvas = async (
     element: HTMLElement,
   ): Promise<HTMLCanvasElement> => {
-    console.log('Generating canvas with html2canvas-pro...')
-
     const canvas = await html2canvas(element, {
       backgroundColor: '#ffffff',
       scale: 2,
@@ -88,11 +82,6 @@ export function DownloadSpeakerImage({
     if (canvas.width === 0 || canvas.height === 0) {
       throw new Error('Generated canvas has zero dimensions')
     }
-
-    console.log('Canvas generated successfully:', {
-      width: canvas.width,
-      height: canvas.height,
-    })
 
     return canvas
   }
@@ -130,8 +119,6 @@ export function DownloadSpeakerImage({
 
     // Cleanup
     setTimeout(() => URL.revokeObjectURL(url), 100)
-
-    console.log('Download completed:', fileName)
   }
 
   /**
@@ -158,8 +145,6 @@ export function DownloadSpeakerImage({
     setIsDownloading(true)
 
     try {
-      console.log('Starting image download process...')
-
       // Wait for all content to load (especially QR codes)
       await waitForImages(element)
 

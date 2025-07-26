@@ -27,7 +27,7 @@ export function useBookmarks() {
           setBookmarks(JSON.parse(stored))
         }
       } catch (error) {
-        console.error('Failed to load bookmarks:', error)
+        // Silently handle localStorage errors
       } finally {
         setIsLoaded(true)
       }
@@ -38,66 +38,38 @@ export function useBookmarks() {
   useEffect(() => {
     if (isLoaded && typeof window !== 'undefined') {
       try {
-        console.log(
-          `[useBookmarks] Saving ${bookmarks.length} bookmarks to localStorage`,
-        )
         localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks))
       } catch (error) {
-        console.error('Failed to save bookmarks:', error)
+        // Silently handle localStorage errors
       }
     }
   }, [bookmarks, isLoaded])
-
-  // Debug effect to track bookmark changes
-  useEffect(() => {
-    console.log(`[useBookmarks] Bookmarks state changed:`, {
-      count: bookmarks.length,
-      bookmarks: bookmarks.map((b) => ({ talkId: b.talkId, title: b.title })),
-    })
-  }, [bookmarks])
 
   const isBookmarked = (talkId: string): boolean => {
     return bookmarks.some((bookmark) => bookmark.talkId === talkId)
   }
 
   const addBookmark = (talk: BookmarkedTalk) => {
-    console.log(`[useBookmarks] addBookmark called for: ${talk.talkId}`)
     setBookmarks((prev) => {
       if (prev.some((bookmark) => bookmark.talkId === talk.talkId)) {
-        console.log(`[useBookmarks] Already bookmarked, no change`)
         return prev // Already bookmarked
       }
       const newBookmarks = [...prev, talk]
-      console.log(
-        `[useBookmarks] Added bookmark. New count: ${newBookmarks.length}`,
-      )
       return newBookmarks
     })
   }
 
   const removeBookmark = (talkId: string) => {
-    console.log(`[useBookmarks] removeBookmark called for: ${talkId}`)
     setBookmarks((prev) => {
       const newBookmarks = prev.filter((bookmark) => bookmark.talkId !== talkId)
-      console.log(
-        `[useBookmarks] Removed bookmark. New count: ${newBookmarks.length}`,
-      )
       return newBookmarks
     })
   }
 
   const toggleBookmark = (talk: BookmarkedTalk) => {
-    console.log(`[useBookmarks] Toggle bookmark for "${talk.title}":`, {
-      talkId: talk.talkId,
-      currentlyBookmarked: isBookmarked(talk.talkId),
-      currentBookmarks: bookmarks.length,
-    })
-
     if (isBookmarked(talk.talkId)) {
-      console.log(`[useBookmarks] Removing bookmark for: ${talk.talkId}`)
       removeBookmark(talk.talkId)
     } else {
-      console.log(`[useBookmarks] Adding bookmark for: ${talk.talkId}`)
       addBookmark(talk)
     }
   }

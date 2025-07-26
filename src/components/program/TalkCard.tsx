@@ -11,7 +11,7 @@ import {
 import { TrackTalk } from '@/lib/conference/types'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { BookmarkButton } from '@/components/BookmarkButton'
-import { useBookmarks } from '@/hooks/useBookmarks'
+import { useBookmarks } from '@/contexts/BookmarksContext'
 import {
   FormatBadge,
   LevelBadge,
