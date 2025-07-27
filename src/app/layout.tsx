@@ -9,6 +9,7 @@ import {
 } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
+import Script from 'next/script'
 import clsx from 'clsx'
 
 import '@/styles/tailwind.css'
@@ -98,6 +99,13 @@ export default async function RootLayout({
         </div>
         <Analytics />
         <SpeedInsights />
+        <Script
+          defer
+          src="https://api.pirsch.io/pa.js"
+          id="pianjs"
+          data-code="Jc72d7tD73Ai9raeYVPeXJ0OhEJrrvaK"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   )
