@@ -1,6 +1,7 @@
 import {
   SponsorInput,
   SponsorExisting,
+  SponsorWithContactInfo,
   SponsorResponse,
   SponsorListResponse,
   SponsorTierInput,
@@ -15,8 +16,14 @@ import {
  */
 
 // Sponsor functions
-export async function fetchSponsors(): Promise<SponsorExisting[]> {
-  const response = await fetch('/admin/api/sponsor')
+export async function fetchSponsors(
+  includeContactInfo: boolean = false,
+): Promise<SponsorExisting[] | SponsorWithContactInfo[]> {
+  const url = includeContactInfo
+    ? '/admin/api/sponsor?includeContactInfo=true'
+    : '/admin/api/sponsor'
+
+  const response = await fetch(url)
   const result: SponsorListResponse = await response.json()
 
   if (!response.ok) {
@@ -26,9 +33,31 @@ export async function fetchSponsors(): Promise<SponsorExisting[]> {
   return result.sponsors || []
 }
 
+export async function fetchSponsor(
+  id: string,
+  includeContactInfo: boolean = false,
+): Promise<SponsorExisting | SponsorWithContactInfo> {
+  const url = includeContactInfo
+    ? `/admin/api/sponsor/${id}?includeContactInfo=true`
+    : `/admin/api/sponsor/${id}`
+
+  const response = await fetch(url)
+  const result: SponsorResponse = await response.json()
+
+  if (!response.ok) {
+    throw new Error(result.error?.message || 'Failed to load sponsor')
+  }
+
+  if (!result.sponsor) {
+    throw new Error('No sponsor data returned')
+  }
+
+  return result.sponsor
+}
+
 export async function createSponsor(
   data: SponsorInput,
-): Promise<SponsorExisting> {
+): Promise<SponsorWithContactInfo> {
   const response = await fetch('/admin/api/sponsor', {
     method: 'POST',
     headers: {
@@ -47,7 +76,32 @@ export async function createSponsor(
     throw new Error('No sponsor data returned')
   }
 
-  return result.sponsor
+  return result.sponsor as SponsorWithContactInfo
+}
+
+export async function updateSponsor(
+  id: string,
+  data: SponsorInput,
+): Promise<SponsorWithContactInfo> {
+  const response = await fetch(`/admin/api/sponsor/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  const result: SponsorResponse = await response.json()
+
+  if (!response.ok) {
+    throw new Error(result.error?.message || 'Failed to update sponsor')
+  }
+
+  if (!result.sponsor) {
+    throw new Error('No sponsor data returned')
+  }
+
+  return result.sponsor as SponsorWithContactInfo
 }
 
 // Conference sponsor assignment functions

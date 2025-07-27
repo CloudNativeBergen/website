@@ -20,7 +20,11 @@ export const GET = auth(
 
     try {
       const id = context.params.id as string
-      const { sponsor, error } = await getSponsor(id)
+      const { searchParams } = new URL(req.url!)
+      const includeContactInfo =
+        searchParams.get('includeContactInfo') === 'true'
+
+      const { sponsor, error } = await getSponsor(id, includeContactInfo)
       if (error) {
         return sponsorResponseError({
           error,

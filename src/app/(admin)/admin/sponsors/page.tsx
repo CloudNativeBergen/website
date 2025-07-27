@@ -1,4 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
 import { ErrorDisplay } from '@/components/admin'
 import SponsorTierEditor from '@/components/admin/SponsorTierEditor'
 import SponsorTierManagement from '@/components/admin/SponsorTierManagement'
@@ -7,6 +8,7 @@ import {
   BuildingOffice2Icon,
   GlobeAltIcon,
   CurrencyDollarIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
@@ -14,6 +16,7 @@ export default async function AdminSponsors() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       sponsors: true,
+      sponsorContact: true,
       sponsorTiers: true,
     })
 
@@ -26,7 +29,7 @@ export default async function AdminSponsors() {
     )
   }
 
-  const sponsors = conference?.sponsors || []
+  const sponsors: ConferenceSponsorWithContact[] = conference?.sponsors || []
   const sponsorTiers = conference?.sponsor_tiers || []
 
   // Group sponsors by tier
@@ -96,6 +99,36 @@ export default async function AdminSponsors() {
         )
       : 'NOK'
 
+  // Helper functions to check missing information
+  const isMissingContactInfo = (
+    sponsor: ConferenceSponsorWithContact,
+  ): boolean => {
+    return (
+      !sponsor.sponsor.contact_persons ||
+      sponsor.sponsor.contact_persons.length === 0
+    )
+  }
+
+  const isMissingBillingInfo = (
+    sponsor: ConferenceSponsorWithContact,
+  ): boolean => {
+    return !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
+  }
+
+  // Count missing information
+  const sponsorsWithMissingContactInfo = sponsors.filter(isMissingContactInfo)
+  const sponsorsWithMissingBillingInfo = sponsors.filter(isMissingBillingInfo)
+  const hasAnyMissingInfo =
+    sponsorsWithMissingContactInfo.length > 0 ||
+    sponsorsWithMissingBillingInfo.length > 0
+
+  // Calculate summary statistics
+  const availableTiers = sponsorTiers.length
+  const formattedTotalValue = formatCurrency(
+    totalSponsorshipValue,
+    primaryCurrency,
+  )
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="border-b border-gray-200 pb-5">
@@ -126,32 +159,40 @@ export default async function AdminSponsors() {
 
       {/* Sponsorship Summary */}
       {sponsors.length > 0 && (
-        <div className="mt-8">
-          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5">
-            <div className="px-6 py-4">
-              <h2 className="mb-4 text-lg font-medium text-gray-900">
-                Sponsorship Summary
-              </h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-gray-900">
-                    {sponsors.length}
-                  </div>
-                  <div className="text-sm text-gray-500">Total Sponsors</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-green-600">
-                    {formatCurrency(totalSponsorshipValue, primaryCurrency)}
-                  </div>
-                  <div className="text-sm text-gray-500">Total Value</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-indigo-600">
-                    {sponsorTiers.length}
-                  </div>
-                  <div className="text-sm text-gray-500">Available Tiers</div>
-                </div>
+        <div className="rounded-lg bg-white p-6 shadow">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-medium text-gray-900">
+              Sponsorship Summary
+            </h2>
+            {hasAnyMissingInfo && (
+              <div className="flex items-center text-sm text-amber-600">
+                <ExclamationTriangleIcon className="mr-1 h-4 w-4 flex-shrink-0" />
+                <span>Missing contact or billing info</span>
               </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="p-4">
+              <dt className="text-sm font-medium text-gray-500">
+                Total Sponsors
+              </dt>
+              <dd className="mt-1 text-2xl font-semibold text-gray-900">
+                {sponsors.length}
+              </dd>
+            </div>
+            <div className="p-4">
+              <dt className="text-sm font-medium text-gray-500">Total Value</dt>
+              <dd className="mt-1 text-2xl font-semibold text-gray-900">
+                {formattedTotalValue}
+              </dd>
+            </div>
+            <div className="p-4">
+              <dt className="text-sm font-medium text-gray-500">
+                Available Tiers
+              </dt>
+              <dd className="mt-1 text-2xl font-semibold text-gray-900">
+                {availableTiers}
+              </dd>
             </div>
           </div>
         </div>

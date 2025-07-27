@@ -1,3 +1,14 @@
+// Contact role options
+export const CONTACT_ROLE_OPTIONS = [
+  'Billing Reference',
+  'Marketing',
+  'Partnership Manager',
+  'Technical Contact',
+  'Executive Sponsor',
+] as const
+
+export type ContactRole = (typeof CONTACT_ROLE_OPTIONS)[number]
+
 // Core sponsor types
 export interface SponsorTier {
   _id: string
@@ -53,6 +64,22 @@ export interface ConferenceSponsor {
   }
 }
 
+export interface ConferenceSponsorWithContact {
+  sponsor: {
+    name: string
+    website: string
+    logo: string
+    org_number?: string
+    contact_persons?: ContactPerson[]
+    billing?: BillingInfo
+  }
+  tier: {
+    title: string
+    tagline: string
+    tier_type?: 'standard' | 'special'
+  }
+}
+
 export interface SponsorTierResponse {
   sponsorTier?: SponsorTierExisting
   error?: {
@@ -80,11 +107,35 @@ export interface SponsorTierValidationError {
   message: string
 }
 
+// Contact and billing information types
+export interface ContactPerson extends Record<string, unknown> {
+  _key: string
+  name: string
+  email: string
+  phone?: string
+  role?: string
+}
+
+export interface BillingInfo {
+  email: string
+  reference?: string
+  comments?: string
+}
+
+export interface BillingFormData {
+  email?: string
+  reference?: string
+  comments?: string
+}
+
 // Sponsor types
 export interface SponsorInput {
   name: string
   website: string
   logo: string
+  org_number?: string
+  contact_persons?: ContactPerson[]
+  billing?: BillingInfo
 }
 
 export interface SponsorExisting {
@@ -96,8 +147,15 @@ export interface SponsorExisting {
   logo: string
 }
 
+// Admin-specific sponsor type with contact info
+export interface SponsorWithContactInfo extends SponsorExisting {
+  org_number?: string
+  contact_persons?: ContactPerson[]
+  billing?: BillingInfo
+}
+
 export interface SponsorResponse {
-  sponsor?: SponsorExisting
+  sponsor?: SponsorExisting | SponsorWithContactInfo
   error?: {
     message: string
     type?: string
@@ -110,7 +168,7 @@ export interface SponsorResponse {
 }
 
 export interface SponsorListResponse {
-  sponsors?: SponsorExisting[]
+  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
   error?: {
     message: string
     type?: string

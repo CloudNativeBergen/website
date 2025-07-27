@@ -6,6 +6,7 @@ export async function getConferenceForCurrentDomain({
   organizers = false,
   schedule = false,
   sponsors = false,
+  sponsorContact = false,
   sponsorTiers = false,
   topics = false,
   featuredSpeakers = false,
@@ -14,6 +15,7 @@ export async function getConferenceForCurrentDomain({
   organizers?: boolean
   schedule?: boolean
   sponsors?: boolean
+  sponsorContact?: boolean
   sponsorTiers?: boolean
   topics?: boolean
   featuredSpeakers?: boolean
@@ -26,16 +28,16 @@ export async function getConferenceForCurrentDomain({
   const headersList = await headers()
   const domain = headersList.get('host') || ''
   try {
-    return await getConferenceForDomain(
-      domain,
+    return await getConferenceForDomain(domain, {
       organizers,
       schedule,
       sponsors,
+      sponsorContact,
       sponsorTiers,
       topics,
       featuredSpeakers,
       revalidate,
-    )
+    })
   } catch (err) {
     const error = err as Error
     const conference = {} as Conference
@@ -45,13 +47,25 @@ export async function getConferenceForCurrentDomain({
 
 export async function getConferenceForDomain(
   domain: string,
-  organizers: boolean = false,
-  schedule: boolean = false,
-  sponsors: boolean = false,
-  sponsorTiers: boolean = false,
-  topics: boolean = false,
-  featuredSpeakers: boolean = false,
-  revalidate: number = 3600,
+  {
+    organizers = false,
+    schedule = false,
+    sponsors = false,
+    sponsorContact = false,
+    sponsorTiers = false,
+    topics = false,
+    featuredSpeakers = false,
+    revalidate = 3600,
+  }: {
+    organizers?: boolean
+    schedule?: boolean
+    sponsors?: boolean
+    sponsorContact?: boolean
+    sponsorTiers?: boolean
+    topics?: boolean
+    featuredSpeakers?: boolean
+    revalidate?: number
+  } = {},
 ): Promise<{ conference: Conference; domain: string; error: Error | null }> {
   let conference = {} as Conference
   let error = null
@@ -131,7 +145,24 @@ export async function getConferenceForDomain(
       sponsor->{
         name,
         website,
-        logo,
+        logo,${
+          sponsorContact
+            ? `
+        org_number,
+        contact_persons[]{
+          _key,
+          name,
+          email,
+          phone,
+          role
+        },
+        billing{
+          email,
+          reference,
+          comments
+        },`
+            : ''
+        }
       },
       tier->{
         title,

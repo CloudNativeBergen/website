@@ -26,12 +26,13 @@ export const GET = auth(async (req: NextAuthRequest) => {
   try {
     const { searchParams } = new URL(req.url!)
     const query = searchParams.get('q')
+    const includeContactInfo = searchParams.get('includeContactInfo') === 'true'
 
     let result
     if (query) {
-      result = await searchSponsors(query)
+      result = await searchSponsors(query, includeContactInfo)
     } else {
-      result = await getAllSponsors()
+      result = await getAllSponsors(includeContactInfo)
     }
 
     const { sponsors, error } = result

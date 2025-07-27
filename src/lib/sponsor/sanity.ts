@@ -4,6 +4,7 @@ import {
   SponsorTierExisting,
   SponsorInput,
   SponsorExisting,
+  SponsorWithContactInfo,
 } from './types'
 import {
   prepareArrayWithKeys,
@@ -143,22 +144,30 @@ export async function getSponsorTier(
 // Sponsor functions
 export async function createSponsor(
   data: SponsorInput,
-): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
+): Promise<{ sponsor?: SponsorWithContactInfo; error?: Error }> {
   try {
     const sponsor = await clientWrite.create({
       _type: 'sponsor',
       name: data.name,
       website: data.website,
       logo: data.logo,
+      org_number: data.org_number,
+      contact_persons: data.contact_persons
+        ? prepareArrayWithKeys(data.contact_persons, 'contact')
+        : undefined,
+      billing: data.billing,
     })
 
-    const result: SponsorExisting = {
+    const result: SponsorWithContactInfo = {
       _id: sponsor._id,
       _createdAt: sponsor._createdAt,
       _updatedAt: sponsor._updatedAt,
       name: sponsor.name,
       website: sponsor.website,
       logo: sponsor.logo,
+      org_number: sponsor.org_number,
+      contact_persons: sponsor.contact_persons,
+      billing: sponsor.billing,
     }
 
     return { sponsor: result }
@@ -170,7 +179,7 @@ export async function createSponsor(
 export async function updateSponsor(
   id: string,
   data: SponsorInput,
-): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
+): Promise<{ sponsor?: SponsorWithContactInfo; error?: Error }> {
   try {
     const sponsor = await clientWrite
       .patch(id)
@@ -178,16 +187,24 @@ export async function updateSponsor(
         name: data.name,
         website: data.website,
         logo: data.logo,
+        org_number: data.org_number,
+        contact_persons: data.contact_persons
+          ? prepareArrayWithKeys(data.contact_persons, 'contact')
+          : undefined,
+        billing: data.billing,
       })
       .commit()
 
-    const result: SponsorExisting = {
+    const result: SponsorWithContactInfo = {
       _id: sponsor._id,
       _createdAt: sponsor._createdAt,
       _updatedAt: sponsor._updatedAt,
       name: sponsor.name,
       website: sponsor.website,
       logo: sponsor.logo,
+      org_number: sponsor.org_number,
+      contact_persons: sponsor.contact_persons,
+      billing: sponsor.billing,
     }
 
     return { sponsor: result }
@@ -207,16 +224,42 @@ export async function deleteSponsor(id: string): Promise<{ error?: Error }> {
 
 export async function getSponsor(
   id: string,
-): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
+  includeContactInfo: boolean = false,
+): Promise<{
+  sponsor?: SponsorExisting | SponsorWithContactInfo
+  error?: Error
+}> {
   try {
-    const sponsor = await clientWrite.fetch(
-      `*[_type == "sponsor" && _id == $id][0]{
-        _id,
+    const fields = includeContactInfo
+      ? `_id,
         _createdAt,
         _updatedAt,
         name,
         website,
-        logo
+        logo,
+        org_number,
+        contact_persons[]{
+          _key,
+          name,
+          email,
+          phone,
+          role
+        },
+        billing{
+          email,
+          reference,
+          comments
+        }`
+      : `_id,
+        _createdAt,
+        _updatedAt,
+        name,
+        website,
+        logo`
+
+    const sponsor = await clientWrite.fetch(
+      `*[_type == "sponsor" && _id == $id][0]{
+        ${fields}
       }`,
       { id },
     )
@@ -233,16 +276,42 @@ export async function getSponsor(
 
 export async function searchSponsors(
   query: string,
-): Promise<{ sponsors?: SponsorExisting[]; error?: Error }> {
+  includeContactInfo: boolean = false,
+): Promise<{
+  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
+  error?: Error
+}> {
   try {
-    const sponsors = await clientWrite.fetch(
-      `*[_type == "sponsor" && name match $searchQuery]{
-        _id,
+    const fields = includeContactInfo
+      ? `_id,
         _createdAt,
         _updatedAt,
         name,
         website,
-        logo
+        logo,
+        org_number,
+        contact_persons[]{
+          _key,
+          name,
+          email,
+          phone,
+          role
+        },
+        billing{
+          email,
+          reference,
+          comments
+        }`
+      : `_id,
+        _createdAt,
+        _updatedAt,
+        name,
+        website,
+        logo`
+
+    const sponsors = await clientWrite.fetch(
+      `*[_type == "sponsor" && name match $searchQuery]{
+        ${fields}
       }`,
       { searchQuery: `${query}*` },
     )
@@ -253,19 +322,43 @@ export async function searchSponsors(
   }
 }
 
-export async function getAllSponsors(): Promise<{
-  sponsors?: SponsorExisting[]
+export async function getAllSponsors(
+  includeContactInfo: boolean = false,
+): Promise<{
+  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
   error?: Error
 }> {
   try {
-    const sponsors = await clientWrite.fetch(
-      `*[_type == "sponsor"] | order(name asc){
-        _id,
+    const fields = includeContactInfo
+      ? `_id,
         _createdAt,
         _updatedAt,
         name,
         website,
-        logo
+        logo,
+        org_number,
+        contact_persons[]{
+          _key,
+          name,
+          email,
+          phone,
+          role
+        },
+        billing{
+          email,
+          reference,
+          comments
+        }`
+      : `_id,
+        _createdAt,
+        _updatedAt,
+        name,
+        website,
+        logo`
+
+    const sponsors = await clientWrite.fetch(
+      `*[_type == "sponsor"] | order(name asc){
+        ${fields}
       }`,
     )
 

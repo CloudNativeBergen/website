@@ -18,17 +18,23 @@ import {
   ExclamationTriangleIcon,
   CheckIcon,
   ChevronUpDownIcon,
+  ChevronDownIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import {
-  ConferenceSponsor,
+  ConferenceSponsorWithContact,
   SponsorExisting,
+  SponsorWithContactInfo,
   SponsorInput,
   SponsorTierExisting,
+  ContactPerson,
+  BillingFormData,
+  CONTACT_ROLE_OPTIONS,
 } from '@/lib/sponsor/types'
 import {
   fetchSponsors,
   createSponsor,
+  updateSponsor,
   addSponsorToConference,
 } from '@/lib/sponsor/client'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
@@ -38,11 +44,14 @@ interface AddSponsorModalProps {
   onClose: () => void
   sponsorTiers: SponsorTierExisting[]
   preselectedTierId?: string
-  onSponsorAdded: (sponsor: ConferenceSponsor) => void
+  editingSponsor?: ConferenceSponsorWithContact | null
+  onSponsorAdded: (sponsor: ConferenceSponsorWithContact) => void
+  onSponsorUpdated?: (sponsor: ConferenceSponsorWithContact) => void
 }
 
-interface SponsorFormData extends SponsorInput {
+interface SponsorFormData extends Omit<SponsorInput, 'billing'> {
   tierId: string
+  billing?: BillingFormData
 }
 
 const DEFAULT_SVG = `<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -55,13 +64,22 @@ export default function SponsorAddModal({
   onClose,
   sponsorTiers,
   preselectedTierId,
+  editingSponsor,
   onSponsorAdded,
+  onSponsorUpdated,
 }: AddSponsorModalProps) {
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
     website: '',
     logo: DEFAULT_SVG,
     tierId: '',
+    org_number: '',
+    contact_persons: [],
+    billing: {
+      email: '',
+      reference: '',
+      comments: '',
+    },
   })
   const [selectedSponsor, setSelectedSponsor] =
     useState<SponsorExisting | null>(null)
@@ -110,19 +128,48 @@ export default function SponsorAddModal({
   // Reset form when modal opens/closes or preselectedTierId changes
   useEffect(() => {
     if (isOpen) {
-      const selectedTierId = preselectedTierId || sponsorTiers[0]?._id || ''
-      setFormData({
-        name: '',
-        website: '',
-        logo: DEFAULT_SVG,
-        tierId: selectedTierId,
-      })
+      if (editingSponsor) {
+        // Editing mode: load existing sponsor data
+        const currentTierMatch = sponsorTiers.find(
+          (tier) => tier.title === editingSponsor.tier?.title,
+        )
+        setFormData({
+          name: editingSponsor.sponsor.name,
+          website: editingSponsor.sponsor.website,
+          logo: editingSponsor.sponsor.logo || DEFAULT_SVG,
+          tierId: currentTierMatch?._id || sponsorTiers[0]?._id || '',
+          org_number: editingSponsor.sponsor.org_number || '',
+          contact_persons: editingSponsor.sponsor.contact_persons || [],
+          billing: editingSponsor.sponsor.billing || {
+            email: '',
+            reference: '',
+            comments: '',
+          },
+        })
+        setIsCreatingNew(false) // Not creating new, we're editing existing
+      } else {
+        // Create mode: reset form
+        const selectedTierId = preselectedTierId || sponsorTiers[0]?._id || ''
+        setFormData({
+          name: '',
+          website: '',
+          logo: DEFAULT_SVG,
+          tierId: selectedTierId,
+          org_number: '',
+          contact_persons: [],
+          billing: {
+            email: '',
+            reference: '',
+            comments: '',
+          },
+        })
+        setIsCreatingNew(false)
+      }
       setSelectedSponsor(null)
       setSponsorQuery('')
-      setIsCreatingNew(false)
       setError('')
     }
-  }, [isOpen, sponsorTiers, preselectedTierId])
+  }, [isOpen, sponsorTiers, preselectedTierId, editingSponsor])
 
   // Update tierId when preselectedTierId changes (even if modal is already open)
   useEffect(() => {
@@ -180,41 +227,104 @@ export default function SponsorAddModal({
     try {
       let sponsorId = selectedSponsor?._id
 
-      // Create new sponsor if needed
-      if (isCreatingNew || !sponsorId) {
-        const sponsor = await createSponsor({
-          name: formData.name,
-          website: formData.website,
-          logo: formData.logo,
+      // Transform billing data for API
+      const billingData = formData.billing?.email
+        ? {
+            email: formData.billing.email,
+            reference: formData.billing.reference,
+            comments: formData.billing.comments,
+          }
+        : undefined
+
+      const sponsorData: SponsorInput = {
+        name: formData.name,
+        website: formData.website,
+        logo: formData.logo,
+        org_number: formData.org_number,
+        contact_persons: formData.contact_persons,
+        billing: billingData,
+      }
+
+      if (editingSponsor) {
+        // Update existing sponsor
+        // We need to get the sponsor ID from the existing sponsor data
+        // For this, we need to fetch the sponsor details first to get the ID
+        const existingSponsors = await fetchSponsors()
+        const existingSponsor = existingSponsors.find(
+          (s) => s.name === editingSponsor.sponsor.name,
+        )
+
+        if (!existingSponsor) {
+          throw new Error('Could not find existing sponsor to update')
+        }
+
+        const updatedSponsor = await updateSponsor(
+          existingSponsor._id,
+          sponsorData,
+        )
+
+        // Find the tier for the updated sponsor
+        const selectedTier = sponsorTiers.find(
+          (tier) => tier._id === formData.tierId,
+        )
+
+        // Create the ConferenceSponsorWithContact object to pass back
+        const updatedConferenceSponsor: ConferenceSponsorWithContact = {
+          sponsor: {
+            name: updatedSponsor.name,
+            website: updatedSponsor.website,
+            logo: updatedSponsor.logo,
+            org_number: (updatedSponsor as SponsorWithContactInfo).org_number,
+            contact_persons: (updatedSponsor as SponsorWithContactInfo)
+              .contact_persons,
+            billing: (updatedSponsor as SponsorWithContactInfo).billing,
+          },
+          tier: {
+            title: selectedTier?.title || '',
+            tagline: selectedTier?.tagline || '',
+            tier_type: selectedTier?.tier_type,
+          },
+        }
+
+        onSponsorUpdated?.(updatedConferenceSponsor)
+      } else {
+        // Create new sponsor if needed
+        if (isCreatingNew || !sponsorId) {
+          const sponsor = await createSponsor(sponsorData)
+          sponsorId = sponsor._id
+        }
+
+        // Add sponsor to conference
+        await addSponsorToConference({
+          sponsorId,
+          tierId: formData.tierId,
         })
-        sponsorId = sponsor._id
+
+        // Find the tier for the added sponsor
+        const selectedTier = sponsorTiers.find(
+          (tier) => tier._id === formData.tierId,
+        )
+
+        // Create the ConferenceSponsorWithContact object to pass back
+        const addedSponsor: ConferenceSponsorWithContact = {
+          sponsor: {
+            name: formData.name,
+            website: formData.website,
+            logo: formData.logo,
+            org_number: formData.org_number,
+            contact_persons: formData.contact_persons,
+            billing: billingData,
+          },
+          tier: {
+            title: selectedTier?.title || '',
+            tagline: selectedTier?.tagline || '',
+            tier_type: selectedTier?.tier_type,
+          },
+        }
+
+        onSponsorAdded(addedSponsor)
       }
 
-      // Add sponsor to conference
-      await addSponsorToConference({
-        sponsorId,
-        tierId: formData.tierId,
-      })
-
-      // Find the tier for the added sponsor
-      const selectedTier = sponsorTiers.find(
-        (tier) => tier._id === formData.tierId,
-      )
-
-      // Create the ConferenceSponsor object to pass back
-      const addedSponsor: ConferenceSponsor = {
-        sponsor: {
-          name: formData.name,
-          website: formData.website,
-          logo: formData.logo,
-        },
-        tier: {
-          title: selectedTier?.title || '',
-          tagline: selectedTier?.tagline || '',
-        },
-      }
-
-      onSponsorAdded(addedSponsor)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -277,7 +387,7 @@ export default function SponsorAddModal({
                       as="h3"
                       className="text-base leading-6 font-semibold text-gray-900 sm:text-lg"
                     >
-                      Add Sponsor
+                      {editingSponsor ? 'Edit Sponsor' : 'Add Sponsor'}
                     </DialogTitle>
 
                     {error && (
@@ -297,91 +407,93 @@ export default function SponsorAddModal({
                       onSubmit={handleSubmit}
                       className="mt-4 space-y-4 sm:mt-6 sm:space-y-6"
                     >
-                      {/* Sponsor Selection */}
-                      <div>
-                        <label className="block text-sm/6 font-medium text-gray-900">
-                          Select Sponsor
-                        </label>
-                        <div className="mt-2">
-                          <Combobox
-                            value={selectedSponsor}
-                            onChange={handleSponsorSelect}
-                          >
-                            <div className="relative">
-                              <ComboboxInput
-                                className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-left text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset focus:ring-2 focus:ring-indigo-600 sm:text-sm/6"
-                                displayValue={(
-                                  sponsor: SponsorExisting | null,
-                                ) => sponsor?.name || sponsorQuery}
-                                onChange={(event) =>
-                                  setSponsorQuery(event.target.value)
-                                }
-                                placeholder={
-                                  isLoadingSponsors
-                                    ? 'Loading...'
-                                    : 'Search existing sponsors or type new name'
-                                }
-                              />
-                              <div className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none">
-                                <ChevronUpDownIcon
-                                  className="h-5 w-5 text-gray-400"
-                                  aria-hidden="true"
+                      {/* Sponsor Selection - Hidden when editing */}
+                      {!editingSponsor && (
+                        <div>
+                          <label className="block text-sm/6 font-medium text-gray-900">
+                            Select Sponsor
+                          </label>
+                          <div className="mt-2">
+                            <Combobox
+                              value={selectedSponsor}
+                              onChange={handleSponsorSelect}
+                            >
+                              <div className="relative">
+                                <ComboboxInput
+                                  className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-left text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset focus:ring-2 focus:ring-indigo-600 sm:text-sm/6"
+                                  displayValue={(
+                                    sponsor: SponsorExisting | null,
+                                  ) => sponsor?.name || sponsorQuery}
+                                  onChange={(event) =>
+                                    setSponsorQuery(event.target.value)
+                                  }
+                                  placeholder={
+                                    isLoadingSponsors
+                                      ? 'Loading...'
+                                      : 'Search existing sponsors or type new name'
+                                  }
                                 />
-                              </div>
+                                <div className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none">
+                                  <ChevronUpDownIcon
+                                    className="h-5 w-5 text-gray-400"
+                                    aria-hidden="true"
+                                  />
+                                </div>
 
-                              <ComboboxOptions className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm">
-                                {sponsorQuery !== '' &&
-                                  !filteredSponsors.find(
-                                    (s) =>
-                                      s.name.toLowerCase() ===
-                                      sponsorQuery.toLowerCase(),
-                                  ) && (
+                                <ComboboxOptions className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm">
+                                  {sponsorQuery !== '' &&
+                                    !filteredSponsors.find(
+                                      (s) =>
+                                        s.name.toLowerCase() ===
+                                        sponsorQuery.toLowerCase(),
+                                    ) && (
+                                      <ComboboxOption
+                                        value={null}
+                                        className="group relative cursor-default py-2 pr-9 pl-3 text-gray-900 select-none data-focus:bg-indigo-600 data-focus:text-white"
+                                      >
+                                        <div className="flex items-center">
+                                          <PlusIcon className="h-5 w-5 flex-shrink-0 text-gray-400 group-data-focus:text-white" />
+                                          <span className="ml-3 truncate group-data-selected:font-semibold">
+                                            Create &quot;{sponsorQuery}&quot;
+                                          </span>
+                                        </div>
+                                      </ComboboxOption>
+                                    )}
+                                  {filteredSponsors.map((sponsor) => (
                                     <ComboboxOption
-                                      value={null}
+                                      key={sponsor._id}
+                                      value={sponsor}
                                       className="group relative cursor-default py-2 pr-9 pl-3 text-gray-900 select-none data-focus:bg-indigo-600 data-focus:text-white"
                                     >
                                       <div className="flex items-center">
-                                        <PlusIcon className="h-5 w-5 flex-shrink-0 text-gray-400 group-data-focus:text-white" />
+                                        <div className="h-6 w-6 flex-shrink-0">
+                                          {sponsor.logo ? (
+                                            <InlineSvgPreviewComponent
+                                              className="h-6 w-6"
+                                              value={sponsor.logo}
+                                            />
+                                          ) : (
+                                            <BuildingOffice2Icon className="h-6 w-6 text-gray-400" />
+                                          )}
+                                        </div>
                                         <span className="ml-3 truncate group-data-selected:font-semibold">
-                                          Create &quot;{sponsorQuery}&quot;
+                                          {sponsor.name}
                                         </span>
                                       </div>
-                                    </ComboboxOption>
-                                  )}
-                                {filteredSponsors.map((sponsor) => (
-                                  <ComboboxOption
-                                    key={sponsor._id}
-                                    value={sponsor}
-                                    className="group relative cursor-default py-2 pr-9 pl-3 text-gray-900 select-none data-focus:bg-indigo-600 data-focus:text-white"
-                                  >
-                                    <div className="flex items-center">
-                                      <div className="h-6 w-6 flex-shrink-0">
-                                        {sponsor.logo ? (
-                                          <InlineSvgPreviewComponent
-                                            className="h-6 w-6"
-                                            value={sponsor.logo}
-                                          />
-                                        ) : (
-                                          <BuildingOffice2Icon className="h-6 w-6 text-gray-400" />
-                                        )}
-                                      </div>
-                                      <span className="ml-3 truncate group-data-selected:font-semibold">
-                                        {sponsor.name}
+                                      <span className="absolute inset-y-0 right-0 hidden items-center pr-4 text-indigo-600 group-data-focus:text-white group-data-selected:flex">
+                                        <CheckIcon
+                                          className="h-5 w-5"
+                                          aria-hidden="true"
+                                        />
                                       </span>
-                                    </div>
-                                    <span className="absolute inset-y-0 right-0 hidden items-center pr-4 text-indigo-600 group-data-focus:text-white group-data-selected:flex">
-                                      <CheckIcon
-                                        className="h-5 w-5"
-                                        aria-hidden="true"
-                                      />
-                                    </span>
-                                  </ComboboxOption>
-                                ))}
-                              </ComboboxOptions>
-                            </div>
-                          </Combobox>
+                                    </ComboboxOption>
+                                  ))}
+                                </ComboboxOptions>
+                              </div>
+                            </Combobox>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Sponsor Details */}
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-8">
@@ -480,41 +592,320 @@ export default function SponsorAddModal({
                         >
                           Sponsor Tier *
                         </label>
-                        <div className="mt-2">
-                          <div className="grid grid-cols-1">
-                            <select
-                              id="tier"
-                              value={formData.tierId}
-                              onChange={(e) => {
+                        <div className="mt-2 grid grid-cols-1">
+                          <select
+                            id="tier"
+                            value={formData.tierId}
+                            onChange={(e) => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                tierId: e.target.value,
+                              }))
+                            }}
+                            required
+                            className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                          >
+                            <option value="">Select a tier</option>
+                            {sponsorTiers.map((tier) => (
+                              <option key={tier._id} value={tier._id}>
+                                {tier.title}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDownIcon
+                            aria-hidden="true"
+                            className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Contact Information Section */}
+                      <div className="border-t border-gray-200 pt-6">
+                        <h4 className="text-base font-semibold text-gray-900">
+                          Contact & Billing Information (Optional)
+                        </h4>
+                        <p className="mt-1 text-sm text-gray-600">
+                          This information is only visible to organizers and
+                          will not be displayed publicly.
+                        </p>
+
+                        {/* Organization Number */}
+                        <div className="mt-4">
+                          <label
+                            htmlFor="org_number"
+                            className="block text-sm/6 font-medium text-gray-900"
+                          >
+                            Organization Number
+                          </label>
+                          <div className="mt-2">
+                            <input
+                              type="text"
+                              id="org_number"
+                              value={formData.org_number || ''}
+                              onChange={(e) =>
                                 setFormData((prev) => ({
                                   ...prev,
-                                  tierId: e.target.value,
+                                  org_number: e.target.value,
+                                }))
+                              }
+                              className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                              placeholder="Company registration number"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Contact Persons */}
+                        <div className="mt-4">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-sm/6 font-medium text-gray-900">
+                              Contact Persons
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newContact: ContactPerson = {
+                                  _key: `contact-${Date.now()}`,
+                                  name: '',
+                                  email: '',
+                                  phone: '',
+                                  role: '',
+                                }
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  contact_persons: [
+                                    ...(prev.contact_persons || []),
+                                    newContact,
+                                  ],
                                 }))
                               }}
-                              required
-                              className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                              className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
                             >
-                              <option value="">Select a tier</option>
-                              {sponsorTiers.map((tier) => (
-                                <option key={tier._id} value={tier._id}>
-                                  {tier.title}
-                                </option>
-                              ))}
-                            </select>
-                            <svg
-                              fill="none"
-                              viewBox="0 0 20 20"
-                              strokeWidth={1.5}
-                              stroke="currentColor"
-                              aria-hidden="true"
-                              className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="m19.5 8.25-7.5 7.5-7.5-7.5"
-                              />
-                            </svg>
+                              + Add Contact
+                            </button>
+                          </div>
+                          <div className="mt-2 space-y-3">
+                            {formData.contact_persons?.map((contact, index) => (
+                              <div
+                                key={contact._key}
+                                className="rounded-lg border border-gray-200 bg-gray-50 p-4"
+                              >
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700">
+                                      Name *
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={contact.name}
+                                      onChange={(e) => {
+                                        const updatedContacts = [
+                                          ...(formData.contact_persons || []),
+                                        ]
+                                        updatedContacts[index] = {
+                                          ...contact,
+                                          name: e.target.value,
+                                        }
+                                        setFormData((prev) => ({
+                                          ...prev,
+                                          contact_persons: updatedContacts,
+                                        }))
+                                      }}
+                                      className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+                                      placeholder="Full name"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700">
+                                      Email *
+                                    </label>
+                                    <input
+                                      type="email"
+                                      value={contact.email}
+                                      onChange={(e) => {
+                                        const updatedContacts = [
+                                          ...(formData.contact_persons || []),
+                                        ]
+                                        updatedContacts[index] = {
+                                          ...contact,
+                                          email: e.target.value,
+                                        }
+                                        setFormData((prev) => ({
+                                          ...prev,
+                                          contact_persons: updatedContacts,
+                                        }))
+                                      }}
+                                      className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+                                      placeholder="email@example.com"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700">
+                                      Phone
+                                    </label>
+                                    <input
+                                      type="tel"
+                                      value={contact.phone || ''}
+                                      onChange={(e) => {
+                                        const updatedContacts = [
+                                          ...(formData.contact_persons || []),
+                                        ]
+                                        updatedContacts[index] = {
+                                          ...contact,
+                                          phone: e.target.value,
+                                        }
+                                        setFormData((prev) => ({
+                                          ...prev,
+                                          contact_persons: updatedContacts,
+                                        }))
+                                      }}
+                                      className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+                                      placeholder="+47 123 45 678"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700">
+                                      Role
+                                    </label>
+                                    <div className="mt-1 grid grid-cols-1">
+                                      <select
+                                        value={contact.role || ''}
+                                        onChange={(e) => {
+                                          const updatedContacts = [
+                                            ...(formData.contact_persons || []),
+                                          ]
+                                          updatedContacts[index] = {
+                                            ...contact,
+                                            role: e.target.value,
+                                          }
+                                          setFormData((prev) => ({
+                                            ...prev,
+                                            contact_persons: updatedContacts,
+                                          }))
+                                        }}
+                                        className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                      >
+                                        <option value="">
+                                          Select a role...
+                                        </option>
+                                        {CONTACT_ROLE_OPTIONS.map((role) => (
+                                          <option key={role} value={role}>
+                                            {role}
+                                          </option>
+                                        ))}
+                                      </select>
+                                      <ChevronDownIcon
+                                        aria-hidden="true"
+                                        className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-3 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updatedContacts = (
+                                        formData.contact_persons || []
+                                      ).filter((_, i) => i !== index)
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        contact_persons: updatedContacts,
+                                      }))
+                                    }}
+                                    className="text-sm text-red-600 hover:text-red-500"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Billing Information */}
+                        <div className="mt-4">
+                          <h5 className="text-sm font-medium text-gray-900">
+                            Billing Information
+                          </h5>
+                          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div className="sm:col-span-2">
+                              <label
+                                htmlFor="billing_email"
+                                className="block text-sm/6 font-medium text-gray-900"
+                              >
+                                Billing Email
+                              </label>
+                              <div className="mt-2">
+                                <input
+                                  type="email"
+                                  id="billing_email"
+                                  value={formData.billing?.email || ''}
+                                  onChange={(e) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      billing: {
+                                        ...prev.billing,
+                                        email: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                  placeholder="billing@example.com"
+                                />
+                              </div>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label
+                                htmlFor="billing_reference"
+                                className="block text-sm/6 font-medium text-gray-900"
+                              >
+                                Billing Reference
+                              </label>
+                              <div className="mt-2">
+                                <input
+                                  type="text"
+                                  id="billing_reference"
+                                  value={formData.billing?.reference || ''}
+                                  onChange={(e) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      billing: {
+                                        ...prev.billing,
+                                        reference: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                  placeholder="PO number, reference code, etc."
+                                />
+                              </div>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label
+                                htmlFor="billing_comments"
+                                className="block text-sm/6 font-medium text-gray-900"
+                              >
+                                Billing Comments
+                              </label>
+                              <div className="mt-2">
+                                <textarea
+                                  id="billing_comments"
+                                  rows={3}
+                                  value={formData.billing?.comments || ''}
+                                  onChange={(e) =>
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      billing: {
+                                        ...prev.billing,
+                                        comments: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                  placeholder="Additional billing instructions or notes..."
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -538,7 +929,13 @@ export default function SponsorAddModal({
                           }
                           className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                         >
-                          {isSubmitting ? 'Adding...' : 'Add Sponsor'}
+                          {isSubmitting
+                            ? editingSponsor
+                              ? 'Updating...'
+                              : 'Adding...'
+                            : editingSponsor
+                              ? 'Update Sponsor'
+                              : 'Add Sponsor'}
                         </button>
                       </div>
                     </form>

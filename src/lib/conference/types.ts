@@ -2,7 +2,11 @@ import { Reference, TypedObject } from 'sanity'
 import { Format, ProposalExisting } from '@/lib/proposal/types'
 import { Speaker, SpeakerWithTalks } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
-import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
+import {
+  SponsorTier,
+  ConferenceSponsor,
+  ConferenceSponsorWithContact,
+} from '@/lib/sponsor/types'
 
 export interface ConferenceProposals {
   conference: Conference | Reference
@@ -59,7 +63,7 @@ export interface Conference {
   domains: string[]
   formats: Format[]
   topics: Topic[]
-  sponsors?: ConferenceSponsor[]
+  sponsors?: ConferenceSponsor[] | ConferenceSponsorWithContact[]
   sponsor_tiers?: SponsorTier[]
   schedules?: ConferenceSchedule[]
   vanity_metrics?: ConferenceVanityMetric[]
