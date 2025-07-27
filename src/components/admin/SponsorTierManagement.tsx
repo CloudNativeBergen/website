@@ -10,7 +10,6 @@ import {
   TrashIcon,
   ArrowDownTrayIcon,
   PencilIcon,
-  ExclamationTriangleIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
 import {
@@ -69,13 +68,6 @@ export default function SponsorTierManagement({
   ): boolean => {
     return !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
   }
-
-  // Helper functions to count missing information
-  const sponsorsWithMissingContactInfo = sponsors.filter(isMissingContactInfo)
-  const sponsorsWithMissingBillingInfo = sponsors.filter(isMissingBillingInfo)
-  const hasAnyMissingInfo =
-    sponsorsWithMissingContactInfo.length > 0 ||
-    sponsorsWithMissingBillingInfo.length > 0
 
   const addSponsorToState = (newSponsor: ConferenceSponsorWithContact) => {
     // Add to sponsors array
@@ -269,49 +261,6 @@ export default function SponsorTierManagement({
           Add Sponsor
         </button>
       </div>
-
-      {/* Warning Section for Missing Information */}
-      {sponsors.length > 0 && hasAnyMissingInfo && (
-        <div className="rounded-md bg-yellow-50 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">
-                Sponsor Information Incomplete
-              </h3>
-              <div className="mt-2 text-sm text-yellow-700">
-                <p>Some sponsors are missing required information:</p>
-                <ul className="mt-1 list-inside list-disc space-y-1">
-                  {sponsorsWithMissingContactInfo.length > 0 && (
-                    <li>
-                      {sponsorsWithMissingContactInfo.length} sponsor
-                      {sponsorsWithMissingContactInfo.length !== 1
-                        ? 's'
-                        : ''}{' '}
-                      missing contact information
-                    </li>
-                  )}
-                  {sponsorsWithMissingBillingInfo.length > 0 && (
-                    <li>
-                      {sponsorsWithMissingBillingInfo.length} sponsor
-                      {sponsorsWithMissingBillingInfo.length !== 1
-                        ? 's'
-                        : ''}{' '}
-                      missing billing information
-                    </li>
-                  )}
-                </ul>
-                <p className="mt-2">
-                  Look for red indicators (🔴) on sponsor cards below and click
-                  the edit button to add missing information.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {sponsors.length === 0 ? (
         <div className="py-12 text-center">

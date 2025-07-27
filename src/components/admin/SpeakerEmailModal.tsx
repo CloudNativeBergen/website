@@ -8,6 +8,7 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { SpeakerEmailTemplate } from '@/components/email/SpeakerEmailTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
+import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 
 interface SpeakerEmailModalProps {
@@ -83,7 +84,9 @@ export function SpeakerEmailModal({
     message: PortableTextBlock[]
   }) => {
     // Convert PortableText to HTML for individual speaker emails
-    const messageHTML = await portableTextToHTML(message as any)
+    const messageHTML = await portableTextToHTML(
+      message as PortableTextBlockForHTML[],
+    )
 
     // Use the multi-speaker endpoint for all cases
     const response = await fetch('/admin/api/speakers/email/multi', {
@@ -139,7 +142,6 @@ export function SpeakerEmailModal({
   // Create preview component
   const createPreview = ({
     subject,
-    message,
     messageHTML,
   }: {
     subject: string

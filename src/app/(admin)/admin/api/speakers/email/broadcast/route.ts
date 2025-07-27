@@ -4,30 +4,13 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { render } from '@react-email/render'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import { isValidPortableText } from '@/lib/portabletext/validation'
 import React from 'react'
 import { getOrCreateConferenceAudience } from '@/lib/email/audience'
 import { Resend } from 'resend'
 import { PortableTextBlock } from '@portabletext/types'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-
-// Validation function for PortableText blocks
-function isValidPortableTextBlock(obj: any): obj is PortableTextBlock {
-  return (
-    obj &&
-    typeof obj === 'object' &&
-    typeof obj._type === 'string' &&
-    typeof obj._key === 'string'
-  )
-}
-
-function isValidPortableText(data: any): data is PortableTextBlock[] {
-  return (
-    Array.isArray(data) &&
-    data.length > 0 &&
-    data.every(isValidPortableTextBlock)
-  )
-}
 
 export const dynamic = 'force-dynamic'
 
@@ -62,7 +45,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       }
 
       messagePortableText = parsed
-    } catch (error) {
+    } catch {
       return Response.json(
         { error: 'Invalid JSON format in message' },
         { status: 400 },
@@ -78,8 +61,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
     }
 
     // Get or create the conference audience
-    const { audienceId, error: audienceError } =
-      await getOrCreateConferenceAudience(conference)
+    const { audienceId } = await getOrCreateConferenceAudience(conference)
 
     if (!audienceId) {
       return Response.json(
@@ -134,7 +116,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       broadcastId: broadcastResponse.data!.id,
       audienceId,
     })
-  } catch (error) {
+  } catch {
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 })

@@ -113,7 +113,6 @@ export function EmailModal({
 
   const handleSend = async () => {
     const currentMessage = getCurrentMessage()
-    const currentMessageHTML = getCurrentMessageHTML()
 
     if (!subject.trim() || !currentMessage.trim()) {
       showNotification({
