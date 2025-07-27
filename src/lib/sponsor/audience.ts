@@ -1,26 +1,12 @@
 import { ContactPerson, SponsorWithContactInfo } from './types'
-import { Contact, syncSponsorAudience } from '@/lib/email/audience'
+import {
+  Contact,
+  getOrCreateConferenceAudienceByType,
+  addContactToAudience,
+  removeContactFromAudience,
+} from '@/lib/email/audience'
 import { Conference } from '@/lib/conference/types'
-
-/**
- * Extract email contacts from sponsor contact persons
- */
-export function extractSponsorContacts(
-  sponsor: SponsorWithContactInfo,
-): Contact[] {
-  if (!sponsor.contact_persons) {
-    return []
-  }
-
-  return sponsor.contact_persons
-    .filter((contact) => contact.email) // Only include contacts with email
-    .map((contact) => ({
-      email: contact.email,
-      firstName: contact.name.split(' ')[0] || '',
-      lastName: contact.name.split(' ').slice(1).join(' ') || '',
-      organization: sponsor.name,
-    }))
-}
+import { delay, EMAIL_CONFIG } from '@/lib/email/config'
 
 /**
  * Compare old and new contact lists to determine what changed
@@ -45,6 +31,7 @@ export function diffSponsorContacts(
 
 /**
  * Update sponsor audience when contacts change
+ * Only adds/removes specific contacts that changed - no full sync needed
  */
 export async function updateSponsorAudience(
   conference: Conference,
@@ -57,28 +44,30 @@ export async function updateSponsorAudience(
   error?: Error
 }> {
   try {
-    // Extract contacts from both old and new sponsor data
-    const newContacts = extractSponsorContacts(newSponsor)
-
-    // Get all current sponsor contacts for the conference
-    // We need to do a full sync to ensure consistency across all sponsors
-    const allSponsorContacts = await getAllConferenceSponsorContacts(conference)
-
-    // Update the contacts for this specific sponsor
-    const updatedAllContacts = allSponsorContacts.filter(
-      (contact) => contact.organization !== newSponsor.name,
+    // Calculate the diff to know exactly what changed
+    const oldContactsWithPerson = oldSponsor?.contact_persons || []
+    const newContactsWithPerson = newSponsor.contact_persons || []
+    const { added, removed } = diffSponsorContacts(
+      oldContactsWithPerson,
+      newContactsWithPerson,
     )
-    updatedAllContacts.push(...newContacts)
 
-    // Sync the entire sponsor audience
-    const result = await syncSponsorAudience(conference, updatedAllContacts)
-
-    return {
-      success: result.success,
-      addedCount: result.addedCount,
-      removedCount: result.removedCount,
-      error: result.error,
+    // If no changes, skip the sync
+    if (added.length === 0 && removed.length === 0) {
+      return {
+        success: true,
+        addedCount: 0,
+        removedCount: 0,
+      }
     }
+
+    // Use incremental updates for all changes - no full sync needed
+    return await updateSponsorAudienceIncremental(
+      conference,
+      added,
+      removed,
+      newSponsor.name,
+    )
   } catch (error) {
     console.error('Failed to update sponsor audience:', error)
     return {
@@ -91,55 +80,86 @@ export async function updateSponsorAudience(
 }
 
 /**
- * Get all sponsor contacts for a conference
- * This queries all sponsors associated with the conference
+ * Incremental sponsor audience update - only add/remove specific contacts
+ * Uses lib/email/audience functions directly for maximum reuse
  */
-async function getAllConferenceSponsorContacts(
+async function updateSponsorAudienceIncremental(
   conference: Conference,
-): Promise<Contact[]> {
+  addedContacts: ContactPerson[],
+  removedContacts: ContactPerson[],
+  sponsorName: string,
+): Promise<{
+  success: boolean
+  addedCount: number
+  removedCount: number
+  error?: Error
+}> {
   try {
-    // Import here to avoid circular dependencies
-    const { clientWrite } = await import('@/lib/sanity/client')
+    // Get or create the sponsor audience using the generic audience function
+    const { audienceId, error: audienceError } =
+      await getOrCreateConferenceAudienceByType(conference, 'sponsors')
 
-    // Query all sponsors for this conference with their contact information
-    const sponsors = await clientWrite.fetch(
-      `*[_type == "conference" && _id == $conferenceId][0].sponsors[]{
-        sponsor->{
-          _id,
-          name,
-          contact_persons[]{
-            _key,
-            name,
-            email,
-            phone,
-            role
-          }
+    if (audienceError || !audienceId) {
+      throw audienceError || new Error('Failed to get sponsor audience ID')
+    }
+
+    let addedCount = 0
+    let removedCount = 0
+
+    // Add new contacts using the generic addContactToAudience function
+    for (const contact of addedContacts) {
+      if (contact.email) {
+        const contactToAdd: Contact = {
+          email: contact.email,
+          firstName: contact.name.split(' ')[0] || '',
+          lastName: contact.name.split(' ').slice(1).join(' ') || '',
+          organization: sponsorName,
         }
-      }`,
-      { conferenceId: conference._id },
-    )
 
-    const allContacts: Contact[] = []
+        // Use the generic function which already has retry/backoff logic
+        const { success } = await addContactToAudience(audienceId, contactToAdd)
+        if (success) {
+          addedCount++
+        }
 
-    // Extract contacts from all sponsors
-    for (const sponsorRef of sponsors || []) {
-      if (sponsorRef.sponsor && sponsorRef.sponsor.contact_persons) {
-        const sponsorContacts = sponsorRef.sponsor.contact_persons
-          .filter((contact: ContactPerson) => contact.email)
-          .map((contact: ContactPerson) => ({
-            email: contact.email,
-            firstName: contact.name.split(' ')[0] || '',
-            lastName: contact.name.split(' ').slice(1).join(' ') || '',
-            organization: sponsorRef.sponsor.name,
-          }))
-
-        allContacts.push(...sponsorContacts)
+        // Add delay to respect rate limits (only if multiple contacts)
+        if (addedContacts.length > 1) {
+          await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+        }
       }
     }
 
-    return allContacts
+    // Remove contacts using the generic removeContactFromAudience function
+    for (const contact of removedContacts) {
+      if (contact.email) {
+        // Use the generic function which already has retry/backoff logic
+        const { success } = await removeContactFromAudience(
+          audienceId,
+          contact.email,
+        )
+        if (success) {
+          removedCount++
+        }
+
+        // Add delay to respect rate limits (only if multiple contacts)
+        if (removedContacts.length > 1) {
+          await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+        }
+      }
+    }
+
+    return {
+      success: true,
+      addedCount,
+      removedCount,
+    }
   } catch (error) {
-    console.error('Failed to get conference sponsor contacts:', error)
-    return []
+    console.error('Failed to perform sponsor audience update:', error)
+    return {
+      success: false,
+      addedCount: 0,
+      removedCount: 0,
+      error: error as Error,
+    }
   }
 }

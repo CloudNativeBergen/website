@@ -9,7 +9,30 @@ import {
   SponsorTierResponse,
   ConferenceSponsorInput,
   ConferenceSponsorResponse,
+  SponsorTierValidationError,
 } from './types'
+
+/**
+ * Custom error class for API errors that may include validation errors
+ */
+export class SponsorAPIError extends Error {
+  public validationErrors?: SponsorTierValidationError[]
+  public status?: number
+  public type?: string
+
+  constructor(
+    message: string,
+    validationErrors?: SponsorTierValidationError[],
+    status?: number,
+    type?: string,
+  ) {
+    super(message)
+    this.name = 'SponsorAPIError'
+    this.validationErrors = validationErrors
+    this.status = status
+    this.type = type
+  }
+}
 
 /**
  * Client-side API functions for sponsor management
@@ -69,7 +92,12 @@ export async function createSponsor(
   const result: SponsorResponse = await response.json()
 
   if (!response.ok) {
-    throw new Error(result.error?.message || 'Failed to create sponsor')
+    throw new SponsorAPIError(
+      result.error?.message || 'Failed to create sponsor',
+      result.error?.validationErrors,
+      result.error?.status,
+      result.error?.type,
+    )
   }
 
   if (!result.sponsor) {
@@ -94,7 +122,12 @@ export async function updateSponsor(
   const result: SponsorResponse = await response.json()
 
   if (!response.ok) {
-    throw new Error(result.error?.message || 'Failed to update sponsor')
+    throw new SponsorAPIError(
+      result.error?.message || 'Failed to update sponsor',
+      result.error?.validationErrors,
+      result.error?.status,
+      result.error?.type,
+    )
   }
 
   if (!result.sponsor) {

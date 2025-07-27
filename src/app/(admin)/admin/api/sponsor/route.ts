@@ -67,6 +67,21 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     const validationErrors = validateSponsor(data)
     if (validationErrors.length > 0) {
+      console.error(
+        `Sponsor validation failed for new sponsor ${data.name || 'unknown sponsor'}:`,
+        {
+          validationErrors: validationErrors.map((e) => ({
+            field: e.field,
+            message: e.message,
+          })),
+          sponsorData: {
+            name: data.name,
+            website: data.website,
+            contactPersonsCount: data.contact_persons?.length || 0,
+            hasBilling: !!data.billing,
+          },
+        },
+      )
       return sponsorResponseError({
         message: 'Sponsor contains invalid fields',
         validationErrors,
@@ -114,6 +129,13 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     return sponsorResponse(sponsor)
   } catch (error) {
+    console.error('Sponsor creation failed:', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString(),
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+      url: req.url,
+    })
     return sponsorResponseError({
       error: error as Error,
       message: 'Failed to process request',

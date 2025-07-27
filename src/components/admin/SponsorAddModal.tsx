@@ -30,14 +30,49 @@ import {
   ContactPerson,
   BillingFormData,
   CONTACT_ROLE_OPTIONS,
+  SponsorTierValidationError,
 } from '@/lib/sponsor/types'
 import {
   fetchSponsors,
   createSponsor,
   updateSponsor,
   addSponsorToConference,
+  SponsorAPIError,
 } from '@/lib/sponsor/client'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
+
+/**
+ * Helper function to convert field names to user-friendly labels
+ */
+function getFieldLabel(field: string): string {
+  const fieldMap: Record<string, string> = {
+    name: 'Sponsor Name',
+    website: 'Website URL',
+    logo: 'Logo (SVG)',
+    org_number: 'Organization Number',
+    'billing.email': 'Billing Email',
+    'billing.reference': 'Billing Reference',
+    'billing.comments': 'Billing Comments',
+  }
+
+  // Handle contact person fields
+  if (field.includes('contact_persons')) {
+    const match = field.match(/contact_persons\.(\d+)\.(.+)/)
+    if (match) {
+      const index = parseInt(match[1]) + 1
+      const subField = match[2]
+      const subFieldLabels: Record<string, string> = {
+        name: 'Name',
+        email: 'Email',
+        phone: 'Phone',
+        role: 'Role',
+      }
+      return `Contact Person ${index} - ${subFieldLabels[subField] || subField}`
+    }
+  }
+
+  return fieldMap[field] || field
+}
 
 interface AddSponsorModalProps {
   isOpen: boolean
@@ -90,6 +125,9 @@ export default function SponsorAddModal({
   const [sponsorQuery, setSponsorQuery] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [validationErrors, setValidationErrors] = useState<
+    SponsorTierValidationError[]
+  >([])
   const [isCreatingNew, setIsCreatingNew] = useState(false)
   const [isLoadingSponsors, setIsLoadingSponsors] = useState(false)
   const [hasLoadedSponsors, setHasLoadedSponsors] = useState(false)
@@ -168,6 +206,7 @@ export default function SponsorAddModal({
       setSelectedSponsor(null)
       setSponsorQuery('')
       setError('')
+      setValidationErrors([])
     }
   }, [isOpen, sponsorTiers, preselectedTierId, editingSponsor])
 
@@ -222,6 +261,7 @@ export default function SponsorAddModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setValidationErrors([])
     setIsSubmitting(true)
 
     try {
@@ -327,7 +367,20 @@ export default function SponsorAddModal({
 
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      // Check if error has validationErrors property (more robust than instanceof)
+      if (
+        err &&
+        typeof err === 'object' &&
+        'validationErrors' in err &&
+        Array.isArray((err as any).validationErrors)
+      ) {
+        const apiError = err as SponsorAPIError
+        setValidationErrors(apiError.validationErrors || [])
+        setError(apiError.message || 'Validation failed')
+      } else {
+        setError(err instanceof Error ? err.message : 'An error occurred')
+        setValidationErrors([])
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -390,14 +443,34 @@ export default function SponsorAddModal({
                       {editingSponsor ? 'Edit Sponsor' : 'Add Sponsor'}
                     </DialogTitle>
 
-                    {error && (
+                    {(error || validationErrors.length > 0) && (
                       <div className="mt-4 rounded-md bg-red-50 p-4">
                         <div className="flex">
                           <div className="flex-shrink-0">
                             <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
                           </div>
                           <div className="ml-3">
-                            <p className="text-sm text-red-800">{error}</p>
+                            {validationErrors.length > 0 ? (
+                              <>
+                                <h3 className="text-sm font-medium text-red-800">
+                                  Please fix the following errors:
+                                </h3>
+                                <div className="mt-2">
+                                  <ul className="list-disc pl-5 text-sm text-red-700">
+                                    {validationErrors.map((error, index) => (
+                                      <li key={index}>
+                                        <strong>
+                                          {getFieldLabel(error.field)}:
+                                        </strong>{' '}
+                                        {error.message}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              </>
+                            ) : error ? (
+                              <p className="text-sm text-red-800">{error}</p>
+                            ) : null}
                           </div>
                         </div>
                       </div>

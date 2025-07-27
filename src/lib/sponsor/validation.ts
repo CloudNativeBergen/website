@@ -3,6 +3,7 @@ import {
   SponsorTierValidationError,
   SponsorInput,
 } from './types'
+import isSvg from 'is-svg'
 
 export function validateSponsorTier(
   data: SponsorTierInput & { conference?: string },
@@ -149,7 +150,7 @@ export function validateSponsor(
   // Validate logo (SVG content)
   if (!data.logo || data.logo.trim().length === 0) {
     errors.push({ field: 'logo', message: 'Logo is required' })
-  } else if (!data.logo.trim().startsWith('<svg')) {
+  } else if (!isSvg(data.logo)) {
     errors.push({ field: 'logo', message: 'Logo must be valid SVG content' })
   }
 

@@ -38,6 +38,14 @@ export const GET = auth(
 
       return sponsorResponse(sponsor)
     } catch (error) {
+      console.error('Sponsor retrieval failed:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+        errorType:
+          error instanceof Error ? error.constructor.name : typeof error,
+        url: req.url,
+      })
       return sponsorResponseError({
         error: error as Error,
         message: 'Failed to process request',
@@ -65,6 +73,22 @@ export const PUT = auth(
 
       const validationErrors = validateSponsor(data)
       if (validationErrors.length > 0) {
+        console.error(
+          `Sponsor validation failed for ${data.name || 'unknown sponsor'}:`,
+          {
+            sponsorId: id,
+            validationErrors: validationErrors.map((e) => ({
+              field: e.field,
+              message: e.message,
+            })),
+            sponsorData: {
+              name: data.name,
+              website: data.website,
+              contactPersonsCount: data.contact_persons?.length || 0,
+              hasBilling: !!data.billing,
+            },
+          },
+        )
         return sponsorResponseError({
           message: 'Sponsor contains invalid fields',
           validationErrors,
@@ -116,6 +140,14 @@ export const PUT = auth(
 
       return sponsorResponse(sponsor)
     } catch (error) {
+      console.error('Sponsor update failed:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+        errorType:
+          error instanceof Error ? error.constructor.name : typeof error,
+        url: req.url,
+      })
       return sponsorResponseError({
         error: error as Error,
         message: 'Failed to process request',
@@ -188,6 +220,14 @@ export const DELETE = auth(
 
       return sponsorResponse(undefined)
     } catch (error) {
+      console.error('Sponsor deletion failed:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+        errorType:
+          error instanceof Error ? error.constructor.name : typeof error,
+        url: req.url,
+      })
       return sponsorResponseError({
         error: error as Error,
         message: 'Failed to process request',
