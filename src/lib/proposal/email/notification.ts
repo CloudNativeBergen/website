@@ -63,7 +63,7 @@ export async function sendAcceptRejectNotification(params: NotificationParams) {
   const template = getEmailTemplate(action, templateProps)
 
   const { data, error } = await resend.emails.send({
-    from: EMAIL_CONFIG.RESEND_FROM_EMAIL,
+    from: params.event.contactEmail || EMAIL_CONFIG.RESEND_FROM_EMAIL,
     to: [params.speaker.email],
     subject: subject,
     react: template,

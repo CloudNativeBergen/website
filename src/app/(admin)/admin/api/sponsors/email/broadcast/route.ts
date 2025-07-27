@@ -5,7 +5,7 @@ import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { render } from '@react-email/render'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import React from 'react'
-import { getOrCreateConferenceAudience } from '@/lib/email/audience'
+import { getOrCreateConferenceAudienceByType } from '@/lib/email/audience'
 import { Resend } from 'resend'
 import { PortableTextBlock } from '@portabletext/types'
 
@@ -77,9 +77,9 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: conferenceError.message }, { status: 500 })
     }
 
-    // Get or create the conference audience
+    // Get or create the conference audience for sponsors
     const { audienceId, error: audienceError } =
-      await getOrCreateConferenceAudience(conference)
+      await getOrCreateConferenceAudienceByType(conference, 'sponsors')
 
     if (!audienceId) {
       return Response.json(
@@ -89,7 +89,17 @@ export const POST = auth(async (req: NextAuthRequest) => {
     }
 
     // Convert PortableText content to HTML
-    const htmlContent = await portableTextToHTML(messagePortableText)
+    let htmlContent: string
+    try {
+      htmlContent = await portableTextToHTML(messagePortableText)
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error)
+      return Response.json(
+        { error: `Failed to convert message to HTML: ${errorMessage}` },
+        { status: 500 },
+      )
+    }
 
     // Render the email template
     const emailHtml = await render(

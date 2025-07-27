@@ -19,8 +19,7 @@ export interface EmailModalProps {
   contextInfo?: string
   onSend: (data: {
     subject: string
-    message: string
-    messageHTML: string
+    message: PortableTextBlock[]
   }) => Promise<void>
   submitButtonText?: string
   helpText?: string
@@ -35,7 +34,7 @@ export interface EmailModalProps {
   }
   previewComponent?: (data: {
     subject: string
-    message: string
+    message: PortableTextBlock[]
     messageHTML: string
   }) => React.ReactNode
   fromAddress: string
@@ -129,8 +128,7 @@ export function EmailModal({
     try {
       await onSend({
         subject,
-        message: currentMessage,
-        messageHTML: currentMessageHTML,
+        message: richTextValue,
       })
 
       // Reset form and close modal on success
@@ -212,7 +210,7 @@ export function EmailModal({
                 <div className="rounded-xl border border-brand-frosted-steel bg-white p-6">
                   {previewComponent({
                     subject,
-                    message: getCurrentMessage(),
+                    message: richTextValue,
                     messageHTML: getCurrentMessageHTML(),
                   })}
                 </div>

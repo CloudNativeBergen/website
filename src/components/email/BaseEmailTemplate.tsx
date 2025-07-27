@@ -35,6 +35,15 @@ export function BaseEmailTemplate({
   unsubscribeUrl,
   customContent,
 }: BaseEmailTemplateProps) {
+  // Validation: Ensure either speakerName or customContent is provided
+  if (!speakerName && !customContent) {
+    throw new Error(
+      `BaseEmailTemplate requires either speakerName or customContent to be provided. ` +
+        `Use speakerName for personalized emails or customContent for broadcast emails. ` +
+        `Title: "${title || 'No title provided'}"`,
+    )
+  }
+
   // Email-safe styles - using tables for layout and inline styles for maximum compatibility
   const containerStyle: React.CSSProperties = {
     fontFamily:

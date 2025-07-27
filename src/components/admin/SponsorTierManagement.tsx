@@ -58,25 +58,16 @@ export default function SponsorTierManagement({
   const isMissingContactInfo = (
     sponsor: ConferenceSponsorWithContact,
   ): boolean => {
-    const missing =
+    return (
       !sponsor.sponsor.contact_persons ||
       sponsor.sponsor.contact_persons.length === 0
-    console.log('Debug - Contact info for', sponsor.sponsor.name, ':', {
-      contact_persons: sponsor.sponsor.contact_persons,
-      missing,
-    })
-    return missing
+    )
   }
 
   const isMissingBillingInfo = (
     sponsor: ConferenceSponsorWithContact,
   ): boolean => {
-    const missing = !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
-    console.log('Debug - Billing info for', sponsor.sponsor.name, ':', {
-      billing: sponsor.sponsor.billing,
-      missing,
-    })
-    return missing
+    return !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
   }
 
   // Helper functions to count missing information
@@ -85,22 +76,6 @@ export default function SponsorTierManagement({
   const hasAnyMissingInfo =
     sponsorsWithMissingContactInfo.length > 0 ||
     sponsorsWithMissingBillingInfo.length > 0
-
-  // Debug logging
-  console.log('Debug - Sponsors count:', sponsors.length)
-  console.log(
-    'Debug - Missing contact info:',
-    sponsorsWithMissingContactInfo.length,
-  )
-  console.log(
-    'Debug - Missing billing info:',
-    sponsorsWithMissingBillingInfo.length,
-  )
-  console.log('Debug - Has any missing info:', hasAnyMissingInfo)
-  console.log(
-    'Debug - Should show warning:',
-    sponsors.length > 0 && hasAnyMissingInfo,
-  )
 
   const addSponsorToState = (newSponsor: ConferenceSponsorWithContact) => {
     // Add to sponsors array
@@ -312,14 +287,18 @@ export default function SponsorTierManagement({
                   {sponsorsWithMissingContactInfo.length > 0 && (
                     <li>
                       {sponsorsWithMissingContactInfo.length} sponsor
-                      {sponsorsWithMissingContactInfo.length !== 1 ? 's' : ''}{' '}
+                      {sponsorsWithMissingContactInfo.length !== 1
+                        ? 's'
+                        : ''}{' '}
                       missing contact information
                     </li>
                   )}
                   {sponsorsWithMissingBillingInfo.length > 0 && (
                     <li>
                       {sponsorsWithMissingBillingInfo.length} sponsor
-                      {sponsorsWithMissingBillingInfo.length !== 1 ? 's' : ''}{' '}
+                      {sponsorsWithMissingBillingInfo.length !== 1
+                        ? 's'
+                        : ''}{' '}
                       missing billing information
                     </li>
                   )}

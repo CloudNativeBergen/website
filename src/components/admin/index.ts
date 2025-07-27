@@ -35,7 +35,7 @@ export { ProposalActionModal } from './ProposalActionModal'
 
 // Speaker Management Components
 export { SpeakerTable } from './SpeakerTable'
-export { BroadcastEmailModal } from './BroadcastEmailModal'
+export { GeneralBroadcastModal } from './GeneralBroadcastModal'
 export { SpeakerEmailModal } from './SpeakerEmailModal'
 export { EmailModal } from './EmailModal'
 export { SpeakerActions } from './SpeakerActions'
@@ -44,6 +44,7 @@ export { SpeakerActions } from './SpeakerActions'
 export { default as SponsorTierEditor } from './SponsorTierEditor'
 export { default as SponsorTierManagement } from './SponsorTierManagement'
 export { default as SponsorAddModal } from './SponsorAddModal'
+export { SponsorActions } from './SponsorActions'
 
 // Utility Components
 export { ErrorDisplay } from './ErrorDisplay'

@@ -1,6 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
-import { ErrorDisplay } from '@/components/admin'
+import { ErrorDisplay, SponsorActions } from '@/components/admin'
 import SponsorTierEditor from '@/components/admin/SponsorTierEditor'
 import SponsorTierManagement from '@/components/admin/SponsorTierManagement'
 import { formatCurrency } from '@/lib/format'
@@ -195,6 +195,27 @@ export default async function AdminSponsors() {
               </dd>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Sponsor Communications */}
+      {sponsors.length > 0 && (
+        <div className="mt-8">
+          <SponsorActions
+            sponsors={sponsors}
+            conferenceTitle={conference.title}
+            conferenceLocation={`${conference.city}, ${conference.country}`}
+            conferenceDate={new Date(conference.start_date).toLocaleDateString(
+              'en-US',
+              {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              },
+            )}
+            conferenceUrl={`https://${conference.domains[0]}`}
+            socialLinks={conference.social_links || []}
+          />
         </div>
       )}
 

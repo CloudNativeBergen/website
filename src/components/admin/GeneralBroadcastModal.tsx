@@ -3,16 +3,18 @@
 import { useMemo } from 'react'
 import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
-import { SpeakerBroadcastTemplate } from '@/components/email/SpeakerBroadcastTemplate'
+import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { ArrowPathIcon } from '@heroicons/react/24/outline'
+import { PortableTextBlock } from '@portabletext/editor'
 
-interface BroadcastEmailModalProps {
+interface GeneralBroadcastModalProps {
   isOpen: boolean
   onClose: () => void
   onSend: (subject: string, message: string) => Promise<void>
   onSyncContacts: () => Promise<void>
-  speakerCount: number
+  recipientCount: number
+  recipientType: string // 'speakers' or 'sponsors'
   fromEmail: string
   eventName: string
   eventLocation: string
@@ -21,19 +23,20 @@ interface BroadcastEmailModalProps {
   socialLinks: string[]
 }
 
-export function BroadcastEmailModal({
+export function GeneralBroadcastModal({
   isOpen,
   onClose,
   onSend,
   onSyncContacts,
-  speakerCount,
+  recipientCount,
+  recipientType,
   fromEmail,
   eventName,
   eventLocation,
   eventDate,
   eventUrl,
   socialLinks,
-}: BroadcastEmailModalProps) {
+}: GeneralBroadcastModalProps) {
   const { showNotification } = useNotification()
 
   // Memoize initial values to prevent unnecessary re-renders and form resets
@@ -41,7 +44,7 @@ export function BroadcastEmailModal({
     () => ({
       subject: '',
       message: convertStringToPortableTextBlocks(
-        'Hi {{{FIRST_NAME|here}}},\n\n',
+        'Hi {{{FIRST_NAME|there}}},\n\n',
       ),
     }),
     [], // Empty dependency array since these values should be static
@@ -49,18 +52,17 @@ export function BroadcastEmailModal({
 
   const handleSend = async ({
     subject,
-    messageHTML,
+    message,
   }: {
     subject: string
-    message: string
-    messageHTML: string
+    message: PortableTextBlock[]
   }) => {
     try {
-      await onSend(subject, messageHTML) // Use HTML version for email
+      await onSend(subject, JSON.stringify(message)) // Send PortableText as JSON string
       showNotification({
         type: 'success',
         title: 'Email sent',
-        message: `Email sent to ${speakerCount} speakers`,
+        message: `Email sent to ${recipientCount} ${recipientType}`,
       })
     } catch (error) {
       throw error // Let EmailModal handle the error
@@ -71,7 +73,7 @@ export function BroadcastEmailModal({
   const recipientDisplay = (
     <div className="flex items-center gap-3">
       <span className="text-sm text-gray-600">
-        {speakerCount} confirmed speakers
+        {recipientCount} confirmed {recipientType}
       </span>
       <button
         type="button"
@@ -90,11 +92,11 @@ export function BroadcastEmailModal({
     messageHTML,
   }: {
     subject: string
-    message: string
+    message: PortableTextBlock[]
     messageHTML: string
   }) => {
     return (
-      <SpeakerBroadcastTemplate
+      <BroadcastTemplate
         content={
           <div
             style={{
@@ -106,7 +108,6 @@ export function BroadcastEmailModal({
           />
         }
         subject={subject}
-        speakerName="" // Empty to avoid showing hard-coded greeting
         eventName={eventName}
         eventLocation={eventLocation}
         eventDate={eventDate}
@@ -123,7 +124,7 @@ export function BroadcastEmailModal({
       title="Send Broadcast Email"
       recipientInfo={recipientDisplay}
       onSend={handleSend}
-      submitButtonText={`Send to ${speakerCount} speakers`}
+      submitButtonText={`Send to ${recipientCount} ${recipientType}`}
       previewComponent={createPreview}
       fromAddress={fromEmail}
       initialValues={initialValues}
@@ -131,7 +132,7 @@ export function BroadcastEmailModal({
         subject: 'Enter broadcast subject...',
         message: 'Enter your message here...',
       }}
-      helpText="Use {{{FIRST_NAME|there}}} to personalize the greeting. This will be replaced with each speaker's first name or 'there' as a fallback."
+      helpText={`Use {{{FIRST_NAME|there}}} to personalize the greeting. This will be replaced with each ${recipientType.slice(0, -1)}&apos;s first name or &apos;there&apos; as a fallback.`}
     />
   )
 }
