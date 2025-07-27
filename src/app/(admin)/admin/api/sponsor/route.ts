@@ -13,6 +13,8 @@ import {
   sponsorListResponseError,
 } from '@/lib/sponsor/server'
 import { validateSponsor } from '@/lib/sponsor/validation'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { updateSponsorAudience } from '@/lib/sponsor/audience'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,6 +81,35 @@ export const POST = auth(async (req: NextAuthRequest) => {
         error,
         message: 'Failed to create sponsor',
       })
+    }
+
+    // Update sponsor audience automatically when new sponsor is created
+    try {
+      const { conference } = await getConferenceForCurrentDomain()
+      if (conference && sponsor) {
+        const audienceResult = await updateSponsorAudience(
+          conference,
+          null, // No old sponsor data for creation
+          sponsor,
+        )
+
+        if (audienceResult.success) {
+          console.log(
+            `Sponsor audience updated for new sponsor ${sponsor.name}: ${audienceResult.addedCount} added`,
+          )
+        } else {
+          console.warn(
+            `Failed to update sponsor audience for new sponsor ${sponsor.name}:`,
+            audienceResult.error,
+          )
+        }
+      }
+    } catch (audienceError) {
+      // Don't fail the sponsor creation if audience sync fails
+      console.warn(
+        'Failed to sync sponsor audience, but sponsor was created:',
+        audienceError,
+      )
     }
 
     return sponsorResponse(sponsor)
