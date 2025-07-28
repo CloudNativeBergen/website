@@ -5,7 +5,6 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
-import { EMAIL_CONFIG } from '@/lib/email/config'
 
 export default async function AdminSpeakers() {
   try {
@@ -77,7 +76,7 @@ export default async function AdminSpeakers() {
 
             <SpeakerActions
               eligibleSpeakersCount={confirmedSpeakers.length}
-              fromEmail={EMAIL_CONFIG.RESEND_FROM_EMAIL}
+              fromEmail={`Cloud Native Bergen <${conference.contact_email}>`}
               conference={conference}
             />
           </div>

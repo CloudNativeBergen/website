@@ -60,6 +60,13 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: conferenceError.message }, { status: 500 })
     }
 
+    if (!conference.contact_email) {
+      return Response.json(
+        { error: 'Conference contact email is not configured' },
+        { status: 400 },
+      )
+    }
+
     // Get or create the conference audience for sponsors
     const { audienceId } = await getOrCreateConferenceAudienceByType(
       conference,
@@ -110,9 +117,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
     const broadcastResponse = await resend.broadcasts.create({
       name: subject, // Use subject as the broadcast name
       audienceId,
-      from:
-        conference.contact_email ||
-        'Cloud Native Bergen <noreply@cloudnativebergen.dev>',
+      from: conference.contact_email,
       subject,
       html: emailHtml,
     })

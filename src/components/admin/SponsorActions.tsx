@@ -14,6 +14,7 @@ interface SponsorActionsProps {
   conferenceDate: string
   conferenceUrl: string
   socialLinks: string[]
+  contactEmail: string
 }
 
 export function SponsorActions({
@@ -23,6 +24,7 @@ export function SponsorActions({
   conferenceDate,
   conferenceUrl,
   socialLinks,
+  contactEmail,
 }: SponsorActionsProps) {
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false)
   const { showNotification } = useNotification()
@@ -138,7 +140,7 @@ export function SponsorActions({
         onSyncContacts={handleSyncContacts}
         recipientCount={sponsorsWithContacts.length}
         recipientType="sponsors"
-        fromEmail="Cloud Native Bergen <noreply@cloudnativebergen.dev>"
+        fromEmail={`Cloud Native Bergen <${contactEmail}>`}
         eventName={conferenceTitle}
         eventLocation={conferenceLocation}
         eventDate={conferenceDate}

@@ -215,6 +215,7 @@ export default async function AdminSponsors() {
             )}
             conferenceUrl={`https://${conference.domains[0]}`}
             socialLinks={conference.social_links || []}
+            contactEmail={conference.contact_email}
           />
         </div>
       )}
