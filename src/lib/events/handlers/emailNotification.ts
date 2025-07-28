@@ -41,6 +41,7 @@ export async function handleEmailNotification(
       name: event.conference.title,
       url: event.conference.domains?.[0] ?? '',
       socialLinks: event.conference.social_links,
+      contactEmail: event.conference.contact_email,
     },
   })
 

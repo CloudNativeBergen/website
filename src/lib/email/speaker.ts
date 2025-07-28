@@ -131,7 +131,6 @@ export async function sendSpeakerEmail({
             email: speaker.email,
           }
           await addSpeakerToAudience(audienceId, speakerForAudience as Speaker)
-          console.log(`Speaker ${speaker.name} added to conference audience`)
         }
       } catch (error) {
         // Don't fail the email if audience sync fails
@@ -195,7 +194,7 @@ export async function sendFormattedSpeakerEmail({
     // Send the email with retry logic for production reliability
     const emailResult = await retryWithBackoff(async () => {
       const result = await resend.emails.send({
-        from: EMAIL_CONFIG.RESEND_FROM_EMAIL,
+        from: conference.contact_email || EMAIL_CONFIG.RESEND_FROM_EMAIL,
         to: [speaker.email],
         subject: subject,
         react: emailTemplate,
@@ -374,9 +373,6 @@ export async function sendMultiSpeakerEmail({
               speakerForAudience as Speaker,
             )
           }
-          console.log(
-            `${targetSpeakers.length} speakers added to conference audience`,
-          )
         }
       } catch (error) {
         // Don't fail the email if audience sync fails
@@ -440,7 +436,7 @@ export async function sendFormattedMultiSpeakerEmail({
     // Send the email with retry logic for production reliability
     const emailResult = await retryWithBackoff(async () => {
       const result = await resend.emails.send({
-        from: EMAIL_CONFIG.RESEND_FROM_EMAIL,
+        from: conference.contact_email || EMAIL_CONFIG.RESEND_FROM_EMAIL,
         to: speakers.map((s) => s.email),
         subject: subject,
         react: emailTemplate,

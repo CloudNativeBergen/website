@@ -29,7 +29,7 @@ The Cloud Native Bergen website features a comprehensive email system built on R
 │  Email Templates                                                  │
 │  ├── BaseEmailTemplate (shared foundation)                       │
 │  ├── SpeakerEmailTemplate (speaker communications)               │
-│  ├── BroadcastEmailTemplate (audience communications)            │
+│  ├── BroadcastTemplate (audience communications)                 │
 │  └── EmailComponents (reusable UI elements)                      │
 ├─────────────────────────────────────────────────────────────────┤
 │  External Services                                                │

@@ -6,7 +6,7 @@ import { render } from '@react-email/render'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import React from 'react'
-import { getOrCreateConferenceAudience } from '@/lib/email/audience'
+import { getOrCreateConferenceAudienceByType } from '@/lib/email/audience'
 import { Resend } from 'resend'
 import { PortableTextBlock } from '@portabletext/types'
 
@@ -60,8 +60,11 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: conferenceError.message }, { status: 500 })
     }
 
-    // Get or create the conference audience
-    const { audienceId } = await getOrCreateConferenceAudience(conference)
+    // Get or create the conference audience for sponsors
+    const { audienceId } = await getOrCreateConferenceAudienceByType(
+      conference,
+      'sponsors',
+    )
 
     if (!audienceId) {
       return Response.json(

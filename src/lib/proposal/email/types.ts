@@ -28,6 +28,7 @@ export interface NotificationEventData {
   name: string
   url: string
   socialLinks?: string[]
+  contactEmail?: string
 }
 
 export interface NotificationParams {

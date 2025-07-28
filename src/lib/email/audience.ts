@@ -9,6 +9,15 @@ import {
   EMAIL_CONFIG,
 } from './config'
 
+export type AudienceType = 'speakers' | 'sponsors'
+
+export interface Contact {
+  email: string
+  firstName: string
+  lastName: string
+  organization?: string
+}
+
 export interface SpeakerAudienceManager {
   getOrCreateAudience: (
     conference: Conference,
@@ -28,12 +37,16 @@ export interface SpeakerAudienceManager {
 }
 
 /**
- * Get or create a persistent audience for a conference
+ * Get or create a persistent audience for a conference by type
  */
-export async function getOrCreateConferenceAudience(
+export async function getOrCreateConferenceAudienceByType(
   conference: Conference,
+  audienceType: AudienceType,
 ): Promise<{ audienceId: string; error?: Error }> {
-  const audienceName = `${conference.title} Speakers`
+  const audienceName =
+    audienceType === 'speakers'
+      ? `${conference.title} Speakers`
+      : `${conference.title} Sponsors`
 
   try {
     const existingAudiences = await retryWithBackoff(() =>
@@ -73,34 +86,46 @@ export async function getOrCreateConferenceAudience(
     // Don't spam logs for rate limit errors that have already been handled by retry logic
     if (isRateLimitError(error)) {
       console.warn(
-        `Conference audience could not be created/accessed due to persistent rate limiting`,
+        `Conference ${audienceType} audience could not be created/accessed due to persistent rate limiting`,
       )
     } else {
-      console.error('Failed to get or create conference audience:', error)
+      console.error(
+        `Failed to get or create conference ${audienceType} audience:`,
+        error,
+      )
     }
     return { audienceId: '', error: error as Error }
   }
 }
 
 /**
- * Add a speaker to the conference audience
+ * Get or create a persistent audience for a conference (backwards compatibility)
  */
-export async function addSpeakerToAudience(
+export async function getOrCreateConferenceAudience(
+  conference: Conference,
+): Promise<{ audienceId: string; error?: Error }> {
+  return getOrCreateConferenceAudienceByType(conference, 'speakers')
+}
+
+/**
+ * Add a contact to an audience
+ */
+export async function addContactToAudience(
   audienceId: string,
-  speaker: Speaker,
+  contact: Contact,
 ): Promise<{ success: boolean; error?: Error }> {
   try {
-    if (!speaker.email) {
-      throw new Error('Speaker email is required')
+    if (!contact.email) {
+      throw new Error('Contact email is required')
     }
 
     const contactResponse = await retryWithBackoff(
       async () =>
         await resend.contacts.create({
           audienceId,
-          email: speaker.email,
-          firstName: speaker.name.split(' ')[0] || '',
-          lastName: speaker.name.split(' ').slice(1).join(' ') || '',
+          email: contact.email,
+          firstName: contact.firstName,
+          lastName: contact.lastName,
           unsubscribed: false,
         }),
     )
@@ -118,21 +143,21 @@ export async function addSpeakerToAudience(
     // Don't spam logs for rate limit errors that have already been handled by retry logic
     if (isRateLimitError(error)) {
       console.warn(
-        `Speaker ${speaker.name} could not be added to audience due to persistent rate limiting`,
+        `Contact ${contact.email} could not be added to audience due to persistent rate limiting`,
       )
     } else {
-      console.error('Failed to add speaker to audience:', error)
+      console.error('Failed to add contact to audience:', error)
     }
     return { success: false, error: error as Error }
   }
 }
 
 /**
- * Remove a speaker from the conference audience
+ * Remove a contact from an audience
  */
-export async function removeSpeakerFromAudience(
+export async function removeContactFromAudience(
   audienceId: string,
-  speakerEmail: string,
+  email: string,
 ): Promise<{ success: boolean; error?: Error }> {
   try {
     // First, find the contact by email with retry
@@ -146,9 +171,7 @@ export async function removeSpeakerFromAudience(
       )
     }
 
-    const contact = contactsResponse.data?.data.find(
-      (c) => c.email === speakerEmail,
-    )
+    const contact = contactsResponse.data?.data.find((c) => c.email === email)
 
     if (!contact) {
       // Contact not found, consider it already removed
@@ -175,31 +198,58 @@ export async function removeSpeakerFromAudience(
     // Don't spam logs for rate limit errors that have already been handled by retry logic
     if (isRateLimitError(error)) {
       console.warn(
-        `Speaker with email ${speakerEmail} could not be removed from audience due to persistent rate limiting`,
+        `Contact with email ${email} could not be removed from audience due to persistent rate limiting`,
       )
     } else {
-      console.error('Failed to remove speaker from audience:', error)
+      console.error('Failed to remove contact from audience:', error)
     }
     return { success: false, error: error as Error }
   }
 }
+/**
+ * Add a speaker to the conference audience
+ */
+export async function addSpeakerToAudience(
+  audienceId: string,
+  speaker: Speaker,
+): Promise<{ success: boolean; error?: Error }> {
+  const contact: Contact = {
+    email: speaker.email,
+    firstName: speaker.name.split(' ')[0] || '',
+    lastName: speaker.name.split(' ').slice(1).join(' ') || '',
+  }
+  return addContactToAudience(audienceId, contact)
+}
 
 /**
- * Sync the conference audience with current confirmed/accepted speakers
+ * Remove a speaker from the conference audience
  */
-export async function syncConferenceAudience(
+export async function removeSpeakerFromAudience(
+  audienceId: string,
+  speakerEmail: string,
+): Promise<{ success: boolean; error?: Error }> {
+  return removeContactFromAudience(audienceId, speakerEmail)
+}
+
+/**
+ * Sync an audience with a list of contacts
+ */
+export async function syncAudienceWithContacts(
   conference: Conference,
-  eligibleSpeakers: (Speaker & { proposals: ProposalExisting[] })[],
+  audienceType: AudienceType,
+  contacts: Contact[],
 ): Promise<{
   success: boolean
   audienceId: string
   syncedCount: number
+  addedCount: number
+  removedCount: number
   error?: Error
 }> {
   try {
     // Get or create audience
     const { audienceId, error: audienceError } =
-      await getOrCreateConferenceAudience(conference)
+      await getOrCreateConferenceAudienceByType(conference, audienceType)
 
     if (audienceError || !audienceId) {
       throw audienceError || new Error('Failed to get audience ID')
@@ -218,15 +268,15 @@ export async function syncConferenceAudience(
 
     const existingContacts = contactsResponse.data?.data || []
     const existingEmails = new Set(existingContacts.map((c) => c.email))
-    const currentSpeakerEmails = new Set(
-      eligibleSpeakers.filter((s) => s.email).map((s) => s.email!),
+    const currentContactEmails = new Set(
+      contacts.filter((c) => c.email).map((c) => c.email),
     )
 
-    // Add new speakers with rate limiting
+    // Add new contacts with rate limiting
     let addedCount = 0
-    for (const speaker of eligibleSpeakers) {
-      if (speaker.email && !existingEmails.has(speaker.email)) {
-        const { success } = await addSpeakerToAudience(audienceId, speaker)
+    for (const contact of contacts) {
+      if (contact.email && !existingEmails.has(contact.email)) {
+        const { success } = await addContactToAudience(audienceId, contact)
         if (success) {
           addedCount++
         }
@@ -235,13 +285,13 @@ export async function syncConferenceAudience(
       }
     }
 
-    // Remove speakers who are no longer eligible with rate limiting
+    // Remove contacts who are no longer eligible with rate limiting
     let removedCount = 0
-    for (const contact of existingContacts) {
-      if (!currentSpeakerEmails.has(contact.email)) {
-        const { success } = await removeSpeakerFromAudience(
+    for (const existingContact of existingContacts) {
+      if (!currentContactEmails.has(existingContact.email)) {
+        const { success } = await removeContactFromAudience(
           audienceId,
-          contact.email,
+          existingContact.email,
         )
         if (success) {
           removedCount++
@@ -252,23 +302,79 @@ export async function syncConferenceAudience(
     }
 
     console.log(
-      `Audience sync completed: ${addedCount} added, ${removedCount} removed`,
+      `${audienceType} audience sync completed: ${addedCount} added, ${removedCount} removed`,
     )
 
     return {
       success: true,
       audienceId,
-      syncedCount: eligibleSpeakers.length,
+      syncedCount: contacts.length,
+      addedCount,
+      removedCount,
     }
   } catch (error) {
-    console.error('Failed to sync conference audience:', error)
+    console.error(`Failed to sync ${audienceType} audience:`, error)
     return {
       success: false,
       audienceId: '',
       syncedCount: 0,
+      addedCount: 0,
+      removedCount: 0,
       error: error as Error,
     }
   }
+}
+/**
+ * Sync the conference audience with current confirmed/accepted speakers
+ */
+export async function syncConferenceAudience(
+  conference: Conference,
+  eligibleSpeakers: (Speaker & { proposals: ProposalExisting[] })[],
+): Promise<{
+  success: boolean
+  audienceId: string
+  syncedCount: number
+  error?: Error
+}> {
+  // Convert speakers to contacts
+  const contacts: Contact[] = eligibleSpeakers
+    .filter((s) => s.email)
+    .map((speaker) => ({
+      email: speaker.email!,
+      firstName: speaker.name.split(' ')[0] || '',
+      lastName: speaker.name.split(' ').slice(1).join(' ') || '',
+    }))
+
+  const result = await syncAudienceWithContacts(
+    conference,
+    'speakers',
+    contacts,
+  )
+
+  // Return format compatible with existing code
+  return {
+    success: result.success,
+    audienceId: result.audienceId,
+    syncedCount: result.syncedCount,
+    error: result.error,
+  }
+}
+
+/**
+ * Sync the sponsor audience with current sponsor contacts
+ */
+export async function syncSponsorAudience(
+  conference: Conference,
+  sponsorContacts: Contact[],
+): Promise<{
+  success: boolean
+  audienceId: string
+  syncedCount: number
+  addedCount: number
+  removedCount: number
+  error?: Error
+}> {
+  return syncAudienceWithContacts(conference, 'sponsors', sponsorContacts)
 }
 
 /**

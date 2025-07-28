@@ -3,6 +3,7 @@ import {
   SponsorTierValidationError,
   SponsorInput,
 } from './types'
+import isSvg from 'is-svg'
 
 export function validateSponsorTier(
   data: SponsorTierInput & { conference?: string },
@@ -149,8 +150,54 @@ export function validateSponsor(
   // Validate logo (SVG content)
   if (!data.logo || data.logo.trim().length === 0) {
     errors.push({ field: 'logo', message: 'Logo is required' })
-  } else if (!data.logo.trim().startsWith('<svg')) {
+  } else if (!isSvg(data.logo)) {
     errors.push({ field: 'logo', message: 'Logo must be valid SVG content' })
+  }
+
+  // Validate contact persons (optional)
+  if (data.contact_persons) {
+    data.contact_persons.forEach((contact, index) => {
+      if (!contact.name || contact.name.trim().length === 0) {
+        errors.push({
+          field: `contact_persons.${index}.name`,
+          message: 'Contact person name is required',
+        })
+      }
+      if (!contact.email || contact.email.trim().length === 0) {
+        errors.push({
+          field: `contact_persons.${index}.email`,
+          message: 'Contact person email is required',
+        })
+      } else {
+        // Simple email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(contact.email)) {
+          errors.push({
+            field: `contact_persons.${index}.email`,
+            message: 'Contact person email must be valid',
+          })
+        }
+      }
+    })
+  }
+
+  // Validate billing info (optional)
+  if (data.billing) {
+    if (!data.billing.email || data.billing.email.trim().length === 0) {
+      errors.push({
+        field: 'billing.email',
+        message: 'Billing email is required when billing info is provided',
+      })
+    } else {
+      // Simple email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(data.billing.email)) {
+        errors.push({
+          field: 'billing.email',
+          message: 'Billing email must be valid',
+        })
+      }
+    }
   }
 
   return errors

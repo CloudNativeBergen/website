@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/Button'
-import { BroadcastEmailModal } from '@/components/admin'
+import { GeneralBroadcastModal } from '@/components/admin'
 import { useNotification } from './NotificationProvider'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 
@@ -37,12 +37,6 @@ export function SpeakerActions({
       if (!response.ok) {
         throw new Error(result.error || 'Failed to send broadcast email')
       }
-
-      showNotification({
-        type: 'success',
-        title: 'Email sent successfully!',
-        message: `Email successfully sent to ${result.recipientCount} speakers.`,
-      })
     } catch (error: unknown) {
       console.error('Broadcast error:', error)
       throw error // Re-throw to be handled by the modal
@@ -96,12 +90,13 @@ export function SpeakerActions({
         </Button>
       </div>
 
-      <BroadcastEmailModal
+      <GeneralBroadcastModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSend={handleSendBroadcast}
         onSyncContacts={handleSyncContacts}
-        speakerCount={eligibleSpeakersCount}
+        recipientCount={eligibleSpeakersCount}
+        recipientType="speakers"
         fromEmail={fromEmail}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}

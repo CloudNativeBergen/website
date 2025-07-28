@@ -8,6 +8,8 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { SpeakerEmailTemplate } from '@/components/email/SpeakerEmailTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
+import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
+import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 
 interface SpeakerEmailModalProps {
   isOpen: boolean
@@ -76,12 +78,16 @@ export function SpeakerEmailModal({
 
   const handleSend = async ({
     subject,
-    messageHTML,
+    message,
   }: {
     subject: string
-    message: string
-    messageHTML: string
+    message: PortableTextBlock[]
   }) => {
+    // Convert PortableText to HTML for individual speaker emails
+    const messageHTML = await portableTextToHTML(
+      message as PortableTextBlockForHTML[],
+    )
+
     // Use the multi-speaker endpoint for all cases
     const response = await fetch('/admin/api/speakers/email/multi', {
       method: 'POST',
@@ -139,7 +145,7 @@ export function SpeakerEmailModal({
     messageHTML,
   }: {
     subject: string
-    message: string
+    message: PortableTextBlock[]
     messageHTML: string
   }) => {
     // Extract conference information with type guard

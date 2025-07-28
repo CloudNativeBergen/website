@@ -9,8 +9,13 @@ import {
   PlusIcon,
   TrashIcon,
   ArrowDownTrayIcon,
+  PencilIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline'
-import { ConferenceSponsor, SponsorTierExisting } from '@/lib/sponsor/types'
+import {
+  ConferenceSponsorWithContact,
+  SponsorTierExisting,
+} from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
 import { removeSponsorFromConference } from '@/lib/sponsor/client'
 import { useNotification } from './NotificationProvider'
@@ -18,9 +23,9 @@ import { ConfirmationModal } from './ConfirmationModal'
 import SponsorAddModal from './SponsorAddModal'
 
 interface SponsorManagementProps {
-  sponsors: ConferenceSponsor[]
+  sponsors: ConferenceSponsorWithContact[]
   sponsorTiers: SponsorTierExisting[]
-  sponsorsByTier: Record<string, ConferenceSponsor[]>
+  sponsorsByTier: Record<string, ConferenceSponsorWithContact[]>
   sortedTierNames: string[]
 }
 
@@ -36,7 +41,8 @@ export default function SponsorTierManagement({
   const [modalState, setModalState] = useState<{
     isOpen: boolean
     preselectedTierId?: string
-  }>({ isOpen: false, preselectedTierId: undefined })
+    editingSponsor?: ConferenceSponsorWithContact | null
+  }>({ isOpen: false, preselectedTierId: undefined, editingSponsor: null })
   const [removingSponsors, setRemovingSponsors] = useState<Set<string>>(
     new Set(),
   )
@@ -47,7 +53,23 @@ export default function SponsorTierManagement({
   }>({ isOpen: false, sponsorName: '', sponsorRef: '' })
   const { showNotification } = useNotification()
 
-  const addSponsorToState = (newSponsor: ConferenceSponsor) => {
+  // Helper functions to check missing information
+  const isMissingContactInfo = (
+    sponsor: ConferenceSponsorWithContact,
+  ): boolean => {
+    return (
+      !sponsor.sponsor.contact_persons ||
+      sponsor.sponsor.contact_persons.length === 0
+    )
+  }
+
+  const isMissingBillingInfo = (
+    sponsor: ConferenceSponsorWithContact,
+  ): boolean => {
+    return !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
+  }
+
+  const addSponsorToState = (newSponsor: ConferenceSponsorWithContact) => {
     // Add to sponsors array
     setSponsors((prev) => [...prev, newSponsor])
 
@@ -79,11 +101,68 @@ export default function SponsorTierManagement({
   }
 
   const openAddModal = (tierId?: string) => {
-    setModalState({ isOpen: true, preselectedTierId: tierId })
+    setModalState({
+      isOpen: true,
+      preselectedTierId: tierId,
+      editingSponsor: null,
+    })
   }
 
-  const closeAddModal = () => {
-    setModalState({ isOpen: false, preselectedTierId: undefined })
+  const openEditModal = (sponsor: ConferenceSponsorWithContact) => {
+    setModalState({
+      isOpen: true,
+      editingSponsor: sponsor,
+      preselectedTierId: undefined,
+    })
+  }
+
+  const closeModal = () => {
+    setModalState({
+      isOpen: false,
+      preselectedTierId: undefined,
+      editingSponsor: null,
+    })
+  }
+
+  const updateSponsorInState = (
+    updatedSponsor: ConferenceSponsorWithContact,
+  ) => {
+    // Update sponsors array
+    setSponsors((prev) =>
+      prev.map((sponsor) =>
+        sponsor.sponsor.name === updatedSponsor.sponsor.name
+          ? updatedSponsor
+          : sponsor,
+      ),
+    )
+
+    // Update sponsorsByTier
+    setSponsorsByTier((prev) => {
+      const newSponsorsByTier = { ...prev }
+
+      // Remove from old tier
+      Object.keys(newSponsorsByTier).forEach((tierName) => {
+        newSponsorsByTier[tierName] = newSponsorsByTier[tierName].filter(
+          (sponsor) => sponsor.sponsor.name !== updatedSponsor.sponsor.name,
+        )
+      })
+
+      // Add to new tier
+      const tierName = updatedSponsor.tier.title
+      if (!newSponsorsByTier[tierName]) {
+        newSponsorsByTier[tierName] = []
+      }
+      newSponsorsByTier[tierName].push(updatedSponsor)
+
+      return newSponsorsByTier
+    })
+
+    // Show success notification
+    showNotification({
+      type: 'success',
+      title: 'Sponsor updated successfully',
+      message: `${updatedSponsor.sponsor.name} has been updated.`,
+    })
   }
 
   const handleRemoveSponsor = async (
@@ -272,6 +351,13 @@ export default function SponsorTierManagement({
                             </button>
                           )}
                           <button
+                            onClick={() => openEditModal(sponsorData)}
+                            className="rounded-md bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                            title="Edit sponsor"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() =>
                               handleRemoveSponsor(sponsor.name, sponsor.name)
                             }
@@ -322,10 +408,44 @@ export default function SponsorTierManagement({
                           </div>
                         </div>
                         <div className="mt-4">
-                          <div className="flex items-center justify-start">
-                            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                          <div className="flex items-center justify-start space-x-2">
+                            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">
                               <TagIcon className="mr-1 h-3 w-3" />
                               Active
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                                isMissingContactInfo(sponsorData)
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-green-100 text-green-800'
+                              }`}
+                              title={
+                                isMissingContactInfo(sponsorData)
+                                  ? 'Missing contact information'
+                                  : 'Contact information complete'
+                              }
+                            >
+                              <UserGroupIcon
+                                className={`h-3 w-3 ${!isMissingContactInfo(sponsorData) ? 'mr-1' : ''}`}
+                              />
+                              {!isMissingContactInfo(sponsorData) && 'Contact'}
+                            </span>
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                                isMissingBillingInfo(sponsorData)
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-green-100 text-green-800'
+                              }`}
+                              title={
+                                isMissingBillingInfo(sponsorData)
+                                  ? 'Missing billing information'
+                                  : 'Billing information complete'
+                              }
+                            >
+                              <CurrencyDollarIcon
+                                className={`h-3 w-3 ${!isMissingBillingInfo(sponsorData) ? 'mr-1' : ''}`}
+                              />
+                              {!isMissingBillingInfo(sponsorData) && 'Billing'}
                             </span>
                           </div>
                         </div>
@@ -391,12 +511,18 @@ export default function SponsorTierManagement({
       )}
 
       <SponsorAddModal
-        key={modalState.preselectedTierId || 'default'}
+        key={
+          modalState.editingSponsor
+            ? `edit-${modalState.editingSponsor.sponsor.name}`
+            : modalState.preselectedTierId || 'default'
+        }
         isOpen={modalState.isOpen}
-        onClose={closeAddModal}
+        onClose={closeModal}
         sponsorTiers={sponsorTiers}
         preselectedTierId={modalState.preselectedTierId}
+        editingSponsor={modalState.editingSponsor}
         onSponsorAdded={addSponsorToState}
+        onSponsorUpdated={updateSponsorInState}
       />
 
       <ConfirmationModal

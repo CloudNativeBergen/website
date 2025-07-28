@@ -53,8 +53,7 @@ import { SpeakerPromotion } from '@/components/SpeakerPromotion'
 import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
-  SpeakerBroadcastTemplate,
-  BroadcastEmailTemplate,
+  BroadcastTemplate,
   BaseEmailTemplate,
 } from '@/components/email'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
@@ -2336,13 +2335,13 @@ export default async function BrandingPage() {
                 emailTime="Today 3:20 PM"
               >
                 <BaseEmailTemplate
-                  title="Collaboration guidelines for your presentation"
                   eventName={conference.title}
                   eventLocation="Demo City, Sampleland"
                   eventDate="31st Demober 2099"
                   eventUrl={`https://${domain}/`}
                   socialLinks={conference.social_links || []}
                   customContent={{
+                    heading: 'Collaboration guidelines for your presentation',
                     body: (
                       <>
                         {/* Rich PortableText Content Example */}
@@ -2612,9 +2611,8 @@ export default async function BrandingPage() {
                 emailSubject="Speaker Dinner & Conference Updates"
                 emailTime="Yesterday 9:00 AM"
               >
-                <SpeakerBroadcastTemplate
+                <BroadcastTemplate
                   subject="Speaker Dinner & Conference Updates"
-                  speakerName="Fellow Demo Speaker"
                   eventName={conference.title}
                   eventLocation="Sample City, Testlandia"
                   eventDate="32nd Mockuary 2099"
@@ -2946,9 +2944,8 @@ export default async function BrandingPage() {
                 emailSubject="Early Bird Tickets Now Available!"
                 emailTime="2 days ago 10:00 AM"
               >
-                <BroadcastEmailTemplate
+                <BroadcastTemplate
                   subject="Early Bird Tickets Now Available!"
-                  recipientName="Community Member"
                   eventName={conference.title}
                   eventLocation={`${conference.city}, ${conference.country}`}
                   eventDate={new Date(conference.start_date).toLocaleDateString(
@@ -2962,23 +2959,69 @@ export default async function BrandingPage() {
                   eventUrl={`https://${conference.domains[0]}`}
                   socialLinks={conference.social_links || []}
                   unsubscribeUrl="https://example.com/unsubscribe" // Example unsubscribe URL for demo
-                  content={`
-                    <p>We're thrilled to announce that early bird tickets for ${conference.title} are now available!</p>
+                  content={
+                    <div>
+                      <p>
+                        We&apos;re thrilled to announce that early bird tickets
+                        for {conference.title} are now available!
+                      </p>
 
-                    <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎟️ Ticket Information</h2>
-                    <ul>
-                      <li><strong>Early Bird Price:</strong> 299 NOK (Regular: 499 NOK)</li>
-                      <li><strong>Available Until:</strong> March 31st, 2025</li>
-                      <li><strong>Includes:</strong> Full conference access, lunch, and networking reception</li>
-                    </ul>
+                      <h2
+                        style={{
+                          color: '#1D4ED8',
+                          fontSize: '18px',
+                          margin: '24px 0 12px 0',
+                        }}
+                      >
+                        🎟️ Ticket Information
+                      </h2>
+                      <ul>
+                        <li>
+                          <strong>Early Bird Price:</strong> 299 NOK (Regular:
+                          499 NOK)
+                        </li>
+                        <li>
+                          <strong>Available Until:</strong> March 31st, 2025
+                        </li>
+                        <li>
+                          <strong>Includes:</strong> Full conference access,
+                          lunch, and networking reception
+                        </li>
+                      </ul>
 
-                    <h2 style="color: #1D4ED8; font-size: 18px; margin: 24px 0 12px 0;">🎤 Confirmed Speakers</h2>
-                    <p>We have an amazing lineup including experts from Google, Microsoft, and the Cloud Native Computing Foundation.</p>
+                      <h2
+                        style={{
+                          color: '#1D4ED8',
+                          fontSize: '18px',
+                          margin: '24px 0 12px 0',
+                        }}
+                      >
+                        🎤 Confirmed Speakers
+                      </h2>
+                      <p>
+                        We have an amazing lineup including experts from Google,
+                        Microsoft, and the Cloud Native Computing Foundation.
+                      </p>
 
-                    <div style="text-align: center; margin: 32px 0;">
-                      <a href="https://tickets.demo-examples.fictional" style="background: linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; display: inline-block;">Get Your Ticket</a>
+                      <div style={{ textAlign: 'center', margin: '32px 0' }}>
+                        <a
+                          href="https://tickets.demo-examples.fictional"
+                          style={{
+                            background:
+                              'linear-gradient(135deg, #1D4ED8 0%, #3B82F6 100%)',
+                            color: 'white',
+                            padding: '12px 24px',
+                            textDecoration: 'none',
+                            borderRadius: '8px',
+                            fontWeight: '600',
+                            display: 'inline-block',
+                          }}
+                        >
+                          Get Your Ticket
+                        </a>
+                      </div>
                     </div>
-                  `}
+                  }
                 />
               </ExpandableEmailTemplate>
 

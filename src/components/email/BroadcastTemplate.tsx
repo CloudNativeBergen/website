@@ -1,9 +1,8 @@
 import * as React from 'react'
 import { BaseEmailTemplate } from './BaseEmailTemplate'
 
-export interface SpeakerBroadcastTemplateProps {
+export interface BroadcastTemplateProps {
   subject: string
-  speakerName: string
   eventName: string
   eventLocation: string
   eventDate: string
@@ -13,9 +12,8 @@ export interface SpeakerBroadcastTemplateProps {
   content: React.ReactNode // Rich text content from PortableText
 }
 
-export function SpeakerBroadcastTemplate({
+export function BroadcastTemplate({
   subject,
-  speakerName,
   eventName,
   eventLocation,
   eventDate,
@@ -23,7 +21,7 @@ export function SpeakerBroadcastTemplate({
   socialLinks,
   unsubscribeUrl,
   content,
-}: SpeakerBroadcastTemplateProps) {
+}: BroadcastTemplateProps) {
   const contentStyle: React.CSSProperties = {
     fontSize: '16px',
     lineHeight: '1.6',
@@ -33,18 +31,16 @@ export function SpeakerBroadcastTemplate({
 
   return (
     <BaseEmailTemplate
-      title={subject}
-      titleColor="#1D4ED8"
-      speakerName={speakerName}
-      proposalTitle="" // Not applicable for broadcast emails
       eventName={eventName}
       eventLocation={eventLocation}
       eventDate={eventDate}
       eventUrl={eventUrl}
       socialLinks={socialLinks || []}
       unsubscribeUrl={unsubscribeUrl}
-    >
-      <div style={contentStyle}>{content}</div>
-    </BaseEmailTemplate>
+      customContent={{
+        heading: subject,
+        body: <div style={contentStyle}>{content}</div>,
+      }}
+    />
   )
 }
