@@ -1,6 +1,9 @@
 @import url('https://fonts.bunny.net/css?family=atkinson-hyperlegible:400,400i,700,700i&display=swap');
 @import 'tailwindcss';
 
+/* Safelist container query classes used in Sponsors component */
+@source inline("@container {@lg:,@xl:,@sm:,@[480px]:,}{absolute left-0 mt-8 mb-0 ml-40 w-32 h-8 h-10 bg-green-100 grid-cols-3 grid-cols-5}");
+
 @theme {
   --text-*: initial;
   --text-xs: 0.75rem;
