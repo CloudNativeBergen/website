@@ -151,9 +151,33 @@
   --font-family-mono: var(--font-jetbrains), 'JetBrains Mono', monospace;
 
   --container-2xl: 40rem;
+
+  /* Custom animations */
+  --animate-pulse-subtle: pulse-subtle 4s ease-in-out infinite;
+}
+
+/* Custom keyframes */
+@keyframes pulse-subtle {
+  0%,
+  100% {
+    transform: scale(1.05);
+    box-shadow:
+      0 25px 50px -12px rgba(0, 0, 0, 0.25),
+      0 0 0 4px rgba(59, 130, 246, 0.15);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow:
+      0 25px 50px -12px rgba(0, 0, 0, 0.25),
+      0 0 0 6px rgba(59, 130, 246, 0.2);
+  }
 }
 
 /* Brand Color Utility Classes */
+.animate-pulse-subtle {
+  animation: var(--animate-pulse-subtle);
+}
+
 .bg-brand-cloud-blue {
   background-color: var(--color-brand-cloud-blue);
 }
@@ -489,6 +513,7 @@
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
+  line-clamp: 1;
 }
 
 .line-clamp-2 {
@@ -496,6 +521,7 @@
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .line-clamp-3 {
@@ -503,4 +529,5 @@
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
 }
