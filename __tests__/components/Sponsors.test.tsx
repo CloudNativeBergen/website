@@ -84,7 +84,11 @@ describe('Sponsors Sorting Logic', () => {
     // Create a tier with multiple sponsors
     const goldSponsors: ConferenceSponsor[] = [
       {
-        sponsor: { name: 'Gold Sponsor 1', website: 'https://1.com', logo: 'logo-1' },
+        sponsor: {
+          name: 'Gold Sponsor 1',
+          website: 'https://1.com',
+          logo: 'logo-1',
+        },
         tier: {
           title: 'Gold',
           tagline: 'Gold tier',
@@ -93,7 +97,11 @@ describe('Sponsors Sorting Logic', () => {
         },
       },
       {
-        sponsor: { name: 'Gold Sponsor 2', website: 'https://2.com', logo: 'logo-2' },
+        sponsor: {
+          name: 'Gold Sponsor 2',
+          website: 'https://2.com',
+          logo: 'logo-2',
+        },
         tier: {
           title: 'Gold',
           tagline: 'Gold tier',
@@ -139,10 +147,14 @@ describe('Sponsors Sorting Logic', () => {
       // For standard tiers, sort by highest price in tier (most expensive tier first)
       const aTierSponsors = groupedSponsors[a]
       const bTierSponsors = groupedSponsors[b]
-      
-      const aMaxPrice = Math.max(...aTierSponsors.map(s => s.tier.price?.[0]?.amount || 0))
-      const bMaxPrice = Math.max(...bTierSponsors.map(s => s.tier.price?.[0]?.amount || 0))
-      
+
+      const aMaxPrice = Math.max(
+        ...aTierSponsors.map((s) => s.tier.price?.[0]?.amount || 0),
+      )
+      const bMaxPrice = Math.max(
+        ...bTierSponsors.map((s) => s.tier.price?.[0]?.amount || 0),
+      )
+
       if (aMaxPrice !== bMaxPrice) {
         return bMaxPrice - aMaxPrice // Sort descending (most expensive tier first)
       }
@@ -184,7 +196,7 @@ describe('Sponsors Sorting Logic', () => {
     }
 
     const sponsors = [sponsorWithoutPrice, sponsorWithPrice]
-    
+
     // Sort by price (most expensive first)
     const sorted = sponsors.sort((a, b) => {
       const aPrice = a.tier.price?.[0]?.amount || 0
