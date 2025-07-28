@@ -372,7 +372,7 @@ export default function SponsorAddModal({
         err &&
         typeof err === 'object' &&
         'validationErrors' in err &&
-        Array.isArray((err as any).validationErrors)
+        Array.isArray((err as SponsorAPIError).validationErrors)
       ) {
         const apiError = err as SponsorAPIError
         setValidationErrors(apiError.validationErrors || [])

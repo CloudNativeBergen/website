@@ -71,7 +71,17 @@ export const POST = auth(async (req: NextAuthRequest) => {
     }
 
     // Convert PortableText content to HTML
-    const htmlContent = await portableTextToHTML(messagePortableText)
+    let htmlContent: string
+    try {
+      htmlContent = await portableTextToHTML(messagePortableText)
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error)
+      return Response.json(
+        { error: `Failed to convert message to HTML: ${errorMessage}` },
+        { status: 500 },
+      )
+    }
 
     // Render the email template
     const emailHtml = await render(
@@ -106,6 +116,18 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     if (broadcastResponse.error) {
       return Response.json(
+        { error: 'Failed to create broadcast email' },
+        { status: 500 },
+      )
+    }
+
+    // Actually send the broadcast
+    const sendResponse = await resend.broadcasts.send(
+      broadcastResponse.data!.id,
+    )
+
+    if (sendResponse.error) {
+      return Response.json(
         { error: 'Failed to send broadcast email' },
         { status: 500 },
       )
@@ -115,6 +137,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       success: true,
       broadcastId: broadcastResponse.data!.id,
       audienceId,
+      sent: true,
     })
   } catch {
     return Response.json({ error: 'Internal server error' }, { status: 500 })

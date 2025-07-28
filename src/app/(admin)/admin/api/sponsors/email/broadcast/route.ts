@@ -119,6 +119,18 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     if (broadcastResponse.error) {
       return Response.json(
+        { error: 'Failed to create broadcast email' },
+        { status: 500 },
+      )
+    }
+
+    // Actually send the broadcast
+    const sendResponse = await resend.broadcasts.send(
+      broadcastResponse.data!.id,
+    )
+
+    if (sendResponse.error) {
+      return Response.json(
         { error: 'Failed to send broadcast email' },
         { status: 500 },
       )
@@ -128,6 +140,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       success: true,
       broadcastId: broadcastResponse.data!.id,
       audienceId,
+      sent: true,
     })
   } catch {
     return Response.json({ error: 'Internal server error' }, { status: 500 })
