@@ -80,13 +80,21 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
 
         {/* Unified responsive sponsor grid using container queries */}
         <div className="@container">
+          {/* DEBUG: Simple container query test */}
+          <div className="mb-4 border bg-red-100 p-4 text-center @lg:bg-green-100">
+            <p className="text-sm">
+              Container Query Test: Red=Small, Green=Large (@lg:{`>`}
+              32rem/512px)
+            </p>
+          </div>
+
           {sortedTierNames.map((tierName) => {
             const tierSponsors = groupedSponsors[tierName]
 
             return (
-              <div key={tierName} className="mb-12 last:mb-0 @3xl:mb-0">
+              <div key={tierName} className="mb-12 last:mb-0 @xl:mb-0">
                 {/* Tier header - responsive positioning */}
-                <div className="mb-6 flex items-center gap-3 @3xl:absolute @3xl:left-0 @3xl:mt-8 @3xl:mb-0 @3xl:w-32">
+                <div className="mb-6 flex items-center gap-3 @xl:absolute @xl:left-0 @xl:mt-8 @xl:mb-0 @xl:w-32">
                   <div className="h-0.5 w-4 bg-blue-900"></div>
                   <h3 className="font-display text-lg font-bold tracking-wider whitespace-nowrap text-blue-900 uppercase">
                     {tierName}
@@ -94,8 +102,8 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                 </div>
 
                 {/* Tier sponsors grid - responsive columns */}
-                <div className="@3xl:ml-40">
-                  <div className="grid grid-cols-2 @sm:grid-cols-3 @3xl:grid-cols-5">
+                <div className="@xl:ml-40">
+                  <div className="grid grid-cols-2 @sm:grid-cols-3 @xl:grid-cols-5">
                     {tierSponsors.map((sponsor, i) => (
                       <div
                         key={`${sponsor.sponsor.name}-${i}`}
@@ -109,7 +117,7 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                           aria-label={`Visit ${sponsor.sponsor.name} website`}
                         >
                           <InlineSvgPreviewComponent
-                            className="h-8 w-auto max-w-full object-contain @[480px]:h-10 @3xl:h-8"
+                            className="h-8 w-auto max-w-full object-contain @[480px]:h-10 @xl:h-8"
                             value={sponsor.sponsor.logo}
                           />
                         </a>
