@@ -47,10 +47,14 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
     // For standard tiers, sort by highest price in tier (most expensive tier first)
     const aTierSponsors = groupedSponsors[a]
     const bTierSponsors = groupedSponsors[b]
-    
-    const aMaxPrice = Math.max(...aTierSponsors.map(s => s.tier.price?.[0]?.amount || 0))
-    const bMaxPrice = Math.max(...bTierSponsors.map(s => s.tier.price?.[0]?.amount || 0))
-    
+
+    const aMaxPrice = Math.max(
+      ...aTierSponsors.map((s) => s.tier.price?.[0]?.amount || 0),
+    )
+    const bMaxPrice = Math.max(
+      ...bTierSponsors.map((s) => s.tier.price?.[0]?.amount || 0),
+    )
+
     if (aMaxPrice !== bMaxPrice) {
       return bMaxPrice - aMaxPrice // Sort descending (most expensive tier first)
     }
@@ -80,9 +84,9 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
             const tierSponsors = groupedSponsors[tierName]
 
             return (
-              <div key={tierName} className="mb-12 last:mb-0 @4xl:mb-0">
+              <div key={tierName} className="mb-12 last:mb-0 @3xl:mb-0">
                 {/* Tier header - responsive positioning */}
-                <div className="mb-6 flex items-center gap-3 @4xl:absolute @4xl:left-0 @4xl:mt-8 @4xl:mb-0 @4xl:w-32">
+                <div className="mb-6 flex items-center gap-3 @3xl:absolute @3xl:left-0 @3xl:mt-8 @3xl:mb-0 @3xl:w-32">
                   <div className="h-0.5 w-4 bg-blue-900"></div>
                   <h3 className="font-display text-lg font-bold tracking-wider whitespace-nowrap text-blue-900 uppercase">
                     {tierName}
@@ -90,8 +94,8 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                 </div>
 
                 {/* Tier sponsors grid - responsive columns */}
-                <div className="@4xl:ml-40">
-                  <div className="grid grid-cols-2 @sm:grid-cols-3 @4xl:grid-cols-5">
+                <div className="@3xl:ml-40">
+                  <div className="grid grid-cols-2 @sm:grid-cols-3 @3xl:grid-cols-5">
                     {tierSponsors.map((sponsor, i) => (
                       <div
                         key={`${sponsor.sponsor.name}-${i}`}
@@ -105,7 +109,7 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                           aria-label={`Visit ${sponsor.sponsor.name} website`}
                         >
                           <InlineSvgPreviewComponent
-                            className="h-8 w-auto max-w-full object-contain @[480px]:h-10 @4xl:h-8"
+                            className="h-8 w-auto max-w-full object-contain @[480px]:h-10 @3xl:h-8"
                             value={sponsor.sponsor.logo}
                           />
                         </a>

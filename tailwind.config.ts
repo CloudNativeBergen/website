@@ -1,10 +1,9 @@
 import headlessuiPlugin from '@headlessui/tailwindcss'
 import formsPlugin from '@tailwindcss/forms'
-import containerQueriesPlugin from '@tailwindcss/container-queries'
 
 export default {
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
-  plugins: [headlessuiPlugin, formsPlugin, containerQueriesPlugin],
+  plugins: [headlessuiPlugin, formsPlugin],
   theme: {
     extend: {
       animation: {
