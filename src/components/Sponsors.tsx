@@ -80,14 +80,6 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
 
         {/* Unified responsive sponsor grid using container queries */}
         <div className="@container">
-          {/* DEBUG: Simple container query test */}
-          <div className="mb-4 border bg-red-100 p-4 text-center @lg:bg-green-100">
-            <p className="text-sm">
-              Container Query Test: Red=Small, Green=Large (@lg:{`>`}
-              32rem/512px)
-            </p>
-          </div>
-
           {sortedTierNames.map((tierName) => {
             const tierSponsors = groupedSponsors[tierName]
 
