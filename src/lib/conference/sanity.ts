@@ -141,7 +141,7 @@ export async function getConferenceForDomain(
       }
       ${
         sponsors
-          ? `sponsors[] | order(tier->tier_type asc, tier->title asc){
+          ? `sponsors[] | order(tier->tier_type asc, tier->price[0].amount desc, tier->title asc){
       sponsor->{
         name,
         website,
@@ -167,7 +167,12 @@ export async function getConferenceForDomain(
       tier->{
         title,
         tagline,
-        tier_type
+        tier_type,
+        price[]{
+          _key,
+          amount,
+          currency
+        }
       }
       },`
           : ''

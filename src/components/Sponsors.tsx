@@ -26,14 +26,36 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
     {} as Record<string, ConferenceSponsor[]>,
   )
 
-  // Sort tier names by hierarchy
+  // Sort sponsors within each tier by value (most expensive first) for standard tiers
+  Object.keys(groupedSponsors).forEach((tierName) => {
+    if (tierName !== 'SPECIAL') {
+      groupedSponsors[tierName].sort((a, b) => {
+        const aPrice = a.tier.price?.[0]?.amount || 0
+        const bPrice = b.tier.price?.[0]?.amount || 0
+        return bPrice - aPrice // Sort descending (most expensive first)
+      })
+    }
+  })
+
+  // Sort tier names by hierarchy and value
   const sortedTierNames = Object.keys(groupedSponsors).sort((a, b) => {
     // Special group always goes last
     if (a === 'SPECIAL' && b !== 'SPECIAL') return 1
     if (b === 'SPECIAL' && a !== 'SPECIAL') return -1
     if (a === 'SPECIAL' && b === 'SPECIAL') return 0
 
-    // For standard tiers, sort alphabetically
+    // For standard tiers, sort by highest price in tier (most expensive tier first)
+    const aTierSponsors = groupedSponsors[a]
+    const bTierSponsors = groupedSponsors[b]
+    
+    const aMaxPrice = Math.max(...aTierSponsors.map(s => s.tier.price?.[0]?.amount || 0))
+    const bMaxPrice = Math.max(...bTierSponsors.map(s => s.tier.price?.[0]?.amount || 0))
+    
+    if (aMaxPrice !== bMaxPrice) {
+      return bMaxPrice - aMaxPrice // Sort descending (most expensive tier first)
+    }
+
+    // If prices are equal, sort alphabetically
     return a.localeCompare(b)
   })
 

@@ -1,4 +1,4 @@
-// Contact role options
+
 export const CONTACT_ROLE_OPTIONS = [
   'Billing Reference',
   'Marketing',
@@ -61,6 +61,11 @@ export interface ConferenceSponsor {
     title: string
     tagline: string
     tier_type?: 'standard' | 'special'
+    price?: Array<{
+      _key: string
+      amount: number
+      currency: string
+    }>
   }
 }
 
@@ -77,6 +82,11 @@ export interface ConferenceSponsorWithContact {
     title: string
     tagline: string
     tier_type?: 'standard' | 'special'
+    price?: Array<{
+      _key: string
+      amount: number
+      currency: string
+    }>
   }
 }
 
