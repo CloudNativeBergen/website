@@ -7,7 +7,12 @@ import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import React from 'react'
 import { getOrCreateConferenceAudience } from '@/lib/email/audience'
-import { resend, retryWithBackoff, delay, EMAIL_CONFIG } from '@/lib/email/config'
+import {
+  resend,
+  retryWithBackoff,
+  delay,
+  EMAIL_CONFIG,
+} from '@/lib/email/config'
 import { PortableTextBlock } from '@portabletext/types'
 
 export const dynamic = 'force-dynamic'
