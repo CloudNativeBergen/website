@@ -7,10 +7,8 @@ import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import React from 'react'
 import { getOrCreateConferenceAudience } from '@/lib/email/audience'
-import { Resend } from 'resend'
+import { resend, retryWithBackoff, delay, EMAIL_CONFIG } from '@/lib/email/config'
 import { PortableTextBlock } from '@portabletext/types'
-
-const resend = new Resend(process.env.RESEND_API_KEY)
 
 export const dynamic = 'force-dynamic'
 
@@ -103,15 +101,15 @@ export const POST = auth(async (req: NextAuthRequest) => {
       }),
     )
 
-    // Send broadcast email
-    const broadcastResponse = await resend.broadcasts.create({
-      name: subject, // Use subject as the broadcast name
-      audienceId,
-      from:
-        conference.contact_email ||
-        'Cloud Native Bergen <noreply@cloudnativebergen.dev>',
-      subject,
-      html: emailHtml,
+    // Send broadcast email with rate limiting
+    const broadcastResponse = await retryWithBackoff(async () => {
+      return await resend.broadcasts.create({
+        name: subject, // Use subject as the broadcast name
+        audienceId,
+        from: `${conference.organizer} <${conference.contact_email}>`,
+        subject,
+        html: emailHtml,
+      })
     })
 
     if (broadcastResponse.error) {
@@ -121,10 +119,13 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // Actually send the broadcast
-    const sendResponse = await resend.broadcasts.send(
-      broadcastResponse.data!.id,
-    )
+    // Add delay to respect rate limits before sending
+    await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+
+    // Actually send the broadcast with rate limiting
+    const sendResponse = await retryWithBackoff(async () => {
+      return await resend.broadcasts.send(broadcastResponse.data!.id)
+    })
 
     if (sendResponse.error) {
       return Response.json(
