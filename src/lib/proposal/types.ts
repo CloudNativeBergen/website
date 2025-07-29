@@ -3,6 +3,7 @@ import { Conference, ConferenceSchedule } from '@/lib/conference/types'
 import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock, Reference } from 'sanity'
 import { Review } from '@/lib/review/types'
+import { CoSpeakerInvitation } from '@/lib/cospeaker/types'
 
 export enum Language {
   norwegian = 'norwegian',
@@ -94,6 +95,7 @@ export interface ProposalExisting extends Proposal {
   schedule?: ConferenceSchedule[]
   conference: Conference | Reference
   reviews?: Review[]
+  invitations?: CoSpeakerInvitation[]
 }
 
 export interface ProposalBaseResponse {

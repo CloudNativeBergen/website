@@ -15,7 +15,7 @@ import {
   HeartIcon,
   XMarkIcon,
   BellIcon,
-} from '@heroicons/react/20/solid'
+} from '@heroicons/react/24/solid'
 import { Speaker } from '@/lib/speaker/types'
 import { postProposalAction } from '@/lib/proposal'
 import { TrashIcon } from '@heroicons/react/24/solid'

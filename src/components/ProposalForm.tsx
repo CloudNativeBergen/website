@@ -28,6 +28,8 @@ import { PortableTextBlock } from '@portabletext/editor'
 import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { CoSpeakerInvitation } from '@/lib/cospeaker/types'
+import { fetchInvitationsForProposal } from '@/lib/cospeaker/client'
 import {
   Checkbox,
   Dropdown,
@@ -74,9 +76,28 @@ export function ProposalForm({
     }
     return []
   })
+  // State for pending invitations
+  const [pendingInvitations, setPendingInvitations] = useState<
+    CoSpeakerInvitation[]
+  >([])
 
   const buttonPrimary = proposalId ? 'Update' : 'Submit'
   const buttonPrimaryLoading = proposalId ? 'Updating...' : 'Submitting...'
+
+  // Fetch existing invitations when editing a proposal
+  useEffect(() => {
+    const fetchInvitations = async () => {
+      if (proposalId && proposalId !== 'new') {
+        try {
+          const invitations = await fetchInvitationsForProposal(proposalId)
+          setPendingInvitations(invitations)
+        } catch (error) {
+          console.error('Failed to fetch invitations:', error)
+        }
+      }
+    }
+    fetchInvitations()
+  }, [proposalId])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [proposalSubmitError, setProposalSubmitError] = useState(
@@ -133,23 +154,23 @@ export function ProposalForm({
     <form onSubmit={handleSubmit}>
       <div className="space-y-12">
         {proposalSubmitError.type && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+          <div className="border-brand-sunset-glow/50 bg-brand-sunset-glow/10 rounded-lg border p-6">
             <div className="flex">
               <div className="flex-shrink-0">
                 <XCircleIcon
-                  className="h-6 w-6 text-red-500"
+                  className="text-brand-sunset-glow h-6 w-6"
                   aria-hidden="true"
                 />
               </div>
               <div className="ml-4">
-                <h3 className="font-space-grotesk text-lg font-semibold text-red-800">
+                <h3 className="font-space-grotesk text-brand-sunset-glow text-lg font-semibold">
                   Submission failed: {proposalSubmitError.type}
                 </h3>
-                <div className="font-inter mt-2 text-red-700">
+                <div className="font-inter text-brand-sunset-glow/90 mt-2">
                   <p>{proposalSubmitError.message}</p>
                   {proposalSubmitError.validationErrors &&
                     proposalSubmitError.validationErrors.length > 0 && (
-                      <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700">
+                      <ul className="font-inter text-brand-sunset-glow/90 mt-2 list-inside list-disc text-sm">
                         {proposalSubmitError.validationErrors.map((error) => (
                           <li key={error.field}>{error.message}</li>
                         ))}
@@ -170,8 +191,17 @@ export function ProposalForm({
           <CoSpeakerSelector
             selectedSpeakers={coSpeakers}
             onSpeakersChange={setCoSpeakers}
-            currentUserSpeaker={currentUserSpeaker}
             format={proposal.format}
+            proposalId={proposalId}
+            pendingInvitations={pendingInvitations}
+            onInvitationSent={(invitation) => {
+              setPendingInvitations((prev) => [...prev, invitation])
+            }}
+            onInvitationCanceled={(invitationId) => {
+              setPendingInvitations((prev) =>
+                prev.filter((inv) => inv._id !== invitationId),
+              )
+            }}
           />
         </div>
         <SpeakerDetailsForm
@@ -195,12 +225,19 @@ export function ProposalForm({
           </Link>{' '}
           or click on your avatar in the top right corner of the page to access
           your proposals.
+          {!proposalId && proposal.format !== Format.lightning_10 && (
+            <>
+              {' '}
+              You can also add co-speakers after creating your proposal by
+              editing it.
+            </>
+          )}
         </p>
       </div>
 
       <div className="mt-6 flex items-center justify-end gap-x-6">
         <Link
-          href="/cfp"
+          href="/cfp/list"
           type="button"
           className="font-inter text-sm leading-6 font-semibold text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
         >
@@ -578,7 +615,7 @@ function SpeakerDetailsForm({
               />
             ) : (
               <UserCircleIcon
-                className="h-12 w-12 text-gray-300"
+                className="h-12 w-12 text-brand-frosted-steel"
                 aria-hidden="true"
               />
             )}

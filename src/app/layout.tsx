@@ -84,7 +84,7 @@ export default async function RootLayout({
     <html
       lang="en"
       className={clsx(
-        'h-full bg-white antialiased',
+        'h-full bg-brand-glacier-white antialiased',
         inter.variable,
         jetbrainsMono.variable,
         spaceGrotesk.variable,
