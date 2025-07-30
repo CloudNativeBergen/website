@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDownIcon } from '@heroicons/react/20/solid'
+import { ChevronDownIcon } from '@heroicons/react/24/solid'
 import { Menu, Transition } from '@headlessui/react'
 import { Fragment, ReactNode } from 'react'
 import { classNames } from './utils'

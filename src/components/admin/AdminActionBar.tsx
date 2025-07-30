@@ -11,7 +11,7 @@ import {
   ExclamationTriangleIcon,
   HeartIcon,
   EnvelopeIcon,
-} from '@heroicons/react/20/solid'
+} from '@heroicons/react/24/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
 import { SpeakerEmailModal } from './SpeakerEmailModal'

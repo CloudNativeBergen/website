@@ -94,7 +94,7 @@ export function SpeakerAvatars({
           key={`${speaker._id || 'speaker'}-${index}`}
           className={`${classes.container} ${
             index > 0 ? classes.spacingCompact : ''
-          } relative rounded-full border-2 border-white bg-gray-100 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
+          } relative rounded-full border-2 border-brand-glacier-white bg-brand-sky-mist shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
             index === 1
               ? 'group-hover:translate-x-[var(--spread-2)]'
               : index === 2
@@ -122,9 +122,12 @@ export function SpeakerAvatars({
             />
           ) : (
             <div
-              className={`${classes.image} flex items-center justify-center rounded-full bg-gray-200`}
+              className={`${classes.image} bg-brand-sky-mist-dark flex items-center justify-center rounded-full`}
             >
-              <UserIcon className={`${classes.icon} text-gray-400`} />
+              <UserIcon
+                className={`${classes.icon} text-brand-cloud-blue`}
+                aria-hidden="true"
+              />
             </div>
           )}
         </div>
@@ -132,7 +135,7 @@ export function SpeakerAvatars({
 
       {remainingCount > 0 && (
         <div
-          className={`${classes.container} ${classes.spacingCompact} relative flex items-center justify-center rounded-full border-2 border-white bg-gray-300 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
+          className={`${classes.container} ${classes.spacingCompact} relative flex items-center justify-center rounded-full border-2 border-brand-glacier-white bg-brand-cloud-blue/20 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
             visibleSpeakers.length === 1
               ? 'group-hover:translate-x-[var(--spread-2)]'
               : visibleSpeakers.length === 2
@@ -146,7 +149,10 @@ export function SpeakerAvatars({
           }}
           title={showTooltip ? `+${remainingCount} more speakers` : undefined}
         >
-          <span className={`${classes.text} font-medium text-gray-600`}>
+          <span
+            className={`${classes.text} text-brand-cloud-blue-dark font-medium`}
+            aria-label={`${remainingCount} more speaker${remainingCount > 1 ? 's' : ''}`}
+          >
             +{remainingCount}
           </span>
         </div>
@@ -189,7 +195,7 @@ export function SpeakerAvatarsWithNames({
         showTooltip={showTooltip}
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-900">
+        <p className="truncate text-sm font-medium text-brand-slate-gray">
           {visibleSpeakers.map((speaker) => speaker.name).join(', ')}
           {remainingCount > 0 && ` +${remainingCount} more`}
         </p>

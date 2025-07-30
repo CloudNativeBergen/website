@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BellIcon } from '@heroicons/react/20/solid'
+import { BellIcon } from '@heroicons/react/24/solid'
 import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { ProposalExisting } from '@/lib/proposal/types'

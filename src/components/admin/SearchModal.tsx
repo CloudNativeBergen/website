@@ -9,7 +9,7 @@ import {
   DialogPanel,
   DialogBackdrop,
 } from '@headlessui/react'
-import { MagnifyingGlassIcon } from '@heroicons/react/20/solid'
+import { MagnifyingGlassIcon } from '@heroicons/react/24/solid'
 import {
   ExclamationTriangleIcon,
   DocumentTextIcon,

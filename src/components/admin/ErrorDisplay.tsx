@@ -1,4 +1,4 @@
-import { ExclamationTriangleIcon } from '@heroicons/react/20/solid'
+import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { ErrorDisplayProps } from './utils'
 

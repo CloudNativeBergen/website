@@ -16,7 +16,7 @@ import {
   TagIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
-import { StarIcon } from '@heroicons/react/20/solid'
+import { StarIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { SponsorTierInput, SponsorTierExisting } from '@/lib/sponsor/types'
 import {

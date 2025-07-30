@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { ChevronLeftIcon } from '@heroicons/react/20/solid'
+import { ChevronLeftIcon } from '@heroicons/react/24/solid'
 
 interface BackToProposalsButtonProps {
   className?: string

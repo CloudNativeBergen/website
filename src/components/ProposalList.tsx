@@ -2,8 +2,8 @@
 
 import { Action, ProposalExisting, Status } from '@/lib/proposal/types'
 import { XMarkIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
-import { useSearchParams } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { useState, useEffect, useCallback } from 'react'
 import { ProposalActionModal } from './ProposalActionModal'
 import { ProposalCard } from './ProposalCard'
 import Link from 'next/link'
@@ -49,11 +49,14 @@ function ProposalSuccessMessage({
 export function ProposalList({
   initialProposals,
   cfpIsOpen,
+  currentConferenceId,
 }: {
   initialProposals: ProposalExisting[]
   cfpIsOpen: boolean
+  currentConferenceId: string
 }) {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const success = searchParams.get('success') ?? undefined
   const confirm = searchParams.get('confirm') ?? ''
 
@@ -104,11 +107,28 @@ export function ProposalList({
     window.history.replaceState({}, document.title, window.location.pathname)
   }
 
-  async function actionHandler(proposal: ProposalExisting, action: Action) {
-    setActionAction(action)
-    setActionProposal(proposal)
-    setActionOpen(true)
-  }
+  const actionHandler = useCallback(
+    async (proposal: ProposalExisting, action: Action) => {
+      // Handle navigation actions
+      if (action === Action.view) {
+        // Redirect to speaker-accessible view page
+        router.push(`/cfp/proposal/${proposal._id}`)
+        return
+      }
+
+      if (action === Action.edit) {
+        // Use the submit page with id parameter
+        router.push(`/cfp/submit?id=${proposal._id}`)
+        return
+      }
+
+      // Handle modal actions
+      setActionAction(action)
+      setActionProposal(proposal)
+      setActionOpen(true)
+    },
+    [router],
+  )
 
   useEffect(() => {
     if (confirm) {
@@ -117,7 +137,7 @@ export function ProposalList({
         actionHandler(proposal, Action.confirm)
       }
     }
-  }, [confirm, proposals])
+  }, [confirm, proposals, actionHandler])
 
   return (
     <>
@@ -187,21 +207,32 @@ export function ProposalList({
                   className="grid grid-cols-1 gap-6 sm:grid-cols-2"
                 >
                   {conferenceProposals.map((proposal) => {
-                    const isConferenceEnded = Boolean(
+                    // Check if this proposal belongs to a different conference
+                    const isFromDifferentConference =
+                      typeof proposal.conference === 'object' &&
+                      proposal.conference !== null &&
+                      '_id' in proposal.conference &&
+                      proposal.conference._id !== currentConferenceId
+
+                    // Check if CFP has ended for the current conference
+                    const isCfpEnded = Boolean(
                       typeof proposal.conference === 'object' &&
                         proposal.conference !== null &&
-                        'end_date' in proposal.conference &&
-                        proposal.conference.end_date &&
-                        new Date(proposal.conference.end_date as string) <
+                        'cfp_end_date' in proposal.conference &&
+                        proposal.conference.cfp_end_date &&
+                        new Date(proposal.conference.cfp_end_date as string) <
                           new Date(),
                     )
+
+                    // Mark as read-only if from different conference OR CFP has ended
+                    const readOnly = isFromDifferentConference || isCfpEnded
 
                     return (
                       <ProposalCard
                         key={proposal._id}
                         proposal={proposal}
                         actionCallback={actionHandler}
-                        readOnly={isConferenceEnded}
+                        readOnly={readOnly}
                       />
                     )
                   })}

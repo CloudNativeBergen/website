@@ -1,6 +1,4 @@
 import { XCircleIcon } from '@heroicons/react/24/solid'
-import { BackgroundImage } from '@/components/BackgroundImage'
-import { Container } from '@/components/Container'
 import {
   Format,
   Language,
@@ -15,6 +13,7 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { CFPLayout } from '@/components/cfp/CFPLayout'
 
 export const dynamic = 'force-dynamic'
 
@@ -127,57 +126,52 @@ export default async function Submit({
   }
 
   return (
-    <>
-      <div className="relative py-20 sm:pt-36 sm:pb-24">
-        <BackgroundImage className="-top-36 -bottom-14" />
-        <Container className="relative">
-          <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
-              Submit Presentation
-            </h1>
-            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
-              <p>
-                Become our next speaker and share your knowledge with the
-                community! We are especially interested in local speakers who
-                can provide unique insights and perspectives.
-              </p>
-            </div>
-          </div>
-          {loadingError && (
-            <div className="mx-auto mt-12 max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 lg:max-w-4xl lg:px-12">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <XCircleIcon
-                    className="h-6 w-6 text-red-500"
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="ml-4">
-                  <h3 className="font-space-grotesk text-lg font-semibold text-red-800">
-                    Loading Error: {loadingError.type}
-                  </h3>
-                  <div className="font-inter mt-2 text-red-700">
-                    <p>{loadingError.message}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          {!loadingError && currentUserSpeaker && (
-            <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12">
-              <ProposalForm
-                initialProposal={proposal}
-                initialSpeaker={speaker}
-                proposalId={proposalId}
-                userEmail={session.speaker.email}
-                conference={conference}
-                allowedFormats={conference.formats}
-                currentUserSpeaker={currentUserSpeaker}
+    <CFPLayout>
+      <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
+        <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
+          Submit Presentation
+        </h1>
+        <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
+          <p>
+            Become our next speaker and share your knowledge with the community!
+            We are especially interested in local speakers who can provide
+            unique insights and perspectives.
+          </p>
+        </div>
+      </div>
+      {loadingError && (
+        <div className="mx-auto mt-12 max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 lg:max-w-4xl lg:px-12">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <XCircleIcon
+                className="h-6 w-6 text-red-500"
+                aria-hidden="true"
               />
             </div>
-          )}
-        </Container>
-      </div>
-    </>
+            <div className="ml-4">
+              <h3 className="font-space-grotesk text-lg font-semibold text-red-800">
+                Loading Error: {loadingError.type}
+              </h3>
+              <div className="font-inter mt-2 text-red-700">
+                <p>{loadingError.message}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {!loadingError && currentUserSpeaker && (
+        <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12">
+          <ProposalForm
+            initialProposal={proposal}
+            initialSpeaker={speaker}
+            proposalId={proposalId}
+            userEmail={session.speaker.email}
+            conference={conference}
+            allowedFormats={conference.formats}
+            currentUserSpeaker={currentUserSpeaker}
+          />
+        </div>
+      )}
+    </CFPLayout>
   )
 }

@@ -28,7 +28,7 @@ import {
   ListBulletIcon,
   NumberedListIcon,
   UnderlineIcon,
-} from '@heroicons/react/20/solid'
+} from '@heroicons/react/24/solid'
 
 const schemaDefinition = defineSchema({
   decorators: [{ name: 'strong' }, { name: 'em' }, { name: 'underline' }],

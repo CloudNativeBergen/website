@@ -1,237 +1,290 @@
-import { Action, ProposalExisting, Status } from '@/lib/proposal/types'
+'use client'
+
+import { ProposalExisting, Action, formats } from '@/lib/proposal/types'
+import { CoSpeakerInvitation } from '@/lib/cospeaker/types'
+import { InvitationBadges } from './InvitationBadges'
+import { SpeakerAvatars } from './SpeakerAvatars'
+import { PortableText } from '@portabletext/react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { fetchInvitationsForProposal } from '@/lib/cospeaker/client'
+import { Speaker } from '@/lib/speaker/types'
 import {
-  BookOpenIcon,
-  CheckCircleIcon,
-  EnvelopeIcon,
-  PencilIcon,
+  ClockIcon,
+  UserGroupIcon,
+  PencilSquareIcon,
+  CheckIcon,
   TrashIcon,
-  UserCircleIcon,
+  EyeIcon,
+  ArrowUturnLeftIcon,
   XMarkIcon,
 } from '@heroicons/react/24/solid'
-import { SpinnerIcon } from './SocialIcons'
-import { PortableTextBlock } from '@portabletext/editor'
-import { PortableTextTextBlock, PortableTextObject } from 'sanity'
-import { SpeakerAvatars } from './SpeakerAvatars'
-import { StatusBadge } from '@/lib/proposal'
 
-interface ProposalButtonAction {
-  label: Action
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any
-  link?: string
-  onClick?: () => void
+interface ProposalCardProps {
+  proposal: ProposalExisting
+  actionCallback?: (proposal: ProposalExisting, action: Action) => void
+  readOnly?: boolean
+  invitations?: CoSpeakerInvitation[]
+  href?: string
+  className?: string
 }
 
-import clsx from 'clsx'
-import Link from 'next/link'
-
-function capitalizeFirstLetter(string: string) {
-  return string.charAt(0).toUpperCase() + string.slice(1)
-}
-
-function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text
-  return text.substring(0, maxLength).replace(/\s+\S*$/, '') + '...'
-}
-
-function ProposalActionLink({ action }: { action: ProposalButtonAction }) {
-  return (
-    <Link
-      href={action.link || '#'}
-      className="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-brand-slate-gray"
-    >
-      <action.icon
-        className="h-5 w-5 text-brand-cloud-gray"
-        aria-hidden="true"
-      />
-      {capitalizeFirstLetter(action.label)}
-    </Link>
-  )
-}
-
-function ProposalActionButton({
-  action,
-  isLoading,
-}: {
-  action: ProposalButtonAction
-  isLoading: boolean
-}) {
-  return (
-    <button
-      disabled={isLoading}
-      onClick={action.onClick}
-      className="relative inline-flex w-0 flex-1 cursor-pointer items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-brand-slate-gray"
-    >
-      {isLoading ? (
-        <SpinnerIcon className="h-5 w-5 animate-spin text-brand-cloud-gray" />
-      ) : (
-        <action.icon
-          className="h-5 w-5 text-brand-cloud-gray"
-          aria-hidden="true"
-        />
-      )}
-      {capitalizeFirstLetter(action.label)}
-    </button>
-  )
-}
 export function ProposalCard({
   proposal,
-  readOnly = false,
   actionCallback,
-}: {
-  proposal: ProposalExisting
-  readOnly?: boolean
-  actionCallback: (proposal: ProposalExisting, action: Action) => void
-}) {
-  const actions: ProposalButtonAction[] = []
+  readOnly = false,
+  invitations: initialInvitations,
+  href,
+  className = '',
+}: ProposalCardProps) {
+  const [invitations, setInvitations] = useState<CoSpeakerInvitation[]>(
+    initialInvitations || [],
+  )
+  const [isLoadingInvitations, setIsLoadingInvitations] = useState(false)
 
-  if (
-    proposal.status === Status.draft ||
-    proposal.status === Status.submitted
-  ) {
-    actions.push({
-      label: Action.edit,
-      icon: PencilIcon,
-      link: `/cfp/submit?id=${proposal._id}`,
-    })
-  } else {
-    actions.push({
-      label: Action.view,
-      icon: BookOpenIcon,
-      link: `/cfp/submit?id=${proposal._id}`,
-    })
+  // Load invitations if not provided
+  useEffect(() => {
+    if (!initialInvitations && proposal._id) {
+      setIsLoadingInvitations(true)
+      fetchInvitationsForProposal(proposal._id)
+        .then(setInvitations)
+        .catch(console.error)
+        .finally(() => setIsLoadingInvitations(false))
+    }
+  }, [proposal._id, initialInvitations])
+
+  // Ensure speakers is an array of Speaker objects
+  const speakers = Array.isArray(proposal.speakers)
+    ? proposal.speakers.filter(
+        (s): s is Speaker => typeof s === 'object' && '_id' in s && 'name' in s,
+      )
+    : []
+
+  const formatDisplay = formats.get(proposal.format) || proposal.format
+  const statusColors: Record<string, string> = {
+    draft: 'bg-gray-100 text-gray-700',
+    submitted: 'bg-blue-100 text-blue-700',
+    accepted: 'bg-green-100 text-green-700',
+    confirmed: 'bg-green-100 text-green-700',
+    rejected: 'bg-red-100 text-red-700',
+    withdrawn: 'bg-orange-100 text-orange-700',
+    deleted: 'bg-gray-100 text-gray-700',
   }
 
-  if (proposal.status === Status.draft) {
-    actions.push({
-      label: Action.delete,
-      icon: TrashIcon,
-      onClick: () => {
-        actionCallback(proposal, Action.delete)
-      },
-    })
-    actions.push({
-      label: Action.submit,
-      icon: EnvelopeIcon,
-      onClick: async () => {
-        actionCallback(proposal, Action.submit)
-      },
-    })
-  }
+  // Action button handlers
+  const handleView = () => actionCallback?.(proposal, Action.view)
+  const handleEdit = () => actionCallback?.(proposal, Action.edit)
+  const handleSubmit = () => actionCallback?.(proposal, Action.submit)
+  const handleConfirm = () => actionCallback?.(proposal, Action.confirm)
+  const handleWithdraw = () => actionCallback?.(proposal, Action.withdraw)
+  const handleDelete = () => actionCallback?.(proposal, Action.delete)
+  const handleUnsubmit = () => actionCallback?.(proposal, Action.unsubmit)
 
-  if (proposal.status === Status.submitted) {
-    actions.push({
-      label: Action.unsubmit,
-      icon: XMarkIcon,
-      onClick: () => {
-        actionCallback(proposal, Action.unsubmit)
-      },
-    })
-  }
+  const content = (
+    <div className="flex h-full flex-col">
+      {/* Main content area */}
+      <div className="flex-grow">
+        {/* Header */}
+        <div className="mb-4">
+          <div className="flex items-start justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {proposal.title}
+            </h3>
+            <span
+              className={`ml-2 inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                statusColors[proposal.status] || statusColors.draft
+              }`}
+              role="status"
+              aria-label={`Proposal status: ${proposal.status}`}
+            >
+              {proposal.status.charAt(0).toUpperCase() +
+                proposal.status.slice(1)}
+            </span>
+          </div>
+        </div>
 
-  if (
-    proposal.status === Status.confirmed ||
-    proposal.status === Status.accepted
-  ) {
-    actions.push({
-      label: Action.withdraw,
-      icon: XMarkIcon,
-      onClick: () => {
-        actionCallback(proposal, Action.withdraw)
-      },
-    })
-  }
+        {/* Speakers and Co-speakers */}
+        <div className="mb-4 space-y-3">
+          {/* Primary speakers */}
+          {speakers.length > 0 && (
+            <div className="flex items-center gap-3">
+              <SpeakerAvatars speakers={speakers} size="sm" maxVisible={3} />
+              <div className="text-sm text-gray-600">
+                {speakers.map((s: Speaker) => s.name).join(', ')}
+              </div>
+            </div>
+          )}
 
-  if (proposal.status === Status.accepted) {
-    actions.push({
-      label: Action.confirm,
-      icon: CheckCircleIcon,
-      onClick: () => {
-        actionCallback(proposal, Action.confirm)
-      },
-    })
+          {/* Invitation badges - only show non-accepted invitations */}
+          {(() => {
+            const pendingInvitations = invitations.filter(
+              (inv) => inv.status !== 'accepted',
+            )
+            return (
+              (pendingInvitations.length > 0 || isLoadingInvitations) && (
+                <div className="flex items-center gap-2">
+                  <UserGroupIcon
+                    className="h-4 w-4 text-gray-400"
+                    aria-hidden="true"
+                  />
+                  {isLoadingInvitations ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <div className="h-3 w-3 animate-spin rounded-full border-b-2 border-gray-400"></div>
+                      Loading invitations...
+                    </div>
+                  ) : (
+                    <InvitationBadges invitations={pendingInvitations} size="sm" />
+                  )}
+                </div>
+              )
+            )
+          })()}
+        </div>
+
+        {/* Metadata */}
+        <div className="mb-4 flex flex-wrap gap-4 text-sm text-gray-600">
+          <div className="flex items-center gap-1">
+            <ClockIcon className="h-4 w-4" aria-hidden="true" />
+            <span>{formatDisplay}</span>
+          </div>
+        </div>
+
+        {/* Description preview */}
+        {proposal.description && (
+          <div className="mb-4">
+            <div className="prose prose-sm line-clamp-3 max-w-none text-gray-600">
+              <PortableText value={proposal.description} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Action buttons - centered at bottom */}
+      {actionCallback && (
+        <div className="mt-4 flex items-center justify-center gap-2 border-t pt-4">
+          {/* View button for all proposals */}
+          <button
+            onClick={handleView}
+            className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100"
+            aria-label={`View proposal: ${proposal.title}`}
+          >
+            <EyeIcon className="h-3 w-3" aria-hidden="true" />
+            View
+          </button>
+
+          {!readOnly && (
+            <>
+              {/* Draft proposals: can edit, submit, and delete */}
+              {proposal.status === 'draft' && (
+                <>
+                  <button
+                    onClick={handleEdit}
+                    className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                    aria-label={`Edit proposal: ${proposal.title}`}
+                  >
+                    <PencilSquareIcon className="h-3 w-3" aria-hidden="true" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleSubmit}
+                    className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-green-600 hover:bg-green-50"
+                    aria-label={`Submit proposal: ${proposal.title}`}
+                  >
+                    <CheckIcon className="h-3 w-3" aria-hidden="true" />
+                    Submit
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                    aria-label={`Delete proposal: ${proposal.title}`}
+                  >
+                    <TrashIcon className="h-3 w-3" aria-hidden="true" />
+                    Delete
+                  </button>
+                </>
+              )}
+
+              {/* Submitted proposals: can edit and unsubmit */}
+              {proposal.status === 'submitted' && (
+                <>
+                  <button
+                    onClick={handleEdit}
+                    className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                    aria-label={`Edit proposal: ${proposal.title}`}
+                  >
+                    <PencilSquareIcon className="h-3 w-3" aria-hidden="true" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleUnsubmit}
+                    className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50"
+                    aria-label={`Unsubmit proposal: ${proposal.title}`}
+                  >
+                    <ArrowUturnLeftIcon
+                      className="h-3 w-3"
+                      aria-hidden="true"
+                    />
+                    Unsubmit
+                  </button>
+                </>
+              )}
+
+              {/* Accepted proposals: can confirm or withdraw */}
+              {proposal.status === 'accepted' && (
+                <>
+                  <button
+                    onClick={handleConfirm}
+                    className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-green-600 hover:bg-green-50"
+                    aria-label={`Confirm attendance for proposal: ${proposal.title}`}
+                  >
+                    <CheckIcon className="h-3 w-3" aria-hidden="true" />
+                    Confirm
+                  </button>
+                  <button
+                    onClick={handleWithdraw}
+                    className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50"
+                    aria-label={`Withdraw proposal: ${proposal.title}`}
+                  >
+                    <XMarkIcon className="h-3 w-3" aria-hidden="true" />
+                    Withdraw
+                  </button>
+                </>
+              )}
+
+              {/* Confirmed proposals: can withdraw */}
+              {proposal.status === 'confirmed' && (
+                <button
+                  onClick={handleWithdraw}
+                  className="flex items-center gap-1 rounded px-3 py-2 text-sm font-medium text-orange-600 hover:bg-orange-50"
+                  aria-label={`Withdraw proposal: ${proposal.title}`}
+                >
+                  <XMarkIcon className="h-3 w-3" aria-hidden="true" />
+                  Withdraw
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={`block rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-gray-300 hover:shadow-md ${className}`}
+      >
+        {content}
+      </Link>
+    )
   }
 
   return (
-    <li
-      key={proposal._id}
-      className={clsx(
-        'col-span-1 divide-y divide-brand-cloud-gray/20 rounded-lg border-l-4 bg-white shadow',
-        // Status-based border styling using consistent configuration
-        {
-          'border-l-green-500': proposal.status === Status.accepted,
-          'border-l-blue-500': proposal.status === Status.submitted,
-          'border-l-yellow-500': proposal.status === Status.draft,
-          'border-l-green-600': proposal.status === Status.confirmed,
-          'border-l-red-500': proposal.status === Status.rejected,
-          'border-l-gray-500': proposal.status === Status.withdrawn,
-        },
-      )}
+    <div
+      className={`flex h-full min-h-[300px] flex-col rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-gray-300 hover:shadow-md ${className}`}
     >
-      <div className="p-6">
-        <div className="mb-3 flex w-full items-start justify-between space-x-6">
-          <div className="flex-1">
-            <div className="mb-2">
-              <StatusBadge status={proposal.status} />
-            </div>
-            <h3 className="font-space-grotesk line-clamp-2 text-sm font-medium text-brand-slate-gray">
-              {proposal.title}
-            </h3>
-          </div>
-          {proposal.speakers &&
-          Array.isArray(proposal.speakers) &&
-          proposal.speakers.length > 0 ? (
-            <SpeakerAvatars
-              speakers={proposal.speakers}
-              size="md"
-              maxVisible={3}
-            />
-          ) : (
-            <UserCircleIcon
-              className="h-10 w-10 flex-shrink-0 rounded-full bg-brand-cloud-gray/20"
-              aria-hidden="true"
-            />
-          )}
-        </div>
-        <p className="font-inter line-clamp-3 text-sm text-brand-cloud-gray">
-          {proposal.status === Status.accepted ? (
-            <>Your proposal has been accepted.</>
-          ) : (
-            <>{truncateText(portableTextToString(proposal.description), 150)}</>
-          )}
-        </p>
-      </div>
-      {!readOnly && actions.length > 0 && (
-        <div>
-          <div className="-mt-px flex divide-x divide-brand-cloud-gray/20">
-            {actions.map((action, i) => (
-              <div
-                key={`${proposal._id}-${action.label}`}
-                className={clsx(
-                  i > 0 ? '-ml-px' : '',
-                  'relative inline-flex w-0 flex-1',
-                )}
-              >
-                {action.link ? (
-                  <ProposalActionLink action={action} />
-                ) : (
-                  <ProposalActionButton action={action} isLoading={false} />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </li>
+      {content}
+    </div>
   )
-}
-
-function portableTextToString(value: PortableTextBlock[]): string {
-  return value
-    .map((block) =>
-      (block as PortableTextTextBlock<PortableTextObject>).children
-        .map((child) => child.text)
-        .join(''),
-    )
-    .join(' ')
 }

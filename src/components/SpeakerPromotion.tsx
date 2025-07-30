@@ -492,7 +492,7 @@ export async function SpeakerPromotion({
                   ? isFeatured
                     ? 'Featured Speaker'
                     : 'Speaker Spotlight'
-                  : "I'm speaking at"}
+                  : 'I&apos;m speaking at'}
               </span>
             </div>
             <h1 className="font-space-grotesk line-clamp-2 px-2 text-2xl leading-tight font-bold">

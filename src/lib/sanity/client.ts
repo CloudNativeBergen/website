@@ -11,7 +11,7 @@ export const clientReadCached = createClient({
   dataset,
   apiVersion,
   useCdn: true,
-  token: process.env.SANITY_API_TOKEN_READ || 'invalid',
+  token: process.env.SANITY_API_TOKEN_READ,
 })
 
 export const clientReadUncached = createClient({
@@ -19,7 +19,7 @@ export const clientReadUncached = createClient({
   dataset,
   apiVersion,
   useCdn: false,
-  token: process.env.SANITY_API_TOKEN_READ || 'invalid',
+  token: process.env.SANITY_API_TOKEN_READ,
 })
 
 export const clientWrite = createClient({
@@ -27,7 +27,7 @@ export const clientWrite = createClient({
   dataset,
   apiVersion,
   useCdn: false,
-  token: process.env.SANITY_API_TOKEN_WRITE || 'invalid',
+  token: process.env.SANITY_API_TOKEN_WRITE,
 })
 
 const builder = imageUrlBuilder(clientReadCached)

@@ -1,5 +1,6 @@
-import { ChevronDownIcon, XMarkIcon } from '@heroicons/react/16/solid'
 import {
+  ChevronDownIcon,
+  XMarkIcon,
   LinkIcon,
   MinusCircleIcon,
   PlusCircleIcon,
@@ -65,35 +66,45 @@ export function LinkInput({
           type="url"
           name={name}
           id={name}
-          className="col-start-1 row-start-1 block w-full rounded-l-md bg-white py-1.5 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+          className="col-start-1 row-start-1 block w-full rounded-l-md bg-white py-1.5 pl-10 text-base text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-frosted-steel placeholder:text-brand-frosted-steel focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
           value={value}
           onChange={(e) => update(index, e.target.value)}
         />
         <LinkIcon
           aria-hidden="true"
-          className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4"
+          className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-brand-frosted-steel sm:size-4"
         />
       </div>
       <button
         type="button"
-        className="flex shrink-0 items-center gap-x-1.5 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+        className="flex shrink-0 items-center gap-x-1.5 bg-white px-3 py-2 text-sm font-semibold text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-frosted-steel hover:bg-brand-sky-mist focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue"
         onClick={() => remove(index)}
       >
-        <MinusCircleIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+        <MinusCircleIcon
+          className="h-5 w-5 text-brand-frosted-steel"
+          aria-hidden="true"
+        />
       </button>
       <button
         type="button"
-        className="flex shrink-0 items-center gap-x-1.5 rounded-r-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+        className="flex shrink-0 items-center gap-x-1.5 rounded-r-md bg-white px-3 py-2 text-sm font-semibold text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-frosted-steel hover:bg-brand-sky-mist focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue"
         onClick={() => add(index)}
       >
-        <PlusCircleIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+        <PlusCircleIcon
+          className="h-5 w-5 text-brand-frosted-steel"
+          aria-hidden="true"
+        />
       </button>
     </div>
   )
 }
 
 export function ErrorText({ children }: { children: React.ReactNode }) {
-  return <p className="font-inter mt-2 text-sm/6 text-red-600">{children}</p>
+  return (
+    <p className="font-inter text-brand-sunset-glow mt-2 text-sm/6">
+      {children}
+    </p>
+  )
 }
 
 export function HelpText({ children }: { children: React.ReactNode }) {
@@ -129,7 +140,7 @@ export function Textarea({
     <>
       <label
         htmlFor={name}
-        className="block text-sm/6 font-medium text-gray-900"
+        className="block text-sm/6 font-medium text-brand-slate-gray"
       >
         {label}
       </label>
@@ -140,7 +151,7 @@ export function Textarea({
           rows={rows}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="font-inter block w-full rounded-md bg-white px-3 py-1.5 text-base text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-frosted-steel placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+          className="font-inter block w-full rounded-md bg-white px-3 py-1.5 text-base text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-frosted-steel placeholder:text-brand-frosted-steel focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
         />
       </div>
     </>
@@ -165,7 +176,7 @@ export function Dropdown({
     <>
       <label
         htmlFor={name}
-        className="block text-sm/6 font-medium text-gray-900"
+        className="block text-sm/6 font-medium text-brand-slate-gray"
       >
         {label}
       </label>
@@ -186,7 +197,7 @@ export function Dropdown({
         </select>
         <ChevronDownIcon
           aria-hidden="true"
-          className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+          className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-brand-frosted-steel sm:size-4"
         />
       </div>
     </>
@@ -219,7 +230,7 @@ export function Checkbox({
         />
       </div>
       <div className="text-sm/6">
-        <label htmlFor={name} className="font-medium text-gray-900">
+        <label htmlFor={name} className="font-medium text-brand-slate-gray">
           {label}
         </label>
         {children}
@@ -247,12 +258,15 @@ export function Multiselect({
 }) {
   return (
     <>
-      <label htmlFor={name} className="block text-sm font-medium text-gray-900">
+      <label
+        htmlFor={name}
+        className="block text-sm font-medium text-brand-slate-gray"
+      >
         {label}
       </label>
       <div className="mt-2">
         <div className="relative">
-          <div className="flex flex-wrap gap-2 rounded-md border border-gray-300 bg-white p-2 focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2">
+          <div className="flex flex-wrap gap-2 rounded-md border border-brand-frosted-steel bg-white p-2 focus-within:ring-2 focus-within:ring-brand-cloud-blue focus-within:ring-offset-2">
             {value.map((selectedId) => {
               const option = options.find((opt) => opt.id === selectedId)
               if (!option) return null
@@ -273,7 +287,7 @@ export function Multiselect({
                     onClick={() =>
                       setValue(value.filter((id) => id !== selectedId))
                     }
-                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-gray-200 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-brand-sky-mist focus:ring-2 focus:ring-brand-cloud-blue focus:outline-none"
                   >
                     <span className="sr-only">Remove {option.title}</span>
                     <XMarkIcon className="h-3 w-3" aria-hidden="true" />
@@ -296,7 +310,7 @@ export function Multiselect({
                 }
               }}
               disabled={value.length >= maxItems}
-              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 ${
+              className={`flex-1 border-0 bg-transparent p-0 text-sm text-brand-slate-gray placeholder-brand-frosted-steel focus:ring-0 ${
                 value.length >= maxItems ? 'cursor-not-allowed opacity-50' : ''
               }`}
             >
