@@ -12,9 +12,15 @@ import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitat
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 
-// Token secret - in production this should be in env vars
-const TOKEN_SECRET =
-  process.env.INVITATION_TOKEN_SECRET || 'invitation-token-secret-key'
+// Token secret - must be set via environment variable
+const TOKEN_SECRET = process.env.INVITATION_TOKEN_SECRET
+
+// Validate token secret is set
+if (!TOKEN_SECRET) {
+  throw new Error(
+    'INVITATION_TOKEN_SECRET environment variable is not set. '
+  )
+}
 
 export interface SendEmailParams<T = Record<string, unknown>> {
   to: string
