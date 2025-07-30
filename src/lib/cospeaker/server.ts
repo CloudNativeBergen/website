@@ -250,7 +250,6 @@ export async function sendInvitationEmail(
   invitation: CoSpeakerInvitationFull,
 ): Promise<boolean> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
     // Use the stored token from the invitation
     const token = invitation.token
@@ -259,15 +258,16 @@ export async function sendInvitationEmail(
       return false
     }
 
-    const invitationUrl = `${baseUrl}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
+    
 
     // Fetch conference data for the current domain
-    const { conference, error: conferenceError } =
+    const { conference, domain, error: conferenceError } =
       await getConferenceForCurrentDomain()
     if (conferenceError || !conference) {
       console.error('Error fetching conference data:', conferenceError)
       // Fallback to defaults if conference data is not available
     }
+    const invitationUrl = `${domain}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
 
     // TODO: Fetch proposal details when we can do so without speakerId
     // For now, we'll use the default message
