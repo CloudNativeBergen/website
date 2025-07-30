@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     if (
       !isTestMode &&
       session?.user?.email &&
-      payload.inviteeEmail.toLowerCase() !== session.user.email.toLowerCase()
+      payload.invitedEmail.toLowerCase() !== session.user.email.toLowerCase()
     ) {
       return NextResponse.json(
         { error: 'This invitation is for a different email address' },
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       // Get or create speaker profile
       if (isTestMode) {
         // In test mode, we need to use findSpeakerByEmail or create a new speaker
-        const testEmail = payload.inviteeEmail
+        const testEmail = payload.invitedEmail
         const { speaker: existingSpeaker } = await findSpeakerByEmail(testEmail)
 
         if (existingSpeaker?._id) {

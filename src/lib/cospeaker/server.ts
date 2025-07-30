@@ -3,9 +3,10 @@ import React from 'react'
 import crypto from 'crypto'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReference } from '@/lib/sanity/helpers'
+import type { Reference } from '@sanity/types'
 import {
   InvitationTokenPayload,
-  CoSpeakerInvitation,
+  CoSpeakerInvitationFull,
   InvitationStatus,
 } from './types'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
@@ -137,7 +138,7 @@ export function verifyInvitationToken(
 interface InvitationUpdateData {
   status: 'accepted' | 'declined'
   respondedAt: string
-  acceptedSpeakerId?: string
+  acceptedSpeaker?: Reference
 }
 
 /**
@@ -155,7 +156,7 @@ export async function updateInvitationStatus(
     }
 
     if (acceptedSpeakerId) {
-      update.acceptedSpeakerId = acceptedSpeakerId
+      update.acceptedSpeaker = createReference(acceptedSpeakerId)
     }
 
     const result = await clientWrite.patch(invitationId).set(update).commit()
@@ -171,13 +172,14 @@ export async function updateInvitationStatus(
  * Create a co-speaker invitation in Sanity
  */
 export async function createCoSpeakerInvitation(params: {
-  inviterEmail: string
-  inviterName: string
-  inviteeEmail: string
-  inviteeName: string
+  invitedByEmail: string
+  invitedByName: string
+  invitedEmail: string
+  invitedName?: string
   proposalId: string
   proposalTitle: string
-}): Promise<CoSpeakerInvitation | null> {
+  invitedBySpeakerId: string
+}): Promise<CoSpeakerInvitationFull | null> {
   try {
     // Create expiration date (14 days from now)
     const expiresAt = new Date()
@@ -186,31 +188,38 @@ export async function createCoSpeakerInvitation(params: {
     // Create the invitation document
     const invitation = await clientWrite.create({
       _type: 'coSpeakerInvitation',
-      inviterEmail: params.inviterEmail,
-      inviterName: params.inviterName,
-      inviteeEmail: params.inviteeEmail,
-      inviteeName: params.inviteeName,
       proposal: createReference(params.proposalId),
+      invitedBy: createReference(params.invitedBySpeakerId),
+      invitedEmail: params.invitedEmail,
+      invitedName: params.invitedName,
       status: 'pending',
       expiresAt: expiresAt.toISOString(),
+      createdAt: new Date().toISOString(),
     })
 
-    // Map the Sanity document to the CoSpeakerInvitation type
-    const mappedInvitation: CoSpeakerInvitation = {
+    // Return the full invitation object
+    const fullInvitation: CoSpeakerInvitationFull = {
       _id: invitation._id,
-      inviterEmail: invitation.inviterEmail,
-      inviterName: invitation.inviterName,
-      inviteeEmail: invitation.inviteeEmail,
-      inviteeName: invitation.inviteeName,
-      proposalId: params.proposalId,
-      proposalTitle: params.proposalTitle,
+      invitedEmail: invitation.invitedEmail,
+      invitedName: invitation.invitedName,
       status: invitation.status as InvitationStatus,
       token: '', // Token is generated when sending the email
       expiresAt: invitation.expiresAt,
-      createdAt: invitation._createdAt || new Date().toISOString(),
+      createdAt: invitation.createdAt,
+      _createdAt: invitation._createdAt,
+      _updatedAt: invitation._updatedAt,
+      proposal: {
+        _id: params.proposalId,
+        title: params.proposalTitle,
+      },
+      invitedBy: {
+        _id: params.invitedBySpeakerId,
+        name: params.invitedByName,
+        email: params.invitedByEmail,
+      },
     }
 
-    return mappedInvitation
+    return fullInvitation
   } catch (error) {
     console.error('Error creating co-speaker invitation:', error)
     return null
@@ -218,7 +227,7 @@ export async function createCoSpeakerInvitation(params: {
 }
 
 export async function sendInvitationEmail(
-  invitation: CoSpeakerInvitation,
+  invitation: CoSpeakerInvitationFull,
 ): Promise<boolean> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
@@ -226,8 +235,14 @@ export async function sendInvitationEmail(
     // Create the invitation token
     const tokenPayload: InvitationTokenPayload = {
       invitationId: invitation._id,
-      inviteeEmail: invitation.inviteeEmail,
-      proposalId: invitation.proposalId,
+      invitedEmail: invitation.invitedEmail,
+      proposalId:
+        typeof invitation.proposal === 'object' && '_id' in invitation.proposal
+          ? invitation.proposal._id
+          : typeof invitation.proposal === 'object' &&
+              '_ref' in invitation.proposal
+            ? invitation.proposal._ref
+            : '',
       expiresAt: new Date(invitation.expiresAt).getTime(),
     }
 
@@ -262,13 +277,31 @@ export async function sendInvitationEmail(
         ? `https://${conference.domains[0]}`
         : process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
+    // Get proposal title from the proposal object
+    const proposalTitle =
+      typeof invitation.proposal === 'object' && 'title' in invitation.proposal
+        ? invitation.proposal.title
+        : 'a proposal'
+
+    // Get inviter details from the invitedBy object
+    const inviterName =
+      typeof invitation.invitedBy === 'object' && 'name' in invitation.invitedBy
+        ? invitation.invitedBy.name
+        : 'Someone'
+
+    const inviterEmail =
+      typeof invitation.invitedBy === 'object' &&
+      'email' in invitation.invitedBy
+        ? invitation.invitedBy.email
+        : ''
+
     // In test mode, log the email instead of sending
     if (AppEnvironment.isTestMode) {
       console.log('[TEST MODE] Would send co-speaker invitation email:')
-      console.log('To:', invitation.inviteeEmail)
+      console.log('To:', invitation.invitedEmail)
       console.log(
         'Subject:',
-        `You've been invited to co-present \"${invitation.proposalTitle || 'a proposal'}\"`,
+        `You've been invited to co-present \"${proposalTitle}\"`,
       )
       console.log('Invitation URL:', invitationUrl)
       console.log('Token:', token)
@@ -277,14 +310,14 @@ export async function sendInvitationEmail(
 
     // Send the email
     const result = await sendEmail({
-      to: invitation.inviteeEmail,
-      subject: `You've been invited to co-present "${invitation.proposalTitle || 'a proposal'}"`,
+      to: invitation.invitedEmail,
+      subject: `You've been invited to co-present "${proposalTitle}"`,
       component: CoSpeakerInvitationTemplate,
       props: {
-        inviterName: invitation.inviterName,
-        inviterEmail: invitation.inviterEmail,
-        inviteeName: invitation.inviteeName || 'Guest',
-        proposalTitle: invitation.proposalTitle || 'Untitled Proposal',
+        inviterName,
+        inviterEmail,
+        inviteeName: invitation.invitedName || 'Guest',
+        proposalTitle: proposalTitle || 'Untitled Proposal',
         proposalAbstract,
         invitationUrl,
         eventName,

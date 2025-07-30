@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Format } from '@/lib/proposal/types'
 import { getCoSpeakerLimit } from './constants'
-import { CoSpeakerInvitation } from './types'
+import { CoSpeakerInvitationMinimal, toMinimalInvitation } from './types'
 import {
   sendInvitations,
   cancelInvitation as cancelInvitationApi,
@@ -12,14 +12,20 @@ import {
 
 export interface InviteField {
   email: string
+  name: string
 }
 
 export interface UseInviteFieldsReturn {
   inviteFields: InviteField[]
   setInviteFields: React.Dispatch<React.SetStateAction<InviteField[]>>
-  handleFieldChange: (index: number, value: string) => void
+  handleFieldChange: (
+    index: number,
+    field: keyof InviteField,
+    value: string,
+  ) => void
   clearField: (index: number) => void
   getValidInviteEmails: () => string[]
+  getValidInviteFields: () => { email: string; name: string }[]
   isAnyFieldFilled: () => boolean
 }
 
@@ -29,7 +35,7 @@ export function useInviteFields(format: Format): UseInviteFieldsReturn {
   const [inviteFields, setInviteFields] = useState<InviteField[]>(() =>
     Array(maxCoSpeakers)
       .fill(null)
-      .map(() => ({ email: '' })),
+      .map(() => ({ email: '', name: '' })),
   )
 
   const prevMaxCoSpeakers = useRef(maxCoSpeakers)
@@ -38,27 +44,43 @@ export function useInviteFields(format: Format): UseInviteFieldsReturn {
       setInviteFields(
         Array(maxCoSpeakers)
           .fill(null)
-          .map((_, index) => inviteFields[index] || { email: '' }),
+          .map((_, index) => inviteFields[index] || { email: '', name: '' }),
       )
       prevMaxCoSpeakers.current = maxCoSpeakers
     }
   }, [maxCoSpeakers, inviteFields])
 
-  const handleFieldChange = (index: number, value: string) => {
+  const handleFieldChange = (
+    index: number,
+    field: keyof InviteField,
+    value: string,
+  ) => {
     setInviteFields((prev) =>
-      prev.map((item, i) => (i === index ? { email: value } : item)),
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
     )
   }
 
   const clearField = (index: number) => {
     setInviteFields((prev) =>
-      prev.map((item, i) => (i === index ? { email: '' } : item)),
+      prev.map((item, i) => (i === index ? { email: '', name: '' } : item)),
     )
   }
 
   const getValidInviteEmails = () => {
     const emails = inviteFields.map((field) => field.email)
     return getValidEmails(emails)
+  }
+
+  const getValidInviteFields = () => {
+    return inviteFields
+      .filter(
+        (field) =>
+          field.email.trim() !== '' && getValidEmails([field.email]).length > 0,
+      )
+      .map((field) => ({
+        email: field.email.trim(),
+        name: field.name.trim(),
+      }))
   }
 
   const isAnyFieldFilled = () => {
@@ -71,6 +93,7 @@ export function useInviteFields(format: Format): UseInviteFieldsReturn {
     handleFieldChange,
     clearField,
     getValidInviteEmails,
+    getValidInviteFields,
     isAnyFieldFilled,
   }
 }
@@ -82,14 +105,14 @@ export interface UseInvitationsReturn {
   cancelingInvitationId: string | null
   sendInvites: (
     proposalId: string,
-    emails: string[],
-  ) => Promise<CoSpeakerInvitation[]>
+    inviteFields: { email: string; name: string }[],
+  ) => Promise<CoSpeakerInvitationMinimal[]>
   cancelInvite: (proposalId: string, invitationId: string) => Promise<void>
   clearMessages: () => void
 }
 
 export function useInvitations(
-  onInvitationSent?: (invitation: CoSpeakerInvitation) => void,
+  onInvitationSent?: (invitation: CoSpeakerInvitationMinimal) => void,
   onInvitationCanceled?: (invitationId: string) => void,
 ): UseInvitationsReturn {
   const [isSendingInvite, setIsSendingInvite] = useState(false)
@@ -106,9 +129,9 @@ export function useInvitations(
 
   const sendInvites = async (
     proposalId: string,
-    emails: string[],
-  ): Promise<CoSpeakerInvitation[]> => {
-    if (emails.length === 0) {
+    inviteFields: { email: string; name: string }[],
+  ): Promise<CoSpeakerInvitationMinimal[]> => {
+    if (inviteFields.length === 0) {
       setInviteError('Please enter at least one valid email address')
       return []
     }
@@ -122,7 +145,7 @@ export function useInvitations(
     clearMessages()
 
     try {
-      const result = await sendInvitations(proposalId, emails)
+      const result = await sendInvitations(proposalId, inviteFields)
 
       if (!result.success) {
         throw new Error(result.error)
@@ -132,13 +155,16 @@ export function useInvitations(
         `Invitation${result.sentEmails.length > 1 ? 's' : ''} sent to ${result.sentEmails.join(', ')}`,
       )
 
+      // Convert full invitations to minimal format
+      const minimalInvitations = result.invitations.map(toMinimalInvitation)
+
       if (onInvitationSent) {
-        result.invitations.forEach((invitation) => {
+        minimalInvitations.forEach((invitation) => {
           onInvitationSent(invitation)
         })
       }
 
-      return result.invitations
+      return minimalInvitations
     } catch (error) {
       setInviteError(
         error instanceof Error ? error.message : 'Failed to send invitation(s)',

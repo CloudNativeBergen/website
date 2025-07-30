@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
         _type: 'coSpeakerInvitation',
         inviterEmail: 'test@example.com',
         inviterName: 'Test Speaker',
-        inviteeEmail: payload.inviteeEmail,
-        inviteeName: 'Test Invitee',
+        invitedEmail: payload.invitedEmail,
+        invitedName: 'Test Invitee',
         proposal: {
           _ref: payload.proposalId,
         },

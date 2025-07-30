@@ -8,25 +8,60 @@ export const INVITATION_STATUSES = [
 
 export type InvitationStatus = (typeof INVITATION_STATUSES)[number]
 
-export interface CoSpeakerInvitation {
+// Minimal invitation type for use in proposals (to avoid circular dependencies)
+// This matches the Sanity schema field names exactly
+export interface CoSpeakerInvitationMinimal {
   _id: string
-  inviterEmail: string
-  inviterName: string
-  inviteeEmail: string
-  inviteeName?: string
-  proposalId: string
-  proposalTitle: string
+  invitedEmail: string
+  invitedName?: string
   status: InvitationStatus
   token: string
   expiresAt: string
-  createdAt: string
+  createdAt?: string
   respondedAt?: string
-  acceptedSpeakerId?: string
+  declineReason?: string
+}
+
+// Full invitation type that matches Sanity schema exactly
+export interface CoSpeakerInvitationFull extends CoSpeakerInvitationMinimal {
+  _createdAt?: string
+  _updatedAt?: string
+  // References to other documents (matches Sanity schema)
+  proposal?:
+    | {
+        _ref: string
+        _type: 'reference'
+      }
+    | {
+        _id: string
+        title?: string
+      }
+  invitedBy?:
+    | {
+        _ref: string
+        _type: 'reference'
+      }
+    | {
+        _id: string
+        name: string
+        email: string
+      }
+  acceptedSpeaker?:
+    | {
+        _ref: string
+        _type: 'reference'
+      }
+    | {
+        _id: string
+        name: string
+        email: string
+        image?: string
+      }
 }
 
 export interface InvitationTokenPayload {
   invitationId: string
-  inviteeEmail: string
+  invitedEmail: string
   proposalId: string
   expiresAt: number
 }
@@ -83,4 +118,21 @@ export function formatProposalFormat(format: string): string {
     workshop: 'Workshop (2 hours)',
   }
   return formats[format] || format
+}
+
+// Utility function to convert full invitation to minimal
+export function toMinimalInvitation(
+  invitation: CoSpeakerInvitationFull,
+): CoSpeakerInvitationMinimal {
+  return {
+    _id: invitation._id,
+    invitedEmail: invitation.invitedEmail,
+    invitedName: invitation.invitedName,
+    status: invitation.status,
+    token: invitation.token,
+    expiresAt: invitation.expiresAt,
+    createdAt: invitation.createdAt,
+    respondedAt: invitation.respondedAt,
+    declineReason: invitation.declineReason,
+  }
 }

@@ -1,16 +1,16 @@
 import { groq } from 'next-sanity'
 import { clientReadUncached as clientRead } from '@/lib/sanity/client'
-import { CoSpeakerInvitation, InvitationStatus } from './types'
+import { CoSpeakerInvitationFull, InvitationStatus } from './types'
 
 /**
  * Get pending invitations for a proposal
  */
 export async function getPendingInvitationsForProposal(
   proposalId: string,
-): Promise<CoSpeakerInvitation[]> {
+): Promise<CoSpeakerInvitationFull[]> {
   const query = groq`*[
-    _type == "coSpeakerInvitation" && 
-    proposal._ref == $proposalId && 
+    _type == "coSpeakerInvitation" &&
+    proposal._ref == $proposalId &&
     status == "pending"
   ] {
     ...,
@@ -36,7 +36,7 @@ export async function getPendingInvitationsForProposal(
  */
 export async function getInvitationsForProposal(
   proposalId: string,
-): Promise<CoSpeakerInvitation[]> {
+): Promise<CoSpeakerInvitationFull[]> {
   const query = groq`*[
     _type == "coSpeakerInvitation" &&
     proposal._ref == $proposalId
@@ -73,11 +73,11 @@ export async function getInvitationsForProposal(
  */
 export async function getInvitationsForProposals(
   proposalIds: string[],
-): Promise<Record<string, CoSpeakerInvitation[]>> {
+): Promise<Record<string, CoSpeakerInvitationFull[]>> {
   if (!proposalIds.length) return {}
 
   const query = groq`*[
-    _type == "coSpeakerInvitation" && 
+    _type == "coSpeakerInvitation" &&
     proposal._ref in $proposalIds
   ] {
     _id,
@@ -98,7 +98,7 @@ export async function getInvitationsForProposals(
     )
 
     // Group invitations by proposal ID
-    const invitationsByProposal: Record<string, CoSpeakerInvitation[]> = {}
+    const invitationsByProposal: Record<string, CoSpeakerInvitationFull[]> = {}
 
     for (const invitation of invitations || []) {
       const proposalId = invitation.proposalId
@@ -118,7 +118,9 @@ export async function getInvitationsForProposals(
 /**
  * Check if an invitation is expired
  */
-export function isInvitationExpired(invitation: CoSpeakerInvitation): boolean {
+export function isInvitationExpired(
+  invitation: CoSpeakerInvitationFull,
+): boolean {
   if (!invitation.expiresAt) return false
   return new Date(invitation.expiresAt) < new Date()
 }
@@ -127,7 +129,7 @@ export function isInvitationExpired(invitation: CoSpeakerInvitation): boolean {
  * Get display status for an invitation considering expiry
  */
 export function getInvitationDisplayStatus(
-  invitation: CoSpeakerInvitation,
+  invitation: CoSpeakerInvitationFull,
 ): InvitationStatus | 'expired' {
   if (invitation.status === 'pending' && isInvitationExpired(invitation)) {
     return 'expired'

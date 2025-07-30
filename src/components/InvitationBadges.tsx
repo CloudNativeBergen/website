@@ -1,4 +1,4 @@
-import { CoSpeakerInvitation } from '@/lib/cospeaker/types'
+import { CoSpeakerInvitationFull } from '@/lib/cospeaker/types'
 import { getInvitationDisplayStatus } from '@/lib/cospeaker/sanity'
 import {
   ClockIcon,
@@ -9,7 +9,7 @@ import {
 import { formatDistanceToNow } from 'date-fns'
 
 interface InvitationBadgesProps {
-  invitations?: CoSpeakerInvitation[]
+  invitations?: CoSpeakerInvitationFull[]
   size?: 'sm' | 'md'
 }
 
@@ -27,7 +27,7 @@ export function InvitationBadges({
       acc[displayStatus].push(inv)
       return acc
     },
-    {} as Record<string, CoSpeakerInvitation[]>,
+    {} as Record<string, CoSpeakerInvitationFull[]>,
   )
 
   const badgeClasses =
@@ -95,7 +95,7 @@ export function InvitationBadges({
 }
 
 interface InvitationStatusListProps {
-  invitations?: CoSpeakerInvitation[]
+  invitations?: CoSpeakerInvitationFull[]
 }
 
 export function InvitationStatusList({
@@ -150,7 +150,7 @@ export function InvitationStatusList({
                       : 'text-brand-slate-gray'
                   }
                 >
-                  {invitation.inviteeName || invitation.inviteeEmail}
+                  {invitation.invitedName || invitation.invitedEmail}
                 </span>
               </div>
               <span className="text-xs text-brand-slate-gray">

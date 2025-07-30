@@ -8,7 +8,10 @@ import {
   XCircleIcon,
 } from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from './SpeakerAvatars'
-import { CoSpeakerInvitation, InvitationStatus } from '@/lib/cospeaker/types'
+import {
+  CoSpeakerInvitationMinimal,
+  InvitationStatus,
+} from '@/lib/cospeaker/types'
 import {
   getCoSpeakerLimit,
   allowsCoSpeakers,
@@ -38,8 +41,8 @@ interface CoSpeakerSelectorProps {
   onSpeakersChange: (speakers: Speaker[]) => void
   format: Format
   proposalId?: string // Optional for new proposals
-  pendingInvitations?: CoSpeakerInvitation[]
-  onInvitationSent?: (invitation: CoSpeakerInvitation) => void
+  pendingInvitations?: CoSpeakerInvitationMinimal[]
+  onInvitationSent?: (invitation: CoSpeakerInvitationMinimal) => void
   onInvitationCanceled?: (invitationId: string) => void
 }
 
@@ -61,7 +64,7 @@ export function CoSpeakerSelector({
     inviteFields,
     handleFieldChange,
     clearField,
-    getValidInviteEmails,
+    getValidInviteFields,
     isAnyFieldFilled,
     setInviteFields,
   } = useInviteFields(format)
@@ -94,20 +97,21 @@ export function CoSpeakerSelector({
   }
 
   const handleSendInvitation = async () => {
-    const validEmails = getValidInviteEmails()
+    const validFields = getValidInviteFields()
 
     if (!proposalId) {
       return
     }
 
-    const sentInvitations = await sendInvites(proposalId, validEmails)
+    const sentInvitations = await sendInvites(proposalId, validFields)
 
     // Clear the fields that were successfully sent
     if (sentInvitations.length > 0) {
+      const sentEmails = validFields.map((field) => field.email)
       setInviteFields((prev) =>
         prev.map((field) => {
-          const wasSent = validEmails.includes(field.email)
-          return wasSent ? { email: '' } : field
+          const wasSent = sentEmails.includes(field.email)
+          return wasSent ? { email: '', name: '' } : field
         }),
       )
     }
@@ -239,10 +243,10 @@ export function CoSpeakerSelector({
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-900">
-                          {invitation.inviteeName}
+                          {invitation.invitedName || invitation.invitedEmail}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {invitation.inviteeEmail} •{' '}
+                          {invitation.invitedEmail} •{' '}
                           {getInvitationStatusText(invitation.status)}
                         </p>
                       </div>
@@ -325,42 +329,84 @@ export function CoSpeakerSelector({
                 </div>
 
                 {/* Dynamic invite fields */}
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {inviteFields
                     .slice(0, maxCoSpeakers - totalCoSpeakers)
                     .map((field, index) => (
-                      <div key={index} className="flex items-center space-x-2">
-                        <div className="flex-1">
-                          <label
-                            htmlFor={`invite-email-${index}`}
-                            className="block text-sm/6 font-medium text-gray-900"
-                          >
-                            Co-speaker {index + 1} Email
-                          </label>
-                          <div className="mt-2">
-                            <input
-                              type="email"
-                              id={`invite-email-${index}`}
-                              value={field.email}
-                              onChange={(e) =>
-                                handleFieldChange(index, e.target.value)
-                              }
-                              placeholder="their.email@example.com"
-                              aria-label={`Co-speaker ${index + 1} Email`}
-                              className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
-                            />
+                      <div
+                        key={index}
+                        className="rounded-md border border-gray-200 bg-white p-4"
+                      >
+                        <div className="flex items-start justify-between">
+                          <h5 className="text-sm font-medium text-gray-900">
+                            Co-speaker {index + 1}
+                          </h5>
+                          {(field.email || field.name) && (
+                            <button
+                              type="button"
+                              onClick={() => clearField(index)}
+                              className="text-gray-400 hover:text-gray-600"
+                              title={`Clear co-speaker ${index + 1} details`}
+                            >
+                              <XMarkIcon
+                                className="h-5 w-5"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          )}
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <label
+                              htmlFor={`invite-email-${index}`}
+                              className="block text-sm font-medium text-gray-900"
+                            >
+                              Email *
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="email"
+                                id={`invite-email-${index}`}
+                                value={field.email}
+                                onChange={(e) =>
+                                  handleFieldChange(
+                                    index,
+                                    'email',
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="their.email@example.com"
+                                aria-label={`Co-speaker ${index + 1} Email`}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor={`invite-name-${index}`}
+                              className="block text-sm font-medium text-gray-900"
+                            >
+                              Name (optional)
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`invite-name-${index}`}
+                                value={field.name}
+                                onChange={(e) =>
+                                  handleFieldChange(
+                                    index,
+                                    'name',
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="Their Name"
+                                aria-label={`Co-speaker ${index + 1} Name`}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                              />
+                            </div>
                           </div>
                         </div>
-                        {field.email && (
-                          <button
-                            type="button"
-                            onClick={() => clearField(index)}
-                            className="mt-7 text-gray-400 hover:text-gray-600"
-                            title={`Clear co-speaker ${index + 1} email`}
-                          >
-                            <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-                          </button>
-                        )}
                       </div>
                     ))}
                 </div>
@@ -391,7 +437,7 @@ export function CoSpeakerSelector({
                       <>
                         <EnvelopeIcon className="h-4 w-4" aria-hidden="true" />
                         Send Invitation
-                        {getValidInviteEmails().length > 1 ? 's' : ''}
+                        {getValidInviteFields().length > 1 ? 's' : ''}
                       </>
                     )}
                   </button>

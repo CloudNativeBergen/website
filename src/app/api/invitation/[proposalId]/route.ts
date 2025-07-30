@@ -94,12 +94,13 @@ export const POST = auth(
 
       // Create the invitation
       const invitation = await createCoSpeakerInvitation({
-        inviterEmail: req.auth.user.email!,
-        inviterName: req.auth.speaker.name,
-        inviteeEmail,
-        inviteeName,
+        invitedByEmail: req.auth.user.email!,
+        invitedByName: req.auth.speaker.name,
+        invitedEmail: inviteeEmail,
+        invitedName: inviteeName,
         proposalId: proposalId as string,
         proposalTitle: proposal.title,
+        invitedBySpeakerId: req.auth.speaker._id,
       })
 
       if (!invitation) {

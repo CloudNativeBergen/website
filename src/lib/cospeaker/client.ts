@@ -1,7 +1,7 @@
 'use client'
 
-import { CoSpeakerInvitation } from './types'
-import { COSPEAKER_API_ENDPOINTS, COSPEAKER_API_PARAMS } from './constants'
+import { CoSpeakerInvitationFull } from './types'
+import { COSPEAKER_API_ENDPOINTS } from './constants'
 import { AppEnvironment } from '@/lib/environment'
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
@@ -75,18 +75,18 @@ export async function cancelInvitation(
 
 export async function sendInvitations(
   proposalId: string,
-  emails: string[],
+  inviteFields: { email: string; name: string }[],
 ): Promise<{
   success: boolean
   sentEmails: string[]
-  invitations: CoSpeakerInvitation[]
+  invitations: CoSpeakerInvitationFull[]
   error?: string
 }> {
   try {
     const results = []
     const sentEmails = []
 
-    for (const email of emails) {
+    for (const field of inviteFields) {
       const url = AppEnvironment.buildApiUrl(
         COSPEAKER_API_ENDPOINTS.INVITATION_CREATE(proposalId),
       )
@@ -97,19 +97,21 @@ export async function sendInvitations(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          inviteeEmail: email,
-          inviteeName: generateNameFromEmail(email),
+          inviteeEmail: field.email,
+          inviteeName: field.name || generateNameFromEmail(field.email),
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || `Failed to send invitation to ${email}`)
+        throw new Error(
+          data.error || `Failed to send invitation to ${field.email}`,
+        )
       }
 
       results.push(data.invitation)
-      sentEmails.push(email)
+      sentEmails.push(field.email)
     }
 
     return {

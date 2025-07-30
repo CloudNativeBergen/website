@@ -79,7 +79,7 @@ export default async function InvitationResponsePage({
   if (
     !isTestMode &&
     session?.user?.email &&
-    payload.inviteeEmail.toLowerCase() !== session.user.email.toLowerCase()
+    payload.invitedEmail.toLowerCase() !== session.user.email.toLowerCase()
   ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -90,7 +90,7 @@ export default async function InvitationResponsePage({
             </h2>
             <p className="mb-4 text-yellow-700">
               This invitation was sent to{' '}
-              <strong>{payload.inviteeEmail}</strong>, but you&apos;re signed in
+              <strong>{payload.invitedEmail}</strong>, but you&apos;re signed in
               as <strong>{session.user.email}</strong>.
             </p>
             <p className="text-yellow-700">
