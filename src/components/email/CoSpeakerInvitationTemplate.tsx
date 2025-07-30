@@ -37,14 +37,7 @@ export function CoSpeakerInvitationTemplate({
   socialLinks = [],
 }: CoSpeakerInvitationTemplateProps) {
   const invitationSection = (
-    <EmailSection
-      backgroundColor="#E0F2FE"
-      borderColor="#7DD3FC"
-      borderLeftColor="#1D4ED8"
-    >
-      <EmailSectionHeader>
-        🎤 You&apos;ve been invited to be a co-speaker!
-      </EmailSectionHeader>
+    <div style={{ marginBottom: '24px' }}>
       <EmailText>
         <strong>{inviterName}</strong> ({inviterEmail}) has invited you to join
         as a co-speaker for their proposal submitted to {eventName}.
@@ -53,7 +46,7 @@ export function CoSpeakerInvitationTemplate({
         As a co-speaker, you&apos;ll be listed on the proposal and can
         participate in presenting if the talk is accepted.
       </EmailText>
-    </EmailSection>
+    </div>
   )
 
   const proposalSection = (

@@ -37,14 +37,7 @@ export function CoSpeakerResponseTemplate({
   socialLinks = [],
 }: CoSpeakerResponseTemplateProps) {
   const responseSection = accepted ? (
-    <EmailSection
-      backgroundColor="#DCFCE7"
-      borderColor="#86EFAC"
-      borderLeftColor="#22C55E"
-    >
-      <EmailSectionHeader color="#15803D">
-        🎉 Great news! Your invitation was accepted
-      </EmailSectionHeader>
+    <div style={{ marginBottom: '24px' }}>
       <EmailText>
         <strong>{respondentName}</strong> ({respondentEmail}) has accepted your
         invitation to be a co-speaker for your proposal.
@@ -53,16 +46,9 @@ export function CoSpeakerResponseTemplate({
         They are now listed as a co-speaker on your proposal and can view all
         proposal details.
       </EmailText>
-    </EmailSection>
+    </div>
   ) : (
-    <EmailSection
-      backgroundColor="#FEE2E2"
-      borderColor="#FCA5A5"
-      borderLeftColor="#EF4444"
-    >
-      <EmailSectionHeader color="#991B1B">
-        Your invitation was declined
-      </EmailSectionHeader>
+    <div style={{ marginBottom: '24px' }}>
       <EmailText>
         <strong>{respondentName}</strong> ({respondentEmail}) has declined your
         invitation to be a co-speaker for your proposal.
@@ -77,7 +63,7 @@ export function CoSpeakerResponseTemplate({
           </EmailText>
         </div>
       )}
-    </EmailSection>
+    </div>
   )
 
   const proposalSection = (

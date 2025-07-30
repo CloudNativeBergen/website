@@ -55,6 +55,8 @@ import {
   ProposalRejectTemplate,
   BroadcastTemplate,
   BaseEmailTemplate,
+  CoSpeakerInvitationTemplate,
+  CoSpeakerResponseTemplate,
 } from '@/components/email'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { CallToAction } from '@/components/CallToAction'
@@ -2922,6 +2924,215 @@ export default async function BrandingPage() {
             </div>
           </div>
 
+          {/* Co-Speaker Templates */}
+          <div className="mb-16">
+            <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
+              🚀 Pair Programming for Presentations
+            </h3>
+            <p className="font-inter mb-12 text-center text-lg text-brand-slate-gray">
+              Just like scaling microservices, great talks scale better with
+              collaboration! Our co-speaker invitation system orchestrates
+              seamless partnerships between speakers, enabling distributed
+              expertise and fault-tolerant presentations. Deploy these templates
+              to invite, coordinate, and celebrate speaker collaborations.
+            </p>
+
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+              {/* Co-Speaker Invitation Email */}
+              <ExpandableEmailTemplate
+                title="🎤 Co-Speaker Invitation Email"
+                description="Invites potential co-speakers to join presentations with clear next steps and secure token-based verification."
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="potential.cospeaker@example.com"
+                emailSubject='You&apos;ve been invited to co-present "Building Resilient Microservices"'
+                emailTime="Today 11:30 AM"
+              >
+                <CoSpeakerInvitationTemplate
+                  inviterName="Demo Speaker"
+                  inviterEmail="demo.speaker@example.com"
+                  inviteeName="Potential CoSpeaker"
+                  proposalTitle="Building Resilient Microservices with Kubernetes"
+                  proposalAbstract="Learn how to design fault-tolerant microservices that can handle failures gracefully and maintain system reliability in cloud native environments. This talk covers circuit breakers, retry patterns, and monitoring strategies."
+                  eventName={conference.title}
+                  eventLocation={`${conference.city}, ${conference.country}`}
+                  eventDate="June 15, 2025"
+                  eventUrl={`https://${domain}/`}
+                  invitationUrl={`https://${domain}/invitation/abc123def456ghi789jkl012mno345pqr678stu901vwx234yz`}
+                  expiresAt="August 13, 2025"
+                  socialLinks={conference.social_links || []}
+                />
+              </ExpandableEmailTemplate>
+
+              {/* Co-Speaker Response Email - Accepted */}
+              <ExpandableEmailTemplate
+                title="✅ Co-Speaker Invitation Accepted"
+                description="Notifies the original speaker when their co-speaker invitation is accepted with next steps."
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="demo.speaker@example.com"
+                emailSubject="Co-speaker invitation accepted: Building Resilient Microservices"
+                emailTime="Today 2:15 PM"
+              >
+                <CoSpeakerResponseTemplate
+                  inviterName="Demo Speaker"
+                  respondentName="Potential CoSpeaker"
+                  respondentEmail="potential.cospeaker@example.com"
+                  proposalTitle="Building Resilient Microservices with Kubernetes"
+                  proposalUrl={`https://${domain}/cfp/list`}
+                  eventName={conference.title}
+                  eventLocation={`${conference.city}, ${conference.country}`}
+                  eventDate="June 15, 2025"
+                  eventUrl={`https://${domain}/`}
+                  accepted={true}
+                  socialLinks={conference.social_links || []}
+                />
+              </ExpandableEmailTemplate>
+
+              {/* Co-Speaker Response Declined Example */}
+              <ExpandableEmailTemplate
+                title="❌ Co-Speaker Invitation Declined"
+                description="Professional notification when a co-speaker invitation is declined, maintaining positive relationships."
+                previewHeight={600}
+                emailFrom={conference.contact_email}
+                emailTo="demo.speaker@example.com"
+                emailSubject="Co-speaker invitation declined: Building Resilient Microservices"
+                emailTime="Yesterday 4:45 PM"
+              >
+                <CoSpeakerResponseTemplate
+                  inviterName="Demo Speaker"
+                  respondentName="Busy Developer"
+                  respondentEmail="busy.developer@example.com"
+                  proposalTitle="Building Resilient Microservices with Kubernetes"
+                  proposalUrl={`https://${domain}/cfp/list`}
+                  eventName={conference.title}
+                  eventLocation={`${conference.city}, ${conference.country}`}
+                  eventDate="June 15, 2025"
+                  eventUrl={`https://${domain}/`}
+                  accepted={false}
+                  declineReason="Thank you for thinking of me! Unfortunately, I have a conflict with another commitment during that time period."
+                  socialLinks={conference.social_links || []}
+                />
+              </ExpandableEmailTemplate>
+            </div>
+
+            {/* Co-Speaker Template Guidelines */}
+            <div className="mt-12 rounded-xl bg-white p-8 shadow-lg">
+              <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
+                Co-Speaker Template Guidelines
+              </h4>
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                <div>
+                  <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
+                    Security & Token Management
+                  </h5>
+                  <ul className="font-inter space-y-3 text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>Secure Tokens:</strong> HMAC-SHA256 signed
+                        tokens with 14-day expiration for invitation security
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>Email Verification:</strong> Case-insensitive
+                        email matching ensures invitations reach the correct
+                        recipient
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>One-Time Use:</strong> Tokens become invalid
+                        after response to prevent replay attacks
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span>
+                        <strong>Test Mode:</strong> Development environment
+                        supports testing without sending actual emails
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
+                    User Experience Design
+                  </h5>
+                  <ul className="font-inter space-y-3 text-brand-slate-gray">
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Clear Context:</strong> Invitations include full
+                        proposal details and inviter information
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Expiration Awareness:</strong> Real-time
+                        expiration checking with countdown displays
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Response Feedback:</strong> Immediate
+                        confirmation and next steps for both parties
+                      </span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span>
+                        <strong>Mobile Optimized:</strong> Responsive design
+                        ensures accessibility across all devices
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="mt-8 rounded-lg bg-brand-sky-mist/50 p-6">
+                <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                  Integration with Existing Systems
+                </h5>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div>
+                    <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
+                      Authentication
+                    </h6>
+                    <p className="font-inter text-sm text-brand-slate-gray">
+                      Integrates with NextAuth.js for LinkedIn and GitHub OAuth2
+                      authentication flows
+                    </p>
+                  </div>
+                  <div>
+                    <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
+                      Sanity CMS
+                    </h6>
+                    <p className="font-inter text-sm text-brand-slate-gray">
+                      Co-speaker invitations stored as documents with full audit
+                      trail and status tracking
+                    </p>
+                  </div>
+                  <div>
+                    <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
+                      Email Service
+                    </h6>
+                    <p className="font-inter text-sm text-brand-slate-gray">
+                      Powered by Resend with retry logic, rate limiting, and
+                      delivery tracking
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* General Communication Templates */}
           <div className="mb-16">
             <h3 className="font-space-grotesk mb-8 text-center text-3xl font-semibold text-brand-slate-gray">
@@ -3282,6 +3493,56 @@ export default async function BrandingPage() {
                     <td className="px-6 py-4">
                       <span className="inline-flex rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
                         Admin Tool
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-brand-fresh-green">
+                        Co-Speaker Invitation
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        Invite speakers to collaborate
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>Secure token system</li>
+                        <li>Talk context details</li>
+                        <li>Accept/decline options</li>
+                        <li>Professional tone</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                        Automated
+                      </span>
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <span className="font-space-grotesk font-semibold text-brand-cloud-blue">
+                        Co-Speaker Response
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-inter text-brand-slate-gray">
+                        Notify of invitation response
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <ul className="font-inter list-inside list-disc space-y-1 text-sm text-brand-slate-gray">
+                        <li>Accept/decline status</li>
+                        <li>Professional language</li>
+                        <li>Next steps guidance</li>
+                        <li>Relationship preservation</li>
+                      </ul>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                        Automated
                       </span>
                     </td>
                   </tr>
