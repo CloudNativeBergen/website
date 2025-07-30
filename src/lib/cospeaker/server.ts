@@ -18,9 +18,13 @@ const TOKEN_SECRET = process.env.INVITATION_TOKEN_SECRET
 // Validate token secret is set
 if (!TOKEN_SECRET) {
   throw new Error(
-    'INVITATION_TOKEN_SECRET environment variable is not set. '
+    'INVITATION_TOKEN_SECRET environment variable is not set. ' +
+    'Please set this environment variable to a secure random value.'
   )
 }
+
+// TypeScript now knows TOKEN_SECRET is defined after the check above
+const SECURE_TOKEN_SECRET = TOKEN_SECRET as string
 
 export interface SendEmailParams<T = Record<string, unknown>> {
   to: string
@@ -83,7 +87,7 @@ export async function sendEmail<T = Record<string, unknown>>({
 export function createInvitationToken(payload: InvitationTokenPayload): string {
   const data = JSON.stringify(payload)
   const signature = crypto
-    .createHmac('sha256', TOKEN_SECRET)
+    .createHmac('sha256', SECURE_TOKEN_SECRET)
     .update(data)
     .digest('base64url')
 
@@ -111,7 +115,7 @@ export function verifyInvitationToken(
 
     // Verify signature
     const expectedSignature = crypto
-      .createHmac('sha256', TOKEN_SECRET)
+      .createHmac('sha256', SECURE_TOKEN_SECRET)
       .update(data)
       .digest('base64url')
 
