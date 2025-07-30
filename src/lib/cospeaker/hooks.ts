@@ -1,0 +1,196 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { Format } from '@/lib/proposal/types'
+import { getCoSpeakerLimit } from './constants'
+import { CoSpeakerInvitation } from './types'
+import {
+  sendInvitations,
+  cancelInvitation as cancelInvitationApi,
+  getValidEmails,
+} from './client'
+
+export interface InviteField {
+  email: string
+}
+
+export interface UseInviteFieldsReturn {
+  inviteFields: InviteField[]
+  setInviteFields: React.Dispatch<React.SetStateAction<InviteField[]>>
+  handleFieldChange: (index: number, value: string) => void
+  clearField: (index: number) => void
+  getValidInviteEmails: () => string[]
+  isAnyFieldFilled: () => boolean
+}
+
+/**
+ * Custom hook for managing invite fields based on format
+ */
+export function useInviteFields(format: Format): UseInviteFieldsReturn {
+  const maxCoSpeakers = getCoSpeakerLimit(format)
+
+  // Initialize invite fields array based on max co-speakers
+  const [inviteFields, setInviteFields] = useState<InviteField[]>(() =>
+    Array(maxCoSpeakers)
+      .fill(null)
+      .map(() => ({ email: '' })),
+  )
+
+  // Update invite fields when format changes
+  const prevMaxCoSpeakers = useRef(maxCoSpeakers)
+  useEffect(() => {
+    if (prevMaxCoSpeakers.current !== maxCoSpeakers) {
+      setInviteFields(
+        Array(maxCoSpeakers)
+          .fill(null)
+          .map((_, index) => inviteFields[index] || { email: '' }),
+      )
+      prevMaxCoSpeakers.current = maxCoSpeakers
+    }
+  }, [maxCoSpeakers, inviteFields])
+
+  const handleFieldChange = (index: number, value: string) => {
+    setInviteFields((prev) =>
+      prev.map((item, i) => (i === index ? { email: value } : item)),
+    )
+  }
+
+  const clearField = (index: number) => {
+    setInviteFields((prev) =>
+      prev.map((item, i) => (i === index ? { email: '' } : item)),
+    )
+  }
+
+  const getValidInviteEmails = () => {
+    const emails = inviteFields.map((field) => field.email)
+    return getValidEmails(emails)
+  }
+
+  const isAnyFieldFilled = () => {
+    return getValidInviteEmails().length > 0
+  }
+
+  return {
+    inviteFields,
+    setInviteFields,
+    handleFieldChange,
+    clearField,
+    getValidInviteEmails,
+    isAnyFieldFilled,
+  }
+}
+
+export interface UseInvitationsReturn {
+  isSendingInvite: boolean
+  inviteError: string
+  inviteSuccess: string
+  cancelingInvitationId: string | null
+  sendInvites: (
+    proposalId: string,
+    emails: string[],
+  ) => Promise<CoSpeakerInvitation[]>
+  cancelInvite: (proposalId: string, invitationId: string) => Promise<void>
+  clearMessages: () => void
+}
+
+/**
+ * Custom hook for managing invitation operations
+ */
+export function useInvitations(
+  onInvitationSent?: (invitation: CoSpeakerInvitation) => void,
+  onInvitationCanceled?: (invitationId: string) => void,
+): UseInvitationsReturn {
+  const [isSendingInvite, setIsSendingInvite] = useState(false)
+  const [inviteError, setInviteError] = useState<string>('')
+  const [inviteSuccess, setInviteSuccess] = useState<string>('')
+  const [cancelingInvitationId, setCancelingInvitationId] = useState<
+    string | null
+  >(null)
+
+  const clearMessages = () => {
+    setInviteError('')
+    setInviteSuccess('')
+  }
+
+  const sendInvites = async (
+    proposalId: string,
+    emails: string[],
+  ): Promise<CoSpeakerInvitation[]> => {
+    if (emails.length === 0) {
+      setInviteError('Please enter at least one valid email address')
+      return []
+    }
+
+    if (!proposalId) {
+      setInviteError('Please save your proposal before inviting co-speakers')
+      return []
+    }
+
+    setIsSendingInvite(true)
+    clearMessages()
+
+    try {
+      const result = await sendInvitations(proposalId, emails)
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      setInviteSuccess(
+        `Invitation${result.sentEmails.length > 1 ? 's' : ''} sent to ${result.sentEmails.join(', ')}`,
+      )
+
+      // Notify parent component about new invitations
+      if (onInvitationSent) {
+        result.invitations.forEach((invitation) => {
+          onInvitationSent(invitation)
+        })
+      }
+
+      return result.invitations
+    } catch (error) {
+      setInviteError(
+        error instanceof Error ? error.message : 'Failed to send invitation(s)',
+      )
+      return []
+    } finally {
+      setIsSendingInvite(false)
+    }
+  }
+
+  const cancelInvite = async (
+    proposalId: string,
+    invitationId: string,
+  ): Promise<void> => {
+    if (!proposalId) return
+
+    setCancelingInvitationId(invitationId)
+    clearMessages()
+
+    try {
+      await cancelInvitationApi(proposalId, invitationId)
+      setInviteSuccess('Invitation canceled successfully')
+
+      // Notify parent component about canceled invitation
+      if (onInvitationCanceled) {
+        onInvitationCanceled(invitationId)
+      }
+    } catch (error) {
+      setInviteError(
+        error instanceof Error ? error.message : 'Failed to cancel invitation',
+      )
+    } finally {
+      setCancelingInvitationId(null)
+    }
+  }
+
+  return {
+    isSendingInvite,
+    inviteError,
+    inviteSuccess,
+    cancelingInvitationId,
+    sendInvites,
+    cancelInvite,
+    clearMessages,
+  }
+}

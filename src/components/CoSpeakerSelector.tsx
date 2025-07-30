@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef } from 'react'
 import { Speaker } from '@/lib/speaker/types'
 import { Format } from '@/lib/proposal/types'
 import {
@@ -10,12 +9,12 @@ import {
 } from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from './SpeakerAvatars'
 import { CoSpeakerInvitation, InvitationStatus } from '@/lib/cospeaker/types'
-import { cancelInvitation } from '@/lib/cospeaker/client'
 import {
   getCoSpeakerLimit,
   allowsCoSpeakers,
   getSpeakerLimitDescription,
 } from '@/lib/cospeaker/constants'
+import { useInviteFields, useInvitations } from '@/lib/cospeaker/hooks'
 
 function getFormatDisplayName(format: Format): string {
   switch (format) {
@@ -34,9 +33,6 @@ function getFormatDisplayName(format: Format): string {
   }
 }
 
-// Email validation regex
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 interface CoSpeakerSelectorProps {
   selectedSpeakers: Speaker[] // This should be just the co-speakers (not including current user)
   onSpeakersChange: (speakers: Speaker[]) => void
@@ -45,10 +41,6 @@ interface CoSpeakerSelectorProps {
   pendingInvitations?: CoSpeakerInvitation[]
   onInvitationSent?: (invitation: CoSpeakerInvitation) => void
   onInvitationCanceled?: (invitationId: string) => void
-}
-
-interface InviteField {
-  email: string
 }
 
 export function CoSpeakerSelector({
@@ -61,22 +53,27 @@ export function CoSpeakerSelector({
   onInvitationCanceled,
 }: CoSpeakerSelectorProps) {
   const maxCoSpeakers = getCoSpeakerLimit(format)
-
-  // Initialize invite fields array based on max co-speakers
-  const [inviteFields, setInviteFields] = useState<InviteField[]>(() =>
-    Array(maxCoSpeakers)
-      .fill(null)
-      .map(() => ({ email: '' })),
-  )
-  const [isSendingInvite, setIsSendingInvite] = useState(false)
-  const [inviteError, setInviteError] = useState<string>('')
-  const [inviteSuccess, setInviteSuccess] = useState<string>('')
-  const [cancelingInvitationId, setCancelingInvitationId] = useState<
-    string | null
-  >(null)
-
   const formatName = getFormatDisplayName(format)
   const isLightningTalk = !allowsCoSpeakers(format)
+
+  // Custom hooks for managing invite fields and invitations
+  const {
+    inviteFields,
+    handleFieldChange,
+    clearField,
+    getValidInviteEmails,
+    isAnyFieldFilled,
+    setInviteFields,
+  } = useInviteFields(format)
+
+  const {
+    isSendingInvite,
+    inviteError,
+    inviteSuccess,
+    cancelingInvitationId,
+    sendInvites,
+    cancelInvite,
+  } = useInvitations(onInvitationSent, onInvitationCanceled)
 
   // selectedSpeakers already contains only co-speakers (current user is excluded by ProposalForm)
   const coSpeakers = selectedSpeakers
@@ -86,32 +83,6 @@ export function CoSpeakerSelector({
     coSpeakers.length +
     pendingInvitations.filter((inv) => inv.status === 'pending').length
 
-  // Update invite fields when format changes
-  const prevMaxCoSpeakers = useRef(maxCoSpeakers)
-  useEffect(() => {
-    if (prevMaxCoSpeakers.current !== maxCoSpeakers) {
-      setInviteFields(
-        Array(maxCoSpeakers)
-          .fill(null)
-          .map((_, index) => inviteFields[index] || { email: '' }),
-      )
-      prevMaxCoSpeakers.current = maxCoSpeakers
-    }
-  }, [maxCoSpeakers, inviteFields])
-
-  const handleFieldChange = (index: number, value: string) => {
-    setInviteFields((prev) =>
-      prev.map((item, i) => (i === index ? { email: value } : item)),
-    )
-  }
-
-  // Clear a specific field
-  const clearField = (index: number) => {
-    setInviteFields((prev) =>
-      prev.map((item, i) => (i === index ? { email: '' } : item)),
-    )
-  }
-
   const handleRemoveSpeaker = (speakerId: string) => {
     const newSpeakers = selectedSpeakers.filter((s) => s._id !== speakerId)
     onSpeakersChange(newSpeakers)
@@ -119,108 +90,26 @@ export function CoSpeakerSelector({
 
   const handleCancelInvitation = async (invitationId: string) => {
     if (!proposalId) return
-
-    setCancelingInvitationId(invitationId)
-    setInviteError('')
-    setInviteSuccess('')
-
-    try {
-      await cancelInvitation(proposalId, invitationId)
-      setInviteSuccess('Invitation canceled successfully')
-
-      // Notify parent component about the canceled invitation
-      if (onInvitationCanceled) {
-        onInvitationCanceled(invitationId)
-      }
-    } catch (error) {
-      setInviteError(
-        error instanceof Error ? error.message : 'Failed to cancel invitation',
-      )
-    } finally {
-      setCancelingInvitationId(null)
-    }
+    await cancelInvite(proposalId, invitationId)
   }
 
   const handleSendInvitation = async () => {
-    // Get filled fields (valid email addresses)
-    const filledFields = inviteFields.filter(
-      (field) => field.email.trim() && emailRegex.test(field.email),
-    )
-
-    if (filledFields.length === 0) {
-      setInviteError('Please enter at least one valid email address')
-      return
-    }
+    const validEmails = getValidInviteEmails()
 
     if (!proposalId) {
-      setInviteError('Please save your proposal before inviting co-speakers')
       return
     }
 
-    setIsSendingInvite(true)
-    setInviteError('')
-    setInviteSuccess('')
+    const sentInvitations = await sendInvites(proposalId, validEmails)
 
-    try {
-      const results = []
-
-      // Send invitations for all filled fields
-      for (const field of filledFields) {
-        const response = await fetch(`/api/invitation/${proposalId}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            inviteeEmail: field.email,
-            inviteeName: field.email
-              .split('@')[0]
-              .replace(/[._-]/g, ' ')
-              .replace(/\b\w/g, (l) => l.toUpperCase()), // Convert email to a readable name
-          }),
-        })
-
-        const data = await response.json()
-
-        if (!response.ok) {
-          throw new Error(
-            data.error || `Failed to send invitation to ${field.email}`,
-          )
-        }
-
-        results.push({ field, invitation: data.invitation })
-      }
-
-      // Clear the sent fields and show success message
-      const sentEmails = results.map((r) => r.field.email)
-      setInviteSuccess(
-        `Invitation${sentEmails.length > 1 ? 's' : ''} sent to ${sentEmails.join(', ')}`,
-      )
-
-      // Clear fields that were successfully sent
+    // Clear the fields that were successfully sent
+    if (sentInvitations.length > 0) {
       setInviteFields((prev) =>
         prev.map((field) => {
-          const wasSent = filledFields.some(
-            (sent) => sent.email === field.email,
-          )
+          const wasSent = validEmails.includes(field.email)
           return wasSent ? { email: '' } : field
         }),
       )
-
-      // Notify parent component about the new invitations
-      if (onInvitationSent) {
-        results.forEach((result) => {
-          if (result.invitation) {
-            onInvitationSent(result.invitation)
-          }
-        })
-      }
-    } catch (error) {
-      setInviteError(
-        error instanceof Error ? error.message : 'Failed to send invitation(s)',
-      )
-    } finally {
-      setIsSendingInvite(false)
     }
   }
 
@@ -490,13 +379,7 @@ export function CoSpeakerSelector({
                   <button
                     type="button"
                     onClick={handleSendInvitation}
-                    disabled={
-                      isSendingInvite ||
-                      !inviteFields.some(
-                        (field) =>
-                          field.email.trim() && emailRegex.test(field.email),
-                      )
-                    }
+                    disabled={isSendingInvite || !isAnyFieldFilled()}
                     className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-brand-cloud-blue/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSendingInvite ? (
@@ -508,11 +391,7 @@ export function CoSpeakerSelector({
                       <>
                         <EnvelopeIcon className="h-4 w-4" aria-hidden="true" />
                         Send Invitation
-                        {inviteFields.filter(
-                          (f) => f.email.trim() && emailRegex.test(f.email),
-                        ).length > 1
-                          ? 's'
-                          : ''}
+                        {getValidInviteEmails().length > 1 ? 's' : ''}
                       </>
                     )}
                   </button>
@@ -546,13 +425,6 @@ export function CoSpeakerSelector({
                   <p className="mt-1 text-sm text-amber-700">
                     You have reached the maximum number of co-speakers (
                     {maxCoSpeakers}) for {formatName.toLowerCase()}s.
-                    {maxCoSpeakers < 3 && (
-                      <>
-                        {' '}
-                        If you need more co-speakers, consider changing to a
-                        workshop format which allows up to 3 co-speakers.
-                      </>
-                    )}
                   </p>
                 </div>
               </div>

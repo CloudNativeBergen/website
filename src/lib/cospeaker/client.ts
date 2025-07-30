@@ -26,67 +26,6 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 /**
- * Fetch invitations for a proposal through the API route
- * This function is safe to use in client components
- */
-export async function fetchInvitationsForProposal(
-  proposalId: string,
-  isTestMode: boolean = false,
-): Promise<CoSpeakerInvitation[]> {
-  try {
-    const url = new URL(
-      COSPEAKER_API_ENDPOINTS.INVITATIONS,
-      window.location.origin,
-    )
-    url.searchParams.set(COSPEAKER_API_PARAMS.PROPOSAL_ID, proposalId)
-    if (isTestMode) {
-      url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
-    }
-
-    const data = await apiFetch<{ invitations: CoSpeakerInvitation[] }>(
-      url.toString(),
-    )
-    return data.invitations || []
-  } catch (error) {
-    console.error('[fetchInvitationsForProposal] Error:', error)
-    return []
-  }
-}
-
-/**
- * Fetch invitations for multiple proposals through the API route
- * This function is safe to use in client components
- */
-export async function fetchInvitationsForProposals(
-  proposalIds: string[],
-  isTestMode: boolean = false,
-): Promise<Record<string, CoSpeakerInvitation[]>> {
-  try {
-    if (!proposalIds.length) return {}
-
-    const url = new URL(
-      COSPEAKER_API_ENDPOINTS.INVITATIONS,
-      window.location.origin,
-    )
-    url.searchParams.set(
-      COSPEAKER_API_PARAMS.PROPOSAL_IDS,
-      proposalIds.join(','),
-    )
-    if (isTestMode) {
-      url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
-    }
-
-    const data = await apiFetch<{
-      invitationsByProposal: Record<string, CoSpeakerInvitation[]>
-    }>(url.toString())
-    return data.invitationsByProposal || {}
-  } catch (error) {
-    console.error('[fetchInvitationsForProposals] Error:', error)
-    return {}
-  }
-}
-
-/**
  * Respond to a co-speaker invitation
  * This function is safe to use in client components
  */
@@ -156,4 +95,95 @@ export async function cancelInvitation(
     },
     body: JSON.stringify({ invitationId }),
   })
+}
+
+/**
+ * Send co-speaker invitations to multiple email addresses
+ * This function is safe to use in client components
+ */
+export async function sendInvitations(
+  proposalId: string,
+  emails: string[],
+  isTestMode: boolean = false,
+): Promise<{
+  success: boolean
+  sentEmails: string[]
+  invitations: CoSpeakerInvitation[]
+  error?: string
+}> {
+  try {
+    const results = []
+    const sentEmails = []
+
+    // Send invitations for all emails
+    for (const email of emails) {
+      const url = new URL(
+        COSPEAKER_API_ENDPOINTS.INVITATION_CREATE(proposalId),
+        window.location.origin,
+      )
+      if (isTestMode) {
+        url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
+      }
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inviteeEmail: email,
+          inviteeName: generateNameFromEmail(email),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || `Failed to send invitation to ${email}`)
+      }
+
+      results.push(data.invitation)
+      sentEmails.push(email)
+    }
+
+    return {
+      success: true,
+      sentEmails,
+      invitations: results,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      sentEmails: [],
+      invitations: [],
+      error:
+        error instanceof Error ? error.message : 'Failed to send invitation(s)',
+    }
+  }
+}
+
+/**
+ * Generate a readable name from an email address
+ * Converts email prefix to a proper name format
+ */
+export function generateNameFromEmail(email: string): string {
+  return email
+    .split('@')[0]
+    .replace(/[._-]/g, ' ')
+    .replace(/\b\w/g, (l) => l.toUpperCase())
+}
+
+/**
+ * Validate an email address using regex
+ */
+export function validateEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+/**
+ * Filter and validate email addresses from invite fields
+ */
+export function getValidEmails(emails: string[]): string[] {
+  return emails.filter((email) => email.trim() && validateEmail(email))
 }
