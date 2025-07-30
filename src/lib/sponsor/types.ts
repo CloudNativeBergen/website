@@ -1,4 +1,3 @@
-
 export const CONTACT_ROLE_OPTIONS = [
   'Billing Reference',
   'Marketing',

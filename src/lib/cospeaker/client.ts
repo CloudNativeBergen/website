@@ -10,21 +10,18 @@ import { COSPEAKER_API_ENDPOINTS, COSPEAKER_API_PARAMS } from './constants'
  * @returns The parsed JSON response
  * @throws Error if the response is not ok
  */
-async function apiFetch<T>(
-  url: string,
-  options?: RequestInit,
-): Promise<T> {
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options)
-  
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))
     throw new Error(
-      errorData.error || 
-      errorData.message || 
-      `Request failed: ${response.statusText}`
+      errorData.error ||
+        errorData.message ||
+        `Request failed: ${response.statusText}`,
     )
   }
-  
+
   return response.json()
 }
 
@@ -37,14 +34,17 @@ export async function fetchInvitationsForProposal(
   isTestMode: boolean = false,
 ): Promise<CoSpeakerInvitation[]> {
   try {
-    const url = new URL(COSPEAKER_API_ENDPOINTS.INVITATIONS, window.location.origin)
+    const url = new URL(
+      COSPEAKER_API_ENDPOINTS.INVITATIONS,
+      window.location.origin,
+    )
     url.searchParams.set(COSPEAKER_API_PARAMS.PROPOSAL_ID, proposalId)
     if (isTestMode) {
       url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
     }
-    
+
     const data = await apiFetch<{ invitations: CoSpeakerInvitation[] }>(
-      url.toString()
+      url.toString(),
     )
     return data.invitations || []
   } catch (error) {
@@ -64,15 +64,21 @@ export async function fetchInvitationsForProposals(
   try {
     if (!proposalIds.length) return {}
 
-    const url = new URL(COSPEAKER_API_ENDPOINTS.INVITATIONS, window.location.origin)
-    url.searchParams.set(COSPEAKER_API_PARAMS.PROPOSAL_IDS, proposalIds.join(','))
+    const url = new URL(
+      COSPEAKER_API_ENDPOINTS.INVITATIONS,
+      window.location.origin,
+    )
+    url.searchParams.set(
+      COSPEAKER_API_PARAMS.PROPOSAL_IDS,
+      proposalIds.join(','),
+    )
     if (isTestMode) {
       url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
     }
 
-    const data = await apiFetch<{ invitationsByProposal: Record<string, CoSpeakerInvitation[]> }>(
-      url.toString()
-    )
+    const data = await apiFetch<{
+      invitationsByProposal: Record<string, CoSpeakerInvitation[]>
+    }>(url.toString())
     return data.invitationsByProposal || {}
   } catch (error) {
     console.error('[fetchInvitationsForProposals] Error:', error)
@@ -94,21 +100,21 @@ export async function respondToInvitation(
   error?: string
 }> {
   try {
-    const url = new URL(COSPEAKER_API_ENDPOINTS.INVITATION_RESPOND, window.location.origin)
+    const url = new URL(
+      COSPEAKER_API_ENDPOINTS.INVITATION_RESPOND,
+      window.location.origin,
+    )
     if (isTestMode) {
       url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
     }
 
-    const data = await apiFetch<{ message: string }>(
-      url.toString(),
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token, action: response }),
-      }
-    )
+    const data = await apiFetch<{ message: string }>(url.toString(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token, action: response }),
+    })
 
     return {
       success: true,
@@ -135,19 +141,19 @@ export async function cancelInvitation(
   invitationId: string,
   isTestMode: boolean = false,
 ): Promise<void> {
-  const url = new URL(COSPEAKER_API_ENDPOINTS.INVITATION_DELETE(proposalId), window.location.origin)
+  const url = new URL(
+    COSPEAKER_API_ENDPOINTS.INVITATION_DELETE(proposalId),
+    window.location.origin,
+  )
   if (isTestMode) {
     url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
   }
-  
-  await apiFetch(
-    url.toString(),
-    {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ invitationId }),
-    }
-  )
+
+  await apiFetch(url.toString(), {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ invitationId }),
+  })
 }

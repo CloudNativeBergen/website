@@ -1,10 +1,16 @@
-// Define InvitationStatus locally to avoid circular dependency issues
-export type InvitationStatus =
-  | 'pending'
-  | 'accepted'
-  | 'declined'
-  | 'expired'
-  | 'canceled'
+/**
+ * Invitation status types - single source of truth
+ * Used across Sanity schema and application code
+ */
+export const INVITATION_STATUSES = [
+  'pending',
+  'accepted',
+  'declined',
+  'expired',
+  'canceled',
+] as const
+
+export type InvitationStatus = (typeof INVITATION_STATUSES)[number]
 
 export interface CoSpeakerInvitation {
   _id: string

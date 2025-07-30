@@ -117,7 +117,10 @@ export const POST = auth(
           console.error('Failed to send invitation email for:', invitation._id)
         }
       } else {
-        console.log('[TEST MODE] Skipping email send for invitation:', invitation._id)
+        console.log(
+          '[TEST MODE] Skipping email send for invitation:',
+          invitation._id,
+        )
       }
 
       return NextResponse.json({ invitation }, { status: 200 })

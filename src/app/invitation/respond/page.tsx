@@ -28,8 +28,6 @@ export default async function InvitationResponsePage({
   const isTestMode =
     process.env.NODE_ENV === 'development' && params.test === 'true'
 
-  
-
   // Require authentication (unless in test mode)
   if (!session?.user?.email && !isTestMode) {
     const callbackUrl = `/invitation/respond?token=${params.token || ''}`

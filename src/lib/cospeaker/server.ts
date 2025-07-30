@@ -19,12 +19,12 @@ const TOKEN_SECRET = process.env.INVITATION_TOKEN_SECRET
 if (!TOKEN_SECRET) {
   throw new Error(
     'INVITATION_TOKEN_SECRET environment variable is not set. ' +
-    'Please set this environment variable to a secure random value.'
+      'Please set this environment variable to a secure random value.',
   )
 }
 
-// TypeScript now knows TOKEN_SECRET is defined after the check above
-const SECURE_TOKEN_SECRET = TOKEN_SECRET as string
+// Use validated token secret
+const SECURE_TOKEN_SECRET = TOKEN_SECRET
 
 export interface SendEmailParams<T = Record<string, unknown>> {
   to: string
@@ -238,7 +238,9 @@ export async function sendInvitationEmail(
       expiresAt: new Date(invitation.expiresAt).getTime(),
     }
 
-    const token = isTestMode ? `test-${invitation._id}` : createInvitationToken(tokenPayload)
+    const token = isTestMode
+      ? `test-${invitation._id}`
+      : createInvitationToken(tokenPayload)
     const invitationUrl = `${baseUrl}/invitation/respond?token=${token}${isTestMode ? '&test=true' : ''}`
 
     // Fetch conference data for the current domain
@@ -271,7 +273,10 @@ export async function sendInvitationEmail(
     if (isTestMode) {
       console.log('[TEST MODE] Would send co-speaker invitation email:')
       console.log('To:', invitation.inviteeEmail)
-      console.log('Subject:', `You've been invited to co-present \"${invitation.proposalTitle || 'a proposal'}\"`)
+      console.log(
+        'Subject:',
+        `You've been invited to co-present \"${invitation.proposalTitle || 'a proposal'}\"`,
+      )
       console.log('Invitation URL:', invitationUrl)
       console.log('Token:', token)
       return true

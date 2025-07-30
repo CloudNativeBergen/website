@@ -5,12 +5,13 @@ import {
 } from '@/lib/cospeaker/server'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReferenceWithKey } from '@/lib/sanity/helpers'
-import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
+import { getOrCreateSpeaker, findSpeakerByEmail } from '@/lib/speaker/sanity'
 import { sendEmail } from '@/lib/cospeaker/server'
 import { auth } from '@/lib/auth'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
+import { v4 as randomUUID } from 'uuid'
 import type { User } from 'next-auth'
 
 interface RespondRequest {
@@ -129,7 +130,6 @@ export async function POST(request: NextRequest) {
       // Get or create speaker profile
       if (isTestMode) {
         // In test mode, we need to use findSpeakerByEmail or create a new speaker
-        const { findSpeakerByEmail } = await import('@/lib/speaker/sanity')
         const testEmail = payload.inviteeEmail
         const { speaker: existingSpeaker } = await findSpeakerByEmail(testEmail)
 
@@ -137,9 +137,6 @@ export async function POST(request: NextRequest) {
           acceptedSpeakerId = existingSpeaker._id
         } else {
           // Create a minimal speaker for testing
-          const { clientWrite } = await import('@/lib/sanity/client')
-          const { v4: randomUUID } = await import('uuid')
-
           const newSpeaker = await clientWrite.create({
             _type: 'speaker',
             _id: randomUUID(),
@@ -188,7 +185,7 @@ export async function POST(request: NextRequest) {
       // Add speaker to the speakers array of the proposal
       const currentSpeakers = proposal.speakers || []
       const speakerRefs = currentSpeakers.map((s: { _id: string }) =>
-        createReferenceWithKey(s._id, 'speaker')
+        createReferenceWithKey(s._id, 'speaker'),
       )
 
       // Check if the speaker is already in the list

@@ -1,13 +1,7 @@
 import { defineType, defineField } from 'sanity'
+import { INVITATION_STATUSES } from '@/lib/cospeaker/types'
 
-export const INVITATION_STATUSES = [
-  { title: 'Pending', value: 'pending' },
-  { title: 'Accepted', value: 'accepted' },
-  { title: 'Declined', value: 'declined' },
-  { title: 'Expired', value: 'expired' },
-] as const
-
-export type InvitationStatus = (typeof INVITATION_STATUSES)[number]['value']
+export type InvitationStatus = (typeof INVITATION_STATUSES)[number]
 
 export default defineType({
   name: 'coSpeakerInvitation',
@@ -52,7 +46,10 @@ export default defineType({
       description: 'Current status of the invitation.',
       initialValue: 'pending',
       options: {
-        list: [...INVITATION_STATUSES],
+        list: INVITATION_STATUSES.map((status) => ({
+          title: status.charAt(0).toUpperCase() + status.slice(1),
+          value: status,
+        })),
       },
       validation: (Rule) => Rule.required(),
     }),
@@ -61,7 +58,7 @@ export default defineType({
       type: 'string',
       title: 'Invitation Token',
       description: 'Unique token for secure invitation access.',
-      validation: (Rule) => Rule.required(),
+      initialValue: () => crypto.randomUUID(),
       readOnly: true,
     }),
     defineField({
