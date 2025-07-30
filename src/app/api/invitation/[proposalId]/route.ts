@@ -4,6 +4,7 @@ import {
   createCoSpeakerInvitation,
   sendInvitationEmail,
 } from '@/lib/cospeaker/server'
+import { getTotalSpeakerLimit } from '@/lib/cospeaker/constants'
 import { NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
 
@@ -89,6 +90,28 @@ export const POST = auth(
         return NextResponse.json(
           { error: 'Proposal not found or unauthorized' },
           { status: 404 },
+        )
+      }
+
+      // Check speaker limits based on format
+      const maxSpeakers = getTotalSpeakerLimit(proposal.format)
+      const currentSpeakerCount = proposal.speakers?.length || 0
+
+      // Count pending invitations
+      const pendingInvitations = await clientWrite.fetch(
+        `count(*[_type == "coSpeakerInvitation" && proposal._ref == $proposalId && status == "pending"])`,
+        { proposalId },
+      )
+
+      const totalPotentialSpeakers =
+        currentSpeakerCount + pendingInvitations + 1 // +1 for this new invitation
+
+      if (totalPotentialSpeakers > maxSpeakers) {
+        return NextResponse.json(
+          {
+            error: `This ${proposal.format.replace('_', ' ')} format allows a maximum of ${maxSpeakers} speakers. You currently have ${currentSpeakerCount} speaker(s) and ${pendingInvitations} pending invitation(s).`,
+          },
+          { status: 400 },
         )
       }
 

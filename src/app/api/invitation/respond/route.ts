@@ -11,6 +11,7 @@ import { auth } from '@/lib/auth'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
+import { getTotalSpeakerLimit } from '@/lib/cospeaker/constants'
 import { v4 as randomUUID } from 'uuid'
 import type { User } from 'next-auth'
 
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
       `*[_type == "talk" && _id == $proposalId][0]{
         _id,
         title,
+        format,
         speakers[]->{
           _id,
           name,
@@ -127,6 +129,18 @@ export async function POST(request: NextRequest) {
     let acceptedSpeakerId: string | null = null
 
     if (action === 'accept') {
+      // Check speaker limits before accepting
+      const maxSpeakers = getTotalSpeakerLimit(proposal.format)
+      const currentSpeakerCount = proposal.speakers?.length || 0
+
+      if (currentSpeakerCount >= maxSpeakers) {
+        return NextResponse.json(
+          {
+            error: `This ${proposal.format.replace('_', ' ')} format allows a maximum of ${maxSpeakers} speakers. The proposal already has ${currentSpeakerCount} speaker(s).`,
+          },
+          { status: 400 },
+        )
+      }
       // Get or create speaker profile
       if (isTestMode) {
         // In test mode, we need to use findSpeakerByEmail or create a new speaker

@@ -109,7 +109,53 @@ export default defineType({
         },
       ],
       validation: (Rule) =>
-        Rule.min(1).max(3).error('Please select 1-3 speakers'),
+        Rule.min(1)
+          .max(4)
+          .custom((speakers, context) => {
+            if (!speakers || !Array.isArray(speakers)) return true
+
+            const document = context.document
+            if (!document?.format) return true
+
+            // Import format-specific limits (this is a simplified check since we can't import the full utility in Sanity)
+            let maxSpeakers = 2 // Default for most presentations
+
+            switch (document.format) {
+              case 'lightning_10':
+                maxSpeakers = 1 // Lightning talks: single speaker only
+                break
+              case 'presentation_20':
+              case 'presentation_25':
+                maxSpeakers = 2 // Short presentations: 1 primary + 1 co-speaker
+                break
+              case 'presentation_40':
+              case 'presentation_45':
+                maxSpeakers = 3 // Longer presentations: 1 primary + 2 co-speakers
+                break
+              case 'workshop_120':
+              case 'workshop_240':
+                maxSpeakers = 4 // Workshops: 1 primary + 3 co-speakers
+                break
+            }
+
+            if (speakers.length > maxSpeakers) {
+              const formatNames = {
+                lightning_10: 'Lightning talks',
+                presentation_20: 'Short presentations',
+                presentation_25: 'Short presentations',
+                presentation_40: 'Longer presentations',
+                presentation_45: 'Longer presentations',
+                workshop_120: 'Workshops',
+                workshop_240: 'Long workshops',
+              }
+              const formatName =
+                formatNames[document.format as keyof typeof formatNames] ||
+                'This format'
+              return `${formatName} can have at most ${maxSpeakers} speaker${maxSpeakers > 1 ? 's' : ''}`
+            }
+
+            return true
+          }),
     }),
     defineField({
       name: 'conference',

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Speaker } from '@/lib/speaker/types'
 import { Format } from '@/lib/proposal/types'
 import {
@@ -11,27 +11,11 @@ import {
 import { SpeakerAvatars } from './SpeakerAvatars'
 import { CoSpeakerInvitation, InvitationStatus } from '@/lib/cospeaker/types'
 import { cancelInvitation } from '@/lib/cospeaker/client'
-
-// Constants for better maintainability
-const DEFAULT_CO_SPEAKER_LIMIT = 1
-
-// Helper function to get co-speaker limits based on format
-function getCoSpeakerLimit(format: Format): number {
-  switch (format) {
-    case Format.lightning_10:
-      return 0 // No co-speakers for lightning talks
-    case Format.presentation_20:
-    case Format.presentation_25:
-    case Format.presentation_40:
-    case Format.presentation_45:
-      return DEFAULT_CO_SPEAKER_LIMIT // One co-speaker for presentations
-    case Format.workshop_120:
-    case Format.workshop_240:
-      return 3 // Three co-speakers for workshops
-    default:
-      return DEFAULT_CO_SPEAKER_LIMIT // Default to one co-speaker
-  }
-}
+import {
+  getCoSpeakerLimit,
+  allowsCoSpeakers,
+  getSpeakerLimitDescription,
+} from '@/lib/cospeaker/constants'
 
 function getFormatDisplayName(format: Format): string {
   switch (format) {
@@ -63,6 +47,10 @@ interface CoSpeakerSelectorProps {
   onInvitationCanceled?: (invitationId: string) => void
 }
 
+interface InviteField {
+  email: string
+}
+
 export function CoSpeakerSelector({
   selectedSpeakers,
   onSpeakersChange,
@@ -72,8 +60,14 @@ export function CoSpeakerSelector({
   onInvitationSent,
   onInvitationCanceled,
 }: CoSpeakerSelectorProps) {
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteName, setInviteName] = useState('')
+  const maxCoSpeakers = getCoSpeakerLimit(format)
+
+  // Initialize invite fields array based on max co-speakers
+  const [inviteFields, setInviteFields] = useState<InviteField[]>(() =>
+    Array(maxCoSpeakers)
+      .fill(null)
+      .map(() => ({ email: '' })),
+  )
   const [isSendingInvite, setIsSendingInvite] = useState(false)
   const [inviteError, setInviteError] = useState<string>('')
   const [inviteSuccess, setInviteSuccess] = useState<string>('')
@@ -81,9 +75,8 @@ export function CoSpeakerSelector({
     string | null
   >(null)
 
-  const maxCoSpeakers = getCoSpeakerLimit(format)
   const formatName = getFormatDisplayName(format)
-  const isLightningTalk = format === Format.lightning_10
+  const isLightningTalk = !allowsCoSpeakers(format)
 
   // selectedSpeakers already contains only co-speakers (current user is excluded by ProposalForm)
   const coSpeakers = selectedSpeakers
@@ -92,6 +85,32 @@ export function CoSpeakerSelector({
   const totalCoSpeakers =
     coSpeakers.length +
     pendingInvitations.filter((inv) => inv.status === 'pending').length
+
+  // Update invite fields when format changes
+  const prevMaxCoSpeakers = useRef(maxCoSpeakers)
+  useEffect(() => {
+    if (prevMaxCoSpeakers.current !== maxCoSpeakers) {
+      setInviteFields(
+        Array(maxCoSpeakers)
+          .fill(null)
+          .map((_, index) => inviteFields[index] || { email: '' }),
+      )
+      prevMaxCoSpeakers.current = maxCoSpeakers
+    }
+  }, [maxCoSpeakers, inviteFields])
+
+  const handleFieldChange = (index: number, value: string) => {
+    setInviteFields((prev) =>
+      prev.map((item, i) => (i === index ? { email: value } : item)),
+    )
+  }
+
+  // Clear a specific field
+  const clearField = (index: number) => {
+    setInviteFields((prev) =>
+      prev.map((item, i) => (i === index ? { email: '' } : item)),
+    )
+  }
 
   const handleRemoveSpeaker = (speakerId: string) => {
     const newSpeakers = selectedSpeakers.filter((s) => s._id !== speakerId)
@@ -123,14 +142,13 @@ export function CoSpeakerSelector({
   }
 
   const handleSendInvitation = async () => {
-    // Validate email
-    if (!emailRegex.test(inviteEmail)) {
-      setInviteError('Please enter a valid email address')
-      return
-    }
+    // Get filled fields (valid email addresses)
+    const filledFields = inviteFields.filter(
+      (field) => field.email.trim() && emailRegex.test(field.email),
+    )
 
-    if (!inviteName.trim()) {
-      setInviteError('Please enter the co-speaker&apos;s name')
+    if (filledFields.length === 0) {
+      setInviteError('Please enter at least one valid email address')
       return
     }
 
@@ -144,34 +162,62 @@ export function CoSpeakerSelector({
     setInviteSuccess('')
 
     try {
-      const response = await fetch(`/api/invitation/${proposalId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          inviteeEmail: inviteEmail,
-          inviteeName: inviteName,
-        }),
-      })
+      const results = []
 
-      const data = await response.json()
+      // Send invitations for all filled fields
+      for (const field of filledFields) {
+        const response = await fetch(`/api/invitation/${proposalId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            inviteeEmail: field.email,
+            inviteeName: field.email
+              .split('@')[0]
+              .replace(/[._-]/g, ' ')
+              .replace(/\b\w/g, (l) => l.toUpperCase()), // Convert email to a readable name
+          }),
+        })
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send invitation')
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || `Failed to send invitation to ${field.email}`,
+          )
+        }
+
+        results.push({ field, invitation: data.invitation })
       }
 
-      setInviteSuccess(`Invitation sent to ${inviteName} (${inviteEmail})`)
-      setInviteEmail('')
-      setInviteName('')
+      // Clear the sent fields and show success message
+      const sentEmails = results.map((r) => r.field.email)
+      setInviteSuccess(
+        `Invitation${sentEmails.length > 1 ? 's' : ''} sent to ${sentEmails.join(', ')}`,
+      )
 
-      // Notify parent component about the new invitation
-      if (onInvitationSent && data.invitation) {
-        onInvitationSent(data.invitation)
+      // Clear fields that were successfully sent
+      setInviteFields((prev) =>
+        prev.map((field) => {
+          const wasSent = filledFields.some(
+            (sent) => sent.email === field.email,
+          )
+          return wasSent ? { email: '' } : field
+        }),
+      )
+
+      // Notify parent component about the new invitations
+      if (onInvitationSent) {
+        results.forEach((result) => {
+          if (result.invitation) {
+            onInvitationSent(result.invitation)
+          }
+        })
       }
     } catch (error) {
       setInviteError(
-        error instanceof Error ? error.message : 'Failed to send invitation',
+        error instanceof Error ? error.message : 'Failed to send invitation(s)',
       )
     } finally {
       setIsSendingInvite(false)
@@ -226,9 +272,8 @@ export function CoSpeakerSelector({
             </>
           ) : (
             <>
-              Add co-speakers to your {formatName.toLowerCase()} by inviting
-              them via email. Maximum {maxCoSpeakers} co-speaker
-              {maxCoSpeakers > 1 ? 's' : ''} allowed.
+              {getSpeakerLimitDescription(format)}. Add co-speakers to your{' '}
+              {formatName.toLowerCase()} by inviting them via email.
             </>
           )}
         </p>
@@ -378,47 +423,57 @@ export function CoSpeakerSelector({
           {/* Email invitation section - only show if under the limit */}
           {totalCoSpeakers < maxCoSpeakers && (
             <div className="space-y-4">
-              <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <div>
-                  <label
-                    htmlFor="invite-name"
-                    className="block text-sm/6 font-medium text-gray-900"
-                  >
-                    Co-speaker&apos;s Name
-                  </label>
-                  <div className="mt-2">
-                    <input
-                      type="text"
-                      id="invite-name"
-                      value={inviteName}
-                      onChange={(e) => setInviteName(e.target.value)}
-                      placeholder="Enter their full name"
-                      aria-label="Co-speaker's Name"
-                      aria-required="true"
-                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
-                    />
-                  </div>
+                  <h4 className="mb-3 text-sm font-medium text-gray-900">
+                    Invite Co-speakers
+                  </h4>
+                  <p className="mb-4 text-xs text-gray-500">
+                    Enter email addresses to invite co-speakers. They&apos;ll
+                    receive personalized invitations and create their own
+                    speaker profiles when they accept.
+                  </p>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="invite-email"
-                    className="block text-sm/6 font-medium text-gray-900"
-                  >
-                    Co-speaker&apos;s Email
-                  </label>
-                  <div className="mt-2">
-                    <input
-                      type="email"
-                      id="invite-email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="their.email@example.com"
-                      aria-label="Co-speaker's Email"
-                      aria-required="true"
-                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
-                    />
-                  </div>
+                {/* Dynamic invite fields */}
+                <div className="space-y-3">
+                  {inviteFields
+                    .slice(0, maxCoSpeakers - totalCoSpeakers)
+                    .map((field, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <div className="flex-1">
+                          <label
+                            htmlFor={`invite-email-${index}`}
+                            className="block text-sm/6 font-medium text-gray-900"
+                          >
+                            Co-speaker {index + 1} Email
+                          </label>
+                          <div className="mt-2">
+                            <input
+                              type="email"
+                              id={`invite-email-${index}`}
+                              value={field.email}
+                              onChange={(e) =>
+                                handleFieldChange(index, e.target.value)
+                              }
+                              placeholder="their.email@example.com"
+                              aria-label={`Co-speaker ${index + 1} Email`}
+                              className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                            />
+                          </div>
+                        </div>
+                        {field.email && (
+                          <button
+                            type="button"
+                            onClick={() => clearField(index)}
+                            className="mt-7 text-gray-400 hover:text-gray-600"
+                            title={`Clear co-speaker ${index + 1} email`}
+                          >
+                            <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
                 </div>
 
                 {inviteError && (
@@ -429,13 +484,19 @@ export function CoSpeakerSelector({
 
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-gray-500">
-                    They&apos;ll receive an email invitation to join as your
-                    co-speaker
+                    They&apos;ll receive email invitations to join as your
+                    co-speakers
                   </p>
                   <button
                     type="button"
                     onClick={handleSendInvitation}
-                    disabled={isSendingInvite || !inviteEmail || !inviteName}
+                    disabled={
+                      isSendingInvite ||
+                      !inviteFields.some(
+                        (field) =>
+                          field.email.trim() && emailRegex.test(field.email),
+                      )
+                    }
                     className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-brand-cloud-blue/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSendingInvite ? (
@@ -447,6 +508,11 @@ export function CoSpeakerSelector({
                       <>
                         <EnvelopeIcon className="h-4 w-4" aria-hidden="true" />
                         Send Invitation
+                        {inviteFields.filter(
+                          (f) => f.email.trim() && emailRegex.test(f.email),
+                        ).length > 1
+                          ? 's'
+                          : ''}
                       </>
                     )}
                   </button>
