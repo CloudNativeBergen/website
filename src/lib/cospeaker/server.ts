@@ -185,7 +185,15 @@ export async function createCoSpeakerInvitation(params: {
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 14)
 
-    // Create the invitation document
+    // Generate the secure token
+    const tokenPayload: InvitationTokenPayload = {
+      invitationId: '', // Will be updated after creation
+      invitedEmail: params.invitedEmail,
+      proposalId: params.proposalId,
+      expiresAt: expiresAt.getTime(),
+    }
+
+    // Create the invitation document first to get the ID
     const invitation = await clientWrite.create({
       _type: 'coSpeakerInvitation',
       proposal: createReference(params.proposalId),
@@ -197,17 +205,29 @@ export async function createCoSpeakerInvitation(params: {
       createdAt: new Date().toISOString(),
     })
 
+    // Now generate the token with the actual invitation ID
+    tokenPayload.invitationId = invitation._id
+    const token = AppEnvironment.isTestMode
+      ? `test-${invitation._id}`
+      : createInvitationToken(tokenPayload)
+
+    // Update the invitation with the token
+    const updatedInvitation = await clientWrite
+      .patch(invitation._id)
+      .set({ token })
+      .commit()
+
     // Return the full invitation object
     const fullInvitation: CoSpeakerInvitationFull = {
-      _id: invitation._id,
-      invitedEmail: invitation.invitedEmail,
-      invitedName: invitation.invitedName,
-      status: invitation.status as InvitationStatus,
-      token: '', // Token is generated when sending the email
-      expiresAt: invitation.expiresAt,
-      createdAt: invitation.createdAt,
-      _createdAt: invitation._createdAt,
-      _updatedAt: invitation._updatedAt,
+      _id: updatedInvitation._id,
+      invitedEmail: updatedInvitation.invitedEmail,
+      invitedName: updatedInvitation.invitedName,
+      status: updatedInvitation.status as InvitationStatus,
+      token: updatedInvitation.token,
+      expiresAt: updatedInvitation.expiresAt,
+      createdAt: updatedInvitation.createdAt,
+      _createdAt: updatedInvitation._createdAt,
+      _updatedAt: updatedInvitation._updatedAt,
       proposal: {
         _id: params.proposalId,
         title: params.proposalTitle,
@@ -232,23 +252,13 @@ export async function sendInvitationEmail(
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
-    // Create the invitation token
-    const tokenPayload: InvitationTokenPayload = {
-      invitationId: invitation._id,
-      invitedEmail: invitation.invitedEmail,
-      proposalId:
-        typeof invitation.proposal === 'object' && '_id' in invitation.proposal
-          ? invitation.proposal._id
-          : typeof invitation.proposal === 'object' &&
-              '_ref' in invitation.proposal
-            ? invitation.proposal._ref
-            : '',
-      expiresAt: new Date(invitation.expiresAt).getTime(),
+    // Use the stored token from the invitation
+    const token = invitation.token
+    if (!token) {
+      console.error('No token found in invitation:', invitation._id)
+      return false
     }
 
-    const token = AppEnvironment.isTestMode
-      ? `test-${invitation._id}`
-      : createInvitationToken(tokenPayload)
     const invitationUrl = `${baseUrl}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
 
     // Fetch conference data for the current domain

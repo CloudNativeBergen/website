@@ -58,8 +58,7 @@ export default defineType({
       type: 'string',
       title: 'Invitation Token',
       description: 'Unique token for secure invitation access.',
-      initialValue: () => crypto.randomUUID(),
-      readOnly: true,
+      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'expiresAt',

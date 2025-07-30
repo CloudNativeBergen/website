@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyInvitationToken } from '@/lib/cospeaker/server'
-import { clientWrite } from '@/lib/sanity/client'
+import { getInvitationByToken } from '@/lib/cospeaker/sanity'
 import { AppEnvironment } from '@/lib/environment'
 
 export async function GET(request: NextRequest) {
@@ -16,62 +16,34 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // In test mode, create a mock token payload
-    let payload
-    if (isTestMode) {
-      // Decode a simple test token format: "test-{invitationId}"
-      if (token.startsWith('test-')) {
-        payload = {
-          invitationId: token.replace('test-', ''),
-          inviteeEmail: 'test-invitee@example.com',
-          proposalId: 'test-proposal-id',
-          expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours from now
-        }
-      } else {
-        return NextResponse.json(
-          { error: 'Invalid test token format' },
-          { status: 400 },
-        )
-      }
-    } else {
-      // Verify real token
-      payload = verifyInvitationToken(token)
-      if (!payload) {
-        return NextResponse.json(
-          { error: 'Invalid or expired token' },
-          { status: 400 },
-        )
-      }
+    // Get invitation by token from database
+    const invitation = await getInvitationByToken(token)
+
+    if (!invitation) {
+      return NextResponse.json(
+        { error: 'Invalid token or invitation not found' },
+        { status: 404 },
+      )
     }
 
-    // Get full invitation details
-    let invitation
-    if (isTestMode) {
-      // Return a mock invitation for testing
-      invitation = {
-        _id: payload.invitationId,
-        _type: 'coSpeakerInvitation',
-        inviterEmail: 'test@example.com',
-        inviterName: 'Test Speaker',
-        invitedEmail: payload.invitedEmail,
-        invitedName: 'Test Invitee',
-        proposal: {
-          _ref: payload.proposalId,
-        },
-        status: 'pending',
-        expiresAt: new Date(payload.expiresAt).toISOString(),
-        createdAt: new Date().toISOString(),
-      }
-    } else {
-      invitation = await clientWrite.fetch(
-        `*[_type == "coSpeakerInvitation" && _id == $invitationId][0]`,
-        { invitationId: payload.invitationId },
-      )
-
-      if (!invitation) {
+    // For non-test modes, verify the token signature
+    if (!isTestMode) {
+      const payload = verifyInvitationToken(token)
+      if (!payload) {
         return NextResponse.json(
-          { error: 'Invitation not found' },
-          { status: 404 },
+          { error: 'Invalid or expired token signature' },
+          { status: 400 },
+        )
+      }
+
+      // Verify token matches invitation data
+      if (
+        payload.invitationId !== invitation._id ||
+        payload.invitedEmail !== invitation.invitedEmail
+      ) {
+        return NextResponse.json(
+          { error: 'Token does not match invitation data' },
+          { status: 400 },
         )
       }
     }
@@ -86,13 +58,24 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Check if invitation is expired
+    const isExpired = new Date(invitation.expiresAt) < new Date()
+    if (isExpired && invitation.status === 'pending') {
+      return NextResponse.json(
+        {
+          error: 'Invitation has expired',
+          isExpired: true,
+        },
+        { status: 400 },
+      )
+    }
+
     // Return invitation details
     return NextResponse.json({
       invitation: {
         ...invitation,
-        isExpired: new Date(invitation.expiresAt) < new Date(),
+        isExpired,
       },
-      payload,
     })
   } catch (error) {
     console.error('Error verifying invitation:', error)
