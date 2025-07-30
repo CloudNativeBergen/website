@@ -2,7 +2,8 @@ export class AppEnvironment {
   static readonly isDevelopment = process.env.NODE_ENV === 'development'
 
   static readonly isTestMode =
-    this.isDevelopment && process.env.NEXT_PUBLIC_ENABLE_TEST_MODE === 'true'
+    AppEnvironment.isDevelopment &&
+    process.env.NEXT_PUBLIC_ENABLE_TEST_MODE === 'true'
 
   static readonly testUser = {
     id: 'test-user-id',
@@ -23,7 +24,7 @@ export class AppEnvironment {
         : 'http://localhost:3000',
     )
 
-    if (this.isTestMode || options?.testMode) {
+    if (AppEnvironment.isTestMode || options?.testMode) {
       url.searchParams.set('test', 'true')
     }
 
@@ -32,23 +33,25 @@ export class AppEnvironment {
 
   static isTestModeFromUrl(url: string | URL): boolean {
     const urlObj = typeof url === 'string' ? new URL(url) : url
-    return this.isDevelopment && urlObj.searchParams.get('test') === 'true'
+    return (
+      AppEnvironment.isDevelopment && urlObj.searchParams.get('test') === 'true'
+    )
   }
 
   static createMockAuthContext() {
-    if (!this.isTestMode) return null
+    if (!AppEnvironment.isTestMode) return null
 
     return {
       user: {
-        email: this.testUser.email,
-        name: this.testUser.name,
-        sub: this.testUser.id,
-        picture: this.testUser.picture,
+        email: AppEnvironment.testUser.email,
+        name: AppEnvironment.testUser.name,
+        sub: AppEnvironment.testUser.id,
+        picture: AppEnvironment.testUser.picture,
       },
       speaker: {
-        _id: this.testUser.speakerId,
-        name: this.testUser.name,
-        email: this.testUser.email,
+        _id: AppEnvironment.testUser.speakerId,
+        name: AppEnvironment.testUser.name,
+        email: AppEnvironment.testUser.email,
         _type: 'speaker' as const,
         slug: { current: 'test-speaker' },
       },
@@ -56,19 +59,19 @@ export class AppEnvironment {
         provider: 'test',
         providerAccountId: 'test-account',
         type: 'oauth' as const,
-        userId: this.testUser.id,
+        userId: AppEnvironment.testUser.id,
       },
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     }
   }
 
   static getTestModeFromRequest(req: { url: string }): boolean {
-    return this.isTestModeFromUrl(req.url)
+    return AppEnvironment.isTestModeFromUrl(req.url)
   }
 
   static createMockAuthFromRequest(req: { url: string }) {
-    return this.getTestModeFromRequest(req)
-      ? this.createMockAuthContext()
+    return AppEnvironment.getTestModeFromRequest(req)
+      ? AppEnvironment.createMockAuthContext()
       : null
   }
 }
