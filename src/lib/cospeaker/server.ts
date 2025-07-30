@@ -232,15 +232,6 @@ export async function sendInvitationEmail(
     const token = createInvitationToken(tokenPayload)
     const invitationUrl = `${baseUrl}/invitation/respond?token=${token}`
 
-    // Log the invitation URL for testing purposes
-    console.log('Co-speaker invitation URL:', invitationUrl)
-    console.log('Invitation details:', {
-      inviteeEmail: invitation.inviteeEmail,
-      proposalTitle: invitation.proposalTitle,
-      expiresAt: invitation.expiresAt,
-      invitationId: invitation._id,
-    })
-
     // Fetch conference data for the current domain
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain()

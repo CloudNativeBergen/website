@@ -26,7 +26,6 @@ export function SpeakerProfileForm({ speaker }: SpeakerProfileFormProps) {
 
   // Update form when speaker prop changes
   useEffect(() => {
-    console.log('SpeakerProfileForm: speaker prop received:', speaker)
     if (speaker && speaker._id) {
       const newFormData = {
         name: speaker.name || '',
@@ -34,7 +33,6 @@ export function SpeakerProfileForm({ speaker }: SpeakerProfileFormProps) {
         bio: speaker.bio || '',
         flags: (speaker.flags || []) as Flags[],
       }
-      console.log('SpeakerProfileForm: updating form with:', newFormData)
       setFormData(newFormData)
     }
   }, [speaker?._id, speaker?.name, speaker?.title, speaker?.bio, speaker?.flags])

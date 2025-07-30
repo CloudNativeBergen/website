@@ -90,9 +90,6 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       )
     }
-    // Debug logging
-    console.log('Invitation data:', invitation)
-    console.log('Proposal from invitation:', invitation.proposal)
 
     if (invitation.status !== 'pending') {
       return NextResponse.json(
@@ -119,8 +116,6 @@ export async function POST(request: NextRequest) {
       }`,
       { proposalId: invitation.proposal._id },
     )
-
-    console.log('Proposal query result:', proposal)
 
     if (!proposal) {
       return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
@@ -278,8 +273,6 @@ export async function POST(request: NextRequest) {
         console.error('Error sending notification email:', emailError)
         // Continue processing even if email fails
       }
-    } else {
-      console.log('Skipping notification email - no inviter email available')
     }
 
     return NextResponse.json({

@@ -28,13 +28,7 @@ export default async function InvitationResponsePage({
   const isTestMode =
     process.env.NODE_ENV === 'development' && params.test === 'true'
 
-  // Log for debugging
-  console.log('Invitation response page accessed:', {
-    hasSession: !!session,
-    userEmail: session?.user?.email,
-    hasToken: !!params.token,
-    isTestMode,
-  })
+  
 
   // Require authentication (unless in test mode)
   if (!session?.user?.email && !isTestMode) {

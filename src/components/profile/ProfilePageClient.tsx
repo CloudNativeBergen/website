@@ -22,14 +22,8 @@ export function ProfilePageClient({ initialSpeaker }: ProfilePageClientProps) {
     'profile',
   )
 
-  // Debug logging
-  console.log('ProfilePageClient: initialSpeaker:', initialSpeaker)
-  console.log('ProfilePageClient: profile from hook:', profile)
-  console.log('ProfilePageClient: loading:', loading)
-
   // Use initialSpeaker as fallback if profile hasn't loaded yet
   const speaker = profile || initialSpeaker
-  console.log('ProfilePageClient: speaker being passed to form:', speaker)
 
   if (loading && !profile) {
     return <ProfileSkeleton />
