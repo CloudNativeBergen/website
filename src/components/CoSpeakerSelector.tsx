@@ -382,39 +382,43 @@ export function CoSpeakerSelector({
                 <div>
                   <label
                     htmlFor="invite-name"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm/6 font-medium text-gray-900"
                   >
                     Co-speaker&apos;s Name
                   </label>
-                  <input
-                    type="text"
-                    id="invite-name"
-                    value={inviteName}
-                    onChange={(e) => setInviteName(e.target.value)}
-                    placeholder="Enter their full name"
-                    aria-label="Co-speaker's Name"
-                    aria-required="true"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-cloud-blue focus:ring-brand-cloud-blue sm:text-sm"
-                  />
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      id="invite-name"
+                      value={inviteName}
+                      onChange={(e) => setInviteName(e.target.value)}
+                      placeholder="Enter their full name"
+                      aria-label="Co-speaker's Name"
+                      aria-required="true"
+                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label
                     htmlFor="invite-email"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm/6 font-medium text-gray-900"
                   >
                     Co-speaker&apos;s Email
                   </label>
-                  <input
-                    type="email"
-                    id="invite-email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="their.email@example.com"
-                    aria-label="Co-speaker's Email"
-                    aria-required="true"
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-cloud-blue focus:ring-brand-cloud-blue sm:text-sm"
-                  />
+                  <div className="mt-2">
+                    <input
+                      type="email"
+                      id="invite-email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="their.email@example.com"
+                      aria-label="Co-speaker's Email"
+                      aria-required="true"
+                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                    />
+                  </div>
                 </div>
 
                 {inviteError && (
@@ -432,7 +436,7 @@ export function CoSpeakerSelector({
                     type="button"
                     onClick={handleSendInvitation}
                     disabled={isSendingInvite || !inviteEmail || !inviteName}
-                    className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-cloud-blue/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-brand-cloud-blue/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSendingInvite ? (
                       <>
