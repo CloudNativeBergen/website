@@ -172,7 +172,7 @@ export function CFPLayout({ children }: CFPLayoutProps) {
                 alt=""
                 src={
                   session?.user?.picture ||
-                  `https://ui-avatars.com/api/?name=${encodeURIComponent(session?.user?.name || 'Admin')}&background=4f46e5&color=fff`
+                  `https://placehold.co/32x32/4f46e5/ffffff?text=${encodeURIComponent((session?.user?.name || 'Admin').split(' ').map(n => n[0]).join('').toUpperCase())}`
                 }
                 width={32}
                 height={32}
@@ -203,7 +203,7 @@ export function CFPLayout({ children }: CFPLayoutProps) {
                     alt=""
                     src={
                       session?.user?.picture ||
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(session?.user?.name || 'Admin')}&background=4f46e5&color=fff`
+                      `https://placehold.co/32x32/4f46e5/ffffff?text=${encodeURIComponent((session?.user?.name || 'Admin').split(' ').map(n => n[0]).join('').toUpperCase())}`
                     }
                     width={32}
                     height={32}
