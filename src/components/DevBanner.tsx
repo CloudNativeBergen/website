@@ -2,9 +2,6 @@
 
 import { AppEnvironment } from '@/lib/environment'
 
-/**
- * Global development banner that appears when test mode is active
- */
 export function DevBanner() {
   if (!AppEnvironment.isTestMode) return null
 

@@ -23,20 +23,15 @@ export interface UseInviteFieldsReturn {
   isAnyFieldFilled: () => boolean
 }
 
-/**
- * Custom hook for managing invite fields based on format
- */
 export function useInviteFields(format: Format): UseInviteFieldsReturn {
   const maxCoSpeakers = getCoSpeakerLimit(format)
 
-  // Initialize invite fields array based on max co-speakers
   const [inviteFields, setInviteFields] = useState<InviteField[]>(() =>
     Array(maxCoSpeakers)
       .fill(null)
       .map(() => ({ email: '' })),
   )
 
-  // Update invite fields when format changes
   const prevMaxCoSpeakers = useRef(maxCoSpeakers)
   useEffect(() => {
     if (prevMaxCoSpeakers.current !== maxCoSpeakers) {
@@ -93,9 +88,6 @@ export interface UseInvitationsReturn {
   clearMessages: () => void
 }
 
-/**
- * Custom hook for managing invitation operations
- */
 export function useInvitations(
   onInvitationSent?: (invitation: CoSpeakerInvitation) => void,
   onInvitationCanceled?: (invitationId: string) => void,
@@ -140,7 +132,6 @@ export function useInvitations(
         `Invitation${result.sentEmails.length > 1 ? 's' : ''} sent to ${result.sentEmails.join(', ')}`,
       )
 
-      // Notify parent component about new invitations
       if (onInvitationSent) {
         result.invitations.forEach((invitation) => {
           onInvitationSent(invitation)
@@ -171,7 +162,6 @@ export function useInvitations(
       await cancelInvitationApi(proposalId, invitationId)
       setInviteSuccess('Invitation canceled successfully')
 
-      // Notify parent component about canceled invitation
       if (onInvitationCanceled) {
         onInvitationCanceled(invitationId)
       }

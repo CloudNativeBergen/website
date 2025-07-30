@@ -20,7 +20,6 @@ export const POST = auth(
     // https://stackoverflow.com/questions/79145063/params-should-be-awaited-nextjs15
     const { proposalId } = await context.params
 
-    // Check for test mode and apply mock auth if needed
     const mockAuth = AppEnvironment.createMockAuthFromRequest(req)
     if (mockAuth) {
       req.auth = mockAuth
@@ -141,10 +140,8 @@ export const DELETE = auth(
     req: NextAuthRequest,
     context: { params: Record<string, string | string[] | undefined> },
   ) => {
-    // This needs to be awaited – do not remove
     const { proposalId } = await context.params
 
-    // Check for test mode and apply mock auth if needed
     const mockAuth = AppEnvironment.createMockAuthFromRequest(req)
     if (mockAuth) {
       req.auth = mockAuth

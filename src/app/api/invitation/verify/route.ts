@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyInvitationToken } from '@/lib/cospeaker/server'
 import { clientWrite } from '@/lib/sanity/client'
+import { AppEnvironment } from '@/lib/environment'
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const token = searchParams.get('token')
-    const isTestMode =
-      process.env.NODE_ENV === 'development' &&
-      searchParams.get('test') === 'true'
+    const isTestMode = AppEnvironment.isTestModeFromUrl(request.url)
 
     if (!token) {
       return NextResponse.json(

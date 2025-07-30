@@ -40,10 +40,6 @@ export interface SendEmailResponse {
   error?: string
 }
 
-/**
- * Send an email with retry logic and error handling
- * This function should only be used in server-side code (API routes, server components)
- */
 export async function sendEmail<T = Record<string, unknown>>({
   to,
   subject,
@@ -221,9 +217,6 @@ export async function createCoSpeakerInvitation(params: {
   }
 }
 
-/**
- * Send a co-speaker invitation email
- */
 export async function sendInvitationEmail(
   invitation: CoSpeakerInvitation,
 ): Promise<boolean> {

@@ -1,7 +1,3 @@
-/**
- * Invitation status types - single source of truth
- * Used across Sanity schema and application code
- */
 export const INVITATION_STATUSES = [
   'pending',
   'accepted',

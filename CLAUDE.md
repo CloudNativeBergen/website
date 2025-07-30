@@ -44,7 +44,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Refer to the branding page (`/branding` or `docs/BRANDING.md`) for styling guidelines and maintain visual consistency.
 - Fetch and manage content primarily through Sanity.
 - Implement authentication flows using NextAuth.js 5.0 with the specified providers.
-- Ensure code is clean, well-commented, and maintainable.
+- Ensure code is clean, maintainable and only comment when absolutely required to understand why the code is written in a certain way.
 - Document any significant changes or features in the project README or relevant files under the `/docs` directory.
 - Prioritize performance and accessibility.
 - Use Vercel for deployment previews and production hosting.

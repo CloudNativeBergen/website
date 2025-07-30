@@ -4,13 +4,6 @@ import { CoSpeakerInvitation } from './types'
 import { COSPEAKER_API_ENDPOINTS, COSPEAKER_API_PARAMS } from './constants'
 import { AppEnvironment } from '@/lib/environment'
 
-/**
- * Generic API fetch helper that handles common patterns
- * @param url - The URL to fetch
- * @param options - Fetch options (method, headers, body, etc.)
- * @returns The parsed JSON response
- * @throws Error if the response is not ok
- */
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options)
 
@@ -26,10 +19,6 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   return response.json()
 }
 
-/**
- * Respond to a co-speaker invitation
- * This function is safe to use in client components
- */
 export async function respondToInvitation(
   token: string,
   response: 'accept' | 'decline',
@@ -67,10 +56,6 @@ export async function respondToInvitation(
   }
 }
 
-/**
- * Cancel a pending co-speaker invitation
- * This function is safe to use in client components
- */
 export async function cancelInvitation(
   proposalId: string,
   invitationId: string,
@@ -88,10 +73,6 @@ export async function cancelInvitation(
   })
 }
 
-/**
- * Send co-speaker invitations to multiple email addresses
- * This function is safe to use in client components
- */
 export async function sendInvitations(
   proposalId: string,
   emails: string[],
@@ -105,7 +86,6 @@ export async function sendInvitations(
     const results = []
     const sentEmails = []
 
-    // Send invitations for all emails
     for (const email of emails) {
       const url = AppEnvironment.buildApiUrl(
         COSPEAKER_API_ENDPOINTS.INVITATION_CREATE(proposalId),
@@ -148,10 +128,6 @@ export async function sendInvitations(
   }
 }
 
-/**
- * Generate a readable name from an email address
- * Converts email prefix to a proper name format
- */
 export function generateNameFromEmail(email: string): string {
   return email
     .split('@')[0]
@@ -159,17 +135,11 @@ export function generateNameFromEmail(email: string): string {
     .replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
-/**
- * Validate an email address using regex
- */
 export function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
 }
 
-/**
- * Filter and validate email addresses from invite fields
- */
 export function getValidEmails(emails: string[]): string[] {
   return emails.filter((email) => email.trim() && validateEmail(email))
 }
