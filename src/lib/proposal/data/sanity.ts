@@ -80,6 +80,17 @@ export async function getProposal({
       topics[]-> {
         _id, title, color, slug, description
       },
+      "coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
+        _id,
+        invitedEmail,
+        invitedName,
+        status,
+        token,
+        expiresAt,
+        createdAt,
+        respondedAt,
+        declineReason
+      },
       ${
         includeReviews && isOrganizer
           ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
@@ -164,6 +175,17 @@ export async function getProposals({
     },
     topics[]-> {
       _id, title, color, slug, description
+    },
+    "coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
+      _id,
+      invitedEmail,
+      invitedName,
+      status,
+      token,
+      expiresAt,
+      createdAt,
+      respondedAt,
+      declineReason
     },
     ${
       includeReviews
@@ -447,6 +469,17 @@ export async function searchProposals({
       },
       topics[]-> {
         _id, title, color, slug, description
+      },
+      "coSpeakerInvitations": *[_type == "coSpeakerInvitation" && proposal._ref == ^._id]{
+        _id,
+        invitedEmail,
+        invitedName,
+        status,
+        token,
+        expiresAt,
+        createdAt,
+        respondedAt,
+        declineReason
       }
       ${
         includeReviews

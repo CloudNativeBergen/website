@@ -1,36 +1,23 @@
-import { useState, useEffect } from 'react'
 import { Speaker } from '@/lib/speaker/types'
 import { Format } from '@/lib/proposal/types'
-import { searchSpeakers } from '@/lib/speaker/client'
 import {
-  UserIcon,
   XMarkIcon,
-  MagnifyingGlassIcon,
+  EnvelopeIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from './SpeakerAvatars'
-
-// Constants for better maintainability
-const DEFAULT_CO_SPEAKER_LIMIT = 1
-const SEARCH_DEBOUNCE_MS = 300
-const BLUR_DELAY_MS = 200
-
-// Helper function to get co-speaker limits based on format
-function getCoSpeakerLimit(format: Format): number {
-  switch (format) {
-    case Format.lightning_10:
-      return 0 // No co-speakers for lightning talks
-    case Format.presentation_20:
-    case Format.presentation_25:
-    case Format.presentation_40:
-    case Format.presentation_45:
-      return DEFAULT_CO_SPEAKER_LIMIT // One co-speaker for presentations
-    case Format.workshop_120:
-    case Format.workshop_240:
-      return 3 // Three co-speakers for workshops
-    default:
-      return DEFAULT_CO_SPEAKER_LIMIT // Default to one co-speaker
-  }
-}
+import {
+  CoSpeakerInvitationMinimal,
+  InvitationStatus,
+} from '@/lib/cospeaker/types'
+import {
+  getCoSpeakerLimit,
+  allowsCoSpeakers,
+  getSpeakerLimitDescription,
+} from '@/lib/cospeaker/constants'
+import { useInviteFields, useInvitations } from '@/lib/cospeaker/hooks'
 
 function getFormatDisplayName(format: Format): string {
   switch (format) {
@@ -52,94 +39,116 @@ function getFormatDisplayName(format: Format): string {
 interface CoSpeakerSelectorProps {
   selectedSpeakers: Speaker[] // This should be just the co-speakers (not including current user)
   onSpeakersChange: (speakers: Speaker[]) => void
-  currentUserSpeaker: Speaker
   format: Format
+  proposalId?: string // Optional for new proposals
+  pendingInvitations?: CoSpeakerInvitationMinimal[]
+  onInvitationSent?: (invitation: CoSpeakerInvitationMinimal) => void
+  onInvitationCanceled?: (invitationId: string) => void
 }
 
 export function CoSpeakerSelector({
   selectedSpeakers,
   onSpeakersChange,
-  currentUserSpeaker,
   format,
+  proposalId,
+  pendingInvitations = [],
+  onInvitationSent,
+  onInvitationCanceled,
 }: CoSpeakerSelectorProps) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<Speaker[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [showResults, setShowResults] = useState(false)
-  const [error, setError] = useState<string>('')
-
   const maxCoSpeakers = getCoSpeakerLimit(format)
   const formatName = getFormatDisplayName(format)
-  const isLightningTalk = format === Format.lightning_10
+  const isLightningTalk = !allowsCoSpeakers(format)
 
-  // Filter out the current user and already selected speakers from search results
-  const filteredResults = searchResults.filter(
-    (speaker) =>
-      speaker._id !== currentUserSpeaker._id &&
-      !selectedSpeakers.some((s) => s._id === speaker._id),
-  )
+  // Custom hooks for managing invite fields and invitations
+  const {
+    inviteFields,
+    handleFieldChange,
+    clearField,
+    getValidInviteFields,
+    isAnyFieldFilled,
+    setInviteFields,
+  } = useInviteFields(format)
+
+  const {
+    isSendingInvite,
+    inviteError,
+    inviteSuccess,
+    cancelingInvitationId,
+    sendInvites,
+    cancelInvite,
+  } = useInvitations(onInvitationSent, onInvitationCanceled)
 
   // selectedSpeakers already contains only co-speakers (current user is excluded by ProposalForm)
   const coSpeakers = selectedSpeakers
 
-  useEffect(() => {
-    const timeoutId = setTimeout(async () => {
-      if (searchQuery.trim().length >= 2) {
-        setIsSearching(true)
-        setError('')
-
-        try {
-          const result = await searchSpeakers(searchQuery)
-
-          if (result.error) {
-            setError(result.error.message)
-            setSearchResults([])
-          } else {
-            setSearchResults(result.speakers)
-            setShowResults(true)
-          }
-        } catch {
-          setError('Failed to search speakers')
-          setSearchResults([])
-        } finally {
-          setIsSearching(false)
-        }
-      } else {
-        setSearchResults([])
-        setShowResults(false)
-      }
-    }, SEARCH_DEBOUNCE_MS)
-
-    return () => clearTimeout(timeoutId)
-  }, [searchQuery])
-
-  const handleSelectSpeaker = (speaker: Speaker) => {
-    // Check if we've reached the limit
-    if (selectedSpeakers.length >= maxCoSpeakers) {
-      return // Don't add if we've reached the limit
-    }
-
-    // Add the selected speaker to the list
-    const newSpeakers = [...selectedSpeakers, speaker]
-    onSpeakersChange(newSpeakers)
-    setSearchQuery('')
-    setShowResults(false)
-  }
+  // Calculate total co-speakers including pending invitations
+  const totalCoSpeakers =
+    coSpeakers.length +
+    pendingInvitations.filter((inv) => inv.status === 'pending').length
 
   const handleRemoveSpeaker = (speakerId: string) => {
     const newSpeakers = selectedSpeakers.filter((s) => s._id !== speakerId)
     onSpeakersChange(newSpeakers)
   }
 
-  const handleSearchFocus = () => {
-    if (searchQuery.trim().length >= 2) {
-      setShowResults(true)
+  const handleCancelInvitation = async (invitationId: string) => {
+    if (!proposalId) return
+    await cancelInvite(proposalId, invitationId)
+  }
+
+  const handleSendInvitation = async () => {
+    const validFields = getValidInviteFields()
+
+    if (!proposalId) {
+      return
+    }
+
+    const sentInvitations = await sendInvites(proposalId, validFields)
+
+    // Clear the fields that were successfully sent
+    if (sentInvitations.length > 0) {
+      const sentEmails = validFields.map((field) => field.email)
+      setInviteFields((prev) =>
+        prev.map((field) => {
+          const wasSent = sentEmails.includes(field.email)
+          return wasSent ? { email: '', name: '' } : field
+        }),
+      )
     }
   }
 
-  const handleSearchBlur = () => {
-    // Delay hiding results to allow for clicks
-    setTimeout(() => setShowResults(false), BLUR_DELAY_MS)
+  const getInvitationStatusIcon = (status: InvitationStatus) => {
+    switch (status) {
+      case 'pending':
+        return <ClockIcon className="text-cloud-blue h-5 w-5" />
+      case 'accepted':
+        return <CheckCircleIcon className="text-fresh-green h-5 w-5" />
+      case 'declined':
+        return <XCircleIcon className="text-cloud-blue-dark h-5 w-5" />
+      case 'expired':
+        return <ClockIcon className="text-sunbeam-yellow-dark h-5 w-5" />
+      case 'canceled':
+        return <XCircleIcon className="h-5 w-5 text-gray-400" />
+      default:
+        return null
+    }
+  }
+
+  const getInvitationStatusText = (status: InvitationStatus) => {
+    switch (status) {
+      case 'pending':
+        return 'Invitation pending'
+      case 'accepted':
+        return 'Invitation accepted'
+      case 'declined':
+        return 'Invitation declined'
+      case 'expired':
+        return 'Invitation expired'
+      case 'canceled':
+        return 'Invitation canceled'
+      default:
+        return ''
+    }
   }
 
   return (
@@ -156,39 +165,11 @@ export function CoSpeakerSelector({
             </>
           ) : (
             <>
-              Add co-speakers to your {formatName.toLowerCase()}. You can search
-              for existing speakers in our database. Maximum {maxCoSpeakers}{' '}
-              co-speaker{maxCoSpeakers > 1 ? 's' : ''} allowed.
+              {getSpeakerLimitDescription(format)}. Add co-speakers to your{' '}
+              {formatName.toLowerCase()} by inviting them via email.
             </>
           )}
         </p>
-        <div className="mt-2 rounded-md border border-blue-200 bg-blue-50 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-blue-400"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.94 6.94a.75.75 0 11-1.061-1.061 3 3 0 112.871 5.026v.345a.75.75 0 01-1.5 0v-.5c0-.72.57-1.172 1.081-1.287A1.5 1.5 0 108.94 6.94zM10 15a1 1 0 100-2 1 1 0 000 2z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">
-                Adding existing speakers only
-              </h3>
-              <p className="mt-1 text-sm text-blue-700">
-                You can currently only add existing speakers who have already
-                registered. New speakers must create their own account and
-                register before they can be added as co-speakers.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Warning for lightning talks */}
@@ -200,6 +181,7 @@ export function CoSpeakerSelector({
                 className="h-5 w-5 text-orange-400"
                 viewBox="0 0 20 20"
                 fill="currentColor"
+                aria-hidden="true"
               >
                 <path
                   fillRule="evenodd"
@@ -209,7 +191,7 @@ export function CoSpeakerSelector({
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-orange-800">
+              <h3 className="text-sm font-medium text-orange-800" role="alert">
                 Co-speakers not available for lightning talks
               </h3>
               <p className="mt-1 text-sm text-orange-700">
@@ -226,6 +208,67 @@ export function CoSpeakerSelector({
       {/* Show co-speakers section only if not a lightning talk */}
       {!isLightningTalk && (
         <>
+          {/* Success message */}
+          {inviteSuccess && (
+            <div className="rounded-md border border-green-200 bg-green-50 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <CheckCircleIcon
+                    className="text-fresh-green h-5 w-5"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-green-800">{inviteSuccess}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pending invitations */}
+          {pendingInvitations.length > 0 && (
+            <div>
+              <h4 className="text-cloud-blue-dark mb-2 text-sm font-medium">
+                Pending Invitations
+              </h4>
+              <div className="space-y-2">
+                {pendingInvitations.map((invitation) => (
+                  <div
+                    key={invitation._id}
+                    className="flex items-center justify-between rounded-lg border bg-gray-50 p-3"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="flex-shrink-0">
+                        {getInvitationStatusIcon(invitation.status)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {invitation.invitedName || invitation.invitedEmail}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {invitation.invitedEmail} •{' '}
+                          {getInvitationStatusText(invitation.status)}
+                        </p>
+                      </div>
+                    </div>
+                    {invitation.status === 'pending' && invitation._id && (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelInvitation(invitation._id!)}
+                        disabled={cancelingInvitationId === invitation._id}
+                        className="text-sm text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {cancelingInvitationId === invitation._id
+                          ? 'Canceling...'
+                          : 'Cancel'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Co-speakers display */}
           <div className="space-y-3">
             {/* Co-speakers (can be removed) */}
@@ -259,8 +302,9 @@ export function CoSpeakerSelector({
                         onClick={() => handleRemoveSpeaker(speaker._id)}
                         className="text-red-500 transition-colors hover:text-red-700"
                         title="Remove co-speaker"
+                        aria-label={`Remove ${speaker.name} as co-speaker`}
                       >
-                        <XMarkIcon className="h-5 w-5" />
+                        <XMarkIcon className="h-5 w-5" aria-hidden="true" />
                       </button>
                     </div>
                   ))}
@@ -269,114 +313,141 @@ export function CoSpeakerSelector({
             )}
           </div>
 
-          {/* Search input - only show if under the limit */}
-          {selectedSpeakers.length < maxCoSpeakers && (
-            <div className="relative">
-              <div className="relative">
-                <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={handleSearchFocus}
-                  onBlur={handleSearchBlur}
-                  placeholder="Search for speakers by name, email, or title..."
-                  className="w-full rounded-lg border border-gray-300 py-2 pr-4 pl-10 focus:border-transparent focus:ring-2 focus:ring-brand-cloud-blue"
-                />
-              </div>
-
-              {/* Search results dropdown */}
-              {showResults && (
-                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-300 bg-white shadow-lg">
-                  {isSearching && (
-                    <div className="flex items-center justify-center p-4">
-                      <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-brand-cloud-blue"></div>
-                      <span className="ml-2 text-sm text-gray-600">
-                        Searching...
-                      </span>
-                    </div>
-                  )}
-
-                  {error && (
-                    <div className="bg-red-50 p-4 text-sm text-red-600">
-                      {error}
-                    </div>
-                  )}
-
-                  {!isSearching &&
-                    !error &&
-                    filteredResults.length === 0 &&
-                    searchQuery.trim().length >= 2 && (
-                      <div className="p-4 text-center">
-                        <div className="mb-2">
-                          <svg
-                            className="mx-auto h-6 w-6 text-gray-400"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
-                            />
-                          </svg>
-                        </div>
-                        <p className="mb-2 text-sm text-gray-600">
-                          No speakers found matching &quot;{searchQuery}&quot;
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Only registered speakers can be added as co-speakers.
-                          The person you&apos;re looking for may need to create
-                          their own account first.
-                        </p>
-                      </div>
-                    )}
-
-                  {!isSearching && !error && filteredResults.length > 0 && (
-                    <div className="py-2">
-                      {filteredResults.map((speaker) => (
-                        <button
-                          key={speaker._id}
-                          type="button"
-                          onClick={() => handleSelectSpeaker(speaker)}
-                          className="flex w-full items-center space-x-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
-                        >
-                          <div className="flex-shrink-0">
-                            {speaker.image ? (
-                              <img
-                                src={`${speaker.image}?w=32&h=32&fit=crop`}
-                                alt={speaker.name}
-                                className="h-8 w-8 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200">
-                                <UserIcon className="h-5 w-5 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900">
-                              {speaker.name}
-                            </p>
-                            {speaker.title && (
-                              <p className="truncate text-xs text-gray-500">
-                                {speaker.title}
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+          {/* Email invitation section - only show if under the limit */}
+          {totalCoSpeakers < maxCoSpeakers && (
+            <div className="space-y-4">
+              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div>
+                  <h4 className="mb-3 text-sm font-medium text-gray-900">
+                    Invite Co-speakers
+                  </h4>
+                  <p className="mb-4 text-xs text-gray-500">
+                    Enter email addresses to invite co-speakers. They&apos;ll
+                    receive personalized invitations and create their own
+                    speaker profiles when they accept.
+                  </p>
                 </div>
-              )}
+
+                {/* Dynamic invite fields */}
+                <div className="space-y-4">
+                  {inviteFields
+                    .slice(0, maxCoSpeakers - totalCoSpeakers)
+                    .map((field, index) => (
+                      <div
+                        key={index}
+                        className="rounded-md border border-gray-200 bg-white p-4"
+                      >
+                        <div className="flex items-start justify-between">
+                          <h5 className="text-sm font-medium text-gray-900">
+                            Co-speaker {index + 1}
+                          </h5>
+                          {(field.email || field.name) && (
+                            <button
+                              type="button"
+                              onClick={() => clearField(index)}
+                              className="text-gray-400 hover:text-gray-600"
+                              title={`Clear co-speaker ${index + 1} details`}
+                            >
+                              <XMarkIcon
+                                className="h-5 w-5"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          )}
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <label
+                              htmlFor={`invite-email-${index}`}
+                              className="block text-sm font-medium text-gray-900"
+                            >
+                              Email *
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="email"
+                                id={`invite-email-${index}`}
+                                value={field.email}
+                                onChange={(e) =>
+                                  handleFieldChange(
+                                    index,
+                                    'email',
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="their.email@example.com"
+                                aria-label={`Co-speaker ${index + 1} Email`}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor={`invite-name-${index}`}
+                              className="block text-sm font-medium text-gray-900"
+                            >
+                              Name (optional)
+                            </label>
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                id={`invite-name-${index}`}
+                                value={field.name}
+                                onChange={(e) =>
+                                  handleFieldChange(
+                                    index,
+                                    'name',
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="Their Name"
+                                aria-label={`Co-speaker ${index + 1} Name`}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                {inviteError && (
+                  <div className="text-sm text-red-600" role="alert">
+                    {inviteError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-gray-500">
+                    They&apos;ll receive email invitations to join as your
+                    co-speakers
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSendInvitation}
+                    disabled={isSendingInvite || !isAnyFieldFilled()}
+                    className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-brand-cloud-blue/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSendingInvite ? (
+                      <>
+                        <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-white"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <EnvelopeIcon className="h-4 w-4" aria-hidden="true" />
+                        Send Invitation
+                        {getValidInviteFields().length > 1 ? 's' : ''}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
           {/* Show limit reached message */}
-          {selectedSpeakers.length >= maxCoSpeakers && (
+          {totalCoSpeakers >= maxCoSpeakers && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
               <div className="flex">
                 <div className="flex-shrink-0">
@@ -384,6 +455,7 @@ export function CoSpeakerSelector({
                     className="h-5 w-5 text-amber-400"
                     viewBox="0 0 20 20"
                     fill="currentColor"
+                    aria-hidden="true"
                   >
                     <path
                       fillRule="evenodd"
@@ -399,23 +471,10 @@ export function CoSpeakerSelector({
                   <p className="mt-1 text-sm text-amber-700">
                     You have reached the maximum number of co-speakers (
                     {maxCoSpeakers}) for {formatName.toLowerCase()}s.
-                    {maxCoSpeakers < 3 && (
-                      <>
-                        {' '}
-                        If you need more co-speakers, consider changing to a
-                        workshop format which allows up to 3 co-speakers.
-                      </>
-                    )}
                   </p>
                 </div>
               </div>
             </div>
-          )}
-
-          {searchQuery.trim().length > 0 && searchQuery.trim().length < 2 && (
-            <p className="text-xs text-gray-500">
-              Type at least 2 characters to search for speakers
-            </p>
           )}
         </>
       )}

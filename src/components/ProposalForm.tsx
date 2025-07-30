@@ -20,6 +20,7 @@ import {
   Level,
   levels,
   ProposalInput,
+  ProposalExisting,
 } from '@/lib/proposal/types'
 import { Flags, SpeakerInput, Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
@@ -40,6 +41,7 @@ import {
 } from './Form'
 import { PortableTextEditor } from './PortableTextEditor'
 import { CoSpeakerSelector } from './CoSpeakerSelector'
+import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
 import Link from 'next/link'
 
 export function ProposalForm({
@@ -75,8 +77,28 @@ export function ProposalForm({
     return []
   })
 
+  // State for co-speaker invitations
+  const [coSpeakerInvitations, setCoSpeakerInvitations] = useState<
+    CoSpeakerInvitationMinimal[]
+  >(
+    'coSpeakerInvitations' in initialProposal
+      ? (initialProposal as ProposalExisting).coSpeakerInvitations || []
+      : [],
+  )
+
   const buttonPrimary = proposalId ? 'Update' : 'Submit'
   const buttonPrimaryLoading = proposalId ? 'Updating...' : 'Submitting...'
+
+  // Handlers for co-speaker invitations
+  const handleInvitationSent = (invitation: CoSpeakerInvitationMinimal) => {
+    setCoSpeakerInvitations((prev) => [...prev, invitation])
+  }
+
+  const handleInvitationCanceled = (invitationId: string) => {
+    setCoSpeakerInvitations((prev) =>
+      prev.filter((inv) => inv._id !== invitationId),
+    )
+  }
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [proposalSubmitError, setProposalSubmitError] = useState(
@@ -170,8 +192,11 @@ export function ProposalForm({
           <CoSpeakerSelector
             selectedSpeakers={coSpeakers}
             onSpeakersChange={setCoSpeakers}
-            currentUserSpeaker={currentUserSpeaker}
             format={proposal.format}
+            proposalId={proposalId}
+            pendingInvitations={coSpeakerInvitations}
+            onInvitationSent={handleInvitationSent}
+            onInvitationCanceled={handleInvitationCanceled}
           />
         </div>
         <SpeakerDetailsForm
