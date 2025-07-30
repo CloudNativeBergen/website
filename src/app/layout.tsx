@@ -15,6 +15,7 @@ import clsx from 'clsx'
 import '@/styles/tailwind.css'
 import { SessionProvider } from 'next-auth/react'
 import { auth } from '@/lib/auth'
+import { DevBanner } from '@/components/DevBanner'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -95,6 +96,7 @@ export default async function RootLayout({
     >
       <body className="flex min-h-full">
         <div className="flex w-full flex-col">
+          <DevBanner />
           <SessionProvider session={session}>{children}</SessionProvider>
         </div>
         <Analytics />

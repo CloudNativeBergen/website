@@ -2,6 +2,7 @@
 
 import { CoSpeakerInvitation } from './types'
 import { COSPEAKER_API_ENDPOINTS, COSPEAKER_API_PARAMS } from './constants'
+import { AppEnvironment } from '@/lib/environment'
 
 /**
  * Generic API fetch helper that handles common patterns
@@ -32,20 +33,15 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 export async function respondToInvitation(
   token: string,
   response: 'accept' | 'decline',
-  isTestMode: boolean = false,
 ): Promise<{
   success: boolean
   message?: string
   error?: string
 }> {
   try {
-    const url = new URL(
+    const url = AppEnvironment.buildApiUrl(
       COSPEAKER_API_ENDPOINTS.INVITATION_RESPOND,
-      window.location.origin,
     )
-    if (isTestMode) {
-      url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
-    }
 
     const data = await apiFetch<{ message: string }>(url.toString(), {
       method: 'POST',
@@ -78,15 +74,10 @@ export async function respondToInvitation(
 export async function cancelInvitation(
   proposalId: string,
   invitationId: string,
-  isTestMode: boolean = false,
 ): Promise<void> {
-  const url = new URL(
+  const url = AppEnvironment.buildApiUrl(
     COSPEAKER_API_ENDPOINTS.INVITATION_DELETE(proposalId),
-    window.location.origin,
   )
-  if (isTestMode) {
-    url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
-  }
 
   await apiFetch(url.toString(), {
     method: 'DELETE',
@@ -104,7 +95,6 @@ export async function cancelInvitation(
 export async function sendInvitations(
   proposalId: string,
   emails: string[],
-  isTestMode: boolean = false,
 ): Promise<{
   success: boolean
   sentEmails: string[]
@@ -117,13 +107,9 @@ export async function sendInvitations(
 
     // Send invitations for all emails
     for (const email of emails) {
-      const url = new URL(
+      const url = AppEnvironment.buildApiUrl(
         COSPEAKER_API_ENDPOINTS.INVITATION_CREATE(proposalId),
-        window.location.origin,
       )
-      if (isTestMode) {
-        url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
-      }
 
       const response = await fetch(url.toString(), {
         method: 'POST',

@@ -5,6 +5,8 @@ import { auth } from '@/lib/auth'
 import { verifyInvitationToken } from '@/lib/cospeaker/server'
 import { clientWrite } from '@/lib/sanity/client'
 import InvitationResponseClient from './InvitationResponseClient'
+import { AppEnvironment } from '@/lib/environment'
+import { DevBanner } from '@/components/DevBanner'
 
 export const metadata: Metadata = {
   title: 'Co-Speaker Invitation | Cloud Native Bergen',
@@ -25,8 +27,7 @@ export default async function InvitationResponsePage({
   const params = await searchParams
 
   // Test mode for development (bypasses auth)
-  const isTestMode =
-    process.env.NODE_ENV === 'development' && params.test === 'true'
+  const isTestMode = AppEnvironment.isDevelopment && params.test === 'true'
 
   // Require authentication (unless in test mode)
   if (!session?.user?.email && !isTestMode) {
@@ -177,22 +178,13 @@ export default async function InvitationResponsePage({
   // Pass data to client component for interactive response
   return (
     <>
-      {isTestMode && (
-        <div className="border-b border-yellow-200 bg-yellow-50 p-4">
-          <div className="mx-auto max-w-4xl">
-            <p className="font-semibold text-yellow-800">
-              ⚠️ Test Mode Active - Authentication bypassed for development
-            </p>
-            <p className="text-sm text-yellow-600">
-              Testing as: {payload.inviteeEmail}
-            </p>
-          </div>
-        </div>
-      )}
+      <DevBanner />
       <InvitationResponseClient
         invitation={invitation}
         token={token}
-        userName={isTestMode ? 'Test User' : session?.user?.name || ''}
+        userName={
+          isTestMode ? AppEnvironment.testUser.name : session?.user?.name || ''
+        }
         isTestMode={isTestMode}
       />
     </>

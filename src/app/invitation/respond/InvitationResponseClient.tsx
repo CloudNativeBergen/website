@@ -74,7 +74,7 @@ export default function InvitationResponseClient({
     setError('')
 
     try {
-      const result = await respondToInvitation(token, action, isTestMode)
+      const result = await respondToInvitation(token, action)
 
       if (result.success) {
         // Redirect to success page with action and title

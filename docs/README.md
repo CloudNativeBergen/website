@@ -62,14 +62,82 @@ Authentication is handled using [Auth.js](https://authjs.dev/) (formerly NextAut
 - If a user tries to access these routes without being authenticated, they are automatically redirected to the sign-in page (`/api/auth/signin`).
 - The original intended URL is passed as a `callbackUrl` query parameter, so the user is redirected back after successful authentication.
 
+### Test Authentication System
+
+For development and testing purposes, the application includes a secure test authentication system that allows bypassing normal authentication flows.
+
+**Security Model:**
+
+The test authentication system is designed with multiple security layers to prevent misuse:
+
+1. **Environment Restriction**: Test mode only activates in development environments (`NODE_ENV === 'development'`)
+2. **Explicit Configuration**: Requires the `NEXT_PUBLIC_ENABLE_TEST_MODE=true` environment variable
+3. **URL Parameter**: Uses `?test=true` query parameter for specific invitation/response flows
+4. **Production Protection**: Automatically disabled in production builds
+
+**Purpose and Usage:**
+
+The `?test=true` query parameter serves several critical development purposes:
+
+- **Co-speaker Invitation Testing**: Allows testing invitation flows without requiring multiple real accounts
+- **Email Flow Validation**: Enables testing email templates and invitation responses without sending actual emails
+- **Authentication Bypass**: Provides a controlled way to test protected routes during development
+- **Integration Testing**: Facilitates automated testing of authentication-dependent features
+
+**Mock Authentication Data:**
+
+When test mode is active, the system uses consistent mock authentication data:
+
+```typescript
+{
+  user: {
+    id: 'test-user-id',
+    email: 'test@cloudnativebergen.io',
+    name: 'Test Speaker',
+    picture: '/images/default-avatar.png'
+  },
+  speaker: {
+    _id: 'test-speaker-id',
+    name: 'Test Speaker',
+    email: 'test@cloudnativebergen.io'
+  }
+}
+```
+
+**Security Guarantees:**
+
+1. **Development Only**: The system checks `process.env.NODE_ENV === 'development'` before any test mode activation
+2. **Double Verification**: Both environment variable AND URL parameter must be present
+3. **Visual Indication**: A prominent yellow banner appears when test mode is active
+4. **Audit Trail**: All test mode actions are logged with `[TEST MODE]` prefixes
+5. **Production Compile-time Safety**: Test mode code is excluded from production builds
+
+**Implementation Details:**
+
+The centralized test authentication system is implemented in `src/lib/environment/config.ts` through the `AppEnvironment` class:
+
+- `isTestModeFromUrl()`: Validates both environment and URL parameter
+- `createMockAuthContext()`: Generates consistent mock authentication data
+- `createMockAuthFromRequest()`: Applies mock authentication to API requests
+
+**Safe Usage Guidelines:**
+
+- **Development Only**: Never enable in production environments
+- **Local Testing**: Use for testing invitation flows locally
+- **CI/CD**: Can be used in development/staging environments for automated testing
+- **Documentation**: Always document test scenarios that require test mode
+
+This approach ensures that test authentication is both powerful for development and completely secure in production environments.
+
 **Key Files:**
 
 - `src/lib/auth.ts`: Core Auth.js configuration, providers, and callbacks.
+- `src/lib/environment/config.ts`: Centralized test mode configuration and security controls
 - `src/middleware.ts`: Route protection logic.
 - `src/lib/speaker/sanity.ts`: Contains the `getOrCreateSpeaker` function for linking auth users to Sanity speaker profiles.
 - `src/types/next-auth.d.ts`: Custom type definitions for the session object.
 
-This setup ensures that users interacting with protected areas like the CFP are properly authenticated and linked to a corresponding speaker profile in the Sanity backend.
+This setup ensures that users interacting with protected areas like the CFP are properly authenticated and linked to a corresponding speaker profile in the Sanity backend, while providing secure testing capabilities for development workflows.
 
 ## Sanity Schema Structure
 

@@ -9,6 +9,7 @@ import {
   InvitationStatus,
 } from './types'
 import { CoSpeakerInvitationTemplate } from '@/components/email/CoSpeakerInvitationTemplate'
+import { AppEnvironment } from '@/lib/environment'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 
@@ -225,7 +226,6 @@ export async function createCoSpeakerInvitation(params: {
  */
 export async function sendInvitationEmail(
   invitation: CoSpeakerInvitation,
-  isTestMode: boolean = false,
 ): Promise<boolean> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
@@ -238,10 +238,10 @@ export async function sendInvitationEmail(
       expiresAt: new Date(invitation.expiresAt).getTime(),
     }
 
-    const token = isTestMode
+    const token = AppEnvironment.isTestMode
       ? `test-${invitation._id}`
       : createInvitationToken(tokenPayload)
-    const invitationUrl = `${baseUrl}/invitation/respond?token=${token}${isTestMode ? '&test=true' : ''}`
+    const invitationUrl = `${baseUrl}/invitation/respond?token=${token}${AppEnvironment.isTestMode ? '&test=true' : ''}`
 
     // Fetch conference data for the current domain
     const { conference, error: conferenceError } =
@@ -270,7 +270,7 @@ export async function sendInvitationEmail(
         : process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
     // In test mode, log the email instead of sending
-    if (isTestMode) {
+    if (AppEnvironment.isTestMode) {
       console.log('[TEST MODE] Would send co-speaker invitation email:')
       console.log('To:', invitation.inviteeEmail)
       console.log(

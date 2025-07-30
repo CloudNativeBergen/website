@@ -9,6 +9,7 @@ import { getOrCreateSpeaker, findSpeakerByEmail } from '@/lib/speaker/sanity'
 import { sendEmail } from '@/lib/cospeaker/server'
 import { auth } from '@/lib/auth'
 import { CoSpeakerResponseTemplate } from '@/components/email/CoSpeakerResponseTemplate'
+import { AppEnvironment } from '@/lib/environment'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 import { getTotalSpeakerLimit } from '@/lib/cospeaker/constants'
@@ -23,10 +24,7 @@ interface RespondRequest {
 export async function POST(request: NextRequest) {
   try {
     // Check for test mode
-    const searchParams = request.nextUrl.searchParams
-    const isTestMode =
-      process.env.NODE_ENV === 'development' &&
-      searchParams.get('test') === 'true'
+    const isTestMode = AppEnvironment.isTestModeFromUrl(request.url)
 
     const session = await auth()
     if (!isTestMode && !session?.user?.email) {
@@ -155,7 +153,7 @@ export async function POST(request: NextRequest) {
             _type: 'speaker',
             _id: randomUUID(),
             email: testEmail,
-            name: invitation.invitedName || 'Test User',
+            name: invitation.invitedName || AppEnvironment.testUser.name,
             providers: [],
             slug: {
               _type: 'slug',
@@ -259,7 +257,9 @@ export async function POST(request: NextRequest) {
             inviterName: invitation.invitedBy?.name || 'Unknown',
             respondentName:
               invitation.invitedName ||
-              (isTestMode ? 'Test User' : session?.user?.name) ||
+              (isTestMode
+                ? AppEnvironment.testUser.name
+                : session?.user?.name) ||
               'Co-speaker',
             respondentEmail: invitation.invitedEmail,
             proposalTitle: invitation.proposal?.title || 'Unknown Proposal',

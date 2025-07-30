@@ -7,6 +7,7 @@ import {
 import { getTotalSpeakerLimit } from '@/lib/cospeaker/constants'
 import { NextResponse } from 'next/server'
 import { clientWrite } from '@/lib/sanity/client'
+import { AppEnvironment } from '@/lib/environment'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,36 +20,10 @@ export const POST = auth(
     // https://stackoverflow.com/questions/79145063/params-should-be-awaited-nextjs15
     const { proposalId } = await context.params
 
-    // Check for test mode
-    const url = new URL(req.url)
-    const isTestMode =
-      process.env.NODE_ENV === 'development' &&
-      url.searchParams.get('test') === 'true'
-
-    // In test mode, create a mock auth context
-    if (isTestMode) {
-      req.auth = {
-        user: {
-          email: 'test@example.com',
-          name: 'Test User',
-          sub: 'test-user-id',
-          picture: '/images/default-avatar.png',
-        },
-        speaker: {
-          _id: 'test-speaker-id',
-          name: 'Test Speaker',
-          email: 'test@example.com',
-          _type: 'speaker',
-          slug: { current: 'test-speaker' },
-        },
-        account: {
-          provider: 'test',
-          providerAccountId: 'test-account',
-          type: 'oauth',
-          userId: 'test-user-id',
-        },
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      }
+    // Check for test mode and apply mock auth if needed
+    const mockAuth = AppEnvironment.createMockAuthFromRequest(req)
+    if (mockAuth) {
+      req.auth = mockAuth
     }
 
     if (
@@ -80,9 +55,12 @@ export const POST = auth(
       }
 
       // Verify the proposal exists and belongs to the current user
+      const isTestMode = AppEnvironment.getTestModeFromRequest(req)
       const { proposal, proposalError } = await getProposal({
         id: proposalId as string,
-        speakerId: isTestMode ? 'test-speaker-id' : req.auth.speaker._id,
+        speakerId: isTestMode
+          ? AppEnvironment.testUser.speakerId
+          : req.auth.speaker._id,
         isOrganizer: isTestMode,
       })
 
@@ -166,36 +144,10 @@ export const DELETE = auth(
     // This needs to be awaited – do not remove
     const { proposalId } = await context.params
 
-    // Check for test mode
-    const url = new URL(req.url)
-    const isTestMode =
-      process.env.NODE_ENV === 'development' &&
-      url.searchParams.get('test') === 'true'
-
-    // In test mode, create a mock auth context
-    if (isTestMode) {
-      req.auth = {
-        user: {
-          email: 'test@example.com',
-          name: 'Test User',
-          sub: 'test-user-id',
-          picture: '/images/default-avatar.png',
-        },
-        speaker: {
-          _id: 'test-speaker-id',
-          name: 'Test Speaker',
-          email: 'test@example.com',
-          _type: 'speaker',
-          slug: { current: 'test-speaker' },
-        },
-        account: {
-          provider: 'test',
-          providerAccountId: 'test-account',
-          type: 'oauth',
-          userId: 'test-user-id',
-        },
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      }
+    // Check for test mode and apply mock auth if needed
+    const mockAuth = AppEnvironment.createMockAuthFromRequest(req)
+    if (mockAuth) {
+      req.auth = mockAuth
     }
 
     if (
@@ -219,9 +171,12 @@ export const DELETE = auth(
       }
 
       // Verify the proposal exists and belongs to the current user
+      const isTestMode = AppEnvironment.getTestModeFromRequest(req)
       const { proposal, proposalError } = await getProposal({
         id: proposalId as string,
-        speakerId: isTestMode ? 'test-speaker-id' : req.auth.speaker._id,
+        speakerId: isTestMode
+          ? AppEnvironment.testUser.speakerId
+          : req.auth.speaker._id,
         isOrganizer: isTestMode,
       })
 
