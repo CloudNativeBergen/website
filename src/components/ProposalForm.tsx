@@ -170,8 +170,8 @@ export function ProposalForm({
           <CoSpeakerSelector
             selectedSpeakers={coSpeakers}
             onSpeakersChange={setCoSpeakers}
-            currentUserSpeaker={currentUserSpeaker}
             format={proposal.format}
+            proposalId={proposalId}
           />
         </div>
         <SpeakerDetailsForm
