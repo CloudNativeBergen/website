@@ -2,6 +2,7 @@ import { resend, EMAIL_CONFIG, retryWithBackoff } from '@/lib/email/config'
 import React from 'react'
 import crypto from 'crypto'
 import { clientWrite } from '@/lib/sanity/client'
+import { createReference } from '@/lib/sanity/helpers'
 import {
   InvitationTokenPayload,
   CoSpeakerInvitation,
@@ -182,10 +183,7 @@ export async function createCoSpeakerInvitation(params: {
       inviterName: params.inviterName,
       inviteeEmail: params.inviteeEmail,
       inviteeName: params.inviteeName,
-      proposal: {
-        _type: 'reference',
-        _ref: params.proposalId,
-      },
+      proposal: createReference(params.proposalId),
       status: 'pending',
       expiresAt: expiresAt.toISOString(),
     })

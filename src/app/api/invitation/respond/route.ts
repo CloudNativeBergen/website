@@ -4,6 +4,7 @@ import {
   updateInvitationStatus,
 } from '@/lib/cospeaker/server'
 import { clientWrite } from '@/lib/sanity/client'
+import { createReferenceWithKey } from '@/lib/sanity/helpers'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
 import { sendEmail } from '@/lib/cospeaker/server'
 import { auth } from '@/lib/auth'
@@ -186,11 +187,9 @@ export async function POST(request: NextRequest) {
 
       // Add speaker to the speakers array of the proposal
       const currentSpeakers = proposal.speakers || []
-      const speakerRefs = currentSpeakers.map((s: { _id: string }) => ({
-        _type: 'reference',
-        _ref: s._id,
-        _key: s._id,
-      }))
+      const speakerRefs = currentSpeakers.map((s: { _id: string }) =>
+        createReferenceWithKey(s._id, 'speaker')
+      )
 
       // Check if the speaker is already in the list
       const alreadyAdded = speakerRefs.some(
@@ -198,12 +197,8 @@ export async function POST(request: NextRequest) {
       )
 
       if (!alreadyAdded) {
-        // Add new speaker reference
-        speakerRefs.push({
-          _type: 'reference',
-          _ref: acceptedSpeakerId,
-          _key: acceptedSpeakerId,
-        })
+        // Add new speaker reference using the helper function
+        speakerRefs.push(createReferenceWithKey(acceptedSpeakerId!, 'speaker'))
 
         updatedProposal = await clientWrite
           .patch(proposal._id)
