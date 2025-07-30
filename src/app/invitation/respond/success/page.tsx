@@ -4,16 +4,27 @@ import Link from 'next/link'
 export default async function InvitationSuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ action?: string; title?: string }>
+  searchParams: Promise<{ action?: string; title?: string; test?: string }>
 }) {
   const params = await searchParams
   const action = params.action || 'accepted'
   const proposalTitle = params.title || 'the proposal'
   const isAccepted = action === 'accepted'
+  const isTestMode = process.env.NODE_ENV === 'development' && params.test === 'true'
 
   return (
-    <div className="bg-sky-mist flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md">
+    <div className="bg-sky-mist flex min-h-screen flex-col">
+      {isTestMode && (
+        <div className="border-b border-yellow-200 bg-yellow-50 p-4">
+          <div className="mx-auto max-w-4xl">
+            <p className="font-semibold text-yellow-800">
+              ⚠️ Test Mode Active - This was a test invitation response
+            </p>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+        <div className="w-full max-w-md">
         <div className="rounded-lg bg-white p-8 shadow">
           <div className="text-center">
             {isAccepted ? (
@@ -76,6 +87,7 @@ export default async function InvitationSuccessPage({
               </Link>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

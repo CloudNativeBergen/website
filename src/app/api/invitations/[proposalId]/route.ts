@@ -18,14 +18,31 @@ export async function POST(
   { params }: { params: Promise<{ proposalId: string }> },
 ) {
   try {
-    // Authenticate user
+    // Check for test mode
+    const isTestMode =
+      process.env.NODE_ENV === 'development' &&
+      request.nextUrl.searchParams.get('test') === 'true'
+
+    // Authenticate user (bypass in test mode)
     const session = await auth()
-    if (!session?.user?.email) {
+    
+    // In test mode, create a mock session
+    const mockSession = isTestMode ? {
+      user: {
+        email: 'test@example.com',
+        name: 'Test User',
+      }
+    } : null
+
+    if (!session?.user?.email && !mockSession) {
       return NextResponse.json(
         { error: 'Authentication required' },
         { status: 401 },
       )
     }
+
+    const userEmail = session?.user?.email || mockSession?.user?.email || ''
+    const userName = session?.user?.name || mockSession?.user?.name || 'Unknown'
 
     const { proposalId } = await params
     const body = (await request.json()) as InvitationRequest
@@ -39,24 +56,34 @@ export async function POST(
       )
     }
 
-    // Get current speaker first
-    const { speaker: currentSpeaker } = await findSpeakerByEmail(
-      session.user.email,
-    )
-
-    if (!currentSpeaker) {
-      return NextResponse.json(
-        { error: 'Speaker profile not found' },
-        { status: 404 },
-      )
+    // Get current speaker first (create test speaker in test mode)
+    let currentSpeaker
+    if (isTestMode) {
+      currentSpeaker = {
+        _id: 'test-speaker-id',
+        name: 'Test Speaker',
+        email: 'test@example.com',
+      }
+    } else {
+      const { speaker } = await findSpeakerByEmail(userEmail)
+      currentSpeaker = speaker
+      
+      if (!currentSpeaker) {
+        return NextResponse.json(
+          { error: 'Speaker profile not found' },
+          { status: 404 },
+        )
+      }
     }
 
     // Get proposal to verify ownership and conference context
-    const { proposal, proposalError } = await getProposal({
+    const getProposalParams = {
       id: proposalId,
-      speakerId: currentSpeaker._id,
-      isOrganizer: false, // Only allow main speaker to invite, not organizers
-    })
+      isOrganizer: isTestMode ? true : false, // In test mode, allow access as organizer
+      speakerId: isTestMode ? 'test-speaker-id' : currentSpeaker._id, // Always provide speakerId
+    }
+    
+    const { proposal, proposalError } = await getProposal(getProposalParams)
 
     if (proposalError || !proposal) {
       return NextResponse.json(
@@ -86,8 +113,8 @@ export async function POST(
 
     // Create the invitation in Sanity
     const invitation = await createCoSpeakerInvitation({
-      inviterEmail: session.user.email,
-      inviterName: session.user.name || 'Unknown',
+      inviterEmail: userEmail,
+      inviterName: userName,
       inviteeEmail,
       inviteeName,
       proposalId,
@@ -101,12 +128,16 @@ export async function POST(
       )
     }
 
-    // Send the invitation email
-    try {
-      await sendInvitationEmail(invitation)
-    } catch (emailError) {
-      console.error('Failed to send invitation email:', emailError)
-      // Continue even if email fails - the invitation is created
+    // Send the invitation email (skip in test mode)
+    if (!isTestMode) {
+      try {
+        await sendInvitationEmail(invitation)
+      } catch (emailError) {
+        console.error('Failed to send invitation email:', emailError)
+        // Continue even if email fails - the invitation is created
+      }
+    } else {
+      console.log('[TEST MODE] Skipping email send for invitation:', invitation._id)
     }
 
     return NextResponse.json({

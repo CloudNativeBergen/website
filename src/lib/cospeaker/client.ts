@@ -34,10 +34,17 @@ async function apiFetch<T>(
  */
 export async function fetchInvitationsForProposal(
   proposalId: string,
+  isTestMode: boolean = false,
 ): Promise<CoSpeakerInvitation[]> {
   try {
+    const url = new URL(COSPEAKER_API_ENDPOINTS.INVITATIONS, window.location.origin)
+    url.searchParams.set(COSPEAKER_API_PARAMS.PROPOSAL_ID, proposalId)
+    if (isTestMode) {
+      url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
+    }
+    
     const data = await apiFetch<{ invitations: CoSpeakerInvitation[] }>(
-      `${COSPEAKER_API_ENDPOINTS.INVITATIONS}?${COSPEAKER_API_PARAMS.PROPOSAL_ID}=${proposalId}`
+      url.toString()
     )
     return data.invitations || []
   } catch (error) {
@@ -52,12 +59,19 @@ export async function fetchInvitationsForProposal(
  */
 export async function fetchInvitationsForProposals(
   proposalIds: string[],
+  isTestMode: boolean = false,
 ): Promise<Record<string, CoSpeakerInvitation[]>> {
   try {
     if (!proposalIds.length) return {}
 
+    const url = new URL(COSPEAKER_API_ENDPOINTS.INVITATIONS, window.location.origin)
+    url.searchParams.set(COSPEAKER_API_PARAMS.PROPOSAL_IDS, proposalIds.join(','))
+    if (isTestMode) {
+      url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
+    }
+
     const data = await apiFetch<{ invitationsByProposal: Record<string, CoSpeakerInvitation[]> }>(
-      `${COSPEAKER_API_ENDPOINTS.INVITATIONS}?${COSPEAKER_API_PARAMS.PROPOSAL_IDS}=${proposalIds.join(',')}`
+      url.toString()
     )
     return data.invitationsByProposal || {}
   } catch (error) {
@@ -119,9 +133,15 @@ export async function respondToInvitation(
 export async function cancelInvitation(
   proposalId: string,
   invitationId: string,
+  isTestMode: boolean = false,
 ): Promise<void> {
+  const url = new URL(COSPEAKER_API_ENDPOINTS.INVITATION_DELETE(proposalId), window.location.origin)
+  if (isTestMode) {
+    url.searchParams.set(COSPEAKER_API_PARAMS.TEST_MODE, 'true')
+  }
+  
   await apiFetch(
-    COSPEAKER_API_ENDPOINTS.INVITATION_DELETE(proposalId),
+    url.toString(),
     {
       method: 'DELETE',
       headers: {

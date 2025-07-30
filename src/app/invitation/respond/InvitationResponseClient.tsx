@@ -87,6 +87,9 @@ export default function InvitationResponseClient({
           action === 'accept' ? 'accepted' : 'declined',
         )
         successUrl.searchParams.set('title', invitation.proposal.title)
+        if (isTestMode) {
+          successUrl.searchParams.set('test', 'true')
+        }
         router.push(successUrl.toString())
       } else {
         setError(

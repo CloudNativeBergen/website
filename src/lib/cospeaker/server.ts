@@ -217,6 +217,7 @@ export async function createCoSpeakerInvitation(params: {
  */
 export async function sendInvitationEmail(
   invitation: CoSpeakerInvitation,
+  isTestMode: boolean = false,
 ): Promise<boolean> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
@@ -229,8 +230,8 @@ export async function sendInvitationEmail(
       expiresAt: new Date(invitation.expiresAt).getTime(),
     }
 
-    const token = createInvitationToken(tokenPayload)
-    const invitationUrl = `${baseUrl}/invitation/respond?token=${token}`
+    const token = isTestMode ? `test-${invitation._id}` : createInvitationToken(tokenPayload)
+    const invitationUrl = `${baseUrl}/invitation/respond?token=${token}${isTestMode ? '&test=true' : ''}`
 
     // Fetch conference data for the current domain
     const { conference, error: conferenceError } =
@@ -257,6 +258,16 @@ export async function sendInvitationEmail(
       conference && conference.domains?.[0]
         ? `https://${conference.domains[0]}`
         : process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+
+    // In test mode, log the email instead of sending
+    if (isTestMode) {
+      console.log('[TEST MODE] Would send co-speaker invitation email:')
+      console.log('To:', invitation.inviteeEmail)
+      console.log('Subject:', `You've been invited to co-present \"${invitation.proposalTitle || 'a proposal'}\"`)
+      console.log('Invitation URL:', invitationUrl)
+      console.log('Token:', token)
+      return true
+    }
 
     // Send the email
     const result = await sendEmail({
