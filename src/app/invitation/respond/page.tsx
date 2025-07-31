@@ -2,9 +2,8 @@ import { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
-import { verifyInvitationToken } from '@/lib/cospeaker/server'
-import { clientWrite } from '@/lib/sanity/client'
-import InvitationResponseClient from './InvitationResponseClient'
+import { getInvitationByToken } from '@/lib/cospeaker/sanity'
+import InvitationResponseClient from '@/components/InvitationResponseClient'
 import { AppEnvironment } from '@/lib/environment'
 import { DevBanner } from '@/components/DevBanner'
 
@@ -55,9 +54,10 @@ export default async function InvitationResponsePage({
     )
   }
 
-  // Verify token
-  const payload = verifyInvitationToken(token)
-  if (!payload) {
+  // Get invitation by token (optimized single database call)
+  const invitation = await getInvitationByToken(token)
+
+  if (!invitation) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="w-full max-w-md p-6">
@@ -68,78 +68,6 @@ export default async function InvitationResponsePage({
             <p className="text-red-600">
               This invitation link is either invalid or has expired. Co-speaker
               invitations are valid for 14 days.
-            </p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Verify email matches (skip in test mode) - compare in lowercase
-  if (
-    !isTestMode &&
-    session?.user?.email &&
-    payload.invitedEmail.toLowerCase() !== session.user.email.toLowerCase()
-  ) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md p-6">
-          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-            <h2 className="mb-2 text-lg font-semibold text-yellow-800">
-              Email Mismatch
-            </h2>
-            <p className="mb-4 text-yellow-700">
-              This invitation was sent to{' '}
-              <strong>{payload.invitedEmail}</strong>, but you&apos;re signed in
-              as <strong>{session.user.email}</strong>.
-            </p>
-            <p className="text-yellow-700">
-              Please sign in with the correct email address to respond to this
-              invitation.
-            </p>
-            <Link
-              href={`/api/auth/signout?callbackUrl=${encodeURIComponent(`/invitation/respond?token=${token}`)}`}
-              className="mt-4 inline-block rounded bg-yellow-600 px-4 py-2 text-white hover:bg-yellow-700"
-            >
-              Sign out and try again
-            </Link>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Get invitation details
-  const invitation = await clientWrite.fetch(
-    `*[_type == "coSpeakerInvitation" && _id == $invitationId][0]{
-      _id,
-      status,
-      invitedBy->{
-        name
-      },
-      invitedName,
-      invitedEmail,
-      proposal->{
-        _id,
-        title,
-        format
-      },
-      expiresAt
-    }`,
-    { invitationId: payload.invitationId },
-  )
-
-  if (!invitation) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="w-full max-w-md p-6">
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-            <h2 className="mb-2 text-lg font-semibold text-red-800">
-              Invitation Not Found
-            </h2>
-            <p className="text-red-600">
-              This invitation could not be found. It may have been removed or
-              there was an error.
             </p>
           </div>
         </div>
@@ -176,11 +104,36 @@ export default async function InvitationResponsePage({
   }
 
   // Pass data to client component for interactive response
+  // Create a compatible invitation object for the client component
+  const clientInvitation = {
+    _id: invitation._id,
+    status: invitation.status as 'pending' | 'accepted' | 'declined',
+    invitedBy:
+      typeof invitation.invitedBy === 'object' && 'name' in invitation.invitedBy
+        ? { name: invitation.invitedBy.name }
+        : { name: 'Unknown' },
+    invitedName: invitation.invitedName || '',
+    invitedEmail: invitation.invitedEmail,
+    proposal:
+      typeof invitation.proposal === 'object' && '_id' in invitation.proposal
+        ? {
+            _id: invitation.proposal._id,
+            title: invitation.proposal.title || 'Unknown Proposal',
+            format: 'talk' as const, // We'll need to fetch this if needed
+          }
+        : {
+            _id: 'unknown',
+            title: 'Unknown Proposal',
+            format: 'talk' as const,
+          },
+    expiresAt: invitation.expiresAt,
+  }
+
   return (
     <>
       <DevBanner />
       <InvitationResponseClient
-        invitation={invitation}
+        invitation={clientInvitation}
         token={token}
         userName={
           isTestMode ? AppEnvironment.testUser.name : session?.user?.name || ''

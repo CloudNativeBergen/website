@@ -3,6 +3,7 @@ import {
   verifyInvitationToken,
   updateInvitationStatus,
 } from '@/lib/cospeaker/server'
+import { getInvitationByToken } from '@/lib/cospeaker/sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import { createReferenceWithKey } from '@/lib/sanity/helpers'
 import { getOrCreateSpeaker, findSpeakerByEmail } from '@/lib/speaker/sanity'
@@ -21,6 +22,14 @@ interface RespondRequest {
   action: 'accept' | 'decline'
 }
 
+/**
+ * Handle co-speaker invitation responses
+ *
+ * Key improvements:
+ * - Removed email restriction: Users can accept invitations regardless of their logged-in email
+ * - Optimized database calls: Single call to getInvitationByToken instead of multiple queries
+ * - Better type safety: Proper handling of invitation object properties
+ */
 export async function POST(request: NextRequest) {
   try {
     // Check for test mode
@@ -44,52 +53,36 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify token
-    const payload = verifyInvitationToken(token)
-    if (!payload) {
-      return NextResponse.json(
-        { error: 'Invalid or expired token' },
-        { status: 400 },
-      )
-    }
-
-    // Verify email matches (skip in test mode) - case insensitive comparison
-    if (
-      !isTestMode &&
-      session?.user?.email &&
-      payload.invitedEmail.toLowerCase() !== session.user.email.toLowerCase()
-    ) {
-      return NextResponse.json(
-        { error: 'This invitation is for a different email address' },
-        { status: 403 },
-      )
-    }
-
-    // Get invitation details
-    const invitation = await clientWrite.fetch(
-      `*[_type == "coSpeakerInvitation" && _id == $invitationId][0]{
-        _id,
-        status,
-        proposal->{
-          _id,
-          title
-        },
-        invitedBy->{
-          name,
-          email
-        },
-        invitedName,
-        invitedEmail,
-        expiresAt
-      }`,
-      { invitationId: payload.invitationId },
-    )
+    // Get invitation by token (optimized single database call)
+    const invitation = await getInvitationByToken(token)
 
     if (!invitation) {
       return NextResponse.json(
-        { error: 'Invitation not found' },
+        { error: 'Invalid token or invitation not found' },
         { status: 404 },
       )
+    }
+
+    // Verify token signature for non-test modes
+    if (!isTestMode) {
+      const payload = verifyInvitationToken(token)
+      if (!payload) {
+        return NextResponse.json(
+          { error: 'Invalid or expired token' },
+          { status: 400 },
+        )
+      }
+
+      // Verify token matches invitation data
+      if (
+        payload.invitationId !== invitation._id ||
+        payload.invitedEmail !== invitation.invitedEmail
+      ) {
+        return NextResponse.json(
+          { error: 'Token does not match invitation data' },
+          { status: 400 },
+        )
+      }
     }
 
     if (invitation.status !== 'pending') {
@@ -102,7 +95,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check if invitation is expired
+    const isExpired = new Date(invitation.expiresAt) < new Date()
+    if (isExpired) {
+      return NextResponse.json(
+        { error: 'Invitation has expired' },
+        { status: 400 },
+      )
+    }
+
     // Get proposal details
+    const proposalId =
+      typeof invitation.proposal === 'object' && '_id' in invitation.proposal
+        ? invitation.proposal._id
+        : typeof invitation.proposal === 'object' &&
+            '_ref' in invitation.proposal
+          ? invitation.proposal._ref
+          : null
+
+    if (!proposalId) {
+      return NextResponse.json(
+        { error: 'Proposal reference not found' },
+        { status: 400 },
+      )
+    }
+
     const proposal = await clientWrite.fetch(
       `*[_type == "talk" && _id == $proposalId][0]{
         _id,
@@ -116,7 +133,7 @@ export async function POST(request: NextRequest) {
         },
         conference->{_id}
       }`,
-      { proposalId: invitation.proposal._id },
+      { proposalId },
     )
 
     if (!proposal) {
@@ -142,7 +159,7 @@ export async function POST(request: NextRequest) {
       // Get or create speaker profile
       if (isTestMode) {
         // In test mode, we need to use findSpeakerByEmail or create a new speaker
-        const testEmail = payload.invitedEmail
+        const testEmail = invitation.invitedEmail
         const { speaker: existingSpeaker } = await findSpeakerByEmail(testEmail)
 
         if (existingSpeaker?._id) {
@@ -227,7 +244,21 @@ export async function POST(request: NextRequest) {
     )
 
     // Send notification email to inviter (only if we have their email)
-    if (invitation.invitedBy?.email) {
+    const inviterEmail =
+      typeof invitation.invitedBy === 'object' &&
+      'email' in invitation.invitedBy
+        ? invitation.invitedBy.email
+        : null
+    const inviterName =
+      typeof invitation.invitedBy === 'object' && 'name' in invitation.invitedBy
+        ? invitation.invitedBy.name
+        : 'Unknown'
+    const proposalTitle =
+      typeof invitation.proposal === 'object' && 'title' in invitation.proposal
+        ? invitation.proposal.title
+        : proposal?.title || 'Unknown Proposal'
+
+    if (inviterEmail) {
       try {
         // Fetch conference data for the current domain
         const { conference, error: conferenceError } =
@@ -250,11 +281,11 @@ export async function POST(request: NextRequest) {
             : process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
 
         const emailResult = await sendEmail({
-          to: invitation.invitedBy.email,
-          subject: `Co-speaker invitation ${action === 'accept' ? 'accepted' : 'declined'}: ${invitation.proposal?.title}`,
+          to: inviterEmail,
+          subject: `Co-speaker invitation ${action === 'accept' ? 'accepted' : 'declined'}: ${proposalTitle}`,
           component: CoSpeakerResponseTemplate,
           props: {
-            inviterName: invitation.invitedBy?.name || 'Unknown',
+            inviterName,
             respondentName:
               invitation.invitedName ||
               (isTestMode
@@ -262,7 +293,7 @@ export async function POST(request: NextRequest) {
                 : session?.user?.name) ||
               'Co-speaker',
             respondentEmail: invitation.invitedEmail,
-            proposalTitle: invitation.proposal?.title || 'Unknown Proposal',
+            proposalTitle,
             proposalUrl: `${eventUrl}/cfp/list`,
             eventName,
             eventLocation,
