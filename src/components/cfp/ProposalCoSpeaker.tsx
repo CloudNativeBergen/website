@@ -7,7 +7,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline'
-import { SpeakerAvatars } from './SpeakerAvatars'
+import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import {
   CoSpeakerInvitationMinimal,
   InvitationStatus,
@@ -36,7 +36,7 @@ function getFormatDisplayName(format: Format): string {
   }
 }
 
-interface CoSpeakerSelectorProps {
+interface ProposalCoSpeakerProps {
   selectedSpeakers: Speaker[] // This should be just the co-speakers (not including current user)
   onSpeakersChange: (speakers: Speaker[]) => void
   format: Format
@@ -46,7 +46,7 @@ interface CoSpeakerSelectorProps {
   onInvitationCanceled?: (invitationId: string) => void
 }
 
-export function CoSpeakerSelector({
+export function ProposalCoSpeaker({
   selectedSpeakers,
   onSpeakersChange,
   format,
@@ -54,7 +54,7 @@ export function CoSpeakerSelector({
   pendingInvitations = [],
   onInvitationSent,
   onInvitationCanceled,
-}: CoSpeakerSelectorProps) {
+}: ProposalCoSpeakerProps) {
   const maxCoSpeakers = getCoSpeakerLimit(format)
   const formatName = getFormatDisplayName(format)
   const isLightningTalk = !allowsCoSpeakers(format)

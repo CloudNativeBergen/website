@@ -8,10 +8,10 @@ import {
   UserCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/solid'
-import { SpinnerIcon } from './SocialIcons'
+import { SpinnerIcon } from '@/components/SocialIcons'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
-import { SpeakerAvatars } from './SpeakerAvatars'
+import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { StatusBadge } from '@/lib/proposal'
 
 interface ProposalButtonAction {

@@ -6,3 +6,10 @@
 
 // Re-export everything from client-safe exports
 export * from './client'
+
+// Re-export utils directly to ensure they're available
+export {
+  convertJsonToProposal,
+  convertStringToPortableTextBlocks,
+  validateProposal,
+} from './utils/validation'
