@@ -207,7 +207,21 @@ export async function getPublicSpeaker(
     err = error as Error
   }
 
-  const talks = 'talks' in data ? (data.talks as ProposalExisting[]) : []
+  // Handle case where no speaker is found
+  if (!data || Object.keys(data).length === 0) {
+    return {
+      speaker: null,
+      talks: [],
+      err:
+        err ||
+        new Error(
+          'Speaker not found or has no confirmed talks for this conference',
+        ),
+    }
+  }
+
+  const talks =
+    data && 'talks' in data ? (data.talks as ProposalExisting[]) : []
   const speaker = data as Speaker
 
   return { speaker, talks, err }

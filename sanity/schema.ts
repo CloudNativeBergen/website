@@ -8,6 +8,7 @@ import sponsor from './schemaTypes/sponsor'
 import sponsorTier from './schemaTypes/sponsorTier'
 import topic from './schemaTypes/topic'
 import review from './schemaTypes/review'
+import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -19,5 +20,6 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     sponsor,
     sponsorTier,
     topic,
+    coSpeakerInvitation,
   ],
 }
