@@ -8,7 +8,7 @@ import {
 } from '@/lib/proposal/types'
 import { getProposalSanity } from '@/lib/proposal/server'
 import { Speaker } from '@/lib/speaker/types'
-import { ProposalForm } from '@/components/ProposalForm'
+import { ProposalForm } from '@/components/cfp/ProposalForm'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getSpeaker } from '@/lib/speaker/sanity'
@@ -133,8 +133,6 @@ export default async function Submit({
         <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
           <p>
             Become our next speaker and share your knowledge with the community!
-            We are especially interested in local speakers who can provide
-            unique insights and perspectives.
           </p>
         </div>
       </div>

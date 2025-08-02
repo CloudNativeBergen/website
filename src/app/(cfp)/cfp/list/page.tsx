@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/server'
-import { ProposalList } from '@/components/ProposalList'
+import { ProposalList } from '@/components/cfp/ProposalList'
 import { SpeakerPromotion } from '@/components/SpeakerPromotion'
 import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
 import { redirect } from 'next/navigation'

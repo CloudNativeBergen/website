@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  DocumentTextIcon,
   UserIcon,
   PlusIcon,
   ListBulletIcon,

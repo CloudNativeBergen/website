@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { redirect } from 'next/navigation'
-import { ProfilePageClient } from '@/components/profile/ProfilePageClient'
+import { CFPProfilePage } from '@/components/cfp/CFPProfilePage'
 
 export default async function ProfilePage() {
   const session = await auth()
@@ -20,5 +20,5 @@ export default async function ProfilePage() {
     )
   }
 
-  return <ProfilePageClient initialSpeaker={speaker} />
+  return <CFPProfilePage initialSpeaker={speaker} />
 }
