@@ -250,7 +250,6 @@ export async function sendInvitationEmail(
   invitation: CoSpeakerInvitationFull,
 ): Promise<boolean> {
   try {
-
     // Use the stored token from the invitation
     const token = invitation.token
     if (!token) {
@@ -258,11 +257,12 @@ export async function sendInvitationEmail(
       return false
     }
 
-    
-
     // Fetch conference data for the current domain
-    const { conference, domain, error: conferenceError } =
-      await getConferenceForCurrentDomain()
+    const {
+      conference,
+      domain,
+      error: conferenceError,
+    } = await getConferenceForCurrentDomain()
     if (conferenceError || !conference) {
       console.error('Error fetching conference data:', conferenceError)
       // Fallback to defaults if conference data is not available
