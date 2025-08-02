@@ -13,7 +13,6 @@ import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { CFPLayout } from '@/components/cfp/CFPLayout'
 
 export const dynamic = 'force-dynamic'
 
@@ -126,7 +125,7 @@ export default async function Submit({
   }
 
   return (
-    <CFPLayout>
+    <>
       <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
         <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
           Submit Presentation
@@ -172,6 +171,6 @@ export default async function Submit({
           />
         </div>
       )}
-    </CFPLayout>
+    </>
   )
 }

@@ -7,7 +7,6 @@ import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
-import { CFPLayout } from '@/components/cfp/CFPLayout'
 
 function ErrorDisplay({ message }: { message: string }) {
   return (
@@ -31,11 +30,7 @@ export default async function SpeakerDashboard() {
 
   if (conferenceError || !conference) {
     console.error('Error loading conference:', conferenceError)
-    return (
-      <CFPLayout>
-        <ErrorDisplay message="Error loading conference" />
-      </CFPLayout>
-    )
+    return <ErrorDisplay message="Error loading conference" />
   }
 
   const cfpIsOpen =
@@ -49,15 +44,11 @@ export default async function SpeakerDashboard() {
 
   if (proposalsError) {
     console.error('Error fetching proposals:', proposalsError)
-    return (
-      <CFPLayout>
-        <ErrorDisplay message="Error fetching proposals" />
-      </CFPLayout>
-    )
+    return <ErrorDisplay message="Error fetching proposals" />
   }
 
   return (
-    <CFPLayout>
+    <>
       <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
         <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
           Speaker Dashboard
@@ -161,6 +152,6 @@ export default async function SpeakerDashboard() {
           </div>
         </div>
       </div>
-    </CFPLayout>
+    </>
   )
 }

@@ -2,7 +2,6 @@ import { auth } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { redirect } from 'next/navigation'
 import { ProfilePageClient } from '@/components/profile/ProfilePageClient'
-import { CFPLayout } from '@/components/cfp/CFPLayout'
 
 export default async function ProfilePage() {
   const session = await auth()
@@ -15,17 +14,11 @@ export default async function ProfilePage() {
   if (err) {
     console.error('Error loading speaker:', err)
     return (
-      <CFPLayout>
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="text-red-500">Error loading speaker profile</div>
-        </div>
-      </CFPLayout>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-red-500">Error loading speaker profile</div>
+      </div>
     )
   }
 
-  return (
-    <CFPLayout>
-      <ProfilePageClient initialSpeaker={speaker} />
-    </CFPLayout>
-  )
+  return <ProfilePageClient initialSpeaker={speaker} />
 }
