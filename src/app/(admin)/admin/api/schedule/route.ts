@@ -3,6 +3,7 @@ import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { saveScheduleToSanity } from '@/lib/schedule/sanity'
+import { revalidatePath } from 'next/cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,8 +34,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    console.log('Saving schedule to Sanity:', schedule)
-
     const { schedule: savedSchedule, error: saveError } =
       await saveScheduleToSanity(schedule, conference)
 
@@ -45,7 +44,8 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    console.log('Schedule saved successfully:', savedSchedule._id)
+    // Revalidate the schedule page to refresh cached data
+    revalidatePath('/admin/schedule')
 
     return NextResponse.json({ schedule: savedSchedule })
   } catch (error) {

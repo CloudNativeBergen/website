@@ -30,10 +30,11 @@ function generateConferenceDates(startDate: string, endDate: string): string[] {
 
 export async function getScheduleData(): Promise<ScheduleData> {
   try {
-    // Fetch conference with schedule data
+    // Fetch conference with schedule data - use shorter cache for admin
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({
         schedule: true,
+        revalidate: 0, // No cache for schedule admin
       })
 
     if (conferenceError || !conference) {
