@@ -2,7 +2,7 @@
 
 import { useDraggable } from '@dnd-kit/core'
 import { useMemo } from 'react'
-import { ProposalExisting } from '@/lib/proposal/types'
+import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { formats, audiences } from '@/lib/proposal/types'
 import { getProposalDurationMinutes } from '@/lib/schedule/types'
 import { Topic } from '@/lib/topic/types'
@@ -17,6 +17,7 @@ import {
   UserGroupIcon,
   AcademicCapIcon,
   TagIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import './schedule.css'
 
@@ -119,19 +120,28 @@ export function DraggableProposal({
     return { styles, className }
   }, [proposal.topics])
 
-  // Enhanced background styling based on topics
+  // Enhanced background styling based on topics and status
   const backgroundStyle = useMemo(() => {
     const topics = proposal.topics as Topic[]
+    const isAcceptedButNotConfirmed = proposal.status === Status.accepted
+
+    // For accepted but not confirmed proposals, background will be handled by CSS class
+    if (isAcceptedButNotConfirmed) {
+      return {} // Background handled by Tailwind class
+    }
+
+    // For confirmed proposals, use topic-based background with low opacity
     if (topics && topics.length > 0) {
       const background =
         topics.length === 1
-          ? `${topics[0].color}08` // 8 = ~3% opacity
+          ? `${topics[0].color}08` // Low opacity for confirmed
           : `linear-gradient(135deg, ${topics[0].color}08 50%, ${topics[1].color}08 50%)`
 
       return { background }
     }
+
     return {}
-  }, [proposal.topics])
+  }, [proposal.topics, proposal.status])
 
   // Process audiences
   const { primaryAudience, audienceCount } = useMemo(() => {
@@ -168,10 +178,14 @@ export function DraggableProposal({
     }
   }, [transform, isBeingDragged])
 
-  // Memoize class names with topic styling
+  // Memoize class names with topic styling and status styling
   const containerClasses = useMemo(() => {
-    const baseClasses =
-      'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md'
+    const isAcceptedButNotConfirmed = proposal.status === Status.accepted
+
+    const baseClasses = isAcceptedButNotConfirmed
+      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md'
+      : 'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md'
+
     const opacityClass = isBeingDragged
       ? 'opacity-30'
       : isDragging
@@ -182,7 +196,13 @@ export function DraggableProposal({
       talkSize === 'short' || talkSize === 'very-short' ? 'p-1' : 'p-2'
 
     return `${baseClasses} ${opacityClass} ${topicStyling.className} ${paddingClass}`.trim()
-  }, [isBeingDragged, isDragging, talkSize, topicStyling.className]) // Title component based on talk size
+  }, [
+    isBeingDragged,
+    isDragging,
+    talkSize,
+    topicStyling.className,
+    proposal.status,
+  ]) // Title component based on talk size
   const TitleComponent = useMemo(() => {
     const titleClasses = 'pr-1 text-gray-900 truncate'
 
@@ -291,6 +311,14 @@ export function DraggableProposal({
     parts.push(`📋 ${proposal.title}`)
     if (speakerInfo) parts.push(`👤 ${speakerInfo}`)
 
+    // Status info
+    const statusEmoji = proposal.status === Status.accepted ? '⚠️' : '✅'
+    const statusText =
+      proposal.status === Status.accepted
+        ? 'Accepted (not yet confirmed by speaker)'
+        : 'Confirmed'
+    parts.push(`${statusEmoji} Status: ${statusText}`)
+
     // Level with emoji
     const levelEmoji =
       levelConfig?.label === 'Beginner'
@@ -347,7 +375,7 @@ export function DraggableProposal({
             <Bars3Icon className="h-3 w-3 text-gray-400" />
           </div>
 
-          {/* Title with level indicator */}
+          {/* Title with level indicator and status indicator */}
           <div className="flex min-w-0 flex-1 items-center gap-1">
             <div className="min-w-0 flex-1">{TitleComponent}</div>
             {levelConfig && (
@@ -355,6 +383,12 @@ export function DraggableProposal({
                 level={proposal.level}
                 className="flex-shrink-0"
                 size="xs"
+              />
+            )}
+            {proposal.status === Status.accepted && (
+              <ExclamationTriangleIcon
+                className="h-3 w-3 flex-shrink-0 text-amber-500"
+                title="Accepted but not yet confirmed by speaker"
               />
             )}
           </div>

@@ -386,6 +386,13 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         <h3 className="mb-2 text-xs font-medium text-gray-700">Legend</h3>
         <div className="space-y-1.5 text-xs text-gray-600">
           <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-700">Status:</span>
+            <div className="h-3 w-3 rounded border-2 border-amber-300 bg-amber-50"></div>
+            <span>Accepted (not confirmed)</span>
+            <div className="h-3 w-3 rounded border border-gray-200 bg-white"></div>
+            <span>Confirmed</span>
+          </div>
+          <div className="flex items-center gap-2">
             <span className="font-medium text-gray-700">Level:</span>
             <LevelIndicator level={Level.beginner} size="xs" />
             <span>Beginner</span>

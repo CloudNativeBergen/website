@@ -107,15 +107,17 @@ export async function getScheduleData(): Promise<ScheduleData> {
       }
     }
 
-    // Filter for confirmed proposals only
-    const confirmedProposals = proposals.filter(
-      (proposal: ProposalExisting) => proposal.status === Status.confirmed,
+    // Filter for accepted and confirmed proposals (for scheduling)
+    const schedulableProposals = proposals.filter(
+      (proposal: ProposalExisting) =>
+        proposal.status === Status.accepted ||
+        proposal.status === Status.confirmed,
     )
 
     return {
       schedules,
       conference,
-      proposals: confirmedProposals,
+      proposals: schedulableProposals,
     }
   } catch (error) {
     console.error('Error fetching schedule data:', error)

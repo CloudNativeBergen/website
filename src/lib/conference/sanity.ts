@@ -118,6 +118,7 @@ export async function getConferenceForDomain(
           description,
           format,
           level,
+          status,
           audiences,
           topics[]-> {
             _id,
