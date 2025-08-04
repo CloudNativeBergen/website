@@ -9,6 +9,7 @@ import {
   ChevronUpIcon,
 } from '@heroicons/react/24/outline'
 import { TrackTalk } from '@/lib/conference/types'
+import { Status } from '@/lib/proposal/types'
 import { formatSpeakerNamesFromUnknown } from '@/lib/speaker/formatSpeakerNames'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { BookmarkButton } from '@/components/BookmarkButton'
@@ -141,22 +142,27 @@ export function TalkCard({
   const { talk: talkData } = talk
   const primarySpeaker = talkData.speakers?.[0]
   const minHeight = getSmartHeight(durationMinutes)
+  
+  // Check if talk is confirmed
+  const isConfirmed = talkData.status === Status.confirmed
 
   // Create bookmark data for this talk
   const bookmarkData = {
     talkId:
       talkData._id ||
       `${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}`,
-    title: talkData.title,
+    title: isConfirmed ? talkData.title : 'Talk details to be announced',
     startTime: talk.startTime,
     endTime: talk.endTime,
     scheduleDate: talk.scheduleDate,
     trackTitle: talk.trackTitle,
-    speakers: talkData.speakers
-      ?.map((speaker) =>
-        typeof speaker === 'object' && 'name' in speaker ? speaker.name : '',
-      )
-      .filter(Boolean),
+    speakers: isConfirmed 
+      ? talkData.speakers
+          ?.map((speaker) =>
+            typeof speaker === 'object' && 'name' in speaker ? speaker.name : '',
+          )
+          .filter(Boolean)
+      : [],
   }
 
   const isBookmarkedTalk = isLoaded && isBookmarked(bookmarkData.talkId)
@@ -165,9 +171,12 @@ export function TalkCard({
     <div
       className={clsx(
         'rounded-lg border transition-all duration-200 hover:shadow-md',
+        !isConfirmed && 'opacity-75', // Reduce opacity for unconfirmed talks
         isBookmarkedTalk
           ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80'
-          : 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue',
+          : isConfirmed
+          ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue'
+          : 'border-gray-300 bg-gray-50 hover:border-gray-400', // Different styling for unconfirmed
         compact ? 'p-3' : 'p-6',
       )}
       style={fixedHeight ? { minHeight } : {}}
@@ -184,26 +193,37 @@ export function TalkCard({
             <div className="flex-1">
               <h3
                 className={clsx(
-                  'font-space-grotesk font-semibold text-brand-slate-gray',
+                  'font-space-grotesk font-semibold',
+                  !isConfirmed && 'text-gray-500', // Grayed out for unconfirmed
+                  isConfirmed && 'text-brand-slate-gray',
                   compact ? 'text-sm leading-tight' : 'text-base',
                 )}
               >
-                {primarySpeaker &&
-                typeof primarySpeaker === 'object' &&
-                'slug' in primarySpeaker ? (
-                  <Link
-                    href={`/speaker/${primarySpeaker.slug}`}
-                    className="transition-colors hover:text-brand-cloud-blue"
-                  >
-                    {talkData.title}
-                  </Link>
+                {isConfirmed ? (
+                  primarySpeaker &&
+                  typeof primarySpeaker === 'object' &&
+                  'slug' in primarySpeaker ? (
+                    <Link
+                      href={`/speaker/${primarySpeaker.slug}`}
+                      className="transition-colors hover:text-brand-cloud-blue"
+                    >
+                      {talkData.title}
+                    </Link>
+                  ) : (
+                    talkData.title
+                  )
                 ) : (
-                  talkData.title
+                  <span className="flex items-center gap-2">
+                    <span>Talk details to be announced</span>
+                    <span className="inline-flex items-center rounded bg-yellow-100 px-6 py-1 text-xs font-medium text-yellow-800 whitespace-nowrap">
+                      To be announced
+                    </span>
+                  </span>
                 )}
               </h3>
 
               {/* Speaker Info */}
-              {talkData.speakers && talkData.speakers.length > 0 && (
+              {isConfirmed && talkData.speakers && talkData.speakers.length > 0 && (
                 <div
                   className={clsx(
                     'flex items-center gap-2',
@@ -227,27 +247,55 @@ export function TalkCard({
                   </div>
                 </div>
               )}
+              
+              {/* Placeholder for unconfirmed talks */}
+              {!isConfirmed && (
+                <div
+                  className={clsx(
+                    'flex items-center gap-2',
+                    compact ? 'mt-1' : 'mt-2',
+                  )}
+                >
+                  <div className="flex -space-x-2">
+                    <div className="h-8 w-8 rounded-full bg-gray-300"></div>
+                    <div className="h-8 w-8 rounded-full bg-gray-200"></div>
+                  </div>
+                  <div
+                    className={clsx(
+                      'min-w-0 flex-1',
+                      compact ? 'text-xs' : 'text-sm',
+                    )}
+                  >
+                    <div className="font-medium text-gray-400">
+                      Speaker to be announced
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Video Indicator */}
             <div className="flex items-center gap-2">
-              {talkData.video && (
+              {isConfirmed && talkData.video && (
                 <div className="rounded-full bg-red-100 p-2 text-red-800">
                   <PlayIcon className="h-4 w-4" />
                 </div>
               )}
 
-              {/* Bookmark Button */}
-              <BookmarkButton
-                talk={bookmarkData}
-                size={compact ? 'sm' : 'md'}
-              />
+              {/* Bookmark Button - only show for confirmed talks */}
+              {isConfirmed && (
+                <BookmarkButton
+                  talk={bookmarkData}
+                  size={compact ? 'sm' : 'md'}
+                />
+              )}
             </div>
           </div>
         </div>
 
-        {/* Description */}
+        {/* Description - only show for confirmed talks */}
         {!compact &&
+          isConfirmed &&
           talkData.description &&
           Array.isArray(talkData.description) && (
             <div className="flex-1">
@@ -301,6 +349,15 @@ export function TalkCard({
               )}
             </div>
           )}
+          
+        {/* Placeholder description for unconfirmed talks */}
+        {!compact && !isConfirmed && (
+          <div className="flex-1">
+            <div className="text-sm text-gray-400 italic">
+              Talk description will be available once the speaker confirms their participation.
+            </div>
+          </div>
+        )}
 
         {/* Metadata */}
         <div className={clsx(compact ? 'space-y-2' : 'space-y-3')}>
@@ -339,8 +396,8 @@ export function TalkCard({
             </span>
           </div>
 
-          {/* Badges */}
-          {!compact && (
+          {/* Badges - only show for confirmed talks */}
+          {!compact && isConfirmed && (
             <div className="flex flex-wrap gap-2">
               {/* Format Badge */}
               {talkData.format && (
@@ -385,6 +442,15 @@ export function TalkCard({
                   )}
                 </div>
               )}
+            </div>
+          )}
+          
+          {/* Basic info for unconfirmed talks */}
+          {!compact && !isConfirmed && (
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+                Details pending
+              </span>
             </div>
           )}
         </div>
