@@ -1,5 +1,6 @@
 import { sanityImage } from '@/lib/sanity/client'
 import { Speaker } from '@/lib/speaker/types'
+import { formatSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
 import { Reference } from 'sanity'
 
 // Color palette for letter-based avatars
@@ -136,52 +137,58 @@ export function SpeakerAvatars({
         } as React.CSSProperties
       }
     >
-      {visibleSpeakers.map((speaker, index) => (
-        <div
-          key={`${speaker._id || 'speaker'}-${index}`}
-          className={`${classes.container} ${
-            index > 0 ? classes.spacingCompact : ''
-          } relative overflow-hidden rounded-full border-2 border-brand-glacier-white bg-brand-sky-mist shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
-            index === 1
-              ? 'group-hover:translate-x-[var(--spread-2)]'
-              : index === 2
-                ? 'group-hover:translate-x-[var(--spread-3)]'
-                : index === 3
-                  ? 'group-hover:translate-x-[var(--spread-4)]'
-                  : index === 4
-                    ? 'group-hover:translate-x-[var(--spread-5)]'
-                    : ''
-          }`}
-          style={{
-            zIndex: visibleSpeakers.length - index,
-          }}
-          title={showTooltip ? speaker.name : undefined}
-        >
-          {speaker.image ? (
-            <img
-              src={sanityImage(speaker.image)
-                .width(imageDimensions[size].width)
-                .height(imageDimensions[size].height)
-                .fit('crop')
-                .url()}
-              alt={speaker.name}
-              className="absolute inset-0 h-full w-full rounded-full object-cover object-center"
-            />
-          ) : (
-            <div
-              className={`absolute inset-0 flex h-full w-full items-center justify-center rounded-full ${getAvatarColor(speaker.name)}`}
-            >
-              <span className={`${classes.text} font-bold text-white`}>
-                {getAvatarLetter(speaker.name)}
-              </span>
-            </div>
-          )}
-        </div>
-      ))}
+      {visibleSpeakers.map((speaker, index) => {
+        // Generate stable key and classes
+        const speakerId = speaker._id || `speaker-${index}`
+        const isFirstSpeaker = index === 0
+        const translateClass =
+          index === 1
+            ? 'group-hover:translate-x-[var(--spread-2)]'
+            : index === 2
+              ? 'group-hover:translate-x-[var(--spread-3)]'
+              : index === 3
+                ? 'group-hover:translate-x-[var(--spread-4)]'
+                : index === 4
+                  ? 'group-hover:translate-x-[var(--spread-5)]'
+                  : ''
+
+        return (
+          <div
+            key={speakerId}
+            className={`${classes.container} ${
+              !isFirstSpeaker ? classes.spacingCompact : ''
+            } relative overflow-hidden rounded-full border-2 border-gray-200/60 bg-brand-sky-mist shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${translateClass}`}
+            style={{
+              zIndex: visibleSpeakers.length - index,
+            }}
+            title={showTooltip ? speaker.name : undefined}
+          >
+            {speaker.image ? (
+              <img
+                src={sanityImage(speaker.image)
+                  .width(imageDimensions[size].width)
+                  .height(imageDimensions[size].height)
+                  .fit('crop')
+                  .url()}
+                alt={speaker.name}
+                className="absolute inset-0 h-full w-full rounded-full object-cover object-center"
+              />
+            ) : (
+              <div
+                className={`absolute inset-0 flex h-full w-full items-center justify-center rounded-full ${getAvatarColor(speaker.name)}`}
+              >
+                <span className={`${classes.text} font-bold text-white`}>
+                  {getAvatarLetter(speaker.name)}
+                </span>
+              </div>
+            )}
+          </div>
+        )
+      })}
 
       {remainingCount > 0 && (
         <div
-          className={`${classes.container} ${classes.spacingCompact} relative flex items-center justify-center rounded-full border-2 border-brand-glacier-white bg-brand-cloud-blue/20 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
+          className={`${classes.container} ${classes.spacingCompact} relative flex items-center justify-center rounded-full border-2 border-gray-200/60 bg-brand-cloud-blue/20 shadow-sm transition-transform duration-300 ease-in-out hover:scale-110 ${
             visibleSpeakers.length === 1
               ? 'group-hover:translate-x-[var(--spread-2)]'
               : visibleSpeakers.length === 2
@@ -193,7 +200,11 @@ export function SpeakerAvatars({
           style={{
             zIndex: 0,
           }}
-          title={showTooltip ? `+${remainingCount} more speakers` : undefined}
+          title={
+            showTooltip
+              ? `${remainingCount} more speaker${remainingCount > 1 ? 's' : ''}`
+              : undefined
+          }
         >
           <span
             className={`${classes.text} text-brand-cloud-blue-dark font-medium`}
@@ -229,9 +240,6 @@ export function SpeakerAvatarsWithNames({
     return null
   }
 
-  const visibleSpeakers = populatedSpeakers.slice(0, maxVisible)
-  const remainingCount = populatedSpeakers.length - maxVisible
-
   return (
     <div className="flex items-center space-x-3">
       <SpeakerAvatars
@@ -242,8 +250,7 @@ export function SpeakerAvatarsWithNames({
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-brand-slate-gray">
-          {visibleSpeakers.map((speaker) => speaker.name).join(', ')}
-          {remainingCount > 0 && ` +${remainingCount} more`}
+          {formatSpeakerNames(populatedSpeakers)}
         </p>
       </div>
     </div>

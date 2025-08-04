@@ -9,6 +9,7 @@ import {
   ChevronUpIcon,
 } from '@heroicons/react/24/outline'
 import { TrackTalk } from '@/lib/conference/types'
+import { formatSpeakerNamesFromUnknown } from '@/lib/speaker/formatSpeakerNames'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { BookmarkButton } from '@/components/BookmarkButton'
 import { useBookmarks } from '@/contexts/BookmarksContext'
@@ -139,7 +140,6 @@ export function TalkCard({
 
   const { talk: talkData } = talk
   const primarySpeaker = talkData.speakers?.[0]
-  const hasMultipleSpeakers = talkData.speakers && talkData.speakers.length > 1
   const minHeight = getSmartHeight(durationMinutes)
 
   // Create bookmark data for this talk
@@ -221,19 +221,9 @@ export function TalkCard({
                       compact ? 'text-xs' : 'text-sm',
                     )}
                   >
-                    {primarySpeaker &&
-                      typeof primarySpeaker === 'object' &&
-                      'name' in primarySpeaker && (
-                        <div className="truncate font-medium text-brand-cloud-blue">
-                          {primarySpeaker.name}
-                          {hasMultipleSpeakers && (
-                            <span className="font-normal text-gray-500">
-                              {' '}
-                              +{talkData.speakers.length - 1} more
-                            </span>
-                          )}
-                        </div>
-                      )}
+                    <div className="truncate font-medium text-brand-cloud-blue">
+                      {formatSpeakerNamesFromUnknown(talkData.speakers)}
+                    </div>
                   </div>
                 </div>
               )}
