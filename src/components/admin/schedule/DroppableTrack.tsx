@@ -1,5 +1,6 @@
 'use client'
 
+import React, { useCallback, useMemo, useEffect, useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import {
@@ -7,6 +8,7 @@ import {
   generateTimeSlots,
   TimeSlot,
   findAvailableTimeSlot,
+  canSwapTalks,
 } from '@/lib/schedule/types'
 import { DraggableProposal } from './DraggableProposal'
 import { DraggableServiceSession } from './DraggableServiceSession'
@@ -15,9 +17,8 @@ import {
   TrashIcon,
   PlusIcon,
   DocumentDuplicateIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
-import { useState, useMemo, useCallback, useEffect } from 'react'
-import React from 'react'
 
 interface DroppableTrackProps {
   track: ScheduleTrack
@@ -38,6 +39,7 @@ interface TimeSlotDropZoneProps {
   track: ScheduleTrack
   activeDragItem?: DragItem | null
   onCreateServiceSession: (timeSlot: string) => void
+  onSwapHover?: (timeSlot: string | null) => void
 }
 
 interface ServiceSessionModalProps {
@@ -436,6 +438,7 @@ const TimeSlotDropZone = ({
   track,
   activeDragItem,
   onCreateServiceSession,
+  onSwapHover,
 }: TimeSlotDropZoneProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `track-${trackIndex}-time-${timeSlot.time}`,
@@ -446,6 +449,33 @@ const TimeSlotDropZone = ({
     },
   })
 
+  // Handle swap hover detection
+  useEffect(() => {
+    if (!onSwapHover) return
+
+    const occupiedTalk = track.talks.find(
+      (talk) => talk.startTime === timeSlot.time,
+    )
+    const isSwapOperation =
+      occupiedTalk &&
+      occupiedTalk.talk &&
+      activeDragItem?.type === 'scheduled-talk' &&
+      activeDragItem.proposal &&
+      isOver
+
+    // Prevent self-swap indication - don't trigger hover for the same talk being dragged
+    const isSelfSwap =
+      isSwapOperation &&
+      activeDragItem?.proposal?._id === occupiedTalk?.talk?._id &&
+      activeDragItem?.sourceTimeSlot === timeSlot.time
+
+    if (isSwapOperation && !isSelfSwap) {
+      onSwapHover(timeSlot.time)
+    } else if (isOver) {
+      onSwapHover(null)
+    }
+  }, [isOver, timeSlot.time, track.talks, activeDragItem, onSwapHover])
+
   // Memoize canDrop calculation
   const canDrop = useMemo(() => {
     if (!activeDragItem) return true
@@ -453,6 +483,40 @@ const TimeSlotDropZone = ({
     // Only check conflicts for proposals (talks), not service sessions
     if (!activeDragItem.proposal) return true
 
+    // Check if this time slot is occupied by another talk
+    const occupiedTalk = track.talks.find(
+      (talk) => talk.startTime === timeSlot.time,
+    )
+
+    if (occupiedTalk && occupiedTalk.talk) {
+      // Slot is occupied - check if we can swap
+      // Only allow swapping for scheduled talks (not unassigned proposals)
+      if (
+        activeDragItem.type === 'scheduled-talk' &&
+        activeDragItem.sourceTrackIndex !== undefined &&
+        activeDragItem.sourceTimeSlot !== undefined
+      ) {
+        // Prevent self-swap - don't allow dropping on the same talk
+        if (
+          activeDragItem.proposal._id === occupiedTalk.talk._id &&
+          activeDragItem.sourceTimeSlot === timeSlot.time
+        ) {
+          return false
+        }
+
+        return canSwapTalks(
+          track,
+          activeDragItem.proposal,
+          occupiedTalk,
+          timeSlot.time,
+        )
+      }
+
+      // Can't drop unassigned proposal on occupied slot
+      return false
+    }
+
+    // Slot is empty - use existing conflict detection
     // If moving a scheduled talk within the same track, exclude it from conflict detection
     const excludeTalk =
       activeDragItem.type === 'scheduled-talk' &&
@@ -490,7 +554,11 @@ const TimeSlotDropZone = ({
 
   const dropZoneClasses = useMemo(() => {
     const baseClasses = 'absolute right-0 left-0 h-3 border-b border-gray-100'
-    if (isOver && canDrop) return `${baseClasses} border-blue-300 bg-blue-100`
+
+    if (isOver && canDrop) {
+      return `${baseClasses} border-blue-300 bg-blue-100` // Blue for valid drop
+    }
+
     if (isOver && !canDrop) return `${baseClasses} border-red-300 bg-red-100`
     return baseClasses
   }, [isOver, canDrop])
@@ -510,6 +578,20 @@ const TimeSlotDropZone = ({
           {timeSlot.displayTime}
         </div>
       )}
+
+      {/* Swap indicator - show when dragging over occupied slot for swap */}
+      {isOccupied &&
+        activeDragItem?.type === 'scheduled-talk' &&
+        isOver &&
+        canDrop && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center">
+            <div className="flex animate-bounce items-center gap-2 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white shadow-xl">
+              <ArrowsRightLeftIcon className="h-4 w-4 animate-pulse" />
+              <span className="font-semibold">SWAP</span>
+              <ArrowsRightLeftIcon className="h-4 w-4 animate-pulse" />
+            </div>
+          </div>
+        )}
 
       {/* Add service session button - only show when not occupied and not dragging */}
       {!isOccupied && !activeDragItem && (
@@ -537,11 +619,15 @@ const ScheduledTalk = ({
   talkIndex,
   trackIndex,
   onRemoveTalk,
+  activeDragItem,
+  hoveredSwapTimeSlot,
 }: {
   talk: TrackTalk
   talkIndex: number
   trackIndex: number
   onRemoveTalk: (index: number) => void
+  activeDragItem?: DragItem | null
+  hoveredSwapTimeSlot?: string | null
 }) => {
   const position = useMemo(() => calculateTalkPosition(talk), [talk])
 
@@ -549,23 +635,57 @@ const ScheduledTalk = ({
     onRemoveTalk(talkIndex)
   }, [onRemoveTalk, talkIndex])
 
+  // Check if this talk is the target of a potential swap
+  const isSwapTarget = useMemo(() => {
+    if (!activeDragItem?.proposal || !talk.talk || !hoveredSwapTimeSlot)
+      return false
+
+    // Only show swap indication for scheduled talk drags (not unassigned proposals)
+    if (activeDragItem.type !== 'scheduled-talk') return false
+
+    // Don't show swap indication for the talk being dragged itself
+    if (
+      activeDragItem.proposal._id === talk.talk._id &&
+      activeDragItem.sourceTimeSlot === talk.startTime
+    ) {
+      return false
+    }
+
+    // Show swap indication only for the talk at the hovered time slot
+    return talk.startTime === hoveredSwapTimeSlot
+  }, [activeDragItem, talk.talk, talk.startTime, hoveredSwapTimeSlot])
+
   if (!talk.talk) return null
 
   return (
     <div
       key={`${talk.talk._id}-${talk.startTime}`}
-      className="group absolute right-2 left-2 z-10"
+      className={`group absolute right-2 left-2 z-10 transition-all duration-200 ${
+        isSwapTarget ? 'animate-pulse' : ''
+      }`}
       style={{
         top: `${position.top}px`,
         height: `${position.height}px`,
       }}
     >
-      <div className="relative h-full">
+      <div
+        className={`relative h-full transition-all duration-200 ${
+          isSwapTarget
+            ? 'ring-opacity-75 scale-105 transform shadow-lg ring-2 ring-amber-400'
+            : ''
+        }`}
+      >
         <DraggableProposal
           proposal={talk.talk}
           sourceTrackIndex={trackIndex}
           sourceTimeSlot={talk.startTime}
+          isDragging={isSwapTarget}
         />
+        {isSwapTarget && (
+          <div className="absolute -top-2 -right-2 z-30 rounded-full border border-amber-300 bg-amber-100 p-1 shadow-lg">
+            <ArrowsRightLeftIcon className="h-3 w-3 text-amber-600" />
+          </div>
+        )}
         <button
           onClick={handleRemove}
           className="absolute top-0.5 right-0.5 z-20 rounded-full bg-red-100 p-0.5 text-red-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-200 hover:opacity-100"
@@ -689,6 +809,9 @@ function DroppableTrack({
   const [editDescription, setEditDescription] = useState(track.trackDescription)
   const [showServiceModal, setShowServiceModal] = useState(false)
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('')
+  const [hoveredSwapTimeSlot, setHoveredSwapTimeSlot] = useState<string | null>(
+    null,
+  )
 
   // Memoize expensive calculations
   const timeSlots = useMemo(
@@ -873,6 +996,7 @@ function DroppableTrack({
             track={track}
             activeDragItem={activeDragItem}
             onCreateServiceSession={handleCreateServiceSession}
+            onSwapHover={setHoveredSwapTimeSlot}
           />
         ))}
 
@@ -901,6 +1025,8 @@ function DroppableTrack({
                 talkIndex={talkIndex}
                 trackIndex={trackIndex}
                 onRemoveTalk={onRemoveTalk}
+                activeDragItem={activeDragItem}
+                hoveredSwapTimeSlot={hoveredSwapTimeSlot}
               />
             )
           }

@@ -11,6 +11,7 @@ import {
   calculateEndTime,
   getProposalDurationMinutes,
   findAvailableTimeSlot,
+  canSwapTalks,
 } from '@/lib/schedule/types'
 
 export interface UseScheduleEditorReturn {
@@ -148,6 +149,111 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
     [],
   )
 
+  // Helper function to perform swap operation
+  const performSwap = useCallback(
+    (
+      dragItem: DragItem,
+      targetTalk: TrackTalk,
+      dropPosition: DropPosition,
+    ): { success: boolean; updatedSchedule?: ConferenceSchedule } => {
+      if (!schedule || !dragItem.proposal || !targetTalk.talk)
+        return { success: false }
+
+      const { proposal } = dragItem
+      const { trackIndex, timeSlot } = dropPosition
+
+      // Calculate durations and end times
+      const draggedDuration = getProposalDurationMinutes(proposal)
+      const draggedEndTime = calculateEndTime(timeSlot, draggedDuration)
+
+      const targetDuration = getProposalDurationMinutes(targetTalk.talk)
+      const targetEndTime = calculateEndTime(
+        dragItem.sourceTimeSlot!,
+        targetDuration,
+      )
+
+      let updatedSchedule: ConferenceSchedule | null = null
+
+      setSchedule((prev) => {
+        if (!prev) return prev
+
+        const newSchedule = { ...prev }
+        const newTracks = [...newSchedule.tracks]
+
+        // Remove both talks from their current positions
+        // 1. Remove dragged talk from source
+        if (
+          dragItem.sourceTrackIndex !== undefined &&
+          dragItem.sourceTimeSlot !== undefined
+        ) {
+          const sourceTrack = newTracks[dragItem.sourceTrackIndex]
+          const newSourceTalks = sourceTrack.talks.filter(
+            (talk) =>
+              !(
+                talk.talk?._id === proposal._id &&
+                talk.startTime === dragItem.sourceTimeSlot
+              ),
+          )
+          newTracks[dragItem.sourceTrackIndex] = {
+            ...sourceTrack,
+            talks: newSourceTalks,
+          }
+        }
+
+        // 2. Remove target talk from its current position
+        const currentTargetTrack = newTracks[trackIndex]
+        const newTargetTalks = currentTargetTrack.talks.filter(
+          (talk) =>
+            !(
+              talk.talk?._id === targetTalk.talk!._id &&
+              talk.startTime === targetTalk.startTime
+            ),
+        )
+
+        // 3. Add dragged proposal to target position
+        const newDraggedTalk: TrackTalk = {
+          talk: proposal,
+          startTime: timeSlot,
+          endTime: draggedEndTime,
+        }
+
+        newTracks[trackIndex] = {
+          ...currentTargetTrack,
+          talks: [...newTargetTalks, newDraggedTalk].sort((a, b) =>
+            a.startTime.localeCompare(b.startTime),
+          ),
+        }
+
+        // 4. Add target talk to source position
+        if (
+          dragItem.sourceTrackIndex !== undefined &&
+          dragItem.sourceTimeSlot !== undefined
+        ) {
+          const newTargetTalkAtSource: TrackTalk = {
+            talk: targetTalk.talk,
+            startTime: dragItem.sourceTimeSlot,
+            endTime: targetEndTime,
+          }
+
+          const finalSourceTrack = newTracks[dragItem.sourceTrackIndex]
+          newTracks[dragItem.sourceTrackIndex] = {
+            ...finalSourceTrack,
+            talks: [...finalSourceTrack.talks, newTargetTalkAtSource].sort(
+              (a, b) => a.startTime.localeCompare(b.startTime),
+            ),
+          }
+        }
+
+        newSchedule.tracks = newTracks
+        updatedSchedule = newSchedule
+        return newSchedule
+      })
+
+      return { success: true, updatedSchedule: updatedSchedule || undefined }
+    },
+    [schedule],
+  )
+
   const moveTalkToTrack = useCallback(
     (
       dragItem: DragItem,
@@ -165,7 +271,33 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       const durationMinutes = getProposalDurationMinutes(proposal)
       const endTime = calculateEndTime(timeSlot, durationMinutes)
 
-      // Check for conflicts
+      // Check if target slot is occupied
+      const occupiedTalk = targetTrack.talks.find(
+        (talk) => talk.startTime === timeSlot,
+      )
+
+      // Handle swap operation
+      if (
+        occupiedTalk &&
+        occupiedTalk.talk &&
+        dragItem.type === 'scheduled-talk' &&
+        dragItem.sourceTrackIndex !== undefined &&
+        dragItem.sourceTimeSlot !== undefined
+      ) {
+        // Validate swap is possible
+        if (!canSwapTalks(targetTrack, proposal, occupiedTalk, timeSlot)) {
+          return { success: false }
+        }
+
+        return performSwap(dragItem, occupiedTalk, dropPosition)
+      }
+
+      // Handle normal move (to empty slot)
+      if (occupiedTalk) {
+        return { success: false } // Slot is occupied and we can't swap
+      }
+
+      // Check for conflicts in normal move
       const excludeTalk =
         dragItem.type === 'scheduled-talk' &&
         dragItem.sourceTrackIndex === trackIndex
@@ -232,7 +364,7 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
 
       return { success: true, updatedSchedule: updatedSchedule || undefined }
     },
-    [schedule],
+    [schedule, performSwap],
   )
 
   const moveServiceSessionToTrack = useCallback(

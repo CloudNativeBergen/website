@@ -1,4 +1,8 @@
-import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
+import {
+  ConferenceSchedule,
+  ScheduleTrack,
+  TrackTalk,
+} from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 
 export interface DropPosition {
@@ -140,4 +144,39 @@ export function findAvailableTimeSlot(
   })
 
   return hasConflict ? null : startTime
+}
+
+// Helper to check if a swap operation would be valid (no collisions)
+export function canSwapTalks(
+  track: ScheduleTrack,
+  draggedProposal: ProposalExisting,
+  targetTalk: TrackTalk,
+  targetStartTime: string,
+): boolean {
+  if (!targetTalk.talk) return false
+
+  const draggedDuration = getProposalDurationMinutes(draggedProposal)
+  const draggedEndTime = calculateEndTime(targetStartTime, draggedDuration)
+
+  // Check if the dragged proposal (placed at target position) conflicts with other talks
+  const draggedHasConflict = track.talks.some((talk) => {
+    if (!talk.talk) return false
+
+    // Exclude the target talk being swapped
+    if (
+      talk.talk._id === targetTalk.talk!._id &&
+      talk.startTime === targetTalk.startTime
+    ) {
+      return false
+    }
+
+    return timesOverlap(
+      targetStartTime,
+      draggedEndTime,
+      talk.startTime,
+      talk.endTime,
+    )
+  })
+
+  return !draggedHasConflict
 }
