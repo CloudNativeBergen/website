@@ -225,9 +225,9 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
             className="ui-not-focus-visible:outline-none"
           >
             <div className="space-y-3">
-              {track.talks.map((talk) => (
+              {track.talks.map((talk, talkIndex) => (
                 <TalkCard
-                  key={`${trackIndex}-${talk.startTime}`}
+                  key={`mobile-talk-${trackIndex}-${talkIndex}-${talk.startTime}-${talk.talk?._id || talk.placeholder || 'empty'}`}
                   talk={{
                     ...talk,
                     scheduleDate: date,
@@ -308,11 +308,12 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
 
                 return (
                   <div
-                    key={`${timeSlot}-${trackIndex}`}
+                    key={`${timeSlot}-track-${trackIndex}-${track.trackTitle}`}
                     className="min-h-[60px]"
                   >
                     {talk ? (
                       <TalkCard
+                        key={`talk-${timeSlot}-${trackIndex}-${talk.talk?._id || talk.placeholder || 'empty'}`}
                         talk={{
                           ...talk,
                           scheduleDate: date,
