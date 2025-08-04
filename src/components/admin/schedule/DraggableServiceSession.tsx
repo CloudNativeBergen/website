@@ -3,7 +3,7 @@
 import { useDraggable } from '@dnd-kit/core'
 import { useMemo } from 'react'
 import { TrackTalk } from '@/lib/conference/types'
-import { ClockIcon, Bars3Icon, CogIcon } from '@heroicons/react/24/outline'
+import { ClockIcon, Bars3Icon } from '@heroicons/react/24/outline'
 
 interface DraggableServiceSessionProps {
   serviceSession: TrackTalk
@@ -16,7 +16,8 @@ interface DraggableServiceSessionProps {
 const MINUTES_TO_PIXELS = 2.4
 const SERVICE_SESSION_THRESHOLDS = {
   SHORT: 15,
-  MEDIUM: 45,
+  MEDIUM: 30,
+  LONG: 45,
 } as const
 
 export function DraggableServiceSession({
@@ -33,10 +34,11 @@ export function DraggableServiceSession({
     const duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60)
 
     // Determine session size category
-    let size: 'short' | 'medium' | 'long'
+    let size: 'short' | 'medium' | 'long' | 'very-long'
     if (duration <= SERVICE_SESSION_THRESHOLDS.SHORT) size = 'short'
     else if (duration <= SERVICE_SESSION_THRESHOLDS.MEDIUM) size = 'medium'
-    else size = 'long'
+    else if (duration <= SERVICE_SESSION_THRESHOLDS.LONG) size = 'long'
+    else size = 'very-long'
 
     const type =
       sourceTrackIndex !== undefined ? 'scheduled-service' : 'service-session'
@@ -81,7 +83,7 @@ export function DraggableServiceSession({
   // Memoize class names
   const containerClasses = useMemo(() => {
     const baseClasses =
-      'relative max-w-full overflow-hidden rounded-lg border bg-gray-100 shadow-sm transition-shadow duration-200 hover:shadow-md border-l-4 border-l-orange-500'
+      'relative max-w-full overflow-hidden rounded-lg border bg-gray-100 shadow-sm transition-shadow duration-200 hover:shadow-md'
     const opacityClass = isBeingDragged
       ? 'opacity-30'
       : isDragging
@@ -94,18 +96,21 @@ export function DraggableServiceSession({
 
   // Title component based on session size
   const TitleComponent = useMemo(() => {
-    const titleClasses = 'pr-1 text-gray-700 font-medium truncate'
+    const titleClasses = 'pr-1 text-gray-900 truncate'
 
     switch (sessionSize) {
       case 'short':
+      case 'medium':
         return (
-          <h3 className={`line-clamp-1 text-xs leading-tight ${titleClasses}`}>
+          <h3
+            className={`line-clamp-1 text-xs leading-tight font-medium ${titleClasses}`}
+          >
             {serviceSession.placeholder || 'Service Session'}
           </h3>
         )
       default:
         return (
-          <h3 className={`line-clamp-2 text-sm ${titleClasses}`}>
+          <h3 className={`line-clamp-2 text-sm font-semibold ${titleClasses}`}>
             {serviceSession.placeholder || 'Service Session'}
           </h3>
         )
@@ -122,8 +127,8 @@ export function DraggableServiceSession({
       className={containerClasses}
       {...attributes}
     >
-      {/* Header row with drag handle, title, and duration */}
-      <div className="flex min-h-[16px] items-start gap-1">
+      {/* Header row with drag handle and title */}
+      <div className="flex min-h-[16px] items-center gap-1">
         {/* Drag handle */}
         <div
           className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-200"
@@ -132,39 +137,32 @@ export function DraggableServiceSession({
           <Bars3Icon className="h-3 w-3 text-gray-500" />
         </div>
 
-        {/* Service icon */}
-        <div className="flex-shrink-0 pt-0.5">
-          <CogIcon
-            className={
-              sessionSize === 'short'
-                ? 'h-2.5 w-2.5 text-orange-500'
-                : 'h-3 w-3 text-orange-500'
-            }
-          />
-        </div>
-
-        {/* Title - takes remaining space */}
+        {/* Title - takes remaining space and aligns with other proposals */}
         <div className="min-w-0 flex-1">{TitleComponent}</div>
 
         {/* Duration indicator */}
         <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500">
           <ClockIcon
-            className={sessionSize === 'short' ? 'h-2.5 w-2.5' : 'h-3 w-3'}
+            className={
+              sessionSize === 'short' || sessionSize === 'medium'
+                ? 'h-2.5 w-2.5'
+                : 'h-3 w-3'
+            }
           />
           <span className="tabular-nums">{durationMinutes}m</span>
         </div>
       </div>
 
-      {/* Content below header - only for medium and long sessions */}
-      {(sessionSize === 'medium' || sessionSize === 'long') && (
+      {/* Content below header - only for long and very-long sessions (30+ minutes) */}
+      {(sessionSize === 'long' || sessionSize === 'very-long') && (
         <div className="mt-1 space-y-1">
-          {/* Session type indicator */}
+          {/* Session type indicator - only show for sessions 30+ minutes */}
           <div className="flex items-center gap-1 text-xs text-orange-600">
             <span>Service Session</span>
           </div>
 
-          {/* Time range for long sessions */}
-          {sessionSize === 'long' && (
+          {/* Time range for very-long sessions */}
+          {sessionSize === 'very-long' && (
             <div className="text-xs text-gray-500">
               {serviceSession.startTime} - {serviceSession.endTime}
             </div>

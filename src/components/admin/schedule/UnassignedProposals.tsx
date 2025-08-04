@@ -388,7 +388,7 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
           <div className="flex items-center gap-2">
             <span className="font-medium text-gray-700">Status:</span>
             <div className="h-3 w-3 rounded border-2 border-amber-300 bg-amber-50"></div>
-            <span>Accepted (not confirmed)</span>
+            <span>Accepted</span>
             <div className="h-3 w-3 rounded border border-gray-200 bg-white"></div>
             <span>Confirmed</span>
           </div>
