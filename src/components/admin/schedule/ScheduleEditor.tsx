@@ -49,18 +49,18 @@ const BUTTON_STYLES = {
     'inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500',
   danger:
     'flex-1 rounded-md bg-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500',
-} as const
+}
 
 const LAYOUT_CLASSES = {
-  container: 'flex h-full',
-  sidebar: 'border-r border-gray-200 bg-gray-50',
-  mainArea: 'flex flex-1 flex-col',
-  header: 'border-b border-gray-200 bg-white p-4',
-  content: 'flex-1 overflow-auto',
-  tracksContainer: 'p-4',
-  tracksGrid: 'flex min-h-full gap-4',
+  container: 'flex h-[calc(100vh-5rem)]', // Reduced height calculation to account for added padding
+  sidebar: 'border-r border-gray-200 bg-gray-50 flex-shrink-0',
+  mainArea: 'flex flex-1 flex-col min-h-0 min-w-0',
+  header: 'border-b border-gray-200 bg-white px-4 py-2 flex-shrink-0',
+  content: 'flex-1 min-h-0 overflow-auto px-2 pt-4', // Add top padding for breathing room
+  tracksContainer: 'h-full overflow-y-auto', // Enable vertical scrolling within tracks
+  tracksGrid: 'flex gap-4 h-max', // Use content height instead of full height
   emptyState: 'flex flex-1 items-center justify-center',
-  errorBanner: 'border-b border-red-200 bg-red-50 p-4',
+  errorBanner: 'border-b border-red-200 bg-red-50 px-4 py-2 flex-shrink-0',
 } as const
 
 // Memoized HeaderSection component
@@ -99,7 +99,6 @@ const HeaderSection = ({
 
     return (
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-700">Day:</span>
         <div className="flex rounded-lg border border-gray-300 bg-white">
           {schedules.map((daySchedule, index) => {
             const isActive = index === currentDayIndex
@@ -154,7 +153,7 @@ const HeaderSection = ({
             type="button"
           >
             <PlusIcon className="h-4 w-4" />
-            Add Track
+            Track
           </button>
           <button
             onClick={onSave}
@@ -174,7 +173,7 @@ const HeaderSection = ({
             ) : (
               <>
                 <BookmarkIcon className="h-4 w-4" />
-                {isSaving ? 'Saving...' : 'Save Schedule'}
+                {isSaving ? 'Saving...' : 'Save'}
               </>
             )}
           </button>
@@ -233,21 +232,19 @@ const TracksGrid = ({
   activeItem: DragItem | null
 }) => {
   return (
-    <div className={LAYOUT_CLASSES.tracksContainer}>
-      <div className={LAYOUT_CLASSES.tracksGrid}>
-        {tracks.map((track, index) => (
-          <DroppableTrack
-            key={`track-${index}-${track.trackTitle}`} // More stable key
-            track={track}
-            trackIndex={index}
-            onUpdateTrack={(updatedTrack) => onUpdateTrack(index, updatedTrack)}
-            onRemoveTrack={() => onRemoveTrack(index)}
-            onRemoveTalk={(talkIndex) => onRemoveTalk(index, talkIndex)}
-            onDuplicateServiceSession={onDuplicateServiceSession}
-            activeDragItem={activeItem}
-          />
-        ))}
-      </div>
+    <div className={LAYOUT_CLASSES.tracksGrid}>
+      {tracks.map((track, index) => (
+        <DroppableTrack
+          key={`track-${index}-${track.trackTitle}`} // More stable key
+          track={track}
+          trackIndex={index}
+          onUpdateTrack={(updatedTrack) => onUpdateTrack(index, updatedTrack)}
+          onRemoveTrack={() => onRemoveTrack(index)}
+          onRemoveTalk={(talkIndex) => onRemoveTalk(index, talkIndex)}
+          onDuplicateServiceSession={onDuplicateServiceSession}
+          activeDragItem={activeItem}
+        />
+      ))}
     </div>
   )
 }

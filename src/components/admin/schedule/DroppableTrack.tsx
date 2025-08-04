@@ -837,8 +837,9 @@ function DroppableTrack({
 
   return (
     <div
-      className="flex-1"
+      className="flex-shrink-0"
       style={{
+        width: `${TRACK_CONSTRAINTS.MIN_WIDTH}px`,
         minWidth: `${TRACK_CONSTRAINTS.MIN_WIDTH}px`,
         maxWidth: `${TRACK_CONSTRAINTS.MAX_WIDTH}px`,
       }}

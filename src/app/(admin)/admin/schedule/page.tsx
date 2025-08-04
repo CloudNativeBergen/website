@@ -34,7 +34,7 @@ export default async function AdminSchedule() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="-mx-2 -my-8 sm:-mx-4 lg:-mx-8">
       <ScheduleEditor
         initialSchedules={schedules}
         conference={conference}
