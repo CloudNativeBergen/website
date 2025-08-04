@@ -16,7 +16,7 @@ interface DraggableServiceSessionProps {
 const MINUTES_TO_PIXELS = 2.4
 const SERVICE_SESSION_THRESHOLDS = {
   SHORT: 15,
-  MEDIUM: 30,
+  MEDIUM: 25,
   LONG: 45,
 } as const
 
