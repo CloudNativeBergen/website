@@ -271,6 +271,17 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       const durationMinutes = getProposalDurationMinutes(proposal)
       const endTime = calculateEndTime(timeSlot, durationMinutes)
 
+      // Simple duplicate detection: Check if this talk already exists elsewhere in the schedule
+      // (unless we're just moving it within the same schedule)
+      if (dragItem.type !== 'scheduled-talk') {
+        const isDuplicate = schedule.tracks.some((track) =>
+          track.talks.some((talk) => talk.talk?._id === proposal._id),
+        )
+        if (isDuplicate) {
+          return { success: false } // Talk already exists in schedule
+        }
+      }
+
       // Check if target slot is occupied
       const occupiedTalk = targetTrack.talks.find(
         (talk) => talk.startTime === timeSlot,
