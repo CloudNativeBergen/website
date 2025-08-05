@@ -28,7 +28,7 @@ export default async function Speakers() {
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="mx-auto max-w-2xl lg:mx-0">
               <h2 className="font-jetbrains text-3xl font-bold tracking-tight text-brand-slate-gray sm:text-4xl">
-                Meet our speakers
+                Meet our {speakersWithTalks.length} speakers
               </h2>
               <p className="mt-6 text-lg leading-8 text-brand-cloud-gray">
                 These industry experts will share their insights and experiences
