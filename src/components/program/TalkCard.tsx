@@ -7,6 +7,7 @@ import {
   PlayIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { TrackTalk } from '@/lib/conference/types'
 import { Status } from '@/lib/proposal/types'
@@ -146,6 +147,10 @@ export function TalkCard({
   // Check if talk is confirmed
   const isConfirmed = talkData.status === Status.confirmed
 
+  // Check if talk is withdrawn or rejected
+  const isWithdrawnOrRejected =
+    talkData.status === Status.withdrawn || talkData.status === Status.rejected
+
   // Create bookmark data for this talk
   const bookmarkData = {
     talkId:
@@ -173,12 +178,15 @@ export function TalkCard({
     <div
       className={clsx(
         'rounded-lg border transition-all duration-200 hover:shadow-md',
-        !isConfirmed && 'opacity-75', // Reduce opacity for unconfirmed talks
+        !isConfirmed && !isWithdrawnOrRejected && 'opacity-75', // Reduce opacity for unconfirmed talks
+        isWithdrawnOrRejected && 'opacity-60', // More reduced opacity for withdrawn/rejected
         isBookmarkedTalk
           ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80'
           : isConfirmed
             ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue'
-            : 'border-gray-300 bg-gray-50 hover:border-gray-400', // Different styling for unconfirmed
+            : isWithdrawnOrRejected
+              ? 'border-red-300 bg-red-50 hover:border-red-400' // Red styling for withdrawn/rejected
+              : 'border-gray-300 bg-gray-50 hover:border-gray-400', // Different styling for unconfirmed
         compact ? 'p-3' : 'p-6',
       )}
       style={fixedHeight ? { minHeight } : {}}
@@ -196,7 +204,8 @@ export function TalkCard({
               <h3
                 className={clsx(
                   'font-space-grotesk font-semibold',
-                  !isConfirmed && 'text-gray-500', // Grayed out for unconfirmed
+                  isWithdrawnOrRejected && 'text-red-500', // Red text for withdrawn/rejected
+                  !isConfirmed && !isWithdrawnOrRejected && 'text-gray-500', // Grayed out for unconfirmed
                   isConfirmed && 'text-brand-slate-gray',
                   compact ? 'text-sm leading-tight' : 'text-base',
                 )}
@@ -214,10 +223,19 @@ export function TalkCard({
                   ) : (
                     talkData.title
                   )
+                ) : isWithdrawnOrRejected ? (
+                  <span className="flex items-center gap-2">
+                    <span>This session has been cancelled</span>
+                    <span className="inline-flex items-center gap-1 rounded bg-red-100 px-6 py-1 text-xs font-medium whitespace-nowrap text-red-800">
+                      <XMarkIcon className="h-3 w-3" />
+                      Cancelled
+                    </span>
+                  </span>
                 ) : (
                   <span className="flex items-center gap-2">
                     <span>Talk details to be announced</span>
-                    <span className="inline-flex items-center rounded bg-yellow-100 px-6 py-1 text-xs font-medium whitespace-nowrap text-yellow-800">
+                    <span className="inline-flex items-center gap-1 rounded bg-yellow-100 px-6 py-1 text-xs font-medium whitespace-nowrap text-yellow-800">
+                      <ClockIcon className="h-3 w-3" />
                       To be announced
                     </span>
                   </span>
@@ -253,7 +271,7 @@ export function TalkCard({
                 )}
 
               {/* Placeholder for unconfirmed talks */}
-              {!isConfirmed && (
+              {!isConfirmed && !isWithdrawnOrRejected && (
                 <div
                   className={clsx(
                     'flex items-center gap-2',
@@ -272,6 +290,31 @@ export function TalkCard({
                   >
                     <div className="font-medium text-gray-400">
                       Speaker to be announced
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Placeholder for withdrawn/rejected talks */}
+              {isWithdrawnOrRejected && (
+                <div
+                  className={clsx(
+                    'flex items-center gap-2',
+                    compact ? 'mt-1' : 'mt-2',
+                  )}
+                >
+                  <div className="flex -space-x-2">
+                    <div className="h-8 w-8 rounded-full bg-red-200"></div>
+                    <div className="h-8 w-8 rounded-full bg-red-100"></div>
+                  </div>
+                  <div
+                    className={clsx(
+                      'min-w-0 flex-1',
+                      compact ? 'text-xs' : 'text-sm',
+                    )}
+                  >
+                    <div className="font-medium text-red-400">
+                      Session cancelled
                     </div>
                   </div>
                 </div>
@@ -355,11 +398,21 @@ export function TalkCard({
           )}
 
         {/* Placeholder description for unconfirmed talks */}
-        {!compact && !isConfirmed && (
+        {!compact && !isConfirmed && !isWithdrawnOrRejected && (
           <div className="flex-1">
             <div className="text-sm text-gray-400 italic">
               Talk description will be available once the speaker confirms their
               participation.
+            </div>
+          </div>
+        )}
+
+        {/* Placeholder description for withdrawn/rejected talks */}
+        {!compact && isWithdrawnOrRejected && (
+          <div className="flex-1">
+            <div className="text-sm text-red-400 italic">
+              This session has been cancelled and will not be part of the
+              program.
             </div>
           </div>
         )}
@@ -451,10 +504,20 @@ export function TalkCard({
           )}
 
           {/* Basic info for unconfirmed talks */}
-          {!compact && !isConfirmed && (
+          {!compact && !isConfirmed && !isWithdrawnOrRejected && (
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
                 Details pending
+              </span>
+            </div>
+          )}
+
+          {/* Basic info for withdrawn/rejected talks */}
+          {!compact && isWithdrawnOrRejected && (
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-600">
+                <XMarkIcon className="h-3 w-3" />
+                Session cancelled
               </span>
             </div>
           )}

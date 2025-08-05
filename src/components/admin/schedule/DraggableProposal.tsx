@@ -124,6 +124,14 @@ export function DraggableProposal({
   const backgroundStyle = useMemo(() => {
     const topics = proposal.topics as Topic[]
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
+    const isWithdrawnOrRejected =
+      proposal.status === Status.withdrawn ||
+      proposal.status === Status.rejected
+
+    // For withdrawn/rejected proposals, background will be handled by CSS class
+    if (isWithdrawnOrRejected) {
+      return {} // Background handled by Tailwind class
+    }
 
     // For accepted but not confirmed proposals, background will be handled by CSS class
     if (isAcceptedButNotConfirmed) {
@@ -181,10 +189,15 @@ export function DraggableProposal({
   // Memoize class names with topic styling and status styling
   const containerClasses = useMemo(() => {
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
+    const isWithdrawnOrRejected =
+      proposal.status === Status.withdrawn ||
+      proposal.status === Status.rejected
 
-    const baseClasses = isAcceptedButNotConfirmed
-      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md'
-      : 'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md'
+    const baseClasses = isWithdrawnOrRejected
+      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-red-500 bg-red-100 shadow-sm transition-shadow duration-200 hover:shadow-md'
+      : isAcceptedButNotConfirmed
+        ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md'
+        : 'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md'
 
     const opacityClass = isBeingDragged
       ? 'opacity-30'
@@ -205,6 +218,24 @@ export function DraggableProposal({
   ]) // Title component based on talk size
   const TitleComponent = useMemo(() => {
     const titleClasses = 'pr-1 text-gray-900 truncate'
+    const isWithdrawnOrRejected =
+      proposal.status === Status.withdrawn ||
+      proposal.status === Status.rejected
+    const isAcceptedButNotConfirmed = proposal.status === Status.accepted
+
+    const titleContent = isWithdrawnOrRejected ? (
+      <span className="flex items-center gap-1">
+        <ExclamationTriangleIcon className="h-3 w-3 flex-shrink-0 text-red-500" />
+        <span className="truncate">{proposal.title}</span>
+      </span>
+    ) : isAcceptedButNotConfirmed ? (
+      <span className="flex items-center gap-1">
+        <ExclamationTriangleIcon className="h-3 w-3 flex-shrink-0 text-amber-500" />
+        <span className="truncate">{proposal.title}</span>
+      </span>
+    ) : (
+      proposal.title
+    )
 
     switch (talkSize) {
       case 'very-short':
@@ -212,7 +243,7 @@ export function DraggableProposal({
           <h3
             className={`line-clamp-1 text-xs leading-tight font-medium ${titleClasses}`}
           >
-            {proposal.title}
+            {titleContent}
           </h3>
         )
       case 'short':
@@ -220,17 +251,17 @@ export function DraggableProposal({
           <h3
             className={`line-clamp-2 text-xs leading-tight font-medium ${titleClasses}`}
           >
-            {proposal.title}
+            {titleContent}
           </h3>
         )
       default:
         return (
           <h3 className={`line-clamp-2 text-sm font-semibold ${titleClasses}`}>
-            {proposal.title}
+            {titleContent}
           </h3>
         )
     }
-  }, [talkSize, proposal.title])
+  }, [talkSize, proposal.title, proposal.status])
 
   // Speaker component
   const SpeakerComponent = useMemo(() => {
@@ -312,11 +343,21 @@ export function DraggableProposal({
     if (speakerInfo) parts.push(`👤 ${speakerInfo}`)
 
     // Status info
-    const statusEmoji = proposal.status === Status.accepted ? '⚠️' : '✅'
+    const statusEmoji =
+      proposal.status === Status.withdrawn ||
+      proposal.status === Status.rejected
+        ? '🚫'
+        : proposal.status === Status.accepted
+          ? '⚠️'
+          : '✅'
     const statusText =
-      proposal.status === Status.accepted
-        ? 'Accepted (not yet confirmed by speaker)'
-        : 'Confirmed'
+      proposal.status === Status.withdrawn
+        ? 'Withdrawn by speaker'
+        : proposal.status === Status.rejected
+          ? 'Rejected by organizers'
+          : proposal.status === Status.accepted
+            ? 'Accepted (not yet confirmed by speaker)'
+            : 'Confirmed'
     parts.push(`${statusEmoji} Status: ${statusText}`)
 
     // Level with emoji
@@ -383,12 +424,6 @@ export function DraggableProposal({
                 level={proposal.level}
                 className="flex-shrink-0"
                 size="xs"
-              />
-            )}
-            {proposal.status === Status.accepted && (
-              <ExclamationTriangleIcon
-                className="h-3 w-3 flex-shrink-0 text-amber-500"
-                title="Accepted but not yet confirmed by speaker"
               />
             )}
           </div>
