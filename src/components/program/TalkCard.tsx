@@ -142,7 +142,7 @@ export function TalkCard({
   const { talk: talkData } = talk
   const primarySpeaker = talkData.speakers?.[0]
   const minHeight = getSmartHeight(durationMinutes)
-  
+
   // Check if talk is confirmed
   const isConfirmed = talkData.status === Status.confirmed
 
@@ -156,10 +156,12 @@ export function TalkCard({
     endTime: talk.endTime,
     scheduleDate: talk.scheduleDate,
     trackTitle: talk.trackTitle,
-    speakers: isConfirmed 
+    speakers: isConfirmed
       ? talkData.speakers
           ?.map((speaker) =>
-            typeof speaker === 'object' && 'name' in speaker ? speaker.name : '',
+            typeof speaker === 'object' && 'name' in speaker
+              ? speaker.name
+              : '',
           )
           .filter(Boolean)
       : [],
@@ -175,8 +177,8 @@ export function TalkCard({
         isBookmarkedTalk
           ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80'
           : isConfirmed
-          ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue'
-          : 'border-gray-300 bg-gray-50 hover:border-gray-400', // Different styling for unconfirmed
+            ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue'
+            : 'border-gray-300 bg-gray-50 hover:border-gray-400', // Different styling for unconfirmed
         compact ? 'p-3' : 'p-6',
       )}
       style={fixedHeight ? { minHeight } : {}}
@@ -215,7 +217,7 @@ export function TalkCard({
                 ) : (
                   <span className="flex items-center gap-2">
                     <span>Talk details to be announced</span>
-                    <span className="inline-flex items-center rounded bg-yellow-100 px-6 py-1 text-xs font-medium text-yellow-800 whitespace-nowrap">
+                    <span className="inline-flex items-center rounded bg-yellow-100 px-6 py-1 text-xs font-medium whitespace-nowrap text-yellow-800">
                       To be announced
                     </span>
                   </span>
@@ -223,31 +225,33 @@ export function TalkCard({
               </h3>
 
               {/* Speaker Info */}
-              {isConfirmed && talkData.speakers && talkData.speakers.length > 0 && (
-                <div
-                  className={clsx(
-                    'flex items-center gap-2',
-                    compact ? 'mt-1' : 'mt-2',
-                  )}
-                >
-                  <SpeakerAvatars
-                    speakers={talkData.speakers}
-                    maxVisible={compact ? 2 : 3}
-                    size="sm"
-                  />
+              {isConfirmed &&
+                talkData.speakers &&
+                talkData.speakers.length > 0 && (
                   <div
                     className={clsx(
-                      'min-w-0 flex-1',
-                      compact ? 'text-xs' : 'text-sm',
+                      'flex items-center gap-2',
+                      compact ? 'mt-1' : 'mt-2',
                     )}
                   >
-                    <div className="truncate font-medium text-brand-cloud-blue">
-                      {formatSpeakerNamesFromUnknown(talkData.speakers)}
+                    <SpeakerAvatars
+                      speakers={talkData.speakers}
+                      maxVisible={compact ? 2 : 3}
+                      size="sm"
+                    />
+                    <div
+                      className={clsx(
+                        'min-w-0 flex-1',
+                        compact ? 'text-xs' : 'text-sm',
+                      )}
+                    >
+                      <div className="truncate font-medium text-brand-cloud-blue">
+                        {formatSpeakerNamesFromUnknown(talkData.speakers)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-              
+                )}
+
               {/* Placeholder for unconfirmed talks */}
               {!isConfirmed && (
                 <div
@@ -349,12 +353,13 @@ export function TalkCard({
               )}
             </div>
           )}
-          
+
         {/* Placeholder description for unconfirmed talks */}
         {!compact && !isConfirmed && (
           <div className="flex-1">
             <div className="text-sm text-gray-400 italic">
-              Talk description will be available once the speaker confirms their participation.
+              Talk description will be available once the speaker confirms their
+              participation.
             </div>
           </div>
         )}
@@ -444,7 +449,7 @@ export function TalkCard({
               )}
             </div>
           )}
-          
+
           {/* Basic info for unconfirmed talks */}
           {!compact && !isConfirmed && (
             <div className="flex flex-wrap gap-2">
