@@ -1,55 +1,8 @@
 import { sanityImage } from '@/lib/sanity/client'
 import { Speaker } from '@/lib/speaker/types'
 import { formatSpeakerNames } from '@/lib/speaker/formatSpeakerNames'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { Reference } from 'sanity'
-
-// Color palette for letter-based avatars
-const avatarColors = [
-  'bg-red-500',
-  'bg-orange-500',
-  'bg-amber-500',
-  'bg-yellow-500',
-  'bg-lime-500',
-  'bg-green-500',
-  'bg-emerald-500',
-  'bg-teal-500',
-  'bg-cyan-500',
-  'bg-sky-500',
-  'bg-blue-500',
-  'bg-indigo-500',
-  'bg-violet-500',
-  'bg-purple-500',
-  'bg-fuchsia-500',
-  'bg-pink-500',
-  'bg-rose-500',
-]
-
-// Generate consistent color based on first letter
-function getAvatarColor(name: string): string {
-  const firstLetter = name.charAt(0).toUpperCase()
-  const charCode = firstLetter.charCodeAt(0)
-  const colorIndex = charCode % avatarColors.length
-  return avatarColors[colorIndex]
-}
-
-// Get first letter for avatar
-function getAvatarLetter(name: string): string {
-  const nameParts = name.trim().split(/\s+/)
-
-  if (nameParts.length >= 2) {
-    // First letter of first name + first letter of last name
-    return (
-      nameParts[0].charAt(0).toUpperCase() +
-      nameParts[nameParts.length - 1].charAt(0).toUpperCase()
-    )
-  } else {
-    // If only one name part, use first two letters or just one if name is short
-    const singleName = nameParts[0]
-    return singleName.length >= 2
-      ? singleName.charAt(0).toUpperCase() + singleName.charAt(1).toUpperCase()
-      : singleName.charAt(0).toUpperCase()
-  }
-}
 
 interface SpeakerAvatarsProps {
   speakers: Speaker[] | Reference[]
@@ -174,13 +127,12 @@ export function SpeakerAvatars({
                 className="absolute inset-0 h-full w-full rounded-full object-cover object-center"
               />
             ) : (
-              <div
-                className={`absolute inset-0 flex h-full w-full items-center justify-center rounded-full ${getAvatarColor(speaker.name)}`}
-              >
-                <span className={`${classes.text} font-bold text-white`}>
-                  {getAvatarLetter(speaker.name)}
-                </span>
-              </div>
+              <MissingAvatar
+                name={speaker.name}
+                size={imageDimensions[size].width / 2} // Use half of the 2x retina dimension for display size
+                className="absolute inset-0 rounded-full"
+                textSizeClass={classes.text}
+              />
             )}
           </div>
         )

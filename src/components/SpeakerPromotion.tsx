@@ -1,4 +1,5 @@
 import { CloudNativePattern } from '@/components/CloudNativePattern'
+import { MissingAvatar } from '@/components/common/MissingAvatar'
 import {
   ArrowRightIcon,
   BuildingOfficeIcon,
@@ -13,7 +14,6 @@ import {
   TrophyIcon,
   LightBulbIcon,
 } from '@heroicons/react/24/solid'
-import Image from 'next/image'
 import { sanityImage } from '@/lib/sanity/client'
 import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
@@ -244,7 +244,7 @@ const SpeakerImage = ({
 }: SpeakerImageProps) => {
   if (image) {
     return (
-      <Image
+      <img
         src={sanityImage(image)
           .width(size * 2) // 2x for high-DPI
           .height(size * 2)
@@ -258,18 +258,7 @@ const SpeakerImage = ({
     )
   }
 
-  const iconSize = Math.round(size * 0.4)
-  return (
-    <div
-      className={`flex items-center justify-center bg-white/20 ${className}`}
-      style={{ width: size, height: size }}
-    >
-      <UserIcon
-        className="text-white/80"
-        style={{ width: iconSize, height: iconSize }}
-      />
-    </div>
-  )
+  return <MissingAvatar name={name} size={size} className={className} />
 }
 
 interface QRCodeDisplayProps {
@@ -291,7 +280,7 @@ const QRCodeDisplay = ({
       style={{ padding: size * 0.1 }}
       data-qr-code="true"
     >
-      <Image
+      <img
         src={qrCodeUrl}
         alt="QR Code - Scan to view speaker profile"
         width={size}
