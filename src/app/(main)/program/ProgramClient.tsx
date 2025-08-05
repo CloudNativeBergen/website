@@ -55,12 +55,20 @@ export function ProgramClient({ schedules }: ProgramClientProps) {
           (sum, schedule) =>
             sum +
             schedule.tracks.reduce(
-              (trackSum, track) => trackSum + track.talks.length,
+              (trackSum, track) =>
+                trackSum +
+                track.talks.filter(
+                  (talk) => talk.talk !== null && talk.talk !== undefined,
+                ).length,
               0,
             ),
           0,
         )}
-        filteredTalks={filteredData.allTalks.length}
+        filteredTalks={
+          filteredData.allTalks.filter(
+            (talk) => talk.talk !== null && talk.talk !== undefined,
+          ).length
+        }
         viewMode={viewMode}
         viewModes={viewModes}
         onViewModeChange={setViewMode}
