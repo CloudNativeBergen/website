@@ -180,17 +180,30 @@ const deriveExpertise = (talks: SpeakerWithTalks['talks']): string[] => {
 const deriveCompany = (title: string | undefined): string | undefined => {
   if (!title) return undefined
 
+  let company: string | undefined
+
   // Check for " at " pattern first (more specific)
   if (title.includes(' at ')) {
-    return title.split(' at ')[1].trim()
+    company = title.split(' at ')[1].trim()
   }
-
   // Check for "@" pattern
-  if (title.includes('@')) {
-    return title.split('@')[1].trim()
+  else if (title.includes('@')) {
+    company = title.split('@')[1].trim()
   }
 
-  return undefined
+  if (!company) return undefined
+
+  // Clean up company name by removing everything after common separators
+  // Split on common separators and take the first part
+  const separators = ['|', ',', '•', '·', '-', '–', '—', '/', '\\']
+  for (const separator of separators) {
+    if (company.includes(separator)) {
+      company = company.split(separator)[0].trim()
+      break
+    }
+  }
+
+  return company
 }
 
 /**
