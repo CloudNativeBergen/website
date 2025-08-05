@@ -43,8 +43,11 @@ export const POST = auth(
       })
     }
 
-    const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain()
+    const {
+      conference,
+      domain,
+      error: conferenceError,
+    } = await getConferenceForCurrentDomain()
     if (conferenceError || !conference) {
       console.error(conferenceError || 'Conference not found')
       return proposalResponseError({
@@ -132,6 +135,7 @@ export const POST = auth(
         },
         shouldNotify: notify,
         comment,
+        domain,
       },
     }
 

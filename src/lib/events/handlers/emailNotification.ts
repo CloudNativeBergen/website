@@ -39,7 +39,7 @@ export async function handleEmailNotification(
       location: event.conference.city,
       date: formatDate(event.conference.start_date),
       name: event.conference.title,
-      url: event.conference.domains?.[0] ?? '',
+      url: `https://${event.metadata.domain}`,
       socialLinks: event.conference.social_links,
       contactEmail: event.conference.contact_email,
     },

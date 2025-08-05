@@ -18,5 +18,6 @@ export interface ProposalStatusChangeEvent {
     }
     shouldNotify?: boolean
     comment?: string
+    domain: string
   }
 }
