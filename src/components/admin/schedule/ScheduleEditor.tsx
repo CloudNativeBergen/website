@@ -56,8 +56,8 @@ const LAYOUT_CLASSES = {
   sidebar: 'border-r border-gray-200 bg-gray-50 flex-shrink-0',
   mainArea: 'flex flex-1 flex-col min-h-0 min-w-0',
   header: 'border-b border-gray-200 bg-white px-4 py-2 flex-shrink-0',
-  content: 'flex-1 min-h-0 overflow-auto px-2 pt-4', // Add top padding for breathing room
-  tracksContainer: 'h-full overflow-y-auto', // Enable vertical scrolling within tracks
+  content: 'flex-1 min-h-0 overflow-x-auto px-2 pt-4', // Keep horizontal scroll, remove vertical
+  tracksContainer: 'h-full', // Removed overflow-y-auto since this class isn't used
   tracksGrid: 'flex gap-4 h-max', // Use content height instead of full height
   emptyState: 'flex flex-1 items-center justify-center',
   errorBanner: 'border-b border-red-200 bg-red-50 px-4 py-2 flex-shrink-0',
