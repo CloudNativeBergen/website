@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { getStatusBadgeStyle } from './utils'
+import { SpeakerIndicators } from '@/lib/proposal'
 import { useState } from 'react'
 
 interface SpeakerWithProposals extends Speaker {
@@ -116,6 +117,12 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
               scope="col"
               className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
             >
+              Indicators
+            </th>
+            <th
+              scope="col"
+              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
+            >
               Contact
             </th>
             <th
@@ -149,12 +156,20 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
                       {speaker.name}
                     </div>
                     {speaker.title && (
-                      <div className="truncate text-xs text-gray-500">
+                      <div className="max-w-[180px] truncate text-xs text-gray-500">
                         {speaker.title}
                       </div>
                     )}
                   </div>
                 </div>
+              </td>
+              <td className="px-4 py-3">
+                <SpeakerIndicators
+                  speakers={[speaker]}
+                  size="md"
+                  maxVisible={5}
+                  className="justify-start"
+                />
               </td>
               <td className="px-4 py-3">
                 <div className="flex min-w-0 items-center text-sm text-gray-900">
