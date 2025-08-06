@@ -1,3 +1,5 @@
+import type { Session } from 'next-auth'
+
 export class AppEnvironment {
   static readonly isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -10,7 +12,7 @@ export class AppEnvironment {
     email: 'test@cloudnativebergen.io',
     name: 'Test Speaker',
     speakerId: 'test-speaker-id',
-    picture: '/images/default-avatar.png',
+    picture: 'https://placehold.co/192x192/4f46e5/fff/png?text=TS',
   } as const
 
   static buildApiUrl(
@@ -38,30 +40,31 @@ export class AppEnvironment {
     )
   }
 
-  static createMockAuthContext() {
-    if (!AppEnvironment.isTestMode) return null
+  /**
+   * Creates a mock authentication context for development/test mode
+   */
+  static createMockAuthContext(): Session {
+    if (!AppEnvironment.isTestMode) {
+      throw new Error('createMockAuthContext can only be used in test mode.')
+    }
 
     return {
       user: {
-        email: AppEnvironment.testUser.email,
-        name: AppEnvironment.testUser.name,
-        sub: AppEnvironment.testUser.id,
-        picture: AppEnvironment.testUser.picture,
-      },
-      speaker: {
-        _id: AppEnvironment.testUser.speakerId,
-        name: AppEnvironment.testUser.name,
-        email: AppEnvironment.testUser.email,
-        _type: 'speaker' as const,
-        slug: { current: 'test-speaker' },
-      },
-      account: {
-        provider: 'test',
-        providerAccountId: 'test-account',
-        type: 'oauth' as const,
-        userId: AppEnvironment.testUser.id,
+        name: 'Test User',
+        email: 'test@cloudnativebergen.no',
+        picture: 'https://placehold.co/64x64/d1fae5/374151?text=TU',
       },
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      speaker: {
+        _id: 'test-speaker-id',
+        _rev: 'test-rev',
+        _createdAt: new Date().toISOString(),
+        _updatedAt: new Date().toISOString(),
+        name: 'Test User',
+        slug: 'test-user',
+        email: 'test@cloudnativebergen.no',
+        is_organizer: true,
+      },
     }
   }
 

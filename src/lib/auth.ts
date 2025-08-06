@@ -5,6 +5,7 @@ import type { NextAuthConfig, Session, User } from 'next-auth'
 import { NextRequest } from 'next/server'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
 import { sanityImage } from '@/lib/sanity/client'
+import { AppEnvironment } from '@/lib/environment'
 
 export interface NextAuthRequest extends NextRequest {
   auth: Session | null
@@ -153,4 +154,12 @@ export function isAtuh(req: NextAuthRequest): boolean {
   return req.auth && req.auth.user && req.auth.speaker && req.auth.speaker._id
     ? true
     : false
+}
+
+// Helper function to get authentication session with test mode support
+export async function getAuthSession() {
+  if (AppEnvironment.isTestMode) {
+    return AppEnvironment.createMockAuthContext()
+  }
+  return await _auth()
 }

@@ -1,0 +1,23 @@
+# Development tools - exclude from production builds
+
+src/dev-tools/
+public/dev/
+_.dev._
+
+# Test files
+
+**tests**/
+_.test._
+_.spec._
+
+# Documentation
+
+docs/
+\*.md
+!README.md
+
+# Development configuration
+
+.env.example
+jest.config.ts
+jest.setup.ts

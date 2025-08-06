@@ -1,12 +1,12 @@
 import { AdminLayout } from '@/components/admin'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 
 export default async function AdminRootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await auth()
+  const session = await getAuthSession()
   if (!session || !session.speaker || !session.speaker.is_organizer) {
     return (
       <div className="flex h-screen items-center justify-center">

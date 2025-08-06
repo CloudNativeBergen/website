@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clear Session & Storage</title>
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        max-width: 600px;
+        margin: 50px auto;
+        padding: 20px;
+        background: #f8fafc;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      .button {
+        background: #3b82f6;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        margin: 10px 5px;
+        font-size: 14px;
+      }
+      .button:hover {
+        background: #2563eb;
+      }
+      .status {
+        margin: 20px 0;
+        padding: 10px;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+      .success {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+      }
+      .error {
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+      }
+      .info {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #dbeafe;
+      }
+      code {
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🧹 Complete Browser Storage Cleaner</h1>
+      <p>
+        <strong>⚠️ Development Only:</strong> This tool is only available in
+        development mode and will not be accessible in production.
+      </p>
+      <p>
+        This page performs nuclear-level clearing of ALL browser storage types
+        to resolve persistent caching issues.
+      </p>
+      <p>
+        <strong>Clears:</strong> LocalStorage, SessionStorage, Cookies, Service
+        Workers, Cache Storage, IndexedDB, and more!
+      </p>
+
+      <div id="status" class="status info">
+        Ready to clear all browser storage and cache data.
+      </div>
+
+      <div>
+        <button class="button" onclick="clearAll()">Clear Everything</button>
+        <button class="button" onclick="clearCookiesOnly()">
+          Clear Cookies Only
+        </button>
+        <button class="button" onclick="clearStorageOnly()">
+          Clear Storage Only
+        </button>
+        <button class="button" onclick="checkStatus()">Check Status</button>
+      </div>
+
+      <div>
+        <button class="button" onclick="clearServiceWorkers()">
+          Clear Service Workers
+        </button>
+        <button class="button" onclick="clearCacheStorage()">
+          Clear Cache Storage
+        </button>
+        <button class="button" onclick="clearIndexedDB()">
+          Clear IndexedDB
+        </button>
+      </div>
+
+      <div>
+        <button class="button" onclick="window.location.href='/admin'">
+          Go to Admin
+        </button>
+        <button
+          class="button"
+          onclick="window.location.href='/api/admin/clear-session?clear=true'"
+        >
+          API Clear
+        </button>
+      </div>
+
+      <h3>Manual Steps (if needed):</h3>
+      <ol>
+        <li>Open Browser DevTools (F12)</li>
+        <li>Go to <strong>Application</strong> tab</li>
+        <li>
+          Clear <strong>Local Storage</strong>,
+          <strong>Session Storage</strong>, and <strong>Cookies</strong>
+        </li>
+        <li>Hard refresh the page (Ctrl/Cmd + Shift + R)</li>
+      </ol>
+    </div>
+
+    <script>
+      function updateStatus(message, type = 'info') {
+        const status = document.getElementById('status')
+        status.textContent = message
+        status.className = 'status ' + type
+      }
+
+      async function clearAll() {
+        updateStatus('🧹 Starting comprehensive cleanup...', 'info')
+
+        try {
+          // Clear all storage types
+          await clearStorageOnly()
+          await clearCookiesOnly()
+          await clearServiceWorkers()
+          await clearCacheStorage()
+          await clearIndexedDB()
+          await clearWebSQL()
+
+          // Also call the API endpoint
+          const response = await fetch('/api/admin/clear-session?clear=true')
+          const data = await response.json()
+
+          updateStatus(
+            '✅ EVERYTHING cleared! Redirecting to admin...',
+            'success',
+          )
+          setTimeout(() => {
+            window.location.href = '/admin'
+          }, 2000)
+        } catch (error) {
+          updateStatus(
+            '⚠️ Cleanup completed with some errors: ' + error.message,
+            'error',
+          )
+        }
+      }
+
+      function clearCookiesOnly() {
+        // Note: Can't directly clear httpOnly cookies from JS, but we can try
+        const cookiesToClear = [
+          'next-auth.session-token',
+          'next-auth.callback-url',
+          'next-auth.csrf-token',
+          '__Secure-next-auth.session-token',
+          '__Host-next-auth.csrf-token',
+          'authjs.session-token',
+          'authjs.callback-url',
+          'authjs.csrf-token',
+        ]
+
+        cookiesToClear.forEach((name) => {
+          document.cookie =
+            name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+          document.cookie =
+            name +
+            '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=' +
+            window.location.hostname +
+            ';'
+          document.cookie =
+            name +
+            '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.' +
+            window.location.hostname +
+            ';'
+          document.cookie =
+            name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; secure;'
+          document.cookie =
+            name +
+            '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; secure; samesite=strict;'
+        })
+
+        // Clear ALL cookies (nuclear option)
+        document.cookie.split(';').forEach(function (c) {
+          document.cookie = c
+            .replace(/^ +/, '')
+            .replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/')
+        })
+
+        updateStatus(
+          '🍪 Cookies cleared (Note: httpOnly cookies require server-side clearing)',
+          'success',
+        )
+      }
+
+      function clearStorageOnly() {
+        try {
+          // Clear ALL localStorage (nuclear option)
+          localStorage.clear()
+
+          // Clear ALL sessionStorage (nuclear option)
+          sessionStorage.clear()
+
+          updateStatus('🗄️ Browser storage cleared completely', 'success')
+        } catch (error) {
+          updateStatus('❌ Failed to clear storage: ' + error.message, 'error')
+        }
+      }
+
+      async function clearServiceWorkers() {
+        try {
+          if ('serviceWorker' in navigator) {
+            const registrations =
+              await navigator.serviceWorker.getRegistrations()
+
+            for (let registration of registrations) {
+              await registration.unregister()
+            }
+
+            updateStatus(
+              '🔧 Service workers cleared: ' +
+                registrations.length +
+                ' unregistered',
+              'success',
+            )
+          } else {
+            updateStatus('ℹ️ Service workers not supported', 'info')
+          }
+        } catch (error) {
+          updateStatus(
+            '❌ Failed to clear service workers: ' + error.message,
+            'error',
+          )
+        }
+      }
+
+      async function clearCacheStorage() {
+        try {
+          if ('caches' in window) {
+            const cacheNames = await caches.keys()
+
+            for (let cacheName of cacheNames) {
+              await caches.delete(cacheName)
+            }
+
+            updateStatus(
+              '💾 Cache storage cleared: ' +
+                cacheNames.length +
+                ' caches deleted',
+              'success',
+            )
+          } else {
+            updateStatus('ℹ️ Cache storage not supported', 'info')
+          }
+        } catch (error) {
+          updateStatus(
+            '❌ Failed to clear cache storage: ' + error.message,
+            'error',
+          )
+        }
+      }
+
+      async function clearIndexedDB() {
+        try {
+          if ('indexedDB' in window) {
+            // Get all databases (this is limited in some browsers)
+            const databases = (await indexedDB.databases?.()) || []
+
+            for (let db of databases) {
+              if (db.name) {
+                const deleteReq = indexedDB.deleteDatabase(db.name)
+                await new Promise((resolve, reject) => {
+                  deleteReq.onsuccess = () => resolve(null)
+                  deleteReq.onerror = () => reject(deleteReq.error)
+                  deleteReq.onblocked = () => resolve(null) // Continue even if blocked
+                })
+              }
+            }
+
+            updateStatus(
+              '�️ IndexedDB cleared: ' +
+                databases.length +
+                ' databases deleted',
+              'success',
+            )
+          } else {
+            updateStatus('ℹ️ IndexedDB not supported', 'info')
+          }
+        } catch (error) {
+          updateStatus(
+            '⚠️ IndexedDB clearing may have issues: ' + error.message,
+            'error',
+          )
+        }
+      }
+
+      async function clearWebSQL() {
+        try {
+          if ('openDatabase' in window) {
+            // WebSQL is deprecated but some browsers still support it
+            updateStatus(
+              '🗂️ WebSQL found (deprecated) - manual clearing needed',
+              'info',
+            )
+          } else {
+            updateStatus('ℹ️ WebSQL not supported (good!)', 'info')
+          }
+        } catch (error) {
+          updateStatus('ℹ️ WebSQL not available', 'info')
+        }
+      }
+
+      function checkStatus() {
+        const localKeys = Object.keys(localStorage)
+        const sessionKeys = Object.keys(sessionStorage)
+        const cookieCount = document.cookie
+          .split(';')
+          .filter((c) => c.trim().length > 0).length
+
+        updateStatus(
+          `📊 Status - LocalStorage: ${localKeys.length} keys, SessionStorage: ${sessionKeys.length} keys, Cookies: ${cookieCount} cookies`,
+          'info',
+        )
+
+        // Also check service workers and cache
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            console.log('Service Workers:', registrations.length)
+          })
+        }
+
+        if ('caches' in window) {
+          caches.keys().then((cacheNames) => {
+            console.log('Cache Storage:', cacheNames.length, 'caches')
+          })
+        }
+      }
+
+      // Auto-check status on load
+      window.onload = () => {
+        checkStatus()
+      }
+    </script>
+  </body>
+</html>

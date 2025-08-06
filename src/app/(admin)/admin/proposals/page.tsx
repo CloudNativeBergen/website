@@ -2,10 +2,10 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/server'
 import { ErrorDisplay } from '@/components/admin'
 import { ProposalsPageClient } from '@/components/admin/ProposalsPageClient'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 
 export default async function AdminProposals() {
-  const session = await auth()
+  const session = await getAuthSession()
 
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain()

@@ -124,11 +124,24 @@ export function DashboardLayout({
     }
   }, [mode, onSearch])
 
-  const getUserName = () =>
-    session?.user?.name || (mode === 'admin' ? 'Admin' : 'Speaker')
-  const getAvatarUrl = () =>
-    session?.user?.picture ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(getUserName())}&background=${colors.avatar.background}&color=fff`
+  const getUserName = () => {
+    const name = session?.user?.name || 'User'
+    return name
+  }
+  const getAvatarUrl = () => {
+    const userPicture = session?.user?.picture
+    const userName = getUserName()
+    const avatarBackground = colors.avatar.background
+
+    const fallbackUrl = `https://placehold.co/192x192/${avatarBackground}/fff/png?text=${encodeURIComponent(
+      userName
+        .split(' ')
+        .map((n) => n[0])
+        .join(''),
+    )}`
+
+    return userPicture || fallbackUrl
+  }
 
   const isCurrentPath = (href: string) => {
     const basePath = mode === 'admin' ? '/admin' : '/cfp'

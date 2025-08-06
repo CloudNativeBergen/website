@@ -3,7 +3,7 @@ import { getProposals } from '@/lib/proposal/server'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { Review } from '@/lib/review/types'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import {
   DocumentTextIcon,
   UsersIcon,
@@ -14,7 +14,7 @@ import {
 import Link from 'next/link'
 
 export default async function AdminDashboard() {
-  const session = await auth()
+  const session = await getAuthSession()
   const currentUserId = session?.speaker?._id
 
   const { conference, error: conferenceError } =

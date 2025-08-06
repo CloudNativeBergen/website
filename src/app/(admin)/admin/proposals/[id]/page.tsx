@@ -9,7 +9,7 @@ import {
   ProposalReviewPanel,
   AdminActionBar,
 } from '@/components/admin'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import { EMAIL_CONFIG } from '@/lib/email/config'
 
 interface ProposalDetailPageProps {
@@ -27,7 +27,7 @@ export default async function ProposalDetailPage({
   params,
 }: ProposalDetailPageProps) {
   const { id } = await params
-  const session = await auth()
+  const session = await getAuthSession()
 
   try {
     const { domain } = await getConferenceForCurrentDomain({})

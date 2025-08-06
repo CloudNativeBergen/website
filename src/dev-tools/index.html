@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Development Tools</title>
+    <style>
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+        background: #f8fafc;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      .tool-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+        margin-top: 30px;
+      }
+      .tool-card {
+        background: #f8fafc;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+      }
+      .tool-card h3 {
+        margin-top: 0;
+        color: #1e293b;
+      }
+      .tool-link {
+        display: inline-block;
+        background: #3b82f6;
+        color: white;
+        padding: 8px 16px;
+        text-decoration: none;
+        border-radius: 4px;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+      .tool-link:hover {
+        background: #2563eb;
+      }
+      .warning {
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        border-radius: 4px;
+        padding: 15px;
+        margin: 20px 0;
+        color: #92400e;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🛠️ Development Tools</h1>
+      <p>
+        Collection of development and debugging tools for Cloud Native Bergen
+        website.
+      </p>
+
+      <div class="warning">
+        <strong>⚠️ Development Only:</strong> These tools are only available in
+        development mode and will return 404 in production.
+      </div>
+
+      <div class="tool-grid">
+        <div class="tool-card">
+          <h3>🧹 Storage Cleaner</h3>
+          <p>
+            Nuclear-level clearing of all browser storage types including
+            LocalStorage, SessionStorage, Cookies, Service Workers, Cache
+            Storage, and IndexedDB.
+          </p>
+          <a href="/api/dev/clear-storage" class="tool-link"
+            >Open Storage Cleaner</a
+          >
+        </div>
+
+        <div class="tool-card">
+          <h3>🔐 Session Management</h3>
+          <p>
+            Clear authentication sessions and manage test mode authentication.
+          </p>
+          <a href="/api/admin/clear-session?clear=true" class="tool-link"
+            >Clear Sessions</a
+          >
+        </div>
+
+        <div class="tool-card">
+          <h3>🎯 Quick Links</h3>
+          <p>
+            Direct access to admin and CFP areas with test mode authentication.
+          </p>
+          <a href="/admin" class="tool-link">Admin Dashboard</a>
+          <a href="/cfp" class="tool-link">CFP Portal</a>
+        </div>
+
+        <div class="tool-card">
+          <h3>📊 Environment Info</h3>
+          <p>Current environment configuration and test mode status.</p>
+          <div style="margin-top: 10px">
+            <code>NODE_ENV: <span id="nodeEnv">Loading...</span></code
+            ><br />
+            <code>Test Mode: <span id="testMode">Loading...</span></code>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Display environment info
+      document.getElementById('nodeEnv').textContent = 'development'
+      document.getElementById('testMode').textContent =
+        new URLSearchParams(window.location.search).get('test') === 'true' ||
+        localStorage.getItem('test-mode') === 'true'
+          ? 'Enabled'
+          : 'Disabled'
+    </script>
+  </body>
+</html>
