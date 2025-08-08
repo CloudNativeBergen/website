@@ -130,17 +130,37 @@ export function DashboardLayout({
   }
   const getAvatarUrl = () => {
     const userPicture = session?.user?.picture
+
+    // Early return if user already has a picture
+    if (userPicture) {
+      return userPicture
+    }
+
     const userName = getUserName()
     const avatarBackground = colors.avatar.background
 
-    const fallbackUrl = `https://placehold.co/192x192/${avatarBackground}/fff/png?text=${encodeURIComponent(
-      userName
+    // Safely generate initials with fallback
+    let initials = 'U'
+    try {
+      const processedInitials = userName
         .split(' ')
         .map((n) => n[0])
-        .join(''),
-    )}`
+        .join('')
+        .toUpperCase()
+        .slice(0, 2) // Limit to 2 characters max
 
-    return userPicture || fallbackUrl
+      // Only use alphanumeric characters
+      const safeInitials = processedInitials.replace(/[^A-Z0-9]/g, '')
+
+      if (safeInitials.length > 0) {
+        initials = safeInitials
+      }
+    } catch (error) {
+      console.warn('Error generating avatar initials:', error)
+      initials = 'U'
+    }
+
+    return `https://placehold.co/192x192/${avatarBackground}/fff/png?text=${initials}`
   }
 
   const isCurrentPath = (href: string) => {
