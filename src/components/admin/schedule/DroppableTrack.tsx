@@ -97,6 +97,22 @@ const addMinutesToTime = (time: string, minutes: number): string => {
   return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 
+// Calculate total minutes of real talk content (excluding service sessions)
+const calculateTalkContentMinutes = (track: ScheduleTrack): number => {
+  return track.talks.reduce((total, talk) => {
+    // Only count real talks, not service sessions (placeholder sessions)
+    if (!talk.talk) return total
+
+    const start = new Date(`2000-01-01T${talk.startTime}:00`)
+    const end = new Date(`2000-01-01T${talk.endTime}:00`)
+    const durationMinutes = Math.round(
+      (end.getTime() - start.getTime()) / (1000 * 60),
+    )
+
+    return total + durationMinutes
+  }, 0)
+}
+
 // Service Session Modal Component
 const ServiceSessionModal = ({
   isOpen,
@@ -723,6 +739,11 @@ const TrackHeader = ({
   onStartEdit: () => void
   onRemoveTrack: () => void
 }) => {
+  // Calculate talk content minutes
+  const talkContentMinutes = calculateTalkContentMinutes(track)
+  const totalSessions = track.talks.length
+  const realTalks = track.talks.filter((talk) => talk.talk).length
+
   return (
     <div className="rounded-t-lg border border-gray-200 bg-white p-4 shadow-sm">
       {isEditing ? (
@@ -765,11 +786,20 @@ const TrackHeader = ({
             <h3 className="truncate text-lg font-semibold text-gray-900">
               {track.trackTitle}
             </h3>
-            {track.trackDescription && (
-              <p className="mt-1 line-clamp-2 text-sm text-gray-600">
-                {track.trackDescription}
-              </p>
-            )}
+            <div className="mt-2 flex flex-wrap gap-3 text-xs">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-medium text-blue-800">
+                <span className="font-mono font-bold">
+                  {talkContentMinutes}
+                </span>
+                <span>min content</span>
+              </span>
+              {realTalks > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-medium text-green-800">
+                  <span className="font-mono">{realTalks}</span>
+                  <span>talks</span>
+                </span>
+              )}
+            </div>
           </div>
           <div className="ml-3 flex flex-shrink-0 gap-1">
             <button
