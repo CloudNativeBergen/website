@@ -253,7 +253,7 @@ export function TalkCard({
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-md bg-yellow-100 px-2 py-1 text-xs font-medium whitespace-nowrap text-yellow-800">
                       <ClockIcon className="h-3 w-3" />
-                      To be announced
+                      TBA
                     </span>
                   </span>
                 )}
