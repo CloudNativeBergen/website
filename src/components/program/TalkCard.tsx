@@ -76,6 +76,7 @@ export function TalkCard({
   const durationMinutes = calculateDurationMinutes(talk.startTime, talk.endTime)
 
   // Use smart height calculation for schedule view
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getSmartHeight = (duration: number): string => {
     if (!fixedHeight) return 'auto'
 
