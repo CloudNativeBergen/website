@@ -44,8 +44,9 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // Revalidate the schedule page to refresh cached data
+    // Revalidate the schedule and program to refresh cached data
     revalidatePath('/admin/schedule')
+    revalidatePath('/program')
 
     return NextResponse.json({ schedule: savedSchedule })
   } catch (error) {
