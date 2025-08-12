@@ -298,9 +298,25 @@ export default function SponsorAddModal({
           throw new Error('Could not find existing sponsor to update')
         }
 
+        // Check if tier has changed and include tierId in sponsor data if needed
+        const currentTierMatch = sponsorTiers.find(
+          (tier) => tier.title === editingSponsor.tier?.title,
+        )
+        const newTierMatch = sponsorTiers.find(
+          (tier) => tier._id === formData.tierId,
+        )
+
+        const sponsorUpdateData = {
+          ...sponsorData,
+          // Include tierId if tier has changed
+          ...(currentTierMatch?._id !== newTierMatch?._id && {
+            tierId: formData.tierId,
+          }),
+        }
+
         const updatedSponsor = await updateSponsor(
           existingSponsor._id,
-          sponsorData,
+          sponsorUpdateData,
         )
 
         // Find the tier for the updated sponsor

@@ -453,6 +453,67 @@ export async function removeSponsorFromConference(
   )
 }
 
+export async function updateSponsorTierAssignment(
+  conferenceId: string,
+  sponsorName: string,
+  newTierId: string,
+): Promise<{ error?: Error }> {
+  try {
+    // First, find the sponsor document by name to get its ID
+    const sponsor = await clientWrite.fetch(
+      `*[_type == "sponsor" && name == $sponsorName][0]{
+        _id
+      }`,
+      { sponsorName },
+    )
+
+    if (!sponsor) {
+      return { error: new Error('Sponsor not found') }
+    }
+
+    const sponsorId = sponsor._id
+
+    // Now find the sponsor in the conference's sponsors array
+    const conference = await clientWrite.fetch(
+      `*[_type == "conference" && _id == $conferenceId][0]{
+        sponsors[sponsor._ref == $sponsorId]{
+          _key,
+          sponsor,
+          tier
+        }
+      }`,
+      { conferenceId, sponsorId },
+    )
+
+    if (
+      !conference ||
+      !conference.sponsors ||
+      conference.sponsors.length === 0
+    ) {
+      return { error: new Error('Sponsor not found in conference') }
+    }
+
+    const sponsorEntry = conference.sponsors[0]
+    const sponsorKey = sponsorEntry._key
+
+    if (!sponsorKey) {
+      return { error: new Error('Sponsor entry missing _key') }
+    }
+
+    // Update the tier reference for this specific sponsor entry
+    await clientWrite
+      .patch(conferenceId)
+      .set({
+        [`sponsors[_key == "${sponsorKey}"].tier`]: createReference(newTierId),
+      })
+      .commit()
+
+    return {}
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
 export async function fixSponsorKeys(): Promise<{ error?: Error }> {
   return await fixArrayKeys('conference', [
     { field: 'sponsors', prefix: 'sponsor' },

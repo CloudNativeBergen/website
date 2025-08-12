@@ -145,6 +145,8 @@ export interface SponsorInput {
   org_number?: string
   contact_persons?: ContactPerson[]
   billing?: BillingInfo
+  // Optional tier ID for updating sponsor tier assignment
+  tierId?: string
 }
 
 export interface SponsorExisting {

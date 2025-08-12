@@ -1,7 +1,12 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { SponsorInput } from '@/lib/sponsor/types'
-import { getSponsor, updateSponsor, deleteSponsor } from '@/lib/sponsor/sanity'
+import {
+  getSponsor,
+  updateSponsor,
+  deleteSponsor,
+  updateSponsorTierAssignment,
+} from '@/lib/sponsor/sanity'
 import { sponsorResponse, sponsorResponseError } from '@/lib/sponsor/server'
 import { validateSponsor } from '@/lib/sponsor/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -100,13 +105,47 @@ export const PUT = auth(
       // Get the current sponsor data for audience comparison
       const { sponsor: oldSponsor } = await getSponsor(id, true)
 
+      // Extract tier ID from data for separate handling
+      const { tierId, ...sponsorData } = data
+
       // Update the sponsor
-      const { sponsor, error } = await updateSponsor(id, data)
+      const { sponsor, error } = await updateSponsor(id, sponsorData)
       if (error) {
         return sponsorResponseError({
           error,
           message: 'Failed to update sponsor',
         })
+      }
+
+      // Handle tier assignment update if tierId is provided
+      if (tierId && sponsor) {
+        try {
+          const { conference } = await getConferenceForCurrentDomain()
+          if (conference) {
+            const { error: tierError } = await updateSponsorTierAssignment(
+              conference._id,
+              sponsor.name,
+              tierId,
+            )
+            if (tierError) {
+              console.warn(
+                `Failed to update sponsor tier assignment for ${sponsor.name}:`,
+                tierError,
+              )
+              // Note: We don't fail the entire request if tier update fails
+              // The sponsor details have already been saved successfully
+            } else {
+              console.log(
+                `Sponsor tier assignment updated for ${sponsor.name} to tier ${tierId}`,
+              )
+            }
+          }
+        } catch (tierError) {
+          console.warn(
+            'Failed to update sponsor tier assignment, but sponsor was saved:',
+            tierError,
+          )
+        }
       }
 
       // Update sponsor audience automatically when contacts change
