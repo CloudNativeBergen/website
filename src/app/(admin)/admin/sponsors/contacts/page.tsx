@@ -6,7 +6,7 @@ import {
 import { UserGroupIcon } from '@heroicons/react/24/outline'
 import { SponsorWithContactInfo } from '@/lib/sponsor/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getAllSponsors } from '@/lib/sponsor/sanity'
+import { getSponsorsForConference } from '@/lib/sponsor/sanity'
 
 export default async function AdminSponsorContacts() {
   try {
@@ -23,8 +23,11 @@ export default async function AdminSponsorContacts() {
       )
     }
 
-    // Get all sponsors with contact information
-    const { sponsors, error: sponsorsError } = await getAllSponsors(true)
+    // Get sponsors for the current conference only
+    const { sponsors, error: sponsorsError } = await getSponsorsForConference(
+      conference._id,
+      true,
+    )
 
     if (sponsorsError) {
       return (
@@ -59,7 +62,8 @@ export default async function AdminSponsorContacts() {
                   Sponsor Contacts
                 </h1>
                 <p className="font-inter mt-2 text-sm text-brand-slate-gray/70">
-                  Manage sponsor contact information and billing details for{' '}
+                  Manage sponsor contact information and billing details for
+                  active sponsors of{' '}
                   <span className="font-medium text-brand-cloud-blue">
                     {conference.title}
                   </span>
@@ -77,7 +81,7 @@ export default async function AdminSponsorContacts() {
 
           <div className="font-inter mt-4 flex items-center gap-4 text-sm text-brand-slate-gray">
             <span>
-              Total sponsors: <strong>{sponsorsWithContacts.length}</strong>
+              Active sponsors: <strong>{sponsorsWithContacts.length}</strong>
             </span>
             <span>
               With contact information:{' '}
@@ -95,7 +99,7 @@ export default async function AdminSponsorContacts() {
             </div>
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-brand-frosted-steel"></div>
-              <span>{sponsorsWithContacts.length} total sponsors</span>
+              <span>{sponsorsWithContacts.length} conference sponsors</span>
             </div>
           </div>
         </div>
