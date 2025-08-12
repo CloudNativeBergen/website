@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+@source '../app/(admin)';
+@source '../components/admin';
+
 @theme {
   --text-*: initial;
   --text-xs: 0.75rem;
