@@ -82,12 +82,17 @@ export function MissingAvatar({
           : 'text-xs'
   const finalTextSize = textSizeClass || autoTextSize
 
+  // If the avatar is used with an absolutely positioned fill container ("absolute inset-0"),
+  // we should not apply explicit width/height since the parent already defines the size.
+  const usesAbsoluteFill =
+    className.includes('absolute') && className.includes('inset-0')
+
   return (
     <div
-      className={`flex items-center justify-center ${bgColor} ${className}`}
-      style={{ width: size, height: size }}
+      className={`flex h-full w-full items-center justify-center ${bgColor} ${className}`}
+      style={usesAbsoluteFill ? undefined : { width: size, height: size }}
     >
-      <span className={`${finalTextSize} font-bold text-white`}>
+      <span className={`${finalTextSize} leading-none font-bold text-white`}>
         {initials}
       </span>
     </div>
