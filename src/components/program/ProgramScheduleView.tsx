@@ -235,7 +235,7 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
                     trackIndex,
                   }}
                   compact={true}
-                  fixedHeight={false}
+                  fixedHeight={true}
                 />
               ))}
             </div>
@@ -321,7 +321,7 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
                           trackIndex,
                         }}
                         compact={true}
-                        fixedHeight={false}
+                        fixedHeight={true}
                       />
                     ) : (
                       <div className="h-full min-h-[60px]" />

@@ -78,10 +78,14 @@ export function TalkCard({
   // Use smart height calculation for schedule view
   const getSmartHeight = (duration: number): string => {
     if (!fixedHeight) return 'auto'
-    if (duration <= 30) return `${Math.max(duration * 0.8, 4)}rem`
-    if (duration <= 60) return `${Math.max(24 + (duration - 30) * 0.6, 8)}rem`
-    if (duration <= 120) return `${Math.max(42 + (duration - 60) * 0.4, 12)}rem`
-    return `${Math.max(66 + (duration - 120) * 0.2, 16)}rem`
+
+    // Service sessions (placeholder sessions) should be shorter
+    if (!talk.talk) {
+      return compact ? '4rem' : '8rem' // Half height for service sessions
+    }
+
+    // Regular talks get full height for schedule view compact cards
+    return compact ? '8rem' : '16rem' // Normal height for talks
   }
 
   // Handle placeholder/service sessions
@@ -208,6 +212,7 @@ export function TalkCard({
                   !isConfirmed && !isWithdrawnOrRejected && 'text-gray-500', // Grayed out for unconfirmed
                   isConfirmed && 'text-brand-slate-gray',
                   compact ? 'text-sm leading-tight' : 'text-base',
+                  fixedHeight && compact && 'line-clamp-2', // Clamp to 2 lines for schedule view
                 )}
               >
                 {isConfirmed ? (
