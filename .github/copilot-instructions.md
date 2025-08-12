@@ -12,6 +12,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - **Framework:** Next.js 15+ (App Router, Turbopack for dev)
 - **Styling:** Tailwind CSS 4+
 - **Content Management:** Sanity.io
+- **API Layer:** tRPC with React Query integration
 - **Hosting:** Vercel
 - **Notifications:** Resend
 - **Authentication:** NextAuth.js 5.0 (beta)
@@ -71,9 +72,21 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
   - Custom hooks for state management (`useFilterState`, `useProposalFiltering`)
   - Consistent error handling with `ErrorDisplay` component
   - Reusable UI patterns (dropdowns, filters, cards)
-- **Data Management:** Use Server Components and Server Actions where possible for data fetching and mutations.
+- **Data Management:** Use tRPC for type-safe API calls where available, Server Components and Server Actions where applicable.
 - **User Experience:** Prioritize responsive design and accessibility in admin interfaces.
 - **Documentation:** Admin components have comprehensive documentation in `/components/admin/README.md`.
+
+### tRPC Implementation
+
+- **Architecture:** Server-side tRPC routers in `/src/server/routers/` with client integration via React Query
+- **Sponsor Management:** Fully migrated to tRPC with end-to-end type safety
+  - Complete CRUD operations for sponsors and sponsor tiers
+  - Conference-sponsor assignment management (add/remove sponsors)
+  - Proper query invalidation and optimistic updates
+- **Input Validation:** Zod schemas in `/src/server/schemas/` for type-safe input validation
+- **Error Handling:** Consistent TRPCError usage with proper HTTP status codes and user-friendly messages
+- **Performance:** React Query integration provides automatic caching, background updates, and optimistic UI updates
+- **Best Practices:** Follow tRPC patterns documented in `/docs/TRPC_SERVER_ARCHITECTURE.md`
 
 ### Commands
 
