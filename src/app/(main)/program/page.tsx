@@ -4,7 +4,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProgramClient } from './ProgramClient'
 import { Sponsors } from '../../../components/Sponsors'
 
-export const revalidate = 3600
+export const revalidate = 300
 
 export default async function Program() {
   const { conference, error } = await getConferenceForCurrentDomain({
