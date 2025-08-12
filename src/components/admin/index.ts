@@ -45,6 +45,8 @@ export { default as SponsorTierEditor } from './SponsorTierEditor'
 export { default as SponsorTierManagement } from './SponsorTierManagement'
 export { default as SponsorAddModal } from './SponsorAddModal'
 export { SponsorActions } from './SponsorActions'
+export { SponsorContactTable } from './SponsorContactTable'
+export { SponsorContactActions } from './SponsorContactActions'
 
 // Utility Components
 export { ErrorDisplay } from './ErrorDisplay'

@@ -1,11 +1,10 @@
 'use client'
 
-import { useState } from 'react'
 import { Button } from '@/components/Button'
 import { GeneralBroadcastModal } from '@/components/admin'
-import { useNotification } from '@/components/admin/NotificationProvider'
 import { UserGroupIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
 import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
+import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
 
 interface SponsorActionsProps {
   sponsors: ConferenceSponsorWithContact[]
@@ -26,8 +25,12 @@ export function SponsorActions({
   socialLinks,
   contactEmail,
 }: SponsorActionsProps) {
-  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false)
-  const { showNotification } = useNotification()
+  const {
+    isBroadcastModalOpen,
+    setIsBroadcastModalOpen,
+    handleBroadcastEmail,
+    handleSyncContacts,
+  } = useSponsorBroadcast()
 
   // Count sponsors with contact information
   const sponsorsWithContacts = sponsors.filter(
@@ -36,61 +39,6 @@ export function SponsorActions({
       sponsor.sponsor.contact_persons.length > 0 &&
       sponsor.sponsor.contact_persons.some((contact) => contact.email),
   )
-
-  const handleBroadcastEmail = async (subject: string, message: string) => {
-    try {
-      const payload = { subject, message }
-
-      const response = await fetch('/admin/api/sponsors/email/broadcast', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send broadcast email')
-      }
-
-      setIsBroadcastModalOpen(false)
-    } catch (error) {
-      console.error('Failed to send broadcast email:', error)
-      throw error // Let the modal handle the error display
-    }
-  }
-
-  const handleSyncContacts = async () => {
-    try {
-      const response = await fetch('/admin/api/sponsors/email/audience/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to sync sponsor contacts')
-      }
-
-      showNotification({
-        type: 'success',
-        title: 'Contacts Synced',
-        message: data.message,
-      })
-    } catch (error) {
-      console.error('Failed to sync sponsor contacts:', error)
-      showNotification({
-        type: 'error',
-        title: 'Sync Failed',
-        message: 'Failed to sync sponsor contacts with email audience',
-      })
-    }
-  }
 
   if (sponsorsWithContacts.length === 0) {
     return (
