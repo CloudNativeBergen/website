@@ -14,6 +14,7 @@ import {
   SponsorTierUpdateSchema,
   ConferenceSponsorInputSchema,
   SponsorTierAssignmentSchema,
+  InvoiceUpdateSchema,
 } from '../schemas/sponsor'
 import {
   getAllSponsors,
@@ -513,5 +514,45 @@ export const sponsorRouter = router({
       }
 
       return { success: true }
+    }),
+
+  updateInvoice: adminProcedure
+    .input(IdParamSchema.extend({ invoice: InvoiceUpdateSchema }))
+    .mutation(async ({ input }) => {
+      try {
+        const { sponsor, error } = await getSponsor(input.id, true)
+        if (error || !sponsor) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor not found',
+          })
+        }
+
+        // Update only the invoice field
+        const { sponsor: updatedSponsor, error: updateError } =
+          await updateSponsor(input.id, {
+            ...sponsor,
+            invoice: input.invoice,
+          })
+
+        if (updateError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update sponsor invoice',
+            cause: updateError,
+          })
+        }
+
+        return updatedSponsor
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to process invoice update request',
+          cause: error,
+        })
+      }
     }),
 })

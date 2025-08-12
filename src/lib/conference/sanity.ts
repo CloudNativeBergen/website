@@ -162,6 +162,16 @@ export async function getConferenceForDomain(
           email,
           reference,
           comments
+        },
+        invoice{
+          status,
+          date,
+          due_date,
+          their_ref,
+          our_ref,
+          amount,
+          currency,
+          notes
         },`
             : ''
         }

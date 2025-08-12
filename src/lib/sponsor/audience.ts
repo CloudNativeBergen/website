@@ -1,4 +1,4 @@
-import { ContactPerson, SponsorWithContactInfo } from './types'
+import { ContactPerson, SponsorDetailed } from './types'
 import {
   Contact,
   getOrCreateConferenceAudienceByType,
@@ -35,8 +35,8 @@ export function diffSponsorContacts(
  */
 export async function updateSponsorAudience(
   conference: Conference,
-  oldSponsor: SponsorWithContactInfo | null,
-  newSponsor: SponsorWithContactInfo,
+  oldSponsor: SponsorDetailed | null,
+  newSponsor: SponsorDetailed,
 ): Promise<{
   success: boolean
   addedCount: number

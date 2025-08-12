@@ -1,5 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
+import { ConferenceSponsorDetailed } from '@/lib/sponsor/types'
 import { ErrorDisplay, SponsorActions } from '@/components/admin'
 import SponsorTierEditor from '@/components/admin/SponsorTierEditor'
 import SponsorTierManagement from '@/components/admin/SponsorTierManagement'
@@ -10,6 +10,8 @@ import {
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
   UserGroupIcon,
+  HeartIcon,
+  Squares2X2Icon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
@@ -30,7 +32,7 @@ export default async function AdminSponsors() {
     )
   }
 
-  const sponsors: ConferenceSponsorWithContact[] = conference?.sponsors || []
+  const sponsors: ConferenceSponsorDetailed[] = conference?.sponsors || []
   const sponsorTiers = conference?.sponsor_tiers || []
 
   // Group sponsors by tier
@@ -102,7 +104,7 @@ export default async function AdminSponsors() {
 
   // Helper functions to check missing information
   const isMissingContactInfo = (
-    sponsor: ConferenceSponsorWithContact,
+    sponsor: ConferenceSponsorDetailed,
   ): boolean => {
     return (
       !sponsor.sponsor.contact_persons ||
@@ -111,7 +113,7 @@ export default async function AdminSponsors() {
   }
 
   const isMissingBillingInfo = (
-    sponsor: ConferenceSponsorWithContact,
+    sponsor: ConferenceSponsorDetailed,
   ): boolean => {
     return !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
   }
@@ -243,6 +245,44 @@ export default async function AdminSponsors() {
       <div className="mt-12">
         <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/admin/sponsors/board"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <Squares2X2Icon className="h-6 w-6 text-gray-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900">
+                  Pipeline Board
+                </p>
+                <p className="truncate text-sm text-gray-500">
+                  Visual kanban board for managing sponsor pipeline
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/sponsors/relationships"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <HeartIcon className="h-6 w-6 text-gray-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900">
+                  Relationship Management
+                </p>
+                <p className="truncate text-sm text-gray-500">
+                  Manage sponsor relationships, contracts, and invoicing
+                </p>
+              </div>
+            </div>
+          </Link>
+
           <Link
             href="/admin/sponsors/contacts"
             className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400"

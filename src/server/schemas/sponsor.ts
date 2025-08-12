@@ -21,6 +21,20 @@ export const BillingInfoSchema = z.object({
   comments: z.string().optional(),
 })
 
+// Invoice info schema
+export const InvoiceInfoSchema = z.object({
+  status: z
+    .enum(['pending', 'sent', 'paid', 'overdue', 'cancelled', 'partial'])
+    .optional(),
+  date: z.string().optional(), // ISO date string
+  due_date: z.string().optional(), // ISO date string
+  their_ref: z.string().optional(),
+  our_ref: z.string().optional(),
+  amount: z.number().min(0, 'Invoice amount must be positive').optional(),
+  currency: z.string().optional(),
+  notes: z.string().optional(),
+})
+
 // Sponsor input schema for creation/updates
 export const SponsorInputSchema = z.object({
   name: z.string().min(1, 'Sponsor name is required'),
@@ -29,6 +43,7 @@ export const SponsorInputSchema = z.object({
   org_number: z.string().optional(),
   contact_persons: z.array(ContactPersonSchema).optional(),
   billing: BillingInfoSchema.optional(),
+  invoice: InvoiceInfoSchema.optional(),
   tierId: z.string().optional(), // For tier assignment
 })
 
@@ -78,6 +93,7 @@ export const SponsorSearchSchema = z.object({
 // Update schemas (for partial updates)
 export const SponsorUpdateSchema = SponsorInputSchema.partial()
 export const SponsorTierUpdateSchema = SponsorTierInputSchema.partial()
+export const InvoiceUpdateSchema = InvoiceInfoSchema
 
 // ID parameter schemas
 export const IdParamSchema = z.object({

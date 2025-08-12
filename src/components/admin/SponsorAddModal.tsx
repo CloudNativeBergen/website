@@ -20,10 +20,11 @@ import {
 } from '@heroicons/react/24/outline'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
 import {
-  ConferenceSponsorWithContact,
+  ConferenceSponsorDetailed,
   SponsorTierExisting,
   SponsorInput,
-  SponsorWithContactInfo,
+  SponsorDetailed,
+  InvoiceInfo,
 } from '@/lib/sponsor/types'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 import { api } from '@/lib/trpc/client'
@@ -33,18 +34,19 @@ interface SponsorAddModalProps {
   onClose: () => void
   sponsorTiers: SponsorTierExisting[]
   preselectedTierId?: string
-  editingSponsor?: ConferenceSponsorWithContact | null
-  onSponsorAdded?: (sponsor: ConferenceSponsorWithContact) => void
-  onSponsorUpdated?: (sponsor: ConferenceSponsorWithContact) => void
+  editingSponsor?: ConferenceSponsorDetailed | null
+  onSponsorAdded?: (sponsor: ConferenceSponsorDetailed) => void
+  onSponsorUpdated?: (sponsor: ConferenceSponsorDetailed) => void
 }
 
-interface SponsorFormData extends Omit<SponsorInput, 'billing'> {
+interface SponsorFormData extends Omit<SponsorInput, 'billing' | 'invoice'> {
   tierId: string
   billing: {
     email: string
     reference?: string
     comments?: string
   }
+  invoice?: InvoiceInfo
 }
 
 export default function SponsorAddModal({
@@ -71,11 +73,11 @@ export default function SponsorAddModal({
     },
   })
 
-  const [availableSponsors, setAvailableSponsors] = useState<
-    SponsorWithContactInfo[]
-  >([])
+  const [availableSponsors, setAvailableSponsors] = useState<SponsorDetailed[]>(
+    [],
+  )
   const [selectedExistingSponsor, setSelectedExistingSponsor] =
-    useState<SponsorWithContactInfo | null>(null)
+    useState<SponsorDetailed | null>(null)
   const [query, setQuery] = useState('')
   const [sponsorId, setSponsorId] = useState<string>('')
   const [isCreatingNew, setIsCreatingNew] = useState(false)
@@ -179,6 +181,7 @@ export default function SponsorAddModal({
         org_number: formData.org_number,
         contact_persons: formData.contact_persons,
         billing: billingData,
+        invoice: formData.invoice,
       }
 
       if (editingSponsor) {
@@ -218,17 +221,18 @@ export default function SponsorAddModal({
           (tier) => tier._id === formData.tierId,
         )
 
-        // Create the ConferenceSponsorWithContact object to pass back
-        const updatedConferenceSponsor: ConferenceSponsorWithContact = {
+        // Create the ConferenceSponsorDetailed object to pass back
+        const updatedConferenceSponsor: ConferenceSponsorDetailed = {
           sponsor: {
             _id: updatedSponsor._id,
             name: updatedSponsor.name,
             website: updatedSponsor.website,
             logo: updatedSponsor.logo,
-            org_number: (updatedSponsor as SponsorWithContactInfo).org_number,
-            contact_persons: (updatedSponsor as SponsorWithContactInfo)
+            org_number: (updatedSponsor as SponsorDetailed).org_number,
+            contact_persons: (updatedSponsor as SponsorDetailed)
               .contact_persons,
-            billing: (updatedSponsor as SponsorWithContactInfo).billing,
+            billing: (updatedSponsor as SponsorDetailed).billing,
+            invoice: (updatedSponsor as SponsorDetailed).invoice,
           },
           tier: {
             title: selectedTier?.title || '',
@@ -258,8 +262,8 @@ export default function SponsorAddModal({
           (tier) => tier._id === formData.tierId,
         )
 
-        // Create the ConferenceSponsorWithContact object to pass back
-        const addedSponsor: ConferenceSponsorWithContact = {
+        // Create the ConferenceSponsorDetailed object to pass back
+        const addedSponsor: ConferenceSponsorDetailed = {
           sponsor: {
             _id: sponsorId || selectedExistingSponsor?._id || '',
             name: formData.name,
@@ -286,7 +290,7 @@ export default function SponsorAddModal({
     }
   }
 
-  const handleSponsorSelection = (sponsor: SponsorWithContactInfo | null) => {
+  const handleSponsorSelection = (sponsor: SponsorDetailed | null) => {
     setSelectedExistingSponsor(sponsor)
     if (sponsor) {
       setFormData({
@@ -415,7 +419,7 @@ export default function SponsorAddModal({
                     <div className="relative">
                       <ComboboxInput
                         className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
-                        displayValue={(sponsor: SponsorWithContactInfo) =>
+                        displayValue={(sponsor: SponsorDetailed) =>
                           sponsor?.name || ''
                         }
                         onChange={(event) => setQuery(event.target.value)}

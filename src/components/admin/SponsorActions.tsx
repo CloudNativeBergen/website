@@ -3,11 +3,11 @@
 import { Button } from '@/components/Button'
 import { GeneralBroadcastModal } from '@/components/admin'
 import { UserGroupIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
-import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
+import { ConferenceSponsorDetailed, ContactPerson } from '@/lib/sponsor/types'
 import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
 
 interface SponsorActionsProps {
-  sponsors: ConferenceSponsorWithContact[]
+  sponsors: ConferenceSponsorDetailed[]
   conferenceTitle: string
   conferenceLocation: string
   conferenceDate: string
@@ -37,7 +37,9 @@ export function SponsorActions({
     (sponsor) =>
       sponsor.sponsor.contact_persons &&
       sponsor.sponsor.contact_persons.length > 0 &&
-      sponsor.sponsor.contact_persons.some((contact) => contact.email),
+      sponsor.sponsor.contact_persons.some(
+        (contact: ContactPerson) => contact.email,
+      ),
   )
 
   if (sponsorsWithContacts.length === 0) {

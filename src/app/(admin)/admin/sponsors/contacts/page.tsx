@@ -4,7 +4,7 @@ import {
   SponsorContactActions,
 } from '@/components/admin'
 import { UserGroupIcon } from '@heroicons/react/24/outline'
-import { SponsorWithContactInfo } from '@/lib/sponsor/types'
+import { SponsorDetailed } from '@/lib/sponsor/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSponsorsForConference } from '@/lib/sponsor/sanity'
 
@@ -38,7 +38,7 @@ export default async function AdminSponsorContacts() {
       )
     }
 
-    const sponsorsWithContacts = sponsors as SponsorWithContactInfo[]
+    const sponsorsWithContacts = sponsors as SponsorDetailed[]
 
     // Filter sponsors with contact information
     const sponsorsWithContactInfo = sponsorsWithContacts.filter(

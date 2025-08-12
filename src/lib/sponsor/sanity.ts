@@ -4,7 +4,7 @@ import {
   SponsorTierExisting,
   SponsorInput,
   SponsorExisting,
-  SponsorWithContactInfo,
+  SponsorDetailed,
 } from './types'
 import {
   prepareArrayWithKeys,
@@ -143,7 +143,7 @@ export async function getSponsorTier(
 
 export async function createSponsor(
   data: SponsorInput,
-): Promise<{ sponsor?: SponsorWithContactInfo; error?: Error }> {
+): Promise<{ sponsor?: SponsorDetailed; error?: Error }> {
   try {
     const sponsor = await clientWrite.create({
       _type: 'sponsor',
@@ -155,9 +155,11 @@ export async function createSponsor(
         ? prepareArrayWithKeys(data.contact_persons, 'contact')
         : undefined,
       billing: data.billing,
+      invoice: data.invoice,
+      relationship: data.relationship,
     })
 
-    const result: SponsorWithContactInfo = {
+    const result: SponsorDetailed = {
       _id: sponsor._id,
       _createdAt: sponsor._createdAt,
       _updatedAt: sponsor._updatedAt,
@@ -167,6 +169,8 @@ export async function createSponsor(
       org_number: sponsor.org_number,
       contact_persons: sponsor.contact_persons,
       billing: sponsor.billing,
+      invoice: sponsor.invoice,
+      relationship: sponsor.relationship,
     }
 
     return { sponsor: result }
@@ -178,7 +182,7 @@ export async function createSponsor(
 export async function updateSponsor(
   id: string,
   data: SponsorInput,
-): Promise<{ sponsor?: SponsorWithContactInfo; error?: Error }> {
+): Promise<{ sponsor?: SponsorDetailed; error?: Error }> {
   try {
     const sponsor = await clientWrite
       .patch(id)
@@ -191,10 +195,12 @@ export async function updateSponsor(
           ? prepareArrayWithKeys(data.contact_persons, 'contact')
           : undefined,
         billing: data.billing,
+        invoice: data.invoice,
+        relationship: data.relationship,
       })
       .commit()
 
-    const result: SponsorWithContactInfo = {
+    const result: SponsorDetailed = {
       _id: sponsor._id,
       _createdAt: sponsor._createdAt,
       _updatedAt: sponsor._updatedAt,
@@ -204,6 +210,8 @@ export async function updateSponsor(
       org_number: sponsor.org_number,
       contact_persons: sponsor.contact_persons,
       billing: sponsor.billing,
+      invoice: sponsor.invoice,
+      relationship: sponsor.relationship,
     }
 
     return { sponsor: result }
@@ -225,7 +233,7 @@ export async function getSponsor(
   id: string,
   includeContactInfo: boolean = false,
 ): Promise<{
-  sponsor?: SponsorExisting | SponsorWithContactInfo
+  sponsor?: SponsorExisting | SponsorDetailed
   error?: Error
 }> {
   try {
@@ -248,6 +256,52 @@ export async function getSponsor(
           email,
           reference,
           comments
+        },
+        invoice{
+          status,
+          date,
+          due_date,
+          their_ref,
+          our_ref,
+          amount,
+          currency,
+          notes,
+          payment_terms,
+          payment_date,
+          payment_method
+        },
+        relationship{
+          status,
+          status_history[]{
+            _key,
+            status,
+            date,
+            notes,
+            updated_by
+          },
+          contract{
+            value,
+            currency,
+            signed_date,
+            start_date,
+            end_date,
+            terms,
+            deliverables
+          },
+          communications[]{
+            _key,
+            date,
+            type,
+            direction,
+            summary,
+            outcome,
+            next_action,
+            logged_by
+          },
+          assigned_to,
+          priority,
+          next_action_date,
+          notes
         }`
       : `_id,
         _createdAt,
@@ -277,7 +331,7 @@ export async function searchSponsors(
   query: string,
   includeContactInfo: boolean = false,
 ): Promise<{
-  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
+  sponsors?: SponsorExisting[] | SponsorDetailed[]
   error?: Error
 }> {
   try {
@@ -300,6 +354,52 @@ export async function searchSponsors(
           email,
           reference,
           comments
+        },
+        invoice{
+          status,
+          date,
+          due_date,
+          their_ref,
+          our_ref,
+          amount,
+          currency,
+          notes,
+          payment_terms,
+          payment_date,
+          payment_method
+        },
+        relationship{
+          status,
+          status_history[]{
+            _key,
+            status,
+            date,
+            notes,
+            updated_by
+          },
+          contract{
+            value,
+            currency,
+            signed_date,
+            start_date,
+            end_date,
+            terms,
+            deliverables
+          },
+          communications[]{
+            _key,
+            date,
+            type,
+            direction,
+            summary,
+            outcome,
+            next_action,
+            logged_by
+          },
+          assigned_to,
+          priority,
+          next_action_date,
+          notes
         }`
       : `_id,
         _createdAt,
@@ -324,7 +424,7 @@ export async function searchSponsors(
 export async function getAllSponsors(
   includeContactInfo: boolean = false,
 ): Promise<{
-  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
+  sponsors?: SponsorExisting[] | SponsorDetailed[]
   error?: Error
 }> {
   try {
@@ -347,6 +447,52 @@ export async function getAllSponsors(
           email,
           reference,
           comments
+        },
+        invoice{
+          status,
+          date,
+          due_date,
+          their_ref,
+          our_ref,
+          amount,
+          currency,
+          notes,
+          payment_terms,
+          payment_date,
+          payment_method
+        },
+        relationship{
+          status,
+          status_history[]{
+            _key,
+            status,
+            date,
+            notes,
+            updated_by
+          },
+          contract{
+            value,
+            currency,
+            signed_date,
+            start_date,
+            end_date,
+            terms,
+            deliverables
+          },
+          communications[]{
+            _key,
+            date,
+            type,
+            direction,
+            summary,
+            outcome,
+            next_action,
+            logged_by
+          },
+          assigned_to,
+          priority,
+          next_action_date,
+          notes
         }`
       : `_id,
         _createdAt,
@@ -371,7 +517,7 @@ export async function getSponsorsForConference(
   conferenceId: string,
   includeContactInfo: boolean = false,
 ): Promise<{
-  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
+  sponsors?: SponsorExisting[] | SponsorDetailed[]
   error?: Error
 }> {
   try {
@@ -394,6 +540,52 @@ export async function getSponsorsForConference(
           email,
           reference,
           comments
+        },
+        invoice{
+          status,
+          date,
+          due_date,
+          their_ref,
+          our_ref,
+          amount,
+          currency,
+          notes,
+          payment_terms,
+          payment_date,
+          payment_method
+        },
+        relationship{
+          status,
+          status_history[]{
+            _key,
+            status,
+            date,
+            notes,
+            updated_by
+          },
+          contract{
+            value,
+            currency,
+            signed_date,
+            start_date,
+            end_date,
+            terms,
+            deliverables
+          },
+          communications[]{
+            _key,
+            date,
+            type,
+            direction,
+            summary,
+            outcome,
+            next_action,
+            logged_by
+          },
+          assigned_to,
+          priority,
+          next_action_date,
+          notes
         }`
       : `_id,
         _createdAt,

@@ -5,7 +5,7 @@ import { Topic } from '@/lib/topic/types'
 import {
   SponsorTier,
   ConferenceSponsor,
-  ConferenceSponsorWithContact,
+  ConferenceSponsorDetailed,
 } from '@/lib/sponsor/types'
 
 export interface ConferenceProposals {
@@ -63,7 +63,7 @@ export interface Conference {
   domains: string[]
   formats: Format[]
   topics: Topic[]
-  sponsors?: ConferenceSponsor[] | ConferenceSponsorWithContact[]
+  sponsors?: ConferenceSponsor[] | ConferenceSponsorDetailed[]
   sponsor_tiers?: SponsorTier[]
   schedules?: ConferenceSchedule[]
   vanity_metrics?: ConferenceVanityMetric[]
