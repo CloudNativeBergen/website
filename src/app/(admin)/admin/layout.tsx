@@ -1,4 +1,5 @@
 import { AdminLayout } from '@/components/admin'
+import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { getAuthSession } from '@/lib/auth'
 
 export default async function AdminRootLayout({
@@ -15,5 +16,9 @@ export default async function AdminRootLayout({
     )
   }
 
-  return <AdminLayout>{children}</AdminLayout>
+  return (
+    <TRPCProvider>
+      <AdminLayout>{children}</AdminLayout>
+    </TRPCProvider>
+  )
 }

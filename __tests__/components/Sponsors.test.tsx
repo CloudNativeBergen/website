@@ -6,6 +6,7 @@ describe('Sponsors Sorting Logic', () => {
   const mockSponsors: ConferenceSponsor[] = [
     {
       sponsor: {
+        _id: 'sponsor-a-id',
         name: 'Sponsor A',
         website: 'https://a.com',
         logo: 'logo-a',
@@ -19,6 +20,7 @@ describe('Sponsors Sorting Logic', () => {
     },
     {
       sponsor: {
+        _id: 'sponsor-b-id',
         name: 'Sponsor B',
         website: 'https://b.com',
         logo: 'logo-b',
@@ -32,6 +34,7 @@ describe('Sponsors Sorting Logic', () => {
     },
     {
       sponsor: {
+        _id: 'sponsor-c-id',
         name: 'Sponsor C',
         website: 'https://c.com',
         logo: 'logo-c',
@@ -45,6 +48,7 @@ describe('Sponsors Sorting Logic', () => {
     },
     {
       sponsor: {
+        _id: 'sponsor-d-id',
         name: 'Sponsor D',
         website: 'https://d.com',
         logo: 'logo-d',
@@ -85,6 +89,7 @@ describe('Sponsors Sorting Logic', () => {
     const goldSponsors: ConferenceSponsor[] = [
       {
         sponsor: {
+          _id: 'gold-sponsor-1-id',
           name: 'Gold Sponsor 1',
           website: 'https://1.com',
           logo: 'logo-1',
@@ -98,6 +103,7 @@ describe('Sponsors Sorting Logic', () => {
       },
       {
         sponsor: {
+          _id: 'gold-sponsor-2-id',
           name: 'Gold Sponsor 2',
           website: 'https://2.com',
           logo: 'logo-2',
@@ -170,6 +176,7 @@ describe('Sponsors Sorting Logic', () => {
   it('handles sponsors without prices gracefully', () => {
     const sponsorWithoutPrice: ConferenceSponsor = {
       sponsor: {
+        _id: 'sponsor-e-id',
         name: 'Sponsor E',
         website: 'https://e.com',
         logo: 'logo-e',
@@ -183,6 +190,7 @@ describe('Sponsors Sorting Logic', () => {
 
     const sponsorWithPrice: ConferenceSponsor = {
       sponsor: {
+        _id: 'sponsor-f-id',
         name: 'Sponsor F',
         website: 'https://f.com',
         logo: 'logo-f',

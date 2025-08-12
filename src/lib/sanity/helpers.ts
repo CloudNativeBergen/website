@@ -231,13 +231,23 @@ export async function removeReferenceFromArray(
       string,
       unknown
     >[]
+
+    // For nested references, use the keyPrefix as the field name directly
+    const referenceField = keyPrefix === 'ref' ? '_ref' : keyPrefix
+
     const updatedArray = existingArray
-      .filter(
-        (item) =>
-          item._ref !== referenceId &&
-          (item[keyPrefix.slice(0, -1)] as Record<string, unknown>)?._ref !==
-            referenceId,
-      )
+      .filter((item) => {
+        // Check direct reference
+        if (item._ref === referenceId) return false
+
+        // Check nested reference
+        if (referenceField !== '_ref') {
+          const nestedRef = item[referenceField] as Record<string, unknown>
+          if (nestedRef && nestedRef._ref === referenceId) return false
+        }
+
+        return true
+      })
       .map((item) => ({
         ...item,
         _key: (item._key as string) || generateKey(keyPrefix),

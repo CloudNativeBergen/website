@@ -144,6 +144,7 @@ export async function getConferenceForDomain(
         sponsors
           ? `sponsors[] | order(tier->tier_type asc, tier->price[0].amount desc, tier->title asc){
       sponsor->{
+        _id,
         name,
         website,
         logo,${

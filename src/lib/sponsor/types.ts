@@ -1,3 +1,18 @@
+/**
+ * Sponsor Type Definitions
+ *
+ * Migration Status:
+ * ✅ Sponsor CRUD operations: Fully migrated to tRPC
+ * ✅ Sponsor Tier management: Fully migrated to tRPC
+ * ✅ Conference-sponsor assignments: Fully migrated to tRPC
+ * ✅ Sponsor removal: Fixed and working correctly
+ * 🔄 Email functionality: Still uses REST API (maintains minimal response wrapper types)
+ *
+ * All sponsor management operations now use tRPC for type-safe, end-to-end communication.
+ * The sponsor removal functionality correctly removes sponsors from conferences without
+ * deleting the sponsor entity. Core types include sponsor _id for proper identification.
+ */
+
 export const CONTACT_ROLE_OPTIONS = [
   'Billing Reference',
   'Marketing',
@@ -8,7 +23,7 @@ export const CONTACT_ROLE_OPTIONS = [
 
 export type ContactRole = (typeof CONTACT_ROLE_OPTIONS)[number]
 
-// Core sponsor types
+// Core sponsor types - Used by both tRPC and REST APIs
 export interface SponsorTier {
   _id: string
   _createdAt: string
@@ -50,8 +65,10 @@ export interface SponsorTierInput {
 
 export type SponsorTierExisting = SponsorTier
 
+// Conference sponsor types - Used by UI components and data layer
 export interface ConferenceSponsor {
   sponsor: {
+    _id: string
     name: string
     website: string
     logo: string
@@ -70,6 +87,7 @@ export interface ConferenceSponsor {
 
 export interface ConferenceSponsorWithContact {
   sponsor: {
+    _id: string
     name: string
     website: string
     logo: string
@@ -89,34 +107,7 @@ export interface ConferenceSponsorWithContact {
   }
 }
 
-export interface SponsorTierResponse {
-  sponsorTier?: SponsorTierExisting
-  error?: {
-    message: string
-    type?: string
-    status?: number
-    validationErrors?: Array<{
-      field: string
-      message: string
-    }>
-  }
-}
-
-export interface SponsorTierListResponse {
-  sponsorTiers?: SponsorTierExisting[]
-  error?: {
-    message: string
-    type?: string
-    status?: number
-  }
-}
-
-export interface SponsorTierValidationError {
-  field: string
-  message: string
-}
-
-// Contact and billing information types
+// Contact and billing information types - Used by tRPC and UI components
 export interface ContactPerson extends Record<string, unknown> {
   _key: string
   name: string
@@ -137,7 +128,7 @@ export interface BillingFormData {
   comments?: string
 }
 
-// Sponsor types
+// Sponsor types - Core data structures used by tRPC
 export interface SponsorInput {
   name: string
   website: string
@@ -165,34 +156,13 @@ export interface SponsorWithContactInfo extends SponsorExisting {
   billing?: BillingInfo
 }
 
-export interface SponsorResponse {
-  sponsor?: SponsorExisting | SponsorWithContactInfo
-  error?: {
-    message: string
-    type?: string
-    status?: number
-    validationErrors?: Array<{
-      field: string
-      message: string
-    }>
-  }
-}
-
-export interface SponsorListResponse {
-  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
-  error?: {
-    message: string
-    type?: string
-    status?: number
-  }
-}
-
 // Conference sponsor assignment types
 export interface ConferenceSponsorInput {
   sponsorId: string
   tierId: string
 }
 
+// REST API Response types - Only used by remaining email functionality
 export interface ConferenceSponsorResponse {
   success?: boolean
   error?: {

@@ -1,14 +1,15 @@
-import {
-  SponsorTierInput,
-  SponsorTierValidationError,
-  SponsorInput,
-} from './types'
+import { SponsorTierInput, SponsorInput } from './types'
 import isSvg from 'is-svg'
+
+export interface ValidationError {
+  field: string
+  message: string
+}
 
 export function validateSponsorTier(
   data: SponsorTierInput & { conference?: string },
-): SponsorTierValidationError[] {
-  const errors: SponsorTierValidationError[] = []
+): ValidationError[] {
+  const errors: ValidationError[] = []
 
   // Validate title
   if (!data.title || data.title.trim().length === 0) {
@@ -121,10 +122,8 @@ export function validateSponsorTier(
   return errors
 }
 
-export function validateSponsor(
-  data: SponsorInput,
-): SponsorTierValidationError[] {
-  const errors: SponsorTierValidationError[] = []
+export function validateSponsor(data: SponsorInput): ValidationError[] {
+  const errors: ValidationError[] = []
 
   // Validate name
   if (!data.name || data.name.trim().length === 0) {

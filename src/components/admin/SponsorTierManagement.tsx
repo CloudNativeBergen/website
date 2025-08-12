@@ -17,10 +17,10 @@ import {
   SponsorTierExisting,
 } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
-import { removeSponsorFromConference } from '@/lib/sponsor/client'
 import { useNotification } from './NotificationProvider'
 import { ConfirmationModal } from './ConfirmationModal'
 import SponsorAddModal from './SponsorAddModal'
+import { api } from '@/lib/trpc/client'
 
 interface SponsorManagementProps {
   sponsors: ConferenceSponsorWithContact[]
@@ -43,17 +43,30 @@ export default function SponsorTierManagement({
     preselectedTierId?: string
     editingSponsor?: ConferenceSponsorWithContact | null
   }>({ isOpen: false, preselectedTierId: undefined, editingSponsor: null })
-  const [removingSponsors, setRemovingSponsors] = useState<Set<string>>(
-    new Set(),
-  )
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
     sponsorName: string
-    sponsorRef: string
-  }>({ isOpen: false, sponsorName: '', sponsorRef: '' })
+    sponsorId: string
+  }>({ isOpen: false, sponsorName: '', sponsorId: '' })
   const { showNotification } = useNotification()
 
-  // Helper functions to check missing information
+  const removeSponsorMutation = api.sponsor.removeFromConference.useMutation({
+    onSuccess: () => {
+      showNotification({
+        type: 'success',
+        title: 'Sponsor removed',
+        message: 'Sponsor has been successfully removed from the conference.',
+      })
+    },
+    onError: (error) => {
+      showNotification({
+        type: 'error',
+        title: 'Failed to remove sponsor',
+        message: error.message,
+      })
+    },
+  })
+
   const isMissingContactInfo = (
     sponsor: ConferenceSponsorWithContact,
   ): boolean => {
@@ -167,22 +180,21 @@ export default function SponsorTierManagement({
 
   const handleRemoveSponsor = async (
     sponsorName: string,
-    sponsorRef: string,
+    sponsorId: string,
   ) => {
     setConfirmationModal({
       isOpen: true,
       sponsorName,
-      sponsorRef,
+      sponsorId,
     })
   }
 
   const confirmRemoveSponsor = async () => {
-    const { sponsorName, sponsorRef } = confirmationModal
-    setConfirmationModal({ isOpen: false, sponsorName: '', sponsorRef: '' })
-    setRemovingSponsors((prev) => new Set(prev).add(sponsorRef))
+    const { sponsorName, sponsorId } = confirmationModal
+    setConfirmationModal({ isOpen: false, sponsorName: '', sponsorId: '' })
 
     try {
-      await removeSponsorFromConference(sponsorRef)
+      await removeSponsorMutation.mutateAsync({ id: sponsorId })
 
       // Update local state
       const updatedSponsors = sponsors.filter(
@@ -204,27 +216,8 @@ export default function SponsorTierManagement({
         (tierName) => newSponsorsByTier[tierName]?.length > 0,
       )
       setSortedTierNames(newSortedTierNames)
-
-      showNotification({
-        type: 'success',
-        title: 'Sponsor removed',
-        message: `${sponsorName} has been successfully removed from the conference.`,
-      })
-    } catch (error) {
-      console.error('Failed to remove sponsor:', error)
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to remove sponsor'
-      showNotification({
-        type: 'error',
-        title: 'Failed to remove sponsor',
-        message: errorMessage,
-      })
-    } finally {
-      setRemovingSponsors((prev) => {
-        const newSet = new Set(prev)
-        newSet.delete(sponsorRef)
-        return newSet
-      })
+    } catch {
+      // Error handling is done by the mutation
     }
   }
 
@@ -331,7 +324,7 @@ export default function SponsorTierManagement({
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {tierSponsors.map((sponsorData, index) => {
                     const sponsor = sponsorData.sponsor
-                    const isRemoving = removingSponsors.has(sponsor.name)
+                    const sponsorId = sponsor._id
 
                     return (
                       <div
@@ -359,9 +352,9 @@ export default function SponsorTierManagement({
                           </button>
                           <button
                             onClick={() =>
-                              handleRemoveSponsor(sponsor.name, sponsor.name)
+                              handleRemoveSponsor(sponsor.name, sponsorId)
                             }
-                            disabled={isRemoving}
+                            disabled={removeSponsorMutation.isPending}
                             className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                             title="Remove sponsor"
                           >
@@ -474,6 +467,14 @@ export default function SponsorTierManagement({
                       !sponsorsByTier[tier.title] ||
                       sponsorsByTier[tier.title].length === 0,
                   )
+                  .sort((a, b) => {
+                    // Sort by highest price first
+                    const getMaxPrice = (tier: SponsorTierExisting) => {
+                      if (!tier.price || tier.price.length === 0) return 0
+                      return Math.max(...tier.price.map((p) => p.amount))
+                    }
+                    return getMaxPrice(b) - getMaxPrice(a)
+                  })
                   .map((tier) => (
                     <div
                       key={tier._id}
@@ -531,7 +532,7 @@ export default function SponsorTierManagement({
           setConfirmationModal({
             isOpen: false,
             sponsorName: '',
-            sponsorRef: '',
+            sponsorId: '',
           })
         }
         onConfirm={confirmRemoveSponsor}
@@ -539,7 +540,7 @@ export default function SponsorTierManagement({
         message={`Are you sure you want to remove "${confirmationModal.sponsorName}" from this conference? This action cannot be undone.`}
         confirmButtonText="Remove"
         variant="danger"
-        isLoading={removingSponsors.has(confirmationModal.sponsorRef)}
+        isLoading={removeSponsorMutation.isPending}
       />
     </div>
   )

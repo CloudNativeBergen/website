@@ -19,12 +19,8 @@ import {
 import { StarIcon } from '@heroicons/react/20/solid'
 import clsx from 'clsx'
 import { SponsorTierInput, SponsorTierExisting } from '@/lib/sponsor/types'
-import {
-  createSponsorTier,
-  updateSponsorTier,
-  deleteSponsorTier,
-} from '@/lib/sponsor/client'
 import { formatCurrency } from '@/lib/format'
+import { api } from '@/lib/trpc/client'
 
 interface SponsorTierProps {
   conferenceId: string
@@ -47,7 +43,7 @@ function SponsorTierModal({
   isOpen,
   onClose,
   tier,
-  conferenceId,
+  conferenceId: _conferenceId, // eslint-disable-line @typescript-eslint/no-unused-vars
   onSave,
   onDelete,
 }: SponsorTierModalProps) {
@@ -60,26 +56,66 @@ function SponsorTierModal({
     sold_out: false,
     most_popular: false,
   })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  // tRPC mutations
+  const createMutation = api.sponsor.tiers.create.useMutation({
+    onSuccess: (createdTier) => {
+      if (createdTier) {
+        onSave(createdTier)
+        onClose()
+      }
+    },
+    onError: (error) => {
+      console.error('Error creating sponsor tier:', error)
+      alert('Failed to create sponsor tier. Please try again.')
+    },
+  })
+
+  const updateMutation = api.sponsor.tiers.update.useMutation({
+    onSuccess: (updatedTier) => {
+      if (updatedTier) {
+        onSave(updatedTier)
+        onClose()
+      }
+    },
+    onError: (error) => {
+      console.error('Error updating sponsor tier:', error)
+      alert('Failed to update sponsor tier. Please try again.')
+    },
+  })
+
+  const deleteMutation = api.sponsor.tiers.delete.useMutation({
+    onSuccess: () => {
+      if (tier && onDelete) {
+        onDelete(tier._id)
+      }
+      onClose()
+    },
+    onError: (error) => {
+      console.error('Error deleting sponsor tier:', error)
+      alert('Failed to delete sponsor tier. Please try again.')
+    },
+  })
+
+  // Initialize form data when tier changes
   useEffect(() => {
     if (tier) {
       setFormData({
-        title: tier.title || '',
-        tagline: tier.tagline || '',
-        tier_type: tier.tier_type || 'standard',
-        price:
-          tier.price && tier.price.length > 0
-            ? tier.price
-            : [{ amount: 0, currency: 'NOK' }],
-        perks:
-          tier.perks && tier.perks.length > 0
-            ? tier.perks
-            : [{ label: '', description: '' }],
-        sold_out: tier.sold_out ?? false,
-        most_popular: tier.most_popular ?? false,
+        title: tier.title,
+        tagline: tier.tagline,
+        tier_type: tier.tier_type,
+        price: tier.price?.map((p) => ({
+          _key: p._key,
+          amount: p.amount,
+          currency: p.currency,
+        })) || [{ amount: 0, currency: 'NOK' }],
+        perks: tier.perks?.map((p) => ({
+          _key: p._key,
+          label: p.label,
+          description: p.description,
+        })) || [{ label: '', description: '' }],
+        sold_out: tier.sold_out,
+        most_popular: tier.most_popular,
       })
     } else {
       setFormData({
@@ -92,52 +128,40 @@ function SponsorTierModal({
         most_popular: false,
       })
     }
-    setError('')
-    setShowDeleteConfirm(false)
-  }, [tier, isOpen])
+  }, [tier])
 
-  const handleClose = () => {
-    setShowDeleteConfirm(false)
-    onClose()
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setIsSubmitting(true)
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
 
     try {
-      let savedTier: SponsorTierExisting
-
       if (tier) {
         // Update existing tier
-        savedTier = await updateSponsorTier(tier._id, formData)
+        await updateMutation.mutateAsync({
+          id: tier._id,
+          data: formData,
+        })
       } else {
         // Create new tier
-        savedTier = await createSponsorTier(formData, conferenceId)
+        await createMutation.mutateAsync(formData)
       }
-
-      onSave(savedTier)
-      handleClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setIsSubmitting(false)
+    } catch {
+      // Error handling is done by the mutation onError callbacks
     }
   }
 
   const handleDelete = async () => {
-    if (!tier || !onDelete) return
+    if (!tier) return
 
-    setIsSubmitting(true)
-    try {
-      await deleteSponsorTier(tier._id)
-      onDelete(tier._id)
-      handleClose()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
-    } finally {
-      setIsSubmitting(false)
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the tier "${tier.title}"? This action cannot be undone.`,
+    )
+
+    if (confirmed) {
+      try {
+        await deleteMutation.mutateAsync({ id: tier._id })
+      } catch {
+        // Error handling is done by the mutation onError callback
+      }
     }
   }
 
@@ -149,12 +173,10 @@ function SponsorTierModal({
   }
 
   const removePrice = (index: number) => {
-    if (formData.price && formData.price.length > 1) {
-      setFormData((prev) => ({
-        ...prev,
-        price: prev.price?.filter((_, i) => i !== index),
-      }))
-    }
+    setFormData((prev) => ({
+      ...prev,
+      price: prev.price?.filter((_, i) => i !== index) || [],
+    }))
   }
 
   const updatePrice = (
@@ -164,11 +186,10 @@ function SponsorTierModal({
   ) => {
     setFormData((prev) => ({
       ...prev,
-      price: prev.price?.map((price, i) =>
-        i === index
-          ? { ...price, [field]: field === 'amount' ? Number(value) : value }
-          : price,
-      ),
+      price:
+        prev.price?.map((price, i) =>
+          i === index ? { ...price, [field]: value } : price,
+        ) || [],
     }))
   }
 
@@ -180,12 +201,10 @@ function SponsorTierModal({
   }
 
   const removePerk = (index: number) => {
-    if (formData.perks && formData.perks.length > 1) {
-      setFormData((prev) => ({
-        ...prev,
-        perks: prev.perks?.filter((_, i) => i !== index),
-      }))
-    }
+    setFormData((prev) => ({
+      ...prev,
+      perks: prev.perks?.filter((_, i) => i !== index) || [],
+    }))
   }
 
   const updatePerk = (
@@ -195,15 +214,21 @@ function SponsorTierModal({
   ) => {
     setFormData((prev) => ({
       ...prev,
-      perks: prev.perks?.map((perk, i) =>
-        i === index ? { ...perk, [field]: value } : perk,
-      ),
+      perks:
+        prev.perks?.map((perk, i) =>
+          i === index ? { ...perk, [field]: value } : perk,
+        ) || [],
     }))
   }
 
+  const isLoading =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    deleteMutation.isPending
+
   return (
-    <Transition show={isOpen}>
-      <Dialog className="relative z-50" onClose={handleClose}>
+    <Transition appear show={isOpen}>
+      <Dialog as="div" className="relative z-10" onClose={onClose}>
         <TransitionChild
           enter="ease-out duration-300"
           enterFrom="opacity-0"
@@ -212,493 +237,339 @@ function SponsorTierModal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="bg-opacity-75 fixed inset-0 bg-gray-500 transition-opacity" />
+          <div className="bg-opacity-25 fixed inset-0 bg-black" />
         </TransitionChild>
 
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
             <TransitionChild
               enter="ease-out duration-300"
-              enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-              enterTo="opacity-100 translate-y-0 sm:scale-100"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
               leave="ease-in duration-200"
-              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-              leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
             >
-              <DialogPanel className="relative transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl sm:p-6">
-                <div className="absolute top-0 right-0 hidden pt-4 pr-4 sm:block">
+              <DialogPanel className="w-full max-w-4xl transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                <div className="flex items-center justify-between">
+                  <DialogTitle
+                    as="h3"
+                    className="text-lg leading-6 font-medium text-gray-900"
+                  >
+                    {tier ? 'Edit Sponsor Tier' : 'Create Sponsor Tier'}
+                  </DialogTitle>
                   <button
-                    type="button"
-                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
-                    onClick={handleClose}
+                    onClick={onClose}
+                    disabled={isLoading}
+                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50"
                   >
                     <span className="sr-only">Close</span>
-                    <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+                    <XMarkIcon className="h-6 w-6" />
                   </button>
                 </div>
 
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 w-full text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <DialogTitle
-                      as="h3"
-                      className="text-base leading-6 font-semibold text-gray-900"
-                    >
-                      {tier ? 'Edit Sponsor Tier' : 'Create New Sponsor Tier'}
-                    </DialogTitle>
+                <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+                  {/* Basic Information */}
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="title"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Title *
+                      </label>
+                      <input
+                        type="text"
+                        id="title"
+                        value={formData.title}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            title: e.target.value,
+                          }))
+                        }
+                        required
+                        disabled={isLoading}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm"
+                        placeholder="e.g., Gold, Silver, Bronze"
+                      />
+                    </div>
 
-                    {error && (
-                      <div className="mt-4 rounded-md bg-red-50 p-4">
-                        <div className="flex">
-                          <div className="flex-shrink-0">
-                            <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
-                          </div>
-                          <div className="ml-3">
-                            <p className="text-sm text-red-800">{error}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    <div>
+                      <label
+                        htmlFor="tagline"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Tagline *
+                      </label>
+                      <input
+                        type="text"
+                        id="tagline"
+                        value={formData.tagline}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            tagline: e.target.value,
+                          }))
+                        }
+                        required
+                        disabled={isLoading}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm"
+                        placeholder="e.g., Premium partnership opportunity"
+                      />
+                    </div>
+                  </div>
 
-                    {showDeleteConfirm ? (
-                      <div className="mt-6">
-                        <div className="rounded-md bg-red-50 p-4">
-                          <div className="flex">
-                            <div className="flex-shrink-0">
-                              <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
-                            </div>
-                            <div className="ml-3">
-                              <h3 className="text-sm font-medium text-red-800">
-                                Delete Sponsor Tier
-                              </h3>
-                              <div className="mt-2 text-sm text-red-700">
-                                <p>
-                                  Are you sure you want to delete &quot;
-                                  {tier?.title}
-                                  &quot;? This action cannot be undone.
-                                </p>
-                              </div>
-                              <div className="mt-4 flex gap-x-3">
-                                <button
-                                  type="button"
-                                  disabled={isSubmitting}
-                                  onClick={handleDelete}
-                                  className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {isSubmitting ? 'Deleting...' : 'Delete'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setShowDeleteConfirm(false)}
-                                  className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
+                  {/* Tier Type and Status */}
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                    <div>
+                      <label
+                        htmlFor="tier_type"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Tier Type
+                      </label>
+                      <select
+                        id="tier_type"
+                        value={formData.tier_type}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            tier_type: e.target.value as 'standard' | 'special',
+                          }))
+                        }
+                        disabled={isLoading}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm"
+                      >
+                        <option value="standard">Standard</option>
+                        <option value="special">Special</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center">
+                      <input
+                        id="sold_out"
+                        type="checkbox"
+                        checked={formData.sold_out}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            sold_out: e.target.checked,
+                          }))
+                        }
+                        disabled={isLoading}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                      />
+                      <label
+                        htmlFor="sold_out"
+                        className="ml-2 block text-sm text-gray-900"
+                      >
+                        Sold Out
+                      </label>
+                    </div>
+
+                    <div className="flex items-center">
+                      <input
+                        id="most_popular"
+                        type="checkbox"
+                        checked={formData.most_popular}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            most_popular: e.target.checked,
+                          }))
+                        }
+                        disabled={isLoading}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                      />
+                      <label
+                        htmlFor="most_popular"
+                        className="ml-2 block text-sm text-gray-900"
+                      >
+                        Most Popular
+                        <StarIcon className="ml-1 inline h-4 w-4 text-yellow-400" />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Pricing */}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Pricing
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addPrice}
+                        disabled={isLoading}
+                        className="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50"
+                      >
+                        <PlusIcon className="mr-1 h-3 w-3" />
+                        Add Price
+                      </button>
+                    </div>
+                    <div className="mt-2 space-y-3">
+                      {formData.price?.map((price, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center space-x-3"
+                        >
+                          <div className="flex-1">
+                            <input
+                              type="number"
+                              value={price.amount}
+                              onChange={(e) =>
+                                updatePrice(
+                                  index,
+                                  'amount',
+                                  parseFloat(e.target.value) || 0,
+                                )
+                              }
+                              min="0"
+                              step="0.01"
+                              disabled={isLoading}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm"
+                              placeholder="Amount"
+                            />
                           </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <form onSubmit={handleSubmit} className="mt-6 space-y-8">
-                        {/* Basic Information */}
-                        <div className="space-y-6">
-                          <div>
-                            <label
-                              htmlFor="title"
-                              className="block text-sm/6 font-medium text-gray-900"
+                          <div className="w-24">
+                            <select
+                              value={price.currency}
+                              onChange={(e) =>
+                                updatePrice(index, 'currency', e.target.value)
+                              }
+                              disabled={isLoading}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm"
                             >
-                              Title *
-                            </label>
-                            <div className="mt-2">
+                              {CURRENCY_OPTIONS.map((currency) => (
+                                <option key={currency} value={currency}>
+                                  {currency}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {formData.price && formData.price.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removePrice(index)}
+                              disabled={isLoading}
+                              className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      )) || []}
+                    </div>
+                  </div>
+
+                  {/* Perks */}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Perks & Benefits
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addPerk}
+                        disabled={isLoading}
+                        className="inline-flex items-center rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50"
+                      >
+                        <PlusIcon className="mr-1 h-3 w-3" />
+                        Add Perk
+                      </button>
+                    </div>
+                    <div className="mt-2 space-y-3">
+                      {formData.perks?.map((perk, index) => (
+                        <div
+                          key={index}
+                          className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                        >
+                          <div>
+                            <input
+                              type="text"
+                              value={perk.label}
+                              onChange={(e) =>
+                                updatePerk(index, 'label', e.target.value)
+                              }
+                              disabled={isLoading}
+                              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm"
+                              placeholder="Perk title"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <div className="flex space-x-2">
                               <input
                                 type="text"
-                                id="title"
-                                value={formData.title || ''}
+                                value={perk.description}
                                 onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    title: e.target.value,
-                                  }))
+                                  updatePerk(
+                                    index,
+                                    'description',
+                                    e.target.value,
+                                  )
                                 }
-                                required
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                placeholder="e.g., Gold Sponsor"
+                                disabled={isLoading}
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm"
+                                placeholder="Perk description"
                               />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label
-                              htmlFor="tier_type"
-                              className="block text-sm/6 font-medium text-gray-900"
-                            >
-                              Tier Type *
-                            </label>
-                            <div className="mt-2">
-                              <div className="grid grid-cols-1">
-                                <select
-                                  id="tier_type"
-                                  value={formData.tier_type}
-                                  onChange={(e) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      tier_type: e.target.value as
-                                        | 'standard'
-                                        | 'special',
-                                      // Reset optional fields when switching types
-                                      price:
-                                        e.target.value === 'standard'
-                                          ? prev.price || [
-                                              { amount: 0, currency: 'NOK' },
-                                            ]
-                                          : undefined,
-                                      perks:
-                                        e.target.value === 'standard'
-                                          ? prev.perks || [
-                                              { label: '', description: '' },
-                                            ]
-                                          : prev.perks,
-                                    }))
-                                  }
-                                  className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                              {formData.perks && formData.perks.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removePerk(index)}
+                                  disabled={isLoading}
+                                  className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
                                 >
-                                  <option value="standard">
-                                    Standard Sponsor
-                                  </option>
-                                  <option value="special">
-                                    Special Sponsor (Media, Community, etc.)
-                                  </option>
-                                </select>
-                                <svg
-                                  fill="none"
-                                  viewBox="0 0 20 20"
-                                  strokeWidth={1.5}
-                                  stroke="currentColor"
-                                  aria-hidden="true"
-                                  className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="m19.5 8.25-7.5 7.5-7.5-7.5"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                            <p className="mt-2 text-sm text-gray-600">
-                              {formData.tier_type === 'standard'
-                                ? 'Standard sponsors require pricing and perks'
-                                : "Special sponsors (like Media or Community partners) are shown separately and don't require pricing"}
-                            </p>
-                          </div>
-
-                          <div>
-                            <label
-                              htmlFor="tagline"
-                              className="block text-sm/6 font-medium text-gray-900"
-                            >
-                              Tagline *
-                            </label>
-                            <div className="mt-2">
-                              <textarea
-                                id="tagline"
-                                rows={3}
-                                value={formData.tagline || ''}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    tagline: e.target.value,
-                                  }))
-                                }
-                                required
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                placeholder="e.g., Premium sponsorship tier with enhanced visibility and networking opportunities"
-                              />
+                                  <TrashIcon className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
-
-                        {/* Pricing - Only for Standard Sponsors */}
-                        {formData.tier_type === 'standard' && (
-                          <div>
-                            <div className="flex items-center justify-between">
-                              <label className="block text-sm/6 font-medium text-gray-900">
-                                Pricing *
-                              </label>
-                              <button
-                                type="button"
-                                onClick={addPrice}
-                                className="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                              >
-                                <PlusIcon className="mr-1 inline h-3 w-3" />
-                                Add Price
-                              </button>
-                            </div>
-                            <div className="mt-2 space-y-3">
-                              {(formData.price || []).map((price, index) => (
-                                <div
-                                  key={index}
-                                  className="flex items-center gap-x-3"
-                                >
-                                  <div className="flex-1">
-                                    <input
-                                      type="number"
-                                      value={price.amount || 0}
-                                      onChange={(e) =>
-                                        updatePrice(
-                                          index,
-                                          'amount',
-                                          e.target.value,
-                                        )
-                                      }
-                                      min="0"
-                                      step="1"
-                                      required
-                                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                      placeholder="Amount"
-                                    />
-                                  </div>
-                                  <div className="w-24">
-                                    <div className="grid grid-cols-1">
-                                      <select
-                                        value={price.currency || 'NOK'}
-                                        onChange={(e) =>
-                                          updatePrice(
-                                            index,
-                                            'currency',
-                                            e.target.value,
-                                          )
-                                        }
-                                        className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                      >
-                                        {CURRENCY_OPTIONS.map((currency) => (
-                                          <option
-                                            key={currency}
-                                            value={currency}
-                                          >
-                                            {currency}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <svg
-                                        fill="none"
-                                        viewBox="0 0 20 20"
-                                        strokeWidth={1.5}
-                                        stroke="currentColor"
-                                        aria-hidden="true"
-                                        className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          d="m19.5 8.25-7.5 7.5-7.5-7.5"
-                                        />
-                                      </svg>
-                                    </div>
-                                  </div>
-                                  {(formData.price || []).length > 1 && (
-                                    <button
-                                      type="button"
-                                      onClick={() => removePrice(index)}
-                                      className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
-                                    >
-                                      <TrashIcon className="h-4 w-4" />
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Perks - Optional for Special Sponsors */}
-                        <div>
-                          <div className="flex items-center justify-between">
-                            <label className="block text-sm/6 font-medium text-gray-900">
-                              Perks{' '}
-                              {formData.tier_type === 'standard'
-                                ? '*'
-                                : '(Optional)'}
-                            </label>
-                            <button
-                              type="button"
-                              onClick={addPerk}
-                              className="rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-                            >
-                              <PlusIcon className="mr-1 inline h-3 w-3" />
-                              Add Perk
-                            </button>
-                          </div>
-                          <div className="mt-2 space-y-3">
-                            {(formData.perks || []).map((perk, index) => (
-                              <div
-                                key={index}
-                                className="flex items-start gap-x-3"
-                              >
-                                <div className="grid flex-1 grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2">
-                                  <input
-                                    type="text"
-                                    value={perk.label || ''}
-                                    onChange={(e) =>
-                                      updatePerk(index, 'label', e.target.value)
-                                    }
-                                    required={formData.tier_type === 'standard'}
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                    placeholder="Perk name"
-                                  />
-                                  <input
-                                    type="text"
-                                    value={perk.description || ''}
-                                    onChange={(e) =>
-                                      updatePerk(
-                                        index,
-                                        'description',
-                                        e.target.value,
-                                      )
-                                    }
-                                    required={formData.tier_type === 'standard'}
-                                    className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                    placeholder="Perk description"
-                                  />
-                                </div>
-                                {(formData.perks || []).length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => removePerk(index)}
-                                    className="mt-0.5 rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
-                                  >
-                                    <TrashIcon className="h-4 w-4" />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Options */}
-                        <div className="space-y-6">
-                          <div className="flex gap-3">
-                            <div className="flex h-6 shrink-0 items-center">
-                              <div className="group grid size-4 grid-cols-1">
-                                <input
-                                  id="most_popular"
-                                  type="checkbox"
-                                  checked={formData.most_popular || false}
-                                  onChange={(e) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      most_popular: e.target.checked,
-                                    }))
-                                  }
-                                  className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 forced-colors:appearance-auto"
-                                />
-                                <svg
-                                  fill="none"
-                                  viewBox="0 0 14 14"
-                                  className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25"
-                                >
-                                  <path
-                                    d="M3 8L6 11L11 3.5"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    className="opacity-0 group-has-checked:opacity-100"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                            <div className="text-sm/6">
-                              <label
-                                htmlFor="most_popular"
-                                className="font-medium text-gray-900"
-                              >
-                                Mark as most popular
-                              </label>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-3">
-                            <div className="flex h-6 shrink-0 items-center">
-                              <div className="group grid size-4 grid-cols-1">
-                                <input
-                                  id="sold_out"
-                                  type="checkbox"
-                                  checked={formData.sold_out || false}
-                                  onChange={(e) =>
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      sold_out: e.target.checked,
-                                    }))
-                                  }
-                                  className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 forced-colors:appearance-auto"
-                                />
-                                <svg
-                                  fill="none"
-                                  viewBox="0 0 14 14"
-                                  className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25"
-                                >
-                                  <path
-                                    d="M3 8L6 11L11 3.5"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    className="opacity-0 group-has-checked:opacity-100"
-                                  />
-                                </svg>
-                              </div>
-                            </div>
-                            <div className="text-sm/6">
-                              <label
-                                htmlFor="sold_out"
-                                className="font-medium text-gray-900"
-                              >
-                                Mark as sold out
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center justify-between border-t border-gray-900/10 pt-8">
-                          <div>
-                            {tier && onDelete && (
-                              <button
-                                type="button"
-                                onClick={() => setShowDeleteConfirm(true)}
-                                className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600"
-                              >
-                                <TrashIcon className="mr-1 inline h-4 w-4" />
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                          <div className="flex gap-x-3">
-                            <button
-                              type="button"
-                              onClick={handleClose}
-                              className="text-sm/6 font-semibold text-gray-900 hover:text-gray-700"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="submit"
-                              disabled={isSubmitting}
-                              className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {isSubmitting
-                                ? tier
-                                  ? 'Updating...'
-                                  : 'Creating...'
-                                : tier
-                                  ? 'Update Tier'
-                                  : 'Create Tier'}
-                            </button>
-                          </div>
-                        </div>
-                      </form>
-                    )}
+                      )) || []}
+                    </div>
                   </div>
-                </div>
+
+                  {/* Actions */}
+                  <div className="flex justify-between pt-6">
+                    <div>
+                      {tier && onDelete && (
+                        <button
+                          type="button"
+                          onClick={handleDelete}
+                          disabled={isLoading}
+                          className="inline-flex items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50"
+                        >
+                          <ExclamationTriangleIcon className="mr-1.5 h-4 w-4" />
+                          {deleteMutation.isPending
+                            ? 'Deleting...'
+                            : 'Delete Tier'}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex space-x-3">
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={isLoading}
+                        className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isLoading}
+                        className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50"
+                      >
+                        {createMutation.isPending || updateMutation.isPending
+                          ? 'Saving...'
+                          : tier
+                            ? 'Update Tier'
+                            : 'Create Tier'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
               </DialogPanel>
             </TransitionChild>
           </div>
@@ -710,50 +581,54 @@ function SponsorTierModal({
 
 export default function SponsorTierEditor({
   conferenceId,
-  sponsorTiers: initialSponsorTiers,
+  sponsorTiers: initialTiers,
   onTierUpdate,
 }: SponsorTierProps) {
   const [sponsorTiers, setSponsorTiers] =
-    useState<SponsorTierExisting[]>(initialSponsorTiers)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingTier, setEditingTier] = useState<
+    useState<SponsorTierExisting[]>(initialTiers)
+  const [selectedTier, setSelectedTier] = useState<
     SponsorTierExisting | undefined
   >()
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
-  // Update local state when props change
+  // Sync with parent when tiers change
   useEffect(() => {
-    setSponsorTiers(initialSponsorTiers)
-  }, [initialSponsorTiers])
+    setSponsorTiers(initialTiers)
+  }, [initialTiers])
 
-  const handleEditTier = (tier: SponsorTierExisting) => {
-    setEditingTier(tier)
+  const openCreateModal = () => {
+    setSelectedTier(undefined)
     setIsModalOpen(true)
   }
 
-  const handleCreateTier = () => {
-    setEditingTier(undefined)
+  const openEditModal = (tier: SponsorTierExisting) => {
+    setSelectedTier(tier)
     setIsModalOpen(true)
   }
 
-  const handleTierSave = (savedTier: SponsorTierExisting) => {
-    let updatedTiers: SponsorTierExisting[]
+  const closeModal = () => {
+    setIsModalOpen(false)
+    setSelectedTier(undefined)
+  }
 
-    if (editingTier) {
+  const handleSave = (tier: SponsorTierExisting) => {
+    if (selectedTier) {
       // Update existing tier
-      updatedTiers = sponsorTiers.map((tier) =>
-        tier._id === savedTier._id ? savedTier : tier,
+      const updatedTiers = sponsorTiers.map((t) =>
+        t._id === tier._id ? tier : t,
       )
+      setSponsorTiers(updatedTiers)
+      onTierUpdate?.(updatedTiers)
     } else {
       // Add new tier
-      updatedTiers = [...sponsorTiers, savedTier]
+      const updatedTiers = [...sponsorTiers, tier]
+      setSponsorTiers(updatedTiers)
+      onTierUpdate?.(updatedTiers)
     }
-
-    setSponsorTiers(updatedTiers)
-    onTierUpdate?.(updatedTiers)
   }
 
-  const handleTierDelete = (tierId: string) => {
-    const updatedTiers = sponsorTiers.filter((tier) => tier._id !== tierId)
+  const handleDelete = (tierId: string) => {
+    const updatedTiers = sponsorTiers.filter((t) => t._id !== tierId)
     setSponsorTiers(updatedTiers)
     onTierUpdate?.(updatedTiers)
   }
@@ -761,12 +636,19 @@ export default function SponsorTierEditor({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium text-gray-900">Sponsor Tiers</h2>
+        <div>
+          <h3 className="text-lg leading-6 font-medium text-gray-900">
+            Sponsor Tiers
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Manage sponsorship tiers and their pricing.
+          </p>
+        </div>
         <button
-          onClick={handleCreateTier}
-          className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+          onClick={openCreateModal}
+          className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
         >
-          <PlusIcon className="mr-1 h-4 w-4" />
+          <PlusIcon className="mr-1.5 h-4 w-4" />
           Create Tier
         </button>
       </div>
@@ -782,10 +664,10 @@ export default function SponsorTierEditor({
           </p>
           <div className="mt-6">
             <button
-              onClick={handleCreateTier}
-              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+              onClick={openCreateModal}
+              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
             >
-              <PlusIcon className="mr-1 h-4 w-4" />
+              <PlusIcon className="mr-1.5 h-4 w-4" />
               Create Tier
             </button>
           </div>
@@ -794,98 +676,84 @@ export default function SponsorTierEditor({
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {sponsorTiers
             .sort((a, b) => {
-              // Sort standard tiers by price (highest first), special tiers by title
-              if (a.tier_type === 'special' && b.tier_type === 'special') {
-                return a.title.localeCompare(b.title)
+              // Sort by highest price first
+              const getMaxPrice = (tier: SponsorTierExisting) => {
+                if (!tier.price || tier.price.length === 0) return 0
+                return Math.max(...tier.price.map((p) => p.amount))
               }
-              if (a.tier_type === 'special') return 1 // Special tiers go last
-              if (b.tier_type === 'special') return -1 // Standard tiers go first
-
-              // Both are standard tiers, sort by highest price first
-              const maxPriceA = a.price
-                ? Math.max(...a.price.map((p) => p.amount))
-                : 0
-              const maxPriceB = b.price
-                ? Math.max(...b.price.map((p) => p.amount))
-                : 0
-              return maxPriceB - maxPriceA
+              return getMaxPrice(b) - getMaxPrice(a)
             })
             .map((tier) => (
               <div
                 key={tier._id}
                 className={clsx(
-                  'relative flex flex-col rounded-lg border bg-white px-6 py-5 shadow-sm hover:border-gray-400',
-                  tier.most_popular
-                    ? 'border-indigo-500 ring-2 ring-indigo-500'
-                    : 'border-gray-300',
+                  'group relative rounded-lg border border-gray-300 bg-white p-6 shadow-sm hover:border-gray-400',
+                  tier.most_popular && 'ring-2 ring-indigo-500',
                 )}
               >
                 {tier.most_popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 transform">
-                    <span className="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1 text-xs font-medium text-white">
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2">
+                    <span className="inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-medium text-white">
                       <StarIcon className="mr-1 h-3 w-3" />
                       Most Popular
                     </span>
                   </div>
                 )}
 
-                <div className="flex-1 text-center">
-                  <h3 className="text-lg font-medium text-gray-900">
+                <div className="absolute top-4 right-4 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => openEditModal(tier)}
+                      className="rounded-md bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100"
+                    >
+                      <PencilIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center">
+                  <TagIcon className="h-6 w-6 text-gray-400" />
+                  <h4 className="ml-3 text-lg font-medium text-gray-900">
                     {tier.title}
-                  </h3>
-                  <p className="mt-2 text-sm text-gray-500">{tier.tagline}</p>
+                  </h4>
+                </div>
 
-                  {tier.tier_type === 'special' && (
-                    <div className="mt-2">
-                      <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
-                        Special Sponsor
-                      </span>
+                <p className="mt-2 text-sm text-gray-500">{tier.tagline}</p>
+
+                {tier.price && tier.price.length > 0 && (
+                  <div className="mt-4">
+                    <div className="text-2xl font-bold text-gray-900">
+                      {formatCurrency(
+                        Math.max(...tier.price.map((p) => p.amount)),
+                        tier.price[0].currency,
+                      )}
                     </div>
-                  )}
+                    {tier.price.length > 1 && (
+                      <p className="text-sm text-gray-500">
+                        Starting from above price
+                      </p>
+                    )}
+                  </div>
+                )}
 
-                  {tier.price && tier.price.length > 0 && (
-                    <div className="mt-4">
-                      {tier.price.map((price, priceIndex) => (
-                        <div
-                          key={priceIndex}
-                          className="text-2xl font-bold text-gray-900"
-                        >
-                          {formatCurrency(price.amount, price.currency)}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {tier.sold_out && (
-                    <div className="mt-2">
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="flex space-x-2">
+                    <span
+                      className={clsx(
+                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                        tier.tier_type === 'special'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-blue-100 text-blue-800',
+                      )}
+                    >
+                      {tier.tier_type}
+                    </span>
+                    {tier.sold_out && (
                       <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
                         Sold Out
                       </span>
-                    </div>
-                  )}
-
-                  {tier.perks && tier.perks.length > 0 && (
-                    <div className="mt-4 text-left">
-                      <ul className="space-y-2">
-                        {tier.perks.map((perk, perkIndex) => (
-                          <li key={perkIndex} className="text-sm text-gray-600">
-                            <span className="font-medium">{perk.label}:</span>{' '}
-                            {perk.description}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6 flex justify-center">
-                  <button
-                    onClick={() => handleEditTier(tier)}
-                    className="inline-flex items-center rounded-md bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-100"
-                  >
-                    <PencilIcon className="mr-1 h-4 w-4" />
-                    Edit
-                  </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -894,11 +762,11 @@ export default function SponsorTierEditor({
 
       <SponsorTierModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        tier={editingTier}
+        onClose={closeModal}
+        tier={selectedTier}
         conferenceId={conferenceId}
-        onSave={handleTierSave}
-        onDelete={handleTierDelete}
+        onSave={handleSave}
+        onDelete={handleDelete}
       />
     </div>
   )

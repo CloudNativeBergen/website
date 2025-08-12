@@ -141,7 +141,6 @@ export async function getSponsorTier(
   }
 }
 
-// Sponsor functions
 export async function createSponsor(
   data: SponsorInput,
 ): Promise<{ sponsor?: SponsorWithContactInfo; error?: Error }> {

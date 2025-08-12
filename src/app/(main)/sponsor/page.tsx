@@ -3,6 +3,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { SponsorTier } from '@/lib/sponsor/types'
 import clsx from 'clsx'
 
 function PriceFormat({
@@ -46,14 +47,24 @@ export default async function Sponsor() {
   const standardSponsorTiers = allSponsorTiers
     .filter((tier) => tier.tier_type === 'standard')
     .sort((a, b) => {
-      const amountA = a.price?.[0]?.amount || 0
-      const amountB = b.price?.[0]?.amount || 0
-      return amountA - amountB
+      // Sort by highest price first
+      const getMaxPrice = (tier: SponsorTier) => {
+        if (!tier.price || tier.price.length === 0) return 0
+        return Math.max(...tier.price.map((p) => p.amount))
+      }
+      return getMaxPrice(b) - getMaxPrice(a)
     })
 
   const specialSponsorTiers = allSponsorTiers
     .filter((tier) => tier.tier_type === 'special')
-    .sort((a, b) => a.title.localeCompare(b.title))
+    .sort((a, b) => {
+      // Sort by highest price first for special tiers too
+      const getMaxPrice = (tier: SponsorTier) => {
+        if (!tier.price || tier.price.length === 0) return 0
+        return Math.max(...tier.price.map((p) => p.amount))
+      }
+      return getMaxPrice(b) - getMaxPrice(a)
+    })
 
   return (
     <>
