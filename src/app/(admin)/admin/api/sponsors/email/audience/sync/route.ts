@@ -2,7 +2,7 @@ import { NextAuthRequest, auth } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { syncSponsorAudience, Contact } from '@/lib/email/audience'
-import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
+import { ConferenceSponsorDetailed, ContactPerson } from '@/lib/sponsor/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,23 +26,24 @@ export const POST = auth(async (req: NextAuthRequest) => {
     }
 
     // Get sponsors from conference data
-    const sponsors = (conference.sponsors ||
-      []) as ConferenceSponsorWithContact[]
+    const sponsors = (conference.sponsors || []) as ConferenceSponsorDetailed[]
 
     // Filter sponsors that have contact persons with email addresses
     const eligibleSponsors = sponsors.filter(
-      (sponsor: ConferenceSponsorWithContact) =>
+      (sponsor: ConferenceSponsorDetailed) =>
         sponsor.sponsor.contact_persons &&
         sponsor.sponsor.contact_persons.length > 0 &&
-        sponsor.sponsor.contact_persons.some((contact) => contact.email),
+        sponsor.sponsor.contact_persons.some(
+          (contact: ContactPerson) => contact.email,
+        ),
     )
 
     // Transform sponsors to contact list
     const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
-      (sponsor: ConferenceSponsorWithContact) =>
+      (sponsor: ConferenceSponsorDetailed) =>
         sponsor.sponsor.contact_persons
-          ?.filter((contact) => contact.email)
-          .map((contact) => ({
+          ?.filter((contact: ContactPerson) => contact.email)
+          .map((contact: ContactPerson) => ({
             email: contact.email,
             firstName: contact.name?.split(' ')[0] || '',
             lastName: contact.name?.split(' ').slice(1).join(' ') || '',

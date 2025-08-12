@@ -1,6 +1,6 @@
 'use client'
 
-import { SponsorWithContactInfo, ContactPerson } from '@/lib/sponsor/types'
+import { SponsorDetailed, ContactPerson } from '@/lib/sponsor/types'
 import {
   EnvelopeIcon,
   BuildingOffice2Icon,
@@ -15,7 +15,7 @@ import { useState } from 'react'
 import { ContactRoleSelect } from '@/components/common/ContactRoleSelect'
 
 interface SponsorContactTableProps {
-  sponsors: SponsorWithContactInfo[]
+  sponsors: SponsorDetailed[]
 }
 
 const CopyEmailButton = ({ email }: { email: string }) => {
@@ -48,7 +48,7 @@ const CopyEmailButton = ({ email }: { email: string }) => {
 
 // Create unrolled contact rows for table display
 interface ContactRow {
-  sponsor: SponsorWithContactInfo
+  sponsor: SponsorDetailed
   contact: ContactPerson
   isFirstContactForSponsor: boolean
 }

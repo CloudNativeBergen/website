@@ -13,7 +13,7 @@ import {
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
 import {
-  ConferenceSponsorWithContact,
+  ConferenceSponsorDetailed,
   SponsorTierExisting,
 } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
@@ -23,9 +23,9 @@ import SponsorAddModal from './SponsorAddModal'
 import { api } from '@/lib/trpc/client'
 
 interface SponsorManagementProps {
-  sponsors: ConferenceSponsorWithContact[]
+  sponsors: ConferenceSponsorDetailed[]
   sponsorTiers: SponsorTierExisting[]
-  sponsorsByTier: Record<string, ConferenceSponsorWithContact[]>
+  sponsorsByTier: Record<string, ConferenceSponsorDetailed[]>
   sortedTierNames: string[]
 }
 
@@ -41,7 +41,7 @@ export default function SponsorTierManagement({
   const [modalState, setModalState] = useState<{
     isOpen: boolean
     preselectedTierId?: string
-    editingSponsor?: ConferenceSponsorWithContact | null
+    editingSponsor?: ConferenceSponsorDetailed | null
   }>({ isOpen: false, preselectedTierId: undefined, editingSponsor: null })
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
@@ -68,7 +68,7 @@ export default function SponsorTierManagement({
   })
 
   const isMissingContactInfo = (
-    sponsor: ConferenceSponsorWithContact,
+    sponsor: ConferenceSponsorDetailed,
   ): boolean => {
     return (
       !sponsor.sponsor.contact_persons ||
@@ -77,12 +77,30 @@ export default function SponsorTierManagement({
   }
 
   const isMissingBillingInfo = (
-    sponsor: ConferenceSponsorWithContact,
+    sponsor: ConferenceSponsorDetailed,
   ): boolean => {
     return !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
   }
 
-  const addSponsorToState = (newSponsor: ConferenceSponsorWithContact) => {
+  const getInvoiceStatusColor = (status?: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-100 text-green-800'
+      case 'sent':
+        return 'bg-blue-100 text-blue-800'
+      case 'overdue':
+        return 'bg-red-100 text-red-800'
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-800'
+      case 'partial':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'pending':
+      default:
+        return 'bg-orange-100 text-orange-800'
+    }
+  }
+
+  const addSponsorToState = (newSponsor: ConferenceSponsorDetailed) => {
     // Add to sponsors array
     setSponsors((prev) => [...prev, newSponsor])
 
@@ -121,7 +139,7 @@ export default function SponsorTierManagement({
     })
   }
 
-  const openEditModal = (sponsor: ConferenceSponsorWithContact) => {
+  const openEditModal = (sponsor: ConferenceSponsorDetailed) => {
     setModalState({
       isOpen: true,
       editingSponsor: sponsor,
@@ -137,9 +155,7 @@ export default function SponsorTierManagement({
     })
   }
 
-  const updateSponsorInState = (
-    updatedSponsor: ConferenceSponsorWithContact,
-  ) => {
+  const updateSponsorInState = (updatedSponsor: ConferenceSponsorDetailed) => {
     // Update sponsors array
     setSponsors((prev) =>
       prev.map((sponsor) =>
@@ -439,6 +455,20 @@ export default function SponsorTierManagement({
                                 className={`h-3 w-3 ${!isMissingBillingInfo(sponsorData) ? 'mr-1' : ''}`}
                               />
                               {!isMissingBillingInfo(sponsorData) && 'Billing'}
+                            </span>
+                            {/* Invoice status badge */}
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getInvoiceStatusColor(
+                                sponsor.invoice?.status,
+                              )}`}
+                              title={`Invoice status: ${sponsor.invoice?.status || 'pending'}`}
+                            >
+                              {sponsor.invoice?.status
+                                ? sponsor.invoice.status
+                                    .charAt(0)
+                                    .toUpperCase() +
+                                  sponsor.invoice.status.slice(1)
+                                : 'Pending'}
                             </span>
                           </div>
                         </div>
