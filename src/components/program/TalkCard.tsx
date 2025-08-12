@@ -157,11 +157,18 @@ export function TalkCard({
     talkData.status === Status.withdrawn || talkData.status === Status.rejected
 
   // Create bookmark data for this talk
+  const split = talkData.format?.split('_') || []
+  const formatType = split[0] // 'workshop', 'presentation', 'lightning', etc.
+
   const bookmarkData = {
     talkId:
       talkData._id ||
       `${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}`,
-    title: isConfirmed ? talkData.title : 'Talk details to be announced',
+    title: isConfirmed
+      ? talkData.title
+      : formatType === 'workshop'
+        ? 'Workshop details to be announced'
+        : 'Talk details to be announced',
     startTime: talk.startTime,
     endTime: talk.endTime,
     scheduleDate: talk.scheduleDate,
@@ -239,8 +246,12 @@ export function TalkCard({
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <span>Talk details to be announced</span>
-                    <span className="inline-flex items-center gap-1 rounded bg-yellow-100 px-6 py-1 text-xs font-medium whitespace-nowrap text-yellow-800">
+                    <span>
+                      {formatType === 'workshop'
+                        ? 'Workshop details to be announced'
+                        : 'Talk details to be announced'}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-yellow-100 px-2 py-1 text-xs font-medium whitespace-nowrap text-yellow-800">
                       <ClockIcon className="h-3 w-3" />
                       To be announced
                     </span>
