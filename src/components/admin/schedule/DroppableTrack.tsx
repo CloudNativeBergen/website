@@ -741,7 +741,6 @@ const TrackHeader = ({
 }) => {
   // Calculate talk content minutes
   const talkContentMinutes = calculateTalkContentMinutes(track)
-  const totalSessions = track.talks.length
   const realTalks = track.talks.filter((talk) => talk.talk).length
 
   return (
