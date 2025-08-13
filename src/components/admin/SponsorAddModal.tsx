@@ -57,6 +57,7 @@ export default function SponsorAddModal({
   onSponsorUpdated,
 }: SponsorAddModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const companyNameInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
     website: '',
@@ -239,17 +240,25 @@ export default function SponsorAddModal({
 
         onSponsorUpdated?.(updatedConferenceSponsor)
       } else {
+        let finalSponsorId = sponsorId
+
         // Create new sponsor if needed
         if (isCreatingNew || !sponsorId) {
           const sponsor = await createMutation.mutateAsync(sponsorData)
           if (sponsor) {
+            finalSponsorId = sponsor._id
             setSponsorId(sponsor._id)
           }
         }
 
+        // Use selectedExistingSponsor ID if available
+        if (!finalSponsorId && selectedExistingSponsor) {
+          finalSponsorId = selectedExistingSponsor._id
+        }
+
         // Add sponsor to conference
         await addToConferenceMutation.mutateAsync({
-          sponsorId: sponsorId || selectedExistingSponsor?._id || '',
+          sponsorId: finalSponsorId,
           tierId: formData.tierId,
         })
 
@@ -261,7 +270,7 @@ export default function SponsorAddModal({
         // Create the ConferenceSponsorWithContact object to pass back
         const addedSponsor: ConferenceSponsorWithContact = {
           sponsor: {
-            _id: sponsorId || selectedExistingSponsor?._id || '',
+            _id: finalSponsorId,
             name: formData.name,
             website: formData.website,
             logo: formData.logo,
@@ -287,6 +296,12 @@ export default function SponsorAddModal({
   }
 
   const handleSponsorSelection = (sponsor: SponsorWithContactInfo | null) => {
+    if (sponsor === null) {
+      // This means "Create new sponsor" was selected
+      createNewSponsor()
+      return
+    }
+
     setSelectedExistingSponsor(sponsor)
     if (sponsor) {
       setFormData({
@@ -304,18 +319,6 @@ export default function SponsorAddModal({
       })
       setSponsorId(sponsor._id)
       setIsCreatingNew(false)
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        name: '',
-        website: '',
-        logo: '',
-        org_number: '',
-        contact_persons: [],
-        billing: { email: '', reference: '', comments: '' },
-      }))
-      setSponsorId('')
-      setIsCreatingNew(false)
     }
   }
 
@@ -324,14 +327,20 @@ export default function SponsorAddModal({
     setIsCreatingNew(true)
     setFormData((prev) => ({
       ...prev,
-      name: '',
+      name: query, // Use the current search query as the sponsor name
       website: '',
       logo: '',
       org_number: '',
       contact_persons: [],
       billing: { email: '', reference: '', comments: '' },
+      // Keep the selected tier
     }))
     setSponsorId('')
+
+    // Focus the company name input after a short delay to ensure DOM is updated
+    setTimeout(() => {
+      companyNameInputRef.current?.focus()
+    }, 100)
   }
 
   const filteredSponsors = query
@@ -339,6 +348,28 @@ export default function SponsorAddModal({
         sponsor.name.toLowerCase().includes(query.toLowerCase()),
       )
     : availableSponsors
+
+  // Check if form is valid for submission
+  const isFormValid = () => {
+    if (!formData.tierId) return false
+
+    // For creating new sponsors, all required fields must be filled
+    if (isCreatingNew) {
+      return (
+        formData.name.trim() && formData.website.trim() && formData.logo.trim()
+      )
+    }
+
+    // For editing existing sponsors or selecting existing sponsors, we're more lenient
+    // but still require basic fields
+    if (editingSponsor || selectedExistingSponsor) {
+      return (
+        formData.name.trim() && formData.website.trim() && formData.logo.trim()
+      )
+    }
+
+    return false
+  }
 
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
@@ -390,7 +421,6 @@ export default function SponsorAddModal({
                     .map((tier) => (
                       <option key={tier._id} value={tier._id}>
                         {tier.title}
-                        {tier.tagline ? ` - ${tier.tagline}` : ''}
                       </option>
                     ))}
                 </select>
@@ -432,11 +462,10 @@ export default function SponsorAddModal({
                         {!isCreatingNew && (
                           <ComboboxOption
                             value={null}
-                            className="relative cursor-pointer py-2 pr-9 pl-3 text-gray-900 select-none hover:bg-indigo-600 hover:text-white"
-                            onClick={createNewSponsor}
+                            className="group relative cursor-pointer py-2 pr-9 pl-3 text-gray-900 select-none hover:bg-indigo-600 hover:text-white"
                           >
                             <div className="flex items-center">
-                              <PlusIcon className="h-5 w-5 text-indigo-600" />
+                              <PlusIcon className="h-5 w-5 text-indigo-600 group-hover:text-white" />
                               <span className="ml-3 block truncate font-medium">
                                 Create new sponsor
                               </span>
@@ -512,6 +541,7 @@ export default function SponsorAddModal({
                       </label>
                       <div className="mt-2">
                         <input
+                          ref={companyNameInputRef}
                           type="text"
                           id="name"
                           value={formData.name}
@@ -536,7 +566,7 @@ export default function SponsorAddModal({
                         htmlFor="website"
                         className="block text-sm/6 font-medium text-gray-900"
                       >
-                        Website
+                        Website *
                       </label>
                       <div className="mt-2">
                         <input
@@ -549,6 +579,7 @@ export default function SponsorAddModal({
                               website: e.target.value,
                             }))
                           }
+                          required
                           className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
                           placeholder="https://example.com"
                         />
@@ -582,7 +613,7 @@ export default function SponsorAddModal({
                     {/* Logo Upload */}
                     <div className="sm:col-span-2">
                       <label className="block text-sm/6 font-medium text-gray-900">
-                        Logo (SVG)
+                        Logo (SVG) *
                       </label>
                       <div className="mt-2">
                         <input
@@ -887,6 +918,7 @@ export default function SponsorAddModal({
               <button
                 type="submit"
                 disabled={
+                  !isFormValid() ||
                   createMutation.isPending ||
                   updateMutation.isPending ||
                   addToConferenceMutation.isPending
