@@ -1,4 +1,4 @@
-import { Speaker, SpeakerInput, SpeakerWithTalks } from '@/lib/speaker/types'
+import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import {
   clientReadUncached as clientRead,
   clientWrite,
@@ -227,40 +227,6 @@ export async function getPublicSpeaker(
   return { speaker, talks, err }
 }
 
-export async function getPublicSpeakers(
-  conferenceId: string,
-  revalidate: number = 3600,
-) {
-  let speakers: SpeakerWithTalks[] = []
-  let err = null
-
-  try {
-    speakers = await clientReadCached.fetch(
-      `*[ _type == "speaker" && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0]{
-        _id, name, "slug": slug.current, title, bio, links, flags, "image": image.asset->url,
-        "talks": *[_type == "talk" && speaker._ref == ^._id && status == "confirmed" && conference._ref == $conferenceId] {
-          _id, title, description, language, level, format, audiences,
-          topics[]-> {
-            _id,
-            title,
-            "slug": slug.current,
-          }
-        }
-      }`,
-      { conferenceId },
-      {
-        next: {
-          revalidate: revalidate,
-        },
-      },
-    )
-  } catch (error) {
-    err = error as Error
-  }
-
-  return { speakers, err }
-}
-
 export async function updateSpeaker(
   spekaerId: string,
   speaker: SpeakerInput,
@@ -298,7 +264,8 @@ export async function getFeatured(): Promise<{
 
 export async function getSpeakers(
   conferenceId?: string,
-  statuses: Status[] = [Status.accepted, Status.confirmed],
+  statuses: Status[] = [Status.confirmed],
+  includeProposalsFromOtherConferences: boolean = false,
 ): Promise<{
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
   err: Error | null
@@ -312,11 +279,17 @@ export async function getSpeakers(
       : ''
     const statusFilter = statuses.map((status) => `"${status}"`).join(', ')
 
-    const query = groq`*[_type == "speaker" && count(*[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
+    // Conference filter for proposals - optional based on parameter
+    const proposalsConferenceFilter = includeProposalsFromOtherConferences
+      ? ''
+      : conferenceFilter
+
+    // Use references() function to check both old 'speaker' field and new 'speakers' array
+    const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
       ...,
       "slug": slug.current,
       "image": image.asset->url,
-      "proposals": *[_type == "talk" && speaker._ref == ^._id && status in [${statusFilter}] ${conferenceFilter}] {
+      "proposals": *[_type == "talk" && references(^._id) && status in [${statusFilter}] ${proposalsConferenceFilter}] {
         _id,
         title,
         status,
@@ -352,9 +325,14 @@ export async function getSpeakers(
 
 export async function getSpeakersWithAcceptedTalks(
   conferenceId?: string,
+  includeProposalsFromOtherConferences: boolean = false,
 ): Promise<{
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
   err: Error | null
 }> {
-  return getSpeakers(conferenceId, [Status.accepted, Status.confirmed])
+  return getSpeakers(
+    conferenceId,
+    [Status.accepted, Status.confirmed],
+    includeProposalsFromOtherConferences,
+  )
 }

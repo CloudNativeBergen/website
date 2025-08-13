@@ -51,6 +51,16 @@ export function ProposalCard({
   const reviewCount = proposal.reviews?.length || 0
   const speakerNames = getProposalSpeakerNames(proposal)
 
+  // Get current conference ID for speaker indicators
+  const currentConferenceId =
+    typeof proposal.conference === 'object' &&
+    proposal.conference &&
+    '_id' in proposal.conference
+      ? proposal.conference._id
+      : typeof proposal.conference === 'string'
+        ? proposal.conference
+        : undefined
+
   const CardContent = () => (
     <div className="flex items-start space-x-4">
       <div className="flex-shrink-0">
@@ -96,6 +106,7 @@ export function ProposalCard({
                   speakers={speakers}
                   size="md"
                   maxVisible={5}
+                  currentConferenceId={currentConferenceId}
                 />
               </div>
             )}

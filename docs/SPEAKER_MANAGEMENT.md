@@ -33,7 +33,7 @@ The speaker management page pulls data from:
 
 ### Backend/Data Layer
 
-- `src/lib/speaker/sanity.ts` - Contains `getSpeakersWithAcceptedTalks()` function
+- `src/lib/speaker/sanity.ts` - Contains speaker query functions including `getSpeakers()` and `getSpeakersWithAcceptedTalks()`
 - `src/lib/speaker/types.ts` - Speaker type definitions
 
 ### Frontend Components
@@ -44,23 +44,44 @@ The speaker management page pulls data from:
 
 ### Key Functions
 
-#### `getSpeakers(conferenceId?: string, statuses: Status[] = [Status.accepted, Status.confirmed])`
+#### `getSpeakers(conferenceId?: string, statuses: Status[] = [Status.confirmed], includeProposalsFromOtherConferences: boolean = false)`
 
-Generic function to fetch speakers based on talk proposal statuses.
+Generic function to fetch speakers based on talk proposal statuses. By default, only returns speakers with confirmed talks to ensure only publicly visible speakers are included.
 
 **Parameters:**
 
 - `conferenceId` (optional): Filter speakers by specific conference
-- `statuses` (optional): Array of proposal statuses to filter by (defaults to accepted and confirmed)
+- `statuses` (optional): Array of proposal statuses to filter by (defaults to confirmed only)
+- `includeProposalsFromOtherConferences` (optional): Whether to include proposals from other conferences in the speaker's proposal list (defaults to false)
 
 **Returns:**
 
 - Array of speakers with their associated proposals
 - Error handling for failed queries
 
-#### `getSpeakersWithAcceptedTalks(conferenceId?: string)`
+**Usage:**
 
-Legacy wrapper function that calls `getSpeakers` with accepted and confirmed statuses.
+```typescript
+// Get only confirmed speakers (default)
+const { speakers, err } = await getSpeakers(conferenceId)
+
+// Get speakers with accepted or confirmed talks (for admin views)
+const { speakers, err } = await getSpeakers(conferenceId, [
+  Status.accepted,
+  Status.confirmed,
+])
+
+// Get speakers with proposals from all conferences (for comprehensive admin views)
+const { speakers, err } = await getSpeakers(
+  conferenceId,
+  [Status.accepted, Status.confirmed],
+  true,
+)
+```
+
+#### `getSpeakersWithAcceptedTalks(conferenceId?: string, includeProposalsFromOtherConferences: boolean = false)`
+
+Convenience function that calls `getSpeakers` with both accepted and confirmed statuses. Useful for admin interfaces that need to show all speakers with talks under consideration.
 
 ## Usage
 

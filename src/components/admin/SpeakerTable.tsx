@@ -24,6 +24,7 @@ interface SpeakerWithProposals extends Speaker {
 
 interface SpeakerTableProps {
   speakers: SpeakerWithProposals[]
+  currentConferenceId?: string
 }
 
 // Helper function to get a compact format display
@@ -86,7 +87,10 @@ const CopyEmailButton = ({ email }: { email: string }) => {
   )
 }
 
-export function SpeakerTable({ speakers }: SpeakerTableProps) {
+export function SpeakerTable({
+  speakers,
+  currentConferenceId,
+}: SpeakerTableProps) {
   if (speakers.length === 0) {
     return (
       <div className="rounded-lg bg-gray-50 p-8 text-center">
@@ -169,6 +173,7 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
                   size="md"
                   maxVisible={5}
                   className="justify-start"
+                  currentConferenceId={currentConferenceId}
                 />
               </td>
               <td className="px-4 py-3">
@@ -186,27 +191,43 @@ export function SpeakerTable({ speakers }: SpeakerTableProps) {
               </td>
               <td className="px-4 py-3">
                 <div className="space-y-1">
-                  {speaker.proposals.map((proposal) => (
-                    <div
-                      key={proposal._id}
-                      className="flex items-center gap-2 text-xs"
-                    >
-                      <StatusBadge status={proposal.status} />
-                      <span
-                        className="max-w-[200px] truncate text-gray-900"
-                        title={proposal.title}
+                  {speaker.proposals
+                    .filter((proposal) => {
+                      // Only show proposals from the current conference
+                      if (!currentConferenceId) return true
+
+                      const proposalConferenceId =
+                        typeof proposal.conference === 'object' &&
+                        proposal.conference &&
+                        '_id' in proposal.conference
+                          ? proposal.conference._id
+                          : typeof proposal.conference === 'string'
+                            ? proposal.conference
+                            : null
+
+                      return proposalConferenceId === currentConferenceId
+                    })
+                    .map((proposal) => (
+                      <div
+                        key={proposal._id}
+                        className="flex items-center gap-2 text-xs"
                       >
-                        {proposal.title}
-                      </span>
-                      <span
-                        className="flex-shrink-0 text-gray-500"
-                        title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
-                      >
-                        {getCompactFormat(proposal.format)} •{' '}
-                        {languages.get(proposal.language)}
-                      </span>
-                    </div>
-                  ))}
+                        <StatusBadge status={proposal.status} />
+                        <span
+                          className="max-w-[200px] truncate text-gray-900"
+                          title={proposal.title}
+                        >
+                          {proposal.title}
+                        </span>
+                        <span
+                          className="flex-shrink-0 text-gray-500"
+                          title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
+                        >
+                          {getCompactFormat(proposal.format)} •{' '}
+                          {languages.get(proposal.language)}
+                        </span>
+                      </div>
+                    ))}
                 </div>
               </td>
             </tr>

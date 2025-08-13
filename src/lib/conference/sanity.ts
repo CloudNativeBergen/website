@@ -91,7 +91,7 @@ export async function getConferenceForDomain(
       ...,
       "slug": slug.current,
       "image": image.asset->url,
-      "talks": *[_type == "talk" && speaker._ref == ^._id && conference._ref == ^.^._id && status == "confirmed"]{
+      "talks": *[_type == "talk" && references(^._id) && conference._ref == ^.^._id && status == "confirmed"]{
       _id,
       title,
       description,

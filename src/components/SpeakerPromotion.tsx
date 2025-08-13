@@ -558,235 +558,241 @@ export async function SpeakerPromotion({
 
   if (variant === 'minimal') {
     return (
-      <div
-        className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-100 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg ${className}`}
-      >
-        <div className="relative flex h-full flex-col text-center">
-          {/* Speaker Image */}
-          <div className="mb-4 flex justify-center">
-            <SpeakerImage
-              image={image}
-              name={name}
-              size={100}
-              className="rounded-2xl object-cover shadow-md transition-colors duration-300"
-            />
-          </div>
+      <Link href={finalCtaUrl}>
+        <div
+          className={`group relative overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} cursor-pointer border border-gray-100 p-6 transition-all duration-300 hover:border-brand-cloud-blue/30 hover:shadow-lg ${className}`}
+        >
+          <div className="relative flex h-full flex-col text-center">
+            {/* Speaker Image */}
+            <div className="mb-4 flex justify-center">
+              <SpeakerImage
+                image={image}
+                name={name}
+                size={100}
+                className="rounded-2xl object-cover shadow-md transition-colors duration-300"
+              />
+            </div>
 
-          {/* Content Area - Flexible */}
-          <div className="flex flex-1 flex-col">
-            {/* Speaker Name - Large and Bold */}
-            <h3 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
-              {name}
-            </h3>
+            {/* Content Area - Fixed height for consistency */}
+            <div className="flex flex-1 flex-col">
+              {/* Speaker Name - Large and Bold */}
+              <h3 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
+                {name}
+              </h3>
 
-            {/* Title - Clean and Prominent */}
-            {title && (
-              <p className="font-inter mb-3 text-sm leading-relaxed font-semibold text-brand-slate-gray/80">
-                {title}
-              </p>
-            )}
+              {/* Title - Clean and Prominent */}
+              {title && (
+                <p className="font-inter mb-3 line-clamp-2 text-sm leading-relaxed font-semibold text-brand-slate-gray/80">
+                  {title}
+                </p>
+              )}
 
-            {/* Company Badge */}
-            {company && (
-              <div className="mb-4 inline-flex items-center justify-center">
-                <div className="inline-flex items-center rounded-full bg-brand-sky-mist px-3 py-1">
-                  <BuildingOfficeIcon className="mr-1.5 h-3 w-3 text-brand-cloud-blue" />
-                  <span className="font-inter text-xs font-medium text-brand-cloud-blue">
-                    {company}
-                  </span>
+              {/* Company Badge */}
+              {company && (
+                <div className="mb-4 flex justify-center">
+                  <div className="inline-flex items-center rounded-full bg-brand-sky-mist px-3 py-1">
+                    <BuildingOfficeIcon className="mr-1.5 h-3 w-3 text-brand-cloud-blue" />
+                    <span className="font-inter text-xs font-medium text-brand-cloud-blue">
+                      {company}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Primary Talk - Minimal Display */}
-            {primaryTalk && (
-              <div className="mb-4 flex-1">
-                <div className="inline-flex items-center rounded-lg bg-white/80 px-3 py-2 shadow-sm">
-                  <TalkFormatDisplay talk={primaryTalk} size="sm" />
+              {/* Primary Talk - Minimal Display */}
+              {primaryTalk && (
+                <div className="mb-4">
+                  <div className="inline-flex items-center rounded-lg bg-white/80 px-3 py-2 shadow-sm">
+                    <TalkFormatDisplay talk={primaryTalk} size="sm" />
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
 
-          {/* View Profile Button - Always at bottom */}
-          <div className="mt-auto">
-            <Link
-              href={finalCtaUrl}
-              className="group/btn font-inter inline-flex items-center space-x-2 rounded-xl bg-brand-cloud-blue px-6 py-3 font-semibold text-white transition-all hover:bg-brand-cloud-blue/90 hover:shadow-md"
-            >
-              <span>{finalCtaText}</span>
-              <ArrowRightIcon className="h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
-            </Link>
+              {/* Spacer to push button to bottom */}
+              <div className="flex-1"></div>
+            </div>
+
+            {/* View Profile Button - Always at bottom with consistent positioning */}
+            <div className="mt-4">
+              <div className="font-inter inline-flex w-full items-center justify-center space-x-2 rounded-xl bg-brand-cloud-blue px-6 py-3 font-semibold text-white transition-all group-hover:bg-brand-cloud-blue/90 group-hover:shadow-md">
+                <span>{finalCtaText}</span>
+                <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </Link>
     )
   }
 
   if (variant === 'compact') {
     return (
-      <div
-        className={`group relative overflow-hidden rounded-lg bg-gradient-to-r ${config.gradient} border border-gray-200 p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-md ${className}`}
-      >
-        <div className="flex items-center space-x-4">
-          {/* Speaker Image */}
-          <div className="flex-shrink-0">
-            <SpeakerImage
-              image={image}
-              name={name}
-              size={60}
-              className="rounded-full object-cover"
-            />
-          </div>
-
-          {/* Content */}
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex items-center space-x-2">
-              <h3 className="font-space-grotesk truncate text-lg font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
-                {name}
-              </h3>
-              {isFeatured && (
-                <TrophyIcon className="h-4 w-4 flex-shrink-0 text-accent-yellow" />
-              )}
+      <Link href={finalCtaUrl}>
+        <div
+          className={`group relative cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-md ${className}`}
+        >
+          <div className="flex items-center space-x-4">
+            {/* Speaker Image */}
+            <div className="flex-shrink-0">
+              <SpeakerImage
+                image={image}
+                name={name}
+                size={60}
+                className="rounded-full object-cover"
+              />
             </div>
-            {title && (
-              <p className="font-inter truncate text-sm text-gray-700">
-                {title}
-              </p>
-            )}
-            {company && (
-              <p className="font-inter truncate text-xs text-gray-600">
-                {company}
-              </p>
-            )}
-          </div>
 
-          {/* CTA Arrow */}
-          <div className="flex-shrink-0">
-            <ArrowRightIcon className="h-5 w-5 text-gray-400 transition-all group-hover:translate-x-1 group-hover:text-brand-cloud-blue" />
+            {/* Content - Fixed layout to prevent arrow movement */}
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center space-x-2">
+                <h3 className="font-space-grotesk truncate text-lg font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
+                  {name}
+                </h3>
+                {isFeatured && (
+                  <TrophyIcon className="h-4 w-4 flex-shrink-0 text-accent-yellow" />
+                )}
+              </div>
+              {/* Fixed height container for title and company to prevent layout shift */}
+              <div className="flex h-10 flex-col justify-start">
+                {title && (
+                  <p className="font-inter truncate text-sm leading-tight text-gray-700">
+                    {title}
+                  </p>
+                )}
+                {company && (
+                  <p className="font-inter truncate text-xs leading-tight text-gray-600">
+                    {company}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* CTA Arrow - Fixed position */}
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center">
+              <ArrowRightIcon className="h-5 w-5 text-gray-400 transition-all group-hover:translate-x-1 group-hover:text-brand-cloud-blue" />
+            </div>
           </div>
         </div>
-      </div>
+      </Link>
     )
   }
 
   // Default card variant
   return (
-    <div
-      className={`group relative overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-lg ${className}`}
-    >
-      <div className="relative flex h-full flex-col">
-        {/* Featured Badge (only if featured) */}
-        {isFeatured && (
-          <div className="mb-3 flex justify-end">
-            <TrophyIcon className="h-5 w-5 text-accent-yellow" />
-          </div>
-        )}
-
-        {/* Horizontal Header: Image + Name + Title */}
-        <div className="mb-4 flex items-start space-x-3">
-          {/* Speaker Image */}
-          <div className="flex-shrink-0">
-            <SpeakerImage
-              image={image}
-              name={name}
-              size={60}
-              className="rounded-full object-cover shadow-md"
-            />
-          </div>
-
-          {/* Name, Title & Company */}
-          <div className="min-w-0 flex-1">
-            {/* Name */}
-            <h3 className="font-space-grotesk mb-1 text-lg font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
-              {name}
-            </h3>
-
-            {/* Title */}
-            {title && (
-              <p className="font-inter mb-1 line-clamp-1 text-sm font-semibold text-gray-700">
-                {title}
-              </p>
-            )}
-
-            {/* Company */}
-            {company && (
-              <div className="flex items-center space-x-1">
-                <BuildingOfficeIcon className="h-4 w-4 flex-shrink-0 text-gray-400" />
-                <span className="font-inter line-clamp-1 text-xs text-gray-600">
-                  {company}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Content Area - Flexible */}
-        <div className="flex-1">
-          {/* Bio */}
-          {bio && (
-            <div className="mb-3 rounded-lg bg-white/50 p-2">
-              <p className="font-inter line-clamp-2 text-xs text-gray-600">
-                {bio}
-              </p>
+    <Link href={finalCtaUrl}>
+      <div
+        className={`group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-lg ${className}`}
+      >
+        <div className="relative flex h-full flex-col">
+          {/* Featured Badge (only if featured) */}
+          {isFeatured && (
+            <div className="mb-3 flex justify-end">
+              <TrophyIcon className="h-5 w-5 text-accent-yellow" />
             </div>
           )}
 
-          {/* Primary Talk */}
-          {primaryTalk && (
-            <div className="mb-3 rounded-lg border border-gray-100 bg-white/80 p-2">
-              <div className="flex items-center space-x-2">
-                <TalkFormatDisplay talk={primaryTalk} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-space-grotesk line-clamp-1 text-xs font-semibold text-brand-slate-gray">
-                    {primaryTalk.title}
-                  </h4>
+          {/* Horizontal Header: Image + Name + Title */}
+          <div className="mb-4 flex items-start space-x-3">
+            {/* Speaker Image */}
+            <div className="flex-shrink-0">
+              <SpeakerImage
+                image={image}
+                name={name}
+                size={60}
+                className="rounded-full object-cover shadow-md"
+              />
+            </div>
+
+            {/* Name, Title & Company */}
+            <div className="min-w-0 flex-1">
+              {/* Name */}
+              <h3 className="font-space-grotesk mb-1 text-lg font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue">
+                {name}
+              </h3>
+
+              {/* Title */}
+              {title && (
+                <p className="font-inter mb-1 line-clamp-1 text-sm font-semibold text-gray-700">
+                  {title}
+                </p>
+              )}
+
+              {/* Company */}
+              {company && (
+                <div className="flex items-center space-x-1">
+                  <BuildingOfficeIcon className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                  <span className="font-inter line-clamp-1 text-xs text-gray-600">
+                    {company}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Content Area - Flexible */}
+          <div className="flex-1">
+            {/* Bio */}
+            {bio && (
+              <div className="mb-3 rounded-lg bg-white/50 p-2">
+                <p className="font-inter line-clamp-2 text-xs text-gray-600">
+                  {bio}
+                </p>
+              </div>
+            )}
+
+            {/* Primary Talk */}
+            {primaryTalk && (
+              <div className="mb-3 rounded-lg border border-gray-100 bg-white/80 p-2">
+                <div className="flex items-center space-x-2">
+                  <TalkFormatDisplay talk={primaryTalk} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-space-grotesk line-clamp-1 text-xs font-semibold text-brand-slate-gray">
+                      {primaryTalk.title}
+                    </h4>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Expertise Tags */}
-          {expertise.length > 0 && (
-            <div className="mb-3">
-              <div className="flex flex-wrap gap-1">
-                {expertise.slice(0, 3).map((skill) => (
-                  <span
-                    key={skill}
-                    className="rounded-full bg-brand-cloud-blue/10 px-2 py-0.5 text-xs font-medium text-brand-cloud-blue"
-                  >
-                    {skill}
-                  </span>
-                ))}
+            {/* Expertise Tags */}
+            {expertise.length > 0 && (
+              <div className="mb-3">
+                <div className="flex flex-wrap gap-1">
+                  {expertise.slice(0, 3).map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-full bg-brand-cloud-blue/10 px-2 py-0.5 text-xs font-medium text-brand-cloud-blue"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Footer: Talk Count + CTA - Always at bottom */}
-        <div className="mt-auto flex items-center justify-between pt-2">
-          {/* Talk Count */}
-          {talkCount > 0 ? (
-            <div className="flex items-center space-x-1">
-              <SpeakerWaveIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-xs text-gray-700">
-                {talkCount} {talkCount === 1 ? 'Talk' : 'Talks'}
-              </span>
-            </div>
-          ) : (
-            <div></div> // Empty div to maintain layout when no talks
-          )}
+          {/* Footer: Talk Count + CTA - Always at bottom with fixed height */}
+          <div className="mt-auto flex h-6 items-center justify-between pt-2">
+            {/* Talk Count */}
+            {talkCount > 0 ? (
+              <div className="flex items-center space-x-1">
+                <SpeakerWaveIcon className="h-4 w-4 text-gray-400" />
+                <span className="font-inter text-xs text-gray-700">
+                  {talkCount} {talkCount === 1 ? 'Talk' : 'Talks'}
+                </span>
+              </div>
+            ) : (
+              <div></div> // Empty div to maintain layout when no talks
+            )}
 
-          {/* CTA */}
-          <Link
-            href={finalCtaUrl}
-            className="group/cta font-inter inline-flex items-center space-x-1 text-xs font-semibold text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80"
-          >
-            <span>{finalCtaText}</span>
-            <ArrowRightIcon className="h-3 w-3 transition-transform group-hover/cta:translate-x-1" />
-          </Link>
+            {/* CTA Arrow - Fixed position */}
+            <div className="font-inter inline-flex items-center space-x-1 text-xs font-semibold text-brand-cloud-blue transition-colors group-hover:text-brand-cloud-blue/80">
+              <span>{finalCtaText}</span>
+              <ArrowRightIcon className="h-3 w-3 transition-transform group-hover:translate-x-1" />
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </Link>
   )
 }

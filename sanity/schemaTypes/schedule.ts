@@ -85,7 +85,7 @@ export default defineType({
                   preview: {
                     select: {
                       title: 'talk.title',
-                      speaker: 'talk.speaker.name',
+                      speakers: 'talk.speakers',
                       placeholder: 'placeholder',
                       startTime: 'startTime',
                       endTime: 'endTime',
@@ -93,15 +93,22 @@ export default defineType({
                     },
                     prepare({
                       title,
-                      speaker,
+                      speakers,
                       placeholder,
                       startTime,
                       endTime,
                       format,
                     }) {
+                      // Extract speaker names from the speakers array
+                      const speakerNames = speakers
+                        ? speakers
+                            .map((s: any) => s.name || 'Unknown')
+                            .join(', ')
+                        : 'Unknown'
+
                       return {
                         title: `${startTime} - ${endTime} (${format})`,
-                        subtitle: `${title || placeholder} (${speaker})`,
+                        subtitle: `${title || placeholder} (${speakerNames})`,
                       }
                     },
                   },

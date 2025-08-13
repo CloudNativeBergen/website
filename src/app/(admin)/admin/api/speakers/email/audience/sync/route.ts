@@ -6,7 +6,6 @@ import {
   syncConferenceAudience,
   getOrCreateConferenceAudience,
 } from '@/lib/email/audience'
-import { Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 
@@ -28,10 +27,8 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: conferenceError.message }, { status: 500 })
     }
 
-    // Get only confirmed speakers (not just accepted)
-    const { speakers, err } = await getSpeakers(conference._id, [
-      Status.confirmed,
-    ])
+    // Get only confirmed speakers (this is now the default for getSpeakers)
+    const { speakers, err } = await getSpeakers(conference._id)
 
     if (err) {
       console.error('Failed to get speakers:', err)

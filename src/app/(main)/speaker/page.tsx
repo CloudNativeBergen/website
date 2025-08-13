@@ -1,7 +1,7 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { SpeakerPromotion } from '@/components/SpeakerPromotion'
-import { getPublicSpeakers } from '@/lib/speaker/sanity'
+import { getSpeakers } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 
@@ -9,7 +9,8 @@ export const revalidate = 3600
 
 export default async function Speakers() {
   const { conference } = await getConferenceForCurrentDomain()
-  const { speakers, err } = await getPublicSpeakers(conference._id, revalidate)
+  // getSpeakers now defaults to only confirmed speakers, which is what we want for public display
+  const { speakers, err } = await getSpeakers(conference._id)
   if (err) {
     console.error(err)
   }
@@ -17,7 +18,7 @@ export default async function Speakers() {
   // Transform speakers to SpeakerWithTalks format for SpeakerPromotion component
   const speakersWithTalks: SpeakerWithTalks[] = speakers.map((speaker) => ({
     ...speaker,
-    talks: [], // We'll fetch talks separately if needed, for now empty array
+    talks: speaker.proposals || [], // Use the proposals from getSpeakers instead of empty array
   }))
 
   return (
@@ -43,7 +44,7 @@ export default async function Speakers() {
                 <SpeakerPromotion
                   key={speaker._id}
                   speaker={speaker}
-                  variant="card"
+                  variant="compact"
                   ctaText="View Profile"
                 />
               ))}
