@@ -84,7 +84,7 @@ describe('AppEnvironment', () => {
       const { AppEnvironment } = require('@/lib/environment/config')
       expect(AppEnvironment.testUser).toEqual({
         id: 'test-user-id',
-        email: 'test@cloudnativebergen.io',
+        email: 'test@cloudnativebergen.dev',
         name: 'Test Speaker',
         speakerId: 'test-speaker-id',
         picture: '/images/default-avatar.png',
@@ -272,7 +272,7 @@ describe('AppEnvironment', () => {
 
         expect(mockAuth).toEqual({
           user: {
-            email: 'test@cloudnativebergen.io',
+            email: 'test@cloudnativebergen.dev',
             name: 'Test Speaker',
             sub: 'test-user-id',
             picture: '/images/default-avatar.png',
@@ -280,7 +280,7 @@ describe('AppEnvironment', () => {
           speaker: {
             _id: 'test-speaker-id',
             name: 'Test Speaker',
-            email: 'test@cloudnativebergen.io',
+            email: 'test@cloudnativebergen.dev',
             _type: 'speaker',
             slug: { current: 'test-speaker' },
           },
@@ -349,7 +349,7 @@ describe('AppEnvironment', () => {
         const req = { url: 'http://localhost:3000/api/test?test=true' }
         const mockAuth = AppEnvironment.createMockAuthFromRequest(req)
         expect(mockAuth).not.toBeNull()
-        expect(mockAuth?.user.email).toBe('test@cloudnativebergen.io')
+        expect(mockAuth?.user.email).toBe('test@cloudnativebergen.dev')
       })
     })
 

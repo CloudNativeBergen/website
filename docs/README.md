@@ -92,14 +92,14 @@ When test mode is active, the system uses consistent mock authentication data:
 {
   user: {
     id: 'test-user-id',
-    email: 'test@cloudnativebergen.io',
+    email: 'test@cloudnativebergen.dev',
     name: 'Test Speaker',
     picture: '/images/default-avatar.png'
   },
   speaker: {
     _id: 'test-speaker-id',
     name: 'Test Speaker',
-    email: 'test@cloudnativebergen.io'
+    email: 'test@cloudnativebergen.dev'
   }
 }
 ```
