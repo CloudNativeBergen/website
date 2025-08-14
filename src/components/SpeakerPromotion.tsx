@@ -587,18 +587,6 @@ export async function SpeakerPromotion({
                 </p>
               )}
 
-              {/* Company Badge */}
-              {company && (
-                <div className="mb-4 flex justify-center">
-                  <div className="inline-flex items-center rounded-full bg-brand-sky-mist px-3 py-1">
-                    <BuildingOfficeIcon className="mr-1.5 h-3 w-3 text-brand-cloud-blue" />
-                    <span className="font-inter text-xs font-medium text-brand-cloud-blue">
-                      {company}
-                    </span>
-                  </div>
-                </div>
-              )}
-
               {/* Primary Talk - Minimal Display */}
               {primaryTalk && (
                 <div className="mb-4">
