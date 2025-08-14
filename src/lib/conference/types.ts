@@ -60,6 +60,7 @@ export interface Conference {
   social_links?: string[]
   organizers: Speaker[]
   featured_speakers?: SpeakerWithTalks[]
+  featured_talks?: ProposalExisting[]
   domains: string[]
   formats: Format[]
   topics: Topic[]

@@ -106,6 +106,10 @@ export default defineType({
       name: 'is_featured',
       title: 'Is this as featured speaker?',
       type: 'boolean',
+      deprecated: {
+        reason:
+          'Use the featured_speakers array in the conference document instead',
+      },
     }),
     defineField({
       title: 'Flags',

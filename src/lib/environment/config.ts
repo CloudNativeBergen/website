@@ -9,7 +9,7 @@ export class AppEnvironment {
 
   static readonly testUser = {
     id: 'test-user-id',
-    email: 'test@cloudnativebergen.io',
+    email: 'test@cloudnativebergen.dev',
     name: 'Test Speaker',
     speakerId: 'test-speaker-id',
     picture: 'https://placehold.co/192x192/4f46e5/fff/png?text=TS',

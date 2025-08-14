@@ -243,25 +243,6 @@ export async function updateSpeaker(
   return { speaker: updatedSpeaker, err }
 }
 
-export async function getFeatured(): Promise<{
-  speakers: Speaker[]
-  err: Error | null
-}> {
-  let speakers: Speaker[] = []
-  let err = null
-
-  try {
-    speakers =
-      await clientReadCached.fetch(`* [_type == "speaker" && is_featured == true]{
-        name, "slug": slug.current, title, links, "image": image.asset -> url
-      }`)
-  } catch (error) {
-    err = error as Error
-  }
-
-  return { speakers, err }
-}
-
 export async function getSpeakers(
   conferenceId?: string,
   statuses: Status[] = [Status.confirmed],

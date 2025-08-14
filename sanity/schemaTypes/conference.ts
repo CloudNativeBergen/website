@@ -173,6 +173,15 @@ export default defineType({
       initialValue: [],
     }),
     defineField({
+      name: 'featured_talks',
+      title: 'Featured Talks',
+      type: 'array',
+      of: [{ type: 'reference', to: { type: 'talk' } }],
+      validation: (Rule) => Rule.unique(),
+      initialValue: [],
+      description: 'Talks to highlight in the Program Highlights section',
+    }),
+    defineField({
       name: 'domains',
       title: 'Domains',
       type: 'array',

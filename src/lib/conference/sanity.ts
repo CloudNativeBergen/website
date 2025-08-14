@@ -10,6 +10,7 @@ export async function getConferenceForCurrentDomain({
   sponsorTiers = false,
   topics = false,
   featuredSpeakers = false,
+  featuredTalks = false,
   revalidate = 3600,
 }: {
   organizers?: boolean
@@ -19,6 +20,7 @@ export async function getConferenceForCurrentDomain({
   sponsorTiers?: boolean
   topics?: boolean
   featuredSpeakers?: boolean
+  featuredTalks?: boolean
   revalidate?: number
 } = {}): Promise<{
   conference: Conference
@@ -36,6 +38,7 @@ export async function getConferenceForCurrentDomain({
       sponsorTiers,
       topics,
       featuredSpeakers,
+      featuredTalks,
       revalidate,
     })
   } catch (err) {
@@ -55,6 +58,7 @@ export async function getConferenceForDomain(
     sponsorTiers = false,
     topics = false,
     featuredSpeakers = false,
+    featuredTalks = false,
     revalidate = 3600,
   }: {
     organizers?: boolean
@@ -64,6 +68,7 @@ export async function getConferenceForDomain(
     sponsorTiers?: boolean
     topics?: boolean
     featuredSpeakers?: boolean
+    featuredTalks?: boolean
     revalidate?: number
   } = {},
 ): Promise<{ conference: Conference; domain: string; error: Error | null }> {
@@ -102,13 +107,40 @@ export async function getConferenceForDomain(
           : ''
       }
       ${
+        featuredTalks
+          ? `featured_talks[]->{
+      _id,
+      title,
+      description,
+      format,
+      level,
+      status,
+      audiences,
+      topics[]-> {
+        _id,
+        title,
+        color,
+        slug,
+        description
+      },
+      speakers[]->{
+        _id,
+        name,
+        "slug": slug.current,
+        title,
+        "image": image.asset->url
+      }
+      },`
+          : ''
+      }
+      ${
         schedule
           ? `schedules[]-> {
       ...,
       tracks[]{
         trackTitle,
         trackDescription,
-        talks[]{
+        talks[talk->status == "confirmed"]{
         startTime,
         endTime,
         placeholder,
