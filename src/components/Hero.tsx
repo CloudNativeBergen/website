@@ -1,6 +1,7 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
+import { DiamondIcon } from '@/components/DiamondIcon'
 import { iconForLink } from '@/components/SocialIcons'
 import {
   InformationCircleIcon,
@@ -11,6 +12,39 @@ import {
 } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
 import { PortableText } from '@portabletext/react'
+import { TypedObject } from 'sanity'
+
+// Define proper types for PortableText content
+interface PortableTextChild {
+  _type: string
+  text?: string
+}
+
+interface PortableTextBlock extends TypedObject {
+  _type: 'block'
+  children?: PortableTextChild[]
+}
+
+// Utility function to check if PortableText content is empty
+function isPortableTextEmpty(content?: TypedObject[]): boolean {
+  if (!content || !Array.isArray(content) || content.length === 0) {
+    return true
+  }
+
+  // Check if all blocks are empty
+  return content.every((block) => {
+    if (block._type === 'block') {
+      const typedBlock = block as PortableTextBlock
+      if (!typedBlock.children || !Array.isArray(typedBlock.children)) {
+        return true
+      }
+      return typedBlock.children.every((child: PortableTextChild) => {
+        return !child.text || child.text.trim() === ''
+      })
+    }
+    return false
+  })
+}
 
 function ActionButtons({ conference }: { conference: Conference }) {
   const buttons: Array<{
@@ -132,11 +166,63 @@ export function Hero({ conference }: { conference: Conference }) {
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-          {conference.announcement && (
-            <div className="mb-8 rounded-lg border border-brand-cloud-blue/20 bg-brand-sky-mist p-6 text-center text-brand-slate-gray shadow-md">
-              <PortableText value={conference.announcement} />
-            </div>
-          )}
+          {conference.announcement &&
+            !isPortableTextEmpty(conference.announcement) && (
+              <div className="bg-opacity-20 mb-8 rounded-lg border border-accent-yellow bg-brand-sunbeam-yellow p-6 shadow-sm">
+                <div className="flex items-center">
+                  <DiamondIcon className="mr-4 h-7 w-7 flex-shrink-0 text-brand-sunbeam-yellow" />
+                  <div className="font-space-grotesk text-brand-slate-gray">
+                    <PortableText
+                      value={conference.announcement}
+                      components={{
+                        block: {
+                          normal: ({ children }) => (
+                            <p className="text-lg leading-relaxed font-medium text-brand-slate-gray">
+                              {children}
+                            </p>
+                          ),
+                          h1: ({ children }) => (
+                            <h2 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray">
+                              {children}
+                            </h2>
+                          ),
+                          h2: ({ children }) => (
+                            <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray">
+                              {children}
+                            </h3>
+                          ),
+                        },
+                        marks: {
+                          strong: ({ children }) => (
+                            <strong className="font-bold text-brand-slate-gray">
+                              {children}
+                            </strong>
+                          ),
+                          link: ({ children, value }) => (
+                            <a
+                              href={value?.href}
+                              className="font-semibold text-brand-cloud-blue underline decoration-brand-cloud-blue/30 underline-offset-2 transition-colors hover:decoration-brand-cloud-blue"
+                              target={
+                                value?.href?.startsWith('http')
+                                  ? '_blank'
+                                  : undefined
+                              }
+                              rel={
+                                value?.href?.startsWith('http')
+                                  ? 'noopener noreferrer'
+                                  : undefined
+                              }
+                            >
+                              {children}
+                            </a>
+                          ),
+                        },
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
             <span className="sr-only">{conference.title} - </span>
             {conference.tagline}
