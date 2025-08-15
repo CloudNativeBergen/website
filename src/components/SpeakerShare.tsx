@@ -150,9 +150,8 @@ const QRCodeDisplay = ({
       <img
         src={qrCodeUrl}
         alt="QR Code - Scan to view speaker profile"
-        width={size}
-        height={size}
-        style={{ width: size, height: size }}
+        className="h-full w-full object-contain"
+        style={{ minWidth: size, minHeight: size }}
         crossOrigin="anonymous"
       />
     </div>
@@ -169,16 +168,21 @@ const TalkFormatDisplay = ({ talk, size = 'md' }: TalkFormatDisplayProps) => {
   const TalkIcon = talkConfig?.icon || MicrophoneIcon
 
   const sizeClasses = {
-    sm: { icon: 'h-3 w-3', text: 'text-xs' },
-    md: { icon: 'h-4 w-4', text: 'text-sm' },
-    lg: { icon: 'h-5 w-5', text: 'text-base' },
+    sm: { icon: 'h-3 w-3', text: 'text-xs', title: 'text-sm' },
+    md: { icon: 'h-4 w-4', text: 'text-sm', title: 'text-base' },
+    lg: {
+      icon: 'h-[4cqw] w-[4cqw] @xs:h-[4.5cqw] @xs:w-[4.5cqw] @md:h-[5cqw] @md:w-[5cqw] @xl:h-[5.5cqw] @xl:w-[5.5cqw]',
+      text: 'text-[3.5cqw] @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]',
+      title:
+        'text-[4cqw] @xs:text-[4.5cqw] @md:text-[5.5cqw] @xl:text-[6.5cqw]',
+    },
   }
 
   const classes = sizeClasses[size]
 
   return (
-    <div className="flex flex-col space-y-1">
-      <div className="flex items-center justify-center space-x-2">
+    <div className="flex flex-col space-y-[1cqw] @xs:space-y-[1.5cqw] @md:space-y-[2cqw]">
+      <div className="flex items-center justify-center space-x-[1.5cqw] @xs:space-x-[2cqw] @md:space-x-[2.5cqw]">
         <TalkIcon
           className={`${classes.icon} ${talkConfig?.color || 'text-brand-cloud-blue'}`}
         />
@@ -187,7 +191,9 @@ const TalkFormatDisplay = ({ talk, size = 'md' }: TalkFormatDisplayProps) => {
         </span>
       </div>
       {talk.title && (
-        <h3 className="font-space-grotesk line-clamp-3 text-base leading-tight font-bold">
+        <h3
+          className={`font-space-grotesk line-clamp-2 @lg:line-clamp-3 ${classes.title || 'text-base'} leading-tight font-bold`}
+        >
           {talk.title}
         </h3>
       )}
@@ -234,68 +240,74 @@ export async function SpeakerShare({
 
   return (
     <div
-      className={`group relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-200 p-8 transition-all duration-300 hover:shadow-xl ${className}`}
+      className={`group @container relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
     >
-      <div className="relative flex h-full flex-col text-center text-white">
-        {/* Header */}
-        <div className="mb-4">
-          <div className="mb-2 flex items-center justify-center space-x-2">
-            <Icon className="h-5 w-5" />
-            <span className="font-inter text-base font-bold">
+      {/* Enhanced responsive layout with container query units */}
+      <div className="relative flex h-full flex-col p-[3cqw] text-center text-white @xs:p-[4cqw] @md:p-[5cqw] @xl:p-[6cqw]">
+        {/* Header Section */}
+        <header className="mb-[2cqw] shrink-0 @xs:mb-[3cqw] @md:mb-[4cqw]">
+          <div className="mb-[1cqw] flex items-center justify-center gap-[2cqw] @xs:mb-[1.5cqw] @xs:gap-[2.5cqw] @md:mb-[2cqw] @md:gap-[3cqw]">
+            <Icon className="h-[6cqw] w-[6cqw] @xs:h-[6.5cqw] @xs:w-[6.5cqw] @md:h-[7cqw] @md:w-[7cqw] @xl:h-[8cqw] @xl:w-[8cqw]" />
+            <span className="font-inter text-[4.5cqw] leading-tight font-bold @xs:text-[5cqw] @md:text-[5.5cqw] @xl:text-[6cqw]">
               {config.headerText(isFeatured)}
             </span>
           </div>
-          <h1 className="font-space-grotesk line-clamp-2 px-2 text-2xl leading-tight font-bold">
+          <h1 className="font-space-grotesk px-[1cqw] text-[6.5cqw] leading-tight font-bold @xs:text-[7cqw] @md:text-[8cqw] @xl:text-[9cqw]">
             {eventName}
           </h1>
-        </div>
+        </header>
 
-        {/* Speaker Image and QR Code */}
-        <div className="mb-4">
-          <div className="flex items-start justify-center space-x-3">
-            {/* Speaker Image */}
+        {/* Images Section - Much bigger for large containers */}
+        <section className="mb-[2cqw] shrink-0 @xs:mb-[3cqw] @md:mb-[4cqw]">
+          <div className="flex items-center justify-center gap-[3cqw] @xs:gap-[4cqw] @md:gap-[5cqw] @xl:gap-[6cqw]">
+            {/* Speaker Image - Much larger across all sizes */}
             <div className="flex-shrink-0">
               <SpeakerImage
                 image={image}
                 name={name}
-                size={95}
-                className="rounded-2xl object-cover shadow-lg"
+                size={400}
+                className="h-[25cqw] w-[25cqw] rounded-[2cqw] object-cover shadow-lg @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @md:rounded-[2.5cqw] @xl:h-[40cqw] @xl:w-[40cqw] @xl:rounded-[3cqw]"
               />
             </div>
 
-            {/* QR Code */}
-            <QRCodeDisplay qrCodeUrl={qrCodeUrl} size={80} />
+            {/* QR Code - Matching speaker image size */}
+            <QRCodeDisplay
+              qrCodeUrl={qrCodeUrl}
+              size={55}
+              className="h-[25cqw] w-[25cqw] flex-shrink-0 @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @xl:h-[40cqw] @xl:w-[40cqw]"
+            />
           </div>
-        </div>
+        </section>
 
-        {/* Speaker Info - Flexible content area */}
-        <div className="mb-4 flex-1">
-          <h2 className="font-space-grotesk mb-2 line-clamp-2 px-2 text-xl font-bold">
+        {/* Content Section */}
+        <main className="flex flex-1 flex-col justify-center px-[1cqw] @md:px-[2cqw]">
+          <h2 className="font-space-grotesk mb-[1cqw] text-[6cqw] leading-tight font-bold @xs:mb-[1.5cqw] @xs:text-[6.5cqw] @md:mb-[2cqw] @md:text-[7.5cqw] @xl:text-[8.5cqw]">
             {name}
           </h2>
+
           {title && (
-            <p className="font-inter mb-3 line-clamp-2 px-2 text-base font-semibold text-white/90">
+            <p className="font-inter mb-[2cqw] text-[4.5cqw] leading-tight font-semibold text-white/90 @xs:mb-[2.5cqw] @xs:text-[5cqw] @md:mb-[3cqw] @md:text-[5.5cqw] @xl:text-[6cqw]">
               {title}
             </p>
           )}
 
           {/* Primary Talk */}
           {primaryTalk && (
-            <div className="mx-2 mb-3 rounded-xl bg-white/20 p-3 backdrop-blur-sm">
-              <TalkFormatDisplay talk={primaryTalk} />
+            <div className="mx-[1cqw] rounded-[1.5cqw] bg-white/20 p-[2cqw] backdrop-blur-sm @xs:p-[2.5cqw] @md:mx-[2cqw] @md:rounded-[2cqw] @md:p-[3cqw] @xl:rounded-[2.5cqw] @xl:p-[3.5cqw]">
+              <TalkFormatDisplay talk={primaryTalk} size="lg" />
             </div>
           )}
-        </div>
+        </main>
 
-        {/* Footer - Pinned to bottom */}
-        <div className="mt-auto">
-          <div className="flex items-center justify-center space-x-1">
-            <QrCodeIcon className="h-4 w-4" />
-            <p className="font-inter text-xs">
+        {/* Footer Section */}
+        <footer className="mt-[1cqw] shrink-0 @xs:mt-[1.5cqw] @md:mt-[2cqw]">
+          <div className="flex items-center justify-center gap-[1.5cqw] @xs:gap-[2cqw] @md:gap-[2.5cqw]">
+            <QrCodeIcon className="h-[4cqw] w-[4cqw] @xs:h-[4.5cqw] @xs:w-[4.5cqw] @md:h-[5cqw] @md:w-[5cqw]" />
+            <p className="font-inter text-[3.5cqw] leading-tight @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]">
               Scan QR code to view full profile
             </p>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   )

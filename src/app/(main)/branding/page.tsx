@@ -1559,7 +1559,7 @@ export default async function BrandingPage() {
                     </div>
                   </div>
 
-                  <div className="mx-auto grid max-w-7xl grid-cols-1 gap-16 sm:grid-cols-2 lg:grid-cols-2">
+                  <div className="mx-auto grid w-full grid-cols-1 gap-8 md:gap-12 lg:grid-cols-2 lg:gap-16">
                     {/* First speaker with download functionality */}
                     <DownloadSpeakerImage
                       filename={`${
@@ -1570,7 +1570,7 @@ export default async function BrandingPage() {
                         speaker={conference.featured_speakers[0]}
                         variant="speaker-share"
                         isFeatured={true}
-                        className="h-full min-h-[500px] w-full max-w-none"
+                        className="h-96 w-full"
                       />
                     </DownloadSpeakerImage>
 
@@ -1584,9 +1584,40 @@ export default async function BrandingPage() {
                         speaker={conference.featured_speakers[1]}
                         variant="speaker-share"
                         isFeatured={true}
-                        className="h-full min-h-[500px] w-full max-w-none"
+                        className="h-96 w-full"
                       />
                     </DownloadSpeakerImage>
+                  </div>
+                </div>
+              )}
+
+            {/* Smaller Speaker Share Examples */}
+            {conference?.featured_speakers &&
+              conference.featured_speakers.length >= 6 && (
+                <div>
+                  <div className="mb-8">
+                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                      Smaller Size Performance
+                    </h3>
+                    <p className="font-inter text-gray-600">
+                      Testing how the speaker share cards scale down to smaller
+                      sizes with responsive text and elements. These examples
+                      show how the cards adapt when used in grids or constrained
+                      spaces.
+                    </p>
+                  </div>
+
+                  <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-4">
+                    {/* Four smaller speaker cards without download buttons */}
+                    {conference.featured_speakers.slice(0, 4).map((speaker) => (
+                      <SpeakerShare
+                        key={speaker._id}
+                        speaker={speaker}
+                        variant="speaker-share"
+                        isFeatured={true}
+                        className="aspect-square w-full"
+                      />
+                    ))}
                   </div>
                 </div>
               )}
