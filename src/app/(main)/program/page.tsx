@@ -12,6 +12,7 @@ export default async function Program() {
     schedule: true,
     topics: true,
     sponsors: true,
+    confirmedTalksOnly: false,
   })
 
   if (error || !conference) {

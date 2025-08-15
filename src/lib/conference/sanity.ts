@@ -11,6 +11,7 @@ export async function getConferenceForCurrentDomain({
   topics = false,
   featuredSpeakers = false,
   featuredTalks = false,
+  confirmedTalksOnly = true,
   revalidate = 3600,
 }: {
   organizers?: boolean
@@ -21,6 +22,7 @@ export async function getConferenceForCurrentDomain({
   topics?: boolean
   featuredSpeakers?: boolean
   featuredTalks?: boolean
+  confirmedTalksOnly?: boolean
   revalidate?: number
 } = {}): Promise<{
   conference: Conference
@@ -39,6 +41,7 @@ export async function getConferenceForCurrentDomain({
       topics,
       featuredSpeakers,
       featuredTalks,
+      confirmedTalksOnly,
       revalidate,
     })
   } catch (err) {
@@ -59,6 +62,7 @@ export async function getConferenceForDomain(
     topics = false,
     featuredSpeakers = false,
     featuredTalks = false,
+    confirmedTalksOnly = true,
     revalidate = 3600,
   }: {
     organizers?: boolean
@@ -69,6 +73,7 @@ export async function getConferenceForDomain(
     topics?: boolean
     featuredSpeakers?: boolean
     featuredTalks?: boolean
+    confirmedTalksOnly?: boolean
     revalidate?: number
   } = {},
 ): Promise<{ conference: Conference; domain: string; error: Error | null }> {
@@ -140,11 +145,11 @@ export async function getConferenceForDomain(
       tracks[]{
         trackTitle,
         trackDescription,
-        talks[talk->status == "confirmed"]{
+        talks[]{
         startTime,
         endTime,
         placeholder,
-        talk->{
+        talk${confirmedTalksOnly ? '[status == "confirmed"]' : ''}->{
           _id,
           title,
           description,
