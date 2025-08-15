@@ -264,6 +264,12 @@ export function SpeakerSharingActions({
         } else if (error.message.includes('network')) {
           message =
             'Network error occurred. Please check your connection and try again.'
+        } else if (
+          error.message.includes('401') ||
+          error.message.includes('Authentication')
+        ) {
+          message =
+            'Authentication required. Please sign in again and try downloading your speaker card.'
         }
       }
 

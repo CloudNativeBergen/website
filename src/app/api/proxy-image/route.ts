@@ -1,41 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-/**
- * WARNING: The in-memory rate limiting implemented below is NOT suitable for production.
- * In production environments with multiple server instances or serverless functions,
- * each instance will have its own memory store, making rate limiting ineffective.
- * For production, use a shared store such as Redis or a dedicated rate limiting service.
- */
-// Rate limiting store (in production, use Redis or similar)
-const requestCounts = new Map<string, { count: number; lastReset: number }>()
-const RATE_LIMIT = 100 // requests per minute per IP
-const RATE_LIMIT_WINDOW = 60 * 1000 // 1 minute
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now()
-  const clientData = requestCounts.get(ip) || { count: 0, lastReset: now }
-
-  // Reset counter if window has passed
-  if (now - clientData.lastReset > RATE_LIMIT_WINDOW) {
-    clientData.count = 0
-    clientData.lastReset = now
-  }
-
-  clientData.count++
-  requestCounts.set(ip, clientData)
-
-  return clientData.count <= RATE_LIMIT
-}
+import { auth } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    // Rate limiting
-    const ip =
-      request.headers.get('x-forwarded-for') ||
-      request.headers.get('x-real-ip') ||
-      'unknown'
-    if (!checkRateLimit(ip)) {
-      return new NextResponse('Rate limit exceeded', { status: 429 })
+    // Require authentication - only authenticated speakers can use this proxy
+    const session = await auth()
+    if (!session?.user || !session?.speaker) {
+      return new NextResponse('Authentication required', { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
