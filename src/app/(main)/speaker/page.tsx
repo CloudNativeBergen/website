@@ -1,6 +1,6 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { SpeakerPromotion } from '@/components/SpeakerPromotion'
+import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
@@ -15,7 +15,7 @@ export default async function Speakers() {
     console.error(err)
   }
 
-  // Transform speakers to SpeakerWithTalks format for SpeakerPromotion component
+  // Transform speakers to SpeakerWithTalks format for SpeakerPromotionCard component
   const speakersWithTalks: SpeakerWithTalks[] = speakers.map((speaker) => ({
     ...speaker,
     talks: speaker.proposals || [], // Use the proposals from getSpeakers instead of empty array
@@ -38,10 +38,10 @@ export default async function Speakers() {
               </p>
             </div>
 
-            {/* Updated grid layout for SpeakerPromotion cards */}
-            <div className="mx-auto mt-20 grid max-w-2xl grid-cols-1 gap-6 md:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
+            {/* Updated grid layout for SpeakerPromotionCard cards */}
+            <div className="mx-auto mt-20 grid max-w-2xl auto-rows-fr grid-cols-1 gap-6 md:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
               {speakersWithTalks.map((speaker) => (
-                <SpeakerPromotion
+                <SpeakerPromotionCard
                   key={speaker._id}
                   speaker={speaker}
                   variant="compact"

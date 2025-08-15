@@ -1,5 +1,5 @@
 import { Container } from '@/components/Container'
-import { SpeakerPromotion } from '@/components/SpeakerPromotion'
+import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { useMemo } from 'react'
 import { CallToAction } from './CallToAction'
@@ -114,7 +114,7 @@ export function FeaturedSpeakers({
             {/* Featured Speaker - Show randomly selected speaker prominently */}
             {featuredSpeaker && (
               <div className="mt-20 mb-16">
-                <SpeakerPromotion
+                <SpeakerPromotionCard
                   key={featuredSpeaker._id}
                   speaker={featuredSpeaker}
                   variant="featured"
@@ -126,10 +126,10 @@ export function FeaturedSpeakers({
             {remainingSpeakers.length > 0 && (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {remainingSpeakers.map((speaker) => (
-                  <SpeakerPromotion
+                  <SpeakerPromotionCard
                     key={speaker._id}
                     speaker={speaker}
-                    variant="minimal"
+                    variant="default"
                   />
                 ))}
               </div>

@@ -1,12 +1,13 @@
 import { auth } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/server'
 import { ProposalList } from '@/components/cfp/ProposalList'
-import { SpeakerPromotion } from '@/components/SpeakerPromotion'
+import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
+import { LightBulbIcon } from '@heroicons/react/24/outline'
 
 function ErrorDisplay({ message }: { message: string }) {
   return (
@@ -117,15 +118,13 @@ export default async function SpeakerDashboard() {
                               conference?.title || 'Cloud Native Bergen'
                             }
                           >
-                            <SpeakerPromotion
+                            <SpeakerPromotionCard
                               speaker={{
                                 ...primarySpeaker,
                                 talks: [proposal], // Include the confirmed proposal as a talk
                               }}
-                              variant="speaker-share"
-                              eventName={
-                                conference?.title || 'Cloud Native Bergen'
-                              }
+                              variant="featured"
+                              isFeatured={true}
                               ctaText="View Profile"
                               ctaUrl={`https://${domain}/speaker/${primarySpeaker.slug}`}
                               className="w-full max-w-xs"
@@ -137,13 +136,15 @@ export default async function SpeakerDashboard() {
                   </div>
 
                   <div className="mt-6 rounded-lg bg-brand-cloud-blue/5 p-4">
-                    <p className="font-inter text-center text-xs text-brand-slate-gray">
-                      💡{' '}
+                    <p className="font-inter flex items-center justify-center space-x-1 text-center text-xs text-brand-slate-gray">
+                      <LightBulbIcon className="h-4 w-4 text-brand-cloud-blue" />
                       <strong className="text-brand-cloud-blue">
                         Pro tip:
-                      </strong>{' '}
-                      Use the download button to save high-quality PNG images
-                      perfect for social media sharing!
+                      </strong>
+                      <span>
+                        Use the download button to save high-quality PNG images
+                        perfect for social media sharing!
+                      </span>
                     </p>
                   </div>
                 </div>

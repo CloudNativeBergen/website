@@ -26,6 +26,7 @@ import {
   WrenchScrewdriverIcon,
   EyeIcon,
   RocketLaunchIcon,
+  LightBulbIcon,
 } from '@heroicons/react/24/outline'
 import {
   CloudIcon as CloudIconSolid,
@@ -48,8 +49,9 @@ import {
 } from '@/components/branding'
 import { colorPalette, typography } from '@/lib/branding/data'
 
-import { TalkPromotion } from '@/components/TalkPromotion'
-import { SpeakerPromotion } from '@/components/SpeakerPromotion'
+import { TalkPromotionCard } from '@/components/TalkPromotionCard'
+import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
+import { SpeakerShare } from '@/components/SpeakerShare'
 import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
@@ -60,7 +62,15 @@ import {
 } from '@/components/email'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { CallToAction } from '@/components/CallToAction'
-import { Format } from '@/lib/proposal/types'
+import {
+  Format,
+  Level,
+  ProposalExisting,
+  Status,
+  Language,
+  Audience,
+} from '@/lib/proposal/types'
+import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
 
 export const metadata: Metadata = {
@@ -72,6 +82,64 @@ export default async function BrandingPage() {
   const { conference, domain } = await getConferenceForCurrentDomain({
     featuredSpeakers: true,
   })
+
+  // Helper to create mock ProposalExisting objects for design examples
+  function mockTalk(params: {
+    id: string
+    title: string
+    format: Format
+    level?: Level
+    description?: string
+    speakerNames?: string[]
+  }): ProposalExisting {
+    const now = new Date().toISOString()
+    const speakers = (params.speakerNames || ['Example Speaker']).map(
+      (name, idx) => ({
+        _id: `sp-${params.id}-${idx}`,
+        _rev: '1',
+        _createdAt: now,
+        _updatedAt: now,
+        name,
+        email: `${name.toLowerCase().replace(/[^a-z]/g, '')}@example.com`,
+        title: 'Engineer',
+      }),
+    ) as SpeakerWithTalks[]
+    return {
+      _id: params.id,
+      _rev: '1',
+      _type: 'proposal',
+      _createdAt: now,
+      _updatedAt: now,
+      status: Status.accepted,
+      title: params.title,
+      description: params.description
+        ? [
+            {
+              _type: 'block',
+              _key: `b-${params.id}`,
+              style: 'normal',
+              children: [
+                {
+                  _type: 'span',
+                  _key: `s-${params.id}`,
+                  text: params.description,
+                  marks: [],
+                },
+              ],
+              markDefs: [],
+            },
+          ]
+        : [],
+      language: Language.english,
+      format: params.format,
+      level: params.level || Level.intermediate,
+      audiences: [Audience.developer],
+      outline: '',
+      tos: true,
+      speakers,
+      conference: { _ref: 'conf-mock', _type: 'reference' as const },
+    }
+  }
 
   return (
     <div className="bg-brand-glacier-white">
@@ -1394,7 +1462,7 @@ export default async function BrandingPage() {
                     </p>
                   </div>
 
-                  <SpeakerPromotion
+                  <SpeakerPromotionCard
                     speaker={conference.featured_speakers[0]}
                     isFeatured={true}
                     variant="featured"
@@ -1420,10 +1488,10 @@ export default async function BrandingPage() {
 
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                     {conference.featured_speakers.slice(0, 3).map((speaker) => (
-                      <SpeakerPromotion
+                      <SpeakerPromotionCard
                         key={speaker._id}
                         speaker={speaker}
-                        variant="card"
+                        variant="default"
                         ctaText="View Profile"
                       />
                     ))}
@@ -1450,7 +1518,7 @@ export default async function BrandingPage() {
                     {conference.featured_speakers
                       .slice(0, 6)
                       .map((speaker, index) => (
-                        <SpeakerPromotion
+                        <SpeakerPromotionCard
                           key={speaker._id}
                           speaker={speaker}
                           isFeatured={index === 0}
@@ -1478,8 +1546,9 @@ export default async function BrandingPage() {
                     </p>
                     <div className="mt-4 rounded-lg bg-blue-50 p-4">
                       <p className="font-inter text-sm text-blue-800">
-                        <strong className="text-brand-cloud-blue">
-                          💡 Try the Download Feature!
+                        <strong className="flex items-center space-x-2 text-brand-cloud-blue">
+                          <LightBulbIcon className="h-4 w-4" />
+                          <span>Try the Download Feature!</span>
                         </strong>
                         <br />
                         Click &ldquo;Download as PNG&rdquo; below the first
@@ -1497,22 +1566,20 @@ export default async function BrandingPage() {
                         conference.featured_speakers[0]?.slug
                       }-share`}
                     >
-                      <SpeakerPromotion
+                      <SpeakerShare
                         speaker={conference.featured_speakers[0]}
                         variant="speaker-share"
-                        eventName={conference.title || 'Cloud Native Bergen'}
-                        ctaText="View Profile"
+                        isFeatured={true}
                       />
                     </DownloadSpeakerImage>
 
                     {/* Remaining speakers without download */}
                     {conference.featured_speakers.slice(1, 3).map((speaker) => (
-                      <SpeakerPromotion
+                      <SpeakerShare
                         key={speaker._id}
                         speaker={speaker}
                         variant="speaker-share"
-                        eventName={conference.title || 'Cloud Native Bergen'}
-                        ctaText="View Profile"
+                        isFeatured={true}
                       />
                     ))}
                   </div>
@@ -1538,7 +1605,7 @@ export default async function BrandingPage() {
                     {conference.featured_speakers
                       .slice(0, 10)
                       .map((speaker) => (
-                        <SpeakerPromotion
+                        <SpeakerPromotionCard
                           key={speaker._id}
                           speaker={speaker}
                           variant="compact"
@@ -1567,7 +1634,7 @@ export default async function BrandingPage() {
                   <div className="space-y-8">
                     {/* Featured speaker at top */}
                     <div className="mb-8">
-                      <SpeakerPromotion
+                      <SpeakerPromotionCard
                         speaker={conference.featured_speakers[0]}
                         isFeatured={true}
                         variant="featured"
@@ -1580,10 +1647,10 @@ export default async function BrandingPage() {
                       {conference.featured_speakers
                         .slice(1, 4)
                         .map((speaker) => (
-                          <SpeakerPromotion
+                          <SpeakerPromotionCard
                             key={speaker._id}
                             speaker={speaker}
-                            variant="card"
+                            variant="default"
                             ctaText="View Profile"
                           />
                         ))}
@@ -1594,7 +1661,7 @@ export default async function BrandingPage() {
                       {conference.featured_speakers
                         .slice(4, 10)
                         .map((speaker) => (
-                          <SpeakerPromotion
+                          <SpeakerPromotionCard
                             key={speaker._id}
                             speaker={speaker}
                             variant="compact"
@@ -1776,7 +1843,9 @@ export default async function BrandingPage() {
               </h3>
               <p className="font-inter mb-8 text-gray-600">
                 Talk cards showcase conference presentations with
-                format-specific styling and branding elements.
+                format-specific styling and branding elements. The
+                TalkPromotionCard component features modular architecture with
+                guaranteed footer positioning.
               </p>
 
               <div className="space-y-8">
@@ -1785,32 +1854,40 @@ export default async function BrandingPage() {
                   <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
                     Card Variants
                   </h4>
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    <TalkPromotion
-                      title="Building Resilient Microservices"
-                      speaker="Dr. Example McDemo"
-                      format={Format.presentation_45}
-                      level="intermediate"
-                      topic="Architecture"
-                      description="Learn how to design fault-tolerant microservices that can handle failures gracefully and maintain system reliability."
+                  <div className="grid auto-rows-fr grid-cols-1 gap-6 lg:grid-cols-3">
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex1',
+                        title: 'Building Resilient Microservices',
+                        format: Format.presentation_45,
+                        level: Level.intermediate,
+                        description:
+                          'Learn how to design fault-tolerant microservices that can handle failures gracefully and maintain system reliability.',
+                        speakerNames: ['Dr. Example McDemo'],
+                      })}
                       variant="featured"
                     />
 
-                    <TalkPromotion
-                      title="Kubernetes Security Best Practices"
-                      speaker="Marcus Rodriguez"
-                      format={Format.presentation_25}
-                      level="advanced"
-                      topic="Security"
-                      description="Essential security patterns and practices for running Kubernetes in production environments."
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex2',
+                        title: 'Kubernetes Security Best Practices',
+                        format: Format.presentation_25,
+                        level: Level.advanced,
+                        description:
+                          'Essential security patterns and practices for running Kubernetes in production environments.',
+                        speakerNames: ['Marcus Rodriguez'],
+                      })}
                     />
 
-                    <TalkPromotion
-                      title="Quick Start with Helm"
-                      speaker="Emma Thompson"
-                      format={Format.lightning_10}
-                      level="beginner"
-                      topic="Tools"
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex3',
+                        title: 'Quick Start with Helm',
+                        format: Format.lightning_10,
+                        level: Level.beginner,
+                        speakerNames: ['Emma Thompson'],
+                      })}
                       variant="compact"
                     />
                   </div>
@@ -1821,36 +1898,48 @@ export default async function BrandingPage() {
                   <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
                     Talk Format Showcase
                   </h4>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <TalkPromotion
-                      title="CI/CD in 10 Minutes"
-                      speaker="Demo Testberg"
-                      format={Format.lightning_10}
-                      level="beginner"
+                  <div className="grid auto-rows-fr grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex4',
+                        title: 'CI/CD in 10 Minutes',
+                        format: Format.lightning_10,
+                        level: Level.beginner,
+                        speakerNames: ['Demo Testberg'],
+                      })}
                       variant="compact"
                     />
 
-                    <TalkPromotion
-                      title="Container Orchestration"
-                      speaker="Jordan Lee"
-                      format={Format.presentation_20}
-                      level="intermediate"
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex5',
+                        title: 'Container Orchestration',
+                        format: Format.presentation_20,
+                        level: Level.intermediate,
+                        speakerNames: ['Jordan Lee'],
+                      })}
                       variant="compact"
                     />
 
-                    <TalkPromotion
-                      title="Deep Dive: Service Mesh"
-                      speaker="Taylor Wong"
-                      format={Format.presentation_40}
-                      level="advanced"
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex6',
+                        title: 'Deep Dive: Service Mesh',
+                        format: Format.presentation_40,
+                        level: Level.advanced,
+                        speakerNames: ['Taylor Wong'],
+                      })}
                       variant="compact"
                     />
 
-                    <TalkPromotion
-                      title="Hands-on GitOps"
-                      speaker="Casey Miller"
-                      format={Format.workshop_120}
-                      level="intermediate"
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex7',
+                        title: 'Hands-on GitOps',
+                        format: Format.workshop_120,
+                        level: Level.intermediate,
+                        speakerNames: ['Casey Miller'],
+                      })}
                       variant="compact"
                     />
                   </div>
@@ -1874,16 +1963,22 @@ export default async function BrandingPage() {
                   <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
                     Banner Promotion
                   </h4>
-                  <TalkPromotion
-                    title="The Future of Cloud Native Computing"
-                    speaker="Dr. Kubernetes Expert"
-                    format={Format.presentation_45}
-                    date="Example Day, 30th Fictionary 2099"
-                    time="14:00 - 14:45"
-                    location="Main Stage"
-                    description="Explore the next generation of cloud native technologies and their impact on modern software development. This keynote will cover emerging trends in container orchestration, serverless computing, and edge computing."
+                  <TalkPromotionCard
+                    talk={mockTalk({
+                      id: 'ex8',
+                      title: 'The Future of Cloud Native Computing',
+                      format: Format.presentation_45,
+                      description:
+                        'Explore the next generation of cloud native technologies and their impact on modern software development. This keynote will cover emerging trends in container orchestration, serverless computing, and edge computing.',
+                      speakerNames: ['Dr. Kubernetes Expert'],
+                    })}
+                    slot={{
+                      date: 'Example Day, 30th Fictionary 2099',
+                      time: '14:00 - 14:45',
+                      location: 'Main Stage',
+                    }}
                     ctaText="Reserve Your Seat"
-                    variant="banner"
+                    variant="featured"
                   />
                 </div>
 
@@ -1892,39 +1987,194 @@ export default async function BrandingPage() {
                   <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
                     Card & Social Promotions
                   </h4>
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-                    <TalkPromotion
-                      title="Workshop: GitOps with ArgoCD"
-                      speaker="DevOps Specialist"
-                      format={Format.workshop_120}
-                      date="Demo Day, 31st Examplery 2099"
-                      time="09:00 - 11:00"
-                      location="Workshop Room A"
-                      description="Hands-on workshop covering GitOps principles and practical implementation with ArgoCD."
+                  <div className="grid auto-rows-fr grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex9',
+                        title: 'Workshop: GitOps with ArgoCD',
+                        format: Format.workshop_120,
+                        description:
+                          'Hands-on workshop covering GitOps principles and practical implementation with ArgoCD.',
+                        speakerNames: ['DevOps Specialist'],
+                      })}
+                      slot={{
+                        date: 'Demo Day, 31st Examplery 2099',
+                        time: '09:00 - 11:00',
+                        location: 'Workshop Room A',
+                      }}
                       ctaText="Join Workshop"
                     />
 
-                    <TalkPromotion
-                      title="Lightning: WebAssembly & Cloud"
-                      speaker="WASM Enthusiast"
-                      format={Format.lightning_10}
-                      date="Sample Day, 1st Testuary 2099"
-                      time="16:30 - 16:40"
-                      location="Lightning Stage"
-                      description="Quick dive into how WebAssembly is changing cloud computing."
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex10',
+                        title: 'Lightning: WebAssembly & Cloud',
+                        format: Format.lightning_10,
+                        description:
+                          'Quick dive into how WebAssembly is changing cloud computing.',
+                        speakerNames: ['WASM Enthusiast'],
+                      })}
+                      slot={{
+                        date: 'Sample Day, 1st Testuary 2099',
+                        time: '16:30 - 16:40',
+                        location: 'Lightning Stage',
+                      }}
                       ctaText="Watch Live"
                     />
 
-                    <TalkPromotion
-                      title="Observability at Scale"
-                      speaker="SRE Lead"
-                      format={Format.presentation_25}
-                      date="Mock Day, 15th Demober 2099"
-                      location="Tech Stage"
-                      description="Learn to monitor and observe large-scale distributed systems effectively."
-                      variant="social"
+                    <TalkPromotionCard
+                      talk={mockTalk({
+                        id: 'ex11',
+                        title: 'Observability at Scale',
+                        format: Format.presentation_25,
+                        description:
+                          'Learn to monitor and observe large-scale distributed systems effectively.',
+                        speakerNames: ['SRE Lead'],
+                      })}
+                      slot={{
+                        date: 'Mock Day, 15th Demober 2099',
+                        location: 'Tech Stage',
+                      }}
                       ctaText="Learn More"
                     />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Component Features and Migration Guide */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray">
+                Component Features & Architecture
+              </h3>
+              <p className="font-inter mb-8 text-gray-600">
+                The TalkPromotionCard component features a modular
+                header-body-footer architecture with guaranteed footer
+                positioning using flexbox. This component provides improved
+                maintainability and consistent styling across all variants.
+              </p>
+
+              <div className="space-y-8">
+                {/* Component Features */}
+                <div className="rounded-xl bg-white p-8 shadow-sm">
+                  <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
+                    Component Features
+                  </h4>
+                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                    <div>
+                      <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
+                        Architecture Improvements
+                      </h5>
+                      <ul className="font-inter space-y-3 text-brand-slate-gray">
+                        <li className="flex items-start">
+                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                          <span>
+                            <strong>Modular Structure:</strong> Separated
+                            TalkHeader, TalkBody, and TalkFooter components for
+                            better maintainability
+                          </span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                          <span>
+                            <strong>Guaranteed Footer Positioning:</strong> Uses
+                            flexbox with{' '}
+                            <code className="font-jetbrains rounded bg-gray-100 px-1 py-0.5 text-sm">
+                              mt-auto
+                            </code>{' '}
+                            for perfect footer alignment
+                          </span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                          <span>
+                            <strong>Grid Integration:</strong> Works seamlessly
+                            with{' '}
+                            <code className="font-jetbrains rounded bg-gray-100 px-1 py-0.5 text-sm">
+                              auto-rows-fr
+                            </code>{' '}
+                            for equal height cards
+                          </span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                          <span>
+                            <strong>TypeScript Support:</strong> Full type
+                            safety with comprehensive prop interfaces
+                          </span>
+                        </li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
+                        Variant System
+                      </h5>
+                      <ul className="font-inter space-y-3 text-brand-slate-gray">
+                        <li className="flex items-start">
+                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                          <span>
+                            <strong>Default:</strong> Balanced presentation with
+                            full talk information and description
+                          </span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                          <span>
+                            <strong>Featured:</strong> Enhanced styling with
+                            larger text and prominent visual treatment
+                          </span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                          <span>
+                            <strong>Compact:</strong> Space-efficient design for
+                            listings and dense grids
+                          </span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                          <span>
+                            <strong>Consistent Styling:</strong> All variants
+                            maintain footer alignment and responsive behavior
+                          </span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 rounded-lg bg-brand-sky-mist p-6">
+                    <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                      Migration Benefits
+                    </h5>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <div>
+                        <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
+                          Better Maintainability
+                        </h6>
+                        <p className="font-inter text-sm text-brand-slate-gray">
+                          Separated concerns make it easier to update styling,
+                          add features, and fix bugs
+                        </p>
+                      </div>
+                      <div>
+                        <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
+                          Consistent Layout
+                        </h6>
+                        <p className="font-inter text-sm text-brand-slate-gray">
+                          Flexbox architecture ensures footers always align
+                          properly regardless of content length
+                        </p>
+                      </div>
+                      <div>
+                        <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
+                          Future-Proof Design
+                        </h6>
+                        <p className="font-inter text-sm text-brand-slate-gray">
+                          Modular structure allows for easy extension and
+                          customization as requirements evolve
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2277,9 +2527,9 @@ export default async function BrandingPage() {
                 emailTime="Today 2:30 PM"
               >
                 <ProposalAcceptTemplate
+                  eventName={conference.title}
                   speakerName="Demo Speaker"
                   proposalTitle="Building Resilient Microservices with Kubernetes"
-                  eventName={conference.title}
                   eventLocation="Example City, Fictionaland"
                   eventDate="30th Fictionary 2099"
                   eventUrl={`https://${domain}/`}
@@ -2301,9 +2551,9 @@ export default async function BrandingPage() {
                 emailTime="Today 10:15 AM"
               >
                 <ProposalRejectTemplate
+                  eventName={conference.title}
                   speakerName="Test McExample"
                   proposalTitle="Advanced Container Security Patterns"
-                  eventName={conference.title}
                   eventLocation={`${conference.city}, ${conference.country}`}
                   eventDate="June 15, 2025"
                   eventUrl={`https://${domain}/`}
@@ -2614,8 +2864,8 @@ export default async function BrandingPage() {
                 emailTime="Yesterday 9:00 AM"
               >
                 <BroadcastTemplate
-                  subject="Speaker Dinner & Conference Updates"
                   eventName={conference.title}
+                  subject="Speaker Dinner & Conference Updates"
                   eventLocation="Sample City, Testlandia"
                   eventDate="32nd Mockuary 2099"
                   eventUrl={`https://${domain}/`}
@@ -2949,12 +3199,12 @@ export default async function BrandingPage() {
                 emailTime="Today 11:30 AM"
               >
                 <CoSpeakerInvitationTemplate
+                  eventName={conference.title}
                   inviterName="Demo Speaker"
                   inviterEmail="demo.speaker@example.com"
                   inviteeName="Potential CoSpeaker"
                   proposalTitle="Building Resilient Microservices with Kubernetes"
                   proposalAbstract="Learn how to design fault-tolerant microservices that can handle failures gracefully and maintain system reliability in cloud native environments. This talk covers circuit breakers, retry patterns, and monitoring strategies."
-                  eventName={conference.title}
                   eventLocation={`${conference.city}, ${conference.country}`}
                   eventDate="June 15, 2025"
                   eventUrl={`https://${domain}/`}
@@ -2975,12 +3225,12 @@ export default async function BrandingPage() {
                 emailTime="Today 2:15 PM"
               >
                 <CoSpeakerResponseTemplate
+                  eventName={conference.title}
                   inviterName="Demo Speaker"
                   respondentName="Potential CoSpeaker"
                   respondentEmail="potential.cospeaker@example.com"
                   proposalTitle="Building Resilient Microservices with Kubernetes"
                   proposalUrl={`https://${domain}/cfp/list`}
-                  eventName={conference.title}
                   eventLocation={`${conference.city}, ${conference.country}`}
                   eventDate="June 15, 2025"
                   eventUrl={`https://${domain}/`}
@@ -3000,12 +3250,12 @@ export default async function BrandingPage() {
                 emailTime="Yesterday 4:45 PM"
               >
                 <CoSpeakerResponseTemplate
+                  eventName={conference.title}
                   inviterName="Demo Speaker"
                   respondentName="Busy Developer"
                   respondentEmail="busy.developer@example.com"
                   proposalTitle="Building Resilient Microservices with Kubernetes"
                   proposalUrl={`https://${domain}/cfp/list`}
-                  eventName={conference.title}
                   eventLocation={`${conference.city}, ${conference.country}`}
                   eventDate="June 15, 2025"
                   eventUrl={`https://${domain}/`}
@@ -3156,8 +3406,8 @@ export default async function BrandingPage() {
                 emailTime="2 days ago 10:00 AM"
               >
                 <BroadcastTemplate
-                  subject="Early Bird Tickets Now Available!"
                   eventName={conference.title}
+                  subject="Early Bird Tickets Now Available!"
                   eventLocation={`${conference.city}, ${conference.country}`}
                   eventDate={new Date(conference.start_date).toLocaleDateString(
                     'en-US',
@@ -3248,10 +3498,10 @@ export default async function BrandingPage() {
                 emailTime="1 week ago 3:15 PM"
               >
                 <BaseEmailTemplate
+                  eventName={conference.title}
                   title="Welcome to Cloud Native Bergen"
                   speakerName="Taylor Johnson"
                   proposalTitle="Getting Started with Cloud Native Development"
-                  eventName={conference.title}
                   eventLocation={`${conference.city}, ${conference.country}`}
                   eventDate="June 15, 2025"
                   eventUrl={`https://${domain}/`}

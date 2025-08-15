@@ -67,9 +67,9 @@ function ActionButtons({ conference }: { conference: Conference }) {
     new Date() >= new Date(conference.program_date)
   ) {
     buttons.push({
-      label: 'Program',
+      label: 'View Program',
       href: '/program',
-      variant: 'secondary',
+      variant: 'primary',
       icon: CalendarDaysIcon,
     })
   }
@@ -84,11 +84,30 @@ function ActionButtons({ conference }: { conference: Conference }) {
   }
 
   // Reverse the order of buttons to show the most important ones first
-  // and slice to show only the first two buttons
-  const displayButtons = buttons.reverse().slice(0, 2)
+  // Show up to 3 buttons for better mobile experience, prioritizing tickets and program
+  const reversedButtons = buttons.reverse()
+
+  // Prioritize tickets and program when both are available
+  const hasTickets = reversedButtons.find((b) => b.href === '/tickets')
+  const hasProgram = reversedButtons.find((b) => b.href === '/program')
+
+  let displayButtons = reversedButtons
+  if (hasTickets && hasProgram) {
+    // When both are available, show tickets, program, and one other
+    displayButtons = [
+      hasTickets,
+      hasProgram,
+      ...reversedButtons.filter(
+        (b) => b.href !== '/tickets' && b.href !== '/program',
+      ),
+    ].slice(0, 3)
+  } else {
+    // Otherwise show first 2-3 buttons
+    displayButtons = reversedButtons.slice(0, 3)
+  }
 
   return (
-    <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-center">
+    <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:justify-center lg:flex-nowrap">
       {displayButtons.map((button) => {
         const Icon = button.icon
         return (
@@ -129,18 +148,33 @@ export function Hero({ conference }: { conference: Conference }) {
               experience reports from local and international cloud-native
               experts.
             </p>
-            <p>
-              Our speakers will share their insights and experiences, covering
-              topics such as containerization, orchestration, microservices, and
-              more. Whether you&apos;re a beginner or an 10x&apos;er,
-              there&apos;s something for everyone at Cloud Native Day Bergen.
-            </p>
+            {conference.program_date &&
+            new Date() >= new Date(conference.program_date) ? (
+              <p>
+                <strong>The program is now live!</strong> Explore workshops,
+                presentations, and lightning talks from industry experts
+                covering containerization, orchestration, microservices, and
+                more. Whether you&apos;re a beginner or a 10x&apos;er,
+                there&apos;s something for everyone.
+              </p>
+            ) : (
+              <p>
+                Our speakers will share their insights and experiences, covering
+                topics such as containerization, orchestration, microservices,
+                and more. Whether you&apos;re a beginner or an 10x&apos;er,
+                there&apos;s something for everyone at Cloud Native Day Bergen.
+              </p>
+            )}
           </div>
 
           <ActionButtons conference={conference} />
 
           {conference.vanity_metrics &&
-            conference.vanity_metrics.length > 0 && (
+            conference.vanity_metrics.length > 0 &&
+            !(
+              conference.program_date &&
+              new Date() >= new Date(conference.program_date)
+            ) && (
               <dl className="mt-10 grid grid-cols-2 gap-x-8 gap-y-6 sm:mt-16 sm:grid-cols-3 lg:grid-cols-6 lg:justify-start lg:text-left">
                 {conference.vanity_metrics.slice(0, 6).map((metric) => (
                   <div
