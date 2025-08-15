@@ -96,11 +96,9 @@ export function SpeakerSharingActions({
   }
 
   /**
-   * Convert external images to data URLs to avoid CORS issues
+   * Update external image sources to use our proxy for CORS-free access
    */
-  const convertImagesToDataUrls = async (
-    element: HTMLElement,
-  ): Promise<void> => {
+  const updateImageSources = async (element: HTMLElement): Promise<void> => {
     const images = element.querySelectorAll('img')
     const externalImages = Array.from(images).filter(
       (img) =>
@@ -108,46 +106,16 @@ export function SpeakerSharingActions({
         !img.src.includes(window.location.hostname),
     )
 
-    if (externalImages.length === 0) return
+    // Simply update src to use proxy - no need for data URL conversion
+    externalImages.forEach((img) => {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.src)}`
+      img.src = proxyUrl
+    })
 
-    // Process images in parallel for better performance
-    await Promise.all(
-      externalImages.map(async (img) => {
-        try {
-          const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.src)}`
-
-          const response = await fetch(proxyUrl, {
-            signal: AbortSignal.timeout(8000), // 8 second timeout
-          })
-
-          if (!response.ok) {
-            console.warn(
-              `Failed to proxy image: ${response.status} ${response.statusText}`,
-            )
-            return
-          }
-
-          const blob = await response.blob()
-
-          // Verify it's actually an image
-          if (!blob.type.startsWith('image/')) {
-            console.warn('Proxied resource is not an image:', blob.type)
-            return
-          }
-
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = reject
-            reader.readAsDataURL(blob)
-          })
-
-          img.src = dataUrl
-        } catch (error) {
-          console.warn('Failed to convert image to data URL:', img.src, error)
-        }
-      }),
-    )
+    // Wait for proxied images to load
+    if (externalImages.length > 0) {
+      await waitForImages(element)
+    }
   }
 
   /**
@@ -265,8 +233,8 @@ export function SpeakerSharingActions({
       // Wait for all content to load
       await waitForImages(element)
 
-      // Convert external images to data URLs to avoid CORS issues
-      await convertImagesToDataUrls(element)
+      // Update external images to use proxy URLs for CORS-free access
+      await updateImageSources(element)
 
       // Brief pause to ensure DOM updates are complete
       await new Promise((resolve) => setTimeout(resolve, 300))
