@@ -1,4 +1,4 @@
-import { resend, EMAIL_CONFIG, retryWithBackoff } from '@/lib/email/config'
+import { resend, retryWithBackoff } from '@/lib/email/config'
 import React from 'react'
 import crypto from 'crypto'
 import { clientWrite } from '@/lib/sanity/client'
@@ -33,6 +33,7 @@ export interface SendEmailParams<T = Record<string, unknown>> {
   subject: string
   component: React.ComponentType<T>
   props: T
+  from: string
 }
 
 export interface SendEmailResponse {
@@ -46,11 +47,12 @@ export async function sendEmail<T = Record<string, unknown>>({
   subject,
   component: Component,
   props,
+  from,
 }: SendEmailParams<T>): Promise<SendEmailResponse> {
   try {
     const emailResult = await retryWithBackoff(async () => {
       const result = await resend.emails.send({
-        from: EMAIL_CONFIG.RESEND_FROM_EMAIL,
+        from: from,
         to: [to],
         subject,
         react: React.createElement(
@@ -322,6 +324,7 @@ export async function sendInvitationEmail(
     const result = await sendEmail({
       to: invitation.invitedEmail,
       subject: `You've been invited to co-present "${proposalTitle}"`,
+      from: `${conference.organizer} <${conference.cfp_email}>`,
       component: CoSpeakerInvitationTemplate,
       props: {
         inviterName,

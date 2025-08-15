@@ -51,6 +51,7 @@ export interface Conference {
   cfp_start_date: string
   cfp_end_date: string
   cfp_notify_date: string
+  cfp_email: string
   program_date: string
   registration_link?: string
   registration_enabled: boolean

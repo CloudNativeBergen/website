@@ -113,6 +113,13 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'cfp_email',
+      title: 'CFP Email',
+      type: 'string',
+      description: 'Email address used for CFP communications with speakers',
+      validation: (Rule) => Rule.required().email(),
+    }),
+    defineField({
       name: 'program_date',
       title: 'Program Date',
       type: 'date',

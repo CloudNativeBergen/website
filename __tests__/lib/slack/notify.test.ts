@@ -58,6 +58,7 @@ describe('Slack Notifications', () => {
     cfp_start_date: '2024-03-01',
     cfp_end_date: '2024-05-01',
     cfp_notify_date: '2024-05-15',
+    cfp_email: 'cfp@example.com',
     program_date: '2024-05-20',
     registration_enabled: true,
     contact_email: 'test@example.com',

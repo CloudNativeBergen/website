@@ -7,7 +7,6 @@ import { Speaker } from '@/lib/speaker/types'
 import { addSpeakerToAudience, getOrCreateConferenceAudience } from './audience'
 import {
   resend,
-  EMAIL_CONFIG,
   retryWithBackoff,
   createEmailError,
   type EmailResult,
@@ -194,7 +193,7 @@ export async function sendFormattedSpeakerEmail({
     // Send the email with retry logic for production reliability
     const emailResult = await retryWithBackoff(async () => {
       const result = await resend.emails.send({
-        from: conference.contact_email || EMAIL_CONFIG.RESEND_FROM_EMAIL,
+        from: `${conference.organizer} <${conference.cfp_email}>`,
         to: [speaker.email],
         subject: subject,
         react: emailTemplate,
@@ -436,7 +435,7 @@ export async function sendFormattedMultiSpeakerEmail({
     // Send the email with retry logic for production reliability
     const emailResult = await retryWithBackoff(async () => {
       const result = await resend.emails.send({
-        from: conference.contact_email || EMAIL_CONFIG.RESEND_FROM_EMAIL,
+        from: `${conference.organizer} <${conference.cfp_email}>`,
         to: speakers.map((s) => s.email),
         subject: subject,
         react: emailTemplate,

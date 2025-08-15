@@ -283,6 +283,7 @@ export async function POST(request: NextRequest) {
         const emailResult = await sendEmail({
           to: inviterEmail,
           subject: `Co-speaker invitation ${action === 'accept' ? 'accepted' : 'declined'}: ${proposalTitle}`,
+          from: `${conference.organizer} <${conference.cfp_email}>`,
           component: CoSpeakerResponseTemplate,
           props: {
             inviterName,

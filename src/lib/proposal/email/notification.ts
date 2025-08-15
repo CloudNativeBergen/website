@@ -3,7 +3,7 @@ import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
 } from '@/components/email'
-import { resend, EMAIL_CONFIG } from '@/lib/email/config'
+import { resend } from '@/lib/email/config'
 import {
   NotificationParams,
   createTemplateProps,
@@ -63,7 +63,7 @@ export async function sendAcceptRejectNotification(params: NotificationParams) {
   const template = getEmailTemplate(action, templateProps)
 
   const { data, error } = await resend.emails.send({
-    from: params.event.contactEmail || EMAIL_CONFIG.RESEND_FROM_EMAIL,
+    from: `${params.event.organizer} <${params.event.contactEmail}>`,
     to: [params.speaker.email],
     subject: subject,
     react: template,

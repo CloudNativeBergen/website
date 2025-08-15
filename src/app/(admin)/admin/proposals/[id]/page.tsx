@@ -10,7 +10,6 @@ import {
   AdminActionBar,
 } from '@/components/admin'
 import { getAuthSession } from '@/lib/auth'
-import { EMAIL_CONFIG } from '@/lib/email/config'
 
 interface ProposalDetailPageProps {
   params: Promise<{
@@ -30,7 +29,7 @@ export default async function ProposalDetailPage({
   const session = await getAuthSession()
 
   try {
-    const { domain } = await getConferenceForCurrentDomain({})
+    const { conference, domain } = await getConferenceForCurrentDomain({})
     const { proposal, proposalError } = await getProposalSanity({
       id,
       speakerId: '', // For admin view, we don't need to filter by speaker
@@ -79,7 +78,7 @@ export default async function ProposalDetailPage({
               <AdminActionBar
                 proposal={proposal}
                 domain={domain}
-                fromEmail={EMAIL_CONFIG.RESEND_FROM_EMAIL}
+                fromEmail={conference.cfp_email}
               />
             </div>
 

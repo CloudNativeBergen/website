@@ -111,7 +111,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return await resend.broadcasts.create({
         name: subject, // Use subject as the broadcast name
         audienceId,
-        from: `${conference.organizer} <${conference.contact_email}>`,
+        from: `${conference.organizer} <${conference.cfp_email}>`,
         subject,
         html: emailHtml,
       })

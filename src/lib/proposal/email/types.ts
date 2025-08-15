@@ -27,6 +27,7 @@ export interface NotificationEventData {
   date: string
   name: string
   url: string
+  organizer: string
   socialLinks?: string[]
   contactEmail?: string
 }

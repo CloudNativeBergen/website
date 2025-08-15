@@ -81,8 +81,6 @@ export const resend = new Resend(EMAIL_CONFIG.RESEND_API_KEY)
 // Configuration constants
 export const EMAIL_CONFIG = {
   RESEND_API_KEY: process.env.RESEND_API_KEY || 'test_key',
-  RESEND_FROM_EMAIL:
-    process.env.RESEND_FROM_EMAIL || 'contact@cloudnativebergen.dev',
   RATE_LIMIT_DELAY: 500, // 500ms delay = 2 requests per second max
   MAX_RETRIES: 3,
 }
@@ -208,7 +206,7 @@ All email operations include production-ready safeguards:
 // Automatic retry with exponential backoff
 const emailResult = await retryWithBackoff(async () => {
   return await resend.emails.send({
-    from: EMAIL_CONFIG.RESEND_FROM_EMAIL,
+    from: `${conference.organizer} <${conference.cfp_email}>`,
     to: [recipient],
     subject: subject,
     react: template,
@@ -258,11 +256,9 @@ Required environment variables:
 ```bash
 # Production
 RESEND_API_KEY=re_your_api_key_here
-RESEND_FROM_EMAIL=noreply@cloudnativebergen.dev
 
 # Development
 RESEND_API_KEY=test_key
-RESEND_FROM_EMAIL=contact@cloudnativebergen.dev
 ```
 
 ## API Endpoints
@@ -458,8 +454,8 @@ Monitor email delivery through the Resend dashboard:
 ### Common Issues
 
 1. **"fromEmail prop is required"**
-   - Verify server component is passing EMAIL_CONFIG.RESEND_FROM_EMAIL
-   - Check environment variable configuration in server components
+   - Verify server component is passing the conference CFP email
+   - Check conference configuration includes required email fields
    - Ensure client components receive fromEmail as prop
 
 2. **Gmail Interface Not Responding**
