@@ -1551,15 +1551,15 @@ export default async function BrandingPage() {
                           <span>Try the Download Feature!</span>
                         </strong>
                         <br />
-                        Click &ldquo;Download as PNG&rdquo; below the first
-                        speaker card to save a high-quality image. The download
-                        may take a few seconds to process as it waits for all
-                        content (including QR codes) to load properly.
+                        Click &ldquo;Download as PNG&rdquo; below the speaker
+                        cards to save high-quality images. The download may take
+                        a few seconds to process as it waits for all content
+                        (including QR codes) to load properly.
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="mx-auto grid max-w-7xl grid-cols-1 gap-16 sm:grid-cols-2 lg:grid-cols-2">
                     {/* First speaker with download functionality */}
                     <DownloadSpeakerImage
                       filename={`${
@@ -1570,18 +1570,23 @@ export default async function BrandingPage() {
                         speaker={conference.featured_speakers[0]}
                         variant="speaker-share"
                         isFeatured={true}
+                        className="h-full min-h-[500px] w-full max-w-none"
                       />
                     </DownloadSpeakerImage>
 
-                    {/* Remaining speakers without download */}
-                    {conference.featured_speakers.slice(1, 3).map((speaker) => (
+                    {/* Second speaker with download functionality */}
+                    <DownloadSpeakerImage
+                      filename={`${
+                        conference.featured_speakers[1]?.slug
+                      }-share`}
+                    >
                       <SpeakerShare
-                        key={speaker._id}
-                        speaker={speaker}
+                        speaker={conference.featured_speakers[1]}
                         variant="speaker-share"
                         isFeatured={true}
+                        className="h-full min-h-[500px] w-full max-w-none"
                       />
-                    ))}
+                    </DownloadSpeakerImage>
                   </div>
                 </div>
               )}

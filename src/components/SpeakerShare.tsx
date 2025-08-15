@@ -234,7 +234,7 @@ export async function SpeakerShare({
 
   return (
     <div
-      className={`group relative aspect-[4/5] max-w-lg overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-200 p-8 transition-all duration-300 hover:shadow-xl ${className}`}
+      className={`group relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-200 p-8 transition-all duration-300 hover:shadow-xl ${className}`}
     >
       <div className="relative flex h-full flex-col text-center text-white">
         {/* Header */}
