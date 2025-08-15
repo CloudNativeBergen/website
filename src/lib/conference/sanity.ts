@@ -145,11 +145,11 @@ export async function getConferenceForDomain(
       tracks[]{
         trackTitle,
         trackDescription,
-        talks[]{
+        talks${confirmedTalksOnly ? '[!defined(talk) || talk->status == "confirmed"]' : '[]'}{
         startTime,
         endTime,
         placeholder,
-        talk${confirmedTalksOnly ? '[status == "confirmed"]' : ''}->{
+        talk->{
           _id,
           title,
           description,

@@ -23,7 +23,6 @@ export default async function Home() {
   return (
     <>
       <Hero conference={conference} />
-
       {conference.schedules && conference.schedules.length > 0 && (
         <ProgramHighlights
           schedules={conference.schedules}
@@ -32,7 +31,6 @@ export default async function Home() {
           tickets_enabled={conference.registration_enabled}
         />
       )}
-
       <Sponsors sponsors={conference.sponsors || []} />
     </>
   )
