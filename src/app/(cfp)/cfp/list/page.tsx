@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/server'
 import { ProposalList } from '@/components/cfp/ProposalList'
-import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
+import { SpeakerShare } from '@/components/SpeakerShare'
 import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -118,17 +118,24 @@ export default async function SpeakerDashboard() {
                               conference?.title || 'Cloud Native Bergen'
                             }
                           >
-                            <SpeakerPromotionCard
-                              speaker={{
-                                ...primarySpeaker,
-                                talks: [proposal], // Include the confirmed proposal as a talk
-                              }}
-                              variant="featured"
-                              isFeatured={true}
-                              ctaText="View Profile"
-                              ctaUrl={`https://${domain}/speaker/${primarySpeaker.slug}`}
-                              className="w-full max-w-xs"
-                            />
+                            <div
+                              className="h-80 w-80"
+                              style={{ width: '320px', height: '320px' }}
+                            >
+                              <SpeakerShare
+                                speaker={{
+                                  ...primarySpeaker,
+                                  talks: [proposal], // Include the confirmed proposal as a talk
+                                }}
+                                variant="speaker-share"
+                                isFeatured={true}
+                                ctaUrl={`https://${domain}/speaker/${primarySpeaker.slug}`}
+                                eventName={
+                                  conference?.title || 'Cloud Native Bergen'
+                                }
+                                className="h-full w-full"
+                              />
+                            </div>
                           </SpeakerSharingActions>
                         </div>
                       ) : null

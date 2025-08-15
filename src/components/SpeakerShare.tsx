@@ -152,7 +152,6 @@ const QRCodeDisplay = ({
         alt="QR Code - Scan to view speaker profile"
         className="h-full w-full object-contain"
         style={{ minWidth: size, minHeight: size }}
-        crossOrigin="anonymous"
       />
     </div>
   )
