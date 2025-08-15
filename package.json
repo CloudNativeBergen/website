@@ -49,7 +49,7 @@
     "qrcode": "^1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "resend": "^4.8.0",
+    "resend": "^6.0.1",
     "sanity": "^4.3.0",
     "speakingurl": "^14.0.1",
     "styled-components": "^6.1.19",
