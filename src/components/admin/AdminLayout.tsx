@@ -9,6 +9,7 @@ import {
   CalendarDaysIcon,
   BuildingOfficeIcon,
   TicketIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline'
 import {
   DashboardLayout,
@@ -21,6 +22,7 @@ const navigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon },
   { name: 'Proposals', href: '/admin/proposals', icon: DocumentTextIcon },
   { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
+  { name: 'Featured', href: '/admin/featured', icon: StarIcon },
   { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
   { name: 'Sponsors', href: '/admin/sponsors', icon: BuildingOfficeIcon },
   { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },

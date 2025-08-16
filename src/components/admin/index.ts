@@ -48,6 +48,10 @@ export { SponsorActions } from './SponsorActions'
 export { SponsorContactTable } from './SponsorContactTable'
 export { SponsorContactActions } from './SponsorContactActions'
 
+// Featured Content Management Components
+export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'
+export { FeaturedTalksManager } from './FeaturedTalksManager'
+
 // Utility Components
 export { ErrorDisplay } from './ErrorDisplay'
 
