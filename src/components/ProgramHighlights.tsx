@@ -20,6 +20,27 @@ import {
 } from '@heroicons/react/24/outline'
 import { StarIcon, SparklesIcon } from '@heroicons/react/24/solid'
 
+/**
+ * Calculate a stable daily rotation index using modulus arithmetic
+ * This ensures the same content is shown for the entire day across all timezones
+ */
+function getDailyRotationIndex(arrayLength: number): number {
+  if (arrayLength === 0) return 0
+
+  // Use UTC date to ensure consistency across different deployments/timezones
+  const now = new Date()
+  const utcDate = new Date(now.getTime() + now.getTimezoneOffset() * 60000)
+
+  // Calculate days since epoch (Jan 1, 2024) for consistent rotation
+  const epoch = new Date('2024-01-01T00:00:00.000Z')
+  const daysSinceEpoch = Math.floor(
+    (utcDate.getTime() - epoch.getTime()) / (1000 * 60 * 60 * 24),
+  )
+
+  // Use modulus to cycle through the array
+  return daysSinceEpoch % arrayLength
+}
+
 // Extract unique speakers from schedules
 function extractSpeakersFromSchedules(
   schedules: ConferenceSchedule[],
@@ -379,9 +400,25 @@ export function ProgramHighlights({
   // Use featured talk slots (function automatically selects highest scored if none provided)
   const displayFeaturedTalks = featuredTalkSlots
 
+  // Calculate daily rotation indices for consistent daily cycling
+  const featuredSpeakerIndex = getDailyRotationIndex(
+    displayFeaturedSpeakers.length,
+  )
+  const featuredTalkIndex = getDailyRotationIndex(displayFeaturedTalks.length)
+
+  // Get the current day's featured speaker and talk
+  const todaysFeaturedSpeaker =
+    displayFeaturedSpeakers.length > 0
+      ? displayFeaturedSpeakers[featuredSpeakerIndex]
+      : null
+  const todaysFeaturedTalk =
+    displayFeaturedTalks.length > 0
+      ? displayFeaturedTalks[featuredTalkIndex]
+      : null
+
   if (
-    displayFeaturedTalks.length === 0 &&
-    displayFeaturedSpeakers.length === 0 &&
+    !todaysFeaturedTalk &&
+    !todaysFeaturedSpeaker &&
     regularTalks.length === 0
   ) {
     return null
@@ -512,8 +549,7 @@ export function ProgramHighlights({
         )}
 
         {/* Featured Content */}
-        {(displayFeaturedTalks.length > 0 ||
-          displayFeaturedSpeakers.length > 0) && (
+        {(todaysFeaturedTalk || todaysFeaturedSpeaker) && (
           <div className="mt-20">
             <div className="mb-12 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cloud-blue to-brand-fresh-green">
@@ -550,7 +586,7 @@ export function ProgramHighlights({
 
             <div className="grid auto-rows-fr gap-8 lg:grid-cols-2">
               {/* Featured Speaker */}
-              {displayFeaturedSpeakers.length > 0 && (
+              {todaysFeaturedSpeaker && (
                 <div className="flex flex-col">
                   <h4 className="font-space-grotesk mb-6 flex items-center space-x-2 text-xl font-bold text-brand-cloud-blue">
                     <StarIcon className="h-6 w-6" />
@@ -558,19 +594,17 @@ export function ProgramHighlights({
                   </h4>
                   <div className="flex-1">
                     <SpeakerPromotionCard
-                      key={displayFeaturedSpeakers[0]._id}
-                      speaker={displayFeaturedSpeakers[0]}
+                      key={todaysFeaturedSpeaker._id}
+                      speaker={todaysFeaturedSpeaker}
                       variant="featured"
-                      isFeatured={isSpeakerFeatured(
-                        displayFeaturedSpeakers[0]._id,
-                      )}
+                      isFeatured={isSpeakerFeatured(todaysFeaturedSpeaker._id)}
                     />
                   </div>
                 </div>
               )}
 
               {/* Featured Session */}
-              {displayFeaturedTalks.length > 0 && (
+              {todaysFeaturedTalk && (
                 <div className="flex flex-col">
                   <h4 className="font-space-grotesk mb-6 flex items-center space-x-2 text-xl font-bold text-brand-fresh-green">
                     <RocketLaunchIcon className="h-6 w-6" />
@@ -578,10 +612,10 @@ export function ProgramHighlights({
                   </h4>
                   <div className="flex-1">
                     <TalkPromotionCard
-                      key={`${displayFeaturedTalks[0].startTime}-${displayFeaturedTalks[0].talk!._id}`}
-                      talk={displayFeaturedTalks[0].talk!}
+                      key={`${todaysFeaturedTalk.startTime}-${todaysFeaturedTalk.talk!._id}`}
+                      talk={todaysFeaturedTalk.talk!}
                       slot={{
-                        time: `${displayFeaturedTalks[0].startTime} – ${displayFeaturedTalks[0].endTime}`,
+                        time: `${todaysFeaturedTalk.startTime} – ${todaysFeaturedTalk.endTime}`,
                       }}
                       variant="featured"
                       ctaText="View Full Program"
