@@ -93,6 +93,74 @@ export function formatDateSafe(dateString: string): string {
 }
 
 /**
+ * Server-safe date range formatting that produces consistent output regardless of time zone
+ * Uses explicit formatting to avoid hydration mismatches and timezone-dependent results
+ */
+export function formatDatesSafe(
+  dateString1: string,
+  dateString2: string,
+): string {
+  if (!dateString1 || !dateString2) return 'TBD'
+
+  try {
+    const date1 = new Date(dateString1)
+    const date2 = new Date(dateString2)
+
+    // Check for invalid dates
+    if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
+      // Try formatting individually if one is valid
+      if (!isNaN(date1.getTime())) return formatDateSafe(dateString1)
+      if (!isNaN(date2.getTime())) return formatDateSafe(dateString2)
+      return 'Invalid Date Range'
+    }
+
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ]
+
+    const day1 = date1.getDate()
+    const month1 = months[date1.getMonth()]
+    const year1 = date1.getFullYear()
+
+    const day2 = date2.getDate()
+    const month2 = months[date2.getMonth()]
+    const year2 = date2.getFullYear()
+
+    if (year1 !== year2) {
+      // Different years: 10 December 2024 - 1 January 2025
+      return `${day1} ${month1} ${year1} - ${day2} ${month2} ${year2}`
+    }
+    // Same year
+    if (month1 !== month2) {
+      // Different months: 30 September - 1 October 2024
+      return `${day1} ${month1} - ${day2} ${month2} ${year1}`
+    }
+    // Same month and year: 10 - 11 September 2024
+    return `${day1} - ${day2} ${month1} ${year1}`
+  } catch (error) {
+    console.error('Error formatting date range:', error)
+    // Fallback to individual formatting or TBD
+    const formatted1 = formatDateSafe(dateString1)
+    const formatted2 = formatDateSafe(dateString2)
+    if (formatted1 !== 'TBD' && formatted2 !== 'TBD') {
+      return `${formatted1} - ${formatted2}`
+    }
+    return 'TBD'
+  }
+}
+
+/**
  * Server-safe date and time formatting for detailed timestamps
  */
 export function formatDateTimeSafe(dateString: string): string {

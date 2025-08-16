@@ -3,7 +3,7 @@ import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
-import { formatDates } from '@/lib/time'
+import { formatDatesSafe } from '@/lib/time'
 import { CalendarDaysIcon, ClockIcon } from '@heroicons/react/24/outline'
 import Link from 'next/dist/client/link'
 
@@ -49,7 +49,7 @@ export default async function Tickets() {
                     <span className="font-inter text-base">
                       Conference Dates:{' '}
                       <time dateTime={conference.start_date}>
-                        {formatDates(
+                        {formatDatesSafe(
                           conference.start_date,
                           conference.end_date,
                         )}

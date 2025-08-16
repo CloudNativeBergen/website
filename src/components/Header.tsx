@@ -9,7 +9,7 @@ import Image from 'next/image'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { Conference } from '@/lib/conference/types'
-import { formatDates } from '@/lib/time'
+import { formatDatesSafe } from '@/lib/time'
 import { useEffect, useState } from 'react'
 
 export function Header({ c }: { c: Conference }) {
@@ -45,7 +45,7 @@ export function Header({ c }: { c: Conference }) {
             >
               <p>
                 <time dateTime={c.start_date}>
-                  {formatDates(c.start_date, c.end_date)}
+                  {formatDatesSafe(c.start_date, c.end_date)}
                 </time>
               </p>
               <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
@@ -69,7 +69,7 @@ export function Header({ c }: { c: Conference }) {
             <div className="mx-auto flex items-center gap-4 px-4 text-brand-cloud-blue">
               <p>
                 <time dateTime={c.start_date}>
-                  {formatDates(c.start_date, c.end_date)}
+                  {formatDatesSafe(c.start_date, c.end_date)}
                 </time>
               </p>
               <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
