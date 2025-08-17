@@ -76,12 +76,12 @@ export function DownloadSpeakerImage({
     element: HTMLElement,
   ): Promise<HTMLCanvasElement> => {
     const canvas = await html2canvas(element, {
-      backgroundColor: '#ffffff',
-      scale: 2,
+      backgroundColor: null, // Set to null for transparent background
+      scale: 4, // Increased to 4x for much higher resolution (was 2x)
       useCORS: true,
       allowTaint: false,
       removeContainer: false,
-      imageTimeout: 8000, // Reduced timeout for better UX
+      imageTimeout: 12000, // Increased timeout for higher resolution processing
       width: element.offsetWidth,
       height: element.offsetHeight,
       logging: false, // Disable logging in production
@@ -154,7 +154,7 @@ export function DownloadSpeakerImage({
           }
         },
         'image/png',
-        0.95, // Slightly compress for smaller file size
+        1.0, // Maximum quality (was 0.95)
       )
     })
   }
