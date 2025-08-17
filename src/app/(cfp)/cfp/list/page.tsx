@@ -134,6 +134,7 @@ export default async function SpeakerDashboard() {
                                   conference?.title || 'Cloud Native Bergen'
                                 }
                                 className="h-full w-full"
+                                showCloudNativePattern={true}
                               />
                             </div>
                           </SpeakerSharingActions>

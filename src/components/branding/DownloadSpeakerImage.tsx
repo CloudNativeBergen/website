@@ -47,6 +47,29 @@ export function DownloadSpeakerImage({
   }
 
   /**
+   * Update external image sources to use our proxy for CORS-free access
+   */
+  const updateImageSources = async (element: HTMLElement): Promise<void> => {
+    const images = element.querySelectorAll('img')
+    const externalImages = Array.from(images).filter(
+      (img) =>
+        !img.src.startsWith('data:') &&
+        !img.src.includes(window.location.hostname),
+    )
+
+    // Simply update src to use proxy - no need for data URL conversion
+    externalImages.forEach((img) => {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.src)}`
+      img.src = proxyUrl
+    })
+
+    // Wait for proxied images to load
+    if (externalImages.length > 0) {
+      await waitForImages(element)
+    }
+  }
+
+  /**
    * Generate canvas from element using html2canvas-pro
    */
   const generateCanvas = async (
@@ -58,22 +81,28 @@ export function DownloadSpeakerImage({
       useCORS: true,
       allowTaint: false,
       removeContainer: false,
-      imageTimeout: 10000,
+      imageTimeout: 8000, // Reduced timeout for better UX
+      width: element.offsetWidth,
+      height: element.offsetHeight,
+      logging: false, // Disable logging in production
       onclone: (clonedDoc: Document) => {
-        // Ensure QR code elements are visible
+        // Ensure QR code elements are visible in the cloned document
         const qrElements = clonedDoc.querySelectorAll('[data-qr-code]')
         qrElements.forEach((el: Element) => {
           if (el instanceof HTMLElement) {
             el.style.opacity = '1'
             el.style.visibility = 'visible'
+            el.style.display = 'block'
           }
         })
 
-        // Set CORS for external images
-        const images = clonedDoc.querySelectorAll('img')
-        images.forEach((img: HTMLImageElement) => {
-          if (!img.src.startsWith('data:')) {
-            img.crossOrigin = 'anonymous'
+        // Ensure all text is visible and properly styled
+        const textElements = clonedDoc.querySelectorAll(
+          'h1, h2, h3, p, span, div',
+        )
+        textElements.forEach((el: Element) => {
+          if (el instanceof HTMLElement) {
+            el.style.color = el.style.color || 'inherit'
           }
         })
       },
@@ -90,35 +119,44 @@ export function DownloadSpeakerImage({
    * Convert canvas to blob and trigger download
    */
   const downloadCanvas = async (canvas: HTMLCanvasElement): Promise<void> => {
-    const blob = await new Promise<Blob>((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       canvas.toBlob(
         (blob: Blob | null) => {
-          if (blob) {
-            resolve(blob)
-          } else {
+          if (!blob) {
             reject(new Error('Failed to create blob from canvas'))
+            return
+          }
+
+          let url: string | null = null
+          try {
+            // Create download link
+            url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            const fileName = `${filename}-${Date.now()}.png`
+
+            link.href = url
+            link.download = fileName
+            link.style.display = 'none'
+
+            // Trigger download
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+
+            // Clean up memory
+            setTimeout(() => {
+              if (url) URL.revokeObjectURL(url)
+              resolve()
+            }, 100)
+          } catch (error) {
+            if (url) URL.revokeObjectURL(url)
+            reject(error)
           }
         },
         'image/png',
-        1.0,
+        0.95, // Slightly compress for smaller file size
       )
     })
-
-    // Create and trigger download
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const fileName = `${filename}.png`
-
-    link.href = url
-    link.download = fileName
-    link.style.display = 'none'
-
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    // Cleanup
-    setTimeout(() => URL.revokeObjectURL(url), 100)
   }
 
   /**
@@ -148,28 +186,60 @@ export function DownloadSpeakerImage({
       // Wait for all content to load (especially QR codes)
       await waitForImages(element)
 
+      // Update external images to use proxy URLs for CORS-free access
+      await updateImageSources(element)
+
+      // Brief pause to ensure DOM updates are complete
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
       // Generate the canvas
       const canvas = await generateCanvas(element)
 
       // Download the image
       await downloadCanvas(canvas)
+
+      // Clean up canvas to free memory
+      canvas.width = 0
+      canvas.height = 0
     } catch (error) {
       console.error('Download failed:', error)
-      const message = error instanceof Error ? error.message : 'Unknown error'
-      alert(`Failed to generate image: ${message}`)
+
+      // More user-friendly error messages
+      let message = 'Failed to generate image. Please try again.'
+
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          message =
+            'Image generation timed out. Please check your connection and try again.'
+        } else if (error.message.includes('dimensions')) {
+          message =
+            'Unable to capture the image. Please ensure the content is visible.'
+        } else if (error.message.includes('network')) {
+          message =
+            'Network error occurred. Please check your connection and try again.'
+        } else if (
+          error.message.includes('401') ||
+          error.message.includes('Authentication')
+        ) {
+          message =
+            'Authentication required. Please sign in again and try downloading your speaker card.'
+        }
+      }
+
+      alert(message)
     } finally {
       setIsDownloading(false)
     }
   }
 
   return (
-    <div className="relative">
+    <div className="flex flex-col items-center">
       <div ref={componentRef} className="inline-block">
         {children}
       </div>
 
       {/* Download Button */}
-      <div className="mt-4 flex justify-center">
+      <div className="mt-4">
         <button
           onClick={downloadAsImage}
           disabled={isDownloading}

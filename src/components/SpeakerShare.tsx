@@ -5,6 +5,7 @@ import { sanityImage } from '@/lib/sanity/client'
 import { Format } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
+import { CloudNativePattern } from '@/components/CloudNativePattern'
 
 // QR code cache to avoid regenerating the same codes
 const qrCodeCache = new Map<string, string>()
@@ -29,6 +30,8 @@ interface SpeakerShareProps {
   ctaUrl?: string
   /** Conference/event name for social variants */
   eventName?: string
+  /** Whether to show Cloud Native pattern background */
+  showCloudNativePattern?: boolean
 }
 
 /**
@@ -63,30 +66,35 @@ const variantConfig: Record<
 /**
  * Generate QR code data URL for the given URL with caching
  */
-async function generateQRCode(url: string): Promise<string> {
+async function generateQRCode(
+  url: string,
+  size: number = 256,
+): Promise<string> {
   const fullUrl = url.startsWith('http')
     ? url
     : `https://cloudnativebergen.dev${url}`
 
-  // Check cache first
-  if (qrCodeCache.has(fullUrl)) {
-    return qrCodeCache.get(fullUrl)!
+  // Check cache first with size included in key
+  const cacheKey = `${fullUrl}_${size}`
+  if (qrCodeCache.has(cacheKey)) {
+    return qrCodeCache.get(cacheKey)!
   }
 
   try {
     // Dynamic import to reduce bundle size
     const QRCode = (await import('qrcode')).default
     const qrCodeDataUrl = await QRCode.toDataURL(fullUrl, {
-      width: 120,
-      margin: 1,
+      width: size,
+      margin: 0,
       color: {
         dark: '#1a1a1a',
         light: '#ffffff',
       },
+      errorCorrectionLevel: 'M',
     })
 
     // Cache the result
-    qrCodeCache.set(fullUrl, qrCodeDataUrl)
+    qrCodeCache.set(cacheKey, qrCodeDataUrl)
     return qrCodeDataUrl
   } catch (error) {
     console.error('Failed to generate QR code:', error)
@@ -143,15 +151,19 @@ const QRCodeDisplay = ({
 
   return (
     <div
-      className={`rounded-lg bg-white shadow-lg ${className}`}
-      style={{ padding: size * 0.1 }}
+      className={`rounded-[1.5cqw] bg-white shadow-lg ${className}`}
+      style={{
+        padding: `${Math.max(0.3, size * 0.04)}cqw`,
+      }}
       data-qr-code="true"
     >
       <img
         src={qrCodeUrl}
         alt="QR Code - Scan to view speaker profile"
-        className="h-full w-full object-contain"
-        style={{ minWidth: size, minHeight: size }}
+        className="h-full w-full object-cover"
+        style={{
+          imageRendering: 'crisp-edges',
+        }}
       />
     </div>
   )
@@ -219,6 +231,7 @@ export async function SpeakerShare({
   isFeatured = false,
   ctaUrl,
   eventName = 'Cloud Native Bergen',
+  showCloudNativePattern = false,
 }: SpeakerShareProps) {
   // Get variant config
   const config = variantConfig[variant]
@@ -227,8 +240,8 @@ export async function SpeakerShare({
   // CTA URL for QR code
   const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug || speaker._id}`
 
-  // Generate QR code for sharing
-  const qrCodeUrl = await generateQRCode(finalCtaUrl)
+  // Generate QR code for sharing with appropriate size
+  const qrCodeUrl = await generateQRCode(finalCtaUrl, 512)
 
   // Get primary talk
   const primaryTalk =
@@ -237,10 +250,28 @@ export async function SpeakerShare({
   // Extract speaker properties
   const { name, title, image } = speaker
 
+  // Determine background style based on showCloudNativePattern
+  const backgroundStyle = showCloudNativePattern
+    ? 'from-slate-900 via-blue-900 to-slate-900'
+    : config.gradient
+
   return (
     <div
-      className={`group @container relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${config.gradient} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
+      className={`group @container relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
     >
+      {/* Cloud Native Pattern Background - Only when showCloudNativePattern is true */}
+      {showCloudNativePattern && (
+        <CloudNativePattern
+          className="absolute inset-0"
+          variant="dark"
+          opacity={0.25}
+          animated={true}
+          baseSize={35}
+          iconCount={45}
+          seed={42}
+        />
+      )}
+
       {/* Enhanced responsive layout with container query units */}
       <div className="relative flex h-full flex-col p-[3cqw] text-center text-white @xs:p-[4cqw] @md:p-[5cqw] @xl:p-[6cqw]">
         {/* Header Section */}
