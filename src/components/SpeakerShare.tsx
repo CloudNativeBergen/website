@@ -133,7 +133,17 @@ const SpeakerImage = ({
     )
   }
 
-  return <MissingAvatar name={name} size={size} className={className} />
+  // For missing avatars in the container query context, we need to ensure proper sizing
+  return (
+    <div className={`${className} relative overflow-hidden`}>
+      <MissingAvatar
+        name={name}
+        size={size}
+        className="absolute inset-0 flex items-center justify-center rounded-[inherit]"
+        textSizeClass="text-2xl font-bold text-white z-10"
+      />
+    </div>
+  )
 }
 
 interface QRCodeDisplayProps {
@@ -184,8 +194,7 @@ const TalkFormatDisplay = ({ talk, size = 'md' }: TalkFormatDisplayProps) => {
     lg: {
       icon: 'h-[4cqw] w-[4cqw] @xs:h-[4.5cqw] @xs:w-[4.5cqw] @md:h-[5cqw] @md:w-[5cqw] @xl:h-[5.5cqw] @xl:w-[5.5cqw]',
       text: 'text-[3.5cqw] @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]',
-      title:
-        'text-[4cqw] @xs:text-[4.5cqw] @md:text-[5.5cqw] @xl:text-[6.5cqw]',
+      title: 'text-[4cqw] @xs:text-[4.5cqw] @md:text-[5.5cqw] @xl:text-[6cqw]',
     },
   }
 
@@ -275,21 +284,21 @@ export async function SpeakerShare({
       {/* Enhanced responsive layout with container query units */}
       <div className="relative flex h-full flex-col p-[3cqw] text-center text-white @xs:p-[4cqw] @md:p-[5cqw] @xl:p-[6cqw]">
         {/* Header Section */}
-        <header className="mb-[2cqw] shrink-0 @xs:mb-[3cqw] @md:mb-[4cqw]">
+        <header className="mb-[3cqw] shrink-0 @xs:mb-[4cqw] @md:mb-[6cqw] @xl:mb-[8cqw]">
           <div className="mb-[1cqw] flex items-center justify-center gap-[2cqw] @xs:mb-[1.5cqw] @xs:gap-[2.5cqw] @md:mb-[2cqw] @md:gap-[3cqw]">
             <Icon className="h-[6cqw] w-[6cqw] @xs:h-[6.5cqw] @xs:w-[6.5cqw] @md:h-[7cqw] @md:w-[7cqw] @xl:h-[8cqw] @xl:w-[8cqw]" />
             <span className="font-inter text-[4.5cqw] leading-tight font-bold @xs:text-[5cqw] @md:text-[5.5cqw] @xl:text-[6cqw]">
               {config.headerText(isFeatured)}
             </span>
           </div>
-          <h1 className="font-space-grotesk px-[1cqw] text-[6.5cqw] leading-tight font-bold @xs:text-[7cqw] @md:text-[8cqw] @xl:text-[9cqw]">
+          <h1 className="font-space-grotesk px-[1cqw] text-[6cqw] leading-tight font-bold @xs:text-[7cqw] @md:text-[8cqw] @xl:text-[9cqw]">
             {eventName}
           </h1>
         </header>
 
         {/* Images Section - Much bigger for large containers */}
         <section className="mb-[2cqw] shrink-0 @xs:mb-[3cqw] @md:mb-[4cqw]">
-          <div className="flex items-center justify-center gap-[3cqw] @xs:gap-[4cqw] @md:gap-[5cqw] @xl:gap-[6cqw]">
+          <div className="flex items-center justify-center gap-[7cqw] @xs:gap-[8cqw] @md:gap-[12cqw] @xl:gap-[15cqw]">
             {/* Speaker Image - Much larger across all sizes */}
             <div className="flex-shrink-0">
               <SpeakerImage
@@ -311,7 +320,7 @@ export async function SpeakerShare({
 
         {/* Content Section */}
         <main className="flex flex-1 flex-col justify-center px-[1cqw] @md:px-[2cqw]">
-          <h2 className="font-space-grotesk mb-[1cqw] text-[6cqw] leading-tight font-bold @xs:mb-[1.5cqw] @xs:text-[6.5cqw] @md:mb-[2cqw] @md:text-[7.5cqw] @xl:text-[8.5cqw]">
+          <h2 className="font-space-grotesk mb-[1cqw] text-[6cqw] leading-tight font-bold @xs:mb-[1.5cqw] @xs:text-[6cqw] @md:mb-[2cqw] @md:text-[7.5cqw] @xl:text-[8.5cqw]">
             {name}
           </h2>
 
