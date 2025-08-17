@@ -6,7 +6,6 @@ import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActio
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { Status } from '@/lib/proposal/types'
-import { Speaker } from '@/lib/speaker/types'
 import { LightBulbIcon } from '@heroicons/react/24/outline'
 
 function ErrorDisplay({ message }: { message: string }) {

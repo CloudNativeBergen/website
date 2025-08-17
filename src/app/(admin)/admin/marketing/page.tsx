@@ -36,11 +36,8 @@ export default async function MarketingPage() {
     )
   }
 
-  const {
-    conference,
-    domain,
-    error: conferenceError,
-  } = await getConferenceForCurrentDomain()
+  const { conference, error: conferenceError } =
+    await getConferenceForCurrentDomain()
 
   if (conferenceError || !conference) {
     console.error('Error loading conference:', conferenceError)
@@ -178,7 +175,7 @@ export default async function MarketingPage() {
                   Speaker Sharing Cards
                 </h3>
                 <p className="font-inter text-sm text-gray-700">
-                  Click "Download as PNG" on any speaker card to save
+                  Click &quot;Download as PNG&quot; on any speaker card to save
                   high-quality promotional images. All cards include speaker
                   details and are optimized for social media platforms.
                 </p>
