@@ -92,27 +92,17 @@ export default async function SpeakerDashboard() {
 
                   <div className="space-y-6">
                     {confirmedProposals.map((proposal) => {
-                      // Extract speaker data safely
-                      const speakers =
-                        proposal.speakers && Array.isArray(proposal.speakers)
-                          ? proposal.speakers.filter(
-                              (speaker) =>
-                                typeof speaker === 'object' &&
-                                speaker &&
-                                'name' in speaker,
-                            )
-                          : []
-                      const primarySpeaker =
-                        speakers.length > 0 ? (speakers[0] as Speaker) : null
+                      // Use the current authenticated user as the speaker
+                      const currentSpeaker = session.speaker
 
-                      return primarySpeaker ? (
+                      return currentSpeaker ? (
                         <div
                           key={proposal._id}
                           className="flex flex-col items-center"
                         >
                           <SpeakerSharingActions
-                            filename={`${primarySpeaker.slug || primarySpeaker.name?.replace(/\s+/g, '-').toLowerCase()}-speaker-card`}
-                            speakerUrl={`https://${domain}/speaker/${primarySpeaker.slug}`}
+                            filename={`${currentSpeaker.slug || currentSpeaker.name?.replace(/\s+/g, '-').toLowerCase()}-speaker-card`}
+                            speakerUrl={`https://${domain}/speaker/${currentSpeaker.slug}`}
                             talkTitle={proposal.title}
                             eventName={
                               conference?.title || 'Cloud Native Bergen'
@@ -124,12 +114,12 @@ export default async function SpeakerDashboard() {
                             >
                               <SpeakerShare
                                 speaker={{
-                                  ...primarySpeaker,
+                                  ...currentSpeaker,
                                   talks: [proposal], // Include the confirmed proposal as a talk
                                 }}
                                 variant="speaker-share"
                                 isFeatured={true}
-                                ctaUrl={`https://${domain}/speaker/${primarySpeaker.slug}`}
+                                ctaUrl={`https://${domain}/speaker/${currentSpeaker.slug}`}
                                 eventName={
                                   conference?.title || 'Cloud Native Bergen'
                                 }
