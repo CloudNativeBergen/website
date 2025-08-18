@@ -13,6 +13,7 @@ import { sanityImage } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
 import { getConferenceForCurrentDomain } from '../../../../lib/conference/sanity'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
+import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
@@ -137,7 +138,7 @@ export default async function Profile({ params }: Props) {
             <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-3">
               {/* Speaker Image & Basic Info */}
               <div className="lg:col-span-1">
-                <div className="sticky top-8">
+                <div className="sticky top-8 z-10">
                   {/* Speaker Image */}
                   <div className="mb-6 flex justify-center lg:justify-start">
                     {speaker.image ? (
@@ -202,12 +203,11 @@ export default async function Profile({ params }: Props) {
                 {(() => {
                   const blueskyLink = hasBlueskySocial(speaker.links)
                   return blueskyLink ? (
-                    <div className="mb-8 lg:hidden">
-                      <BlueskyFeed
+                    <div className="mb-4 lg:hidden">
+                      <ScrollFadeBlueskyFeed
                         blueskyHandle={blueskyLink}
                         postCount={1}
                         compact={true}
-                        className="mx-auto max-w-sm"
                       />
                     </div>
                   ) : null
@@ -218,7 +218,7 @@ export default async function Profile({ params }: Props) {
               <div className="lg:col-span-2">
                 {/* Name & Title */}
                 <div className="mb-8 text-center lg:text-left">
-                  <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-slate-gray sm:text-5xl">
+                  <h1 className="font-space-grotesk mb-2 text-4xl font-bold text-brand-slate-gray sm:text-5xl">
                     {speaker.name}
                   </h1>
                   {speaker.title && (
