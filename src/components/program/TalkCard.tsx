@@ -13,6 +13,7 @@ import { TrackTalk } from '@/lib/conference/types'
 import { Status } from '@/lib/proposal/types'
 import { formatSpeakerNamesFromUnknown } from '@/lib/speaker/formatSpeakerNames'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import { BookmarkButton } from '@/components/BookmarkButton'
 import { useBookmarks } from '@/contexts/BookmarksContext'
 import {
@@ -281,7 +282,12 @@ export function TalkCard({
                       )}
                     >
                       <div className="truncate font-medium text-brand-cloud-blue">
-                        {formatSpeakerNamesFromUnknown(talkData.speakers)}
+                        <ClickableSpeakerNames
+                          speakers={talkData.speakers}
+                          showFirstNameOnly={compact}
+                          maxVisible={compact ? 2 : undefined}
+                          linkClassName="hover:text-brand-cloud-blue/80 transition-colors"
+                        />
                       </div>
                     </div>
                   </div>

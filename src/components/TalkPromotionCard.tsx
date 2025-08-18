@@ -12,6 +12,8 @@ import Link from 'next/link'
 import { Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
+import { BookmarkButton } from '@/components/BookmarkButton'
 
 /**
  * Props for the TalkPromotionCard component
@@ -168,11 +170,12 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
               maxVisible={3}
             />
             <div className="min-w-0">
-              <p className="font-inter text-sm font-semibold text-brand-slate-gray">
-                {speakers.length > 1
-                  ? `${speakers[0].name} & others`
-                  : speakers[0].name}
-              </p>
+              <div className="font-inter text-sm font-semibold text-brand-slate-gray">
+                <ClickableSpeakerNames
+                  speakers={speakers as Speaker[]}
+                  linkClassName="hover:text-brand-slate-gray/80 transition-colors"
+                />
+              </div>
               <p className="font-inter text-xs text-gray-500">
                 {speakers.length > 1 ? 'Speakers' : 'Speaker'}
               </p>

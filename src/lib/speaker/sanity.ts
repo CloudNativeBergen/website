@@ -187,6 +187,9 @@ export async function getPublicSpeaker(
         name, title, bio, links, flags, "image": image.asset->url,
         "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
           _id, title, description, language, level, format, audiences,
+          speakers[]-> {
+            _id, name, title, "slug": slug.current, "image": image.asset->url
+          },
           topics[]-> {
             _id, title, "slug": slug.current
           },

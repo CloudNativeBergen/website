@@ -1,10 +1,13 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
+import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import { formats, languages, levels } from '@/lib/proposal/types'
 import { flags, Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import * as social from '@/components/SocialIcons'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
+import { formatSpeakerNamesFromUnknown } from '@/lib/speaker/formatSpeakerNames'
 import { Button } from '@/components/Button'
 import { BackLink } from '@/components/BackButton'
 import { ShowMore } from '@/components/ShowMore'
@@ -270,6 +273,29 @@ export default async function Profile({ params }: Props) {
                               <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-brand-slate-gray">
                                 {talk.title}
                               </h3>
+
+                              {/* Co-speakers Section - Only show if there are multiple speakers */}
+                              {talk.speakers && talk.speakers.length > 1 && (
+                                <div className="mb-3 flex items-center gap-3">
+                                  <SpeakerAvatars
+                                    speakers={talk.speakers}
+                                    maxVisible={4}
+                                    size="sm"
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-medium text-brand-cloud-blue">
+                                      <ClickableSpeakerNames
+                                        speakers={talk.speakers}
+                                        linkClassName="hover:text-brand-cloud-blue/80 transition-colors"
+                                      />
+                                    </div>
+                                    <p className="text-xs text-gray-600">
+                                      {talk.speakers.length} speakers
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
                               <div className="flex flex-wrap gap-3">
                                 {/* Format */}
                                 {talk.format && (

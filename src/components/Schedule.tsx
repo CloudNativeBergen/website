@@ -6,11 +6,14 @@ import clsx from 'clsx'
 
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
+import { SpeakerAvatars } from '@/components/SpeakerAvatars'
+import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import {
   ConferenceSchedule,
   ScheduleTrack,
   TrackTalk,
 } from '@/lib/conference/types'
+import { formatSpeakerNamesFromUnknown } from '@/lib/speaker/formatSpeakerNames'
 import Link from 'next/link'
 
 interface ScheduleTrackSummary extends ScheduleTrack {
@@ -150,6 +153,9 @@ function YouTubeEmbed({ url }: { url: string }) {
 
 function TalkTimeSlot({ date, talk }: { date: string; talk: TrackTalk }) {
   const primarySpeaker = talk.talk?.speakers?.[0]
+  const speakers = talk.talk?.speakers
+  const hasMultipleSpeakers = speakers && speakers.length > 1
+
   return (
     <div className="relative block">
       {!talk.talk ||
@@ -159,12 +165,39 @@ function TalkTimeSlot({ date, talk }: { date: string; talk: TrackTalk }) {
           {talk.talk?.title || talk.placeholder || 'TBD'}
         </h4>
       ) : (
-        <Link href={`/speaker/${primarySpeaker.slug}`} className="block">
+        <div className="block">
           <h4 className="text-lg font-semibold tracking-tight text-blue-900">
-            {primarySpeaker.name}
+            <Link
+              href={`/speaker/${primarySpeaker.slug}`}
+              className="hover:text-blue-700"
+            >
+              {talk.talk.title}
+            </Link>
           </h4>
-          <p className="mt-1 tracking-tight text-blue-900">{talk.talk.title}</p>
-        </Link>
+
+          {/* Speaker Info */}
+          {speakers && speakers.length > 0 && (
+            <div className="mt-2 flex items-center gap-2">
+              <SpeakerAvatars speakers={speakers} maxVisible={3} size="sm" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-blue-800">
+                  <ClickableSpeakerNames
+                    speakers={speakers}
+                    showFirstNameOnly={true}
+                    maxVisible={2}
+                    linkClassName="hover:text-blue-600 transition-colors"
+                    separatorClassName="text-blue-600"
+                  />
+                </div>
+                {hasMultipleSpeakers && (
+                  <p className="text-xs text-blue-600">
+                    {speakers.length} speakers
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       )}
       <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
       {talk.talk?.video && <YouTubeEmbed url={talk.talk.video} />}
