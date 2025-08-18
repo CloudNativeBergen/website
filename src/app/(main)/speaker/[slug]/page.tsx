@@ -151,8 +151,8 @@ export default async function Profile({ params }: Props) {
                         className="h-48 w-48 rounded-full object-cover shadow-lg ring-4 ring-white lg:h-64 lg:w-64"
                       />
                     ) : (
-                      <div className="flex h-48 w-48 items-center justify-center rounded-full bg-brand-cloud-blue/10 shadow-lg ring-4 ring-white lg:h-64 lg:w-64">
-                        <UserIcon className="h-24 w-24 text-brand-cloud-blue/50 lg:h-32 lg:w-32" />
+                      <div className="flex h-48 w-48 items-center justify-center rounded-full bg-blue-100 shadow-lg ring-4 ring-white lg:h-64 lg:w-64">
+                        <UserIcon className="h-24 w-24 text-blue-500 lg:h-32 lg:w-32" />
                       </div>
                     )}
                   </div>
@@ -160,7 +160,7 @@ export default async function Profile({ params }: Props) {
                   {/* Local Speaker Flag */}
                   {speaker.flags?.includes(Flags.localSpeaker) && (
                     <div className="mb-6 flex justify-center lg:justify-start">
-                      <span className="rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-xs font-medium text-brand-cloud-blue">
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-600">
                         {flags.get(Flags.localSpeaker)}
                       </span>
                     </div>
