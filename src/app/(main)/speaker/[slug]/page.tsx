@@ -34,10 +34,12 @@ function portableTextToString(value: PortableTextBlock[]): string {
 
 export async function generateMetadata({ params }: Props) {
   const resolvedParams = await params
+  // URL-decode the slug to handle Norwegian characters (æ, ø, å)
+  const decodedSlug = decodeURIComponent(resolvedParams.slug)
   const { conference } = await getConferenceForCurrentDomain()
   const { speaker, talks, err } = await getPublicSpeaker(
     conference._id,
-    resolvedParams.slug,
+    decodedSlug,
   )
 
   if (err || !speaker || !talks || talks.length === 0) {
@@ -81,10 +83,12 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function Profile({ params }: Props) {
   const resolvedParams = await params
+  // URL-decode the slug to handle Norwegian characters (æ, ø, å)
+  const decodedSlug = decodeURIComponent(resolvedParams.slug)
   const { conference } = await getConferenceForCurrentDomain()
   const { speaker, talks, err } = await getPublicSpeaker(
     conference._id,
-    resolvedParams.slug,
+    decodedSlug,
   )
 
   // Handle errors

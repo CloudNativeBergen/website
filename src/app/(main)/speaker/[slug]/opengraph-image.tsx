@@ -321,10 +321,15 @@ export default async function Image({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
+  // URL-decode the slug to handle Norwegian characters (æ, ø, å)
+  const decodedSlug = decodeURIComponent(slug)
   const { conference, domain } = await getConferenceForCurrentDomain({
     sponsors: true,
   })
-  const { speaker, talks, err } = await getPublicSpeaker(conference._id, slug)
+  const { speaker, talks, err } = await getPublicSpeaker(
+    conference._id,
+    decodedSlug,
+  )
 
   // Early return for error state
   if (err || !speaker || !talks?.length) {
