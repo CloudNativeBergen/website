@@ -79,19 +79,8 @@ export function SpeakerEmailTemplate({
         color: '#334155',
         marginBottom: '24px',
       }}
-    >
-      {message.split('\n').map((line, index) => (
-        <p
-          key={index}
-          style={{
-            margin: 0,
-            marginBottom: index < message.split('\n').length - 1 ? '16px' : 0,
-          }}
-        >
-          {line}
-        </p>
-      ))}
-    </div>
+      dangerouslySetInnerHTML={{ __html: message }}
+    />
   )
 
   const proposalLink = (
