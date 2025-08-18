@@ -186,7 +186,7 @@ export default async function Profile({ params }: Props) {
                     </div>
                   )}
 
-                  {/* Bluesky Feed */}
+                  {/* Bluesky Feed - Desktop */}
                   {(() => {
                     const blueskyLink = hasBlueskySocial(speaker.links)
                     return blueskyLink ? (
@@ -197,6 +197,21 @@ export default async function Profile({ params }: Props) {
                     ) : null
                   })()}
                 </div>
+
+                {/* Mobile Bluesky Feed - Show one latest post underneath speaker image on mobile */}
+                {(() => {
+                  const blueskyLink = hasBlueskySocial(speaker.links)
+                  return blueskyLink ? (
+                    <div className="mb-8 lg:hidden">
+                      <BlueskyFeed
+                        blueskyHandle={blueskyLink}
+                        postCount={1}
+                        compact={true}
+                        className="mx-auto max-w-sm"
+                      />
+                    </div>
+                  ) : null
+                })()}
               </div>
 
               {/* Speaker Content */}

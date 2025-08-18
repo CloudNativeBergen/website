@@ -44,6 +44,7 @@ interface BlueskyFeedProps {
   blueskyHandle: string
   className?: string
   postCount?: number
+  compact?: boolean
 }
 
 // Utility function for relative time formatting
@@ -77,6 +78,7 @@ export function BlueskyFeed({
   blueskyHandle,
   className = '',
   postCount = 3,
+  compact = false,
 }: BlueskyFeedProps) {
   const [posts, setPosts] = useState<BlueskyPost[]>([])
   const [loading, setLoading] = useState(true)
@@ -191,24 +193,28 @@ export function BlueskyFeed({
       return (
         <article
           key={post.uri}
-          className={`space-y-3 ${index > 0 ? 'border-t border-gray-100 pt-4' : ''}`}
+          className={`${compact ? 'space-y-2' : 'space-y-3'} ${index > 0 ? 'border-t border-gray-100 pt-3' : ''}`}
           aria-label={`Post by ${post.author.displayName || post.author.handle}`}
         >
           {/* Author information */}
-          <header className="flex items-center gap-2">
+          <header
+            className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}
+          >
             {post.author.avatar ? (
               <img
                 src={post.author.avatar}
                 alt=""
-                className="h-6 w-6 rounded-full object-cover"
+                className={`${compact ? 'h-5 w-5' : 'h-6 w-6'} rounded-full object-cover`}
                 loading="lazy"
               />
             ) : (
               <div
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-blue-600"
+                className={`flex ${compact ? 'h-5 w-5' : 'h-6 w-6'} items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-blue-600`}
                 aria-hidden="true"
               >
-                <span className="text-xs font-medium text-white">
+                <span
+                  className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-white`}
+                >
                   {(post.author.displayName || post.author.handle)
                     .charAt(0)
                     .toUpperCase()}
@@ -216,20 +222,30 @@ export function BlueskyFeed({
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h3 className="truncate text-sm font-medium text-gray-900">
+              <h3
+                className={`truncate ${compact ? 'text-xs' : 'text-sm'} font-medium text-gray-900`}
+              >
                 {post.author.displayName || post.author.handle}
               </h3>
-              <p className="text-xs text-gray-500">@{post.author.handle}</p>
+              {!compact && (
+                <p className="text-xs text-gray-500">@{post.author.handle}</p>
+              )}
             </div>
           </header>
 
           {/* Post content */}
-          <div className="text-sm leading-relaxed text-gray-700">
-            {post.record.text}
+          <div
+            className={`${compact ? 'text-sm leading-relaxed' : 'text-sm leading-relaxed'} text-gray-700`}
+          >
+            {compact && post.record.text.length > 140
+              ? `${post.record.text.substring(0, 140)}...`
+              : post.record.text}
           </div>
 
           {/* Post footer */}
-          <footer className="flex items-center justify-between text-xs text-gray-500">
+          <footer
+            className={`flex items-center justify-between ${compact ? 'text-xs' : 'text-xs'} text-gray-500`}
+          >
             <time
               dateTime={post.record.createdAt}
               title={postDate.toLocaleString()}
@@ -240,48 +256,70 @@ export function BlueskyFeed({
               href={postUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded font-medium text-blue-500 hover:text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none"
+              className={`rounded font-medium text-blue-500 hover:text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none ${compact ? 'text-xs' : ''}`}
               aria-label={`View post by ${post.author.displayName || post.author.handle} on Bluesky`}
             >
-              View on Bluesky
+              {compact ? 'View' : 'View on Bluesky'}
             </a>
           </footer>
         </article>
       )
     })
-  }, [posts])
+  }, [posts, compact])
 
   // Optimized loading component with better skeleton UI
   if (loading) {
     return (
-      <div className={`rounded-lg bg-white p-4 shadow-sm ${className}`}>
-        <div className="mb-3 flex items-center gap-2">
+      <div
+        className={`rounded-lg bg-white ${compact ? 'p-4 shadow-md' : 'p-4'} shadow-sm ${className}`}
+      >
+        <div className={`${compact ? 'mb-3' : 'mb-3'} flex items-center gap-2`}>
           <BlueskyIcon className="h-5 w-5 text-blue-500" />
-          <span className="font-medium text-gray-900">Latest from Bluesky</span>
+          <span
+            className={`${compact ? 'text-sm' : ''} font-medium text-gray-900`}
+          >
+            Latest from Bluesky
+          </span>
         </div>
-        <div className="space-y-4">
+        <div className={compact ? 'space-y-3' : 'space-y-4'}>
           {Array.from({ length: postCount }).map((_, i) => (
             <div
               key={i}
-              className={`space-y-3 ${i > 0 ? 'border-t pt-4' : ''}`}
+              className={`${compact ? 'space-y-2' : 'space-y-3'} ${i > 0 ? 'border-t pt-3' : ''}`}
             >
               {/* Author skeleton */}
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 animate-pulse rounded-full bg-gray-200" />
+              <div
+                className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}
+              >
+                <div
+                  className={`${compact ? 'h-5 w-5' : 'h-6 w-6'} animate-pulse rounded-full bg-gray-200`}
+                />
                 <div className="flex-1">
-                  <div className="mb-1 h-4 w-24 animate-pulse rounded bg-gray-200" />
-                  <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
+                  <div
+                    className={`mb-1 ${compact ? 'h-3 w-20' : 'h-4 w-24'} animate-pulse rounded bg-gray-200`}
+                  />
+                  {!compact && (
+                    <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
+                  )}
                 </div>
               </div>
               {/* Content skeleton */}
               <div className="space-y-2">
-                <div className="h-4 w-full animate-pulse rounded bg-gray-200" />
-                <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200" />
+                <div
+                  className={`${compact ? 'h-3' : 'h-4'} w-full animate-pulse rounded bg-gray-200`}
+                />
+                <div
+                  className={`${compact ? 'h-3' : 'h-4'} w-3/4 animate-pulse rounded bg-gray-200`}
+                />
               </div>
               {/* Footer skeleton */}
               <div className="flex items-center justify-between">
-                <div className="h-3 w-16 animate-pulse rounded bg-gray-200" />
-                <div className="h-3 w-20 animate-pulse rounded bg-gray-200" />
+                <div
+                  className={`${compact ? 'h-2.5 w-12' : 'h-3 w-16'} animate-pulse rounded bg-gray-200`}
+                />
+                <div
+                  className={`${compact ? 'h-2.5 w-16' : 'h-3 w-20'} animate-pulse rounded bg-gray-200`}
+                />
               </div>
             </div>
           ))}
@@ -302,12 +340,14 @@ export function BlueskyFeed({
 
   return (
     <section
-      className={`rounded-lg bg-white p-4 shadow-sm ${className}`}
+      className={`rounded-lg bg-white ${compact ? 'p-4 shadow-md' : 'p-4'} shadow-sm ${className}`}
       aria-label="Latest Bluesky posts"
     >
-      <header className="mb-3 flex items-center gap-2">
+      <header
+        className={`${compact ? 'mb-3' : 'mb-3'} flex items-center gap-2`}
+      >
         <BlueskyIcon className="h-5 w-5 text-blue-500" aria-hidden="true" />
-        <h2 className="font-medium text-gray-900">
+        <h2 className={`${compact ? 'text-sm' : ''} font-medium text-gray-900`}>
           Latest from Bluesky{' '}
           {posts.length > 1 && (
             <span className="text-gray-500">({posts.length})</span>
@@ -315,7 +355,7 @@ export function BlueskyFeed({
         </h2>
       </header>
 
-      <div className="space-y-4">{postItems}</div>
+      <div className={compact ? 'space-y-3' : 'space-y-4'}>{postItems}</div>
     </section>
   )
 }
