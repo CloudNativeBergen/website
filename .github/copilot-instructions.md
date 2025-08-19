@@ -59,6 +59,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Keep chat interactions short and concise.
 - Prefer working code over lengthy examples.
 - Do not provide lengthy summaries.
+- Always run `npm run check` before committing changes.
 
 ### Sanity CMS Requirements
 
