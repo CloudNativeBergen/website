@@ -58,6 +58,47 @@ export default async function AdminTickets() {
     orders.flatMap((order) => order.tickets.map((ticket) => ticket.crm.email)),
   ).size
 
+  // Calculate statistics by ticket category
+  const ticketsByCategory = new Map<
+    string,
+    {
+      count: number
+      revenue: number
+      orders: number
+    }
+  >()
+
+  orders.forEach((order) => {
+    order.categories.forEach((category) => {
+      const current = ticketsByCategory.get(category) || {
+        count: 0,
+        revenue: 0,
+        orders: 0,
+      }
+      ticketsByCategory.set(category, {
+        count: current.count + order.totalTickets,
+        revenue: current.revenue + order.totalAmount,
+        orders: current.orders + 1,
+      })
+    })
+  })
+
+  const categoryStats = Array.from(ticketsByCategory.entries())
+    .map(([category, stats]) => ({
+      category,
+      ...stats,
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  // Function to format numbers consistently for SSR
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('nb-NO', {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="border-b border-gray-200 pb-5">
@@ -97,7 +138,7 @@ export default async function AdminTickets() {
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-green-600">
-                  {totalRevenue.toLocaleString()} NOK
+                  {formatCurrency(totalRevenue)} NOK
                 </div>
                 <div className="text-sm text-gray-500">Total Revenue</div>
               </div>
@@ -111,6 +152,101 @@ export default async function AdminTickets() {
           </div>
         </div>
       </div>
+
+      {/* Breakdown by Ticket Type */}
+      {categoryStats.length > 0 && (
+        <div className="mt-8">
+          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5">
+            <div className="px-6 py-4">
+              <h2 className="mb-4 text-lg font-medium text-gray-900">
+                Breakdown by Ticket Type
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Ticket Type
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Tickets Sold
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Orders
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Revenue
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Percentage
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {categoryStats.map((stat) => (
+                      <tr key={stat.category} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
+                          {stat.category}
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                            {stat.count}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                          {stat.orders}
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                          <span className="font-medium text-green-600">
+                            {formatCurrency(stat.revenue)} NOK
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                          <div className="flex items-center">
+                            <div className="flex-1">
+                              <div className="flex items-center">
+                                <div className="mr-2 text-xs">
+                                  {((stat.count / totalTickets) * 100).toFixed(
+                                    1,
+                                  )}
+                                  %
+                                </div>
+                                <div className="h-2 w-16 rounded-full bg-gray-200">
+                                  <div
+                                    className="h-2 rounded-full bg-blue-600"
+                                    style={{
+                                      width: `${(stat.count / totalTickets) * 100}%`,
+                                    }}
+                                  ></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Orders List */}
       <div className="mt-12">

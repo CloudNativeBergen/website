@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import {
   TicketIcon,
   UserIcon,
@@ -35,6 +35,15 @@ export function ExpandableOrdersTable({
       }
       return newSet
     })
+  }
+
+  // Function to format numbers consistently for SSR
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('nb-NO', {
+      style: 'decimal',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
   }
 
   // Function to format category labels
@@ -130,8 +139,8 @@ export function ExpandableOrdersTable({
               const checkinOrderUrl = getCheckinOrderUrl(order.order_id)
 
               return (
-                <>
-                  <tr key={order.order_id} className="hover:bg-gray-50">
+                <Fragment key={order.order_id}>
+                  <tr className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         {hasMultipleTickets ? (
@@ -221,12 +230,12 @@ export function ExpandableOrdersTable({
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1">
-                        {order.categories.map((category, index) => {
+                        {order.categories.map((category) => {
                           const { formatted, className, title } =
                             getCategoryStyle(category)
                           return (
                             <span
-                              key={index}
+                              key={category}
                               className={className}
                               title={title}
                             >
@@ -246,7 +255,7 @@ export function ExpandableOrdersTable({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-medium text-gray-900">
-                        {order.totalAmount.toLocaleString()} NOK
+                        {formatCurrency(order.totalAmount)} NOK
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -265,7 +274,7 @@ export function ExpandableOrdersTable({
                               Outstanding
                             </div>
                             <div className="mt-1 text-xs text-gray-500">
-                              {order.amountLeft.toLocaleString()} NOK remaining
+                              {formatCurrency(order.amountLeft)} NOK remaining
                             </div>
                           </div>
                         </div>
@@ -302,8 +311,7 @@ export function ExpandableOrdersTable({
                                     {formatCategoryLabel(ticket.category)}
                                   </div>
                                   <div className="text-xs text-gray-500">
-                                    {parseFloat(ticket.sum).toLocaleString()}{' '}
-                                    NOK
+                                    {formatCurrency(parseFloat(ticket.sum))} NOK
                                   </div>
                                 </div>
                               </div>
@@ -313,7 +321,7 @@ export function ExpandableOrdersTable({
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               )
             })}
           </tbody>
