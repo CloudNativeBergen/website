@@ -13,7 +13,6 @@ import { Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
-import { BookmarkButton } from '@/components/BookmarkButton'
 
 /**
  * Props for the TalkPromotionCard component

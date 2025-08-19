@@ -13,7 +13,6 @@ import {
   ScheduleTrack,
   TrackTalk,
 } from '@/lib/conference/types'
-import { formatSpeakerNamesFromUnknown } from '@/lib/speaker/formatSpeakerNames'
 import Link from 'next/link'
 
 interface ScheduleTrackSummary extends ScheduleTrack {

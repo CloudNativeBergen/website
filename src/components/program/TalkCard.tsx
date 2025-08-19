@@ -11,7 +11,6 @@ import {
 } from '@heroicons/react/24/outline'
 import { TrackTalk } from '@/lib/conference/types'
 import { Status } from '@/lib/proposal/types'
-import { formatSpeakerNamesFromUnknown } from '@/lib/speaker/formatSpeakerNames'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import { BookmarkButton } from '@/components/BookmarkButton'
