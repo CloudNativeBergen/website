@@ -8,12 +8,14 @@ import { sponsorRouter } from './routers/sponsor'
 import { featuredRouter } from './routers/featured'
 import { speakersRouter } from './routers/speakers'
 import { proposalsRouter } from './routers/proposals'
+import { galleryRouter } from './routers/gallery'
 
 export const appRouter = router({
   sponsor: sponsorRouter,
   featured: featuredRouter,
   speakers: speakersRouter,
   proposals: proposalsRouter,
+  gallery: galleryRouter,
   // Future routers can be added here:
   // admin: adminRouter,
 })

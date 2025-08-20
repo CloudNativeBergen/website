@@ -1,6 +1,7 @@
 import { clientWrite } from '../sanity/client'
 import { Conference } from './types'
 import { headers } from 'next/headers'
+import { getFeaturedGalleryImages, getGalleryImages } from '@/lib/gallery/sanity'
 
 export async function getConferenceForCurrentDomain({
   organizers = false,
@@ -12,6 +13,7 @@ export async function getConferenceForCurrentDomain({
   featuredSpeakers = false,
   featuredTalks = false,
   confirmedTalksOnly = true,
+  gallery = false,
   revalidate = 3600,
 }: {
   organizers?: boolean
@@ -23,6 +25,7 @@ export async function getConferenceForCurrentDomain({
   featuredSpeakers?: boolean
   featuredTalks?: boolean
   confirmedTalksOnly?: boolean
+  gallery?: boolean | { featuredLimit?: number; limit?: number }
   revalidate?: number
 } = {}): Promise<{
   conference: Conference
@@ -42,6 +45,7 @@ export async function getConferenceForCurrentDomain({
       featuredSpeakers,
       featuredTalks,
       confirmedTalksOnly,
+      gallery,
       revalidate,
     })
   } catch (err) {
@@ -63,6 +67,7 @@ export async function getConferenceForDomain(
     featuredSpeakers = false,
     featuredTalks = false,
     confirmedTalksOnly = true,
+    gallery = false,
     revalidate = 3600,
   }: {
     organizers?: boolean
@@ -74,6 +79,7 @@ export async function getConferenceForDomain(
     featuredSpeakers?: boolean
     featuredTalks?: boolean
     confirmedTalksOnly?: boolean
+    gallery?: boolean | { featuredLimit?: number; limit?: number }
     revalidate?: number
   } = {},
 ): Promise<{ conference: Conference; domain: string; error: Error | null }> {
@@ -253,7 +259,8 @@ export async function getConferenceForDomain(
       }
     }`
 
-    conference = await clientWrite.fetch(
+    // Fetch conference data first
+    const conferenceData = await clientWrite.fetch(
       query,
       { domain, wildcardSubdomain },
       {
@@ -262,8 +269,51 @@ export async function getConferenceForDomain(
         },
       },
     )
+    
+    if (conferenceData) {
+      conference = conferenceData
+      
+      // If gallery is requested and conference exists, fetch gallery data scoped to this conference
+      if (gallery) {
+        const galleryOptions = typeof gallery === 'object' 
+          ? gallery 
+          : { featuredLimit: 8, limit: 50 }
+        
+        const [featuredGalleryImages, galleryImages] = await Promise.all([
+          getFeaturedGalleryImages(galleryOptions.featuredLimit ?? 8, revalidate, conference._id),
+          getGalleryImages({ limit: galleryOptions.limit ?? 50, conferenceId: conference._id }, revalidate),
+        ])
+        
+        conference.featuredGalleryImages = featuredGalleryImages
+        conference.galleryImages = galleryImages
+      }
+    } else {
+      // Conference not found
+      error = new Error('Conference not found for domain: ' + domain)
+      conference = {} as Conference
+      
+      // If gallery was requested, fetch unscoped images
+      if (gallery) {
+        const galleryOptions = typeof gallery === 'object' 
+          ? gallery 
+          : { featuredLimit: 8, limit: 50 }
+        
+        const [featuredGalleryImages, galleryImages] = await Promise.all([
+          getFeaturedGalleryImages(galleryOptions.featuredLimit ?? 8, revalidate),
+          getGalleryImages({ limit: galleryOptions.limit ?? 50 }, revalidate),
+        ])
+        
+        conference.featuredGalleryImages = featuredGalleryImages
+        conference.galleryImages = galleryImages
+      }
+    }
   } catch (err) {
     error = err as Error
+    // Set default empty arrays for gallery if error occurs
+    if (gallery && conference) {
+      conference.featuredGalleryImages = []
+      conference.galleryImages = []
+    }
   }
 
   return { conference, domain, error }

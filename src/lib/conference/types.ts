@@ -7,6 +7,7 @@ import {
   ConferenceSponsor,
   ConferenceSponsorWithContact,
 } from '@/lib/sponsor/types'
+import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 
 export interface ConferenceProposals {
   conference: Conference | Reference
@@ -70,4 +71,6 @@ export interface Conference {
   schedules?: ConferenceSchedule[]
   vanity_metrics?: ConferenceVanityMetric[]
   features?: string[]
+  featuredGalleryImages?: GalleryImageWithSpeakers[]
+  galleryImages?: GalleryImageWithSpeakers[]
 }

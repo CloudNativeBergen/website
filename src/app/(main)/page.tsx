@@ -1,6 +1,7 @@
 import { Hero } from '@/components/Hero'
 import { ProgramHighlights } from '@/components/ProgramHighlights'
 import { Sponsors } from '@/components/Sponsors'
+import { ImageGallery } from '@/components/ImageGallery'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const revalidate = 300 // 5 minutes
@@ -12,6 +13,7 @@ export default async function Home() {
     featuredTalks: true,
     schedule: true,
     sponsors: true,
+    gallery: true,
     revalidate,
   })
 
@@ -29,6 +31,12 @@ export default async function Home() {
           featuredSpeakers={conference.featured_speakers || []}
           featuredTalks={conference.featured_talks || []}
           tickets_enabled={conference.registration_enabled}
+        />
+      )}
+      {conference.galleryImages && conference.galleryImages.length > 0 && (
+        <ImageGallery
+          featuredImages={conference.featuredGalleryImages}
+          allImages={conference.galleryImages}
         />
       )}
       <Sponsors sponsors={conference.sponsors || []} />

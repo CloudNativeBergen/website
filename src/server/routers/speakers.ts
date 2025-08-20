@@ -13,6 +13,7 @@ import { Status } from '@/lib/proposal/types'
 
 const speakerSearchSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
+  includeFeatured: z.boolean().optional().default(false),
 })
 
 export const speakersRouter = router({
@@ -57,10 +58,10 @@ export const speakersRouter = router({
         featuredSpeakers?.map((speaker) => speaker._id) || []
 
       // Filter speakers by name or title containing the search query (case-insensitive)
-      // and exclude already featured speakers
+      // and optionally exclude already featured speakers
       const filteredSpeakers = speakers.filter((speaker) => {
-        // Exclude already featured speakers
-        if (featuredSpeakerIds.includes(speaker._id)) {
+        // Exclude already featured speakers unless includeFeatured is true
+        if (!input.includeFeatured && featuredSpeakerIds.includes(speaker._id)) {
           return false
         }
 

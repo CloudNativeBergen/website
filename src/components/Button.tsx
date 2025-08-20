@@ -8,7 +8,8 @@ type ButtonVariant =
   | 'warning'
   | 'info'
   | 'outline'
-type ButtonSize = 'sm' | 'md' | 'lg'
+  | 'icon'
+type ButtonSize = 'sm' | 'md' | 'lg' | 'icon'
 
 interface BaseButtonProps {
   variant?: ButtonVariant
@@ -42,12 +43,15 @@ const variantStyles: Record<ButtonVariant, string> = {
   info: 'bg-brand-slate-gray hover:bg-brand-slate-gray-hover text-white focus-visible:outline-brand-slate-gray',
   outline:
     'bg-transparent text-brand-cloud-blue hover:bg-brand-cloud-blue hover:text-white focus-visible:outline-brand-cloud-blue shadow-[inset_0_0_0_2px_var(--color-brand-cloud-blue)] hover:shadow-[inset_0_0_0_2px_var(--color-brand-cloud-blue)]',
+  icon:
+    'bg-white/90 hover:bg-white text-gray-800 shadow-lg backdrop-blur-sm focus-visible:outline-brand-cloud-blue',
 }
 
 const sizeStyles: Record<ButtonSize, string> = {
   sm: 'px-3 py-2 text-sm',
   md: 'px-4 py-3 text-base',
   lg: 'px-6 py-4 text-lg',
+  icon: 'p-2',
 }
 
 export function Button({
@@ -58,10 +62,13 @@ export function Button({
   ...props
 }: ButtonProps) {
   const baseStyles =
-    'inline-flex items-center justify-center rounded-2xl font-semibold transition-colors duration-200 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+    'inline-flex items-center justify-center font-semibold transition-all duration-200 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed'
+  
+  const shapeStyles = variant === 'icon' ? 'rounded-full' : 'rounded-2xl'
 
   const buttonClassName = clsx(
     baseStyles,
+    shapeStyles,
     variantStyles[variant],
     sizeStyles[size],
     className,

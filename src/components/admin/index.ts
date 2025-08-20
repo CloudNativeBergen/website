@@ -52,6 +52,9 @@ export { SponsorContactActions } from './SponsorContactActions'
 export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'
 export { FeaturedTalksManager } from './FeaturedTalksManager'
 
+// Gallery Management Components
+export { ImageUploadZone, ImageGrid, ImageMetadataModal, GalleryFilters } from './gallery'
+
 // Utility Components
 export { ErrorDisplay } from './ErrorDisplay'
 
