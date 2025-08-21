@@ -4,6 +4,14 @@ import { ErrorDisplay } from '@/components/admin'
 import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import type { EventTicket } from '@/lib/tickets/checkin'
+import { formatCurrency } from '@/lib/format'
+
+// Sponsor ticket allocation by tier
+const TIER_TICKET_ALLOCATION: Record<string, number> = {
+  Pod: 2,
+  Service: 3,
+  Ingress: 5,
+}
 
 export default async function AdminTickets() {
   let tickets: EventTicket[] = []
@@ -56,9 +64,6 @@ export default async function AdminTickets() {
     0,
   )
   const totalRevenue = orders.reduce((sum, order) => sum + order.totalAmount, 0)
-  const uniqueCustomers = new Set(
-    orders.flatMap((order) => order.tickets.map((ticket) => ticket.crm.email)),
-  ).size
 
   // Calculate statistics by ticket category
   const ticketsByCategory = new Map<
@@ -92,25 +97,10 @@ export default async function AdminTickets() {
     }))
     .sort((a, b) => b.count - a.count)
 
-  // Function to format numbers consistently for SSR
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'decimal',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
-
   // Calculate sponsor tickets allocated through agreements
   const calculateSponsorTickets = () => {
     if (!conference.sponsors || conference.sponsors.length === 0) {
       return { totalSponsorTickets: 0, sponsorTicketsByTier: {} }
-    }
-
-    const tierTicketAllocation: Record<string, number> = {
-      Pod: 2,
-      Service: 3,
-      Ingress: 5,
     }
 
     let totalSponsorTickets = 0
@@ -121,7 +111,7 @@ export default async function AdminTickets() {
 
     conference.sponsors.forEach((sponsorData) => {
       const tierTitle = sponsorData.tier?.title || 'Unknown'
-      const ticketsForTier = tierTicketAllocation[tierTitle] || 0
+      const ticketsForTier = TIER_TICKET_ALLOCATION[tierTitle] || 0
 
       totalSponsorTickets += ticketsForTier
 
@@ -184,7 +174,7 @@ export default async function AdminTickets() {
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-green-600">
-                  {formatCurrency(totalRevenue)} NOK
+                  {formatCurrency(totalRevenue)}
                 </div>
                 <div className="text-sm text-gray-500">Total Revenue</div>
               </div>
@@ -253,7 +243,7 @@ export default async function AdminTickets() {
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
                           <span className="font-medium text-green-600">
-                            {formatCurrency(stat.revenue)} NOK
+                            {formatCurrency(stat.revenue)}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
@@ -336,13 +326,8 @@ export default async function AdminTickets() {
                     {Object.entries(sponsorTicketsByTier)
                       .sort(([, a], [, b]) => b.tickets - a.tickets)
                       .map(([tierName, tierData]) => {
-                        const tierTicketAllocation: Record<string, number> = {
-                          Pod: 2,
-                          Service: 3,
-                          Ingress: 5,
-                        }
                         const ticketsPerSponsor =
-                          tierTicketAllocation[tierName] || 0
+                          TIER_TICKET_ALLOCATION[tierName] || 0
 
                         return (
                           <tr key={tierName} className="hover:bg-gray-50">

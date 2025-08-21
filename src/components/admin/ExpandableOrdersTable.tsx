@@ -2,15 +2,14 @@
 
 import { useState, Fragment } from 'react'
 import {
-  TicketIcon,
   UserIcon,
-  HashtagIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  CreditCardIcon,
 } from '@heroicons/react/24/outline'
-import type { GroupedOrder } from '@/lib/tickets/checkin'
+import type { GroupedOrder, CheckinPayOrder } from '@/lib/tickets/checkin'
+import { PaymentDetailsModal } from './PaymentDetailsModal'
+import { formatCurrency } from '@/lib/format'
 
 interface ExpandableOrdersTableProps {
   orders: GroupedOrder[]
@@ -24,6 +23,13 @@ export function ExpandableOrdersTable({
   eventId,
 }: ExpandableOrdersTableProps) {
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set())
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [selectedPaymentDetails, setSelectedPaymentDetails] =
+    useState<CheckinPayOrder | null>(null)
+  const [paymentDetailsLoading, setPaymentDetailsLoading] = useState(false)
+  const [paymentDetailsError, setPaymentDetailsError] = useState<string | null>(
+    null,
+  )
 
   const toggleExpanded = (orderId: number) => {
     setExpandedOrders((prev) => {
@@ -37,13 +43,35 @@ export function ExpandableOrdersTable({
     })
   }
 
-  // Function to format numbers consistently for SSR
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'decimal',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
+  const handleViewPaymentDetails = async (orderId: number) => {
+    setPaymentDetailsLoading(true)
+    setPaymentDetailsError(null)
+    setPaymentModalOpen(true)
+
+    try {
+      const response = await fetch(
+        `/admin/api/payment-details?orderId=${orderId}`,
+      )
+      if (!response.ok) {
+        throw new Error('Failed to fetch payment details')
+      }
+      const details: CheckinPayOrder = await response.json()
+      setSelectedPaymentDetails(details)
+    } catch (error) {
+      setPaymentDetailsError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to load payment details',
+      )
+    } finally {
+      setPaymentDetailsLoading(false)
+    }
+  }
+
+  const closePaymentModal = () => {
+    setPaymentModalOpen(false)
+    setSelectedPaymentDetails(null)
+    setPaymentDetailsError(null)
   }
 
   // Function to format category labels
@@ -108,26 +136,23 @@ export function ExpandableOrdersTable({
         <table className="min-w-full divide-y divide-gray-300">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
-                Order ID
+              <th className="w-16 px-2 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
+                Order
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
-                Customer & Email
+              <th className="min-w-0 px-3 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
+                Customer Info
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
-                Title & Company
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
+              <th className="w-40 px-3 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
                 Categories
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
-                Quantity
+              <th className="w-20 px-3 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
+                Qty/Price
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
-                Total Price
+              <th className="w-16 px-3 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
+                Status
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
-                Payment Status
+              <th className="w-12 px-2 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase">
+                Actions
               </th>
             </tr>
           </thead>
@@ -140,61 +165,51 @@ export function ExpandableOrdersTable({
 
               return (
                 <Fragment key={order.order_id}>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {hasMultipleTickets ? (
+                  <tr className="border-b border-gray-100 transition-colors hover:bg-gray-50">
+                    <td className="px-2 py-4 whitespace-nowrap">
+                      <div className="flex flex-col items-start">
+                        {hasMultipleTickets && (
                           <button
                             onClick={() => toggleExpanded(order.order_id)}
-                            className="mr-2 rounded p-1 hover:bg-gray-200"
+                            className="mb-1 rounded p-0.5 hover:bg-gray-200"
                           >
                             {isExpanded ? (
-                              <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+                              <ChevronDownIcon className="h-3 w-3 text-gray-400" />
                             ) : (
-                              <ChevronRightIcon className="h-4 w-4 text-gray-400" />
+                              <ChevronRightIcon className="h-3 w-3 text-gray-400" />
                             )}
                           </button>
-                        ) : (
-                          <div className="mr-2 h-6 w-6" /> // Spacer for alignment
                         )}
-                        <HashtagIcon className="mr-2 h-4 w-4 text-gray-400" />
                         {checkinOrderUrl ? (
                           <a
                             href={checkinOrderUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm font-medium text-indigo-600 hover:text-indigo-900 hover:underline"
+                            className="font-mono text-xs font-medium text-indigo-600 hover:text-indigo-900 hover:underline"
                           >
                             {order.order_id}
                           </a>
                         ) : (
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="font-mono text-xs font-medium text-gray-900">
                             {order.order_id}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-2">
-                        <UserIcon className="h-4 w-4 flex-shrink-0 text-gray-400" />
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-gray-900">
-                            {primaryTicket.crm.first_name}{' '}
-                            {primaryTicket.crm.last_name}
-                          </div>
-                          <div className="mt-1 flex items-center">
-                            <a
-                              href={`mailto:${primaryTicket.crm.email}`}
-                              className="truncate text-xs text-indigo-600 hover:text-indigo-900"
-                            >
-                              {primaryTicket.crm.email}
-                            </a>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-gray-900">
+                          {primaryTicket.crm.first_name}{' '}
+                          {primaryTicket.crm.last_name}
+                        </div>
+                        <div className="mt-0.5 truncate text-xs text-gray-500">
+                          <a
+                            href={`mailto:${primaryTicket.crm.email}`}
+                            className="text-indigo-600 hover:text-indigo-800 hover:underline"
+                          >
+                            {primaryTicket.crm.email}
+                          </a>
+                        </div>
                         {(() => {
                           const workTitle = order.fields.find(
                             (f: { key: string; value: string }) =>
@@ -205,38 +220,28 @@ export function ExpandableOrdersTable({
                               f.key === 'company',
                           )?.value
 
-                          if (!workTitle && !company) {
+                          if (workTitle || company) {
                             return (
-                              <span className="text-sm text-gray-400">—</span>
+                              <div className="mt-0.5 truncate text-xs font-medium text-gray-600">
+                                {workTitle && company
+                                  ? `${workTitle} • ${company}`
+                                  : workTitle || company}
+                              </div>
                             )
                           }
-
-                          return (
-                            <div>
-                              {workTitle && (
-                                <div className="text-sm font-medium text-gray-900">
-                                  {workTitle}
-                                </div>
-                              )}
-                              {company && (
-                                <div className="mt-0.5 text-xs text-gray-600">
-                                  {company}
-                                </div>
-                              )}
-                            </div>
-                          )
+                          return null
                         })()}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="px-3 py-4">
+                      <div className="flex max-w-40 flex-wrap gap-1">
                         {order.categories.map((category) => {
                           const { formatted, className, title } =
                             getCategoryStyle(category)
                           return (
                             <span
                               key={category}
-                              className={className}
+                              className={`${className} text-xs`}
                               title={title}
                             >
                               {formatted}
@@ -245,45 +250,54 @@ export function ExpandableOrdersTable({
                         })}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <TicketIcon className="mr-2 h-4 w-4 text-gray-400" />
-                        <span className="text-sm text-gray-900">
-                          {order.totalTickets}
-                        </span>
+                    <td className="px-3 py-4 whitespace-nowrap">
+                      <div className="text-center">
+                        <div className="text-sm font-bold text-gray-900">
+                          {order.totalTickets}×
+                        </div>
+                        <div className="text-xs font-medium text-gray-600">
+                          {formatCurrency(order.totalAmount)}
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-gray-900">
-                        {formatCurrency(order.totalAmount)} NOK
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4 whitespace-nowrap">
                       {order.amountLeft === 0 ? (
-                        <div className="flex items-center">
-                          <CheckCircleIcon className="mr-2 h-4 w-4 text-green-600" />
-                          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-                            Paid in Full
-                          </span>
+                        <div className="flex items-center justify-center">
+                          <div className="inline-flex items-center">
+                            <div className="mr-1.5 h-3 w-3 rounded-full bg-green-500"></div>
+                            <span className="text-xs font-semibold text-green-700">
+                              Paid
+                            </span>
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex items-center">
-                          <ExclamationTriangleIcon className="mr-2 h-4 w-4 text-amber-600" />
-                          <div>
-                            <div className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-                              Outstanding
-                            </div>
-                            <div className="mt-1 text-xs text-gray-500">
-                              {formatCurrency(order.amountLeft)} NOK remaining
-                            </div>
+                        <div className="flex items-center justify-center">
+                          <div className="inline-flex items-center">
+                            <div className="mr-1.5 h-3 w-3 rounded-full bg-amber-500"></div>
+                            <span className="text-xs font-semibold text-amber-700">
+                              Due
+                            </span>
                           </div>
                         </div>
                       )}
                     </td>
+                    <td className="px-2 py-4 whitespace-nowrap">
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() =>
+                            handleViewPaymentDetails(order.order_id)
+                          }
+                          className="inline-flex items-center justify-center rounded-md p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                          title="View Payment Details"
+                        >
+                          <CreditCardIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                   {hasMultipleTickets && isExpanded && (
                     <tr>
-                      <td colSpan={7} className="bg-gray-50 px-6 py-4">
+                      <td colSpan={6} className="bg-gray-50 px-6 py-4">
                         <div className="space-y-2">
                           <h4 className="text-sm font-medium text-gray-900">
                             Attendees ({order.tickets.length} tickets):
@@ -311,7 +325,7 @@ export function ExpandableOrdersTable({
                                     {formatCategoryLabel(ticket.category)}
                                   </div>
                                   <div className="text-xs text-gray-500">
-                                    {formatCurrency(parseFloat(ticket.sum))} NOK
+                                    {formatCurrency(parseFloat(ticket.sum))}
                                   </div>
                                 </div>
                               </div>
@@ -327,6 +341,14 @@ export function ExpandableOrdersTable({
           </tbody>
         </table>
       </div>
+
+      <PaymentDetailsModal
+        isOpen={paymentModalOpen}
+        onClose={closePaymentModal}
+        paymentDetails={selectedPaymentDetails}
+        isLoading={paymentDetailsLoading}
+        error={paymentDetailsError}
+      />
     </div>
   )
 }

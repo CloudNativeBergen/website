@@ -1,12 +1,12 @@
 /**
  * Format numbers consistently for SSR/client rendering compatibility
- * Uses en-US locale to avoid hydration mismatches
+ * Uses nb-NO locale for Norwegian formatting (space as thousand separator)
  */
 export function formatNumber(
   num: number,
   options?: Intl.NumberFormatOptions,
 ): string {
-  return num.toLocaleString('en-US', options)
+  return num.toLocaleString('nb-NO', options)
 }
 
 /**

@@ -18,6 +18,46 @@ export interface EventTicket {
   }
 }
 
+export interface CheckinPayOrder {
+  id: number
+  belongsTo: number
+  orderId: number
+  orderType: string
+  documentType: string
+  kid: string | null
+  invoiceReference: string | null
+  archivedAt: string | null
+  createdAt: string
+  invoiceDate: string | null
+  deliveryDate: string | null
+  dueAt: string
+  contactCrm: {
+    firstName: string
+    lastName: string
+    email: {
+      email: string
+    }
+  }
+  billingCrm: {
+    firstName: string
+    lastName: string
+    email: {
+      email: string
+    }
+  } | null
+  currency: string | null
+  country: string | null
+  paymentMethod: string
+  paymentStatus: string
+  actionRequired: string | null
+  debtStatus: string | null
+  debtLastUpdatedAt: string | null
+  sum: string
+  sumLeft: string
+  paid: boolean
+  sumVat: string
+}
+
 export interface GroupedOrder {
   order_id: number
   tickets: EventTicket[]
@@ -31,6 +71,12 @@ export interface GroupedOrder {
 interface EventTicketsResponse {
   data: {
     eventTickets: EventTicket[]
+  }
+}
+
+interface CheckinPayOrderResponse {
+  data: {
+    findCheckinPayOrderByID: CheckinPayOrder
   }
 }
 
@@ -93,6 +139,83 @@ export async function fetchEventTickets(
   return responseData.data.eventTickets
 }
 
+export async function fetchOrderPaymentDetails(
+  orderId: number,
+): Promise<CheckinPayOrder> {
+  const query = `
+    query FindCheckinPayOrderByID($id: Int!) {
+      findCheckinPayOrderByID(id: $id, type: EVENT) {
+        id
+        belongsTo
+        orderId
+        orderType
+        documentType
+        kid
+        invoiceReference
+        archivedAt
+        createdAt
+        invoiceDate
+        deliveryDate
+        dueAt
+        contactCrm {
+          firstName
+          lastName
+          email {
+            email
+          }
+        }
+        billingCrm {
+          firstName
+          lastName
+          email {
+            email
+          }
+        }
+        currency
+        country
+        paymentMethod
+        paymentStatus
+        actionRequired
+        debtStatus
+        debtLastUpdatedAt
+        sum
+        sumLeft
+        paid
+        sumVat
+      }
+    }
+  `
+
+  const variables = { id: orderId }
+
+  const response = await fetch(CHECKIN_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
+    },
+    body: JSON.stringify({ query, variables }),
+  })
+
+  if (!response.ok) {
+    console.error(
+      'Failed to fetch payment details:',
+      response.status,
+      response.statusText,
+    )
+    throw new Error(`Failed to fetch payment details: ${response.statusText}`)
+  }
+
+  const responseData: CheckinPayOrderResponse = await response.json()
+
+  if (!responseData.data || !responseData.data.findCheckinPayOrderByID) {
+    console.error('Invalid payment details response:', responseData)
+    throw new Error('Invalid payment details response')
+  }
+
+  return responseData.data.findCheckinPayOrderByID
+}
+
 export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
   const ordersMap = new Map<number, GroupedOrder>()
 
@@ -121,4 +244,24 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
   })
 
   return Array.from(ordersMap.values())
+}
+
+export function isPaymentOverdue(paymentDetails: CheckinPayOrder): boolean {
+  if (paymentDetails.paid) return false
+
+  const dueDate = new Date(paymentDetails.dueAt)
+  const now = new Date()
+
+  return dueDate < now && parseFloat(paymentDetails.sumLeft) > 0
+}
+
+export function getDaysOverdue(paymentDetails: CheckinPayOrder): number {
+  if (!isPaymentOverdue(paymentDetails)) return 0
+
+  const dueDate = new Date(paymentDetails.dueAt)
+  const now = new Date()
+  const diffTime = now.getTime() - dueDate.getTime()
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+
+  return diffDays
 }
