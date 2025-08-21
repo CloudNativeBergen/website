@@ -13,6 +13,7 @@ import {
   deleteGalleryImage,
   getGalleryImageStats,
 } from '@/lib/gallery/sanity'
+import { getAllConferences } from '@/lib/conference/sanity'
 
 export const galleryRouter = router({
   list: adminProcedure
@@ -141,4 +142,25 @@ export const galleryRouter = router({
         })
       }
     }),
+
+  conferences: adminProcedure.query(async () => {
+    try {
+      const { conferences, error } = await getAllConferences()
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch conferences',
+          cause: error,
+        })
+      }
+      return conferences
+    } catch (error) {
+      if (error instanceof TRPCError) throw error
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch conferences',
+        cause: error,
+      })
+    }
+  }),
 })

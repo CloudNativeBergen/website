@@ -11,6 +11,7 @@ import {
   TicketIcon,
   StarIcon,
   PresentationChartBarIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline'
 import {
   DashboardLayout,
@@ -24,6 +25,7 @@ const navigation: NavigationItem[] = [
   { name: 'Proposals', href: '/admin/proposals', icon: DocumentTextIcon },
   { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
   { name: 'Featured', href: '/admin/featured', icon: StarIcon },
+  { name: 'Gallery', href: '/admin/gallery', icon: PhotoIcon },
   { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
   { name: 'Sponsors', href: '/admin/sponsors', icon: BuildingOfficeIcon },
   { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },

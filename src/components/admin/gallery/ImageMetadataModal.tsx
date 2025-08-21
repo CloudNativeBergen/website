@@ -28,10 +28,14 @@ export function ImageMetadataModal({
     location: image.location,
     imageAlt: image.imageAlt || '',
     featured: image.featured,
+    conference: image.conference?._id || '',
   })
   const [selectedSpeakers, setSelectedSpeakers] = useState(image.speakers || [])
   const [speakerQuery, setSpeakerQuery] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Fetch available conferences
+  const { data: conferences, isLoading: conferencesLoading } = api.gallery.conferences.useQuery()
 
   const { data: searchResults } = api.speakers.search.useQuery(
     { query: speakerQuery, includeFeatured: true },
@@ -46,7 +50,7 @@ export function ImageMetadataModal({
       onUpdate(updatedImage)
       setIsSubmitting(false)
     },
-    onError: (error: Error) => {
+    onError: (error) => {
       showNotification({ title: error.message || 'Failed to update image', type: 'error' })
       setIsSubmitting(false)
     },
@@ -59,6 +63,7 @@ export function ImageMetadataModal({
       location: image.location,
       imageAlt: image.imageAlt || '',
       featured: image.featured,
+      conference: image.conference?._id || '',
     })
     setSelectedSpeakers(image.speakers || [])
   }, [image])
@@ -143,6 +148,28 @@ export function ImageMetadataModal({
                             />
                           </div>
                         )}
+                      </div>
+
+                      <div>
+                        <label htmlFor="conference" className="block text-sm font-medium text-gray-700">
+                          Conference <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          id="conference"
+                          value={formData.conference}
+                          onChange={(e) => setFormData(prev => ({ ...prev, conference: e.target.value }))}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          required
+                          disabled={conferencesLoading}
+                        >
+                          <option value="">Select a conference</option>
+                          {conferences?.map((conf) => (
+                            <option key={conf._id} value={conf._id}>
+                              {conf.title}
+                              {conf.domains && conf.domains.length > 0 && ` (${conf.domains[0]})`}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div>

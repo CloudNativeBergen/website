@@ -1,4 +1,5 @@
 export { ImageUploadZone } from './ImageUploadZone'
 export { ImageGrid } from './ImageGrid'
+export { GroupedImageGrid } from './GroupedImageGrid'
 export { ImageMetadataModal } from './ImageMetadataModal'
 export { GalleryFilters } from './GalleryFilters'

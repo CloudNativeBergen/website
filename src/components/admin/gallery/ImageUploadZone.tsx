@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { CloudArrowUpIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { CloudArrowUpIcon, XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { useNotification } from '../NotificationProvider'
+import { api } from '@/lib/trpc/client'
 
 /**
  * ImageUploadZone Component
@@ -31,11 +32,13 @@ interface ImageUploadZoneProps {
     photographer?: string
     date?: string
     location?: string
+    conference?: string
     featured?: boolean
   }
+  currentConferenceId?: string // Passed from parent component
 }
 
-export function ImageUploadZone({ onUploadComplete, defaultMetadata = {} }: ImageUploadZoneProps) {
+export function ImageUploadZone({ onUploadComplete, defaultMetadata = {}, currentConferenceId }: ImageUploadZoneProps) {
   const { showNotification } = useNotification()
   const [files, setFiles] = useState<UploadFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
@@ -43,9 +46,20 @@ export function ImageUploadZone({ onUploadComplete, defaultMetadata = {} }: Imag
     photographer: defaultMetadata.photographer || '',
     date: defaultMetadata.date || new Date().toISOString().split('T')[0],
     location: defaultMetadata.location || '',
+    conference: defaultMetadata.conference || currentConferenceId || '',
     featured: defaultMetadata.featured || false,
   })
   const uploadAbortController = useRef<AbortController | null>(null)
+
+  // Fetch available conferences
+  const { data: conferences, isLoading: conferencesLoading } = api.gallery.conferences.useQuery()
+
+  // Set the current conference only on initial mount
+  useEffect(() => {
+    if (currentConferenceId && !defaultMetadata.conference) {
+      setMetadata(prev => ({ ...prev, conference: currentConferenceId }))
+    }
+  }, [currentConferenceId, defaultMetadata.conference])
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newFiles = acceptedFiles.map(file => ({
@@ -77,6 +91,12 @@ export function ImageUploadZone({ onUploadComplete, defaultMetadata = {} }: Imag
   const uploadFiles = async () => {
     if (files.length === 0) {
       showNotification({ title: 'No files selected', type: 'error' })
+      return
+    }
+
+    // Validate conference is selected
+    if (!metadata.conference) {
+      showNotification({ title: 'Please select a conference', type: 'error' })
       return
     }
 
@@ -240,7 +260,49 @@ export function ImageUploadZone({ onUploadComplete, defaultMetadata = {} }: Imag
 
   return (
     <div className="space-y-6">
+      {/* Conference Selection Warning */}
+      {!metadata.conference && (
+        <div className="rounded-md bg-yellow-50 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Conference Required
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>
+                  A conference must be selected before uploading images. This ensures images are properly organized for multi-tenant support.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <label htmlFor="conference" className="block text-sm font-medium text-gray-700">
+            Conference <span className="text-red-500">*</span>
+          </label>
+          <select
+            id="conference"
+            value={metadata.conference}
+            onChange={(e) => setMetadata(prev => ({ ...prev, conference: e.target.value }))}
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+            required
+            disabled={conferencesLoading}
+          >
+            <option value="">Select a conference</option>
+            {conferences?.map((conf) => (
+              <option key={conf._id} value={conf._id}>
+                {conf.title}
+                {conf.domains && conf.domains.length > 0 && ` (${conf.domains[0]})`}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label htmlFor="photographer" className="block text-sm font-medium text-gray-700">
             Photographer

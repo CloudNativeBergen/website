@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
           photographer: metadata.photographer || 'Unknown',
           date: metadata.date || new Date().toISOString().split('T')[0],
           location: metadata.location || 'Unknown',
+          conference: metadata.conference, // Required field - will throw if missing
           featured: metadata.featured || false,
           speakers: metadata.speakers || [],
           imageAlt: metadata.imageAlt || fileName,

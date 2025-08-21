@@ -44,12 +44,12 @@ export async function createGalleryImage(
       ? { file: fileOrInput as Uploadable, ...data }
       : fileOrInput as CreateGalleryImageInput
 
-    const { file, photographer, date, location, featured = false, speakers = [], imageAlt } = input
+    const { file, photographer, date, location, conference, featured = false, speakers = [], imageAlt } = input
 
     // Validate required fields
-    if (!photographer || !date || !location) {
+    if (!photographer || !date || !location || !conference) {
       return {
-        error: 'Missing required fields: photographer, date, or location',
+        error: 'Missing required fields: photographer, date, location, or conference',
         status: 400
       }
     }
@@ -73,6 +73,7 @@ export async function createGalleryImage(
       photographer,
       date,
       location,
+      conference: createReference(conference),
       featured,
       speakers: Array.from(new Set(speakers))
         .filter(Boolean)
@@ -171,6 +172,7 @@ export async function updateGalleryImage(
     if (patch.photographer !== undefined) updatePatch.photographer = patch.photographer
     if (patch.date !== undefined) updatePatch.date = patch.date
     if (patch.location !== undefined) updatePatch.location = patch.location
+    if (patch.conference !== undefined) updatePatch.conference = createReference(patch.conference)
     if (patch.featured !== undefined) updatePatch.featured = patch.featured
     if (patch.speakers !== undefined) {
       updatePatch.speakers = Array.from(new Set(patch.speakers))
@@ -296,6 +298,11 @@ export async function getGalleryImage(
         date,
         location,
         featured,
+        conference->{
+          _id,
+          title,
+          domains
+        },
         speakers[]-> {
           _id,
           name,
@@ -369,6 +376,7 @@ export async function getGalleryImages(
     // Once conference field is added to images, filtering will work properly
     const query = groq`
       *[_type == "imageGallery"
+        && (!defined($conferenceId) || conference._ref == $conferenceId || !defined(conference))
         && (!defined($featured) || featured == $featured)
         && (!defined($speakerId) || $speakerId in speakers[]._ref)
         && (!defined($dateFrom) || date >= $dateFrom)
@@ -387,6 +395,11 @@ export async function getGalleryImages(
         date,
         location,
         featured,
+        conference->{
+          _id,
+          title,
+          domains
+        },
         speakers[]-> {
           _id,
           name,

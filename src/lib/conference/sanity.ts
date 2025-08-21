@@ -318,3 +318,29 @@ export async function getConferenceForDomain(
 
   return { conference, domain, error }
 }
+
+/**
+ * Get all conferences for dropdown selection
+ * Returns minimal conference data needed for selection
+ */
+export async function getAllConferences(): Promise<{
+  conferences: Array<{
+    _id: string
+    title: string
+    domains?: string[]
+  }>
+  error: Error | null
+}> {
+  try {
+    const query = `*[_type == "conference"] | order(title asc) {
+      _id,
+      title,
+      domains
+    }`
+    
+    const conferences = await clientWrite.fetch(query)
+    return { conferences: conferences || [], error: null }
+  } catch (err) {
+    return { conferences: [], error: err as Error }
+  }
+}

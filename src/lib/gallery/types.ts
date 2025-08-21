@@ -7,6 +7,7 @@ export interface CreateGalleryImageInput {
   photographer: string
   date: string
   location: string
+  conference: string // Required conference ID
   featured?: boolean
   speakers?: string[]
   imageAlt?: string
@@ -17,6 +18,7 @@ export interface UpdateGalleryImageInput {
   photographer?: string
   date?: string
   location?: string
+  conference?: string // Optional for updates
   featured?: boolean
   speakers?: string[]
   imageAlt?: string
@@ -50,8 +52,15 @@ export interface SpeakerReference {
   image?: string
 }
 
+export interface ConferenceReference {
+  _id: string
+  title: string
+  domains?: string[]
+}
+
 export interface GalleryImageWithSpeakers extends Omit<GalleryImage, 'speakers'> {
   speakers: SpeakerReference[]
+  conference?: ConferenceReference
   /**
    * Convenience property that mirrors image.alt for easier access.
    * This is a read-only projection from the GROQ query.
