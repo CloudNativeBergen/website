@@ -9,9 +9,11 @@ export default async function AdminTickets() {
   let tickets: EventTicket[] = []
   let error: Error | null = null
 
-  // Get conference data to retrieve Checkin.no IDs
+  // Get conference data to retrieve Checkin.no IDs and sponsors
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForCurrentDomain({
+      sponsors: true,
+    })
 
   if (
     conferenceError ||
@@ -99,6 +101,44 @@ export default async function AdminTickets() {
     }).format(amount)
   }
 
+  // Calculate sponsor tickets allocated through agreements
+  const calculateSponsorTickets = () => {
+    if (!conference.sponsors || conference.sponsors.length === 0) {
+      return { totalSponsorTickets: 0, sponsorTicketsByTier: {} }
+    }
+
+    const tierTicketAllocation: Record<string, number> = {
+      Pod: 2,
+      Service: 3,
+      Ingress: 5,
+    }
+
+    let totalSponsorTickets = 0
+    const sponsorTicketsByTier: Record<
+      string,
+      { sponsors: number; tickets: number }
+    > = {}
+
+    conference.sponsors.forEach((sponsorData) => {
+      const tierTitle = sponsorData.tier?.title || 'Unknown'
+      const ticketsForTier = tierTicketAllocation[tierTitle] || 0
+
+      totalSponsorTickets += ticketsForTier
+
+      if (!sponsorTicketsByTier[tierTitle]) {
+        sponsorTicketsByTier[tierTitle] = { sponsors: 0, tickets: 0 }
+      }
+      sponsorTicketsByTier[tierTitle].sponsors += 1
+      sponsorTicketsByTier[tierTitle].tickets += ticketsForTier
+    })
+
+    return { totalSponsorTickets, sponsorTicketsByTier }
+  }
+
+  const { totalSponsorTickets, sponsorTicketsByTier } =
+    calculateSponsorTickets()
+  const totalTicketsIncludingSponsors = totalTickets + totalSponsorTickets
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="border-b border-gray-200 pb-5">
@@ -125,14 +165,20 @@ export default async function AdminTickets() {
             </h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
               <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">
-                  {orders.length}
-                </div>
-                <div className="text-sm text-gray-500">Total Orders</div>
-              </div>
-              <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600">
                   {totalTickets}
+                </div>
+                <div className="text-sm text-gray-500">Paid Tickets</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-purple-600">
+                  {totalSponsorTickets}
+                </div>
+                <div className="text-sm text-gray-500">Sponsor Tickets</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900">
+                  {totalTicketsIncludingSponsors}
                 </div>
                 <div className="text-sm text-gray-500">Total Tickets</div>
               </div>
@@ -141,12 +187,6 @@ export default async function AdminTickets() {
                   {formatCurrency(totalRevenue)} NOK
                 </div>
                 <div className="text-sm text-gray-500">Total Revenue</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-indigo-600">
-                  {uniqueCustomers}
-                </div>
-                <div className="text-sm text-gray-500">Unique Customers</div>
               </div>
             </div>
           </div>
@@ -242,6 +282,123 @@ export default async function AdminTickets() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sponsor Tickets Breakdown */}
+      {totalSponsorTickets > 0 && (
+        <div className="mt-8">
+          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5">
+            <div className="px-6 py-4">
+              <h2 className="mb-4 text-lg font-medium text-gray-900">
+                Sponsor Ticket Allocations
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Sponsor Tier
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Sponsors
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Tickets per Sponsor
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Total Tickets
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                      >
+                        Percentage
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white">
+                    {Object.entries(sponsorTicketsByTier)
+                      .sort(([, a], [, b]) => b.tickets - a.tickets)
+                      .map(([tierName, tierData]) => {
+                        const tierTicketAllocation: Record<string, number> = {
+                          Pod: 2,
+                          Service: 3,
+                          Ingress: 5,
+                        }
+                        const ticketsPerSponsor =
+                          tierTicketAllocation[tierName] || 0
+
+                        return (
+                          <tr key={tierName} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
+                              {tierName}
+                            </td>
+                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                              <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
+                                {tierData.sponsors}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                              {ticketsPerSponsor}
+                            </td>
+                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                              <span className="font-medium text-purple-600">
+                                {tierData.tickets}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                              <div className="flex items-center">
+                                <div className="flex-1">
+                                  <div className="flex items-center">
+                                    <div className="mr-2 text-xs">
+                                      {(
+                                        (tierData.tickets /
+                                          totalSponsorTickets) *
+                                        100
+                                      ).toFixed(1)}
+                                      %
+                                    </div>
+                                    <div className="h-2 w-16 rounded-full bg-gray-200">
+                                      <div
+                                        className="h-2 rounded-full bg-purple-600"
+                                        style={{
+                                          width: `${(tierData.tickets / totalSponsorTickets) * 100}%`,
+                                        }}
+                                      ></div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 text-sm text-gray-600">
+                <p>
+                  <strong>Note:</strong> Sponsor tickets are allocated through
+                  sponsorship agreements. Pod sponsors receive 2 tickets,
+                  Service sponsors receive 3 tickets, and Ingress sponsors
+                  receive 5 tickets each.
+                </p>
               </div>
             </div>
           </div>
