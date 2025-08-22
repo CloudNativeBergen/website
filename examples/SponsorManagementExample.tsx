@@ -26,8 +26,7 @@ export function SponsorManagement() {
   })
 
   // Fetch sponsor tiers
-  const { data: sponsorTiers, isLoading: loadingTiers } =
-    api.sponsor.tiers.list.useQuery()
+  const { data: sponsorTiers } = api.sponsor.tiers.list.useQuery()
 
   // Create sponsor mutation
   const createSponsorMutation = api.sponsor.create.useMutation({
