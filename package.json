@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "next start",
     "check": "npm run typecheck && npm run lint",
-    "lint": "next lint",
-    "lint:fix": "next lint --fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
     "test": "jest --silent",
     "test:debug": "jest",
     "test:watch": "jest --watch",
@@ -60,6 +60,7 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.33.0",
     "@jest/globals": "^30.0.5",
     "@sanity/client": "^7.9.0",
