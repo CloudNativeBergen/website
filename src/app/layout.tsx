@@ -11,6 +11,7 @@ import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import Script from 'next/script'
 import clsx from 'clsx'
+import { headers } from 'next/headers'
 
 import '@/styles/tailwind.css'
 import { SessionProvider } from 'next-auth/react'
@@ -55,14 +56,24 @@ const bricolageGrotesque = Bricolage_Grotesque({
   variable: '--font-bricolage',
 })
 
-export const metadata: Metadata = {
-  title: {
-    template: '%s - Cloud Native Day Bergen',
-    default:
-      'Cloud Native Day Bergen - A community-driven Kubernetes and Cloud conference',
-  },
-  description:
-    'At Cloud Native Day Bergen, we bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
+export async function generateMetadata(): Promise<Metadata> {
+  const headersList = await headers()
+  const host = headersList.get('host') || 'localhost:3000'
+
+  // Construct the base URL with the correct protocol
+  const protocol = host.includes('localhost') ? 'http' : 'https'
+  const metadataBase = new URL(`${protocol}://${host}`)
+
+  return {
+    metadataBase,
+    title: {
+      template: '%s - Cloud Native Day Bergen',
+      default:
+        'Cloud Native Day Bergen - A community-driven Kubernetes and Cloud conference',
+    },
+    description:
+      'At Cloud Native Day Bergen, we bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
+  }
 }
 
 export default async function RootLayout({
