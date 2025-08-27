@@ -9,7 +9,7 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-export const GET = auth(async (req: NextAuthRequest) => {
+export const GET = auth(async (req: NextAuthRequest): Promise<Response> => {
   // Check organizer access
   const accessError = checkOrganizerAccess(req)
   if (accessError) {
@@ -57,4 +57,5 @@ export const GET = auth(async (req: NextAuthRequest) => {
   }
 
   return proposalListResponse(proposals)
-})
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+}) as any
