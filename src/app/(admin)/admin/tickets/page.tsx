@@ -1,5 +1,6 @@
 import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/checkin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getSpeakers } from '@/lib/speaker/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
 import { TicketIcon } from '@heroicons/react/24/outline'
@@ -127,7 +128,31 @@ export default async function AdminTickets() {
 
   const { totalSponsorTickets, sponsorTicketsByTier } =
     calculateSponsorTickets()
-  const totalTicketsIncludingSponsors = totalTickets + totalSponsorTickets
+
+  // Calculate speaker tickets
+  const calculateSpeakerTickets = async () => {
+    // Get confirmed speakers for this conference
+    const { speakers: confirmedSpeakers, err: speakersError } =
+      await getSpeakers(conference._id)
+
+    if (speakersError) {
+      console.warn(
+        'Could not fetch speakers for ticket calculation:',
+        speakersError,
+      )
+      return { speakerTickets: 0 }
+    }
+
+    // Count confirmed speakers (typically 1 ticket each)
+    const speakerTickets = confirmedSpeakers.length
+
+    return { speakerTickets }
+  }
+
+  const { speakerTickets } = await calculateSpeakerTickets()
+
+  const totalComplimentaryTickets = totalSponsorTickets + speakerTickets
+  const totalTicketsIncludingAll = totalTickets + totalComplimentaryTickets
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -153,7 +178,7 @@ export default async function AdminTickets() {
             <h2 className="mb-4 text-lg font-medium text-gray-900">
               Ticket Summary
             </h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600">
                   {totalTickets}
@@ -167,8 +192,14 @@ export default async function AdminTickets() {
                 <div className="text-sm text-gray-500">Sponsor Tickets</div>
               </div>
               <div className="text-center">
+                <div className="text-3xl font-bold text-emerald-600">
+                  {speakerTickets}
+                </div>
+                <div className="text-sm text-gray-500">Speaker Tickets</div>
+              </div>
+              <div className="text-center">
                 <div className="text-3xl font-bold text-gray-900">
-                  {totalTicketsIncludingSponsors}
+                  {totalTicketsIncludingAll}
                 </div>
                 <div className="text-sm text-gray-500">Total Tickets</div>
               </div>
@@ -382,7 +413,8 @@ export default async function AdminTickets() {
                   <strong>Note:</strong> Sponsor tickets are allocated through
                   sponsorship agreements. Pod sponsors receive 2 tickets,
                   Service sponsors receive 3 tickets, and Ingress sponsors
-                  receive 5 tickets each.
+                  receive 5 tickets each. Speaker tickets are allocated one per
+                  confirmed speaker.
                 </p>
               </div>
             </div>
