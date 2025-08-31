@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, useState } from 'react'
-import { Tab } from '@headlessui/react'
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
 import clsx from 'clsx'
 import { ScheduleTrack } from '@/lib/conference/types'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
@@ -128,7 +128,7 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
           )}
         </div>
         {hasSpeakers && (
-          <Tab.Group
+          <TabGroup
             as="div"
             className="mt-14 grid grid-cols-1 items-start gap-x-8 gap-y-8 sm:mt-16 sm:gap-y-16 lg:mt-24 lg:grid-cols-4"
             vertical={tabOrientation === 'vertical'}
@@ -137,7 +137,7 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
           >
             <div className="relative -mx-4 flex overflow-x-auto pb-4 sm:mx-0 sm:block sm:overflow-visible sm:pb-0">
               <div className="absolute top-2 bottom-0 left-0.5 hidden w-px bg-slate-200 lg:block" />
-              <Tab.List className="grid auto-cols-auto grid-flow-col justify-start gap-x-8 gap-y-10 px-4 whitespace-nowrap sm:mx-auto sm:max-w-2xl sm:grid-cols-3 sm:px-0 sm:text-center lg:grid-flow-row lg:grid-cols-1 lg:text-left">
+              <TabList className="grid auto-cols-auto grid-flow-col justify-start gap-x-8 gap-y-10 px-4 whitespace-nowrap sm:mx-auto sm:max-w-2xl sm:grid-cols-3 sm:px-0 sm:text-center lg:grid-flow-row lg:grid-cols-1 lg:text-left">
                 {({ selectedIndex }) => (
                   <>
                     {tracks.map((track, trackNumber) => (
@@ -179,9 +179,9 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                     ))}
                   </>
                 )}
-              </Tab.List>
+              </TabList>
             </div>
-            <Tab.Panels className="lg:col-span-3">
+            <TabPanels className="lg:col-span-3">
               {tracks.map((track, trackNumber) => {
                 const uniqueSpeakers = Array.from(
                   track.talks
@@ -206,7 +206,7 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                 )
 
                 return (
-                  <Tab.Panel
+                  <TabPanel
                     key={trackNumber}
                     className="ui-not-focus-visible:outline-none grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3"
                     unmount={false}
@@ -248,11 +248,11 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                         </p>
                       </div>
                     ))}
-                  </Tab.Panel>
+                  </TabPanel>
                 )
               })}
-            </Tab.Panels>
-          </Tab.Group>
+            </TabPanels>
+          </TabGroup>
         )}
       </Container>
     </section>

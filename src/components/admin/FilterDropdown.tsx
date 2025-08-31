@@ -1,7 +1,13 @@
 'use client'
 
 import { ChevronDownIcon } from '@heroicons/react/20/solid'
-import { Menu, Transition } from '@headlessui/react'
+import {
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+  Transition,
+} from '@headlessui/react'
 import { Fragment, ReactNode } from 'react'
 import { classNames } from './utils'
 
@@ -37,7 +43,7 @@ export function FilterDropdown({
   }
   return (
     <Menu as="div" className="relative">
-      <Menu.Button className="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50">
+      <MenuButton className="inline-flex items-center gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50">
         {label}
         {activeCount > 0 && (
           <span className="ml-1 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">
@@ -45,7 +51,7 @@ export function FilterDropdown({
           </span>
         )}
         <ChevronDownIcon className="-mr-1 h-5 w-5 text-gray-400" />
-      </Menu.Button>
+      </MenuButton>
       <Transition
         as={Fragment}
         enter="transition ease-out duration-100"
@@ -55,7 +61,7 @@ export function FilterDropdown({
         leaveFrom="transform opacity-100 scale-100"
         leaveTo="transform opacity-0 scale-95"
       >
-        <Menu.Items
+        <MenuItems
           className={`absolute z-10 mt-2 ${getWidthClass()} ring-opacity-5 rounded-md bg-white shadow-lg ring-1 ring-black focus:outline-none ${
             position === 'right'
               ? 'right-0 origin-top-right'
@@ -63,7 +69,7 @@ export function FilterDropdown({
           }`}
         >
           <div className="py-1">{children}</div>
-        </Menu.Items>
+        </MenuItems>
       </Transition>
     </Menu>
   )
@@ -99,12 +105,12 @@ export function FilterOption({
   }
 
   return (
-    <Menu.Item>
-      {({ active }) => (
+    <MenuItem>
+      {({ focus }) => (
         <button
           onClick={handleClick}
           className={classNames(
-            active ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
+            focus ? 'bg-gray-100 text-gray-900' : 'text-gray-700',
             'group flex w-full items-center px-4 py-2 text-sm',
             className,
           )}
@@ -122,6 +128,6 @@ export function FilterOption({
           {children}
         </button>
       )}
-    </Menu.Item>
+    </MenuItem>
   )
 }

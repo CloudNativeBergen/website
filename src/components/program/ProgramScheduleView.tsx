@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Tab } from '@headlessui/react'
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
 import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
@@ -185,14 +185,14 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
   }, [])
 
   return (
-    <Tab.Group
+    <TabGroup
       as="div"
       className="mx-auto grid max-w-2xl grid-cols-1 gap-y-4 sm:grid-cols-2 lg:hidden"
       vertical={tabOrientation === 'vertical'}
       selectedIndex={selectedIndex}
       onChange={handleTabClick}
     >
-      <Tab.List
+      <TabList
         ref={tabListRef}
         className="-mx-4 flex gap-x-4 gap-y-6 overflow-x-auto pb-4 pl-4 sm:mx-0 sm:flex-col sm:pr-8 sm:pb-0 sm:pl-0"
       >
@@ -217,10 +217,10 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
             </div>
           </div>
         ))}
-      </Tab.List>
-      <Tab.Panels>
+      </TabList>
+      <TabPanels>
         {tracks.map((track, trackIndex) => (
-          <Tab.Panel
+          <TabPanel
             key={trackKeys[trackIndex]}
             className="ui-not-focus-visible:outline-none"
           >
@@ -239,10 +239,10 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
                 />
               ))}
             </div>
-          </Tab.Panel>
+          </TabPanel>
         ))}
-      </Tab.Panels>
-    </Tab.Group>
+      </TabPanels>
+    </TabGroup>
   )
 })
 

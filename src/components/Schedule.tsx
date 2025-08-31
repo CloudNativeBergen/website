@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Tab } from '@headlessui/react'
+import { Tab, TabGroup, TabList, TabPanel, TabPanels } from '@headlessui/react'
 import clsx from 'clsx'
 
 import { BackgroundImage } from '@/components/BackgroundImage'
@@ -44,12 +44,12 @@ function ScheduleTabbed({
   }, [])
 
   return (
-    <Tab.Group
+    <TabGroup
       as="div"
       className="mx-auto grid max-w-2xl grid-cols-1 gap-y-6 sm:grid-cols-2 lg:hidden"
       vertical={tabOrientation === 'vertical'}
     >
-      <Tab.List className="-mx-4 flex gap-x-4 gap-y-10 overflow-x-auto pb-4 pl-4 sm:mx-0 sm:flex-col sm:pr-8 sm:pb-0 sm:pl-0">
+      <TabList className="-mx-4 flex gap-x-4 gap-y-10 overflow-x-auto pb-4 pl-4 sm:mx-0 sm:flex-col sm:pr-8 sm:pb-0 sm:pl-0">
         {({ selectedIndex }) => (
           <>
             {tracks.map((track, trackIndex) => (
@@ -76,18 +76,18 @@ function ScheduleTabbed({
             ))}
           </>
         )}
-      </Tab.List>
-      <Tab.Panels>
+      </TabList>
+      <TabPanels>
         {tracks.map((track, trackIndex) => (
-          <Tab.Panel
+          <TabPanel
             key={`track-${trackIndex}`}
             className="ui-not-focus-visible:outline-none"
           >
             <TimeSlots track={track} date={date} trackIndex={trackIndex} />
-          </Tab.Panel>
+          </TabPanel>
         ))}
-      </Tab.Panels>
-    </Tab.Group>
+      </TabPanels>
+    </TabGroup>
   )
 }
 
