@@ -156,59 +156,73 @@ export default async function AdminTickets() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="border-b border-gray-200 pb-5">
-        <div className="flex items-center gap-3">
-          <TicketIcon className="h-8 w-8 text-gray-400" />
-          <div>
-            <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
-              Ticket Management
-            </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Manage sold tickets and attendee information ({orders.length}{' '}
-              orders, {totalTickets} tickets)
-            </p>
+      <div className="pb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <TicketIcon className="h-8 w-8 text-brand-cloud-blue" />
+            <div>
+              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight">
+                Ticket Management
+              </h1>
+              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70">
+                Manage sold tickets and attendee information for{' '}
+                <span className="font-medium text-brand-cloud-blue">
+                  {conference.title}
+                </span>
+                . View orders, revenue, and allocation details.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Ticket Summary */}
-      <div className="mt-8">
-        <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5">
-          <div className="px-6 py-4">
-            <h2 className="mb-4 text-lg font-medium text-gray-900">
-              Ticket Summary
-            </h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
-              <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">
-                  {totalTickets}
-                </div>
-                <div className="text-sm text-gray-500">Paid Tickets</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-purple-600">
-                  {totalSponsorTickets}
-                </div>
-                <div className="text-sm text-gray-500">Sponsor Tickets</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-emerald-600">
-                  {speakerTickets}
-                </div>
-                <div className="text-sm text-gray-500">Speaker Tickets</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-gray-900">
-                  {totalTicketsIncludingAll}
-                </div>
-                <div className="text-sm text-gray-500">Total Tickets</div>
-              </div>
-              <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">
-                  {formatCurrency(totalRevenue)}
-                </div>
-                <div className="text-sm text-gray-500">Total Revenue</div>
-              </div>
+        <div className="font-inter mt-4 grid grid-cols-6 gap-3">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-brand-cloud-blue">
+              {orders.length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">Orders</div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-brand-slate-gray">
+              {totalTickets}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">Paid tickets</div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-blue-600">
+              {totalSponsorTickets}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Sponsor tickets
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-purple-600">
+              {speakerTickets}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Speaker tickets
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-green-600">
+              {totalTicketsIncludingAll}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Total tickets
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-brand-fresh-green">
+              {formatCurrency(totalRevenue)}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Total revenue
             </div>
           </div>
         </div>

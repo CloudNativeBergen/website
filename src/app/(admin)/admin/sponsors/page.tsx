@@ -132,72 +132,85 @@ export default async function AdminSponsors() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="border-b border-gray-200 pb-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-          <BuildingOffice2Icon className="h-8 w-8 text-gray-400" />
-          <div className="flex-1">
-            <h1 className="text-xl leading-7 font-bold text-gray-900 sm:text-2xl sm:tracking-tight lg:truncate lg:text-3xl">
-              Sponsor Management
-            </h1>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-gray-600">
-                Manage conference sponsors and partnerships ({sponsors.length}{' '}
-                active sponsors)
+      <div className="pb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BuildingOffice2Icon className="h-8 w-8 text-brand-cloud-blue" />
+            <div>
+              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight">
+                Sponsor Management
+              </h1>
+              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70">
+                Manage conference sponsors and partnerships for{' '}
+                <span className="font-medium text-brand-cloud-blue">
+                  {conference.title}
+                </span>
+                . Coordinate sponsor relationships and billing information.
               </p>
-              {totalSponsorshipValue > 0 && (
-                <div className="flex items-center space-x-2 sm:mt-0">
-                  <CurrencyDollarIcon className="h-5 w-5 text-green-600" />
-                  <span className="text-sm font-medium text-gray-900">
-                    Total Value:{' '}
-                    {formatCurrency(totalSponsorshipValue, primaryCurrency)}
-                  </span>
-                </div>
-              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="font-inter mt-4 grid grid-cols-6 gap-3">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-brand-slate-gray">
+              {sponsors.length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Total sponsors
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-brand-fresh-green">
+              {formattedTotalValue}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">Total value</div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-brand-cloud-blue">
+              {availableTiers}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Available tiers
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-blue-600">
+              {sponsorsWithMissingContactInfo.length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Missing contacts
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-purple-600">
+              {sponsorsWithMissingBillingInfo.length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Missing billing
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-green-600">
+              {
+                sponsors.filter(
+                  (sponsor) =>
+                    !isMissingContactInfo(sponsor) &&
+                    !isMissingBillingInfo(sponsor),
+                ).length
+              }
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Complete profiles
             </div>
           </div>
         </div>
       </div>
-
-      {/* Sponsorship Summary */}
-      {sponsors.length > 0 && (
-        <div className="rounded-lg bg-white p-6 shadow">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-medium text-gray-900">
-              Sponsorship Summary
-            </h2>
-            {hasAnyMissingInfo && (
-              <div className="flex items-center text-sm text-amber-600">
-                <ExclamationTriangleIcon className="mr-1 h-4 w-4 flex-shrink-0" />
-                <span>Missing contact or billing info</span>
-              </div>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="p-4">
-              <dt className="text-sm font-medium text-gray-500">
-                Total Sponsors
-              </dt>
-              <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                {sponsors.length}
-              </dd>
-            </div>
-            <div className="p-4">
-              <dt className="text-sm font-medium text-gray-500">Total Value</dt>
-              <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                {formattedTotalValue}
-              </dd>
-            </div>
-            <div className="p-4">
-              <dt className="text-sm font-medium text-gray-500">
-                Available Tiers
-              </dt>
-              <dd className="mt-1 text-2xl font-semibold text-gray-900">
-                {availableTiers}
-              </dd>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Sponsor Communications */}
       {sponsors.length > 0 && (

@@ -100,55 +100,70 @@ export default async function MarketingPage() {
                 Marketing Materials
               </h1>
               <p className="font-inter mt-2 text-sm text-brand-slate-gray/70">
-                Download speaker sharing cards for all confirmed speakers. These
-                high-quality images are perfect for social media promotion,
-                conference marketing, and speaker announcements.
+                Download speaker sharing cards for{' '}
+                <span className="font-medium text-brand-cloud-blue">
+                  {conference.title}
+                </span>
+                . High-quality images perfect for social media promotion and
+                marketing.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Summary Statistics */}
         <div className="font-inter mt-4 grid grid-cols-6 gap-3">
           <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="flex items-center">
-              <UserGroupIcon className="h-5 w-5 text-brand-cloud-blue" />
-              <div className="ml-2">
-                <div className="text-xl font-bold text-brand-cloud-blue">
-                  {speakersWithTalks.length}
-                </div>
-                <div className="text-xs text-brand-slate-gray/70">
-                  Confirmed speakers
-                </div>
-              </div>
+            <div className="text-xl font-bold text-brand-slate-gray">
+              {speakersWithTalks.length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Confirmed speakers
             </div>
           </div>
 
           <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="flex items-center">
-              <PresentationChartBarIcon className="h-5 w-5 text-green-600" />
-              <div className="ml-2">
-                <div className="text-xl font-bold text-green-600">
-                  {confirmedProposals.length}
-                </div>
-                <div className="text-xs text-brand-slate-gray/70">
-                  Confirmed talks
-                </div>
-              </div>
+            <div className="text-xl font-bold text-brand-fresh-green">
+              {confirmedProposals.length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Confirmed talks
             </div>
           </div>
 
           <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="flex items-center">
-              <ShareIcon className="h-5 w-5 text-purple-600" />
-              <div className="ml-2">
-                <div className="text-xl font-bold text-purple-600">
-                  {speakersWithTalks.length}
-                </div>
-                <div className="text-xs text-brand-slate-gray/70">
-                  Sharing cards
-                </div>
-              </div>
+            <div className="text-xl font-bold text-brand-cloud-blue">
+              {speakersWithTalks.length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Sharing cards
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-blue-600">
+              {speakersWithTalks.filter(({ speaker }) => speaker.image).length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">With photos</div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-purple-600">
+              {speakersWithTalks.filter(({ talks }) => talks.length > 1).length}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Multi-talk speakers
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
+            <div className="text-xl font-bold text-green-600">
+              {speakersWithTalks.reduce(
+                (sum, { talks }) => sum + talks.length,
+                0,
+              )}
+            </div>
+            <div className="text-xs text-brand-slate-gray/70">
+              Total materials
             </div>
           </div>
         </div>
