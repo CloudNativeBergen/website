@@ -34,6 +34,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({
         schedule: true,
+        confirmedTalksOnly: false,
         revalidate: 0, // No cache for schedule admin
       })
 
