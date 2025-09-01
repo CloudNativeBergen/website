@@ -5,7 +5,6 @@ import {
   createCategoryStatsForAdmin,
 } from '@/lib/tickets/calculations'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getSpeakers } from '@/lib/speaker/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
 import { TicketIcon } from '@heroicons/react/24/outline'

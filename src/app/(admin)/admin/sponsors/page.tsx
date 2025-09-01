@@ -7,8 +7,6 @@ import { formatCurrency } from '@/lib/format'
 import {
   BuildingOffice2Icon,
   GlobeAltIcon,
-  CurrencyDollarIcon,
-  ExclamationTriangleIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
@@ -119,9 +117,6 @@ export default async function AdminSponsors() {
   // Count missing information
   const sponsorsWithMissingContactInfo = sponsors.filter(isMissingContactInfo)
   const sponsorsWithMissingBillingInfo = sponsors.filter(isMissingBillingInfo)
-  const hasAnyMissingInfo =
-    sponsorsWithMissingContactInfo.length > 0 ||
-    sponsorsWithMissingBillingInfo.length > 0
 
   // Calculate summary statistics
   const availableTiers = sponsorTiers.length

@@ -1,5 +1,5 @@
 import type { EventTicket } from '@/lib/tickets/checkin'
-import { groupTicketsByOrder } from '@/lib/tickets/checkin'
+import { groupTicketsByOrder, type GroupedOrder } from '@/lib/tickets/checkin'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import type { Conference } from '@/lib/conference/types'
 
@@ -99,7 +99,7 @@ export async function calculateTicketStatistics(
  */
 export function createCategoryStatsForAdmin(
   tickets: EventTicket[],
-  orders: any[],
+  orders: GroupedOrder[],
   ticketsByCategory: Record<string, number>,
 ): Array<{
   category: string

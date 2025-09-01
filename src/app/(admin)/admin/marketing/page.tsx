@@ -5,7 +5,6 @@ import { Status } from '@/lib/proposal/types'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { DownloadSpeakerImage } from '@/components/branding/DownloadSpeakerImage'
 import {
-  ShareIcon,
   DocumentArrowDownIcon,
   UserGroupIcon,
   PresentationChartBarIcon,
