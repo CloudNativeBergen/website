@@ -1,0 +1,123 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { fetchEventTickets } from '@/lib/tickets/checkin'
+import { calculateTicketStatistics } from '@/lib/tickets/calculations'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
+
+export async function POST(request: NextRequest) {
+  try {
+    // Verify authentication token
+    const authHeader = request.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
+
+    if (!cronSecret) {
+      console.error('CRON_SECRET environment variable is not set')
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 },
+      )
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+      console.error('Invalid or missing authorization token')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const url = new URL(request.url)
+
+    // Log request details for debugging
+    const hostname = request.headers.get('host') || url.hostname
+    const userAgent = request.headers.get('user-agent') || 'unknown'
+    console.log(
+      `Sales update cron triggered - Host: ${hostname}, User-Agent: ${userAgent}, Environment: ${process.env.NODE_ENV}`,
+    )
+
+    // Get conference configuration with sponsors for ticket calculations
+    console.log(`Attempting to load conference for domain: ${hostname}`)
+    const { conference, error: conferenceError } =
+      await getConferenceForCurrentDomain({
+        sponsors: true,
+        featuredSpeakers: false,
+        featuredTalks: false,
+      })
+
+    if (conferenceError || !conference) {
+      console.error(
+        `Failed to load conference for domain ${hostname}:`,
+        conferenceError,
+      )
+      return NextResponse.json(
+        { error: 'Failed to load conference configuration' },
+        { status: 500 },
+      )
+    }
+
+    console.log(
+      `Successfully loaded conference: ${conference.title} (ID: ${conference._id})`,
+    )
+    console.log(
+      `Conference domains: ${conference.domains ? conference.domains.join(', ') : 'none'}`,
+    )
+    console.log(
+      `CheckIn configuration: Customer ID ${conference.checkin_customer_id}, Event ID ${conference.checkin_event_id}`,
+    )
+
+    // Check if checkin configuration is available
+    if (!conference.checkin_customer_id || !conference.checkin_event_id) {
+      console.error('Conference missing checkin configuration')
+      return NextResponse.json(
+        { error: 'Conference not configured for ticket sales tracking' },
+        { status: 400 },
+      )
+    }
+
+    // Fetch ticket data from CheckIn.no
+    const tickets = await fetchEventTickets(
+      conference.checkin_customer_id,
+      conference.checkin_event_id,
+    )
+
+    // Calculate comprehensive ticket statistics (same logic as admin/tickets page)
+    const stats = await calculateTicketStatistics(tickets, conference)
+
+    // Send update to Slack
+    await sendSalesUpdateToSlack({
+      conference,
+      ticketsByCategory: stats.ticketsByCategory,
+      paidTickets: stats.paidTickets,
+      sponsorTickets: stats.sponsorTickets,
+      speakerTickets: stats.speakerTickets,
+      totalTickets: stats.totalTickets,
+      totalRevenue: stats.totalRevenue,
+      lastUpdated: new Date().toISOString(),
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        conference: conference.title,
+        paidTickets: stats.paidTickets,
+        sponsorTickets: stats.sponsorTickets,
+        speakerTickets: stats.speakerTickets,
+        totalTickets: stats.totalTickets,
+        totalRevenue: stats.totalRevenue,
+        categories: stats.ticketsByCategory,
+        lastUpdated: new Date().toISOString(),
+      },
+    })
+  } catch (error) {
+    console.error('Error in sales update cron job:', error)
+    return NextResponse.json(
+      {
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
+      { status: 500 },
+    )
+  }
+}
+
+// Only allow POST requests
+export async function GET() {
+  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 })
+}

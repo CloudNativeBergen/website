@@ -1,4 +1,9 @@
 import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/checkin'
+import {
+  calculateTicketStatistics,
+  TIER_TICKET_ALLOCATION,
+  createCategoryStatsForAdmin,
+} from '@/lib/tickets/calculations'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { ErrorDisplay } from '@/components/admin'
@@ -6,13 +11,6 @@ import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import type { EventTicket } from '@/lib/tickets/checkin'
 import { formatCurrency } from '@/lib/format'
-
-// Sponsor ticket allocation by tier
-const TIER_TICKET_ALLOCATION: Record<string, number> = {
-  Pod: 2,
-  Service: 3,
-  Ingress: 5,
-}
 
 export default async function AdminTickets() {
   let tickets: EventTicket[] = []
@@ -56,65 +54,34 @@ export default async function AdminTickets() {
     )
   }
 
-  // Group tickets by order_id using the function from checkin.ts
+  // Calculate comprehensive ticket statistics using reusable function
+  const stats = await calculateTicketStatistics(tickets, conference)
+
+  // Group tickets by order_id for the orders table
   const orders = groupTicketsByOrder(tickets)
 
-  // Calculate summary statistics from grouped orders (correct totals)
-  const totalTickets = orders.reduce(
-    (sum, order) => sum + order.totalTickets,
-    0,
+  // Create category stats with revenue and order information for admin display
+  const categoryStats = createCategoryStatsForAdmin(
+    tickets,
+    orders,
+    stats.ticketsByCategory,
   )
-  const totalRevenue = orders.reduce((sum, order) => sum + order.totalAmount, 0)
 
-  // Calculate statistics by ticket category
-  const ticketsByCategory = new Map<
+  // Extract calculated values from stats
+  const totalTickets = stats.paidTickets
+  const totalRevenue = stats.totalRevenue
+  const totalSponsorTickets = stats.sponsorTickets
+  const speakerTickets = stats.speakerTickets
+
+  // Calculate sponsor tickets breakdown by tier for the admin table
+  const sponsorTicketsByTier: Record<
     string,
-    {
-      count: number
-      revenue: number
-      orders: number
-    }
-  >()
-
-  orders.forEach((order) => {
-    order.categories.forEach((category) => {
-      const current = ticketsByCategory.get(category) || {
-        count: 0,
-        revenue: 0,
-        orders: 0,
-      }
-      ticketsByCategory.set(category, {
-        count: current.count + order.totalTickets,
-        revenue: current.revenue + order.totalAmount,
-        orders: current.orders + 1,
-      })
-    })
-  })
-
-  const categoryStats = Array.from(ticketsByCategory.entries())
-    .map(([category, stats]) => ({
-      category,
-      ...stats,
-    }))
-    .sort((a, b) => b.count - a.count)
-
-  // Calculate sponsor tickets allocated through agreements
-  const calculateSponsorTickets = () => {
-    if (!conference.sponsors || conference.sponsors.length === 0) {
-      return { totalSponsorTickets: 0, sponsorTicketsByTier: {} }
-    }
-
-    let totalSponsorTickets = 0
-    const sponsorTicketsByTier: Record<
-      string,
-      { sponsors: number; tickets: number }
-    > = {}
-
+    { sponsors: number; tickets: number }
+  > = {}
+  if (conference.sponsors && conference.sponsors.length > 0) {
     conference.sponsors.forEach((sponsorData) => {
       const tierTitle = sponsorData.tier?.title || 'Unknown'
       const ticketsForTier = TIER_TICKET_ALLOCATION[tierTitle] || 0
-
-      totalSponsorTickets += ticketsForTier
 
       if (!sponsorTicketsByTier[tierTitle]) {
         sponsorTicketsByTier[tierTitle] = { sponsors: 0, tickets: 0 }
@@ -122,34 +89,7 @@ export default async function AdminTickets() {
       sponsorTicketsByTier[tierTitle].sponsors += 1
       sponsorTicketsByTier[tierTitle].tickets += ticketsForTier
     })
-
-    return { totalSponsorTickets, sponsorTicketsByTier }
   }
-
-  const { totalSponsorTickets, sponsorTicketsByTier } =
-    calculateSponsorTickets()
-
-  // Calculate speaker tickets
-  const calculateSpeakerTickets = async () => {
-    // Get confirmed speakers for this conference
-    const { speakers: confirmedSpeakers, err: speakersError } =
-      await getSpeakers(conference._id)
-
-    if (speakersError) {
-      console.warn(
-        'Could not fetch speakers for ticket calculation:',
-        speakersError,
-      )
-      return { speakerTickets: 0 }
-    }
-
-    // Count confirmed speakers (typically 1 ticket each)
-    const speakerTickets = confirmedSpeakers.length
-
-    return { speakerTickets }
-  }
-
-  const { speakerTickets } = await calculateSpeakerTickets()
 
   const totalComplimentaryTickets = totalSponsorTickets + speakerTickets
   const totalTicketsIncludingAll = totalTickets + totalComplimentaryTickets
