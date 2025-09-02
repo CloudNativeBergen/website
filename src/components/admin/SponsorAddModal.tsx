@@ -18,6 +18,7 @@ import {
   ChevronDownIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline'
+import { ChevronDownIcon as ChevronDownIconSmall } from '@heroicons/react/16/solid'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
 import {
   ConferenceSponsorWithContact,
@@ -375,26 +376,26 @@ export default function SponsorAddModal({
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className="max-h-screen w-full max-w-4xl overflow-y-auto rounded-xl bg-white p-6 shadow-lg">
+        <DialogPanel className="max-h-screen w-full max-w-4xl overflow-y-auto rounded-xl bg-white p-6 shadow-lg dark:bg-gray-900">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg leading-6 font-semibold text-gray-900">
+            <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
               {editingSponsor ? 'Edit Sponsor' : 'Add Sponsor'}
             </h3>
             <button
               onClick={onClose}
-              className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
+              className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200"
             >
               <span className="sr-only">Close</span>
               <XMarkIcon className="h-6 w-6" aria-hidden="true" />
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             {/* Tier Selection */}
             <div>
               <label
                 htmlFor="tier"
-                className="block text-sm/6 font-medium text-gray-900"
+                className="block text-sm/6 font-medium text-gray-900 dark:text-white"
               >
                 Sponsor Tier *
               </label>
@@ -406,7 +407,7 @@ export default function SponsorAddModal({
                     setFormData((prev) => ({ ...prev, tierId: e.target.value }))
                   }
                   required
-                  className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                  className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
                 >
                   <option value="">Select a tier...</option>
                   {sponsorTiers
@@ -424,9 +425,9 @@ export default function SponsorAddModal({
                       </option>
                     ))}
                 </select>
-                <ChevronDownIcon
+                <ChevronDownIconSmall
                   aria-hidden="true"
-                  className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+                  className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
                 />
               </div>
             </div>
@@ -434,7 +435,7 @@ export default function SponsorAddModal({
             {/* Sponsor Selection (only in create mode) */}
             {!editingSponsor && (
               <div>
-                <label className="block text-sm/6 font-medium text-gray-900">
+                <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                   Select Sponsor
                 </label>
                 <div className="mt-2">
@@ -444,7 +445,7 @@ export default function SponsorAddModal({
                   >
                     <div className="relative">
                       <ComboboxInput
-                        className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+                        className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                         displayValue={(sponsor: SponsorWithContactInfo) =>
                           sponsor?.name || ''
                         }
@@ -453,7 +454,7 @@ export default function SponsorAddModal({
                       />
                       <ComboboxButton className="absolute inset-y-0 right-0 flex items-center rounded-r-md px-2 focus:outline-none">
                         <ChevronUpDownIcon
-                          className="h-5 w-5 text-gray-400"
+                          className="h-5 w-5 text-gray-400 dark:text-gray-500"
                           aria-hidden="true"
                         />
                       </ComboboxButton>
@@ -527,15 +528,15 @@ export default function SponsorAddModal({
             {(isCreatingNew || editingSponsor || selectedExistingSponsor) && (
               <>
                 {/* Sponsor Information */}
-                <div className="border-b border-gray-200 pb-6">
-                  <h4 className="text-base font-medium text-gray-900">
+                <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">
+                  <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
                     Sponsor Information
                   </h4>
-                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
                     <div className="sm:col-span-2">
                       <label
                         htmlFor="name"
-                        className="block text-sm/6 font-medium text-gray-900"
+                        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                       >
                         Company Name *
                       </label>
@@ -555,7 +556,7 @@ export default function SponsorAddModal({
                           disabled={
                             selectedExistingSponsor != null && !isCreatingNew
                           }
-                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6"
+                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 disabled:bg-gray-50 disabled:text-gray-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
                           placeholder="Enter company name"
                         />
                       </div>
@@ -564,7 +565,7 @@ export default function SponsorAddModal({
                     <div className="sm:col-span-2">
                       <label
                         htmlFor="website"
-                        className="block text-sm/6 font-medium text-gray-900"
+                        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                       >
                         Website *
                       </label>
@@ -580,7 +581,7 @@ export default function SponsorAddModal({
                             }))
                           }
                           required
-                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                           placeholder="https://example.com"
                         />
                       </div>
@@ -589,7 +590,7 @@ export default function SponsorAddModal({
                     <div className="sm:col-span-2">
                       <label
                         htmlFor="org_number"
-                        className="block text-sm/6 font-medium text-gray-900"
+                        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                       >
                         Organization Number
                       </label>
@@ -604,7 +605,7 @@ export default function SponsorAddModal({
                               org_number: e.target.value,
                             }))
                           }
-                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                           placeholder="Enter organization number"
                         />
                       </div>
@@ -612,7 +613,7 @@ export default function SponsorAddModal({
 
                     {/* Logo Upload */}
                     <div className="sm:col-span-2">
-                      <label className="block text-sm/6 font-medium text-gray-900">
+                      <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                         Logo (SVG) *
                       </label>
                       <div className="mt-2">
@@ -621,14 +622,14 @@ export default function SponsorAddModal({
                           ref={fileInputRef}
                           onChange={handleFileUpload}
                           accept=".svg"
-                          className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
+                          className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:text-gray-400 dark:file:bg-indigo-500/10 dark:file:text-indigo-400 dark:hover:file:bg-indigo-500/20"
                         />
                         {formData.logo && (
                           <div className="mt-3">
-                            <p className="mb-2 text-sm text-gray-600">
+                            <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
                               Logo Preview:
                             </p>
-                            <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
                               <InlineSvgPreviewComponent
                                 value={formData.logo}
                                 style={{ width: '100px', height: '100px' }}
@@ -639,7 +640,7 @@ export default function SponsorAddModal({
                               onClick={() =>
                                 setFormData((prev) => ({ ...prev, logo: '' }))
                               }
-                              className="ml-3 text-sm text-red-600 hover:text-red-500"
+                              className="ml-3 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                             >
                               Remove
                             </button>
@@ -651,9 +652,9 @@ export default function SponsorAddModal({
                 </div>
 
                 {/* Contact Persons */}
-                <div className="border-b border-gray-200 pb-6">
+                <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-base font-medium text-gray-900">
+                    <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
                       Contact Persons
                     </h4>
                     <button
@@ -673,94 +674,100 @@ export default function SponsorAddModal({
                           ],
                         }))
                       }}
-                      className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+                      className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500 whitespace-nowrap"
                     >
-                      <PlusIcon className="mr-1 h-4 w-4" />
+                      <PlusIcon className="mr-1.5 h-4 w-4" />
                       Add Contact
                     </button>
                   </div>
 
-                  <div className="mt-4 space-y-4">
+                  <div className="mt-4 space-y-3">
                     {(formData.contact_persons || []).map((contact, index) => (
                       <div
                         key={index}
-                        className="rounded-lg border border-gray-200 p-4"
+                        className="rounded-lg border border-gray-900/10 p-4 dark:border-white/10"
                       >
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                           <div>
-                            <label className="block text-xs font-medium text-gray-700">
+                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                               Full Name *
                             </label>
-                            <input
-                              type="text"
-                              value={contact.name}
-                              onChange={(e) => {
-                                const updatedContacts = [
-                                  ...(formData.contact_persons || []),
-                                ]
-                                updatedContacts[index] = {
-                                  ...contact,
-                                  name: e.target.value,
-                                }
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  contact_persons: updatedContacts,
-                                }))
-                              }}
-                              className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
-                              placeholder="Full name"
-                            />
+                            <div className="mt-1">
+                              <input
+                                type="text"
+                                value={contact.name}
+                                onChange={(e) => {
+                                  const updatedContacts = [
+                                    ...(formData.contact_persons || []),
+                                  ]
+                                  updatedContacts[index] = {
+                                    ...contact,
+                                    name: e.target.value,
+                                  }
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    contact_persons: updatedContacts,
+                                  }))
+                                }}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                                placeholder="Full name"
+                              />
+                            </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700">
+                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                               Email *
                             </label>
-                            <input
-                              type="email"
-                              value={contact.email}
-                              onChange={(e) => {
-                                const updatedContacts = [
-                                  ...(formData.contact_persons || []),
-                                ]
-                                updatedContacts[index] = {
-                                  ...contact,
-                                  email: e.target.value,
-                                }
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  contact_persons: updatedContacts,
-                                }))
-                              }}
-                              className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
-                              placeholder="email@example.com"
-                            />
+                            <div className="mt-1">
+                              <input
+                                type="email"
+                                value={contact.email}
+                                onChange={(e) => {
+                                  const updatedContacts = [
+                                    ...(formData.contact_persons || []),
+                                  ]
+                                  updatedContacts[index] = {
+                                    ...contact,
+                                    email: e.target.value,
+                                  }
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    contact_persons: updatedContacts,
+                                  }))
+                                }}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                                placeholder="email@example.com"
+                              />
+                            </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700">
+                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                               Phone
                             </label>
-                            <input
-                              type="tel"
-                              value={contact.phone || ''}
-                              onChange={(e) => {
-                                const updatedContacts = [
-                                  ...(formData.contact_persons || []),
-                                ]
-                                updatedContacts[index] = {
-                                  ...contact,
-                                  phone: e.target.value,
-                                }
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  contact_persons: updatedContacts,
-                                }))
-                              }}
-                              className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-sm text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
-                              placeholder="+47 123 45 678"
-                            />
+                            <div className="mt-1">
+                              <input
+                                type="tel"
+                                value={contact.phone || ''}
+                                onChange={(e) => {
+                                  const updatedContacts = [
+                                    ...(formData.contact_persons || []),
+                                  ]
+                                  updatedContacts[index] = {
+                                    ...contact,
+                                    phone: e.target.value,
+                                  }
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    contact_persons: updatedContacts,
+                                  }))
+                                }}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                                placeholder="+47 123 45 678"
+                              />
+                            </div>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-700">
+                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                               Role
                             </label>
                             <div className="mt-1 grid grid-cols-1">
@@ -779,7 +786,7 @@ export default function SponsorAddModal({
                                     contact_persons: updatedContacts,
                                   }))
                                 }}
-                                className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
                               >
                                 <option value="">Select a role...</option>
                                 {CONTACT_ROLE_OPTIONS.map((role) => (
@@ -788,9 +795,9 @@ export default function SponsorAddModal({
                                   </option>
                                 ))}
                               </select>
-                              <ChevronDownIcon
+                              <ChevronDownIconSmall
                                 aria-hidden="true"
-                                className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+                                className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
                               />
                             </div>
                           </div>
@@ -807,7 +814,7 @@ export default function SponsorAddModal({
                                 contact_persons: updatedContacts,
                               }))
                             }}
-                            className="text-sm text-red-600 hover:text-red-500"
+                            className="text-sm/6 font-semibold text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                           >
                             Remove
                           </button>
@@ -819,18 +826,18 @@ export default function SponsorAddModal({
 
                 {/* Billing Information */}
                 <div>
-                  <h4 className="text-base font-medium text-gray-900">
+                  <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
                     Billing Information
                   </h4>
-                  <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                     <div className="sm:col-span-2">
                       <label
                         htmlFor="billing_email"
-                        className="block text-sm/6 font-medium text-gray-900"
+                        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                       >
                         Billing Email
                       </label>
-                      <div className="mt-2">
+                      <div className="mt-1">
                         <input
                           type="email"
                           id="billing_email"
@@ -844,7 +851,7 @@ export default function SponsorAddModal({
                               },
                             }))
                           }
-                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                           placeholder="billing@example.com"
                         />
                       </div>
@@ -852,11 +859,11 @@ export default function SponsorAddModal({
                     <div className="sm:col-span-2">
                       <label
                         htmlFor="billing_reference"
-                        className="block text-sm/6 font-medium text-gray-900"
+                        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                       >
                         Billing Reference
                       </label>
-                      <div className="mt-2">
+                      <div className="mt-1">
                         <input
                           type="text"
                           id="billing_reference"
@@ -870,7 +877,7 @@ export default function SponsorAddModal({
                               },
                             }))
                           }
-                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                           placeholder="Internal reference number"
                         />
                       </div>
@@ -878,11 +885,11 @@ export default function SponsorAddModal({
                     <div className="sm:col-span-2">
                       <label
                         htmlFor="billing_comments"
-                        className="block text-sm/6 font-medium text-gray-900"
+                        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                       >
                         Billing Comments
                       </label>
-                      <div className="mt-2">
+                      <div className="mt-1">
                         <textarea
                           id="billing_comments"
                           rows={3}
@@ -896,7 +903,7 @@ export default function SponsorAddModal({
                               },
                             }))
                           }
-                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                           placeholder="Any special billing instructions..."
                         />
                       </div>
@@ -907,11 +914,11 @@ export default function SponsorAddModal({
             )}
 
             {/* Submit buttons */}
-            <div className="flex justify-end space-x-3 pt-6">
+            <div className="flex justify-end gap-3 pt-6">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50"
+                className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700 dark:focus-visible:outline-indigo-500 whitespace-nowrap"
               >
                 Cancel
               </button>
@@ -923,7 +930,7 @@ export default function SponsorAddModal({
                   updateMutation.isPending ||
                   addToConferenceMutation.isPending
                 }
-                className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500 whitespace-nowrap"
               >
                 {createMutation.isPending ||
                 updateMutation.isPending ||
