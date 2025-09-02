@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
 import {
   TravelSupportStatus,
@@ -8,11 +9,13 @@ import {
   TravelSupportWithSpeaker,
   TravelExpense,
 } from '@/lib/travel-support/types'
+import { TravelSupportService } from '@/lib/travel-support/service'
 import { ExpenseSummary } from './ExpenseSummary'
 import { ErrorBoundary } from './ErrorBoundary'
 
 export function TravelSupportAdminPage() {
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
+  const { data: session } = useSession()
 
   // Get all travel support requests
   const {
@@ -164,6 +167,7 @@ export function TravelSupportAdminPage() {
                 ) : selectedRequestDetails ? (
                   <RequestDetails
                     request={selectedRequestDetails}
+                    currentUserId={session?.speaker?._id}
                     onUpdateStatus={handleUpdateStatus}
                     onUpdateExpenseStatus={handleUpdateExpenseStatus}
                     isUpdating={
@@ -275,11 +279,13 @@ function RequestCard({
 
 function RequestDetails({
   request,
+  currentUserId,
   onUpdateStatus,
   onUpdateExpenseStatus,
   isUpdating,
 }: {
   request: TravelSupportWithSpeaker & { expenses: TravelExpense[] }
+  currentUserId?: string
   onUpdateStatus: (
     id: string,
     status: TravelSupportStatus,
@@ -298,7 +304,15 @@ function RequestDetails({
     request.totalAmount || 0,
   )
 
-  const canApprove = request.status === TravelSupportStatus.SUBMITTED
+  // Check if current user can approve this request
+  const canApprove =
+    request.status === TravelSupportStatus.SUBMITTED &&
+    currentUserId &&
+    TravelSupportService.canUserApprove(
+      true, // We know they're admin since they can access this page
+      request.speaker._id,
+      currentUserId,
+    )
 
   return (
     <div className="space-y-6">
@@ -479,6 +493,22 @@ function RequestDetails({
           </div>
         </div>
       )}
+
+      {/* Self-approval restriction notice */}
+      {request.status === TravelSupportStatus.SUBMITTED &&
+        currentUserId === request.speaker._id && (
+          <div className="border-t pt-6">
+            <div className="rounded border border-amber-200 bg-amber-50 p-4">
+              <h5 className="font-medium text-amber-800">
+                Cannot Approve Own Request
+              </h5>
+              <p className="mt-1 text-sm text-amber-700">
+                You cannot approve your own travel support request. Another
+                admin must review and approve this request.
+              </p>
+            </div>
+          </div>
+        )}
 
       {/* Existing Review Notes */}
       {request.reviewNotes && (

@@ -374,6 +374,19 @@ export const travelSupportRouter = router({
           })
         }
 
+        // Authorization check - prevent admins from approving their own requests
+        const { authorized, error: authError } =
+          await authorizeTravelSupportOperation(
+            input.travelSupportId,
+            ctx.speaker._id,
+            ctx.speaker.is_organizer,
+            'approve',
+          )
+
+        if (!authorized || authError) {
+          throw authError || createAuthError('FORBIDDEN', 'Access denied')
+        }
+
         // Log status change for audit purposes
         auditLog(
           'Travel Support Status Update',
@@ -386,6 +399,7 @@ export const travelSupportRouter = router({
             newStatus: input.status,
             approvedAmount: input.approvedAmount,
             reviewNotes: input.reviewNotes,
+            approverIsOwner: travelSupport.speaker._id === ctx.speaker._id,
           },
           'info',
         )

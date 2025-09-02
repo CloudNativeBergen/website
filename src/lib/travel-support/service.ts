@@ -237,6 +237,23 @@ export class TravelSupportService {
   }
 
   /**
+   * Check if a user can approve a travel support request
+   * Admins can approve requests, but not their own
+   */
+  static canUserApprove(
+    isAdmin: boolean,
+    requestOwnerId: string,
+    approverUserId: string,
+  ): boolean {
+    if (!isAdmin) {
+      return false
+    }
+
+    // Admins cannot approve their own requests
+    return requestOwnerId !== approverUserId
+  }
+
+  /**
    * Format currency display
    */
   static formatCurrency(

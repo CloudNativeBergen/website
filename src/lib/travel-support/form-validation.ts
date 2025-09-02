@@ -84,8 +84,8 @@ export function hasValidationErrors(errors: Record<string, string>): boolean {
 /**
  * Validate a single field
  */
-export function validateField<T>(
-  schema: ZodSchema<T>,
+export function validateSingleField<T>(
+  schema: z.ZodSchema<T>,
   values: T,
   fieldName: keyof T,
 ): string | undefined {
@@ -98,12 +98,10 @@ export function validateField<T>(
     return undefined
   } catch (error) {
     if (error instanceof ZodError) {
-      const fieldError = error.issues.find((issue) =>
-        issue.path.includes(fieldName as string),
-      )
-      return fieldError?.message
+      const fieldError = error.issues.find((err) => err.path[0] === fieldName)
+      return fieldError?.message || 'Invalid value'
     }
-    return 'Validation failed'
+    return 'Validation error'
   }
 }
 

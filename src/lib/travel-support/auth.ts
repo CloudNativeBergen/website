@@ -239,15 +239,6 @@ export async function authorizeTravelSupportOperation(
         break
 
       case 'submit':
-        if (isOrganizer) {
-          return {
-            authorized: false,
-            error: createAuthError(
-              'FORBIDDEN',
-              'Admins cannot submit travel support requests',
-            ),
-          }
-        }
         if (travelSupport.status !== 'draft') {
           return {
             authorized: false,
@@ -266,6 +257,17 @@ export async function authorizeTravelSupportOperation(
             error: createAuthError(
               'FORBIDDEN',
               'Only admins can approve travel support requests',
+            ),
+          }
+        }
+
+        // Prevent admins from approving their own travel support requests
+        if (travelSupport.speaker._id === speakerId) {
+          return {
+            authorized: false,
+            error: createAuthError(
+              'FORBIDDEN',
+              'Admins cannot approve their own travel support requests',
             ),
           }
         }
