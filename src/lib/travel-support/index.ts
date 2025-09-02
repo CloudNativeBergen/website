@@ -9,12 +9,6 @@ export { TravelSupportService } from './service'
 
 // Utilities
 export * from './form-validation'
-export {
-  performanceMonitor,
-  usePerformanceMonitor,
-  withPerformanceMonitoring,
-  analyzeBundleSize,
-} from './performance'
 
 // Server-side functions (should only be imported on server)
 // Re-export with clear naming to indicate server-only usage

@@ -1,10 +1,5 @@
-import { ZodError } from 'zod'
-import {
-  BankingDetailsSchema,
-  TravelExpenseInputSchema,
-  type BankingDetailsInput,
-  type TravelExpenseInputType,
-} from './validation'
+import { z, ZodError, ZodSchema } from 'zod'
+import { BankingDetailsSchema, TravelExpenseInputSchema } from './validation'
 import type { BankingDetails, TravelExpenseInput } from './types'
 
 /**
@@ -90,13 +85,15 @@ export function hasValidationErrors(errors: Record<string, string>): boolean {
  * Validate a single field
  */
 export function validateField<T>(
-  schema: any,
+  schema: ZodSchema<T>,
   values: T,
   fieldName: keyof T,
 ): string | undefined {
   try {
     // Create a partial schema for the specific field
-    const fieldSchema = schema.pick({ [fieldName]: true })
+    const fieldSchema = (schema as z.ZodObject<z.ZodRawShape>).pick({
+      [fieldName]: true,
+    } as Record<string, true>)
     fieldSchema.parse({ [fieldName]: values[fieldName] })
     return undefined
   } catch (error) {
@@ -113,8 +110,8 @@ export function validateField<T>(
 /**
  * Safe validation that returns both success status and errors
  */
-export function safeValidate<T>(
-  schema: any,
+export function validateData<T>(
+  schema: ZodSchema<T>,
   values: T,
 ): { success: boolean; errors: Record<string, string>; data?: T } {
   try {

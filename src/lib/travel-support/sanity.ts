@@ -411,7 +411,7 @@ export async function deleteReceipt(
 }> {
   try {
     // Get the current expense
-    const expense = await clientRead.fetch<{ receipts: any[] }>(
+    const expense = await clientRead.fetch<{ receipts: unknown[] }>(
       `*[_type == "travelExpense" && _id == $expenseId][0] { receipts }`,
       { expenseId },
     )

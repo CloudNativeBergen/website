@@ -11,10 +11,6 @@ import {
 import { ExpenseSummary } from './ExpenseSummary'
 import { ErrorBoundary } from './ErrorBoundary'
 
-type AdminTravelSupportRequest = TravelSupportWithSpeaker & {
-  expenses?: TravelExpense[]
-}
-
 export function TravelSupportAdminPage() {
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
 

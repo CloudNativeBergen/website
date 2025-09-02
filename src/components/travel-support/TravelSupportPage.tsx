@@ -3,6 +3,7 @@
 import { ExclamationTriangleIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useTravelSupport } from '@/hooks/useTravelSupport'
 import { TravelSupportService } from '@/lib/travel-support/service'
+import { TravelExpenseInput } from '@/lib/travel-support/types'
 import { BankingDetailsForm } from './BankingDetailsForm'
 import { ExpenseForm } from './ExpenseForm'
 import { ExpenseSummary } from './ExpenseSummary'
@@ -10,18 +11,11 @@ import { ExchangeRateDebugPanel } from './ExchangeRateDebugPanel'
 import { StatusBadge } from './StatusBadge'
 import { ExpensesList } from './ExpensesList'
 import { BankingDetailsDisplay } from './BankingDetailsDisplay'
-import {
-  LoadingState,
-  CardSkeleton,
-  BankingDetailsSkeleton,
-} from './LoadingStates'
+import { LoadingState, BankingDetailsSkeleton } from './LoadingStates'
 import { ErrorDisplay } from './ErrorComponents'
 import { ErrorBoundary } from './ErrorBoundary'
-import { usePerformanceMonitor } from '@/lib/travel-support/performance'
 
 export function TravelSupportPage() {
-  const { timeAsyncFunction } = usePerformanceMonitor()
-
   const {
     // Data
     travelSupport,
@@ -62,7 +56,9 @@ export function TravelSupportPage() {
   } = useTravelSupport()
 
   // Handlers
-  const handleExpenseEdit = (expense: any) => {
+  const handleExpenseEdit = (
+    expense: TravelExpenseInput & { _id?: string },
+  ) => {
     setEditingExpense(expense)
     setShowExpenseForm(true)
   }
@@ -72,30 +68,17 @@ export function TravelSupportPage() {
     setShowExpenseForm(false)
   }
 
-  const handleExpenseSave = async (expenseData: any) => {
-    await timeAsyncFunction(
-      editingExpense ? 'update-expense' : 'add-expense',
-      async () => {
-        if (editingExpense) {
-          await updateExpense(editingExpense._id!, expenseData)
-        } else {
-          await addExpense(expenseData)
-        }
-      },
-      {
-        component: 'TravelSupportPage',
-        action: editingExpense ? 'update' : 'add',
-      },
-    )
+  const handleExpenseSave = async (expenseData: TravelExpenseInput) => {
+    if (editingExpense) {
+      await updateExpense(editingExpense._id!, expenseData)
+    } else {
+      await addExpense(expenseData)
+    }
   }
 
   const handleExpenseDelete = async (expenseId: string) => {
     if (confirm('Are you sure you want to delete this expense?')) {
-      await timeAsyncFunction(
-        'delete-expense',
-        () => deleteExpense(expenseId),
-        { component: 'TravelSupportPage', action: 'delete' },
-      )
+      await deleteExpense(expenseId)
     }
   }
 
@@ -104,11 +87,7 @@ export function TravelSupportPage() {
     receiptIndex: number,
   ) => {
     if (confirm('Are you sure you want to delete this receipt?')) {
-      await timeAsyncFunction(
-        'delete-receipt',
-        () => deleteReceipt(expenseId, receiptIndex),
-        { component: 'TravelSupportPage', action: 'delete-receipt' },
-      )
+      await deleteReceipt(expenseId, receiptIndex)
     }
   }
 
@@ -198,8 +177,9 @@ export function TravelSupportPage() {
             Ready to get started?
           </h2>
           <p className="mb-6 text-gray-600 dark:text-gray-400">
-            Let's set up your travel support! We'll help you track expenses and
-            handle reimbursements so you can focus on giving an amazing talk.
+            Let&apos;s set up your travel support! We&apos;ll help you track
+            expenses and handle reimbursements so you can focus on giving an
+            amazing talk.
           </p>
           {createError && (
             <ErrorDisplay
@@ -387,8 +367,8 @@ export function TravelSupportPage() {
             Ready to submit?
           </h3>
           <p className="mt-2 text-sm text-green-700 dark:text-green-300">
-            Once submitted, you won't be able to make changes to your travel
-            support request.
+            Once submitted, you won&apos;t be able to make changes to your
+            travel support request.
           </p>
           {submitError && (
             <ErrorDisplay

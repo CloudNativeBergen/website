@@ -6,9 +6,12 @@ import { TRPCError } from '@trpc/server'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { Flags } from '@/lib/speaker/types'
 import { getTravelSupportById } from './sanity'
-import { TravelSupportStatus } from './types'
+import {
+  TravelSupportStatus,
+  TravelSupportWithSpeaker,
+  TravelExpense,
+} from './types'
 import { AppEnvironment } from '@/lib/environment/config'
-import { TravelSupport } from './types'
 
 /**
  * Check if a speaker is eligible for travel funding
@@ -65,7 +68,9 @@ export async function verifyTravelSupportOwnership(
   speakerId: string,
   isOrganizer: boolean = false,
 ): Promise<{
-  travelSupport: TravelSupport | null
+  travelSupport:
+    | (TravelSupportWithSpeaker & { expenses: TravelExpense[] })
+    | null
   hasAccess: boolean
   error?: Error
 }> {
@@ -80,7 +85,7 @@ export async function verifyTravelSupportOwnership(
       }
     }
 
-    const hasAccess = isOrganizer || travelSupport.speaker._ref === speakerId
+    const hasAccess = isOrganizer || travelSupport.speaker._id === speakerId
 
     return { travelSupport, hasAccess }
   } catch (error) {
@@ -103,20 +108,19 @@ export function createAuthError(
   })
 }
 
-/**
- * Audit log helper for sensitive operations
- * TODO: Replace this with persistent audit logging to a secure database or logging service.
- */
 export function auditLog(
   operation: string,
   adminId: string,
   adminName: string,
   details: Record<string, unknown>,
 ): void {
-  // TODO: Implement persistent audit logging for compliance and security monitoring.
-  // Example: send to external logging service or write to secure database.
-  // This is a placeholder for development only.
-  // throw new Error('Persistent audit logging not implemented');
+  console.log('Audit Log:', {
+    operation,
+    adminId,
+    adminName,
+    details,
+    timestamp: new Date().toISOString(),
+  })
 }
 
 /**
@@ -129,7 +133,7 @@ export async function authorizeTravelSupportOperation(
   operation: 'read' | 'modify' | 'submit' | 'approve',
 ): Promise<{
   authorized: boolean
-  travelSupport?: TravelSupport
+  travelSupport?: TravelSupportWithSpeaker & { expenses: TravelExpense[] }
   error?: TRPCError
 }> {
   try {

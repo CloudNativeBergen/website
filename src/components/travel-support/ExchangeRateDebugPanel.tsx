@@ -53,7 +53,7 @@ export function ExchangeRateDebugPanel() {
     setIsVisible(visible)
     try {
       localStorage.setItem('debug-panel-visible', JSON.stringify(visible))
-    } catch (error) {
+    } catch {
       // Ignore localStorage errors
     }
   }
@@ -62,7 +62,7 @@ export function ExchangeRateDebugPanel() {
     setIsMinimized(minimized)
     try {
       localStorage.setItem('debug-panel-minimized', JSON.stringify(minimized))
-    } catch (error) {
+    } catch {
       // Ignore localStorage errors
     }
   }

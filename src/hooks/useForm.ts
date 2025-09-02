@@ -40,7 +40,7 @@ interface UseFormReturn<T> {
 /**
  * Reusable form management hook with validation and error handling
  */
-export function useForm<T extends Record<string, any>>(
+export function useForm<T extends Record<string, unknown>>(
   options: UseFormOptions<T>,
 ): UseFormReturn<T> {
   const { initialValues, validate, onSubmit } = options

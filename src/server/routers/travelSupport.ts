@@ -31,7 +31,6 @@ import {
   updateTravelExpense,
   updateExpenseStatus,
   deleteTravelExpense,
-  deleteExpense,
   deleteReceipt,
 } from '@/lib/travel-support/sanity'
 
@@ -376,7 +375,7 @@ export const travelSupportRouter = router({
           ctx.speaker.name,
           {
             travelSupportId: input.travelSupportId,
-            speakerId: travelSupport.speaker._ref,
+            speakerId: travelSupport.speaker._id,
             oldStatus: travelSupport.status,
             newStatus: input.status,
             approvedAmount: input.approvedAmount,
