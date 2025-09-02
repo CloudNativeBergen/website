@@ -17,6 +17,7 @@ import '@/styles/tailwind.css'
 import { SessionProvider } from 'next-auth/react'
 import { auth } from '@/lib/auth'
 import { DevBanner } from '@/components/DevBanner'
+import { ThemeProvider } from '@/components/providers/ThemeProvider'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -96,7 +97,7 @@ export default async function RootLayout({
     <html
       lang="en"
       className={clsx(
-        'h-full bg-white antialiased',
+        'h-full antialiased',
         inter.variable,
         jetbrainsMono.variable,
         spaceGrotesk.variable,
@@ -104,12 +105,15 @@ export default async function RootLayout({
         ibmPlexMono.variable,
         bricolageGrotesque.variable,
       )}
+      suppressHydrationWarning
     >
-      <body className="flex min-h-full">
-        <div className="flex w-full flex-col">
-          <DevBanner />
-          <SessionProvider session={session}>{children}</SessionProvider>
-        </div>
+      <body className="flex min-h-full bg-white dark:bg-gray-950">
+        <ThemeProvider>
+          <div className="flex w-full flex-col">
+            <DevBanner />
+            <SessionProvider session={session}>{children}</SessionProvider>
+          </div>
+        </ThemeProvider>
         <Analytics />
         <SpeedInsights />
         <Script

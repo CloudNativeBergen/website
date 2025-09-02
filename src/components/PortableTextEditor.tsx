@@ -65,7 +65,6 @@ const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
             lineHeight: '1.2',
             marginTop: '0',
             marginBottom: '24px',
-            color: '#334155',
             fontFamily:
               '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           }}
@@ -83,7 +82,6 @@ const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
             lineHeight: '1.3',
             marginTop: '0',
             marginBottom: '20px',
-            color: '#334155',
             fontFamily:
               '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           }}
@@ -101,7 +99,6 @@ const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
             lineHeight: '1.4',
             marginTop: '0',
             marginBottom: '16px',
-            color: '#334155',
             fontFamily:
               '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           }}
@@ -119,7 +116,6 @@ const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
             lineHeight: '1.6',
             marginBottom: '16px',
             marginTop: '0',
-            color: '#334155',
             fontFamily:
               'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
           }}
@@ -141,11 +137,7 @@ const renderAnnotation: RenderAnnotationFunction = ({
     return (
       <a
         href={href}
-        style={{
-          color: '#1D4ED8',
-          textDecoration: 'underline',
-          fontWeight: '500',
-        }}
+        className="font-medium text-blue-600 underline dark:text-blue-400"
         target="_blank"
         rel="noopener noreferrer"
       >
@@ -210,7 +202,7 @@ function ToolbarButton({
 }) {
   return (
     <button
-      className={`focus-visible:ring-ring inline-flex h-9 w-9 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors hover:bg-blue-900 hover:text-white focus-visible:ring-1 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 ${isActive ? 'bg-blue-800 text-white' : 'bg-gray-100'}`}
+      className={`focus-visible:ring-ring inline-flex h-9 w-9 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors hover:bg-blue-900 hover:text-white focus-visible:ring-1 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 ${isActive ? 'bg-blue-800 text-white' : 'bg-gray-100 text-gray-900 dark:bg-gray-700 dark:text-white dark:hover:bg-blue-700'}`}
       type="button"
       onClick={onClick}
     >
@@ -393,12 +385,14 @@ export function PortableTextEditor({
       <div>
         <label
           htmlFor={id}
-          className="block text-sm/6 font-medium text-gray-900"
+          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
         >
           {label}
         </label>
-        <div className="block min-h-60 w-full rounded-md bg-gray-50 p-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6">
-          <div className="text-sm text-gray-500">Loading editor...</div>
+        <div className="block min-h-60 w-full rounded-md bg-gray-50 p-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Loading editor...
+          </div>
         </div>
         {helpText && <HelpText>{helpText}</HelpText>}
       </div>
@@ -423,7 +417,7 @@ export function PortableTextEditor({
 
         <label
           htmlFor={id}
-          className="block text-sm/6 font-medium text-gray-900"
+          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
         >
           {label}
         </label>
@@ -432,11 +426,10 @@ export function PortableTextEditor({
 
         <PortableTextEditable
           id={id}
-          className="block min-h-60 w-full rounded-md bg-white p-3 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+          className="block min-h-60 w-full rounded-md bg-white p-3 text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
           style={{
             fontSize: '16px',
             lineHeight: '1.6',
-            color: '#334155',
             fontFamily:
               'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
           }}

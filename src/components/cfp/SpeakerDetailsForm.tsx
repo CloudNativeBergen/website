@@ -133,16 +133,16 @@ export function SpeakerDetailsForm({
   const isProfileMode = mode === 'profile'
   const sectionClassName = isProfileMode
     ? `${className}`
-    : 'border-b border-brand-frosted-steel pb-12'
+    : 'border-b border-brand-frosted-steel pb-12 dark:border-gray-600'
 
   return (
     <div className={sectionClassName}>
       {!isProfileMode && (
         <>
-          <h2 className="font-space-grotesk text-lg leading-7 font-semibold text-brand-slate-gray">
+          <h2 className="text-lg leading-7 font-semibold text-gray-900 dark:text-white">
             Speaker Information
           </h2>
-          <p className="font-inter mt-1 text-sm leading-6 text-brand-cloud-gray">
+          <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
             We need information about you as the speaker.
           </p>
         </>
@@ -204,7 +204,7 @@ export function SpeakerDetailsForm({
           <div className="col-span-full">
             <label
               htmlFor="photo"
-              className="font-space-grotesk block text-sm leading-6 font-medium text-brand-slate-gray"
+              className="block text-sm leading-6 font-medium text-gray-900 dark:text-white"
             >
               Photo
             </label>
@@ -219,7 +219,7 @@ export function SpeakerDetailsForm({
                 />
               ) : (
                 <UserCircleIcon
-                  className="h-12 w-12 text-gray-300"
+                  className="h-12 w-12 text-gray-300 dark:text-gray-500"
                   aria-hidden="true"
                 />
               )}
@@ -232,14 +232,14 @@ export function SpeakerDetailsForm({
               />
               {isUploading ? (
                 <div className="flex items-center gap-x-2">
-                  <div className="h-5 w-5 animate-spin rounded-full border-t-2 border-b-2 border-brand-cloud-blue"></div>
-                  <p className="font-inter text-sm leading-6 font-medium text-brand-slate-gray">
+                  <div className="h-5 w-5 animate-spin rounded-full border-t-2 border-b-2 border-brand-cloud-blue dark:border-blue-400"></div>
+                  <p className="text-sm leading-6 font-medium text-gray-900 dark:text-white">
                     Uploading...
                   </p>
                 </div>
               ) : (
                 <label htmlFor="photo" className="cursor-pointer">
-                  <span className="font-inter text-sm leading-6 font-medium text-brand-cloud-blue hover:text-brand-cloud-blue-hover">
+                  <span className="font-inter text-sm leading-6 font-medium text-brand-cloud-blue hover:text-brand-cloud-blue-hover dark:text-blue-400 dark:hover:text-blue-300">
                     Upload Photo
                   </span>
                 </label>
@@ -258,7 +258,7 @@ export function SpeakerDetailsForm({
         {showLinks && (
           <div className="sm:col-span-4">
             <fieldset>
-              <legend className="font-space-grotesk text-sm leading-6 font-semibold text-brand-slate-gray">
+              <legend className="text-sm leading-6 font-semibold text-gray-900 dark:text-white">
                 Social profiles and links
               </legend>
               <HelpText>
@@ -284,7 +284,7 @@ export function SpeakerDetailsForm({
 
         <div className="col-span-full">
           <fieldset>
-            <legend className="font-space-grotesk text-sm leading-6 font-semibold text-brand-slate-gray">
+            <legend className="text-sm leading-6 font-semibold text-gray-900 dark:text-white">
               Speaker Details
             </legend>
             <div className="mt-6 space-y-6">

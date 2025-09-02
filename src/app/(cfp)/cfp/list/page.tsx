@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/server'
 import { ProposalList } from '@/components/cfp/ProposalList'
 import { SpeakerShare } from '@/components/SpeakerShare'
@@ -11,13 +11,13 @@ import { LightBulbIcon } from '@heroicons/react/24/outline'
 function ErrorDisplay({ message }: { message: string }) {
   return (
     <div className="flex h-full items-center justify-center">
-      <p className="text-red-500">{message}</p>
+      <p className="text-red-500 dark:text-red-400">{message}</p>
     </div>
   )
 }
 
 export default async function SpeakerDashboard() {
-  const session = await auth()
+  const session = await getAuthSession()
   if (!session?.speaker) {
     return redirect('/api/auth/signin?callbackUrl=/cfp/list')
   }
@@ -50,10 +50,10 @@ export default async function SpeakerDashboard() {
   return (
     <>
       <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
-        <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
+        <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
           Speaker Dashboard
         </h1>
-        <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700">
+        <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700 dark:text-gray-300">
           <p>
             Thank you for your interest in submitting a presentation to our
             conference.
@@ -84,7 +84,7 @@ export default async function SpeakerDashboard() {
                 <div className="sticky top-8">
                   {/* Header aligned with proposals list */}
                   <div className="mt-6 mb-4">
-                    <h2 className="font-space-grotesk text-2xl font-bold tracking-tight text-brand-slate-gray">
+                    <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                       Share Your Talks
                     </h2>
                   </div>
@@ -132,10 +132,10 @@ export default async function SpeakerDashboard() {
                     })}
                   </div>
 
-                  <div className="mt-6 rounded-lg bg-brand-cloud-blue/5 p-4">
-                    <p className="font-inter flex items-center justify-center space-x-1 text-center text-xs text-brand-slate-gray">
-                      <LightBulbIcon className="h-4 w-4 text-brand-cloud-blue" />
-                      <strong className="text-brand-cloud-blue">
+                  <div className="mt-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-800">
+                    <p className="flex items-center justify-center space-x-1 text-center text-xs text-gray-600 dark:text-gray-300">
+                      <LightBulbIcon className="h-4 w-4 text-brand-cloud-blue dark:text-blue-400" />
+                      <strong className="text-brand-cloud-blue dark:text-blue-400">
                         Pro tip:
                       </strong>
                       <span>

@@ -3,6 +3,15 @@
 @source '../app/(admin)';
 @source '../components/admin';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Enable dark mode with class strategy */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+}
+
 @theme {
   --text-*: initial;
   --text-xs: 0.75rem;

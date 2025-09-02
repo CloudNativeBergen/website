@@ -5,7 +5,7 @@ import type { NextAuthConfig, Session, User } from 'next-auth'
 import { NextRequest } from 'next/server'
 import { getOrCreateSpeaker } from '@/lib/speaker/sanity'
 import { sanityImage } from '@/lib/sanity/client'
-import { AppEnvironment } from '@/lib/environment'
+import { AppEnvironment } from '@/lib/environment/config'
 
 export interface NextAuthRequest extends NextRequest {
   auth: Session | null
@@ -107,6 +107,7 @@ const config = {
           email: speaker.email,
           image: speaker.image,
           is_organizer: speaker.is_organizer,
+          flags: speaker.flags,
         }
       }
 

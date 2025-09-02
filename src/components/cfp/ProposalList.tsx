@@ -16,16 +16,16 @@ function ProposalSuccessMessage({
   onDismiss: () => void
 }) {
   return showMessage ? (
-    <div className="mx-auto mt-6 flex max-w-2xl flex-col rounded-md bg-brand-fresh-green/10 p-4 lg:max-w-6xl lg:px-12">
+    <div className="mx-auto mt-6 flex max-w-2xl flex-col rounded-md bg-green-50 p-4 lg:max-w-6xl lg:px-12 dark:bg-green-900/20">
       <div className="flex">
         <div className="flex-shrink-0">
           <CheckCircleIcon
-            className="h-5 w-5 text-brand-fresh-green"
+            className="h-5 w-5 text-green-600 dark:text-green-400"
             aria-hidden="true"
           />
         </div>
         <div className="ml-3">
-          <p className="font-inter text-sm font-medium text-brand-slate-gray">
+          <p className="text-sm font-medium text-green-800 dark:text-green-200">
             Proposal submitted successfully.
           </p>
         </div>
@@ -33,7 +33,7 @@ function ProposalSuccessMessage({
           <div className="-mx-1.5 -my-1.5">
             <button
               type="button"
-              className="inline-flex rounded-md bg-brand-fresh-green/10 p-1.5 text-brand-fresh-green transition-colors hover:bg-brand-fresh-green/20 focus:ring-2 focus:ring-brand-fresh-green focus:ring-offset-2 focus:ring-offset-brand-fresh-green/10 focus:outline-none"
+              className="inline-flex rounded-md bg-green-50 p-1.5 text-green-600 transition-colors hover:bg-green-100 focus:ring-2 focus:ring-green-600 focus:ring-offset-2 focus:ring-offset-green-50 focus:outline-none dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/30 dark:focus:ring-green-400 dark:focus:ring-offset-green-900/20"
               onClick={onDismiss}
             >
               <span className="sr-only">Dismiss</span>
@@ -146,18 +146,18 @@ export function ProposalList({
         onDismiss={dismissSuccessMessage}
       />
       {proposals.length === 0 ? (
-        <div className="mx-auto mt-12 flex max-w-2xl flex-col items-center rounded-lg border-2 border-dashed border-brand-cloud-blue bg-white p-6 lg:max-w-6xl lg:px-12">
-          <p className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+        <div className="mx-auto mt-12 flex max-w-2xl flex-col items-center rounded-lg border-2 border-dashed border-brand-cloud-blue bg-gray-50 p-6 lg:max-w-6xl lg:px-12 dark:border-blue-500 dark:bg-gray-800">
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">
             You have no proposals yet.
           </p>
           {cfpIsOpen && (
             <>
-              <p className="font-inter mt-2 text-sm text-gray-600">
+              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                 Submit a proposal to become a speaker.
               </p>
               <Link
                 href="/cfp/submit"
-                className="font-inter mt-4 rounded-md bg-brand-cloud-blue px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-cloud-blue/90"
+                className="mt-4 rounded-md bg-brand-cloud-blue px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-cloud-blue/90 dark:bg-blue-600 dark:hover:bg-blue-500"
               >
                 Submit Proposal
               </Link>
@@ -199,7 +199,7 @@ export function ProposalList({
               ),
             ).map(([conferenceName, conferenceProposals]) => (
               <div key={conferenceName} className="mb-8">
-                <h2 className="font-space-grotesk mb-4 text-2xl font-bold tracking-tight text-brand-slate-gray">
+                <h2 className="mb-4 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                   {conferenceName}
                 </h2>
                 <ul

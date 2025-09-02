@@ -201,13 +201,13 @@ export function ProposalForm({
       </div>
 
       <div className="mt-6">
-        <p className="font-inter text-sm text-brand-slate-gray">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           <span className="font-semibold">Note:</span> Don&apos;t worry. You
           will be able to edit your proposal after you have submitted it. Simply
           navigate to the{' '}
           <Link
             href="/cfp"
-            className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover"
+            className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover dark:text-blue-400 dark:hover:text-blue-300"
           >
             CFP page
           </Link>{' '}
@@ -220,14 +220,14 @@ export function ProposalForm({
         <Link
           href="/cfp"
           type="button"
-          className="font-inter text-sm leading-6 font-semibold text-brand-slate-gray transition-colors hover:text-brand-cloud-blue"
+          className="text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
         >
           Cancel
         </Link>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50"
+          className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
         >
           {isSubmitting ? buttonPrimaryLoading : buttonPrimary}
         </button>
@@ -291,11 +291,11 @@ function ProposalDetailsForm({
   ])
 
   return (
-    <div className="border-b border-brand-frosted-steel pb-12">
-      <h2 className="font-space-grotesk text-lg leading-7 font-semibold text-brand-slate-gray">
+    <div className="border-b border-brand-frosted-steel pb-12 dark:border-gray-600">
+      <h2 className="text-lg leading-7 font-semibold text-gray-900 dark:text-white">
         Presentation Details
       </h2>
-      <p className="font-inter mt-1 text-sm leading-6 text-brand-cloud-gray">
+      <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
         Please provide the following details about your presentation.
       </p>
 

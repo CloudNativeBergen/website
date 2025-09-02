@@ -9,7 +9,7 @@ import {
 import { getProposalSanity } from '@/lib/proposal/server'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalForm } from '@/components/cfp/ProposalForm'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -23,7 +23,7 @@ export default async function Submit({
 }) {
   const { id: proposalId } = (await searchParams) || {}
 
-  const session = await auth()
+  const session = await getAuthSession()
   if (!session?.speaker) {
     return redirect('/api/auth/signin?callbackUrl=/cfp/submit?id=' + proposalId)
   }
@@ -127,29 +127,29 @@ export default async function Submit({
   return (
     <>
       <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-        <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
+        <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
           Submit Presentation
         </h1>
-        <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
+        <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
           <p>
             Become our next speaker and share your knowledge with the community!
           </p>
         </div>
       </div>
       {loadingError && (
-        <div className="mx-auto mt-12 max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 lg:max-w-4xl lg:px-12">
+        <div className="mx-auto mt-12 max-w-2xl rounded-lg border border-red-200 bg-red-50 p-6 lg:max-w-4xl lg:px-12 dark:border-red-800/50 dark:bg-red-900/20">
           <div className="flex">
             <div className="flex-shrink-0">
               <XCircleIcon
-                className="h-6 w-6 text-red-500"
+                className="h-6 w-6 text-red-500 dark:text-red-400"
                 aria-hidden="true"
               />
             </div>
             <div className="ml-4">
-              <h3 className="font-space-grotesk text-lg font-semibold text-red-800">
+              <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
                 Loading Error: {loadingError.type}
               </h3>
-              <div className="font-inter mt-2 text-red-700">
+              <div className="font-inter mt-2 text-red-700 dark:text-red-300">
                 <p>{loadingError.message}</p>
               </div>
             </div>
@@ -157,7 +157,7 @@ export default async function Submit({
         </div>
       )}
       {!loadingError && currentUserSpeaker && (
-        <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12">
+        <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12 dark:border-gray-700 dark:bg-gray-800">
           <ProposalForm
             initialProposal={proposal}
             initialSpeaker={speaker}

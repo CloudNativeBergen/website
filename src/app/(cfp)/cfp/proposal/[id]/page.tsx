@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getProposalSanity as getProposal } from '@/lib/proposal/server'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { ProposalDetail } from '@/components/admin/ProposalDetail'
 import Link from 'next/link'
@@ -16,7 +16,7 @@ export default async function ProposalViewPage({
   params,
 }: ProposalViewPageProps) {
   const { id } = await params
-  const session = await auth()
+  const session = await getAuthSession()
 
   if (!session?.speaker) {
     return redirect('/api/auth/signin?callbackUrl=/cfp/proposal/' + id)

@@ -1,4 +1,5 @@
 import type { Session } from 'next-auth'
+import { Flags } from '../speaker/types'
 
 export class AppEnvironment {
   static readonly isDevelopment = process.env.NODE_ENV === 'development'
@@ -64,6 +65,7 @@ export class AppEnvironment {
         slug: 'test-user',
         email: 'test@cloudnativebergen.no',
         is_organizer: true,
+        flags: [Flags.requiresTravelFunding],
       },
     }
   }

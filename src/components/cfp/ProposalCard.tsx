@@ -38,10 +38,10 @@ function ProposalActionLink({ action }: { action: ProposalButtonAction }) {
   return (
     <Link
       href={action.link || '#'}
-      className="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-brand-slate-gray"
+      className="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-gray-600 dark:text-gray-300"
     >
       <action.icon
-        className="h-5 w-5 text-brand-cloud-gray"
+        className="h-5 w-5 text-gray-500 dark:text-gray-400"
         aria-hidden="true"
       />
       {capitalizeFirstLetter(action.label)}
@@ -60,13 +60,13 @@ function ProposalActionButton({
     <button
       disabled={isLoading}
       onClick={action.onClick}
-      className="relative inline-flex w-0 flex-1 cursor-pointer items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-brand-slate-gray"
+      className="relative inline-flex w-0 flex-1 cursor-pointer items-center justify-center gap-x-3 border border-transparent py-4 text-sm font-semibold text-gray-600 dark:text-gray-300"
     >
       {isLoading ? (
-        <SpinnerIcon className="h-5 w-5 animate-spin text-brand-cloud-gray" />
+        <SpinnerIcon className="h-5 w-5 animate-spin text-gray-500 dark:text-gray-400" />
       ) : (
         <action.icon
-          className="h-5 w-5 text-brand-cloud-gray"
+          className="h-5 w-5 text-gray-500 dark:text-gray-400"
           aria-hidden="true"
         />
       )}
@@ -156,7 +156,7 @@ export function ProposalCard({
     <li
       key={proposal._id}
       className={clsx(
-        'col-span-1 divide-y divide-brand-cloud-gray/20 rounded-lg border-l-4 bg-white shadow',
+        'col-span-1 divide-y divide-gray-200 rounded-lg border-l-4 bg-gray-50 shadow dark:divide-gray-600 dark:bg-gray-800',
         // Status-based border styling using consistent configuration
         {
           'border-l-green-500': proposal.status === Status.accepted,
@@ -174,7 +174,7 @@ export function ProposalCard({
             <div className="mb-2">
               <StatusBadge status={proposal.status} />
             </div>
-            <h3 className="font-space-grotesk line-clamp-2 text-sm font-medium text-brand-slate-gray">
+            <h3 className="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">
               {proposal.title}
             </h3>
           </div>
@@ -193,7 +193,7 @@ export function ProposalCard({
             />
           )}
         </div>
-        <p className="font-inter line-clamp-3 text-sm text-brand-cloud-gray">
+        <p className="line-clamp-3 text-sm text-gray-600 dark:text-gray-400">
           {proposal.status === Status.accepted ? (
             <>Your proposal has been accepted.</>
           ) : (
@@ -203,7 +203,7 @@ export function ProposalCard({
       </div>
       {!readOnly && actions.length > 0 && (
         <div>
-          <div className="-mt-px flex divide-x divide-brand-cloud-gray/20">
+          <div className="-mt-px flex divide-x divide-gray-200 dark:divide-gray-600">
             {actions.map((action, i) => (
               <div
                 key={`${proposal._id}-${action.label}`}

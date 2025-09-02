@@ -22,7 +22,7 @@ export function Input({
     <>
       <label
         htmlFor={name}
-        className="font-space-grotesk block text-sm/6 font-medium text-brand-slate-gray"
+        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
       >
         {label}
       </label>
@@ -36,7 +36,7 @@ export function Input({
           disabled={setValue === undefined}
           onChange={(e) => setValue && setValue(e.target.value)}
           autoComplete={name}
-          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-cloud-gray placeholder:text-brand-cloud-gray focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
         />
       </div>
     </>
@@ -65,40 +65,48 @@ export function LinkInput({
           type="url"
           name={name}
           id={name}
-          className="col-start-1 row-start-1 block w-full rounded-l-md bg-white py-1.5 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+          className="col-start-1 row-start-1 block w-full rounded-l-md bg-white py-1.5 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
           value={value}
           onChange={(e) => update(index, e.target.value)}
         />
         <LinkIcon
           aria-hidden="true"
-          className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4"
+          className="pointer-events-none col-start-1 row-start-1 ml-3 size-5 self-center text-gray-400 sm:size-4 dark:text-gray-500"
         />
       </div>
       <button
         type="button"
-        className="flex shrink-0 items-center gap-x-1.5 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+        className="flex shrink-0 items-center gap-x-1.5 bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10 dark:focus:outline-indigo-500"
         onClick={() => remove(index)}
       >
-        <MinusCircleIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+        <MinusCircleIcon
+          className="h-5 w-5 text-gray-400 dark:text-gray-500"
+          aria-hidden="true"
+        />
       </button>
       <button
         type="button"
-        className="flex shrink-0 items-center gap-x-1.5 rounded-r-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600"
+        className="flex shrink-0 items-center gap-x-1.5 rounded-r-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 focus:relative focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10 dark:focus:outline-indigo-500"
         onClick={() => add(index)}
       >
-        <PlusCircleIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+        <PlusCircleIcon
+          className="h-5 w-5 text-gray-400 dark:text-gray-500"
+          aria-hidden="true"
+        />
       </button>
     </div>
   )
 }
 
 export function ErrorText({ children }: { children: React.ReactNode }) {
-  return <p className="font-inter mt-2 text-sm/6 text-red-600">{children}</p>
+  return (
+    <p className="mt-2 text-sm/6 text-red-600 dark:text-red-400">{children}</p>
+  )
 }
 
 export function HelpText({ children }: { children: React.ReactNode }) {
   return (
-    <p className="font-inter mt-2 text-sm/6 text-brand-cloud-gray">
+    <p className="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">
       {children}
     </p>
   )
@@ -106,7 +114,7 @@ export function HelpText({ children }: { children: React.ReactNode }) {
 
 export function DescriptionText({ children }: { children: React.ReactNode }) {
   return (
-    <p className="font-inter mt-2 text-sm/6 text-brand-cloud-gray">
+    <p className="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">
       {children}
     </p>
   )
@@ -129,7 +137,7 @@ export function Textarea({
     <>
       <label
         htmlFor={name}
-        className="block text-sm/6 font-medium text-gray-900"
+        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
       >
         {label}
       </label>
@@ -140,7 +148,7 @@ export function Textarea({
           rows={rows}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="font-inter block w-full rounded-md bg-white px-3 py-1.5 text-base text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-frosted-steel placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
         />
       </div>
     </>
@@ -165,7 +173,7 @@ export function Dropdown({
     <>
       <label
         htmlFor={name}
-        className="block text-sm/6 font-medium text-gray-900"
+        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
       >
         {label}
       </label>
@@ -176,7 +184,7 @@ export function Dropdown({
           autoComplete={name}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="font-inter col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-brand-slate-gray outline-1 -outline-offset-1 outline-brand-frosted-steel focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+          className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
         >
           {Array.from(options).map(([key, value]) => (
             <option key={key} value={key}>
@@ -186,7 +194,7 @@ export function Dropdown({
         </select>
         <ChevronDownIcon
           aria-hidden="true"
-          className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+          className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
         />
       </div>
     </>
@@ -207,19 +215,37 @@ export function Checkbox({
   children?: React.ReactNode
 }) {
   return (
-    <div className="relative flex gap-x-3">
-      <div className="flex h-6 items-center">
-        <input
-          id={name}
-          name={name}
-          type="checkbox"
-          checked={value}
-          onChange={(e) => setValue(e.target.checked)}
-          className="h-4 w-4 rounded border-brand-frosted-steel text-brand-cloud-blue focus:ring-brand-cloud-blue"
-        />
+    <div className="flex gap-3">
+      <div className="flex h-6 shrink-0 items-center">
+        <div className="group grid size-4 grid-cols-1">
+          <input
+            id={name}
+            name={name}
+            type="checkbox"
+            checked={value}
+            onChange={(e) => setValue(e.target.checked)}
+            className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:checked:border-indigo-500 dark:checked:bg-indigo-500 dark:indeterminate:border-indigo-500 dark:indeterminate:bg-indigo-500 dark:focus-visible:outline-indigo-500 dark:disabled:border-white/5 dark:disabled:bg-white/10 dark:disabled:checked:bg-white/10 forced-colors:appearance-auto"
+          />
+          <svg
+            fill="none"
+            viewBox="0 0 14 14"
+            className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25 dark:group-has-disabled:stroke-white/25"
+          >
+            <path
+              d="M3 8L6 11L11 3.5"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="opacity-0 group-has-checked:opacity-100"
+            />
+          </svg>
+        </div>
       </div>
       <div className="text-sm/6">
-        <label htmlFor={name} className="font-medium text-gray-900">
+        <label
+          htmlFor={name}
+          className="font-medium text-gray-900 dark:text-white"
+        >
           {label}
         </label>
         {children}
@@ -247,12 +273,15 @@ export function Multiselect({
 }) {
   return (
     <>
-      <label htmlFor={name} className="block text-sm font-medium text-gray-900">
+      <label
+        htmlFor={name}
+        className="block text-sm font-medium text-gray-900 dark:text-white"
+      >
         {label}
       </label>
       <div className="mt-2">
         <div className="relative">
-          <div className="flex flex-wrap gap-2 rounded-md border border-gray-300 bg-white p-2 focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2">
+          <div className="flex flex-wrap gap-2 rounded-md border border-gray-300 bg-white p-2 focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2 dark:border-white/10 dark:bg-white/5 dark:focus-within:ring-indigo-500">
             {value.map((selectedId) => {
               const option = options.find((opt) => opt.id === selectedId)
               if (!option) return null
@@ -273,7 +302,7 @@ export function Multiselect({
                     onClick={() =>
                       setValue(value.filter((id) => id !== selectedId))
                     }
-                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-gray-200 focus:ring-2 focus:ring-indigo-600 focus:outline-none"
+                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-gray-200 focus:ring-2 focus:ring-indigo-600 focus:outline-none dark:hover:bg-gray-700 dark:focus:ring-indigo-500"
                   >
                     <span className="sr-only">Remove {option.title}</span>
                     <XMarkIcon className="h-3 w-3" aria-hidden="true" />
@@ -296,7 +325,7 @@ export function Multiselect({
                 }
               }}
               disabled={value.length >= maxItems}
-              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 ${
+              className={`flex-1 border-0 bg-transparent p-0 text-sm text-gray-900 placeholder-gray-400 focus:ring-0 dark:text-white dark:placeholder:text-gray-500 ${
                 value.length >= maxItems ? 'cursor-not-allowed opacity-50' : ''
               }`}
             >

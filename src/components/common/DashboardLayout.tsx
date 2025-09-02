@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useSession, signOut } from 'next-auth/react'
+import { useTheme } from 'next-themes'
 import {
   Dialog,
   DialogBackdrop,
@@ -23,6 +24,7 @@ import {
   BellIcon,
 } from '@heroicons/react/24/outline'
 import { Logomark } from '@/components/Logo'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import clsx from 'clsx'
 
 export interface NavigationItem {
@@ -66,14 +68,14 @@ interface ColorScheme {
 const colorSchemes: Record<DashboardMode, ColorScheme> = {
   admin: {
     sidebar: {
-      background: 'bg-gray-900',
-      active: 'bg-gray-800 text-white',
-      inactive: 'text-gray-400',
-      hover: 'hover:bg-gray-800 hover:text-white',
+      background: 'bg-gray-900 dark:bg-gray-950',
+      active: 'bg-gray-800 text-white dark:bg-gray-700',
+      inactive: 'text-gray-400 dark:text-gray-500',
+      hover: 'hover:bg-gray-800 hover:text-white dark:hover:bg-gray-700',
     },
     mobile: {
-      background: 'bg-gray-900',
-      text: 'text-gray-400',
+      background: 'bg-gray-900 dark:bg-gray-950',
+      text: 'text-gray-400 dark:text-gray-500',
     },
     avatar: {
       background: '4f46e5', // indigo
@@ -81,14 +83,15 @@ const colorSchemes: Record<DashboardMode, ColorScheme> = {
   },
   speaker: {
     sidebar: {
-      background: 'bg-brand-cloud-blue',
-      active: 'bg-brand-cloud-blue-hover text-white',
-      inactive: 'text-blue-100',
-      hover: 'hover:bg-brand-cloud-blue-hover hover:text-white',
+      background: 'bg-brand-cloud-blue dark:bg-gray-900',
+      active: 'bg-brand-cloud-blue-hover text-white dark:bg-gray-800',
+      inactive: 'text-blue-100 dark:text-gray-400',
+      hover:
+        'hover:bg-brand-cloud-blue-hover hover:text-white dark:hover:bg-gray-800',
     },
     mobile: {
-      background: 'bg-brand-cloud-blue',
-      text: 'text-blue-100',
+      background: 'bg-brand-cloud-blue dark:bg-gray-900',
+      text: 'text-blue-100 dark:text-gray-400',
     },
     avatar: {
       background: '1d4ed8', // brand-cloud-blue
@@ -107,7 +110,15 @@ export function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const { data: session } = useSession()
+  const { setTheme } = useTheme()
   const colors = colorSchemes[mode]
+
+  // Force light mode for admin pages
+  useEffect(() => {
+    if (mode === 'admin') {
+      setTheme('light')
+    }
+  }, [mode, setTheme])
 
   // Handle keyboard shortcuts for search (admin mode only)
   useEffect(() => {
@@ -319,52 +330,59 @@ export function DashboardLayout({
             )}
           </div>
 
-          <button
-            onClick={() => signOut({ callbackUrl: '/' })}
-            className="focus:outline-none"
-          >
-            <span className="sr-only">Sign out</span>
-            <Image
-              alt=""
-              src={getAvatarUrl()}
-              width={32}
-              height={32}
-              className={clsx(
-                'size-8 rounded-full transition-opacity hover:opacity-80',
-                mode === 'speaker' ? 'bg-brand-cloud-blue' : 'bg-gray-800',
-              )}
-            />
-          </button>
+          <div className="flex items-center gap-x-2">
+            {mode === 'speaker' && <ThemeToggle />}
+            <button
+              onClick={() => signOut({ callbackUrl: '/' })}
+              className="focus:outline-none"
+            >
+              <span className="sr-only">Sign out</span>
+              <Image
+                alt=""
+                src={getAvatarUrl()}
+                width={32}
+                height={32}
+                className={clsx(
+                  'size-8 rounded-full transition-opacity hover:opacity-80',
+                  mode === 'speaker' ? 'bg-brand-cloud-blue' : 'bg-gray-800',
+                )}
+              />
+            </button>
+          </div>
         </div>
 
         {/* Desktop top menu bar */}
-        <div className="sticky top-0 z-40 hidden h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:flex lg:px-8 lg:pl-28">
+        <div className="sticky top-0 z-40 hidden h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:flex lg:px-8 lg:pl-28 dark:border-gray-800 dark:bg-gray-950">
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1 items-center">
               {mode === 'admin' && onSearch ? (
                 <button
                   type="button"
                   onClick={onSearch}
-                  className="flex w-full max-w-lg items-center gap-x-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-500 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 hover:text-gray-700 focus:ring-2 focus:ring-indigo-600 focus:outline-none focus:ring-inset lg:max-w-xs"
+                  className="flex w-full max-w-lg items-center gap-x-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-500 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 hover:text-gray-700 focus:ring-2 focus:ring-indigo-600 focus:outline-none focus:ring-inset lg:max-w-xs dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-300 dark:focus:ring-indigo-500"
                 >
                   <MagnifyingGlassIcon
                     className="h-5 w-5 flex-shrink-0"
                     aria-hidden="true"
                   />
                   <span className="flex-1 text-left">Search proposals...</span>
-                  <kbd className="ml-auto flex h-5 items-center gap-0.5 rounded border border-gray-200 bg-gray-50 px-1.5 text-xs font-semibold text-gray-600">
+                  <kbd className="ml-auto flex h-5 items-center gap-0.5 rounded border border-gray-200 bg-gray-50 px-1.5 text-xs font-semibold text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
                     <span className="text-xs">⌘</span>K
                   </kbd>
                 </button>
               ) : (
-                <h1 className="text-lg font-semibold text-gray-900">{title}</h1>
+                <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {title}
+                </h1>
               )}
             </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
+              {mode === 'speaker' && <ThemeToggle />}
+
               {mode === 'admin' && (
                 <button
                   type="button"
-                  className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500"
+                  className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
                 >
                   <span className="sr-only">View notifications</span>
                   <BellIcon aria-hidden="true" className="size-6" />
@@ -374,7 +392,7 @@ export function DashboardLayout({
               {/* Separator */}
               <div
                 aria-hidden="true"
-                className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-200"
+                className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-200 dark:bg-gray-700"
               />
 
               {/* Profile dropdown */}
@@ -386,29 +404,29 @@ export function DashboardLayout({
                     src={getAvatarUrl()}
                     width={32}
                     height={32}
-                    className="size-8 rounded-full bg-gray-50"
+                    className="size-8 rounded-full bg-gray-50 dark:bg-gray-800"
                   />
                   <span className="hidden lg:flex lg:items-center">
                     <span
                       aria-hidden="true"
-                      className="ml-4 text-sm leading-6 font-semibold text-gray-900"
+                      className="ml-4 text-sm leading-6 font-semibold text-gray-900 dark:text-white"
                     >
                       {getUserName()}
                     </span>
                     <ChevronDownIcon
                       aria-hidden="true"
-                      className="ml-2 size-5 text-gray-400"
+                      className="ml-2 size-5 text-gray-400 dark:text-gray-500"
                     />
                   </span>
                 </MenuButton>
                 <MenuItems
                   transition
-                  className="absolute right-0 z-10 mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 transition focus:outline-none data-closed:scale-95 data-closed:transform data-closed:opacity-0 data-enter:duration-100 data-enter:ease-out data-leave:duration-75 data-leave:ease-in"
+                  className="absolute right-0 z-10 mt-2.5 w-32 origin-top-right rounded-md bg-white py-2 shadow-lg ring-1 ring-gray-900/5 transition focus:outline-none data-closed:scale-95 data-closed:transform data-closed:opacity-0 data-enter:duration-100 data-enter:ease-out data-leave:duration-75 data-leave:ease-in dark:bg-gray-900 dark:ring-white/10"
                 >
                   <MenuItem>
                     <button
                       onClick={() => signOut({ callbackUrl: '/' })}
-                      className="block w-full px-3 py-1 text-left text-sm leading-6 text-gray-900 data-focus:bg-gray-50"
+                      className="block w-full px-3 py-1 text-left text-sm leading-6 text-gray-900 data-focus:bg-gray-50 dark:text-white dark:data-focus:bg-gray-800"
                     >
                       Sign out
                     </button>
