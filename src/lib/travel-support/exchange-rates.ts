@@ -1,4 +1,5 @@
 import type { SupportedCurrency } from './types'
+import { TIMEOUTS, EXCHANGE_RATE_CONFIG } from './config'
 
 // Exchange rate cache interface
 interface ExchangeRateCache {
@@ -8,8 +9,8 @@ interface ExchangeRateCache {
 }
 
 // Cache key for localStorage
-const CACHE_KEY = 'exchange_rates_cache'
-const CACHE_DURATION = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+const CACHE_KEY = EXCHANGE_RATE_CONFIG.cacheKey
+const CACHE_DURATION = EXCHANGE_RATE_CONFIG.cacheDuration
 
 // Fallback exchange rates (used when API is unavailable)
 const FALLBACK_RATES: Record<
@@ -161,7 +162,7 @@ async function fetchExchangeRatesFromAPI(
         Accept: 'application/json',
       },
       // Add timeout to prevent hanging requests
-      signal: AbortSignal.timeout(10000), // 10 second timeout
+      signal: AbortSignal.timeout(TIMEOUTS.exchangeRateApi),
     })
 
     if (!response.ok) {
@@ -229,7 +230,9 @@ async function buildExchangeRateMatrix(): Promise<
     }
 
     // Add small delay to avoid hitting rate limits
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await new Promise((resolve) =>
+      setTimeout(resolve, EXCHANGE_RATE_CONFIG.apiCallDelay),
+    )
   }
 
   // Add OTHER currency conversions (always 1:1)

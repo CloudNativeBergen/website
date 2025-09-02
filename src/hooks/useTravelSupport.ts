@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { api } from '@/lib/trpc/client'
-import { AppEnvironment } from '@/lib/environment'
+import { AppEnvironment } from '@/lib/environment/config'
 import { Flags } from '@/lib/speaker/types'
 import type {
   TravelExpenseInput,

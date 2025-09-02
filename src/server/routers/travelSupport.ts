@@ -253,10 +253,16 @@ export const travelSupportRouter = router({
         }
 
         // Log banking details update for audit purposes
-        auditLog('Banking Details Update', ctx.speaker._id, ctx.speaker.name, {
-          travelSupportId: input.travelSupportId,
-          isAdmin: ctx.speaker.is_organizer,
-        })
+        auditLog(
+          'Banking Details Update',
+          ctx.speaker._id,
+          ctx.speaker.name,
+          {
+            travelSupportId: input.travelSupportId,
+            isAdmin: ctx.speaker.is_organizer,
+          },
+          'info',
+        )
 
         const { success, error } = await updateBankingDetails(
           input.travelSupportId,
@@ -381,6 +387,7 @@ export const travelSupportRouter = router({
             approvedAmount: input.approvedAmount,
             reviewNotes: input.reviewNotes,
           },
+          'info',
         )
 
         const { success, error } = await updateTravelSupportStatus(
@@ -555,11 +562,17 @@ export const travelSupportRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         // Log expense status change for audit purposes
-        auditLog('Expense Status Update', ctx.speaker._id, ctx.speaker.name, {
-          expenseId: input.expenseId,
-          newStatus: input.status,
-          reviewNotes: input.reviewNotes,
-        })
+        auditLog(
+          'Expense Status Update',
+          ctx.speaker._id,
+          ctx.speaker.name,
+          {
+            expenseId: input.expenseId,
+            newStatus: input.status,
+            reviewNotes: input.reviewNotes,
+          },
+          'info',
+        )
 
         const { success, error } = await updateExpenseStatus(
           input.expenseId,

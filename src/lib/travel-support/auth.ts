@@ -108,19 +108,73 @@ export function createAuthError(
   })
 }
 
+/**
+ * Audit logging interface for production-ready logging
+ */
+interface AuditLogEntry {
+  operation: string
+  adminId: string
+  adminName: string
+  details: Record<string, unknown>
+  timestamp: string
+  severity: 'info' | 'warning' | 'error'
+  sessionId?: string
+  ipAddress?: string
+}
+
+/**
+ * Production-ready audit logging function
+ * In development: logs to console
+ * In production: should integrate with your logging service (e.g., DataDog, CloudWatch, etc.)
+ */
 export function auditLog(
   operation: string,
   adminId: string,
   adminName: string,
   details: Record<string, unknown>,
+  severity: 'info' | 'warning' | 'error' = 'info',
 ): void {
-  console.log('Audit Log:', {
+  const logEntry: AuditLogEntry = {
     operation,
     adminId,
     adminName,
     details,
     timestamp: new Date().toISOString(),
-  })
+    severity,
+  }
+
+  // Development: log to console with structured format
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[AUDIT ${severity.toUpperCase()}]:`, logEntry)
+    return
+  }
+
+  // Production: integrate with your logging service
+  // TODO: Replace with your production logging service
+  // Examples:
+  // - send to DataDog: datadogLogger.log(logEntry)
+  // - send to CloudWatch: cloudWatchLogger.log(logEntry)
+  // - send to Sentry: Sentry.addBreadcrumb(logEntry)
+  // - write to database: auditLogRepository.create(logEntry)
+
+  try {
+    // For now, use structured console logging even in production
+    // This should be replaced with proper logging service integration
+    console.log(
+      JSON.stringify({
+        type: 'audit_log',
+        ...logEntry,
+      }),
+    )
+  } catch (error) {
+    // Fallback: if logging fails, don't throw error to avoid breaking application
+    console.error(
+      'Failed to write audit log:',
+      error,
+      'Original log entry:',
+      logEntry,
+    )
+  }
 }
 
 /**

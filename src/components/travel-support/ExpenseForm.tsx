@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { DocumentIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { ExpenseCategory, TravelExpenseInput } from '@/lib/travel-support/types'
+import { TIMEOUTS } from '@/lib/travel-support/config'
 import { Input, Dropdown, HelpText, ErrorText } from '@/components/Form'
 import { NetworkErrorDisplay, ValidationErrorSummary } from './ErrorComponents'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -109,7 +110,10 @@ export function ExpenseForm({
             formData.append('files', file)
 
             const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 30000) // 30s timeout
+            const timeoutId = setTimeout(
+              () => controller.abort(),
+              TIMEOUTS.fileUpload,
+            )
 
             const response = await fetch('/api/travel-support/upload-receipt', {
               method: 'POST',
