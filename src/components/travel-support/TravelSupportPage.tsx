@@ -55,12 +55,12 @@ export function TravelSupportPage() {
     submitError,
   } = useTravelSupport()
 
-  // Handlers
-  const handleExpenseEdit = (
-    expense: TravelExpenseInput & { _id?: string },
+  // Handlers for inline editing
+  const handleInlineExpenseEdit = async (
+    expenseId: string,
+    expenseData: TravelExpenseInput,
   ) => {
-    setEditingExpense(expense)
-    setShowExpenseForm(true)
+    return await updateExpense(expenseId, expenseData)
   }
 
   const handleExpenseCancel = () => {
@@ -339,9 +339,11 @@ export function TravelSupportPage() {
               <ExpensesList
                 expenses={travelSupport.expenses || []}
                 canEdit={canEdit}
-                onEdit={handleExpenseEdit}
+                onEdit={handleInlineExpenseEdit}
                 onDelete={handleExpenseDelete}
                 onDeleteReceipt={handleReceiptDelete}
+                isUpdatingExpense={isUpdatingExpense}
+                expenseError={expenseError}
               />
             </div>
           </div>

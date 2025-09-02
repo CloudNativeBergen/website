@@ -246,24 +246,30 @@ export class TravelSupportService {
   ): string {
     const displayCurrency = currency === 'OTHER' ? customCurrency : currency
 
-    // Format with appropriate locale
-    const formatter = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: displayCurrency === 'NOK' ? 'NOK' : 'USD', // Fallback to USD for unknown currencies
-      minimumFractionDigits: 2,
-    })
-
     if (currency === 'OTHER' && customCurrency) {
       // For custom currencies, format manually
       return `${amount.toFixed(2)} ${customCurrency}`
     }
 
-    try {
-      return formatter.format(amount)
-    } catch {
-      // Fallback for unsupported currencies
-      return `${amount.toFixed(2)} ${displayCurrency}`
+    // Map of supported currencies that can be used with Intl.NumberFormat
+    const supportedIntlCurrencies = ['NOK', 'USD', 'EUR', 'GBP', 'SEK', 'DKK']
+
+    if (supportedIntlCurrencies.includes(displayCurrency || '')) {
+      try {
+        const formatter = new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: displayCurrency,
+          minimumFractionDigits: 2,
+        })
+        return formatter.format(amount)
+      } catch {
+        // If Intl.NumberFormat fails, fall back to manual formatting
+        return `${amount.toFixed(2)} ${displayCurrency}`
+      }
     }
+
+    // Fallback for unsupported currencies
+    return `${amount.toFixed(2)} ${displayCurrency || 'USD'}`
   }
 
   /**
