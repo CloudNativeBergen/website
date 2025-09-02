@@ -129,6 +129,119 @@ export default defineType({
         ],
       },
     }),
+    defineField({
+      name: 'consent',
+      title: 'Privacy Consent',
+      type: 'object',
+      description: 'GDPR consent tracking for data processing',
+      fields: [
+        defineField({
+          name: 'dataProcessing',
+          title: 'Data Processing Consent',
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'granted',
+              title: 'Consent Granted',
+              type: 'boolean',
+              initialValue: false,
+            }),
+            defineField({
+              name: 'grantedAt',
+              title: 'Consent Granted At',
+              type: 'datetime',
+              readOnly: true,
+            }),
+            defineField({
+              name: 'ipAddress',
+              title: 'IP Address',
+              type: 'string',
+              readOnly: true,
+              description:
+                'IP address when consent was granted (for audit purposes)',
+            }),
+          ],
+        }),
+        defineField({
+          name: 'marketing',
+          title: 'Marketing Communications Consent',
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'granted',
+              title: 'Marketing Consent Granted',
+              type: 'boolean',
+              initialValue: false,
+            }),
+            defineField({
+              name: 'grantedAt',
+              title: 'Marketing Consent Granted At',
+              type: 'datetime',
+              readOnly: true,
+            }),
+            defineField({
+              name: 'withdrawnAt',
+              title: 'Marketing Consent Withdrawn At',
+              type: 'datetime',
+              readOnly: true,
+            }),
+          ],
+        }),
+        defineField({
+          name: 'publicProfile',
+          title: 'Public Profile Display Consent',
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'granted',
+              title: 'Public Profile Consent Granted',
+              type: 'boolean',
+              initialValue: false,
+            }),
+            defineField({
+              name: 'grantedAt',
+              title: 'Public Profile Consent Granted At',
+              type: 'datetime',
+              readOnly: true,
+            }),
+          ],
+        }),
+        defineField({
+          name: 'photography',
+          title: 'Photography/Recording Consent',
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'granted',
+              title: 'Photography Consent Granted',
+              type: 'boolean',
+              initialValue: false,
+            }),
+            defineField({
+              name: 'grantedAt',
+              title: 'Photography Consent Granted At',
+              type: 'datetime',
+              readOnly: true,
+            }),
+          ],
+        }),
+        defineField({
+          name: 'privacyPolicyVersion',
+          title: 'Privacy Policy Version',
+          type: 'string',
+          description: 'Version of privacy policy when consent was granted',
+          readOnly: true,
+        }),
+      ],
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
   ],
   preview: {
     select: {

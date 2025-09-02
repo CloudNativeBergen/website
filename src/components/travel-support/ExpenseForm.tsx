@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { DocumentIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { ExpenseCategory, TravelExpenseInput } from '@/lib/travel-support/types'
 import { TIMEOUTS } from '@/lib/travel-support/config'
-import { Input, Dropdown, HelpText, ErrorText } from '@/components/Form'
+import {
+  Input,
+  Dropdown,
+  HelpText,
+  ErrorText,
+  Checkbox,
+} from '@/components/Form'
 import { NetworkErrorDisplay, ValidationErrorSummary } from './ErrorComponents'
 import { ErrorBoundary } from './ErrorBoundary'
 
@@ -62,6 +68,10 @@ export function ExpenseForm({
   const [isUploading, setIsUploading] = useState(false)
   const [networkError, setNetworkError] = useState<boolean>(false)
 
+  // Receipt processing consent
+  const [receiptProcessingConsent, setReceiptProcessingConsent] =
+    useState(false)
+
   // Track existing receipts separately from new files
   const existingReceipts = initialData?.receipts || []
 
@@ -86,6 +96,15 @@ export function ExpenseForm({
 
     if (receiptFiles.length === 0 && existingReceipts.length === 0) {
       errors.receipts = 'At least one receipt is required'
+    }
+
+    // Add consent validation only if receipts are being uploaded
+    if (
+      (receiptFiles.length > 0 || existingReceipts.length > 0) &&
+      !receiptProcessingConsent
+    ) {
+      errors.consent =
+        'You must consent to receipt processing to submit expenses with receipts'
     }
 
     setValidationErrors(errors)
@@ -551,6 +570,44 @@ export function ExpenseForm({
             </div>
           </div>
         </div>
+
+        {/* Receipt Processing Consent - only show if receipts are involved */}
+        {(receiptFiles.length > 0 || existingReceipts.length > 0) && (
+          <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
+            <fieldset>
+              <legend className="sr-only">Receipt Processing Consent</legend>
+              <div>
+                <h3 className="text-base leading-6 font-semibold text-gray-900 dark:text-white">
+                  Document Processing
+                </h3>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  We need your consent to process and store your receipt
+                  documents for expense verification.
+                </p>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <Checkbox
+                  name="receipt-processing-consent"
+                  label="I consent to the processing and storage of my receipt documents"
+                  value={receiptProcessingConsent}
+                  setValue={setReceiptProcessingConsent}
+                >
+                  <HelpText>
+                    <span className="text-red-600 dark:text-red-400">
+                      Required:
+                    </span>{' '}
+                    We need this consent to store and process your receipts for
+                    expense verification and reimbursement purposes.
+                  </HelpText>
+                </Checkbox>
+                {validationErrors.consent && (
+                  <ErrorText>{validationErrors.consent}</ErrorText>
+                )}
+              </div>
+            </fieldset>
+          </div>
+        )}
 
         <div className="mt-6 flex items-center justify-end gap-x-6">
           <button

@@ -116,6 +116,42 @@ export function ProposalForm({
     event.preventDefault()
     setIsSubmitting(true)
 
+    // Validate required GDPR consent
+    if (!speaker.consent?.dataProcessing?.granted) {
+      setProposalSubmitError({
+        type: 'Validation Error',
+        message: 'You must consent to data processing to submit your proposal.',
+        validationErrors: [
+          {
+            field: 'consent',
+            message:
+              'Data processing consent is required to submit your speaker application.',
+          },
+        ],
+      })
+      setIsSubmitting(false)
+      window.scrollTo(0, 0)
+      return
+    }
+
+    if (!speaker.consent?.publicProfile?.granted) {
+      setProposalSubmitError({
+        type: 'Validation Error',
+        message:
+          'You must consent to public profile display to be a conference speaker.',
+        validationErrors: [
+          {
+            field: 'consent',
+            message:
+              'Public profile consent is required as speakers must be displayed publicly on the conference website.',
+          },
+        ],
+      })
+      setIsSubmitting(false)
+      window.scrollTo(0, 0)
+      return
+    }
+
     // Create the proposal with speakers array (current user first, then co-speakers)
     const allSpeakers = [currentUserSpeaker, ...coSpeakers]
     const proposalWithSpeakers = {

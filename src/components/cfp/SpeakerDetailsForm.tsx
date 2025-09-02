@@ -49,6 +49,20 @@ export function SpeakerDetailsForm({
     speaker?.links?.length ? speaker.links : [''],
   )
 
+  // Consent tracking state
+  const [dataProcessingConsent, setDataProcessingConsent] = useState(
+    speaker?.consent?.dataProcessing?.granted ?? false,
+  )
+  const [marketingConsent, setMarketingConsent] = useState(
+    speaker?.consent?.marketing?.granted ?? false,
+  )
+  const [publicProfileConsent, setPublicProfileConsent] = useState(
+    speaker?.consent?.publicProfile?.granted ?? false,
+  )
+  const [photographyConsent, setPhotographyConsent] = useState(
+    speaker?.consent?.photography?.granted ?? false,
+  )
+
   const [imageError, setImageError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
 
@@ -118,6 +132,25 @@ export function SpeakerDetailsForm({
       flags: speakerFlags,
       links,
       ...(speakerImage && { image: speakerImage }),
+      consent: {
+        dataProcessing: {
+          granted: dataProcessingConsent,
+          ...(dataProcessingConsent && { grantedAt: new Date().toISOString() }),
+        },
+        marketing: {
+          granted: marketingConsent,
+          ...(marketingConsent && { grantedAt: new Date().toISOString() }),
+        },
+        publicProfile: {
+          granted: publicProfileConsent,
+          ...(publicProfileConsent && { grantedAt: new Date().toISOString() }),
+        },
+        photography: {
+          granted: photographyConsent,
+          ...(photographyConsent && { grantedAt: new Date().toISOString() }),
+        },
+        privacyPolicyVersion: '2025-09-02',
+      },
     })
     // setSpeaker is intentionally omitted from deps to prevent infinite loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,6 +161,10 @@ export function SpeakerDetailsForm({
     speakerFlags,
     speakerLinks,
     speakerImage,
+    dataProcessingConsent,
+    marketingConsent,
+    publicProfileConsent,
+    photographyConsent,
   ])
 
   const isProfileMode = mode === 'profile'
@@ -345,6 +382,89 @@ export function SpeakerDetailsForm({
                   {isProfileMode
                     ? 'Let organizers know if you need help with travel expenses'
                     : 'If you require funding to attend the conference, please indicate it here.'}
+                </HelpText>
+              </Checkbox>
+            </div>
+          </fieldset>
+
+          {/* GDPR Consent Section */}
+          <fieldset className="border-t border-gray-200 pt-6 dark:border-gray-700">
+            <legend className="sr-only">
+              Privacy and Data Processing Consent
+            </legend>
+            <div>
+              <h3 className="text-base leading-6 font-semibold text-gray-900 dark:text-white">
+                Privacy and Data Processing
+              </h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                We need your consent to process your personal data. Please
+                review our{' '}
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  Privacy Policy
+                </a>{' '}
+                for detailed information about how we handle your data.
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <Checkbox
+                name="data-processing-consent"
+                label="I consent to the processing of my personal data for conference organization"
+                value={dataProcessingConsent}
+                setValue={setDataProcessingConsent}
+              >
+                <HelpText>
+                  <span className="text-red-600 dark:text-red-400">
+                    Required:
+                  </span>{' '}
+                  We need this consent to manage your speaker application,
+                  communicate with you about the conference, and fulfill our
+                  organizational obligations.
+                </HelpText>
+              </Checkbox>
+
+              <Checkbox
+                name="public-profile-consent"
+                label="I consent to displaying my profile publicly on the conference website"
+                value={publicProfileConsent}
+                setValue={setPublicProfileConsent}
+              >
+                <HelpText>
+                  <span className="text-red-600 dark:text-red-400">
+                    Required:
+                  </span>{' '}
+                  This includes your name, title, bio, photo, and links on the
+                  conference website and promotional materials. Public display
+                  is necessary for conference speakers.
+                </HelpText>
+              </Checkbox>
+
+              <Checkbox
+                name="photography-consent"
+                label="I consent to photography and recording during the conference"
+                value={photographyConsent}
+                setValue={setPhotographyConsent}
+              >
+                <HelpText>
+                  This allows us to photograph and record your presentations and
+                  participation for promotional and archival purposes.
+                </HelpText>
+              </Checkbox>
+
+              <Checkbox
+                name="marketing-consent"
+                label="I would like to receive marketing communications about future events"
+                value={marketingConsent}
+                setValue={setMarketingConsent}
+              >
+                <HelpText>
+                  You can unsubscribe at any time. We&rsquo;ll only send
+                  relevant information about Cloud Native Bergen events.
                 </HelpText>
               </Checkbox>
             </div>

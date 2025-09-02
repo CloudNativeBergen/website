@@ -542,3 +542,200 @@
   -webkit-line-clamp: 3;
   line-clamp: 3;
 }
+
+/* Print Styles for Privacy Policy and similar pages */
+@media print {
+  /* Universal print optimizations */
+  * {
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide navigation, buttons, and interactive elements */
+  nav,
+  header,
+  button,
+  .btn,
+  [role='navigation'],
+  .fixed,
+  .sticky {
+    display: none !important;
+  }
+
+  /* Hide icons for cleaner print */
+  svg {
+    display: none !important;
+  }
+
+  /* Ensure all text is black */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  span,
+  div,
+  li,
+  td,
+  th,
+  a,
+  strong {
+    color: black !important;
+  }
+
+  /* Remove backgrounds and use white */
+  .bg-blue-50,
+  .bg-gray-50,
+  .bg-yellow-50,
+  .bg-green-50,
+  .bg-orange-50,
+  .bg-red-50,
+  .dark\:bg-blue-900\/20,
+  .dark\:bg-gray-800\/50,
+  .dark\:bg-yellow-900\/20,
+  .dark\:bg-green-900\/20,
+  .dark\:bg-orange-900\/20,
+  .dark\:bg-red-900\/20 {
+    background: white !important;
+  }
+
+  /* Borders for print - use simple gray borders */
+  .border-blue-200,
+  .border-gray-200,
+  .border-yellow-200,
+  .border-green-200,
+  .border-orange-200,
+  .border-red-200,
+  .dark\:border-blue-800,
+  .dark\:border-gray-700,
+  .dark\:border-yellow-800,
+  .dark\:border-green-800,
+  .dark\:border-orange-800,
+  .dark\:border-red-800 {
+    border-color: #d1d5db !important;
+  }
+
+  /* Page layout optimizations */
+  body {
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Keep sections together where possible */
+  section {
+    page-break-inside: avoid;
+  }
+
+  section h2 {
+    page-break-after: avoid;
+  }
+
+  /* Optimize spacing for print - more compact */
+  .space-y-8 > * + * {
+    margin-top: 0.5rem !important;
+  }
+
+  .space-y-6 > * + * {
+    margin-top: 0.4rem !important;
+  }
+
+  .space-y-4 > * + * {
+    margin-top: 0.3rem !important;
+  }
+
+  /* Very compact padding for print */
+  .p-6 {
+    padding: 0.4rem !important;
+  }
+
+  .p-4 {
+    padding: 0.3rem !important;
+  }
+
+  .py-12 {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  /* Text size optimizations */
+  .text-4xl,
+  .text-5xl {
+    font-size: 18pt !important;
+    line-height: 1.3 !important;
+  }
+
+  .text-2xl {
+    font-size: 14pt !important;
+    line-height: 1.3 !important;
+  }
+
+  .text-lg {
+    font-size: 12pt !important;
+  }
+
+  .text-base {
+    font-size: 11pt !important;
+  }
+
+  .text-sm {
+    font-size: 10pt !important;
+  }
+
+  /* Table optimizations */
+  table {
+    page-break-inside: avoid;
+  }
+
+  /* Remove rounded corners and shadows for cleaner print */
+  .rounded-lg,
+  .rounded-full {
+    border-radius: 0 !important;
+  }
+
+  .shadow,
+  .shadow-lg,
+  .shadow-md {
+    box-shadow: none !important;
+  }
+
+  /* Center text should be left-aligned for print */
+  .text-center {
+    text-align: left !important;
+  }
+
+  /* Hide decorative elements */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Header optimizations for print */
+  .mt-4 {
+    margin-top: 0.2rem !important;
+  }
+
+  .mt-2 {
+    margin-top: 0.1rem !important;
+  }
+
+  .mb-6 {
+    margin-bottom: 0.2rem !important;
+  }
+
+  /* Make links look like regular text in print */
+  a {
+    text-decoration: none !important;
+    color: black !important;
+  }
+
+  /* Add URL after external links */
+  a[href^='http']:after {
+    content: ' (' attr(href) ')';
+    font-size: 8pt;
+    color: #666;
+  }
+}

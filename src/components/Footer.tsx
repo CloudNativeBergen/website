@@ -17,6 +17,12 @@ export function Footer({ c }: { c: Conference }) {
             >
               Code of Conduct
             </Link>
+            <Link
+              href="/privacy"
+              className="font-inter text-base text-brand-cloud-blue transition-colors hover:text-brand-slate-gray"
+            >
+              Privacy Policy
+            </Link>
           </nav>
           <div className="flex space-x-4">
             {c.social_links?.map((link) => (

@@ -6,7 +6,13 @@ import {
   SUPPORTED_CURRENCIES,
   SupportedCurrency,
 } from '@/lib/travel-support/types'
-import { Input, Dropdown, HelpText, ErrorText } from '@/components/Form'
+import {
+  Input,
+  Dropdown,
+  HelpText,
+  ErrorText,
+  Checkbox,
+} from '@/components/Form'
 import { ValidationErrorSummary } from './ErrorComponents'
 import { ErrorBoundary } from './ErrorBoundary'
 
@@ -37,6 +43,9 @@ export function BankingDetailsForm({
     Record<string, string>
   >({})
 
+  // Financial data processing consent
+  const [financialDataConsent, setFinancialDataConsent] = useState(false)
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
 
@@ -64,6 +73,12 @@ export function BankingDetailsForm({
     if (!formData.iban && !formData.accountNumber) {
       errors.iban = 'Either IBAN or Account Number is required'
       errors.accountNumber = 'Either IBAN or Account Number is required'
+    }
+
+    // Add consent validation
+    if (!financialDataConsent) {
+      errors.consent =
+        'You must consent to financial data processing to save banking details'
     }
 
     setValidationErrors(errors)
@@ -229,6 +244,54 @@ export function BankingDetailsForm({
               </HelpText>
             </div>
           </div>
+        </div>
+
+        {/* Financial Data Processing Consent */}
+        <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
+          <fieldset>
+            <legend className="sr-only">
+              Financial Data Processing Consent
+            </legend>
+            <div>
+              <h3 className="text-base leading-6 font-semibold text-gray-900 dark:text-white">
+                Financial Data Processing
+              </h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                We need your consent to process your financial data for travel
+                reimbursements. Please review our{' '}
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  Privacy Policy
+                </a>{' '}
+                for detailed information.
+              </p>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              <Checkbox
+                name="financial-data-consent"
+                label="I consent to the processing of my financial data for travel reimbursements"
+                value={financialDataConsent}
+                setValue={setFinancialDataConsent}
+              >
+                <HelpText>
+                  <span className="text-red-600 dark:text-red-400">
+                    Required:
+                  </span>{' '}
+                  We need this consent to process your banking details, handle
+                  reimbursements, and manage financial transactions related to
+                  your travel expenses.
+                </HelpText>
+              </Checkbox>
+              {validationErrors.consent && (
+                <ErrorText>{validationErrors.consent}</ErrorText>
+              )}
+            </div>
+          </fieldset>
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-x-6">
