@@ -3,9 +3,9 @@ import { Container } from '@/components/Container'
 
 export function BrandingHeroSection() {
   return (
-    <section className="relative overflow-hidden bg-aqua-gradient py-24">
+    <section className="relative -mt-24 overflow-hidden bg-aqua-gradient pt-36 pb-24">
       <CloudNativePattern
-        className="z-0"
+        className="absolute inset-0"
         opacity={0.18}
         animated={true}
         variant="brand"
