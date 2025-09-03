@@ -16,7 +16,6 @@ import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
-import { SkeletonInline } from './LoadingSkeleton'
 
 export interface EmailModalProps {
   isOpen: boolean

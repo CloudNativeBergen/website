@@ -649,7 +649,7 @@ export default function SponsorTierEditor({
   sponsorTiers: initialTiers,
   onTierUpdate,
 }: SponsorTierProps) {
-  const { theme } = useTheme()
+  useTheme() // initialize theme context for consistent dark mode classes
   const [sponsorTiers, setSponsorTiers] =
     useState<SponsorTierExisting[]>(initialTiers)
   const [selectedTier, setSelectedTier] = useState<

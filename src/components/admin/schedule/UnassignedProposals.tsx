@@ -131,13 +131,7 @@ const ClearFiltersButton = ({
   )
 }
 
-const EmptyState = ({
-  hasProposals,
-  hasActiveFilters,
-}: {
-  hasProposals: boolean
-  hasActiveFilters: boolean
-}) => (
+const EmptyState = ({ hasProposals }: { hasProposals: boolean }) => (
   <div className="flex h-full items-center justify-center p-8 text-center">
     <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
       {hasProposals ? 'No matches found' : 'No talks available'}
@@ -369,10 +363,7 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
             </div>
           )
         ) : (
-          <EmptyState
-            hasProposals={proposals.length > 0}
-            hasActiveFilters={hasActiveFilters}
-          />
+          <EmptyState hasProposals={proposals.length > 0} />
         )}
       </div>
 

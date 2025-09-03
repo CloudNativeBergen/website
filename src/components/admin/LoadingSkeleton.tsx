@@ -3,12 +3,7 @@
  * Provides consistent loading animations across all admin pages
  */
 
-import { ReactNode } from 'react'
-
-interface LoadingSkeletonProps {
-  children?: ReactNode
-  className?: string
-}
+// Note: keep this file minimal; avoid unused types to satisfy strict lint rules
 
 /**
  * Basic skeleton element for simple rectangular content

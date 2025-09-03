@@ -110,7 +110,7 @@ export function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const { data: session } = useSession()
-  const { theme, setTheme } = useTheme()
+  const { theme } = useTheme()
   const colors = colorSchemes[mode]
 
   // Handle keyboard shortcuts for search (admin mode only)
