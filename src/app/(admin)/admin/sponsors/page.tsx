@@ -1,6 +1,10 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
-import { ErrorDisplay, SponsorActions } from '@/components/admin'
+import {
+  ErrorDisplay,
+  SponsorActions,
+  AdminPageHeader,
+} from '@/components/admin'
 import SponsorTierEditor from '@/components/admin/SponsorTierEditor'
 import SponsorTierManagement from '@/components/admin/SponsorTierManagement'
 import { formatCurrency } from '@/lib/format'
@@ -127,87 +131,55 @@ export default async function AdminSponsors() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="pb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BuildingOffice2Icon className="h-8 w-8 text-brand-cloud-blue" />
-            <div>
-              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
-                Sponsor Management
-              </h1>
-              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
-                Manage conference sponsors and partnerships for{' '}
-                <span className="font-medium text-brand-cloud-blue">
-                  {conference.title}
-                </span>
-                . Coordinate sponsor relationships and billing information.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="font-inter mt-4 grid grid-cols-6 gap-3">
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-brand-slate-gray dark:text-white">
-              {sponsors.length}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Total sponsors
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-brand-fresh-green dark:text-green-400">
-              {formattedTotalValue}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Total value
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-brand-cloud-blue dark:text-indigo-400">
-              {availableTiers}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Available tiers
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
-              {sponsorsWithMissingContactInfo.length}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Missing contacts
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-purple-600 dark:text-purple-400">
-              {sponsorsWithMissingBillingInfo.length}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Missing billing
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-green-600 dark:text-green-400">
-              {
-                sponsors.filter(
-                  (sponsor) =>
-                    !isMissingContactInfo(sponsor) &&
-                    !isMissingBillingInfo(sponsor),
-                ).length
-              }
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Complete profiles
-            </div>
-          </div>
-        </div>
-      </div>
+      <AdminPageHeader
+        icon={<BuildingOffice2Icon />}
+        title="Sponsor Management"
+        description={
+          <>
+            Manage conference sponsors and partnerships for{' '}
+            <span className="font-medium text-brand-cloud-blue">
+              {conference.title}
+            </span>
+            . Coordinate sponsor relationships and billing information.
+          </>
+        }
+        stats={[
+          {
+            value: sponsors.length,
+            label: 'Total sponsors',
+            color: 'slate',
+          },
+          {
+            value: formattedTotalValue,
+            label: 'Total value',
+            color: 'green',
+          },
+          {
+            value: availableTiers,
+            label: 'Available tiers',
+            color: 'blue',
+          },
+          {
+            value: sponsorsWithMissingContactInfo.length,
+            label: 'Missing contacts',
+            color: 'blue',
+          },
+          {
+            value: sponsorsWithMissingBillingInfo.length,
+            label: 'Missing billing',
+            color: 'purple',
+          },
+          {
+            value: sponsors.filter(
+              (sponsor) =>
+                !isMissingContactInfo(sponsor) &&
+                !isMissingBillingInfo(sponsor),
+            ).length,
+            label: 'Complete profiles',
+            color: 'green',
+          },
+        ]}
+      />
 
       {/* Sponsor Communications */}
       {sponsors.length > 0 && (

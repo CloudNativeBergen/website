@@ -10,6 +10,7 @@ import {
   FeaturedSpeakersManager,
   FeaturedTalksManager,
   ErrorDisplay,
+  AdminPageHeader,
 } from '@/components/admin'
 import {
   StarIcon,
@@ -37,28 +38,43 @@ export default function AdminFeaturedPage() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="pb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <StarIcon className="h-8 w-8 text-brand-cloud-blue dark:text-indigo-400" />
-            <div>
-              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
-                Featured Content Management
-              </h1>
-              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
-                Manage featured speakers and talks displayed prominently on the
-                website. Featured content appears in Program Highlights
-                sections.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Summary Statistics */}
-        {summaryLoading ? (
+      <AdminPageHeader
+        icon={<StarIcon />}
+        title="Featured Content Management"
+        description="Manage featured speakers and talks displayed prominently on the website. Featured content appears in Program Highlights sections."
+        stats={
+          summaryLoading
+            ? []
+            : summary
+              ? [
+                  {
+                    value: summary.featuredSpeakersCount,
+                    label: 'Featured speakers',
+                    color: 'green',
+                  },
+                  {
+                    value: summary.featuredTalksCount,
+                    label: 'Featured talks',
+                    color: 'blue',
+                  },
+                  {
+                    value: summary.availableSpeakersCount,
+                    label: 'Available speakers',
+                    color: 'blue',
+                  },
+                  {
+                    value: summary.availableTalksCount,
+                    label: 'Available talks',
+                    color: 'purple',
+                  },
+                ]
+              : []
+        }
+      >
+        {summaryLoading && (
           <div className="font-inter mt-4">
             <div className="animate-pulse">
-              <div className="grid grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {[...Array(4)].map((_, i) => (
                   <div
                     key={i}
@@ -68,48 +84,8 @@ export default function AdminFeaturedPage() {
               </div>
             </div>
           </div>
-        ) : (
-          summary && (
-            <div className="font-inter mt-4 grid grid-cols-6 gap-3">
-              <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-                <div className="text-xl font-bold text-brand-fresh-green dark:text-green-400">
-                  {summary.featuredSpeakersCount}
-                </div>
-                <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-                  Featured speakers
-                </div>
-              </div>
-
-              <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-                <div className="text-xl font-bold text-brand-cloud-blue dark:text-indigo-400">
-                  {summary.featuredTalksCount}
-                </div>
-                <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-                  Featured talks
-                </div>
-              </div>
-
-              <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-                <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                  {summary.availableSpeakersCount}
-                </div>
-                <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-                  Available speakers
-                </div>
-              </div>
-
-              <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-                <div className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                  {summary.availableTalksCount}
-                </div>
-                <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-                  Available talks
-                </div>
-              </div>
-            </div>
-          )
         )}
-      </div>
+      </AdminPageHeader>
 
       {/* Management Sections */}
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">

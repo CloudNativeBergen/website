@@ -4,6 +4,7 @@ import { getProposals } from '@/lib/proposal/server'
 import { Status } from '@/lib/proposal/types'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { DownloadSpeakerImage } from '@/components/branding/DownloadSpeakerImage'
+import { AdminPageHeader } from '@/components/admin'
 import {
   DocumentArrowDownIcon,
   UserGroupIcon,
@@ -94,85 +95,57 @@ export default async function MarketingPage() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="pb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <PresentationChartBarIcon className="h-8 w-8 text-brand-cloud-blue dark:text-blue-300" />
-            <div>
-              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
-                Marketing Materials
-              </h1>
-              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
-                Download speaker sharing cards for{' '}
-                <span className="font-medium text-brand-cloud-blue dark:text-blue-300">
-                  {conference.title}
-                </span>
-                . High-quality images perfect for social media promotion and
-                marketing.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="font-inter mt-4 grid grid-cols-6 gap-3">
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-brand-slate-gray dark:text-white">
-              {speakersWithTalks.length}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Confirmed speakers
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-brand-fresh-green dark:text-green-300">
-              {confirmedProposals.length}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Confirmed talks
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-brand-cloud-blue dark:text-blue-300">
-              {speakersWithTalks.length}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Sharing cards
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-blue-600 dark:text-blue-300">
-              {speakersWithTalks.filter(({ speaker }) => speaker.image).length}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              With photos
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-purple-600 dark:text-purple-300">
-              {speakersWithTalks.filter(({ talks }) => talks.length > 1).length}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Multi-talk speakers
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="text-xl font-bold text-green-600 dark:text-green-300">
-              {speakersWithTalks.reduce(
-                (sum, { talks }) => sum + talks.length,
-                0,
-              )}
-            </div>
-            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
-              Total materials
-            </div>
-          </div>
-        </div>
-      </div>
+      <AdminPageHeader
+        icon={<PresentationChartBarIcon />}
+        title="Marketing Materials"
+        description={
+          <>
+            Download speaker sharing cards for{' '}
+            <span className="font-medium text-brand-cloud-blue dark:text-blue-300">
+              {conference.title}
+            </span>
+            . High-quality images perfect for social media promotion and
+            marketing.
+          </>
+        }
+        stats={[
+          {
+            value: speakersWithTalks.length,
+            label: 'Confirmed speakers',
+            color: 'slate',
+          },
+          {
+            value: confirmedProposals.length,
+            label: 'Confirmed talks',
+            color: 'green',
+          },
+          {
+            value: speakersWithTalks.length,
+            label: 'Sharing cards',
+            color: 'blue',
+          },
+          {
+            value: speakersWithTalks.filter(({ speaker }) => speaker.image)
+              .length,
+            label: 'With photos',
+            color: 'blue',
+          },
+          {
+            value: speakersWithTalks.filter(({ talks }) => talks.length > 1)
+              .length,
+            label: 'Multi-talk speakers',
+            color: 'purple',
+          },
+          {
+            value: speakersWithTalks.reduce(
+              (sum, { talks }) => sum + talks.length,
+              0,
+            ),
+            label: 'Total materials',
+            color: 'green',
+          },
+        ]}
+      />
 
       {speakersWithTalks.length === 0 ? (
         <div className="py-12 text-center">

@@ -8,6 +8,7 @@
 // Layout Components
 export { AdminLayout } from './AdminLayout'
 export { AdminActionBar } from './AdminActionBar'
+export { AdminPageHeader } from './AdminPageHeader'
 export { SearchResults } from './SearchResults'
 export { SearchModal } from './SearchModal'
 
@@ -67,4 +68,5 @@ export { useProposalSearch } from './hooks/useProposalSearch'
 
 // Types and Utils
 export type { FilterState } from './ProposalsFilter'
+export type { AdminPageHeaderProps, StatCardProps } from './AdminPageHeader'
 export * from './utils'
