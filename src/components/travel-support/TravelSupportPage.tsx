@@ -1,6 +1,10 @@
 'use client'
 
-import { ExclamationTriangleIcon, PlusIcon } from '@heroicons/react/24/outline'
+import {
+  ExclamationTriangleIcon,
+  PlusIcon,
+  CurrencyDollarIcon,
+} from '@heroicons/react/24/outline'
 import { useTravelSupport } from '@/hooks/useTravelSupport'
 import { TravelSupportService } from '@/lib/travel-support/service'
 import { TravelExpenseInput } from '@/lib/travel-support/types'
@@ -159,19 +163,7 @@ export function TravelSupportPage() {
       <div className="mx-auto max-w-4xl px-4 py-8">
         <div className="text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50">
-            <svg
-              className="h-8 w-8 text-blue-600 dark:text-blue-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12s-1.536.219-2.121.659c-1.172.879-1.172 2.303 0 3.182l.879.659z"
-              />
-            </svg>
+            <CurrencyDollarIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
           </div>
           <h2 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
             Ready to get started?
