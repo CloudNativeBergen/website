@@ -50,6 +50,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Prioritize performance and accessibility.
 - Use Vercel for deployment previews and production hosting.
 - **JSX/TSX Content:** Use HTML entities (`&apos;` for apostrophes and `&quot;` for quotes) instead of raw quotes in JSX/TSX content to comply with linting rules.
+- **Icons:** Use Heroicons (`@heroicons/react`) for all icon needs instead of creating custom SVG elements. Import icons from either `/24/outline` for stroke icons or `/24/solid` for filled icons. This ensures consistency and maintainability across the application.
 
 ### Privacy and GDPR Compliance
 
