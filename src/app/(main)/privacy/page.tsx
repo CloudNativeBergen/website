@@ -20,7 +20,6 @@ import {
   TrashIcon,
   ArrowPathIcon,
   ExclamationTriangleIcon,
-  InformationCircleIcon,
   PhoneIcon,
   PencilIcon,
   PauseIcon,
@@ -65,8 +64,8 @@ export default async function PrivacyPolicyPage() {
               <p className="print:leading-relaxed">
                 We collect your information to organize conferences and manage
                 speaker applications, using privacy-friendly analytics to
-                improve our website. We're committed to protecting your data and
-                never sell your personal information to third parties.
+                improve our website. We&apos;re committed to protecting your
+                data and never sell your personal information to third parties.
               </p>
               <p className="print:leading-relaxed">
                 This policy explains what data we collect, how we use it, and
