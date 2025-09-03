@@ -51,6 +51,24 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Use Vercel for deployment previews and production hosting.
 - **JSX/TSX Content:** Use HTML entities (`&apos;` for apostrophes and `&quot;` for quotes) instead of raw quotes in JSX/TSX content to comply with linting rules.
 
+### Privacy and GDPR Compliance
+
+- **User Data Protection:** Always abide by GDPR regulations when handling any user data, including but not limited to:
+  - Personal information from authentication providers (LinkedIn, GitHub)
+  - Speaker profiles and contact information
+  - Travel support applications and expense data
+  - Email addresses and communication preferences
+  - Any form submissions or user-generated content
+- **Privacy Policy Updates:** When making changes that involve collection, processing, or storage of user data, you **must** update the privacy page (`/privacy`) to reflect:
+  - What data is being collected
+  - How the data will be used and processed
+  - Data retention policies
+  - User rights regarding their data
+  - Contact information for data protection inquiries
+- **Data Minimization:** Only collect and store data that is necessary for the specific functionality being implemented.
+- **Consent Management:** Ensure proper user consent mechanisms are in place for any new data collection.
+- **Documentation:** Refer to `/docs/PRIVACY_OPERATIONS.md` for detailed privacy implementation guidelines and procedures.
+
 ### Coding Style
 
 - Keep code clean, concise, and maintainable.

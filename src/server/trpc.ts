@@ -5,11 +5,11 @@
 
 import { initTRPC, TRPCError } from '@trpc/server'
 import { NextRequest } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 
 // Context creation - runs for every tRPC request
 export async function createTRPCContext(opts: { req: NextRequest }) {
-  const session = await auth()
+  const session = await getAuthSession()
 
   return {
     req: opts.req,

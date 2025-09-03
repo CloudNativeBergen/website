@@ -167,6 +167,21 @@ AUTH_GITHUB_ID=YOUR_GITHUB_ID
 AUTH_GITHUB_SECRET=YOUR_GITHUB_SECRET
 ```
 
+## Environment Variables
+
+### Exchange Rate API (Optional)
+
+The travel support system uses real-time exchange rates for currency conversion. To enable this feature:
+
+1. Get a free API key from [ExchangeRate-API.com](https://www.exchangerate-api.com/) (1,500 requests/month free)
+2. Add to your `.env.local` file:
+
+   ```bash
+   NEXT_PUBLIC_EXCHANGE_RATE_API_KEY=your_api_key_here
+   ```
+
+If not configured, the system will use fallback exchange rates. See [docs/EXCHANGE_RATE_API.md](docs/EXCHANGE_RATE_API.md) for detailed configuration.
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.

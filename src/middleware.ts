@@ -1,9 +1,10 @@
 import { auth } from '@/lib/auth'
 import { NextResponse } from 'next/server'
-import { AppEnvironment } from '@/lib/environment'
+import { AppEnvironment } from '@/lib/environment/config'
 
 export default auth((req) => {
   const { pathname } = req.nextUrl
+  const hasTestParam = req.nextUrl.searchParams.get('test') === 'true'
 
   // Block access to development routes in production
   if (process.env.NODE_ENV === 'production') {
@@ -18,7 +19,10 @@ export default auth((req) => {
   }
 
   // In test mode, bypass authentication entirely (only in development)
-  if (AppEnvironment.isDevelopment && AppEnvironment.isTestMode) {
+  const isTestModeActive =
+    AppEnvironment.isDevelopment && (AppEnvironment.isTestMode || hasTestParam)
+
+  if (isTestModeActive) {
     return NextResponse.next()
   }
 

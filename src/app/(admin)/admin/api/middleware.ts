@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { getAuthSession } from '@/lib/auth'
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function middleware(request: NextRequest) {
   // Get the session
-  const session = await auth()
+  const session = await getAuthSession()
 
   // Check if user is authenticated
   if (!session || !session.user || !session.speaker) {

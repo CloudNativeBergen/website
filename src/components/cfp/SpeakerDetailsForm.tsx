@@ -49,6 +49,20 @@ export function SpeakerDetailsForm({
     speaker?.links?.length ? speaker.links : [''],
   )
 
+  // Consent tracking state
+  const [dataProcessingConsent, setDataProcessingConsent] = useState(
+    speaker?.consent?.dataProcessing?.granted ?? false,
+  )
+  const [marketingConsent, setMarketingConsent] = useState(
+    speaker?.consent?.marketing?.granted ?? false,
+  )
+  const [publicProfileConsent, setPublicProfileConsent] = useState(
+    speaker?.consent?.publicProfile?.granted ?? false,
+  )
+  const [photographyConsent, setPhotographyConsent] = useState(
+    speaker?.consent?.photography?.granted ?? false,
+  )
+
   const [imageError, setImageError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
 
@@ -118,6 +132,25 @@ export function SpeakerDetailsForm({
       flags: speakerFlags,
       links,
       ...(speakerImage && { image: speakerImage }),
+      consent: {
+        dataProcessing: {
+          granted: dataProcessingConsent,
+          ...(dataProcessingConsent && { grantedAt: new Date().toISOString() }),
+        },
+        marketing: {
+          granted: marketingConsent,
+          ...(marketingConsent && { grantedAt: new Date().toISOString() }),
+        },
+        publicProfile: {
+          granted: publicProfileConsent,
+          ...(publicProfileConsent && { grantedAt: new Date().toISOString() }),
+        },
+        photography: {
+          granted: photographyConsent,
+          ...(photographyConsent && { grantedAt: new Date().toISOString() }),
+        },
+        privacyPolicyVersion: '2025-09-02',
+      },
     })
     // setSpeaker is intentionally omitted from deps to prevent infinite loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,21 +161,25 @@ export function SpeakerDetailsForm({
     speakerFlags,
     speakerLinks,
     speakerImage,
+    dataProcessingConsent,
+    marketingConsent,
+    publicProfileConsent,
+    photographyConsent,
   ])
 
   const isProfileMode = mode === 'profile'
   const sectionClassName = isProfileMode
     ? `${className}`
-    : 'border-b border-brand-frosted-steel pb-12'
+    : 'border-b border-brand-frosted-steel pb-12 dark:border-gray-600'
 
   return (
     <div className={sectionClassName}>
       {!isProfileMode && (
         <>
-          <h2 className="font-space-grotesk text-lg leading-7 font-semibold text-brand-slate-gray">
+          <h2 className="text-lg leading-7 font-semibold text-gray-900 dark:text-white">
             Speaker Information
           </h2>
-          <p className="font-inter mt-1 text-sm leading-6 text-brand-cloud-gray">
+          <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
             We need information about you as the speaker.
           </p>
         </>
@@ -204,7 +241,7 @@ export function SpeakerDetailsForm({
           <div className="col-span-full">
             <label
               htmlFor="photo"
-              className="font-space-grotesk block text-sm leading-6 font-medium text-brand-slate-gray"
+              className="block text-sm leading-6 font-medium text-gray-900 dark:text-white"
             >
               Photo
             </label>
@@ -219,7 +256,7 @@ export function SpeakerDetailsForm({
                 />
               ) : (
                 <UserCircleIcon
-                  className="h-12 w-12 text-gray-300"
+                  className="h-12 w-12 text-gray-300 dark:text-gray-500"
                   aria-hidden="true"
                 />
               )}
@@ -232,14 +269,14 @@ export function SpeakerDetailsForm({
               />
               {isUploading ? (
                 <div className="flex items-center gap-x-2">
-                  <div className="h-5 w-5 animate-spin rounded-full border-t-2 border-b-2 border-brand-cloud-blue"></div>
-                  <p className="font-inter text-sm leading-6 font-medium text-brand-slate-gray">
+                  <div className="h-5 w-5 animate-spin rounded-full border-t-2 border-b-2 border-brand-cloud-blue dark:border-blue-400"></div>
+                  <p className="text-sm leading-6 font-medium text-gray-900 dark:text-white">
                     Uploading...
                   </p>
                 </div>
               ) : (
                 <label htmlFor="photo" className="cursor-pointer">
-                  <span className="font-inter text-sm leading-6 font-medium text-brand-cloud-blue hover:text-brand-cloud-blue-hover">
+                  <span className="font-inter text-sm leading-6 font-medium text-brand-cloud-blue hover:text-brand-cloud-blue-hover dark:text-blue-400 dark:hover:text-blue-300">
                     Upload Photo
                   </span>
                 </label>
@@ -258,7 +295,7 @@ export function SpeakerDetailsForm({
         {showLinks && (
           <div className="sm:col-span-4">
             <fieldset>
-              <legend className="font-space-grotesk text-sm leading-6 font-semibold text-brand-slate-gray">
+              <legend className="text-sm leading-6 font-semibold text-gray-900 dark:text-white">
                 Social profiles and links
               </legend>
               <HelpText>
@@ -284,7 +321,7 @@ export function SpeakerDetailsForm({
 
         <div className="col-span-full">
           <fieldset>
-            <legend className="font-space-grotesk text-sm leading-6 font-semibold text-brand-slate-gray">
+            <legend className="text-sm leading-6 font-semibold text-gray-900 dark:text-white">
               Speaker Details
             </legend>
             <div className="mt-6 space-y-6">
@@ -345,6 +382,99 @@ export function SpeakerDetailsForm({
                   {isProfileMode
                     ? 'Let organizers know if you need help with travel expenses'
                     : 'If you require funding to attend the conference, please indicate it here.'}
+                </HelpText>
+              </Checkbox>
+            </div>
+          </fieldset>
+
+          {/* GDPR Consent Section */}
+          <fieldset className="border-t border-gray-200 pt-6 dark:border-gray-700">
+            <legend className="sr-only">Privacy and Data Processing</legend>
+            <div>
+              <h3 className="text-base leading-6 font-semibold text-gray-900 dark:text-white">
+                Privacy and Data Processing
+              </h3>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                Please review our{' '}
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  Privacy Policy
+                </a>{' '}
+                for details on how we handle your data. We process speaker data
+                to organize the conference under contract and our legitimate
+                interests.
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <Checkbox
+                name="data-processing-consent"
+                label="I have read and understand the Privacy Policy"
+                value={dataProcessingConsent}
+                setValue={setDataProcessingConsent}
+              >
+                <HelpText>
+                  <span className="text-red-600 dark:text-red-400">
+                    Required:
+                  </span>{' '}
+                  We process speaker data to organize the conference under
+                  contract and legitimate interests. Your rights are described
+                  in our Privacy Policy.
+                </HelpText>
+              </Checkbox>
+
+              <Checkbox
+                name="public-profile-consent"
+                label="I understand my speaker profile will be displayed publicly as part of the programme"
+                value={publicProfileConsent}
+                setValue={setPublicProfileConsent}
+              >
+                <HelpText>
+                  <span className="text-red-600 dark:text-red-400">
+                    Required:
+                  </span>{' '}
+                  This includes your name, title, bio, photo, and links on the
+                  conference website and promotional materials. Public display
+                  is necessary for conference speakers.
+                </HelpText>
+              </Checkbox>
+
+              <Checkbox
+                name="photography-consent"
+                label="I agree to the Speaker Media Terms"
+                value={photographyConsent}
+                setValue={setPhotographyConsent}
+              >
+                <HelpText>
+                  Allows us to record, edit, and publish your talk on our
+                  official online channels/platforms. You retain your IP; we
+                  will credit you and consider reasonable takedown or redaction
+                  requests where feasible. Read the{' '}
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Speaker Media Terms
+                  </a>
+                  .
+                </HelpText>
+              </Checkbox>
+
+              <Checkbox
+                name="marketing-consent"
+                label="I would like to receive marketing communications about future events"
+                value={marketingConsent}
+                setValue={setMarketingConsent}
+              >
+                <HelpText>
+                  You can unsubscribe at any time. We&rsquo;ll only send
+                  relevant information about Cloud Native Bergen events.
                 </HelpText>
               </Checkbox>
             </div>

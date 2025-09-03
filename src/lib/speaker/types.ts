@@ -19,6 +19,21 @@ export interface SpeakerRef {
   _ref: string
 }
 
+export interface ConsentRecord {
+  granted: boolean
+  grantedAt?: string
+  withdrawnAt?: string
+  ipAddress?: string
+}
+
+export interface SpeakerConsent {
+  dataProcessing?: ConsentRecord
+  marketing?: ConsentRecord
+  publicProfile?: ConsentRecord
+  photography?: ConsentRecord
+  privacyPolicyVersion?: string
+}
+
 interface SpeakerBase {
   name: string
   slug?: string
@@ -27,6 +42,7 @@ interface SpeakerBase {
   image?: string
   links?: string[]
   flags?: Flags[]
+  consent?: SpeakerConsent
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type

@@ -154,10 +154,10 @@ export function ProposalCoSpeaker({
   return (
     <div className="space-y-4">
       <div>
-        <label className="font-space-grotesk block text-sm leading-6 font-medium text-brand-slate-gray">
+        <label className="block text-sm leading-6 font-medium text-gray-900 dark:text-white">
           Co-speakers
         </label>
-        <p className="font-inter mt-1 text-sm leading-6 text-brand-cloud-gray">
+        <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
           {isLightningTalk ? (
             <>
               Lightning talks are presented by a single speaker and cannot have
@@ -174,11 +174,11 @@ export function ProposalCoSpeaker({
 
       {/* Warning for lightning talks */}
       {isLightningTalk && (
-        <div className="rounded-md border border-orange-200 bg-orange-50 p-4">
+        <div className="rounded-md border border-orange-200 bg-orange-50 p-4 dark:border-orange-800/50 dark:bg-orange-900/20">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg
-                className="h-5 w-5 text-orange-400"
+                className="h-5 w-5 text-orange-400 dark:text-orange-500"
                 viewBox="0 0 20 20"
                 fill="currentColor"
                 aria-hidden="true"
@@ -191,10 +191,13 @@ export function ProposalCoSpeaker({
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-orange-800" role="alert">
+              <h3
+                className="text-sm font-medium text-orange-800 dark:text-orange-200"
+                role="alert"
+              >
                 Co-speakers not available for lightning talks
               </h3>
-              <p className="mt-1 text-sm text-orange-700">
+              <p className="mt-1 text-sm text-orange-700 dark:text-orange-300">
                 Lightning talks are designed as single-speaker presentations. If
                 you need to present with co-speakers, please select a different
                 talk format (20-minute, 25-minute, 40-minute, or 45-minute
@@ -210,16 +213,18 @@ export function ProposalCoSpeaker({
         <>
           {/* Success message */}
           {inviteSuccess && (
-            <div className="rounded-md border border-green-200 bg-green-50 p-4">
+            <div className="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <CheckCircleIcon
-                    className="text-fresh-green h-5 w-5"
+                    className="text-fresh-green h-5 w-5 dark:text-green-400"
                     aria-hidden="true"
                   />
                 </div>
                 <div className="ml-3">
-                  <p className="text-sm text-green-800">{inviteSuccess}</p>
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    {inviteSuccess}
+                  </p>
                 </div>
               </div>
             </div>
@@ -228,24 +233,24 @@ export function ProposalCoSpeaker({
           {/* Pending invitations */}
           {pendingInvitations.length > 0 && (
             <div>
-              <h4 className="text-cloud-blue-dark mb-2 text-sm font-medium">
+              <h4 className="text-cloud-blue-dark mb-2 text-sm font-medium dark:text-blue-400">
                 Pending Invitations
               </h4>
               <div className="space-y-2">
                 {pendingInvitations.map((invitation) => (
                   <div
                     key={invitation._id}
-                    className="flex items-center justify-between rounded-lg border bg-gray-50 p-3"
+                    className="flex items-center justify-between rounded-lg border bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700"
                   >
                     <div className="flex items-center space-x-3">
                       <div className="flex-shrink-0">
                         {getInvitationStatusIcon(invitation.status)}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">
                           {invitation.invitedName || invitation.invitedEmail}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {invitation.invitedEmail} •{' '}
                           {getInvitationStatusText(invitation.status)}
                         </p>
@@ -256,7 +261,7 @@ export function ProposalCoSpeaker({
                         type="button"
                         onClick={() => handleCancelInvitation(invitation._id!)}
                         disabled={cancelingInvitationId === invitation._id}
-                        className="text-sm text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="text-sm text-red-600 hover:text-red-800 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
                       >
                         {cancelingInvitationId === invitation._id
                           ? 'Canceling...'
@@ -278,7 +283,7 @@ export function ProposalCoSpeaker({
                   {coSpeakers.map((speaker) => (
                     <div
                       key={speaker._id}
-                      className="flex items-center justify-between rounded-lg border bg-gray-50 p-3"
+                      className="flex items-center justify-between rounded-lg border bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700"
                     >
                       <div className="flex items-center space-x-3">
                         <SpeakerAvatars
@@ -287,11 +292,11 @@ export function ProposalCoSpeaker({
                           maxVisible={1}
                         />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
                             {speaker.name}
                           </p>
                           {speaker.title && (
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
                               {speaker.title}
                             </p>
                           )}
@@ -300,7 +305,7 @@ export function ProposalCoSpeaker({
                       <button
                         type="button"
                         onClick={() => handleRemoveSpeaker(speaker._id)}
-                        className="text-red-500 transition-colors hover:text-red-700"
+                        className="text-red-500 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                         title="Remove co-speaker"
                         aria-label={`Remove ${speaker.name} as co-speaker`}
                       >
@@ -316,12 +321,12 @@ export function ProposalCoSpeaker({
           {/* Email invitation section - only show if under the limit */}
           {totalCoSpeakers < maxCoSpeakers && (
             <div className="space-y-4">
-              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800">
                 <div>
-                  <h4 className="mb-3 text-sm font-medium text-gray-900">
+                  <h4 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">
                     Invite Co-speakers
                   </h4>
-                  <p className="mb-4 text-xs text-gray-500">
+                  <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
                     Enter email addresses to invite co-speakers. They&apos;ll
                     receive personalized invitations and create their own
                     speaker profiles when they accept.
@@ -335,17 +340,17 @@ export function ProposalCoSpeaker({
                     .map((field, index) => (
                       <div
                         key={index}
-                        className="rounded-md border border-gray-200 bg-white p-4"
+                        className="rounded-md border border-gray-200 bg-white p-4 dark:border-gray-600 dark:bg-gray-700"
                       >
                         <div className="flex items-start justify-between">
-                          <h5 className="text-sm font-medium text-gray-900">
+                          <h5 className="text-sm font-medium text-gray-900 dark:text-white">
                             Co-speaker {index + 1}
                           </h5>
                           {(field.email || field.name) && (
                             <button
                               type="button"
                               onClick={() => clearField(index)}
-                              className="text-gray-400 hover:text-gray-600"
+                              className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                               title={`Clear co-speaker ${index + 1} details`}
                             >
                               <XMarkIcon
@@ -359,7 +364,7 @@ export function ProposalCoSpeaker({
                           <div>
                             <label
                               htmlFor={`invite-email-${index}`}
-                              className="block text-sm font-medium text-gray-900"
+                              className="block text-sm font-medium text-gray-900 dark:text-white"
                             >
                               Email *
                             </label>
@@ -377,14 +382,14 @@ export function ProposalCoSpeaker({
                                 }
                                 placeholder="their.email@example.com"
                                 aria-label={`Co-speaker ${index + 1} Email`}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                               />
                             </div>
                           </div>
                           <div>
                             <label
                               htmlFor={`invite-name-${index}`}
-                              className="block text-sm font-medium text-gray-900"
+                              className="block text-sm font-medium text-gray-900 dark:text-white"
                             >
                               Name (optional)
                             </label>
@@ -402,7 +407,7 @@ export function ProposalCoSpeaker({
                                 }
                                 placeholder="Their Name"
                                 aria-label={`Co-speaker ${index + 1} Name`}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6"
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                               />
                             </div>
                           </div>
@@ -412,13 +417,16 @@ export function ProposalCoSpeaker({
                 </div>
 
                 {inviteError && (
-                  <div className="text-sm text-red-600" role="alert">
+                  <div
+                    className="text-sm text-red-600 dark:text-red-400"
+                    role="alert"
+                  >
                     {inviteError}
                   </div>
                 )}
 
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     They&apos;ll receive email invitations to join as your
                     co-speakers
                   </p>
@@ -426,7 +434,7 @@ export function ProposalCoSpeaker({
                     type="button"
                     onClick={handleSendInvitation}
                     disabled={isSendingInvite || !isAnyFieldFilled()}
-                    className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-brand-cloud-blue/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-xs hover:bg-brand-cloud-blue/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
                   >
                     {isSendingInvite ? (
                       <>
@@ -448,11 +456,11 @@ export function ProposalCoSpeaker({
 
           {/* Show limit reached message */}
           {totalCoSpeakers >= maxCoSpeakers && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <svg
-                    className="h-5 w-5 text-amber-400"
+                    className="h-5 w-5 text-amber-400 dark:text-amber-500"
                     viewBox="0 0 20 20"
                     fill="currentColor"
                     aria-hidden="true"
@@ -465,10 +473,10 @@ export function ProposalCoSpeaker({
                   </svg>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-amber-800">
+                  <h3 className="text-sm font-medium text-amber-800 dark:text-amber-200">
                     Co-speaker limit reached
                   </h3>
-                  <p className="mt-1 text-sm text-amber-700">
+                  <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
                     You have reached the maximum number of co-speakers (
                     {maxCoSpeakers}) for {formatName.toLowerCase()}s.
                   </p>

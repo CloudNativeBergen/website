@@ -40,6 +40,22 @@
     sans-serif; /* Match email template font family */
 }
 
+/* Dark mode support for editor */
+:is(.dark) .pt-list-item {
+  color: #d1d5db; /* Gray-300 for dark mode */
+}
+
+/* Dark mode support for editor textbox */
+:is(.dark) [role='textbox'] {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Ensure all text content in editor respects dark mode */
+:is(.dark) [role='textbox'] * {
+  color: inherit !important;
+}
+
 /* Remove the custom bullet pseudo-elements entirely */
 .pt-list-item:before {
   display: none;

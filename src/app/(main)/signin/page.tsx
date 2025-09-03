@@ -28,6 +28,21 @@ export default async function Signin() {
                 </form>
               ))}
             </div>
+
+            <div className="mt-8 text-sm text-gray-600 dark:text-gray-400">
+              <p>
+                By signing in, you agree to our processing of your personal data
+                as described in our{' '}
+                <a
+                  href="/privacy"
+                  className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  Privacy Policy
+                </a>
+                . We will collect your profile information from the selected
+                provider to create and manage your account.
+              </p>
+            </div>
           </div>
         </Container>
       </div>
