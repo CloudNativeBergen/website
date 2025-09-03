@@ -22,13 +22,6 @@ export function BroadcastTemplate({
   unsubscribeUrl,
   content,
 }: BroadcastTemplateProps) {
-  const contentStyle: React.CSSProperties = {
-    fontSize: '16px',
-    lineHeight: '1.6',
-    color: '#334155',
-    marginBottom: '24px',
-  }
-
   return (
     <BaseEmailTemplate
       eventName={eventName}
@@ -39,7 +32,18 @@ export function BroadcastTemplate({
       unsubscribeUrl={unsubscribeUrl}
       customContent={{
         heading: subject,
-        body: <div style={contentStyle}>{content}</div>,
+        body: (
+          <div
+            className="text-gray-700 dark:text-gray-300"
+            style={{
+              fontSize: '16px',
+              lineHeight: '1.6',
+              marginBottom: '24px',
+            }}
+          >
+            {content}
+          </div>
+        ),
       }}
     />
   )

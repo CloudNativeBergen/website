@@ -40,7 +40,7 @@ export function SpeakerEmailModal({
       {speakers.map((speaker, index) => (
         <span
           key={index}
-          className="font-inter rounded-full bg-brand-sky-mist px-3 py-1 text-sm text-brand-slate-gray"
+          className="font-inter rounded-full bg-brand-sky-mist px-3 py-1 text-sm text-brand-slate-gray dark:bg-gray-700 dark:text-gray-300"
         >
           {speaker.name} &lt;{speaker.email}&gt;
         </span>
@@ -118,16 +118,19 @@ export function SpeakerEmailModal({
 
   const localhostWarning =
     domain && domain.includes('localhost') ? (
-      <div className="rounded-md bg-yellow-50 p-4">
+      <div className="rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30">
         <div className="flex">
           <div className="flex-shrink-0">
-            <BellIcon className="h-5 w-5 text-yellow-400" aria-hidden="true" />
+            <BellIcon
+              className="h-5 w-5 text-yellow-400 dark:text-yellow-300"
+              aria-hidden="true"
+            />
           </div>
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-yellow-800">
+            <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
               Development Environment Warning
             </h3>
-            <div className="mt-2 text-sm text-yellow-700">
+            <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
               <p>
                 You are running on localhost. Email notifications will contain
                 invalid links pointing to localhost URLs that speakers cannot

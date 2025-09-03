@@ -245,7 +245,9 @@ export default function SponsorTierManagement({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-medium text-gray-900">Current Sponsors</h2>
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          Current Sponsors
+        </h2>
         <button
           onClick={() => openAddModal()}
           className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 sm:justify-start"
@@ -257,11 +259,11 @@ export default function SponsorTierManagement({
 
       {sponsors.length === 0 ? (
         <div className="py-12 text-center">
-          <BuildingOffice2Icon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-semibold text-gray-900">
+          <BuildingOffice2Icon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+          <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
             No sponsors yet
           </h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Get started by adding your first sponsor to a tier.
           </p>
           <div className="mt-6">
@@ -289,15 +291,15 @@ export default function SponsorTierManagement({
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:space-x-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-md font-medium text-gray-900">
+                      <h3 className="text-md font-medium text-gray-900 dark:text-white">
                         {tierName}
                       </h3>
-                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-200">
                         {tierSponsors.length} sponsor
                         {tierSponsors.length !== 1 ? 's' : ''}
                       </span>
                       {tier && tier.price && tier.price.length > 0 && (
-                        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                        <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-800 dark:text-green-200">
                           <CurrencyDollarIcon className="mr-1 h-3 w-3" />
                           {formatCurrency(
                             Math.max(...tier.price.map((p) => p.amount)),
@@ -308,7 +310,7 @@ export default function SponsorTierManagement({
                     </div>
                     {tier?.tagline && (
                       <div className="mt-1 sm:mt-0">
-                        <span className="text-xs text-gray-500 sm:text-sm">
+                        <span className="text-xs text-gray-500 sm:text-sm dark:text-gray-400">
                           {tier.tagline}
                         </span>
                       </div>
@@ -329,7 +331,7 @@ export default function SponsorTierManagement({
                     return (
                       <div
                         key={`${sponsor.name}-${index}`}
-                        className="group relative rounded-lg border border-gray-300 bg-white p-4 shadow-sm hover:border-gray-400 sm:p-6"
+                        className="group relative rounded-lg border border-gray-300 bg-white p-4 shadow-sm hover:border-gray-400 sm:p-6 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
                       >
                         <div className="absolute top-2 right-2 flex space-x-1 opacity-0 transition-opacity group-hover:opacity-100">
                           {sponsor.logo && (
@@ -337,7 +339,7 @@ export default function SponsorTierManagement({
                               onClick={() =>
                                 handleDownloadSvg(sponsor.name, sponsor.logo)
                               }
-                              className="rounded-md bg-blue-50 p-1.5 text-blue-600 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                              className="rounded-md bg-blue-50 p-1.5 text-blue-600 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-900"
                               title="Download SVG logo"
                             >
                               <ArrowDownTrayIcon className="h-4 w-4" />
@@ -345,7 +347,7 @@ export default function SponsorTierManagement({
                           )}
                           <button
                             onClick={() => openEditModal(sponsorData)}
-                            className="rounded-md bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                            className="rounded-md bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-400 dark:hover:bg-indigo-900"
                             title="Edit sponsor"
                           >
                             <PencilIcon className="h-4 w-4" />
@@ -355,7 +357,7 @@ export default function SponsorTierManagement({
                               handleRemoveSponsor(sponsor.name, sponsorId)
                             }
                             disabled={removeSponsorMutation.isPending}
-                            className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900"
                             title="Remove sponsor"
                           >
                             <TrashIcon className="h-4 w-4" />
@@ -376,13 +378,13 @@ export default function SponsorTierManagement({
                                 }}
                               />
                             ) : (
-                              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
-                                <BuildingOffice2Icon className="h-6 w-6 text-gray-400" />
+                              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">
+                                <BuildingOffice2Icon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
                               </div>
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-gray-900 sm:truncate">
+                            <h4 className="text-sm font-medium text-gray-900 sm:truncate dark:text-white">
                               {sponsor.name}
                             </h4>
                             {sponsor.website && (
@@ -391,7 +393,7 @@ export default function SponsorTierManagement({
                                   href={sponsor.website}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center text-sm text-gray-500 hover:text-indigo-600"
+                                  className="inline-flex items-center text-sm text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400"
                                 >
                                   <GlobeAltIcon className="mr-1 h-4 w-4" />
                                   Visit Website
@@ -402,15 +404,15 @@ export default function SponsorTierManagement({
                         </div>
                         <div className="mt-4">
                           <div className="flex items-center justify-start space-x-2">
-                            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">
+                            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800 dark:bg-green-800 dark:text-green-200">
                               <TagIcon className="mr-1 h-3 w-3" />
                               Active
                             </span>
                             <span
                               className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
                                 isMissingContactInfo(sponsorData)
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-green-100 text-green-800'
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
+                                  : 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
                               }`}
                               title={
                                 isMissingContactInfo(sponsorData)
@@ -426,8 +428,8 @@ export default function SponsorTierManagement({
                             <span
                               className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
                                 isMissingBillingInfo(sponsorData)
-                                  ? 'bg-red-100 text-red-800'
-                                  : 'bg-green-100 text-green-800'
+                                  ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
+                                  : 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
                               }`}
                               title={
                                 isMissingBillingInfo(sponsorData)
@@ -456,8 +458,8 @@ export default function SponsorTierManagement({
               !sponsorsByTier[tier.title] ||
               sponsorsByTier[tier.title].length === 0,
           ) && (
-            <div className="border-t border-gray-200 pt-8">
-              <h3 className="text-md mb-4 font-medium text-gray-900">
+            <div className="border-t border-gray-200 pt-8 dark:border-gray-700">
+              <h3 className="text-md mb-4 font-medium text-gray-900 dark:text-white">
                 Available Tiers
               </h3>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -478,17 +480,17 @@ export default function SponsorTierManagement({
                   .map((tier) => (
                     <div
                       key={tier._id}
-                      className="relative block rounded-lg border-2 border-dashed border-gray-300 p-4 text-center hover:border-gray-400 sm:p-6"
+                      className="relative block rounded-lg border-2 border-dashed border-gray-300 p-4 text-center hover:border-gray-400 sm:p-6 dark:border-gray-600 dark:hover:border-gray-500"
                     >
-                      <TagIcon className="mx-auto h-6 w-6 text-gray-400 sm:h-8 sm:w-8" />
-                      <span className="mt-2 block text-sm font-medium text-gray-900">
+                      <TagIcon className="mx-auto h-6 w-6 text-gray-400 sm:h-8 sm:w-8 dark:text-gray-500" />
+                      <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-white">
                         {tier.title}
                       </span>
-                      <span className="mt-1 block text-xs text-gray-500 sm:text-sm">
+                      <span className="mt-1 block text-xs text-gray-500 sm:text-sm dark:text-gray-400">
                         {tier.tagline}
                       </span>
                       {tier.price && tier.price.length > 0 && (
-                        <span className="mt-2 inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                        <span className="mt-2 inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-800 dark:text-green-200">
                           <CurrencyDollarIcon className="mr-1 h-3 w-3" />
                           {formatCurrency(
                             Math.max(...tier.price.map((p) => p.amount)),
@@ -498,7 +500,7 @@ export default function SponsorTierManagement({
                       )}
                       <button
                         onClick={() => openAddModal(tier._id)}
-                        className="mt-3 inline-flex w-full items-center justify-center text-sm font-medium text-indigo-600 hover:text-indigo-500 sm:w-auto"
+                        className="mt-3 inline-flex w-full items-center justify-center text-sm font-medium text-indigo-600 hover:text-indigo-500 sm:w-auto dark:text-indigo-400 dark:hover:text-indigo-300"
                       >
                         <PlusIcon className="mr-1 h-4 w-4" />
                         Add sponsor

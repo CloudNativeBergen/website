@@ -21,12 +21,20 @@ export function ProposalReviewList({
 }: ProposalReviewListProps) {
   if (reviews.length === 0) {
     if (minimal) {
-      return <p className="py-4 text-sm text-gray-500">No reviews yet</p>
+      return (
+        <p className="py-4 text-sm text-gray-500 dark:text-gray-400">
+          No reviews yet
+        </p>
+      )
     }
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">Reviews</h3>
-        <p className="text-sm text-gray-500">No reviews yet</p>
+      <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+        <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+          Reviews
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No reviews yet
+        </p>
       </div>
     )
   }
@@ -65,8 +73,8 @@ export function ProposalReviewList({
             className={clsx(
               'rounded-lg border p-3',
               isCurrentUserReview
-                ? 'border-indigo-200 bg-indigo-50'
-                : 'border-gray-200',
+                ? 'border-indigo-200 bg-indigo-50 dark:border-indigo-400/30 dark:bg-indigo-900/20'
+                : 'border-gray-200 dark:border-gray-700 dark:bg-gray-800',
             )}
           >
             {/* Reviewer Info */}
@@ -86,8 +94,8 @@ export function ProposalReviewList({
                     loading="lazy"
                   />
                 ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
-                    <span className="text-xs font-medium text-gray-500">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                       {reviewer?.name?.charAt(0) || 'U'}
                     </span>
                   </div>
@@ -100,19 +108,19 @@ export function ProposalReviewList({
                       className={clsx(
                         'text-sm font-medium',
                         isCurrentUserReview
-                          ? 'text-indigo-900'
-                          : 'text-gray-900',
+                          ? 'text-indigo-900 dark:text-indigo-200'
+                          : 'text-gray-900 dark:text-white',
                       )}
                     >
                       {reviewer?.name || 'Unknown Reviewer'}
                     </h4>
                     {isCurrentUserReview && (
-                      <span className="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">
+                      <span className="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
                         You
                       </span>
                     )}
                   </div>
-                  <time className="text-xs text-gray-500">
+                  <time className="text-xs text-gray-500 dark:text-gray-400">
                     {formatDateSafe(review._createdAt)}
                   </time>
                 </div>
@@ -129,7 +137,9 @@ export function ProposalReviewList({
                 const score = review.score[key as keyof typeof review.score]
                 return (
                   <div key={key} className="flex items-center justify-between">
-                    <span className="w-24 text-sm text-gray-600">{label}</span>
+                    <span className="w-24 text-sm text-gray-600 dark:text-gray-300">
+                      {label}
+                    </span>
                     <div className="flex items-center space-x-2">
                       <div className="flex items-center space-x-0.5">
                         {[1, 2, 3, 4, 5].map((star) => (
@@ -138,13 +148,13 @@ export function ProposalReviewList({
                             className={clsx(
                               star <= score
                                 ? 'text-yellow-400'
-                                : 'text-gray-300',
+                                : 'text-gray-300 dark:text-gray-600',
                               'h-3 w-3',
                             )}
                           />
                         ))}
                       </div>
-                      <span className="w-6 text-sm font-medium text-gray-900">
+                      <span className="w-6 text-sm font-medium text-gray-900 dark:text-white">
                         {score}/5
                       </span>
                     </div>
@@ -155,8 +165,8 @@ export function ProposalReviewList({
 
             {/* Comment */}
             {review.comment && (
-              <div className="border-t pt-2">
-                <p className="text-sm leading-relaxed text-gray-700">
+              <div className="border-t pt-2 dark:border-gray-600">
+                <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
                   {review.comment}
                 </p>
               </div>
@@ -172,8 +182,8 @@ export function ProposalReviewList({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="mb-3 text-lg font-semibold text-gray-900">
+    <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
         Reviews ({reviews.length})
       </h3>
       {renderReviewItems()}

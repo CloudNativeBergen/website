@@ -168,11 +168,11 @@ export default async function AdminDashboard() {
   return (
     <div className="mx-auto max-w-7xl">
       {/* Header */}
-      <div className="border-b border-gray-200 pb-5">
-        <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+      <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
+        <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
           Admin Dashboard
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
           Overview of {conference?.title || 'conference'} management
         </p>
       </div>
@@ -183,29 +183,31 @@ export default async function AdminDashboard() {
           {stats.map((item) => (
             <div
               key={item.name}
-              className="relative overflow-hidden rounded-lg bg-white px-4 pt-5 pb-12 shadow sm:px-6 sm:pt-6"
+              className="relative overflow-hidden rounded-lg bg-white px-4 pt-5 pb-12 shadow sm:px-6 sm:pt-6 dark:bg-gray-900 dark:shadow-gray-900/20"
             >
               <dt>
-                <div className="absolute rounded-md bg-indigo-500 p-3">
+                <div className="absolute rounded-md bg-indigo-500 p-3 dark:bg-indigo-600">
                   <item.icon
                     aria-hidden="true"
                     className="h-6 w-6 text-white"
                   />
                 </div>
-                <p className="ml-16 truncate text-sm font-medium text-gray-500">
+                <p className="ml-16 truncate text-sm font-medium text-gray-500 dark:text-gray-400">
                   {item.name}
                 </p>
               </dt>
               <dd className="ml-16 flex flex-col pb-6 sm:pb-7">
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
                   {item.stat}
                 </p>
-                <p className="mt-1 text-sm text-gray-500">{item.subtext}</p>
-                <div className="absolute inset-x-0 bottom-0 bg-gray-50 px-4 py-4 sm:px-6">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {item.subtext}
+                </p>
+                <div className="absolute inset-x-0 bottom-0 bg-gray-50 px-4 py-4 sm:px-6 dark:bg-gray-800">
                   <div className="text-sm">
                     <Link
                       href={item.href}
-                      className="font-medium text-indigo-600 hover:text-indigo-500"
+                      className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
                     >
                       View details
                     </Link>
@@ -220,62 +222,62 @@ export default async function AdminDashboard() {
       {/* Detailed Breakdown */}
       <div className="mt-12 grid grid-cols-1 gap-8 lg:grid-cols-2">
         {/* Status Breakdown */}
-        <div className="overflow-hidden rounded-lg bg-white shadow">
+        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
               Proposal Status Breakdown
             </h3>
             <div className="mt-5">
               <dl className="space-y-3">
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     <Link
                       href="/admin/proposals?status=submitted"
-                      className="hover:text-indigo-600"
+                      className="hover:text-indigo-600 dark:hover:text-indigo-400"
                     >
                       Submitted
                     </Link>
                   </dt>
-                  <dd className="text-sm text-gray-900">
+                  <dd className="text-sm text-gray-900 dark:text-white">
                     {submittedProposals}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     <Link
                       href="/admin/proposals?status=accepted"
-                      className="hover:text-indigo-600"
+                      className="hover:text-indigo-600 dark:hover:text-indigo-400"
                     >
                       Accepted
                     </Link>
                   </dt>
-                  <dd className="text-sm font-medium text-green-600">
+                  <dd className="text-sm font-medium text-green-600 dark:text-green-400">
                     {acceptedProposals}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     <Link
                       href="/admin/proposals?status=rejected"
-                      className="hover:text-indigo-600"
+                      className="hover:text-indigo-600 dark:hover:text-indigo-400"
                     >
                       Rejected
                     </Link>
                   </dt>
-                  <dd className="text-sm font-medium text-red-600">
+                  <dd className="text-sm font-medium text-red-600 dark:text-red-400">
                     {rejectedProposals}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     <Link
                       href="/admin/proposals?status=confirmed"
-                      className="hover:text-indigo-600"
+                      className="hover:text-indigo-600 dark:hover:text-indigo-400"
                     >
                       Confirmed
                     </Link>
                   </dt>
-                  <dd className="text-sm font-medium text-blue-600">
+                  <dd className="text-sm font-medium text-blue-600 dark:text-blue-400">
                     {confirmedProposals}
                   </dd>
                 </div>
@@ -285,50 +287,52 @@ export default async function AdminDashboard() {
         </div>
 
         {/* Review Stats */}
-        <div className="overflow-hidden rounded-lg bg-white shadow">
+        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
               Review Statistics
             </h3>
             <div className="mt-5">
               <dl className="space-y-3">
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     Total Reviews
                   </dt>
-                  <dd className="text-sm text-gray-900">{totalReviews}</dd>
+                  <dd className="text-sm text-gray-900 dark:text-white">
+                    {totalReviews}
+                  </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     <Link
                       href="/admin/proposals?reviewStatus=reviewed"
-                      className="hover:text-indigo-600"
+                      className="hover:text-indigo-600 dark:hover:text-indigo-400"
                     >
                       Reviewed Proposals
                     </Link>
                   </dt>
-                  <dd className="text-sm font-medium text-green-600">
+                  <dd className="text-sm font-medium text-green-600 dark:text-green-400">
                     {reviewedProposals}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     <Link
                       href="/admin/proposals?reviewStatus=unreviewed"
-                      className="hover:text-indigo-600"
+                      className="hover:text-indigo-600 dark:hover:text-indigo-400"
                     >
                       Pending Review
                     </Link>
                   </dt>
-                  <dd className="text-sm font-medium text-orange-600">
+                  <dd className="text-sm font-medium text-orange-600 dark:text-orange-400">
                     {unreviewedProposals}
                   </dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     Average Rating
                   </dt>
-                  <dd className="text-sm text-gray-900">
+                  <dd className="text-sm text-gray-900 dark:text-white">
                     {averageRating > 0
                       ? `${averageRating.toFixed(1)}/5.0`
                       : 'N/A'}
@@ -340,28 +344,32 @@ export default async function AdminDashboard() {
         </div>
 
         {/* Format Breakdown */}
-        <div className="overflow-hidden rounded-lg bg-white shadow">
+        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
               Proposal Formats
             </h3>
             <div className="mt-5">
               <dl className="space-y-3">
                 {Object.entries(formatBreakdown).map(([format, count]) => (
                   <div key={format} className="flex justify-between">
-                    <dt className="text-sm font-medium text-gray-500">
+                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       <Link
                         href={`/admin/proposals?format=${format}`}
-                        className="capitalize hover:text-indigo-600"
+                        className="capitalize hover:text-indigo-600 dark:hover:text-indigo-400"
                       >
                         {format.replace('_', ' ')}
                       </Link>
                     </dt>
-                    <dd className="text-sm text-gray-900">{count}</dd>
+                    <dd className="text-sm text-gray-900 dark:text-white">
+                      {count}
+                    </dd>
                   </div>
                 ))}
                 {Object.keys(formatBreakdown).length === 0 && (
-                  <div className="text-sm text-gray-500">No proposals yet</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No proposals yet
+                  </div>
                 )}
               </dl>
             </div>
@@ -369,9 +377,9 @@ export default async function AdminDashboard() {
         </div>
 
         {/* Review Progress */}
-        <div className="overflow-hidden rounded-lg bg-white shadow">
+        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
               My Review Progress
             </h3>
             {currentUserId ? (
@@ -379,34 +387,36 @@ export default async function AdminDashboard() {
                 <div className="relative">
                   <div className="mb-2 flex items-center justify-between">
                     <div>
-                      <span className="inline-block text-xs font-semibold text-indigo-600">
+                      <span className="inline-block text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                         Your Review Completion
                       </span>
                     </div>
                     <div className="text-right">
-                      <span className="inline-block text-xs font-semibold text-indigo-600">
+                      <span className="inline-block text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                         {userReviewProgress}%
                       </span>
                     </div>
                   </div>
-                  <div className="mb-4 flex h-2 overflow-hidden rounded bg-indigo-200 text-xs">
+                  <div className="mb-4 flex h-2 overflow-hidden rounded bg-indigo-200 text-xs dark:bg-indigo-800">
                     <div
                       style={{ width: `${userReviewProgress}%` }}
-                      className="flex flex-col justify-center bg-indigo-500 text-center whitespace-nowrap text-white shadow-none"
+                      className="flex flex-col justify-center bg-indigo-500 text-center whitespace-nowrap text-white shadow-none dark:bg-indigo-400"
                     ></div>
                   </div>
                   <div className="mt-3 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Reviewed by you:</span>
-                      <span className="font-medium text-green-600">
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Reviewed by you:
+                      </span>
+                      <span className="font-medium text-green-600 dark:text-green-400">
                         {userReviewedProposals}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">
+                      <span className="text-gray-500 dark:text-gray-400">
                         Pending your review:
                       </span>
-                      <span className="font-medium text-orange-600">
+                      <span className="font-medium text-orange-600 dark:text-orange-400">
                         {userUnreviewedProposals}
                       </span>
                     </div>
@@ -414,7 +424,7 @@ export default async function AdminDashboard() {
                       <div className="mt-3">
                         <Link
                           href="/admin/proposals?reviewStatus=unreviewed"
-                          className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-3 py-2 text-sm leading-4 font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
+                          className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-3 py-2 text-sm leading-4 font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-indigo-500 dark:hover:bg-indigo-600 dark:focus:ring-indigo-400"
                         >
                           Review Next Proposal
                         </Link>
@@ -425,7 +435,7 @@ export default async function AdminDashboard() {
               </div>
             ) : (
               <div className="mt-5">
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
                   Please sign in to see your review progress.
                 </p>
               </div>
@@ -436,20 +446,22 @@ export default async function AdminDashboard() {
 
       {/* Quick Actions */}
       <div className="mt-12">
-        <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          Quick Actions
+        </h2>
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400">
+          <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500">
             <div className="flex items-center space-x-3">
               <div className="flex-shrink-0">
-                <DocumentTextIcon className="h-6 w-6 text-gray-400" />
+                <DocumentTextIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
                 <Link href="/admin/proposals" className="focus:outline-none">
                   <span aria-hidden="true" className="absolute inset-0" />
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
                     Manage Proposals
                   </p>
-                  <p className="truncate text-sm text-gray-500">
+                  <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                     Review and manage speaker proposals
                   </p>
                 </Link>
@@ -457,18 +469,18 @@ export default async function AdminDashboard() {
             </div>
           </div>
 
-          <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400">
+          <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500">
             <div className="flex items-center space-x-3">
               <div className="flex-shrink-0">
-                <UsersIcon className="h-6 w-6 text-gray-400" />
+                <UsersIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
                 <a href="/admin/speakers" className="focus:outline-none">
                   <span aria-hidden="true" className="absolute inset-0" />
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
                     Manage Speakers
                   </p>
-                  <p className="truncate text-sm text-gray-500">
+                  <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                     View and manage speaker profiles
                   </p>
                 </a>
@@ -476,18 +488,18 @@ export default async function AdminDashboard() {
             </div>
           </div>
 
-          <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400">
+          <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500">
             <div className="flex items-center space-x-3">
               <div className="flex-shrink-0">
-                <CalendarDaysIcon className="h-6 w-6 text-gray-400" />
+                <CalendarDaysIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
                 <a href="/admin/schedule" className="focus:outline-none">
                   <span aria-hidden="true" className="absolute inset-0" />
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
                     Manage Schedule
                   </p>
-                  <p className="truncate text-sm text-gray-500">
+                  <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                     Create and manage event schedule
                   </p>
                 </a>
@@ -499,7 +511,9 @@ export default async function AdminDashboard() {
 
       {/* Recent Activity */}
       <div className="mt-12">
-        <h2 className="text-lg font-medium text-gray-900">Recent Proposals</h2>
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          Recent Proposals
+        </h2>
         <div className="mt-6 flow-root">
           <ul role="list" className="-mb-8">
             {proposals
@@ -528,14 +542,14 @@ export default async function AdminDashboard() {
                     <div className={`relative ${!isLast ? 'pb-8' : ''}`}>
                       {!isLast && (
                         <span
-                          className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200"
+                          className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700"
                           aria-hidden="true"
                         />
                       )}
                       <div className="relative flex space-x-3">
                         <div>
                           <span
-                            className={`flex h-8 w-8 items-center justify-center rounded-full ring-8 ring-white ${
+                            className={`flex h-8 w-8 items-center justify-center rounded-full ring-8 ring-white dark:ring-gray-900 ${
                               proposal.status === Status.accepted
                                 ? 'bg-green-500'
                                 : proposal.status === Status.rejected
@@ -553,24 +567,24 @@ export default async function AdminDashboard() {
                         </div>
                         <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
                           <div>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
                               <Link
                                 href={`/admin/proposals/${proposal._id}`}
-                                className="font-medium text-gray-900 hover:text-indigo-600"
+                                className="font-medium text-gray-900 hover:text-indigo-600 dark:text-white dark:hover:text-indigo-400"
                               >
                                 {proposal.title}
                               </Link>{' '}
                               by{' '}
-                              <span className="font-medium text-gray-900">
+                              <span className="font-medium text-gray-900 dark:text-white">
                                 {primarySpeaker?.name || 'Unknown Speaker'}
                               </span>
                             </p>
-                            <p className="mt-1 text-xs text-gray-400">
+                            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
                               Status: {proposal.status} •{' '}
                               {proposal.reviews?.length || 0} reviews
                             </p>
                           </div>
-                          <div className="text-right text-sm whitespace-nowrap text-gray-500">
+                          <div className="text-right text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
                             <time dateTime={proposal._createdAt}>
                               {new Date(
                                 proposal._createdAt,
@@ -588,7 +602,7 @@ export default async function AdminDashboard() {
                 <div className="relative">
                   <div className="relative flex space-x-3">
                     <div>
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-500 ring-8 ring-white">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-500 ring-8 ring-white dark:ring-gray-900">
                         <DocumentTextIcon
                           aria-hidden="true"
                           className="h-5 w-5 text-white"
@@ -597,11 +611,11 @@ export default async function AdminDashboard() {
                     </div>
                     <div className="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
                       <div>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
                           No proposals yet.{' '}
                           <Link
                             href="/cfp"
-                            className="font-medium text-indigo-600 hover:text-indigo-500"
+                            className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
                           >
                             Share the CFP
                           </Link>{' '}

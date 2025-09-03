@@ -8,6 +8,7 @@ import {
   Transition,
   TransitionChild,
 } from '@headlessui/react'
+import { useTheme } from 'next-themes'
 import {
   PlusIcon,
   PencilIcon,
@@ -48,6 +49,7 @@ function SponsorTierModal({
   onSave,
   onDelete,
 }: SponsorTierModalProps) {
+  const { theme } = useTheme()
   const [formData, setFormData] = useState<SponsorTierInput>({
     title: '',
     tagline: '',
@@ -229,7 +231,11 @@ function SponsorTierModal({
 
   return (
     <Transition appear show={isOpen}>
-      <Dialog as="div" className="relative z-10" onClose={onClose}>
+      <Dialog
+        as="div"
+        className={`relative z-10 ${theme === 'dark' ? 'dark' : ''}`}
+        onClose={onClose}
+      >
         <TransitionChild
           enter="ease-out duration-300"
           enterFrom="opacity-0"
@@ -643,6 +649,7 @@ export default function SponsorTierEditor({
   sponsorTiers: initialTiers,
   onTierUpdate,
 }: SponsorTierProps) {
+  const { theme } = useTheme()
   const [sponsorTiers, setSponsorTiers] =
     useState<SponsorTierExisting[]>(initialTiers)
   const [selectedTier, setSelectedTier] = useState<

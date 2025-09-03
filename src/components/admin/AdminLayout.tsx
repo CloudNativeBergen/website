@@ -23,21 +23,21 @@ import { NotificationProvider } from './NotificationProvider'
 const navigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon },
   { name: 'Proposals', href: '/admin/proposals', icon: DocumentTextIcon },
-  { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
-  { name: 'Featured', href: '/admin/featured', icon: StarIcon },
   { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
-  { name: 'Sponsors', href: '/admin/sponsors', icon: BuildingOfficeIcon },
+  { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
+  { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
   {
     name: 'Travel Support',
     href: '/admin/travel-support',
     icon: CreditCardIcon,
   },
-  { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
+  { name: 'Sponsors', href: '/admin/sponsors', icon: BuildingOfficeIcon },
   {
     name: 'Marketing',
     href: '/admin/marketing',
     icon: PresentationChartBarIcon,
   },
+  { name: 'Featured', href: '/admin/featured', icon: StarIcon },
   { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
 ]
 

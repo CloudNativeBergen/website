@@ -62,14 +62,14 @@ export function ProposalsList({
   return (
     <div className="mx-auto max-w-7xl">
       {/* Header */}
-      <div className="border-b border-gray-200 pb-5">
+      <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
         <div className="flex items-center gap-3">
-          <DocumentTextIcon className="h-8 w-8 text-gray-400" />
+          <DocumentTextIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
           <div>
-            <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+            <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
               Proposal Management
             </h1>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               Review and manage all conference proposals (
               {filteredProposals.length} of {proposals.length} total)
             </p>
@@ -129,7 +129,7 @@ export function ProposalsList({
         <div className="mt-8 text-center">
           <Link
             href="/admin"
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
             Back to Dashboard
           </Link>
@@ -150,11 +150,11 @@ interface EmptyStateProps {
 function EmptyState({ hasProposals, onClearFilters }: EmptyStateProps) {
   return (
     <div className="py-12 text-center">
-      <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
-      <h3 className="mt-2 text-sm font-semibold text-gray-900">
+      <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+      <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
         {hasProposals ? 'No proposals match your filters' : 'No proposals'}
       </h3>
-      <p className="mt-1 text-sm text-gray-500">
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
         {hasProposals
           ? 'Try adjusting your filters to see more results.'
           : 'Get started by promoting the CFP.'}
@@ -163,14 +163,14 @@ function EmptyState({ hasProposals, onClearFilters }: EmptyStateProps) {
         {hasProposals ? (
           <button
             onClick={onClearFilters}
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
             Clear All Filters
           </button>
         ) : (
           <Link
             href="/cfp"
-            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
             View CFP Page
           </Link>

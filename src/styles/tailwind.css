@@ -45,26 +45,34 @@
   --radius-5xl: 2.5rem;
 
   /* Cloud Native Day Bergen Brand Colors */
-  --brand-cloud-blue: #1d4ed8;
-  --brand-cloud-blue-hover: #1e40af;
-  --brand-aqua-start: #3b82f6;
-  --brand-aqua-end: #06b6d4;
-  --brand-sky-mist: #e0f2fe;
-  --brand-fresh-green: #10b981;
-  --brand-fresh-green-hover: #059669;
-  --brand-glacier-white: #f9fafb;
-  --brand-nordic-purple: #6366f1;
-  --brand-nordic-purple-hover: #4338ca;
-  --brand-sunbeam-yellow: #facc15;
-  --brand-sunbeam-yellow-hover: #eab308;
-  --brand-slate-gray: #334155;
-  --brand-slate-gray-hover: #1e293b;
-  --brand-cloud-gray: #64748b;
-  --brand-frosted-steel: #cbd5e1;
+  --color-brand-cloud-blue: #1d4ed8;
+  --color-brand-cloud-blue-hover: #1e40af;
+  --color-brand-aqua-start: #3b82f6;
+  --color-brand-aqua-end: #06b6d4;
+  --color-brand-sky-mist: #e0f2fe;
+  --color-brand-fresh-green: #10b981;
+  --color-brand-fresh-green-hover: #059669;
+  --color-brand-glacier-white: #f9fafb;
+  --color-brand-nordic-purple: #6366f1;
+  --color-brand-nordic-purple-hover: #4338ca;
+  --color-brand-sunbeam-yellow: #facc15;
+  --color-brand-sunbeam-yellow-hover: #eab308;
+  --color-brand-slate-gray: #334155;
+  --color-brand-slate-gray-hover: #1e293b;
+  --color-brand-cloud-gray: #64748b;
+  --color-brand-frosted-steel: #cbd5e1;
 
   /* Background Gradients */
-  --gradient-aqua: linear-gradient(135deg, #3b82f6, #06b6d4);
-  --gradient-brand: linear-gradient(135deg, #1d4ed8, #06b6d4);
+  --gradient-aqua: linear-gradient(
+    135deg,
+    var(--color-brand-aqua-start),
+    var(--color-brand-aqua-end)
+  );
+  --gradient-brand: linear-gradient(
+    135deg,
+    var(--color-brand-cloud-blue),
+    var(--color-brand-aqua-end)
+  );
   --gradient-nordic: linear-gradient(135deg, #6366f1, #1d4ed8);
   --gradient-cloud: linear-gradient(135deg, #1d4ed8, #3b82f6);
 
@@ -193,28 +201,56 @@
   background-color: var(--color-brand-cloud-blue);
 }
 
+.dark .bg-brand-cloud-blue {
+  background-color: #1e40af; /* blue-800 equivalent */
+}
+
 .bg-brand-sky-mist {
   background-color: var(--color-brand-sky-mist);
+}
+
+.dark .bg-brand-sky-mist {
+  background-color: #0c4a6e; /* sky-900 equivalent */
 }
 
 .bg-brand-fresh-green {
   background-color: var(--color-brand-fresh-green);
 }
 
+.dark .bg-brand-fresh-green {
+  background-color: #166534; /* green-800 equivalent */
+}
+
 .bg-brand-glacier-white {
   background-color: var(--color-brand-glacier-white);
+}
+
+.dark .bg-brand-glacier-white {
+  background-color: #1f2937; /* gray-800 equivalent */
 }
 
 .bg-brand-nordic-purple {
   background-color: var(--color-brand-nordic-purple);
 }
 
+.dark .bg-brand-nordic-purple {
+  background-color: #3730a3; /* indigo-800 equivalent */
+}
+
 .bg-brand-sunbeam-yellow {
   background-color: var(--color-brand-sunbeam-yellow);
 }
 
+.dark .bg-brand-sunbeam-yellow {
+  background-color: #92400e; /* amber-800 equivalent */
+}
+
 .bg-brand-frosted-steel {
   background-color: var(--color-brand-frosted-steel);
+}
+
+.dark .bg-brand-frosted-steel {
+  background-color: #374151; /* gray-700 equivalent */
 }
 
 /* Brand Hover Color Utility Classes */
@@ -222,73 +258,162 @@
   background-color: var(--color-brand-cloud-blue-hover);
 }
 
+.dark .hover\:bg-brand-cloud-blue-hover:hover {
+  background-color: #1e40af; /* blue-700 equivalent */
+}
+
 .hover\:bg-brand-fresh-green-hover:hover {
   background-color: var(--color-brand-fresh-green-hover);
+}
+
+.dark .hover\:bg-brand-fresh-green-hover:hover {
+  background-color: #047857; /* green-700 equivalent */
 }
 
 .hover\:bg-brand-nordic-purple-hover:hover {
   background-color: var(--color-brand-nordic-purple-hover);
 }
 
+.dark .hover\:bg-brand-nordic-purple-hover:hover {
+  background-color: #4338ca; /* indigo-700 equivalent */
+}
+
 .hover\:bg-brand-sunbeam-yellow-hover:hover {
   background-color: var(--color-brand-sunbeam-yellow-hover);
+}
+
+.dark .hover\:bg-brand-sunbeam-yellow-hover:hover {
+  background-color: #b45309; /* amber-700 equivalent */
 }
 
 .hover\:bg-brand-slate-gray-hover:hover {
   background-color: var(--color-brand-slate-gray-hover);
 }
 
+.dark .hover\:bg-brand-slate-gray-hover:hover {
+  background-color: #475569; /* slate-600 equivalent */
+}
+
+/* Dark Mode Support for Brand Text Colors - Using traditional CSS approach */
 .text-brand-cloud-blue {
   color: var(--color-brand-cloud-blue);
+}
+
+.dark .text-brand-cloud-blue {
+  color: #93c5fd; /* blue-200 equivalent */
 }
 
 .text-brand-sky-mist {
   color: var(--color-brand-sky-mist);
 }
 
+.dark .text-brand-sky-mist {
+  color: #e0f2fe; /* sky-100 equivalent */
+}
+
 .text-brand-fresh-green {
   color: var(--color-brand-fresh-green);
+}
+
+.dark .text-brand-fresh-green {
+  color: #86efac; /* green-200 equivalent */
 }
 
 .text-brand-glacier-white {
   color: var(--color-brand-glacier-white);
 }
 
+.dark .text-brand-glacier-white {
+  color: #ffffff; /* white */
+}
+
 .text-brand-nordic-purple {
   color: var(--color-brand-nordic-purple);
+}
+
+.dark .text-brand-nordic-purple {
+  color: #c7d2fe; /* indigo-200 equivalent */
 }
 
 .text-brand-sunbeam-yellow {
   color: var(--color-brand-sunbeam-yellow);
 }
 
+.dark .text-brand-sunbeam-yellow {
+  color: #fde68a; /* amber-200 equivalent */
+}
+
 .text-brand-slate-gray {
   color: var(--color-brand-slate-gray);
+}
+
+.dark .text-brand-slate-gray {
+  color: #ffffff; /* white */
 }
 
 .text-brand-cloud-gray {
   color: var(--color-brand-cloud-gray);
 }
 
+.dark .text-brand-cloud-gray {
+  color: #e2e8f0; /* slate-200 equivalent */
+}
+
 .text-brand-frosted-steel {
   color: var(--color-brand-frosted-steel);
 }
 
+.dark .text-brand-frosted-steel {
+  color: #f1f5f9; /* slate-100 equivalent */
+}
+
 /* Brand Gradient Utility Classes */
 .bg-aqua-gradient {
-  background-image: var(--background-image-aqua-gradient);
+  background-image: var(--gradient-aqua);
+}
+
+.dark .bg-aqua-gradient {
+  background-image: linear-gradient(
+    135deg,
+    #1e40af,
+    #155e75
+  ); /* blue-800 to cyan-800 */
 }
 
 .bg-brand-gradient {
-  background-image: var(--background-image-brand-gradient);
+  background-image: var(--gradient-brand);
+}
+
+.dark .bg-brand-gradient {
+  background-image: linear-gradient(
+    135deg,
+    #1e3a8a,
+    #155e75
+  ); /* blue-900 to cyan-800 */
 }
 
 .bg-nordic-gradient {
   background-image: var(--background-image-nordic-gradient);
 }
 
+.dark .bg-nordic-gradient {
+  background-image: linear-gradient(
+    135deg,
+    #312e81,
+    #581c87
+  ); /* indigo-900 to purple-800 */
+}
+
 .bg-cloud-gradient {
   background-image: var(--background-image-cloud-gradient);
+}
+
+.dark .bg-cloud-gradient {
+  background-image: linear-gradient(
+    135deg,
+    #1e3a8a,
+    #1e293b
+  ); /* blue-900 to slate-800 */
 }
 
 /* Border Color Utilities */
@@ -296,16 +421,32 @@
   border-color: var(--color-brand-cloud-blue);
 }
 
+.dark .border-brand-cloud-blue {
+  border-color: #2563eb; /* blue-600 equivalent */
+}
+
 .border-brand-sky-mist {
   border-color: var(--color-brand-sky-mist);
+}
+
+.dark .border-brand-sky-mist {
+  border-color: #0284c7; /* sky-600 equivalent */
 }
 
 .border-brand-fresh-green {
   border-color: var(--color-brand-fresh-green);
 }
 
+.dark .border-brand-fresh-green {
+  border-color: #059669; /* green-600 equivalent */
+}
+
 .border-brand-nordic-purple {
   border-color: var(--color-brand-nordic-purple);
+}
+
+.dark .border-brand-nordic-purple {
+  border-color: #4f46e5; /* indigo-600 equivalent */
 }
 
 /* Font Family Utilities */

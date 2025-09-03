@@ -83,7 +83,7 @@ export function DraggableServiceSession({
   // Memoize class names
   const containerClasses = useMemo(() => {
     const baseClasses =
-      'relative max-w-full overflow-hidden rounded-lg border bg-gray-100 shadow-sm transition-shadow duration-200 hover:shadow-md'
+      'relative max-w-full overflow-hidden rounded-lg border bg-gray-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-gray-600 dark:bg-gray-700'
     const opacityClass = isBeingDragged
       ? 'opacity-30'
       : isDragging
@@ -96,7 +96,7 @@ export function DraggableServiceSession({
 
   // Title component based on session size
   const TitleComponent = useMemo(() => {
-    const titleClasses = 'pr-1 text-gray-900 truncate'
+    const titleClasses = 'pr-1 text-gray-900 truncate dark:text-white'
 
     switch (sessionSize) {
       case 'short':
@@ -131,17 +131,17 @@ export function DraggableServiceSession({
       <div className="flex min-h-[16px] items-center gap-1">
         {/* Drag handle */}
         <div
-          className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-200"
+          className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-200 dark:hover:bg-gray-600"
           {...listeners}
         >
-          <Bars3Icon className="h-3 w-3 text-gray-500" />
+          <Bars3Icon className="h-3 w-3 text-gray-500 dark:text-gray-400" />
         </div>
 
         {/* Title - takes remaining space and aligns with other proposals */}
         <div className="min-w-0 flex-1">{TitleComponent}</div>
 
         {/* Duration indicator */}
-        <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500">
+        <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
           <ClockIcon
             className={
               sessionSize === 'short' || sessionSize === 'medium'
@@ -157,13 +157,13 @@ export function DraggableServiceSession({
       {(sessionSize === 'long' || sessionSize === 'very-long') && (
         <div className="mt-1 space-y-1">
           {/* Session type indicator - only show for sessions 30+ minutes */}
-          <div className="flex items-center gap-1 text-xs text-orange-600">
+          <div className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400">
             <span>Service Session</span>
           </div>
 
           {/* Time range for very-long sessions */}
           {sessionSize === 'very-long' && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500 dark:text-gray-400">
               {serviceSession.startTime} - {serviceSession.endTime}
             </div>
           )}

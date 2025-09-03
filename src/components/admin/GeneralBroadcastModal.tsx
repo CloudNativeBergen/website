@@ -72,13 +72,13 @@ export function GeneralBroadcastModal({
   // Custom recipient display with sync button
   const recipientDisplay = (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-600">
+      <span className="text-sm text-gray-600 dark:text-gray-400">
         {recipientCount} confirmed {recipientType}
       </span>
       <button
         type="button"
         onClick={onSyncContacts}
-        className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-200"
+        className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
       >
         <ArrowPathIcon className="h-3 w-3" />
         Sync
@@ -99,10 +99,10 @@ export function GeneralBroadcastModal({
       <BroadcastTemplate
         content={
           <div
+            className="text-base leading-relaxed text-gray-700 dark:text-gray-300"
             style={{
               fontSize: '16px',
               lineHeight: '1.6',
-              color: '#334155',
             }}
             dangerouslySetInnerHTML={{ __html: messageHTML }}
           />

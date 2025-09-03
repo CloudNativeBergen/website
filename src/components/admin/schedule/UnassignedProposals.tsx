@@ -26,15 +26,15 @@ const FILTER_STYLES = {
   container: 'space-y-3',
   searchContainer: 'relative',
   searchIcon:
-    'absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none',
+    'absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none dark:text-gray-500',
   searchInput:
-    'w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-500 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all',
+    'w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-500 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 dark:focus:bg-gray-600',
   filterRow: 'flex items-center gap-2',
-  filterIcon: 'h-4 w-4 text-gray-500 flex-shrink-0',
+  filterIcon: 'h-4 w-4 text-gray-500 flex-shrink-0 dark:text-gray-400',
   select:
-    'flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer',
+    'flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:bg-gray-600',
   clearButton:
-    'absolute top-2 right-2 inline-flex items-center gap-1 rounded-md bg-white/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-gray-600 hover:bg-white hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all shadow-sm border border-gray-200',
+    'absolute top-2 right-2 inline-flex items-center gap-1 rounded-md bg-white/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-gray-600 hover:bg-white hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all shadow-sm border border-gray-200 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100 dark:border-gray-600',
 } as const
 
 // Memoized filter components
@@ -138,18 +138,11 @@ const EmptyState = ({
   hasProposals: boolean
   hasActiveFilters: boolean
 }) => (
-  <div className="flex flex-col items-center justify-center py-12 text-center">
-    <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-      {hasActiveFilters ? (
-        <FunnelIcon className="h-6 w-6 text-gray-400" />
-      ) : (
-        <AdjustmentsHorizontalIcon className="h-6 w-6 text-gray-400" />
-      )}
-    </div>
-    <h3 className="mb-2 text-sm font-medium text-gray-900">
+  <div className="flex h-full items-center justify-center p-8 text-center">
+    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
       {hasProposals ? 'No matches found' : 'No talks available'}
     </h3>
-    <p className="text-sm text-gray-500">
+    <p className="text-sm text-gray-500 dark:text-gray-400">
       {hasProposals
         ? 'Try adjusting your search or filter criteria'
         : 'No confirmed proposals are available for scheduling'}
@@ -294,16 +287,18 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
 
   return (
     <div
-      className="sticky flex h-full w-80 flex-col bg-white shadow-sm"
+      className="sticky flex h-full w-80 flex-col bg-white shadow-sm dark:bg-gray-900"
       style={{ top: '80px' }}
     >
       {/* Header */}
-      <div className="relative border-b border-gray-200 bg-gray-50/50 p-4">
+      <div className="relative border-b border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
         <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Unassigned Talks
           </h2>
-          <p className="mt-1 text-sm text-gray-600">{statsText}</p>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            {statsText}
+          </p>
         </div>
 
         {/* Clear filters button - positioned absolutely to prevent layout shift */}
@@ -382,18 +377,24 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
       </div>
 
       {/* Legend */}
-      <div className="border-t border-gray-200 bg-gray-50/50 p-3">
-        <h3 className="mb-2 text-xs font-medium text-gray-700">Legend</h3>
-        <div className="space-y-1.5 text-xs text-gray-600">
+      <div className="border-t border-gray-200 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
+        <h3 className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">
+          Legend
+        </h3>
+        <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-400">
           <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-700">Status:</span>
-            <div className="h-3 w-3 rounded border-2 border-amber-300 bg-amber-50"></div>
+            <span className="font-medium text-gray-700 dark:text-gray-300">
+              Status:
+            </span>
+            <div className="h-3 w-3 rounded border-2 border-amber-300 bg-amber-50 dark:border-amber-600 dark:bg-amber-900/50"></div>
             <span>Accepted</span>
-            <div className="h-3 w-3 rounded border border-gray-200 bg-white"></div>
+            <div className="h-3 w-3 rounded border border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"></div>
             <span>Confirmed</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-700">Level:</span>
+            <span className="font-medium text-gray-700 dark:text-gray-300">
+              Level:
+            </span>
             <LevelIndicator level={Level.beginner} size="xs" />
             <span>Beginner</span>
             <LevelIndicator level={Level.intermediate} size="xs" />
@@ -402,20 +403,26 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
             <span>Advanced</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-700">Topics:</span>
+            <span className="font-medium text-gray-700 dark:text-gray-300">
+              Topics:
+            </span>
             <div className="h-3 w-3 rounded-sm bg-blue-500"></div>
             <span>Square indicators</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-700">Border:</span>
+            <span className="font-medium text-gray-700 dark:text-gray-300">
+              Border:
+            </span>
             <div className="h-3 w-4 border-l-4 border-blue-500"></div>
             <span>Single topic</span>
             <div className="h-3 w-4 border-l-4 border-orange-500"></div>
             <span>Multiple topics</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-medium text-gray-700">Audience:</span>
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs">
+            <span className="font-medium text-gray-700 dark:text-gray-300">
+              Audience:
+            </span>
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-700 dark:text-gray-300">
               DEV +1
             </span>
             <span>Primary + count</span>

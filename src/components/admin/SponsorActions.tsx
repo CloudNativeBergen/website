@@ -42,13 +42,13 @@ export function SponsorActions({
 
   if (sponsorsWithContacts.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-6">
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
         <div className="text-center">
-          <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-semibold text-gray-900">
+          <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+          <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
             No Sponsor Contacts
           </h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Add contact information to sponsors to enable email broadcasts.
           </p>
         </div>
@@ -60,10 +60,10 @@ export function SponsorActions({
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
             Sponsor Communications
           </h3>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Send emails to {sponsorsWithContacts.length} sponsors with contact
             information
           </p>

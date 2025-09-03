@@ -14,8 +14,10 @@ function ErrorDisplay({ message }: { message: string }) {
   return (
     <div className="flex h-full items-center justify-center">
       <div className="text-center">
-        <div className="text-lg font-semibold text-red-500">{message}</div>
-        <p className="mt-2 text-gray-600">
+        <div className="text-lg font-semibold text-red-500 dark:text-red-400">
+          {message}
+        </div>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
           Please try again or contact support if the issue persists.
         </p>
       </div>
@@ -30,7 +32,9 @@ export default async function MarketingPage() {
   if (!session?.speaker?.is_organizer) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <p className="text-lg text-gray-500">Access Denied</p>
+        <p className="text-lg text-gray-500 dark:text-gray-400">
+          Access Denied
+        </p>
       </div>
     )
   }
@@ -93,14 +97,14 @@ export default async function MarketingPage() {
       <div className="pb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <PresentationChartBarIcon className="h-8 w-8 text-brand-cloud-blue" />
+            <PresentationChartBarIcon className="h-8 w-8 text-brand-cloud-blue dark:text-blue-300" />
             <div>
-              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight">
+              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
                 Marketing Materials
               </h1>
-              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70">
+              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
                 Download speaker sharing cards for{' '}
-                <span className="font-medium text-brand-cloud-blue">
+                <span className="font-medium text-brand-cloud-blue dark:text-blue-300">
                   {conference.title}
                 </span>
                 . High-quality images perfect for social media promotion and
@@ -111,57 +115,59 @@ export default async function MarketingPage() {
         </div>
 
         <div className="font-inter mt-4 grid grid-cols-6 gap-3">
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-slate-gray">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-slate-gray dark:text-white">
               {speakersWithTalks.length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Confirmed speakers
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-fresh-green">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-fresh-green dark:text-green-300">
               {confirmedProposals.length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Confirmed talks
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-cloud-blue">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-cloud-blue dark:text-blue-300">
               {speakersWithTalks.length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Sharing cards
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-blue-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-blue-600 dark:text-blue-300">
               {speakersWithTalks.filter(({ speaker }) => speaker.image).length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">With photos</div>
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
+              With photos
+            </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-purple-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-purple-600 dark:text-purple-300">
               {speakersWithTalks.filter(({ talks }) => talks.length > 1).length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Multi-talk speakers
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-green-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-green-600 dark:text-green-300">
               {speakersWithTalks.reduce(
                 (sum, { talks }) => sum + talks.length,
                 0,
               )}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Total materials
             </div>
           </div>
@@ -170,25 +176,25 @@ export default async function MarketingPage() {
 
       {speakersWithTalks.length === 0 ? (
         <div className="py-12 text-center">
-          <UserGroupIcon className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-          <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900">
+          <UserGroupIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
+          <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
             No Confirmed Speakers Yet
           </h3>
-          <p className="font-inter text-gray-600">
+          <p className="font-inter text-gray-600 dark:text-gray-400">
             Speaker sharing cards will appear here once talks are confirmed.
           </p>
         </div>
       ) : (
         <>
           {/* Instructions */}
-          <div className="mb-8 rounded-lg bg-blue-50 p-6">
+          <div className="mb-8 rounded-lg bg-blue-50 p-6 dark:bg-blue-900/20">
             <div className="flex items-start">
-              <DocumentArrowDownIcon className="mt-1 mr-3 h-6 w-6 text-brand-cloud-blue" />
+              <DocumentArrowDownIcon className="mt-1 mr-3 h-6 w-6 text-brand-cloud-blue dark:text-blue-300" />
               <div>
-                <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-cloud-blue">
+                <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-cloud-blue dark:text-blue-300">
                   Speaker Sharing Cards
                 </h3>
-                <p className="font-inter text-sm text-gray-700">
+                <p className="font-inter text-sm text-gray-700 dark:text-gray-300">
                   Click &quot;Download as PNG&quot; on any speaker card to save
                   high-quality promotional images. All cards include speaker
                   details and are optimized for social media platforms.

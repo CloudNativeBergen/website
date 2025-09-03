@@ -67,12 +67,14 @@ export function ProposalsFilter({
   allowedFormats,
 }: ProposalsFilterProps) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center space-x-2">
-            <FunnelIcon className="h-5 w-5 text-gray-400" />
-            <span className="text-sm font-medium text-gray-700">Filters:</span>
+            <FunnelIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Filters:
+            </span>
           </div>
 
           {/* Status Filter */}
@@ -155,10 +157,10 @@ export function ProposalsFilter({
               className="text-left"
             >
               <div className="flex flex-col space-y-1 text-left">
-                <span className="font-medium text-gray-900">
+                <span className="font-medium text-gray-900 dark:text-white">
                   Hide speakers with accepted talks
                 </span>
-                <span className="max-w-xs text-xs leading-relaxed text-gray-500">
+                <span className="max-w-xs text-xs leading-relaxed text-gray-500 dark:text-gray-400">
                   Only show submitted proposals from speakers who don&apos;t
                   already have accepted or confirmed talks
                 </span>
@@ -277,7 +279,7 @@ export function ProposalsFilter({
           {activeFilterCount > 0 && (
             <button
               onClick={onClearAll}
-              className="text-sm text-indigo-600 hover:text-indigo-500"
+              className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
             >
               Clear all ({activeFilterCount})
             </button>

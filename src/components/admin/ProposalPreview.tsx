@@ -85,13 +85,13 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-        <h2 className="text-lg font-semibold text-gray-900">
+      <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Proposal Preview
         </h2>
         <button
           onClick={onClose}
-          className="rounded-md p-2 text-gray-400 hover:text-gray-500"
+          className="rounded-md p-2 text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
@@ -116,7 +116,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
               {requiresTravelFunding && (
                 <div className="flex items-center space-x-2">
                   <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Requires travel funding
                   </p>
                 </div>
@@ -124,11 +124,11 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             </div>
           ) : (
             <div className="flex items-center space-x-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                <UserIcon className="h-6 w-6 text-gray-400" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+                <UserIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
                   Unknown Speaker
                 </p>
               </div>
@@ -137,7 +137,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
 
           {/* Title */}
           <div>
-            <h1 className="text-xl font-bold text-gray-900">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
               {proposal.title}
             </h1>
           </div>
@@ -147,14 +147,14 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             <span
               className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
                 proposal.status === Status.submitted
-                  ? 'bg-yellow-100 text-yellow-800'
+                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                   : proposal.status === Status.accepted
-                    ? 'bg-green-100 text-green-800'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                     : proposal.status === Status.rejected
-                      ? 'bg-red-100 text-red-800'
+                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                       : proposal.status === Status.confirmed
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-800'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
               }`}
             >
               {formatStatus(proposal.status)}
@@ -163,8 +163,8 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
 
           {/* Review Summary */}
           {reviewCount > 0 && (
-            <div className="rounded-lg bg-gray-50 p-4">
-              <h4 className="mb-3 text-sm font-medium text-gray-900">
+            <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+              <h4 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">
                 Review Summary
               </h4>
               <div className="flex items-center justify-between">
@@ -179,16 +179,16 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                       ) : (
                         <StarIcon
                           key={star}
-                          className="h-5 w-5 text-gray-300"
+                          className="h-5 w-5 text-gray-300 dark:text-gray-600"
                         />
                       ),
                     )}
                   </div>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {averageRating.toFixed(1)} out of 5
                   </span>
                 </div>
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
                   {reviewCount} review{reviewCount !== 1 ? 's' : ''}
                 </span>
               </div>
@@ -196,7 +196,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
               {/* Individual score breakdown */}
               {proposal.reviews && proposal.reviews.length > 0 && (
                 <div className="mt-3 space-y-2">
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gray-600 dark:text-gray-400">
                     <div className="flex justify-between">
                       <span>Content:</span>
                       <span>
@@ -251,30 +251,38 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
           {/* Details */}
           <div className="grid grid-cols-1 gap-4 text-sm">
             <div className="flex items-center space-x-2">
-              <ClockIcon className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-600">Duration:</span>
-              <span className="font-medium">
+              <ClockIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <span className="text-gray-600 dark:text-gray-400">
+                Duration:
+              </span>
+              <span className="font-medium dark:text-white">
                 {formatDuration(proposal.format)}
               </span>
             </div>
 
             <div className="flex items-center space-x-2">
-              <UserIcon className="h-4 w-4 text-gray-400" />
-              <span className="text-gray-600">Level:</span>
-              <span className="font-medium">{formatLevel(proposal.level)}</span>
+              <UserIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <span className="text-gray-600 dark:text-gray-400">Level:</span>
+              <span className="font-medium dark:text-white">
+                {formatLevel(proposal.level)}
+              </span>
             </div>
 
             <div className="flex items-center space-x-2">
-              <span className="text-gray-600">Language:</span>
-              <span className="font-medium">
+              <span className="text-gray-600 dark:text-gray-400">
+                Language:
+              </span>
+              <span className="font-medium dark:text-white">
                 {formatLanguage(proposal.language)}
               </span>
             </div>
 
             {proposal.audiences && proposal.audiences.length > 0 && (
               <div className="flex items-start space-x-2">
-                <span className="text-gray-600">Audience:</span>
-                <span className="font-medium">
+                <span className="text-gray-600 dark:text-gray-400">
+                  Audience:
+                </span>
+                <span className="font-medium dark:text-white">
                   {formatAudience(proposal.audiences)}
                 </span>
               </div>
@@ -282,9 +290,11 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
 
             {proposal._createdAt && (
               <div className="flex items-center space-x-2">
-                <CalendarIcon className="h-4 w-4 text-gray-400" />
-                <span className="text-gray-600">Submitted:</span>
-                <span className="font-medium">
+                <CalendarIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                <span className="text-gray-600 dark:text-gray-400">
+                  Submitted:
+                </span>
+                <span className="font-medium dark:text-white">
                   {formatDateSafe(proposal._createdAt)}
                 </span>
               </div>
@@ -294,10 +304,10 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
           {/* Description */}
           {proposal.description && (
             <div>
-              <h4 className="mb-2 text-sm font-medium text-gray-900">
+              <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
                 Description
               </h4>
-              <div className="prose prose-sm max-w-none text-gray-600">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
                 <PortableText value={proposal.description} />
               </div>
             </div>
@@ -306,7 +316,9 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
           {/* Topics */}
           {proposal.topics && proposal.topics.length > 0 && (
             <div>
-              <h4 className="mb-2 text-sm font-medium text-gray-900">Topics</h4>
+              <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                Topics
+              </h4>
               <div className="flex flex-wrap gap-2">
                 {proposal.topics.map((topic) => {
                   // Handle both Topic objects and References
@@ -326,7 +338,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                   return (
                     <span
                       key={topicId}
-                      className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"
+                      className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200"
                     >
                       {topicTitle}
                     </span>
@@ -339,10 +351,10 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
       </div>
 
       {/* Footer Actions */}
-      <div className="border-t border-gray-200 px-6 py-4">
+      <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
         <Link
           href={`/admin/proposals/${proposal._id}`}
-          className="inline-flex w-full items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
+          className="inline-flex w-full items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-indigo-500 dark:hover:bg-indigo-600 dark:focus:ring-indigo-400"
         >
           View Full Details
         </Link>

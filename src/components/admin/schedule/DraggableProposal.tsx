@@ -194,10 +194,10 @@ export function DraggableProposal({
       proposal.status === Status.rejected
 
     const baseClasses = isWithdrawnOrRejected
-      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-red-500 bg-red-100 shadow-sm transition-shadow duration-200 hover:shadow-md'
+      ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-red-500 bg-red-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-red-600 dark:bg-red-900'
       : isAcceptedButNotConfirmed
-        ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md'
-        : 'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md'
+        ? 'relative max-w-full overflow-hidden rounded-lg border-2 border-amber-500 bg-amber-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-amber-400 dark:bg-stone-800'
+        : 'relative max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-gray-700 dark:bg-gray-800'
 
     const opacityClass = isBeingDragged
       ? 'opacity-30'
@@ -217,7 +217,7 @@ export function DraggableProposal({
     proposal.status,
   ]) // Title component based on talk size
   const TitleComponent = useMemo(() => {
-    const titleClasses = 'pr-1 text-gray-900 truncate'
+    const titleClasses = 'pr-1 text-gray-900 truncate dark:text-gray-100'
     const isWithdrawnOrRejected =
       proposal.status === Status.withdrawn ||
       proposal.status === Status.rejected
@@ -225,12 +225,12 @@ export function DraggableProposal({
 
     const titleContent = isWithdrawnOrRejected ? (
       <span className="flex items-center gap-1">
-        <ExclamationTriangleIcon className="h-3 w-3 flex-shrink-0 text-red-500" />
+        <ExclamationTriangleIcon className="h-3 w-3 flex-shrink-0 text-red-500 dark:text-red-400" />
         <span className="truncate">{proposal.title}</span>
       </span>
     ) : isAcceptedButNotConfirmed ? (
       <span className="flex items-center gap-1">
-        <ExclamationTriangleIcon className="h-3 w-3 flex-shrink-0 text-amber-500" />
+        <ExclamationTriangleIcon className="h-3 w-3 flex-shrink-0 text-amber-600 dark:text-amber-300" />
         <span className="truncate">{proposal.title}</span>
       </span>
     ) : (
@@ -268,7 +268,7 @@ export function DraggableProposal({
     if (!speakerInfo) return null
 
     return (
-      <div className="flex items-center gap-1 text-xs text-gray-600">
+      <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
         <UserIcon className="h-3 w-3 flex-shrink-0" />
         <span className="truncate">{speakerInfo}</span>
       </div>
@@ -283,9 +283,9 @@ export function DraggableProposal({
 
     return (
       <div className="flex items-center gap-1">
-        <UserGroupIcon className="h-3 w-3 flex-shrink-0 text-gray-500" />
+        <UserGroupIcon className="h-3 w-3 flex-shrink-0 text-gray-500 dark:text-gray-400" />
         <span
-          className="text-xs font-medium text-gray-600"
+          className="text-xs font-medium text-gray-600 dark:text-gray-400"
           title={`Primary: ${audiences.get(proposal.audiences?.[0])}${
             audienceCount > 1 ? ` (${audienceCount} total)` : ''
           }`}
@@ -311,7 +311,7 @@ export function DraggableProposal({
 
     return (
       <div className="flex items-center gap-1">
-        <TagIcon className="h-3 w-3 flex-shrink-0 text-gray-500" />
+        <TagIcon className="h-3 w-3 flex-shrink-0 text-gray-500 dark:text-gray-400" />
         <div className="flex items-center gap-1">
           {displayTopics.map((topic, index) => (
             <span
@@ -322,7 +322,9 @@ export function DraggableProposal({
             />
           ))}
           {remainingCount > 0 && (
-            <span className="text-xs text-gray-500">+{remainingCount}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              +{remainingCount}
+            </span>
           )}
         </div>
       </div>
@@ -410,10 +412,10 @@ export function DraggableProposal({
         <div className="flex min-h-[16px] items-center gap-1">
           {/* Drag handle */}
           <div
-            className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100"
+            className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
             {...listeners}
           >
-            <Bars3Icon className="h-3 w-3 text-gray-400" />
+            <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
           </div>
 
           {/* Title with level indicator and status indicator */}
@@ -429,7 +431,7 @@ export function DraggableProposal({
           </div>
 
           {/* Duration indicator */}
-          <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500">
+          <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
             <ClockIcon
               className={
                 talkSize === 'short' || talkSize === 'very-short'
@@ -463,7 +465,9 @@ export function DraggableProposal({
 
             {/* Format - only for long talks */}
             {talkSize === 'long' && (
-              <div className="text-xs text-gray-500">{formatDisplay}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {formatDisplay}
+              </div>
             )}
           </div>
         )}

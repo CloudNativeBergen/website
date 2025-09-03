@@ -110,17 +110,8 @@ export function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const { data: session } = useSession()
-  const { setTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
   const colors = colorSchemes[mode]
-
-  // Force light mode for admin pages only - run once when mode changes
-  useEffect(() => {
-    if (mode === 'admin') {
-      setTheme('light')
-    }
-    // Speaker mode: let the root theme provider handle everything
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]) // Only depend on mode, not setTheme to avoid infinite loops
 
   // Handle keyboard shortcuts for search (admin mode only)
   useEffect(() => {
@@ -188,7 +179,7 @@ export function DashboardLayout({
         <Dialog
           open={sidebarOpen}
           onClose={setSidebarOpen}
-          className="relative z-50 lg:hidden"
+          className={`relative z-50 lg:hidden ${theme === 'dark' ? 'dark' : ''}`}
         >
           <DialogBackdrop
             transition
@@ -339,7 +330,7 @@ export function DashboardLayout({
           </div>
 
           <div className="flex items-center gap-x-2">
-            {mode === 'speaker' && <ThemeToggle />}
+            <ThemeToggle />
             <button
               onClick={() => signOut({ callbackUrl: '/' })}
               className="focus:outline-none"
@@ -385,7 +376,7 @@ export function DashboardLayout({
               )}
             </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
-              {mode === 'speaker' && <ThemeToggle />}
+              <ThemeToggle />
 
               {mode === 'admin' && (
                 <button

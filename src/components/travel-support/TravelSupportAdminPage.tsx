@@ -13,6 +13,7 @@ import { TravelSupportService } from '@/lib/travel-support/service'
 import { ExpenseSummary } from './ExpenseSummary'
 import { ErrorBoundary } from './ErrorBoundary'
 import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
+import { SkeletonCard } from '@/components/admin/LoadingSkeleton'
 
 export function TravelSupportAdminPage() {
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
@@ -86,12 +87,24 @@ export function TravelSupportAdminPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-blue-600 dark:border-blue-400"></div>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Loading travel support requests...
-          </p>
+      <div className="mx-auto max-w-7xl">
+        {/* Header skeleton */}
+        <div className="pb-6">
+          <div className="animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded bg-gray-200 dark:bg-gray-700" />
+              <div>
+                <div className="h-8 w-64 rounded bg-gray-200 dark:bg-gray-700" />
+                <div className="mt-2 h-4 w-96 rounded bg-gray-200 dark:bg-gray-700" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Two-column content skeleton */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <SkeletonCard rows={8} />
+          <SkeletonCard rows={8} />
         </div>
       </div>
     )
@@ -168,11 +181,14 @@ export function TravelSupportAdminPage() {
             <div className="p-6">
               {selectedRequest ? (
                 isLoadingDetails ? (
-                  <div className="py-8 text-center">
-                    <div className="mx-auto h-6 w-6 animate-spin rounded-full border-t-2 border-b-2 border-blue-600 dark:border-blue-400"></div>
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                      Loading details...
-                    </p>
+                  <div className="py-4">
+                    <div className="animate-pulse space-y-3">
+                      <div className="h-6 w-1/3 rounded bg-gray-200 dark:bg-gray-700" />
+                      <div className="h-4 w-2/3 rounded bg-gray-200 dark:bg-gray-700" />
+                      <div className="h-20 rounded bg-gray-200 dark:bg-gray-700" />
+                      <div className="h-4 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
+                      <div className="h-16 rounded bg-gray-200 dark:bg-gray-700" />
+                    </div>
                   </div>
                 ) : selectedRequestDetails ? (
                   <RequestDetails

@@ -144,15 +144,21 @@ const StatBar = memo(function StatBar({
     <div className="flex items-center gap-3">
       <div className="flex-1">
         <div className="mb-1 flex items-center justify-between">
-          <div className="text-sm font-medium text-gray-900">{item.label}</div>
+          <div className="text-sm font-medium text-gray-900 dark:text-white">
+            {item.label}
+          </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="font-semibold text-gray-900">{item.count}</span>
-            <span className="text-gray-500">({item.percentage}%)</span>
+            <span className="font-semibold text-gray-900 dark:text-white">
+              {item.count}
+            </span>
+            <span className="text-gray-500 dark:text-gray-400">
+              ({item.percentage}%)
+            </span>
           </div>
         </div>
-        <div className="h-2 w-full rounded-full bg-gray-200">
+        <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
           <div
-            className={`h-2 rounded-full transition-all duration-300 ${!backgroundColor ? 'bg-indigo-600' : ''}`}
+            className={`h-2 rounded-full transition-all duration-300 ${!backgroundColor ? 'bg-indigo-600 dark:bg-indigo-500' : ''}`}
             style={{
               width: `${width}%`,
               backgroundColor,
@@ -188,7 +194,9 @@ const StatSection = memo(function StatSection({
 
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-medium text-gray-900">{title}</h4>
+      <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+        {title}
+      </h4>
       <div className="space-y-2">
         {section.items.map((item) => (
           <StatBar
@@ -239,34 +247,34 @@ export const ProposalStatistics = memo(function ProposalStatistics({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50">
+    <div className="rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
       {/* Header */}
       <button
         onClick={toggleExpanded}
-        className="flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-gray-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:ring-inset"
+        className="flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-gray-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:ring-inset dark:hover:bg-gray-700 dark:focus:ring-indigo-400"
         aria-expanded={isExpanded}
         aria-controls="proposal-statistics-content"
       >
         <div className="flex items-center gap-3">
           <ChartBarIcon
-            className="h-5 w-5 text-indigo-600"
+            className="h-5 w-5 text-indigo-600 dark:text-indigo-400"
             aria-hidden="true"
           />
-          <span className="text-sm font-medium text-gray-900">
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
             Proposal Statistics
           </span>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             ({proposals.length} proposal{proposals.length !== 1 ? 's' : ''})
           </span>
         </div>
         {isExpanded ? (
           <ChevronDownIcon
-            className="h-4 w-4 text-gray-500"
+            className="h-4 w-4 text-gray-500 dark:text-gray-400"
             aria-hidden="true"
           />
         ) : (
           <ChevronRightIcon
-            className="h-4 w-4 text-gray-500"
+            className="h-4 w-4 text-gray-500 dark:text-gray-400"
             aria-hidden="true"
           />
         )}
@@ -276,7 +284,7 @@ export const ProposalStatistics = memo(function ProposalStatistics({
       {isExpanded && (
         <div
           id="proposal-statistics-content"
-          className="border-t border-gray-200 px-4 pb-4"
+          className="border-t border-gray-200 px-4 pb-4 dark:border-gray-700"
         >
           <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-3">
             <StatSection title="Level" section={statistics.levelStats} />

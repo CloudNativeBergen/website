@@ -97,22 +97,24 @@ export function AdminActionBar({
   )
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-wrap items-center justify-between gap-4">
         {/* Left side - Status, Reviews, and Speaker Indicators */}
         <div className="flex min-w-0 flex-wrap items-center gap-4">
           {/* Status */}
           <div className="flex flex-shrink-0 items-center gap-2">
-            <span className="text-sm font-medium text-gray-600">Status:</span>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              Status:
+            </span>
             <span
               className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                 proposal.status === 'accepted'
-                  ? 'bg-green-100 text-green-800'
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                   : proposal.status === 'rejected'
-                    ? 'bg-red-100 text-red-800'
+                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                     : proposal.status === 'submitted'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-gray-100 text-gray-800'
+                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
               }`}
             >
               {proposal.status.charAt(0).toUpperCase() +
@@ -123,10 +125,10 @@ export function AdminActionBar({
           {/* Reviews Summary */}
           {proposal.reviews && proposal.reviews.length > 0 && (
             <div className="flex flex-shrink-0 items-center gap-2">
-              <span className="text-sm font-medium text-gray-600">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Reviews:
               </span>
-              <span className="text-sm whitespace-nowrap text-gray-900">
+              <span className="text-sm whitespace-nowrap text-gray-900 dark:text-white">
                 {proposal.reviews.length} review
                 {proposal.reviews.length !== 1 ? 's' : ''}
                 {(() => {
@@ -148,13 +150,13 @@ export function AdminActionBar({
           {/* Speaker Indicators */}
           {speakers.length > 0 && (
             <div className="flex flex-shrink-0 items-center gap-2">
-              <span className="text-sm font-medium text-gray-600">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Speaker:
               </span>
               <div className="flex items-center gap-1">
                 {isSeasonedSpeaker && (
                   <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-100 text-yellow-700"
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
                     title="Seasoned speaker - has previous accepted talks"
                   >
                     <StarIcon className="h-3 w-3" />
@@ -162,7 +164,7 @@ export function AdminActionBar({
                 )}
                 {isNewSpeaker && (
                   <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700"
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                     title="New speaker - no previous accepted talks"
                   >
                     <UserPlusIcon className="h-3 w-3" />
@@ -170,7 +172,7 @@ export function AdminActionBar({
                 )}
                 {isLocalSpeaker && (
                   <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
                     title="Local speaker"
                   >
                     <MapPinIcon className="h-3 w-3" />
@@ -178,7 +180,7 @@ export function AdminActionBar({
                 )}
                 {isUnderrepresentedSpeaker && (
                   <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-purple-700"
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
                     title="Underrepresented speaker"
                   >
                     <HeartIcon className="h-3 w-3" />
@@ -186,7 +188,7 @@ export function AdminActionBar({
                 )}
                 {requiresTravelSupport && (
                   <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-red-700"
+                    className="flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
                     title="Requires travel support"
                   >
                     <ExclamationTriangleIcon className="h-3 w-3" />
@@ -203,7 +205,7 @@ export function AdminActionBar({
           {speakers.length > 0 && speakers.some((speaker) => speaker.email) && (
             <button
               onClick={handleEmailSpeakers}
-              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
               title={`Email ${speakers.length === 1 ? speakers.filter((s) => s.email)[0]?.name : `${speakers.filter((s) => s.email).length} speakers`}`}
             >
               <EnvelopeIcon className="h-3 w-3" />
@@ -214,7 +216,7 @@ export function AdminActionBar({
           {canApprove && (
             <button
               onClick={() => handleAction(Action.accept)}
-              className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700"
+              className="inline-flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
             >
               <CheckIcon className="h-3 w-3" />
               Approve
@@ -223,7 +225,7 @@ export function AdminActionBar({
           {canRemind && (
             <button
               onClick={() => handleAction(Action.remind)}
-              className="inline-flex items-center gap-1 rounded-md bg-yellow-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-yellow-700"
+              className="inline-flex items-center gap-1 rounded-md bg-yellow-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-yellow-700 dark:bg-yellow-500 dark:hover:bg-yellow-600"
             >
               <BellIcon className="h-3 w-3" />
               Remind
@@ -232,7 +234,7 @@ export function AdminActionBar({
           {canReject && (
             <button
               onClick={() => handleAction(Action.reject)}
-              className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
+              className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
             >
               <XMarkIcon className="h-3 w-3" />
               Reject

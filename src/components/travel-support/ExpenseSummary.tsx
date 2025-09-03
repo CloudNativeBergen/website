@@ -89,11 +89,10 @@ export function ExpenseSummary({
         <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
           Expense Summary
         </h3>
-        <div className="flex items-center justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-indigo-600"></div>
-          <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
-            Loading exchange rates...
-          </span>
+        <div className="animate-pulse space-y-3">
+          <div className="h-5 w-1/3 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-4 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
+          <div className="h-24 rounded bg-gray-200 dark:bg-gray-700" />
         </div>
       </div>
     )

@@ -98,14 +98,14 @@ export default async function AdminTickets() {
       <div className="pb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <TicketIcon className="h-8 w-8 text-brand-cloud-blue" />
+            <TicketIcon className="h-8 w-8 text-brand-cloud-blue dark:text-blue-300" />
             <div>
-              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight">
+              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
                 Ticket Management
               </h1>
-              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70">
+              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
                 Manage sold tickets and attendee information for{' '}
-                <span className="font-medium text-brand-cloud-blue">
+                <span className="font-medium text-brand-cloud-blue dark:text-blue-300">
                   {conference.title}
                 </span>
                 . View orders, revenue, and allocation details.
@@ -115,52 +115,56 @@ export default async function AdminTickets() {
         </div>
 
         <div className="font-inter mt-4 grid grid-cols-6 gap-3">
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-cloud-blue">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-cloud-blue dark:text-blue-300">
               {orders.length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">Orders</div>
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
+              Orders
+            </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-slate-gray">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-slate-gray dark:text-white">
               {totalTickets}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">Paid tickets</div>
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
+              Paid tickets
+            </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-blue-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-cloud-blue dark:text-blue-300">
               {totalSponsorTickets}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Sponsor tickets
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-purple-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-nordic-purple dark:text-indigo-300">
               {speakerTickets}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Speaker tickets
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-green-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-fresh-green dark:text-green-300">
               {totalTicketsIncludingAll}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Total tickets
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-fresh-green">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-fresh-green dark:text-green-300">
               {formatCurrency(totalRevenue)}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Total revenue
             </div>
           </div>
@@ -170,67 +174,70 @@ export default async function AdminTickets() {
       {/* Breakdown by Ticket Type */}
       {categoryStats.length > 0 && (
         <div className="mt-8">
-          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5">
+          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5 dark:bg-gray-900 dark:ring-gray-700">
             <div className="px-6 py-4">
-              <h2 className="mb-4 text-lg font-medium text-gray-900">
+              <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                 Breakdown by Ticket Type
               </h2>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Ticket Type
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Tickets Sold
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Orders
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Revenue
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Percentage
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
+                  <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
                     {categoryStats.map((stat) => (
-                      <tr key={stat.category} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
+                      <tr
+                        key={stat.category}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                      >
+                        <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
                           {stat.category}
                         </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
                             {stat.count}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
                           {stat.orders}
                         </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
-                          <span className="font-medium text-green-600">
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                          <span className="font-medium text-green-600 dark:text-green-400">
                             {formatCurrency(stat.revenue)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
                           <div className="flex items-center">
                             <div className="flex-1">
                               <div className="flex items-center">
@@ -265,48 +272,48 @@ export default async function AdminTickets() {
       {/* Sponsor Tickets Breakdown */}
       {totalSponsorTickets > 0 && (
         <div className="mt-8">
-          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5">
+          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5 dark:bg-gray-900 dark:ring-gray-700">
             <div className="px-6 py-4">
-              <h2 className="mb-4 text-lg font-medium text-gray-900">
+              <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                 Sponsor Ticket Allocations
               </h2>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Sponsor Tier
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Sponsors
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Tickets per Sponsor
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Total Tickets
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
                       >
                         Percentage
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
+                  <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
                     {Object.entries(sponsorTicketsByTier)
                       .sort(([, a], [, b]) => b.tickets - a.tickets)
                       .map(([tierName, tierData]) => {
@@ -314,24 +321,27 @@ export default async function AdminTickets() {
                           TIER_TICKET_ALLOCATION[tierName] || 0
 
                         return (
-                          <tr key={tierName} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
+                          <tr
+                            key={tierName}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                          >
+                            <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
                               {tierName}
                             </td>
-                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
-                              <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
+                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                              <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-300">
                                 {tierData.sponsors}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
                               {ticketsPerSponsor}
                             </td>
-                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
-                              <span className="font-medium text-purple-600">
+                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                              <span className="font-medium text-purple-600 dark:text-purple-400">
                                 {tierData.tickets}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
                               <div className="flex items-center">
                                 <div className="flex-1">
                                   <div className="flex items-center">
@@ -361,7 +371,7 @@ export default async function AdminTickets() {
                   </tbody>
                 </table>
               </div>
-              <div className="mt-4 text-sm text-gray-600">
+              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
                 <p>
                   <strong>Note:</strong> Sponsor tickets are allocated through
                   sponsorship agreements. Pod sponsors receive 2 tickets,
@@ -377,14 +387,16 @@ export default async function AdminTickets() {
 
       {/* Orders List */}
       <div className="mt-12">
-        <h2 className="mb-4 text-lg font-medium text-gray-900">Orders</h2>
+        <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
+          Orders
+        </h2>
         {orders.length === 0 ? (
           <div className="py-12 text-center">
-            <TicketIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900">
+            <TicketIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
               No orders found
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               No tickets have been sold for this event yet.
             </p>
           </div>
@@ -398,11 +410,11 @@ export default async function AdminTickets() {
       </div>
 
       {/* Debug Info */}
-      <div className="mt-8 rounded-lg bg-gray-50 p-4">
-        <h3 className="mb-2 text-sm font-medium text-gray-900">
+      <div className="mt-8 rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+        <h3 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
           Debug Information
         </h3>
-        <div className="space-y-1 text-xs text-gray-600">
+        <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
           <div>Customer ID: {conference.checkin_customer_id}</div>
           <div>Event ID: {conference.checkin_event_id}</div>
           <div>API Response: {tickets.length} tickets loaded</div>

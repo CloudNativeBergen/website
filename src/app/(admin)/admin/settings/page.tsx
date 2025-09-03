@@ -39,10 +39,12 @@ function Badge({
   variant?: 'default' | 'success' | 'warning' | 'error'
 }) {
   const variants = {
-    default: 'bg-gray-100 text-gray-800',
-    success: 'bg-green-100 text-green-800',
-    warning: 'bg-yellow-100 text-yellow-800',
-    error: 'bg-red-100 text-red-800',
+    default: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+    success:
+      'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
+    warning:
+      'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
+    error: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400',
   }
 
   return (
@@ -64,10 +66,12 @@ function InfoCard({
   icon: React.ComponentType<{ className?: string }>
 }) {
   return (
-    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200">
+    <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
       <div className="mb-4 flex items-center">
-        <Icon className="mr-2 h-5 w-5 text-gray-400" />
-        <h3 className="text-lg font-medium text-gray-900">{title}</h3>
+        <Icon className="mr-2 h-5 w-5 text-gray-400 dark:text-gray-500" />
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+          {title}
+        </h3>
       </div>
       <div className="space-y-3">{children}</div>
     </div>
@@ -103,13 +107,13 @@ function FieldRow({
         <div className="flex items-center">
           {value ? (
             <>
-              <CheckCircleIcon className="mr-1 h-4 w-4 text-green-500" />
-              <span className="text-green-700">Yes</span>
+              <CheckCircleIcon className="mr-1 h-4 w-4 text-green-500 dark:text-green-400" />
+              <span className="text-green-700 dark:text-green-300">Yes</span>
             </>
           ) : (
             <>
-              <XCircleIcon className="mr-1 h-4 w-4 text-red-500" />
-              <span className="text-red-700">No</span>
+              <XCircleIcon className="mr-1 h-4 w-4 text-red-500 dark:text-red-400" />
+              <span className="text-red-700 dark:text-red-300">No</span>
             </>
           )}
         </div>
@@ -130,7 +134,7 @@ function FieldRow({
             })}
           </div>
         ) : (
-          <span className="text-gray-500">None</span>
+          <span className="text-gray-500 dark:text-gray-400">None</span>
         )
       break
     case 'links':
@@ -143,7 +147,7 @@ function FieldRow({
                   href={link as string}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500 hover:underline"
+                  className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                 >
                   <span className="max-w-sm truncate">{link as string}</span>
                   <LinkIcon className="ml-1 h-3 w-3 flex-shrink-0" />
@@ -152,7 +156,7 @@ function FieldRow({
             ))}
           </div>
         ) : (
-          <span className="text-gray-500">None</span>
+          <span className="text-gray-500 dark:text-gray-400">None</span>
         )
       break
     case 'formats':
@@ -172,7 +176,7 @@ function FieldRow({
             })}
           </div>
         ) : (
-          <span className="text-gray-500">None</span>
+          <span className="text-gray-500 dark:text-gray-400">None</span>
         )
       break
     case 'team':
@@ -185,14 +189,17 @@ function FieldRow({
                   ? member
                   : (member as NamedItem)?.name || 'Unknown Member'
               return (
-                <div key={idx} className="py-1 text-sm text-gray-900">
+                <div
+                  key={idx}
+                  className="py-1 text-sm text-gray-900 dark:text-white"
+                >
                   {memberName}
                 </div>
               )
             })}
           </div>
         ) : (
-          <span className="text-gray-500">None</span>
+          <span className="text-gray-500 dark:text-gray-400">None</span>
         )
       break
     case 'url':
@@ -201,7 +208,7 @@ function FieldRow({
           href={value as string}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center text-indigo-600 hover:text-indigo-500"
+          className="flex items-center text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
           {value as string}
           <LinkIcon className="ml-1 h-3 w-3" />
@@ -214,7 +221,7 @@ function FieldRow({
       displayValue = value ? (
         <a
           href={`mailto:${value}`}
-          className="flex items-center text-indigo-600 hover:text-indigo-500"
+          className="flex items-center text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
           {value as string}
           <EnvelopeIcon className="ml-1 h-3 w-3" />
@@ -228,9 +235,11 @@ function FieldRow({
   }
 
   return (
-    <div className="flex justify-between border-b border-gray-200 py-2 last:border-b-0">
-      <dt className="text-sm font-medium text-gray-500">{label}</dt>
-      <dd className="max-w-xs text-right text-sm text-gray-900">
+    <div className="flex justify-between border-b border-gray-200 py-2 last:border-b-0 dark:border-gray-700">
+      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+        {label}
+      </dt>
+      <dd className="max-w-xs text-right text-sm text-gray-900 dark:text-white">
         {displayValue}
       </dd>
     </div>
@@ -263,14 +272,14 @@ export default async function AdminSettings() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="border-b border-gray-200 pb-5">
+      <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
         <div className="flex items-center gap-3">
-          <Cog6ToothIcon className="h-8 w-8 text-gray-400" />
+          <Cog6ToothIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
           <div>
-            <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+            <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
               Conference Settings
             </h1>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               Configuration settings for {conference.title}
             </p>
           </div>
@@ -405,10 +414,10 @@ export default async function AdminSettings() {
               {conference.sponsor_tiers.map((tier, idx) => (
                 <div
                   key={idx}
-                  className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0"
+                  className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0 dark:border-gray-700"
                 >
                   <div className="mb-2 flex items-center justify-between">
-                    <span className="font-medium text-gray-900">
+                    <span className="font-medium text-gray-900 dark:text-white">
                       {tier.title}
                     </span>
                     <div className="flex items-center space-x-2">
@@ -418,9 +427,11 @@ export default async function AdminSettings() {
                       )}
                     </div>
                   </div>
-                  <p className="mb-2 text-sm text-gray-600">{tier.tagline}</p>
+                  <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                    {tier.tagline}
+                  </p>
                   {tier.price && tier.price.length > 0 && (
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       {tier.price.map((price, pidx) => (
                         <span key={pidx}>
                           {price.amount} {price.currency}

@@ -73,8 +73,8 @@ export function ProposalCard({
             maxVisible={3}
           />
         ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-            <UserIcon className="h-6 w-6 text-gray-400" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+            <UserIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
           </div>
         )}
       </div>
@@ -83,7 +83,7 @@ export function ProposalCard({
         <div className="focus:outline-none">
           {/* Header row with title and status */}
           <div className="mb-2 flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 flex-1 text-sm font-medium text-gray-900">
+            <h3 className="line-clamp-2 flex-1 text-sm font-medium text-gray-900 dark:text-white">
               {proposal.title}
             </h3>
             <StatusBadge
@@ -94,7 +94,7 @@ export function ProposalCard({
           </div>
 
           {/* Speaker name with indicators */}
-          <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
+          <div className="mb-2 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
             <div className="flex min-w-0 flex-1 items-center">
               <span className="truncate font-medium">{speakerNames}</span>
             </div>
@@ -128,7 +128,7 @@ export function ProposalCard({
               showText={true}
             />
 
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500 dark:text-gray-400">
               {levels.get(proposal.level) ||
                 proposal.level ||
                 'Level not specified'}{' '}
@@ -139,7 +139,7 @@ export function ProposalCard({
             </div>
 
             {proposal.audiences && proposal.audiences.length > 0 && (
-              <div className="line-clamp-1 text-xs text-gray-500">
+              <div className="line-clamp-1 text-xs text-gray-500 dark:text-gray-400">
                 Audience:{' '}
                 {proposal.audiences
                   .map((aud) => audiences.get(aud) || aud)
@@ -153,11 +153,11 @@ export function ProposalCard({
   )
 
   const baseCardClasses =
-    'relative rounded-lg border bg-white px-6 py-5 shadow-sm transition-all duration-200'
+    'relative rounded-lg border bg-white px-6 py-5 shadow-sm transition-all duration-200 dark:bg-gray-800'
   const cardClasses = `${baseCardClasses} ${
     isSelected
-      ? 'border-indigo-500 bg-indigo-50 shadow-md'
-      : 'border-gray-300 hover:border-gray-400 hover:shadow-md'
+      ? 'border-indigo-500 bg-indigo-50 shadow-md dark:border-indigo-400 dark:bg-indigo-900/20'
+      : 'border-gray-300 hover:border-gray-400 hover:shadow-md dark:border-gray-600 dark:hover:border-gray-500'
   } ${onSelect ? 'cursor-pointer' : ''}`
 
   const handleClick = (e: React.MouseEvent) => {
@@ -177,7 +177,9 @@ export function ProposalCard({
         <div className="absolute top-3 left-3 hidden lg:block">
           <div
             className={`h-2 w-2 rounded-full ${
-              isSelected ? 'bg-indigo-500' : 'bg-gray-300'
+              isSelected
+                ? 'bg-indigo-500 dark:bg-indigo-400'
+                : 'bg-gray-300 dark:bg-gray-600'
             }`}
           />
         </div>

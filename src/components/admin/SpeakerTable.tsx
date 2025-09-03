@@ -75,11 +75,11 @@ const CopyEmailButton = ({ email }: { email: string }) => {
   return (
     <button
       onClick={copyToClipboard}
-      className="ml-2 p-1 text-gray-400 transition-colors hover:text-gray-600"
+      className="ml-2 p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : 'Copy email'}
     >
       {copied ? (
-        <CheckIcon className="h-4 w-4 text-green-600" />
+        <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
       ) : (
         <ClipboardIcon className="h-4 w-4" />
       )}
@@ -93,12 +93,12 @@ export function SpeakerTable({
 }: SpeakerTableProps) {
   if (speakers.length === 0) {
     return (
-      <div className="rounded-lg bg-gray-50 p-8 text-center">
-        <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
-        <h3 className="mt-2 text-sm font-medium text-gray-900">
+      <div className="rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
+        <UserIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+        <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
           No speakers found
         </h3>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           No speakers with accepted or confirmed talks were found for this
           conference.
         </p>
@@ -107,39 +107,42 @@ export function SpeakerTable({
   }
 
   return (
-    <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg">
-      <table className="min-w-full divide-y divide-gray-300">
-        <thead className="bg-gray-50">
+    <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700">
+      <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
             <th
               scope="col"
-              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
+              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
             >
               Speaker
             </th>
             <th
               scope="col"
-              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
+              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
             >
               Indicators
             </th>
             <th
               scope="col"
-              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
+              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
             >
               Contact
             </th>
             <th
               scope="col"
-              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase"
+              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
             >
               Talks
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200 bg-white">
+        <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
           {speakers.map((speaker) => (
-            <tr key={speaker._id} className="hover:bg-gray-50">
+            <tr
+              key={speaker._id}
+              className="hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
               <td className="px-4 py-3">
                 <div className="flex min-w-0 items-center">
                   <div className="h-8 w-8 flex-shrink-0">
@@ -150,17 +153,17 @@ export function SpeakerTable({
                         alt={speaker.name}
                       />
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300">
-                        <UserIcon className="h-5 w-5 text-gray-600" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600">
+                        <UserIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
                       </div>
                     )}
                   </div>
                   <div className="ml-3 min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-gray-900">
+                    <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
                       {speaker.name}
                     </div>
                     {speaker.title && (
-                      <div className="max-w-[180px] truncate text-xs text-gray-500">
+                      <div className="max-w-[180px] truncate text-xs text-gray-500 dark:text-gray-400">
                         {speaker.title}
                       </div>
                     )}
@@ -177,11 +180,11 @@ export function SpeakerTable({
                 />
               </td>
               <td className="px-4 py-3">
-                <div className="flex min-w-0 items-center text-sm text-gray-900">
-                  <EnvelopeIcon className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400" />
+                <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
+                  <EnvelopeIcon className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400 dark:text-gray-500" />
                   <a
                     href={`mailto:${speaker.email}`}
-                    className="truncate hover:text-blue-600"
+                    className="truncate hover:text-blue-600 dark:hover:text-blue-400"
                     title={speaker.email}
                   >
                     {speaker.email}
@@ -214,13 +217,13 @@ export function SpeakerTable({
                       >
                         <StatusBadge status={proposal.status} />
                         <span
-                          className="max-w-[200px] truncate text-gray-900"
+                          className="max-w-[200px] truncate text-gray-900 dark:text-white"
                           title={proposal.title}
                         >
                           {proposal.title}
                         </span>
                         <span
-                          className="flex-shrink-0 text-gray-500"
+                          className="flex-shrink-0 text-gray-500 dark:text-gray-400"
                           title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
                         >
                           {getCompactFormat(proposal.format)} •{' '}

@@ -59,12 +59,12 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
     ) || false
 
   return (
-    <div className="bg-white">
+    <div>
       {/* Header */}
-      <div className="border-b border-gray-200 py-5">
+      <div className="border-b border-gray-200 py-5 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">
               {proposal.title}
             </h1>
             <div className="mt-2 flex items-center space-x-4">
@@ -73,7 +73,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               >
                 {statuses.get(proposal.status) || proposal.status}
               </span>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
                 Submitted {formatDateSafe(proposal._createdAt)}
               </span>
             </div>
@@ -88,10 +88,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
           <div className="space-y-8 lg:col-span-2">
             {/* Description */}
             <div>
-              <h2 className="mb-4 text-lg font-medium text-gray-900">
+              <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                 Description
               </h2>
-              <div className="prose prose-sm max-w-none text-gray-600">
+              <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
                 {proposal.description && proposal.description.length > 0 ? (
                   <PortableText value={proposal.description} />
                 ) : (
@@ -103,10 +103,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
             {/* Outline */}
             {proposal.outline && (
               <div>
-                <h2 className="mb-4 text-lg font-medium text-gray-900">
+                <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                   Outline
                 </h2>
-                <div className="prose prose-sm max-w-none text-gray-600">
+                <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
                   <p className="whitespace-pre-wrap">{proposal.outline}</p>
                 </div>
               </div>
@@ -115,14 +115,14 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
             {/* Topics */}
             {topics && topics.length > 0 && (
               <div>
-                <h2 className="mb-4 text-lg font-medium text-gray-900">
+                <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                   Topics
                 </h2>
                 <div className="flex flex-wrap gap-2">
                   {topics.map((topic) => (
                     <span
                       key={topic._id}
-                      className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20 ring-inset"
+                      className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-600/20 ring-inset dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-400/30"
                     >
                       <TagIcon className="mr-1 h-3 w-3" />
                       {topic.title}
@@ -139,19 +139,20 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   speaker?.submittedTalks && speaker.submittedTalks.length > 0,
               ) && (
                 <div>
-                  <h2 className="mb-4 text-lg font-medium text-gray-900">
+                  <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                     Other Submissions
                   </h2>
                   <div className="space-y-3">
                     {speakers
                       .flatMap((speaker) => speaker.submittedTalks || [])
+                      .filter((talk) => talk._id !== proposal._id) // Don't show the current proposal
                       .map((talk) => (
                         <div
                           key={talk._id}
-                          className="flex items-start justify-between rounded-lg bg-gray-50 p-4"
+                          className="flex items-start justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900">
+                            <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
                               {talk.title}
                             </p>
                             <div className="mt-1 flex items-center space-x-2">
@@ -160,7 +161,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                               >
                                 {statuses.get(talk.status) || talk.status}
                               </span>
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
                                 {formatDateSafe(talk._createdAt)}
                               </span>
                             </div>
@@ -172,7 +173,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                                   return (
                                     <span
                                       key={topic._id}
-                                      className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20"
+                                      className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-400/30"
                                     >
                                       {topic.title}
                                     </span>
@@ -195,7 +196,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   speaker.previousAcceptedTalks.length > 0,
               ) && (
                 <div>
-                  <h2 className="mb-4 text-lg font-medium text-gray-900">
+                  <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                     Previous Accepted Talks
                   </h2>
                   <div className="space-y-3">
@@ -204,10 +205,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                       .map((talk) => (
                         <div
                           key={talk._id}
-                          className="flex items-start justify-between rounded-lg bg-gray-50 p-4"
+                          className="flex items-start justify-between rounded-lg bg-gray-50 p-4 dark:bg-gray-800"
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-gray-900">
+                            <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
                               {talk.title}
                             </p>
                             <div className="mt-1 flex items-center space-x-2">
@@ -217,7 +218,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                                 {statuses.get(talk.status) || talk.status}
                               </span>
                               {talk.conference && (
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
                                   {(() => {
                                     // Type guard to check if conference is a Conference object (not a Reference)
                                     const isConferenceObject = (
@@ -247,7 +248,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                                   return (
                                     <span
                                       key={topic._id}
-                                      className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20"
+                                      className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700 ring-1 ring-blue-600/20 dark:bg-blue-900 dark:text-blue-200 dark:ring-blue-400/30"
                                     >
                                       {topic.title}
                                     </span>
@@ -266,8 +267,8 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Speaker Information */}
-            <div className="rounded-lg bg-gray-50 p-6">
-              <h2 className="mb-4 text-lg font-medium text-gray-900">
+            <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800">
+              <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                 {speakers.length > 1 ? 'Speakers' : 'Speaker'}
               </h2>
               {speakers.length > 0 ? (
@@ -293,14 +294,14 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                             loading="lazy"
                           />
                         ) : (
-                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-200">
-                            <UserIcon className="h-8 w-8 text-gray-400" />
+                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
+                            <UserIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
                           </div>
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center space-x-2">
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">
                             {speaker.name}
                           </p>
                           {requiresTravelFunding && (
@@ -313,18 +314,18 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                           )}
                         </div>
                         {speaker.bio && (
-                          <p className="mt-1 line-clamp-3 text-sm text-gray-500">
+                          <p className="mt-1 line-clamp-3 text-sm text-gray-500 dark:text-gray-400">
                             {speaker.bio}
                           </p>
                         )}
                         {speaker.title && (
-                          <p className="mt-1 text-sm text-gray-500">
+                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                             {speaker.title}
                           </p>
                         )}
                         {speaker.links && speaker.links.length > 0 && (
                           <div className="mt-3">
-                            <p className="mb-1 text-xs font-medium text-gray-500">
+                            <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
                               Social Links
                             </p>
                             <div className="flex flex-wrap gap-2">
@@ -334,7 +335,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                                   href={link}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-xs break-all text-blue-600 hover:text-blue-800 hover:underline"
+                                  className="text-xs break-all text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
                                   title={link}
                                 >
                                   {new URL(link).hostname}
@@ -348,42 +349,44 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 italic">
+                <p className="text-sm text-gray-500 italic dark:text-gray-400">
                   Speaker information not available
                 </p>
               )}
             </div>
 
             {/* Proposal Details */}
-            <div className="rounded-lg bg-gray-50 p-6">
-              <h2 className="mb-4 text-lg font-medium text-gray-900">
+            <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800">
+              <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                 Details
               </h2>
               <dl className="space-y-3">
                 <div>
-                  <dt className="flex items-center text-sm font-medium text-gray-500">
+                  <dt className="flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">
                     <ClockIcon className="mr-2 h-4 w-4" />
                     Format
                   </dt>
-                  <dd className="mt-1 text-sm text-gray-900">
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white">
                     {formats.get(proposal.format) ||
                       proposal.format ||
                       'Not specified'}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Level</dt>
-                  <dd className="mt-1 text-sm text-gray-900">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Level
+                  </dt>
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white">
                     {levels.get(proposal.level) ||
                       proposal.level ||
                       'Not specified'}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">
+                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                     Language
                   </dt>
-                  <dd className="mt-1 text-sm text-gray-900">
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white">
                     {languages.get(proposal.language) ||
                       proposal.language ||
                       'Not specified'}
@@ -391,10 +394,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                 </div>
                 {proposal.audiences && proposal.audiences.length > 0 && (
                   <div>
-                    <dt className="text-sm font-medium text-gray-500">
+                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                       Target Audience
                     </dt>
-                    <dd className="mt-1 text-sm text-gray-900">
+                    <dd className="mt-1 text-sm text-gray-900 dark:text-white">
                       {proposal.audiences
                         .map((aud) => audiences.get(aud) || aud)
                         .join(', ')}
@@ -402,21 +405,21 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   </div>
                 )}
                 <div>
-                  <dt className="flex items-center text-sm font-medium text-gray-500">
+                  <dt className="flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     Created
                   </dt>
-                  <dd className="mt-1 text-sm text-gray-900">
+                  <dd className="mt-1 text-sm text-gray-900 dark:text-white">
                     {formatDateTimeSafe(proposal._createdAt)}
                   </dd>
                 </div>
                 {proposal._updatedAt &&
                   proposal._updatedAt !== proposal._createdAt && (
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">
+                      <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                         Last Updated
                       </dt>
-                      <dd className="mt-1 text-sm text-gray-900">
+                      <dd className="mt-1 text-sm text-gray-900 dark:text-white">
                         {formatDateTimeSafe(proposal._updatedAt)}
                       </dd>
                     </div>

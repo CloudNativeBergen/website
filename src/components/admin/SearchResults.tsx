@@ -5,6 +5,7 @@ import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
 import { SpeakerAvatars } from '../SpeakerAvatars'
 import { UserIcon } from '@heroicons/react/24/outline'
 import { getStatusBadgeStyle } from './utils'
+import { SkeletonList } from './LoadingSkeleton'
 
 interface SearchResultsProps {
   results: ProposalExisting[]
@@ -38,9 +39,8 @@ export function SearchResults({
     <div className="absolute top-full right-0 left-0 z-50 mt-1 max-h-96 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
       <div className="p-2">
         {isSearching && (
-          <div className="flex items-center justify-center p-4 text-gray-500">
-            <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-gray-500"></div>
-            Searching...
+          <div className="p-4">
+            <SkeletonList items={4} itemHeight="h-16" />
           </div>
         )}
 

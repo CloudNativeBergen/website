@@ -44,23 +44,26 @@ interface ScheduleEditorProps {
 // Constants for better maintainability
 const BUTTON_STYLES = {
   primary:
-    'inline-flex items-center gap-2 rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50',
+    'inline-flex items-center gap-2 rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600',
   secondary:
-    'inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500',
+    'inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700',
   danger:
-    'flex-1 rounded-md bg-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500',
+    'flex-1 rounded-md bg-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500',
 }
 
 const LAYOUT_CLASSES = {
   container: 'flex h-[calc(100vh-5rem)]', // Reduced height calculation to account for added padding
-  sidebar: 'border-r border-gray-200 bg-gray-50 flex-shrink-0',
+  sidebar:
+    'border-r border-gray-200 bg-gray-50 flex-shrink-0 dark:border-gray-700 dark:bg-gray-800',
   mainArea: 'flex flex-1 flex-col min-h-0 min-w-0',
-  header: 'border-b border-gray-200 bg-white px-4 py-2 flex-shrink-0',
+  header:
+    'border-b border-gray-200 bg-white px-4 py-2 flex-shrink-0 dark:border-gray-700 dark:bg-gray-900',
   content: 'flex-1 min-h-0 overflow-x-auto px-2 pt-4', // Keep horizontal scroll, remove vertical
   tracksContainer: 'h-full', // Removed overflow-y-auto since this class isn't used
   tracksGrid: 'flex gap-4 h-max', // Use content height instead of full height
   emptyState: 'flex flex-1 items-center justify-center',
-  errorBanner: 'border-b border-red-200 bg-red-50 px-4 py-2 flex-shrink-0',
+  errorBanner:
+    'border-b border-red-200 bg-red-50 px-4 py-2 flex-shrink-0 dark:border-red-800 dark:bg-red-900/20',
 } as const
 
 // Memoized HeaderSection component
@@ -99,7 +102,7 @@ const HeaderSection = ({
 
     return (
       <div className="flex items-center gap-2">
-        <div className="flex rounded-lg border border-gray-300 bg-white">
+        <div className="flex rounded-lg border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800">
           {schedules.map((daySchedule, index) => {
             const isActive = index === currentDayIndex
             const dayDate = new Date(daySchedule.date)
@@ -115,8 +118,8 @@ const HeaderSection = ({
                 onClick={() => onDayChange(index)}
                 className={`px-3 py-1.5 text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
                   isActive
-                    ? 'border-blue-200 bg-blue-50 text-blue-700'
-                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100'
                 }`}
                 type="button"
               >
@@ -137,11 +140,13 @@ const HeaderSection = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-6">
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
               Schedule Editor
             </h1>
             {headerInfo && (
-              <p className="mt-1 text-sm text-gray-600">{headerInfo}</p>
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {headerInfo}
+              </p>
             )}
           </div>
           {dayNavigation}
@@ -189,7 +194,7 @@ MemoizedHeaderSection.displayName = 'MemoizedHeaderSection'
 // Memoized ErrorBanner component
 const ErrorBanner = React.memo(({ error }: { error: string }) => (
   <div className={LAYOUT_CLASSES.errorBanner}>
-    <p className="text-red-800">{error}</p>
+    <p className="text-red-800 dark:text-red-300">{error}</p>
   </div>
 ))
 ErrorBanner.displayName = 'ErrorBanner'
@@ -198,7 +203,9 @@ ErrorBanner.displayName = 'ErrorBanner'
 const EmptyState = React.memo(({ onAddTrack }: { onAddTrack: () => void }) => (
   <div className={LAYOUT_CLASSES.emptyState}>
     <div className="text-center">
-      <p className="mb-4 text-gray-500">No tracks created yet</p>
+      <p className="mb-4 text-gray-500 dark:text-gray-400">
+        No tracks created yet
+      </p>
       <button
         onClick={onAddTrack}
         className={BUTTON_STYLES.primary}
@@ -289,8 +296,8 @@ const AddTrackModal = ({
 
   return (
     <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
-      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6">
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">
+      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800">
+        <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
           Add New Track
         </h3>
 
@@ -298,7 +305,7 @@ const AddTrackModal = ({
           <div>
             <label
               htmlFor="title"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
               Track Title
             </label>
@@ -307,7 +314,7 @@ const AddTrackModal = ({
               id="title"
               value={title}
               onChange={handleTitleChange}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
               placeholder="e.g., Platform Engineering"
               required
               autoFocus
@@ -317,7 +324,7 @@ const AddTrackModal = ({
           <div>
             <label
               htmlFor="description"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
               Description
             </label>
@@ -325,7 +332,7 @@ const AddTrackModal = ({
               id="description"
               value={description}
               onChange={handleDescriptionChange}
-              className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
               rows={3}
               placeholder="Track description..."
             />
@@ -334,7 +341,7 @@ const AddTrackModal = ({
           <div className="flex gap-3 pt-4">
             <button
               type="submit"
-              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-blue-700 dark:hover:bg-blue-600"
             >
               Add Track
             </button>

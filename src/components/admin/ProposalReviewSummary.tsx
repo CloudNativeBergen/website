@@ -40,22 +40,24 @@ export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {
   ]
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="mb-3 text-lg font-semibold text-gray-900">
+    <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
         Review Summary
       </h3>
 
       {reviews.length === 0 ? (
-        <p className="text-sm text-gray-500">No reviews yet</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No reviews yet
+        </p>
       ) : (
         <div className="space-y-3">
           {/* Overall Score */}
-          <div className="rounded-lg bg-gray-50 p-3">
+          <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-700">
             <div className="mb-1 flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-900">
+              <span className="text-sm font-medium text-gray-900 dark:text-white">
                 Overall Score
               </span>
-              <span className="text-lg font-semibold text-gray-900">
+              <span className="text-lg font-semibold text-gray-900 dark:text-white">
                 {overallAverage.toFixed(1)}/5
               </span>
             </div>
@@ -66,11 +68,11 @@ export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {
                 ) : (
                   <StarIconOutline
                     key={star}
-                    className="h-4 w-4 text-gray-300"
+                    className="h-4 w-4 text-gray-300 dark:text-gray-600"
                   />
                 ),
               )}
-              <span className="ml-2 text-sm text-gray-500">
+              <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
                 ({reviews.length} review{reviews.length !== 1 ? 's' : ''})
               </span>
             </div>
@@ -80,7 +82,9 @@ export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {
           <div className="space-y-2">
             {scoreCategories.map(({ key, label, score }) => (
               <div key={key} className="flex items-center justify-between">
-                <span className="w-28 text-sm text-gray-700">{label}</span>
+                <span className="w-28 text-sm text-gray-700 dark:text-gray-300">
+                  {label}
+                </span>
                 <div className="flex flex-1 items-center space-x-2">
                   <div className="flex items-center space-x-1">
                     {[1, 2, 3, 4, 5].map((star) => (
@@ -89,13 +93,13 @@ export function ProposalReviewSummary({ reviews }: ProposalReviewSummaryProps) {
                         className={clsx(
                           star <= Math.round(score)
                             ? 'text-yellow-400'
-                            : 'text-gray-300',
+                            : 'text-gray-300 dark:text-gray-600',
                           'h-3 w-3',
                         )}
                       />
                     ))}
                   </div>
-                  <span className="ml-2 text-sm font-medium text-gray-900">
+                  <span className="ml-2 text-sm font-medium text-gray-900 dark:text-white">
                     {score.toFixed(1)}
                   </span>
                 </div>

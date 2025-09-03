@@ -114,20 +114,20 @@ export function ProposalReviewForm({
   ]
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <h3 className="mb-3 text-lg font-semibold text-gray-900">
+    <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
         {existingReview ? 'Update My Review' : 'Add My Review'}
       </h3>
 
       <form onSubmit={submitHandler} className="space-y-4">
         {/* Rating Categories */}
         <div className="space-y-2">
-          <label className="sr-only block text-sm font-medium text-gray-700">
+          <label className="sr-only block text-sm font-medium text-gray-700 dark:text-gray-300">
             Scores
           </label>
           {scoreCategories.map(({ key, label }) => (
             <div key={key} className="flex items-center justify-between">
-              <span className="w-24 flex-shrink-0 text-sm font-medium text-gray-700">
+              <span className="w-24 flex-shrink-0 text-sm font-medium text-gray-700 dark:text-gray-300">
                 {label}
               </span>
               <div className="flex items-center space-x-2">
@@ -141,7 +141,7 @@ export function ProposalReviewForm({
                         (hovered[key as keyof typeof hovered] ||
                           ratings[key as keyof typeof ratings]) >= star
                           ? 'text-yellow-400'
-                          : 'text-gray-300 hover:text-yellow-300',
+                          : 'text-gray-300 hover:text-yellow-300 dark:text-gray-600 dark:hover:text-yellow-400',
                       )}
                       onMouseEnter={() => {
                         setHovered((h) => ({ ...h, [key]: star }))
@@ -157,7 +157,7 @@ export function ProposalReviewForm({
                     </button>
                   ))}
                 </div>
-                <span className="w-8 text-right text-sm text-gray-500">
+                <span className="w-8 text-right text-sm text-gray-500 dark:text-gray-400">
                   {ratings[key as keyof typeof ratings]}/5
                 </span>
               </div>
@@ -169,7 +169,7 @@ export function ProposalReviewForm({
         <div>
           <label
             htmlFor="comment"
-            className="mb-1 block text-sm font-medium text-gray-700"
+            className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
           >
             Comment
           </label>
@@ -177,7 +177,7 @@ export function ProposalReviewForm({
             id="comment"
             name="comment"
             rows={3}
-            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-500"
             placeholder="Write your review comments here..."
             value={comment}
             onChange={(e) => setComment(e.target.value)}
@@ -190,7 +190,7 @@ export function ProposalReviewForm({
             type="button"
             onClick={handleNextProposal}
             disabled={isLoadingNext}
-            className="inline-flex items-center gap-x-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-x-2 rounded-md bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
           >
             <ArrowRightIcon className="h-4 w-4" />
             {isLoadingNext ? 'Loading...' : 'Next'}
@@ -200,7 +200,7 @@ export function ProposalReviewForm({
             disabled={
               isSubmitting || Object.values(ratings).some((r) => r === 0)
             }
-            className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-x-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
           >
             <PaperAirplaneIcon className="h-4 w-4" />
             {isSubmitting

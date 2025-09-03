@@ -125,14 +125,14 @@ export default async function AdminSpeakers() {
         <div className="pb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <UserGroupIcon className="h-8 w-8 text-brand-cloud-blue" />
+              <UserGroupIcon className="h-8 w-8 text-brand-cloud-blue dark:text-blue-300" />
               <div>
-                <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight">
+                <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
                   Speaker Management
                 </h1>
-                <p className="font-inter mt-2 text-sm text-brand-slate-gray/70">
+                <p className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
                   Manage speakers with accepted or confirmed talks for{' '}
-                  <span className="font-medium text-brand-cloud-blue">
+                  <span className="font-medium text-brand-cloud-blue dark:text-blue-300">
                     {conference.title}
                   </span>
                   . Emails are sent only to speakers with confirmed talks.
@@ -148,19 +148,19 @@ export default async function AdminSpeakers() {
           </div>
 
           <div className="font-inter mt-4 grid grid-cols-6 gap-3">
-            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-              <div className="text-xl font-bold text-brand-slate-gray">
+            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+              <div className="text-xl font-bold text-brand-slate-gray dark:text-white">
                 {stats.totalSpeakers}
               </div>
-              <div className="text-xs text-brand-slate-gray/70">
+              <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
                 Total speakers
               </div>
             </div>
 
-            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-              <div className="text-xl font-bold text-brand-fresh-green">
+            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+              <div className="text-xl font-bold text-brand-fresh-green dark:text-green-300">
                 {stats.confirmedSpeakers}{' '}
-                <span className="text-sm font-normal text-brand-slate-gray/60">
+                <span className="text-sm font-normal text-brand-slate-gray/60 dark:text-gray-400">
                   (
                   {stats.totalSpeakers > 0
                     ? Math.round(
@@ -170,13 +170,15 @@ export default async function AdminSpeakers() {
                   %)
                 </span>
               </div>
-              <div className="text-xs text-brand-slate-gray/70">Confirmed</div>
+              <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
+                Confirmed
+              </div>
             </div>
 
-            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-              <div className="text-xl font-bold text-brand-cloud-blue">
+            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+              <div className="text-xl font-bold text-brand-cloud-blue dark:text-blue-300">
                 {stats.acceptedSpeakers}{' '}
-                <span className="text-sm font-normal text-brand-slate-gray/60">
+                <span className="text-sm font-normal text-brand-slate-gray/60 dark:text-gray-400">
                   (
                   {stats.totalSpeakers > 0
                     ? Math.round(
@@ -186,13 +188,15 @@ export default async function AdminSpeakers() {
                   %)
                 </span>
               </div>
-              <div className="text-xs text-brand-slate-gray/70">Accepted</div>
+              <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
+                Accepted
+              </div>
             </div>
 
-            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-              <div className="text-xl font-bold text-blue-600">
+            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+              <div className="text-xl font-bold text-brand-cloud-blue dark:text-blue-300">
                 {stats.newSpeakers}{' '}
-                <span className="text-sm font-normal text-brand-slate-gray/60">
+                <span className="text-sm font-normal text-brand-slate-gray/60 dark:text-gray-400">
                   (
                   {stats.totalSpeakers > 0
                     ? Math.round(
@@ -202,15 +206,15 @@ export default async function AdminSpeakers() {
                   %)
                 </span>
               </div>
-              <div className="text-xs text-brand-slate-gray/70">
+              <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
                 New speakers
               </div>
             </div>
 
-            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-              <div className="text-xl font-bold text-purple-600">
+            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+              <div className="text-xl font-bold text-brand-nordic-purple dark:text-indigo-300">
                 {stats.underrepresentedSpeakers}{' '}
-                <span className="text-sm font-normal text-brand-slate-gray/60">
+                <span className="text-sm font-normal text-brand-slate-gray/60 dark:text-gray-400">
                   (
                   {stats.totalSpeakers > 0
                     ? Math.round(
@@ -221,15 +225,15 @@ export default async function AdminSpeakers() {
                   %)
                 </span>
               </div>
-              <div className="text-xs text-brand-slate-gray/70">
+              <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
                 Underrepresented
               </div>
             </div>
 
-            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-              <div className="text-xl font-bold text-green-600">
+            <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+              <div className="text-xl font-bold text-brand-fresh-green dark:text-green-300">
                 {stats.localSpeakers}{' '}
-                <span className="text-sm font-normal text-brand-slate-gray/60">
+                <span className="text-sm font-normal text-brand-slate-gray/60 dark:text-gray-400">
                   (
                   {stats.totalSpeakers > 0
                     ? Math.round(
@@ -239,7 +243,7 @@ export default async function AdminSpeakers() {
                   %)
                 </span>
               </div>
-              <div className="text-xs text-brand-slate-gray/70">
+              <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
                 Local speakers
               </div>
             </div>

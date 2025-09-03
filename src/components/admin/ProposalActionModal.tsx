@@ -8,6 +8,7 @@ import {
   Transition,
   TransitionChild,
 } from '@headlessui/react'
+import { useTheme } from 'next-themes'
 import { ProposalExisting, Action, Status } from '@/lib/proposal/types'
 import {
   ArchiveBoxXMarkIcon,
@@ -28,27 +29,39 @@ function capitalizeFirstLetter(string: string) {
 function colorForAction(action: Action): [string, string, string] {
   switch (action) {
     case Action.submit:
-      return ['bg-blue-100', 'text-blue-600', 'bg-blue-600 hover:bg-blue-500']
+      return [
+        'bg-blue-100 dark:bg-blue-900/30',
+        'text-blue-600 dark:text-blue-400',
+        'bg-blue-600 hover:bg-blue-500 dark:bg-blue-700 dark:hover:bg-blue-600',
+      ]
     case Action.accept:
     case Action.confirm:
       return [
-        'bg-green-100',
-        'text-green-600',
-        'bg-green-600 hover:bg-green-500',
+        'bg-green-100 dark:bg-green-900/30',
+        'text-green-600 dark:text-green-400',
+        'bg-green-600 hover:bg-green-500 dark:bg-green-700 dark:hover:bg-green-600',
       ]
     case Action.remind:
       return [
-        'bg-yellow-100',
-        'text-yellow-600',
-        'bg-yellow-600 hover:bg-yellow-500',
+        'bg-yellow-100 dark:bg-yellow-900/30',
+        'text-yellow-600 dark:text-yellow-400',
+        'bg-yellow-600 hover:bg-yellow-500 dark:bg-yellow-700 dark:hover:bg-yellow-600',
       ]
     case Action.reject:
     case Action.withdraw:
     case Action.delete:
-      return ['bg-red-100', 'text-red-600', 'bg-red-600 hover:bg-red-500']
+      return [
+        'bg-red-100 dark:bg-red-900/30',
+        'text-red-600 dark:text-red-400',
+        'bg-red-600 hover:bg-red-500 dark:bg-red-700 dark:hover:bg-red-600',
+      ]
   }
 
-  return ['bg-gray-100', 'text-gray-600', 'bg-gray-600 hover:bg-gray-500']
+  return [
+    'bg-gray-100 dark:bg-gray-800',
+    'text-gray-600 dark:text-gray-400',
+    'bg-gray-600 hover:bg-gray-500 dark:bg-gray-700 dark:hover:bg-gray-600',
+  ]
 }
 
 function iconForAction(
@@ -94,6 +107,7 @@ export function ProposalActionModal({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [notify, setNotify] = useState<boolean>(true)
   const [comment, setComment] = useState<string>('')
+  const { theme } = useTheme()
 
   const ActionIcon = iconForAction(action)
   const [iconBgColor, iconTextColor, buttonColor] = colorForAction(action)
@@ -115,8 +129,12 @@ export function ProposalActionModal({
   }
 
   return (
-    <Transition show={open}>
-      <Dialog className="relative z-10" onClose={close}>
+    <Transition appear show={open}>
+      <Dialog
+        as="div"
+        className={`relative z-10 ${theme === 'dark' ? 'dark' : ''}`}
+        onClose={close}
+      >
         <TransitionChild
           enter="ease-out duration-300"
           enterFrom="opacity-0"
@@ -125,7 +143,7 @@ export function ProposalActionModal({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="bg-opacity-75 fixed inset-0 bg-gray-500 transition-opacity" />
+          <div className="bg-opacity-25 fixed inset-0 bg-black" />
         </TransitionChild>
 
         <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
@@ -138,11 +156,11 @@ export function ProposalActionModal({
               leaveFrom="opacity-100 translate-y-0 sm:scale-100"
               leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
             >
-              <DialogPanel className="relative transform overflow-hidden rounded-lg bg-white px-6 py-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-8">
+              <DialogPanel className="relative transform overflow-hidden rounded-2xl bg-white px-6 py-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-8 dark:bg-gray-900">
                 <div className="absolute top-0 right-0 hidden pt-4 pr-4 sm:block">
                   <button
                     type="button"
-                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
+                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-gray-900 dark:text-gray-500 dark:hover:text-gray-400"
                     onClick={() => close()}
                   >
                     <span className="sr-only">Close</span>
@@ -164,13 +182,13 @@ export function ProposalActionModal({
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <DialogTitle
                       as="h3"
-                      className="text-base/7 leading-6 font-semibold text-gray-900"
+                      className="text-base/7 leading-6 font-semibold text-gray-900 dark:text-white"
                     >
                       {capitalizeFirstLetter(action)} proposal
                     </DialogTitle>
                     {error && (
                       <div className="mt-2">
-                        <p className="text-sm/6 text-red-500">
+                        <p className="text-sm/6 text-red-500 dark:text-red-400">
                           Server error: &quot;{error}&quot;
                         </p>
                       </div>
@@ -181,19 +199,19 @@ export function ProposalActionModal({
                         action === Action.remind ||
                         action === Action.reject) &&
                       notify && (
-                        <div className="mt-2 rounded-md bg-yellow-50 p-4">
+                        <div className="mt-2 rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30">
                           <div className="flex">
                             <div className="flex-shrink-0">
                               <BellIcon
-                                className="h-5 w-5 text-yellow-400"
+                                className="h-5 w-5 text-yellow-400 dark:text-yellow-300"
                                 aria-hidden="true"
                               />
                             </div>
                             <div className="ml-3">
-                              <h3 className="text-sm font-medium text-yellow-800">
+                              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                                 Development Environment Warning
                               </h3>
-                              <div className="mt-2 text-sm text-yellow-700">
+                              <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
                                 <p>
                                   You are running on localhost. Email
                                   notifications will contain invalid links
@@ -207,7 +225,7 @@ export function ProposalActionModal({
                       )}
                     {adminUI ? (
                       <div className="mt-2">
-                        <p className="text-sm/6 text-gray-600">
+                        <p className="text-sm/6 text-gray-600 dark:text-gray-400">
                           Are you sure you want to {action} the proposal{' '}
                           <span className="font-semibold">
                             {proposal.title}
@@ -234,25 +252,25 @@ export function ProposalActionModal({
                             <input
                               type="checkbox"
                               checked={notify}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
                               onChange={() => setNotify(!notify)}
                             />
-                            <span className="ml-2 text-sm/6 text-gray-700">
+                            <span className="ml-2 text-sm/6 text-gray-700 dark:text-gray-300">
                               Notify the speaker via email
                             </span>
                           </label>
                         </div>
                         <div className="mt-4">
-                          <label className="block text-sm/6 font-medium text-gray-900">
+                          <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                             Comment
                           </label>
                           <textarea
-                            className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                            className="mt-1 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                             rows={3}
                             placeholder="Add a comment..."
                             onChange={(e) => setComment(e.target.value)}
                           ></textarea>
-                          <p className="mt-2 text-sm/6 text-gray-600">
+                          <p className="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">
                             Your comment will be included in the email to the
                             speaker.
                           </p>
@@ -260,7 +278,7 @@ export function ProposalActionModal({
                       </div>
                     ) : (
                       <div className="mt-2">
-                        <p className="text-sm/6 text-gray-600">
+                        <p className="text-sm/6 text-gray-600 dark:text-gray-400">
                           Are you sure you want to {action} the proposal{' '}
                           <span className="font-semibold">
                             {proposal.title}
@@ -288,7 +306,7 @@ export function ProposalActionModal({
                   </button>
                   <button
                     type="button"
-                    className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm/6 font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 sm:mt-0 sm:w-auto"
+                    className="mt-3 inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-gray-900 shadow-xs ring-1 ring-gray-300 ring-inset hover:bg-gray-50 sm:mt-0 sm:w-auto dark:text-white dark:ring-gray-600 dark:hover:bg-gray-800"
                     onClick={() => close()}
                   >
                     Cancel

@@ -132,10 +132,10 @@ export default async function AdminSponsors() {
           <div className="flex items-center gap-3">
             <BuildingOffice2Icon className="h-8 w-8 text-brand-cloud-blue" />
             <div>
-              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight">
+              <h1 className="font-space-grotesk text-2xl leading-7 font-bold text-brand-slate-gray sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
                 Sponsor Management
               </h1>
-              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70">
+              <p className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
                 Manage conference sponsors and partnerships for{' '}
                 <span className="font-medium text-brand-cloud-blue">
                   {conference.title}
@@ -147,51 +147,53 @@ export default async function AdminSponsors() {
         </div>
 
         <div className="font-inter mt-4 grid grid-cols-6 gap-3">
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-slate-gray">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-slate-gray dark:text-white">
               {sponsors.length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Total sponsors
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-fresh-green">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-fresh-green dark:text-green-400">
               {formattedTotalValue}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">Total value</div>
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
+              Total value
+            </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-brand-cloud-blue">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-brand-cloud-blue dark:text-indigo-400">
               {availableTiers}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Available tiers
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-blue-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
               {sponsorsWithMissingContactInfo.length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Missing contacts
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-purple-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-purple-600 dark:text-purple-400">
               {sponsorsWithMissingBillingInfo.length}
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Missing billing
             </div>
           </div>
 
-          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20">
-            <div className="text-xl font-bold text-green-600">
+          <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
+            <div className="text-xl font-bold text-green-600 dark:text-green-400">
               {
                 sponsors.filter(
                   (sponsor) =>
@@ -200,7 +202,7 @@ export default async function AdminSponsors() {
                 ).length
               }
             </div>
-            <div className="text-xs text-brand-slate-gray/70">
+            <div className="text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Complete profiles
             </div>
           </div>
@@ -249,21 +251,23 @@ export default async function AdminSponsors() {
 
       {/* Quick Actions */}
       <div className="mt-12">
-        <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          Quick Actions
+        </h2>
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
             href="/admin/sponsors/contacts"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
               <div className="flex-shrink-0">
-                <UserGroupIcon className="h-6 w-6 text-gray-400" />
+                <UserGroupIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
                   Sponsor Contacts
                 </p>
-                <p className="truncate text-sm text-gray-500">
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                   Manage sponsor contact information
                 </p>
               </div>
@@ -272,17 +276,17 @@ export default async function AdminSponsors() {
 
           <Link
             href="/sponsor"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
               <div className="flex-shrink-0">
-                <GlobeAltIcon className="h-6 w-6 text-gray-400" />
+                <GlobeAltIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
                   View Sponsor Page
                 </p>
-                <p className="truncate text-sm text-gray-500">
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                   See the public sponsorship information
                 </p>
               </div>
@@ -291,17 +295,17 @@ export default async function AdminSponsors() {
 
           <Link
             href="/admin"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
               <div className="flex-shrink-0">
-                <BuildingOffice2Icon className="h-6 w-6 text-gray-400" />
+                <BuildingOffice2Icon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
                   Back to Dashboard
                 </p>
-                <p className="truncate text-sm text-gray-500">
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                   Return to the main admin dashboard
                 </p>
               </div>

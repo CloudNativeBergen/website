@@ -65,7 +65,7 @@ export default async function ProposalDetailPage({
 
                 {/* Quick Actions */}
                 <div className="flex items-center space-x-3">
-                  <div className="flex items-center text-sm text-gray-500">
+                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                     <ClockIcon className="mr-1 h-4 w-4" />
                     <span className="hidden sm:inline">Last updated: </span>
                     {new Date(

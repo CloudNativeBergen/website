@@ -145,17 +145,19 @@ const ServiceSessionModal = ({
 
   return (
     <div className="bg-opacity-50 fixed inset-0 z-50 flex items-center justify-center bg-black">
-      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6">
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">
+      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800">
+        <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
           Create Service Session
         </h3>
-        <p className="mb-4 text-sm text-gray-600">Starting at {timeSlot}</p>
+        <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+          Starting at {timeSlot}
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label
               htmlFor="title"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
               Session Title
             </label>
@@ -164,7 +166,7 @@ const ServiceSessionModal = ({
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
               placeholder="e.g., Coffee Break, Lunch, Networking"
               required
               autoFocus
@@ -174,7 +176,7 @@ const ServiceSessionModal = ({
           <div>
             <label
               htmlFor="duration"
-              className="mb-1 block text-sm font-medium text-gray-700"
+              className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
               Duration (minutes)
             </label>
@@ -182,7 +184,7 @@ const ServiceSessionModal = ({
               id="duration"
               value={duration}
               onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 transition-colors focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             >
               <option value={5}>5 minutes</option>
               <option value={10}>10 minutes</option>
@@ -198,14 +200,14 @@ const ServiceSessionModal = ({
           <div className="flex gap-3 pt-4">
             <button
               type="submit"
-              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-blue-700 dark:hover:bg-blue-600"
             >
               Create Session
             </button>
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 rounded-md bg-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-400 focus:ring-2 focus:ring-gray-500 focus:outline-none"
+              className="flex-1 rounded-md bg-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-400 focus:ring-2 focus:ring-gray-500 focus:outline-none dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500"
             >
               Cancel
             </button>
@@ -367,7 +369,7 @@ const ServiceSession = ({
 
         {/* Editing overlay */}
         {isEditing && (
-          <div className="absolute inset-0 z-30 rounded-md border-2 border-blue-400 bg-blue-50 p-2">
+          <div className="absolute inset-0 z-30 rounded-md border-2 border-blue-400 bg-blue-50 p-2 dark:border-blue-500 dark:bg-blue-900/20">
             <div className="space-y-1">
               <input
                 type="text"
@@ -375,20 +377,20 @@ const ServiceSession = ({
                 onChange={(e) => setEditTitle(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onBlur={handleSaveEdit}
-                className="w-full rounded border border-blue-300 bg-white px-1 py-0.5 text-xs font-medium text-gray-700 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                className="w-full rounded border border-blue-300 bg-white px-1 py-0.5 text-xs font-medium text-gray-700 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-blue-600 dark:bg-gray-800 dark:text-gray-300"
                 autoFocus
               />
               <div className="flex gap-1">
                 <button
                   onClick={handleSaveEdit}
-                  className="rounded px-1 py-0.5 text-xs text-blue-600 hover:bg-blue-100"
+                  className="rounded px-1 py-0.5 text-xs text-blue-600 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-800/50"
                   type="button"
                 >
                   Save
                 </button>
                 <button
                   onClick={handleCancelEdit}
-                  className="rounded px-1 py-0.5 text-xs text-gray-600 hover:bg-gray-100"
+                  className="rounded px-1 py-0.5 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
                   type="button"
                 >
                   Cancel
@@ -402,15 +404,17 @@ const ServiceSession = ({
         <div
           className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
             isResizing
-              ? 'border-blue-400 bg-blue-200 opacity-100'
-              : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100'
+              ? 'border-blue-400 bg-blue-200 opacity-100 dark:border-blue-500 dark:bg-blue-800'
+              : 'border-gray-400 bg-gray-200 opacity-0 group-hover:opacity-100 dark:border-gray-500 dark:bg-gray-600'
           }`}
           onMouseDown={handleMouseDown}
           title="Drag to resize"
         >
           <div
             className={`absolute inset-x-0 top-0.5 mx-auto h-0.5 w-6 rounded ${
-              isResizing ? 'bg-blue-500' : 'bg-gray-400'
+              isResizing
+                ? 'bg-blue-500 dark:bg-blue-400'
+                : 'bg-gray-400 dark:bg-gray-300'
             }`}
           ></div>
         </div>
@@ -419,7 +423,7 @@ const ServiceSession = ({
         <div className="absolute top-0.5 right-0.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             onClick={handleStartEdit}
-            className="rounded-full bg-gray-100 p-0.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100"
+            className="rounded-full bg-gray-100 p-0.5 text-gray-600 transition-colors hover:bg-gray-200 hover:opacity-100 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
             title="Rename session"
             type="button"
           >
@@ -427,7 +431,7 @@ const ServiceSession = ({
           </button>
           <button
             onClick={handleDuplicate}
-            className="rounded-full bg-blue-100 p-0.5 text-blue-600 transition-colors hover:bg-blue-200 hover:opacity-100"
+            className="rounded-full bg-blue-100 p-0.5 text-blue-600 transition-colors hover:bg-blue-200 hover:opacity-100 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-800/50"
             title="Duplicate to all tracks"
             type="button"
           >
@@ -435,7 +439,7 @@ const ServiceSession = ({
           </button>
           <button
             onClick={handleRemove}
-            className="rounded-full bg-red-100 p-0.5 text-red-600 transition-colors hover:bg-red-200 hover:opacity-100"
+            className="rounded-full bg-red-100 p-0.5 text-red-600 transition-colors hover:bg-red-200 hover:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50"
             title="Remove session"
             type="button"
           >
@@ -569,13 +573,15 @@ const TimeSlotDropZone = ({
   )
 
   const dropZoneClasses = useMemo(() => {
-    const baseClasses = 'absolute right-0 left-0 h-3 border-b border-gray-100'
+    const baseClasses =
+      'absolute right-0 left-0 h-3 border-b border-gray-100 dark:border-gray-700'
 
     if (isOver && canDrop) {
-      return `${baseClasses} border-blue-300 bg-blue-100` // Blue for valid drop
+      return `${baseClasses} border-blue-300 bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30` // Blue for valid drop
     }
 
-    if (isOver && !canDrop) return `${baseClasses} border-red-300 bg-red-100`
+    if (isOver && !canDrop)
+      return `${baseClasses} border-red-300 bg-red-100 dark:border-red-600 dark:bg-red-900/30`
     return baseClasses
   }, [isOver, canDrop])
 
@@ -590,7 +596,7 @@ const TimeSlotDropZone = ({
       style={{ top: `${position}px` }}
     >
       {showLabel && (
-        <div className="absolute -top-0.5 left-2 text-xs text-gray-400">
+        <div className="absolute -top-0.5 left-2 text-xs text-gray-400 dark:text-gray-500">
           {timeSlot.displayTime}
         </div>
       )}
@@ -601,7 +607,7 @@ const TimeSlotDropZone = ({
         isOver &&
         canDrop && (
           <div className="absolute inset-0 z-20 flex items-center justify-center">
-            <div className="flex animate-bounce items-center gap-2 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white shadow-xl">
+            <div className="flex animate-bounce items-center gap-2 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white shadow-xl dark:bg-orange-700">
               <ArrowsRightLeftIcon className="h-4 w-4 animate-pulse" />
               <span className="font-semibold">SWAP</span>
               <ArrowsRightLeftIcon className="h-4 w-4 animate-pulse" />
@@ -619,7 +625,7 @@ const TimeSlotDropZone = ({
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <div className="pointer-events-none flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white shadow-lg">
+          <div className="pointer-events-none flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs text-white shadow-lg dark:bg-blue-700">
             <PlusIcon className="h-3 w-3" />
             Service
           </div>
@@ -704,7 +710,7 @@ const ScheduledTalk = ({
         )}
         <button
           onClick={handleRemove}
-          className="absolute top-0.5 right-0.5 z-20 rounded-full bg-red-100 p-0.5 text-red-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-200 hover:opacity-100"
+          className="absolute top-0.5 right-0.5 z-20 rounded-full bg-red-100 p-0.5 text-red-600 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-200 hover:opacity-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-800/50"
           title="Remove from schedule"
           type="button"
         >
@@ -744,35 +750,35 @@ const TrackHeader = ({
   const realTalks = track.talks.filter((talk) => talk.talk).length
 
   return (
-    <div className="rounded-t-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-t-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
       {isEditing ? (
         <div className="space-y-3">
           <input
             type="text"
             value={editTitle}
             onChange={(e) => onEditTitle(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             placeholder="Track title"
             autoFocus
           />
           <textarea
             value={editDescription}
             onChange={(e) => onEditDescription(e.target.value)}
-            className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             rows={2}
             placeholder="Track description"
           />
           <div className="flex gap-2">
             <button
               onClick={onSave}
-              className="rounded-md bg-blue-600 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="rounded-md bg-blue-600 px-3 py-1 text-sm text-white transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-blue-700 dark:hover:bg-blue-600"
               type="button"
             >
               Save
             </button>
             <button
               onClick={onCancel}
-              className="rounded-md bg-gray-300 px-3 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-400 focus:ring-2 focus:ring-gray-500 focus:outline-none"
+              className="rounded-md bg-gray-300 px-3 py-1 text-sm text-gray-700 transition-colors hover:bg-gray-400 focus:ring-2 focus:ring-gray-500 focus:outline-none dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500"
               type="button"
             >
               Cancel
@@ -782,18 +788,18 @@ const TrackHeader = ({
       ) : (
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-lg font-semibold text-gray-900">
+            <h3 className="truncate text-lg font-semibold text-gray-900 dark:text-white">
               {track.trackTitle}
             </h3>
             <div className="mt-2 flex flex-wrap gap-3 text-xs">
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-medium text-blue-800">
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 font-medium text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">
                 <span className="font-mono font-bold">
                   {talkContentMinutes}
                 </span>
                 <span>min content</span>
               </span>
               {realTalks > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-medium text-green-800">
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 font-medium text-green-800 dark:bg-green-900/50 dark:text-green-300">
                   <span className="font-mono">{realTalks}</span>
                   <span>talks</span>
                 </span>
@@ -803,7 +809,7 @@ const TrackHeader = ({
           <div className="ml-3 flex flex-shrink-0 gap-1">
             <button
               onClick={onStartEdit}
-              className="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-gray-500 dark:hover:text-gray-300"
               title="Edit track"
               type="button"
             >
@@ -811,7 +817,7 @@ const TrackHeader = ({
             </button>
             <button
               onClick={onRemoveTrack}
-              className="rounded p-1 text-gray-400 transition-colors hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:outline-none"
+              className="rounded p-1 text-gray-400 transition-colors hover:text-red-600 focus:ring-2 focus:ring-red-500 focus:outline-none dark:text-gray-500 dark:hover:text-red-400"
               title="Remove track"
               type="button"
             >
@@ -983,8 +989,10 @@ function DroppableTrack({
   // Memoize track container classes
   const trackContainerClasses = useMemo(() => {
     const baseClasses =
-      'relative rounded-b-lg border-r border-b border-l border-gray-200 bg-gray-50'
-    return isOver ? `${baseClasses} bg-blue-50` : baseClasses
+      'relative rounded-b-lg border-r border-b border-l border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900'
+    return isOver
+      ? `${baseClasses} bg-blue-50 dark:bg-blue-900/20`
+      : baseClasses
   }, [isOver])
 
   return (
@@ -1064,7 +1072,7 @@ function DroppableTrack({
         {/* Empty state */}
         {track.talks.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 dark:text-gray-500">
               Drop talks here or create service sessions
             </p>
           </div>
