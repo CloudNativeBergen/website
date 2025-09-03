@@ -14,6 +14,11 @@ import {
 import { NetworkErrorDisplay, ValidationErrorSummary } from './ErrorComponents'
 import { ErrorBoundary } from './ErrorBoundary'
 
+// Generate a unique key for receipt items
+const generateReceiptKey = () => {
+  return `receipt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
 interface ExpenseFormProps {
   onSave: (expense: TravelExpenseInput) => void
   onCancel: () => void
@@ -175,6 +180,7 @@ export function ExpenseForm({
             }
 
             return {
+              _key: generateReceiptKey(),
               file: {
                 _type: 'file' as const,
                 asset: {
