@@ -187,31 +187,31 @@ const createDepthLayers = (
     name: 'background',
     zIndex: 1,
     sizeRange: [baseSize * 0.5, baseSize * 0.7],
-    opacityMultiplier: variant === 'light' ? 0.4 : 0.3,
+    opacityMultiplier: variant === 'light' ? 0.4 : 0.5,
     blur: 2.0,
     frequency: 0.5,
     animationSpeedMultiplier: 1.5,
-    brightness: 0.6,
+    brightness: variant === 'light' ? 0.6 : 0.9,
   },
   {
     name: 'midground',
     zIndex: 10,
     sizeRange: [baseSize * 0.8, baseSize * 1.2],
-    opacityMultiplier: variant === 'light' ? 0.7 : 0.6,
+    opacityMultiplier: variant === 'light' ? 0.7 : 0.8,
     blur: 0.8,
     frequency: 0.35,
     animationSpeedMultiplier: 1.0,
-    brightness: 0.8,
+    brightness: variant === 'light' ? 0.8 : 1.1,
   },
   {
     name: 'foreground',
     zIndex: 20,
     sizeRange: [baseSize * 1.3, baseSize * 1.6],
-    opacityMultiplier: variant === 'light' ? 1.0 : 0.9,
+    opacityMultiplier: variant === 'light' ? 1.0 : 1.2,
     blur: 0,
     frequency: 0.15,
     animationSpeedMultiplier: 0.7,
-    brightness: 1.0,
+    brightness: variant === 'light' ? 1.0 : 1.3,
   },
 ]
 
@@ -461,13 +461,13 @@ export function CloudNativePattern({
     return {
       deep: isLight
         ? 'bg-gradient-to-r from-blue-50/5 via-purple-50/8 to-cyan-50/5'
-        : 'bg-gradient-to-r from-blue-900/5 via-purple-900/8 to-cyan-900/5',
+        : 'bg-gradient-to-r from-blue-900/15 via-purple-900/20 to-cyan-900/15',
       mid: isLight
         ? 'bg-gradient-to-br from-cyan-50/6 via-transparent to-indigo-50/6'
-        : 'bg-gradient-to-br from-cyan-900/6 via-transparent to-indigo-900/6',
+        : 'bg-gradient-to-br from-cyan-900/12 via-transparent to-indigo-900/12',
       foreground: isLight
         ? 'bg-gradient-to-t from-transparent via-transparent to-blue-50/3'
-        : 'bg-gradient-to-t from-transparent via-transparent to-blue-900/3',
+        : 'bg-gradient-to-t from-transparent via-transparent to-blue-900/8',
     }
   }, [variant])
 

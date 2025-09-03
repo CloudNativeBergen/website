@@ -3,7 +3,7 @@ import { Container } from '@/components/Container'
 
 export function BrandingHeroSection() {
   return (
-    <section className="relative -mt-24 overflow-hidden bg-aqua-gradient pt-36 pb-24">
+    <section className="relative -mt-24 overflow-hidden bg-aqua-gradient pt-36 pb-24 dark:bg-gradient-to-br dark:from-gray-900 dark:via-blue-900/50 dark:to-gray-800">
       <CloudNativePattern
         className="absolute inset-0"
         opacity={0.18}
@@ -12,7 +12,7 @@ export function BrandingHeroSection() {
         baseSize={50}
         iconCount={100}
       />
-      <div className="absolute inset-0 z-10 bg-black/30"></div>
+      <div className="absolute inset-0 z-10 bg-black/30 dark:bg-black/20"></div>
       <Container className="relative z-20">
         <div className="text-center">
           <h1 className="font-jetbrains mb-6 text-5xl font-bold text-white">

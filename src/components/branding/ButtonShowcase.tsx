@@ -12,7 +12,7 @@ export function ButtonShowcase() {
     <div className="space-y-12">
       {/* Primary Action Buttons */}
       <div>
-        <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
+        <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
           Primary Action Buttons
         </h3>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -20,7 +20,7 @@ export function ButtonShowcase() {
             <Button href="#" variant="primary" className="w-full">
               Get Your Ticket
             </Button>
-            <p className="font-inter text-sm text-brand-slate-gray">
+            <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-400">
               Primary CTA - Cloud Blue
             </p>
           </div>
@@ -30,7 +30,7 @@ export function ButtonShowcase() {
               <UserGroupIcon className="mr-2 h-5 w-5" />
               Become a Sponsor
             </Button>
-            <p className="font-inter text-sm text-brand-slate-gray">
+            <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-400">
               Sponsorship - Fresh Green
             </p>
           </div>
@@ -40,7 +40,7 @@ export function ButtonShowcase() {
               <DocumentTextIcon className="mr-2 h-5 w-5" />
               Submit to Speak
             </Button>
-            <p className="font-inter text-sm text-brand-slate-gray">
+            <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-400">
               Call for Papers - Sunbeam Yellow
             </p>
           </div>
@@ -49,7 +49,7 @@ export function ButtonShowcase() {
 
       {/* Secondary Action Buttons */}
       <div>
-        <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
+        <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
           Secondary Action Buttons
         </h3>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -58,7 +58,7 @@ export function ButtonShowcase() {
               <CalendarIcon className="mr-2 h-5 w-5" />
               View Program
             </Button>
-            <p className="font-inter text-sm text-brand-slate-gray">
+            <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-400">
               Program/Schedule - Nordic Purple
             </p>
           </div>
@@ -67,7 +67,7 @@ export function ButtonShowcase() {
             <Button href="#" variant="outline" className="w-full">
               Learn More
             </Button>
-            <p className="font-inter text-sm text-brand-slate-gray">
+            <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-400">
               Secondary outline - Cloud Blue
             </p>
           </div>

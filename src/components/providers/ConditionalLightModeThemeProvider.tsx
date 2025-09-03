@@ -14,8 +14,7 @@ function ConditionalLightModeForcer() {
 
   useEffect(() => {
     // Force light mode for main pages, but allow theme switching for CFP dashboard pages (/cfp/)
-    // The /cfp page itself should be forced to light mode, only /cfp/ sub-routes should allow theme switching
-    if (!pathname.startsWith('/cfp/')) {
+    if (!pathname.startsWith('/cfp/') || !pathname.startsWith('/branding')) {
       setTheme('light')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

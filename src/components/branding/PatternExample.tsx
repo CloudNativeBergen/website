@@ -32,7 +32,7 @@ export function PatternExample({
 
   return (
     <div>
-      <h5 className="font-space-grotesk text-md mb-3 font-semibold text-brand-slate-gray">
+      <h5 className="font-space-grotesk text-md mb-3 font-semibold text-brand-slate-gray dark:text-gray-200">
         {title}
       </h5>
       <div
