@@ -134,7 +134,7 @@ Adjust as needed; document exceptions.
 
 ## 5) Data subject requests (DSR) SOP
 
-- Intake: use the template in Appendix C (web form/email alias like [privacy@cloudnativebergen.no](mailto:privacy@cloudnativebergen.no)). Accept access/erasure/rectification/objection/portability/restriction requests.
+- Intake: use the template in Appendix C (web form/email alias like [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev)). Accept access/erasure/rectification/objection/portability/restriction requests.
 - Verify identity: email challenge to registered address, or reasonable verification for other channels.
 - Triage: log request, category, deadline (30 days), systems to search (ticketing, email/CRM, file storage, video platform).
 - Evaluate exceptions: legal obligations (accounting), freedom of expression and information for published content, overriding legitimate interests.
@@ -210,11 +210,11 @@ See Appendices G and H for a sample onboarding questionnaire and a lightweight R
 
 English:
 
-“We are recording photo and video at this event. Talks will be published on our official video channels/platforms. By entering, you acknowledge this. If you prefer not to be recorded, please speak to staff for seating options and a no‑filming area. Privacy contact: [privacy@cloudnativebergen.no](mailto:privacy@cloudnativebergen.no).”
+“We are recording photo and video at this event. Talks will be published on our official video channels/platforms. By entering, you acknowledge this. If you prefer not to be recorded, please speak to staff for seating options and a no‑filming area. Privacy contact: [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev).”
 
 Norwegian (draft – localize as needed):
 
-“Vi tar bilder og gjør opptak av foredrag under arrangementet. Foredrag publiseres på våre offisielle videokanaler/plattformer. Ved å gå inn godtar du dette. Gi beskjed til våre frivillige hvis du ikke ønsker å bli filmet; vi har egne soner uten filming. Kontakt for personvern: [privacy@cloudnativebergen.no](mailto:privacy@cloudnativebergen.no).”
+“Vi tar bilder og gjør opptak av foredrag under arrangementet. Foredrag publiseres på våre offisielle videokanaler/plattformer. Ved å gå inn godtar du dette. Gi beskjed til våre frivillige hvis du ikke ønsker å bli filmet; vi har egne soner uten filming. Kontakt for personvern: [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev).”
 
 Long‑form poster (link via QR): see Appendix B/C references.
 
@@ -242,7 +242,7 @@ Include checkboxes in the CFP/acceptance flow:
 - Details:
 - Identity verification method:
 
-Submit to: [privacy@cloudnativebergen.no](mailto:privacy@cloudnativebergen.no)
+Submit to: [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev)
 
 ### Appendix D: Subprocessor register template
 
@@ -307,6 +307,6 @@ Use this to collect key facts before signing.
 
 ## Public‑facing privacy notice — suggested clause for recordings and online publication
 
-“Recordings and publication. We record conference sessions and publish talks on our official online video channels/platforms. The legal basis for speakers is our speaking agreement and our legitimate interest in documenting and sharing the event. For attendees, our legitimate interest allows incidental capture; we provide no‑filming areas and will honor reasonable requests for removal or blurring where feasible. Publication on third‑party platforms may involve transfers outside the EEA; we rely on standard contractual clauses and have assessed transfer risks. You can read more in our Privacy Operations Playbook and contact us at [privacy@cloudnativebergen.no](mailto:privacy@cloudnativebergen.no).”
+“Recordings and publication. We record conference sessions and publish talks on our official online video channels/platforms. The legal basis for speakers is our speaking agreement and our legitimate interest in documenting and sharing the event. For attendees, our legitimate interest allows incidental capture; we provide no‑filming areas and will honor reasonable requests for removal or blurring where feasible. Publication on third‑party platforms may involve transfers outside the EEA; we rely on standard contractual clauses and have assessed transfer risks. You can read more in our Privacy Operations Playbook and contact us at [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev).”
 
 Add a link to this playbook from your website privacy page.

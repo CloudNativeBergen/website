@@ -14,21 +14,21 @@ export default async function CodeOfConduct() {
 
   return (
     <>
-      <div className="relative py-20 sm:pt-36 sm:pb-24">
-        <BackgroundImage className="-top-36 -bottom-14" />
-        <Container className="relative">
-          <div className="mx-auto max-w-4xl">
-            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
+      <div className="relative py-20 sm:pt-36 sm:pb-24 print:py-8">
+        <BackgroundImage className="-top-36 -bottom-14 print:hidden" />
+        <Container className="relative print:max-w-none print:px-0">
+          <div className="mx-auto max-w-4xl print:max-w-none">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl print:mb-4 print:text-3xl print:font-bold print:text-black">
               Community Code of Conduct
             </h1>
-            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
-              <p>
+            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray print:mt-4 print:space-y-4 print:text-base print:text-black">
+              <p className="print:leading-relaxed">
                 As participants, speakers, sponsors, volunteers, organizers, and
                 contributors in the
                 {organizerName} community, we pledge to respect all people who
                 participate in our events and activities.
               </p>
-              <p>
+              <p className="print:leading-relaxed">
                 We are committed to making participation in {organizerName}{' '}
                 events and the broader community a harassment-free experience
                 for everyone, regardless of age, body size, caste, disability,
@@ -41,14 +41,16 @@ export default async function CodeOfConduct() {
             </div>
           </div>
 
-          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm">
-            <div className="prose prose-lg max-w-none">
-              <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm print:mt-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+            <div className="prose prose-lg print:prose-base max-w-none print:max-w-none">
+              <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Scope
               </h2>
-              <div className="font-inter text-brand-slate-gray">
-                <p>This code of conduct applies to:</p>
-                <ul className="mt-4 ml-6 list-disc space-y-2">
+              <div className="font-inter text-brand-slate-gray print:text-black">
+                <p className="print:leading-relaxed">
+                  This code of conduct applies to:
+                </p>
+                <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
                   <li>
                     All {organizerName} community spaces, both online and
                     offline
@@ -68,22 +70,22 @@ export default async function CodeOfConduct() {
                 </ul>
               </div>
 
-              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue">
+              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Our Standards
               </h2>
-              <div className="font-inter text-brand-slate-gray">
-                <p>
+              <div className="font-inter text-brand-slate-gray print:text-black">
+                <p className="print:leading-relaxed">
                   The {organizerName} Community is open, inclusive and
                   respectful. Every member of our community has the right to
                   have their identity respected and to participate in a safe,
                   welcoming environment.
                 </p>
 
-                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray">
+                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
                   Examples of behavior that contributes to a positive
                   environment:
                 </h3>
-                <ul className="mt-4 ml-6 list-disc space-y-2">
+                <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
                   <li>
                     Demonstrating empathy and kindness toward other people
                   </li>
@@ -108,10 +110,10 @@ export default async function CodeOfConduct() {
                   <li>Supporting and encouraging fellow community members</li>
                 </ul>
 
-                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray">
+                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
                   Examples of unacceptable behavior:
                 </h3>
-                <ul className="mt-4 ml-6 list-disc space-y-2">
+                <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
                   <li>
                     The use of sexualized language or imagery in any context
                   </li>
@@ -156,10 +158,10 @@ export default async function CodeOfConduct() {
                   </li>
                 </ul>
 
-                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray">
+                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
                   Additional prohibited behaviors:
                 </h3>
-                <ul className="mt-4 ml-6 list-disc space-y-2">
+                <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
                   <li>
                     Providing knowingly false or misleading information in
                     connection with a Code of Conduct investigation or otherwise
@@ -187,21 +189,21 @@ export default async function CodeOfConduct() {
                 </p>
               </div>
 
-              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue">
+              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Reporting
               </h2>
-              <div className="font-inter text-brand-slate-gray">
-                <p>
+              <div className="font-inter text-brand-slate-gray print:text-black">
+                <p className="print:leading-relaxed">
                   We encourage reporting of any incidents that violate this Code
                   of Conduct. Reports can be made in the following ways:
                 </p>
 
-                <ul className="mt-4 ml-6 list-disc space-y-2">
+                <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
                   <li>
                     <strong>Email:</strong> Contact the organizers via{' '}
                     <a
                       href={`mailto:${conference.contact_email}`}
-                      className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover"
+                      className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover print:text-black print:underline"
                     >
                       {conference.contact_email}
                     </a>
@@ -218,10 +220,10 @@ export default async function CodeOfConduct() {
                   </li>
                 </ul>
 
-                <p className="mt-6">
+                <p className="mt-6 print:mt-4 print:leading-relaxed">
                   <strong>What to include in your report:</strong>
                 </p>
-                <ul className="mt-4 ml-6 list-disc space-y-2">
+                <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
                   <li>Your contact information</li>
                   <li>Names of any witnesses or other people involved</li>
                   <li>When and where the incident occurred</li>
@@ -229,7 +231,7 @@ export default async function CodeOfConduct() {
                   <li>Any additional context you believe is relevant</li>
                 </ul>
 
-                <p className="mt-6">
+                <p className="mt-6 print:mt-4 print:leading-relaxed">
                   All reports will be handled with discretion and
                   confidentiality. You can expect a response within three
                   business days. We are committed to making our community a safe
@@ -237,23 +239,23 @@ export default async function CodeOfConduct() {
                 </p>
               </div>
 
-              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue">
+              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Enforcement
               </h2>
-              <div className="font-inter text-brand-slate-gray">
-                <p>
+              <div className="font-inter text-brand-slate-gray print:text-black">
+                <p className="print:leading-relaxed">
                   Upon review and investigation of a reported incident, the
                   Cloud Native Bergen organizing team will determine what action
                   is appropriate based on this Code of Conduct and its related
                   documentation.
                 </p>
 
-                <p className="mt-4">
+                <p className="mt-4 print:mt-3 print:leading-relaxed">
                   <strong>
                     Possible consequences may include, but are not limited to:
                   </strong>
                 </p>
-                <ul className="mt-4 ml-6 list-disc space-y-2">
+                <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
                   <li>A private conversation or warning</li>
                   <li>A public reprimand</li>
                   <li>Temporary removal from community spaces or events</li>
@@ -271,22 +273,22 @@ export default async function CodeOfConduct() {
                   </li>
                 </ul>
 
-                <p className="mt-6">
+                <p className="mt-6 print:mt-4 print:leading-relaxed">
                   The severity of consequences will be determined based on the
                   nature, context, and impact of the violation, as well as the
                   individual&apos;s history within the community.
                 </p>
               </div>
 
-              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue">
+              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Acknowledgements
               </h2>
-              <div className="font-inter text-brand-slate-gray">
-                <p>
+              <div className="font-inter text-brand-slate-gray print:text-black">
+                <p className="print:leading-relaxed">
                   This Code of Conduct is adapted from the{' '}
                   <a
                     href="https://github.com/cncf/foundation/blob/master/code-of-conduct.md"
-                    className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover"
+                    className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover print:text-black print:underline"
                   >
                     CNCF Code of Conduct
                   </a>
