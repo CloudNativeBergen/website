@@ -25,6 +25,7 @@ import {
   ArrowUpTrayIcon,
   NoSymbolIcon,
   UserIcon,
+  VideoCameraIcon,
   BookOpenIcon,
   CalendarIcon,
   CheckIcon,
@@ -453,6 +454,23 @@ export default async function PrivacyPolicyPage() {
                 Analyzing feedback to improve future conferences
               </p>
             </div>
+          </div>
+
+          {/* Recordings and Publication (concise clause) */}
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-2 flex items-center text-lg font-semibold text-gray-900 dark:text-white">
+              <VideoCameraIcon className="mr-3 h-5 w-5" />
+              Recordings and Publication
+            </h3>
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              We record conference sessions and may publish talks on our
+              official online video channels/platforms. For speakers, the legal
+              basis is our speaking agreement and our legitimate interest in
+              documenting and sharing the event. For attendees, our legitimate
+              interests allow incidental capture; we provide no‑filming areas
+              and will honor reasonable requests for removal or blurring where
+              feasible.
+            </p>
           </div>
         </section>
 

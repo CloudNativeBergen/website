@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import { ThemeProvider as NextThemesProvider, useTheme } from 'next-themes'
+import { useTheme } from 'next-themes'
 
 interface ConditionalLightModeThemeProviderProps {
   children: React.ReactNode
@@ -18,7 +18,8 @@ function ConditionalLightModeForcer() {
     if (!pathname.startsWith('/cfp/')) {
       setTheme('light')
     }
-  }, [setTheme, pathname])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]) // Only depend on pathname, not setTheme to avoid loops
 
   return null
 }
@@ -27,9 +28,9 @@ export function ConditionalLightModeThemeProvider({
   children,
 }: ConditionalLightModeThemeProviderProps) {
   return (
-    <NextThemesProvider attribute="class" disableTransitionOnChange>
+    <>
       <ConditionalLightModeForcer />
       {children}
-    </NextThemesProvider>
+    </>
   )
 }

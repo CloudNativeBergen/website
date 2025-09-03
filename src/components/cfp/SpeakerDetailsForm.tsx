@@ -389,16 +389,13 @@ export function SpeakerDetailsForm({
 
           {/* GDPR Consent Section */}
           <fieldset className="border-t border-gray-200 pt-6 dark:border-gray-700">
-            <legend className="sr-only">
-              Privacy and Data Processing Consent
-            </legend>
+            <legend className="sr-only">Privacy and Data Processing</legend>
             <div>
               <h3 className="text-base leading-6 font-semibold text-gray-900 dark:text-white">
                 Privacy and Data Processing
               </h3>
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                We need your consent to process your personal data. Please
-                review our{' '}
+                Please review our{' '}
                 <a
                   href="/privacy"
                   target="_blank"
@@ -407,14 +404,16 @@ export function SpeakerDetailsForm({
                 >
                   Privacy Policy
                 </a>{' '}
-                for detailed information about how we handle your data.
+                for details on how we handle your data. We process speaker data
+                to organize the conference under contract and our legitimate
+                interests.
               </p>
             </div>
 
             <div className="mt-6 space-y-4">
               <Checkbox
                 name="data-processing-consent"
-                label="I consent to the processing of my personal data for conference organization"
+                label="I have read and understand the Privacy Policy"
                 value={dataProcessingConsent}
                 setValue={setDataProcessingConsent}
               >
@@ -422,15 +421,15 @@ export function SpeakerDetailsForm({
                   <span className="text-red-600 dark:text-red-400">
                     Required:
                   </span>{' '}
-                  We need this consent to manage your speaker application,
-                  communicate with you about the conference, and fulfill our
-                  organizational obligations.
+                  We process speaker data to organize the conference under
+                  contract and legitimate interests. Your rights are described
+                  in our Privacy Policy.
                 </HelpText>
               </Checkbox>
 
               <Checkbox
                 name="public-profile-consent"
-                label="I consent to displaying my profile publicly on the conference website"
+                label="I understand my speaker profile will be displayed publicly as part of the programme"
                 value={publicProfileConsent}
                 setValue={setPublicProfileConsent}
               >
@@ -446,13 +445,24 @@ export function SpeakerDetailsForm({
 
               <Checkbox
                 name="photography-consent"
-                label="I consent to photography and recording during the conference"
+                label="I agree to the Speaker Media Terms"
                 value={photographyConsent}
                 setValue={setPhotographyConsent}
               >
                 <HelpText>
-                  This allows us to photograph and record your presentations and
-                  participation for promotional and archival purposes.
+                  Allows us to record, edit, and publish your talk on our
+                  official online channels/platforms. You retain your IP; we
+                  will credit you and consider reasonable takedown or redaction
+                  requests where feasible. Read the{' '}
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Speaker Media Terms
+                  </a>
+                  .
                 </HelpText>
               </Checkbox>
 

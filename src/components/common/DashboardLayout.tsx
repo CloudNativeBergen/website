@@ -113,12 +113,14 @@ export function DashboardLayout({
   const { setTheme } = useTheme()
   const colors = colorSchemes[mode]
 
-  // Force light mode for admin pages
+  // Force light mode for admin pages only - run once when mode changes
   useEffect(() => {
     if (mode === 'admin') {
       setTheme('light')
     }
-  }, [mode, setTheme])
+    // Speaker mode: let the root theme provider handle everything
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]) // Only depend on mode, not setTheme to avoid infinite loops
 
   // Handle keyboard shortcuts for search (admin mode only)
   useEffect(() => {
