@@ -223,7 +223,10 @@ export function DashboardLayout({
                 )}
               >
                 <div className="flex h-16 shrink-0 items-center">
-                  <Logomark className="h-8 w-auto text-white" />
+                  <Logomark
+                    className="h-8 w-auto text-white"
+                    variant={mode === 'speaker' ? 'white' : 'gradient'}
+                  />
                 </div>
                 <nav className="flex flex-1 flex-col">
                   <ul role="list" className="-mx-2 flex-1 space-y-1">
@@ -265,7 +268,10 @@ export function DashboardLayout({
             )}
           >
             <div className="flex h-16 shrink-0 items-center justify-center">
-              <Logomark className="h-8 w-auto text-white" />
+              <Logomark
+                className="h-8 w-auto text-white"
+                variant={mode === 'speaker' ? 'white' : 'gradient'}
+              />
             </div>
             <nav className="flex flex-1 flex-col">
               <ul role="list" className="flex-1 space-y-1">
