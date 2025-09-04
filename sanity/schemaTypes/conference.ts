@@ -159,6 +159,113 @@ export default defineType({
       description: 'Event ID for Checkin.no API integration',
     }),
     defineField({
+      name: 'ticket_capacity',
+      title: 'Maximum Ticket Capacity',
+      type: 'number',
+      description:
+        'Total maximum number of tickets available for sale (excluding sponsor/speaker tickets)',
+      validation: (Rule) => Rule.min(1),
+    }),
+    defineField({
+      name: 'ticket_targets',
+      title: 'Ticket Sales Targets',
+      type: 'object',
+      description:
+        'Configuration for ticket sales target tracking and milestones',
+      fields: [
+        defineField({
+          name: 'enabled',
+          title: 'Enable Target Tracking',
+          type: 'boolean',
+          description:
+            'Whether to enable ticket sales target tracking for this conference',
+          initialValue: false,
+        }),
+        defineField({
+          name: 'sales_start_date',
+          title: 'Sales Start Date',
+          type: 'date',
+          description: 'When ticket sales officially began',
+          hidden: ({ parent }) => !parent?.enabled,
+        }),
+        defineField({
+          name: 'target_curve',
+          title: 'Target Progression Curve',
+          type: 'string',
+          description: 'How targets should progress over time',
+          options: {
+            list: [
+              { title: 'Linear - Steady progression', value: 'linear' },
+              {
+                title: 'Early Push - Higher targets early on',
+                value: 'early_push',
+              },
+              {
+                title: 'Late Push - Higher targets near the end',
+                value: 'late_push',
+              },
+              {
+                title: 'S-Curve - Slow start, rapid middle, slow end',
+                value: 's_curve',
+              },
+            ],
+          },
+          initialValue: 'linear',
+          hidden: ({ parent }) => !parent?.enabled,
+        }),
+        defineField({
+          name: 'milestones',
+          title: 'Sales Milestones',
+          type: 'array',
+          description: 'Key dates and target percentages for ticket sales',
+          of: [
+            {
+              type: 'object',
+              fields: [
+                defineField({
+                  name: 'date',
+                  title: 'Milestone Date',
+                  type: 'date',
+                  validation: (Rule) => Rule.required(),
+                }),
+                defineField({
+                  name: 'target_percentage',
+                  title: 'Target Percentage',
+                  type: 'number',
+                  description:
+                    'Target percentage of total capacity to be sold by this date',
+                  validation: (Rule) => Rule.min(0).max(100),
+                }),
+                defineField({
+                  name: 'label',
+                  title: 'Milestone Label',
+                  type: 'string',
+                  description:
+                    'Optional label for this milestone (e.g., "Early Bird End", "CFP Close")',
+                }),
+              ],
+              preview: {
+                select: {
+                  title: 'label',
+                  subtitle: 'date',
+                  description: 'target_percentage',
+                },
+                prepare(selection) {
+                  const { title, subtitle, description } = selection
+                  return {
+                    title: title || subtitle,
+                    subtitle: `${description}% target by ${subtitle}`,
+                  }
+                },
+              },
+            },
+          ],
+          hidden: ({ parent }) => !parent?.enabled,
+        }),
+      ],
+      hidden: ({ document }) => !document?.ticket_capacity,
+    }),
+    defineField({
       name: 'social_links',
       title: 'Socials Links',
       type: 'array',

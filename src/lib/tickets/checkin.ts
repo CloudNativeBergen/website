@@ -7,7 +7,6 @@ export interface EventTicket {
   order_id: number
   category: string
   customer_name: string | null
-  numberOfTickets: number
   sum: string // price without vat
   sum_left: string // outstanding amount
   fields: { key: string; value: string }[]
@@ -80,6 +79,167 @@ interface CheckinPayOrderResponse {
   }
 }
 
+interface EventDiscount {
+  startsAt: string
+  stopsAt: string
+  trigger: string
+  triggerValue: string | null
+  type: string
+  value: string
+  affects: string
+  affectsValue: string | null
+  modes: string[]
+  tickets: string[]
+  ticketsOnly: boolean
+  includeBooking: boolean
+  times: number
+  timesTotal: number
+}
+
+export async function getEventDiscounts(
+  eventId: number,
+): Promise<EventDiscount[]> {
+  const query = `
+    query findEventByIdQuery($id: Int!) {
+      findEventById(id: $id) {
+        id
+        discounts {
+          startsAt
+          stopsAt
+          trigger
+          triggerValue
+          type
+          value
+          affects
+          affectsValue
+          modes
+          tickets
+          ticketsOnly
+          includeBooking
+          times
+          timesTotal
+        }
+      }
+    }
+  `
+
+  const variables = { id: eventId }
+
+  const response = await fetch(CHECKIN_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
+    },
+    body: JSON.stringify({ query, variables }),
+  })
+
+  if (!response.ok) {
+    console.error(
+      'Failed to fetch event discounts:',
+      response.status,
+      response.statusText,
+    )
+    throw new Error(`Failed to fetch event discounts: ${response.statusText}`)
+  }
+
+  const responseData = await response.json()
+
+  if (!responseData.data || !responseData.data.findEventById) {
+    console.error('Invalid event discounts response:', responseData)
+    throw new Error('Invalid event discounts response')
+  }
+
+  return responseData.data.findEventById.discounts || []
+}
+
+export interface CreateEventDiscountInput {
+  eventId: number
+  discountCode: string
+  numberOfTickets: number
+  ticketTypes: string[]
+  discountType?: 'percentage' | 'fixed'
+  discountValue?: number
+  startsAt?: string
+  stopsAt?: string
+}
+
+export async function createEventDiscount(
+  input: CreateEventDiscountInput,
+): Promise<EventDiscount> {
+  const {
+    eventId,
+    discountCode,
+    numberOfTickets,
+    ticketTypes,
+  } = input
+
+  const query = `
+    mutation CreateEventDiscount($input: CreateEventDiscountInput!) {
+      createEventDiscount(input: $input) {
+        startsAt
+        stopsAt
+        trigger
+        triggerValue
+        type
+        value
+        affects
+        affectsValue
+        modes
+        tickets
+        ticketsOnly
+        includeBooking
+        times
+        timesTotal
+      }
+    }
+  `
+
+  const variables = {
+    input: {
+      eventId,
+      trigger: 'code',
+      triggerValue: discountCode,
+      type: 'percentage',
+      value: '100',
+      affects: 'tickets',
+      tickets: ticketTypes,
+      ticketsOnly: true,
+      includeBooking: false,
+      times: 0,
+      timesTotal: numberOfTickets,
+      modes: ['web'],
+    },
+  }
+
+  const response = await fetch(CHECKIN_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
+    },
+    body: JSON.stringify({ query, variables }),
+  })
+
+  if (!response.ok) {
+    console.error(
+      'Failed to create event discount:',
+      response.status,
+      response.statusText,
+    )
+    throw new Error(`Failed to create event discount: ${response.statusText}`)
+  }
+
+  const responseData = await response.json()
+
+  if (!responseData.data || !responseData.data.createEventDiscount) {
+    console.error('Invalid create discount response:', responseData)
+    throw new Error('Invalid create discount response')
+  }
+
+  return responseData.data.createEventDiscount
+}
+
 export async function fetchEventTickets(
   customerId: number,
   eventId: number,
@@ -91,7 +251,6 @@ export async function fetchEventTickets(
         order_id
         category
         customer_name
-        numberOfTickets
         sum
         sum_left
         fields {
@@ -226,7 +385,7 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
       ordersMap.set(orderId, {
         order_id: orderId,
         tickets: [],
-        totalTickets: ticket.numberOfTickets, // numberOfTickets is the total for the order
+        totalTickets: 0,
         totalAmount: parseFloat(ticket.sum) || 0, // sum is the total amount for the order
         amountLeft: parseFloat(ticket.sum_left) || 0, // sum_left is the outstanding amount for the order
         categories: [],
@@ -235,6 +394,7 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
     }
 
     const order = ordersMap.get(orderId)!
+    order.totalTickets = order.totalTickets + 1
     order.tickets.push(ticket)
 
     // Add unique categories

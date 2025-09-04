@@ -330,7 +330,7 @@ export function DashboardLayout({
             )}
           </div>
 
-          <div className="flex items-center gap-x-2">
+          <div className="flex items-center gap-x-2" suppressHydrationWarning>
             <ThemeToggle />
             <button
               onClick={() => signOut({ callbackUrl: '/' })}
@@ -376,7 +376,10 @@ export function DashboardLayout({
                 </h1>
               )}
             </div>
-            <div className="flex items-center gap-x-4 lg:gap-x-6">
+            <div
+              className="flex items-center gap-x-4 lg:gap-x-6"
+              suppressHydrationWarning
+            >
               <ThemeToggle />
 
               {mode === 'admin' && (
@@ -397,7 +400,10 @@ export function DashboardLayout({
 
               {/* Profile dropdown */}
               <Menu as="div" className="relative">
-                <MenuButton className="-m-1.5 flex items-center p-1.5">
+                <MenuButton
+                  className="-m-1.5 flex items-center p-1.5"
+                  suppressHydrationWarning
+                >
                   <span className="sr-only">Open user menu</span>
                   <Image
                     alt=""

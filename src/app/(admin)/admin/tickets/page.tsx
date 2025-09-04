@@ -4,9 +4,13 @@ import {
   TIER_TICKET_ALLOCATION,
   createCategoryStatsForAdmin,
 } from '@/lib/tickets/calculations'
+import { analyzeTicketTargets } from '@/lib/tickets/target-calculations'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
+import { TargetSetupGuide } from '@/components/admin/TargetSetupGuide'
+import { TargetTrackingWithPreview } from '@/components/admin/TargetTrackingWithPreview'
+import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import type { EventTicket } from '@/lib/tickets/checkin'
 import { formatCurrency } from '@/lib/format'
@@ -43,6 +47,7 @@ export default async function AdminTickets() {
       conference.checkin_customer_id,
       conference.checkin_event_id,
     )
+    console.log(tickets.length)
   } catch (err) {
     error = err as Error
   }
@@ -56,6 +61,9 @@ export default async function AdminTickets() {
   // Calculate comprehensive ticket statistics using reusable function
   const stats = await calculateTicketStatistics(tickets, conference)
 
+  // Analyze ticket targets if enabled
+  const targetAnalysis = await analyzeTicketTargets(conference, tickets)
+
   // Group tickets by order_id for the orders table
   const orders = groupTicketsByOrder(tickets)
 
@@ -68,9 +76,7 @@ export default async function AdminTickets() {
 
   // Extract calculated values from stats
   const totalTickets = stats.paidTickets
-  const totalRevenue = stats.totalRevenue
   const totalSponsorTickets = stats.sponsorTickets
-  const speakerTickets = stats.speakerTickets
 
   // Calculate sponsor tickets breakdown by tier for the admin table
   const sponsorTicketsByTier: Record<
@@ -90,9 +96,6 @@ export default async function AdminTickets() {
     })
   }
 
-  const totalComplimentaryTickets = totalSponsorTickets + speakerTickets
-  const totalTicketsIncludingAll = totalTickets + totalComplimentaryTickets
-
   return (
     <div className="mx-auto max-w-7xl">
       <AdminPageHeader
@@ -100,255 +103,233 @@ export default async function AdminTickets() {
         title="Ticket Management"
         description="Manage sold tickets and attendee information for"
         contextHighlight={conference.title}
-        stats={[
-          {
-            value: orders.length,
-            label: 'Orders',
-            color: 'blue',
-          },
-          {
-            value: totalTickets,
-            label: 'Paid tickets',
-            color: 'slate',
-          },
-          {
-            value: totalSponsorTickets,
-            label: 'Sponsor tickets',
-            color: 'blue',
-          },
-          {
-            value: speakerTickets,
-            label: 'Speaker tickets',
-            color: 'purple',
-          },
-          {
-            value: totalTicketsIncludingAll,
-            label: 'Total tickets',
-            color: 'green',
-          },
-          {
-            value: formatCurrency(totalRevenue),
-            label: 'Total revenue',
-            color: 'green',
-          },
-        ]}
-      >
-        <p className="font-inter mt-3 text-sm text-brand-slate-gray/60 dark:text-gray-500">
-          View orders, revenue, and allocation details.
-        </p>
-      </AdminPageHeader>
+        stats={[]}
+      ></AdminPageHeader>
+
+      {/* Target Configuration Setup */}
+      {!targetAnalysis && (
+        <div className="mt-8">
+          <TargetSetupGuide
+            conferenceId={conference._id}
+            hasCapacity={!!conference.ticket_capacity}
+            hasTargetConfig={!!conference.ticket_targets?.enabled}
+            currentCapacity={conference.ticket_capacity}
+          />
+        </div>
+      )}
+
+      {/* Ticket Target Tracking with Live Preview */}
+      {targetAnalysis && (
+        <TargetTrackingWithPreview
+          conference={conference}
+          targetAnalysis={targetAnalysis}
+        />
+      )}
 
       {/* Breakdown by Ticket Type */}
       {categoryStats.length > 0 && (
         <div className="mt-8">
-          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="px-6 py-4">
-              <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
-                Breakdown by Ticket Type
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
-                    <tr>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Ticket Type
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Tickets Sold
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Orders
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Revenue
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Percentage
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                    {categoryStats.map((stat) => (
-                      <tr
-                        key={stat.category}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                      >
-                        <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
-                          {stat.category}
-                        </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                            {stat.count}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                          {stat.orders}
-                        </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                          <span className="font-medium text-green-600 dark:text-green-400">
-                            {formatCurrency(stat.revenue)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
-                          <div className="flex items-center">
-                            <div className="flex-1">
-                              <div className="flex items-center">
-                                <div className="mr-2 text-xs">
-                                  {((stat.count / totalTickets) * 100).toFixed(
-                                    1,
-                                  )}
-                                  %
-                                </div>
-                                <div className="h-2 w-16 rounded-full bg-gray-200">
-                                  <div
-                                    className="h-2 rounded-full bg-blue-600"
-                                    style={{
-                                      width: `${(stat.count / totalTickets) * 100}%`,
-                                    }}
-                                  ></div>
-                                </div>
+          <CollapsibleSection
+            title="Breakdown by Ticket Type"
+            defaultOpen={false}
+          >
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Ticket Type
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Tickets Sold
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Orders
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Revenue
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Percentage
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                  {categoryStats.map((stat) => (
+                    <tr
+                      key={stat.category}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
+                      <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
+                        {stat.category}
+                      </td>
+                      <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                          {stat.count}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                        {stat.orders}
+                      </td>
+                      <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                        <span className="font-medium text-green-600 dark:text-green-400">
+                          {formatCurrency(stat.revenue)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center">
+                          <div className="flex-1">
+                            <div className="flex items-center">
+                              <div className="mr-2 text-xs">
+                                {((stat.count / totalTickets) * 100).toFixed(1)}
+                                %
+                              </div>
+                              <div className="h-2 w-16 rounded-full bg-gray-200">
+                                <div
+                                  className="h-2 rounded-full bg-blue-600"
+                                  style={{
+                                    width: `${(stat.count / totalTickets) * 100}%`,
+                                  }}
+                                ></div>
                               </div>
                             </div>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </CollapsibleSection>
         </div>
       )}
 
       {/* Sponsor Tickets Breakdown */}
       {totalSponsorTickets > 0 && (
         <div className="mt-8">
-          <div className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5 dark:bg-gray-900 dark:ring-gray-700">
-            <div className="px-6 py-4">
-              <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
-                Sponsor Ticket Allocations
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
-                    <tr>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Sponsor Tier
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Sponsors
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Tickets per Sponsor
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Total Tickets
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
-                      >
-                        Percentage
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-                    {Object.entries(sponsorTicketsByTier)
-                      .sort(([, a], [, b]) => b.tickets - a.tickets)
-                      .map(([tierName, tierData]) => {
-                        const ticketsPerSponsor =
-                          TIER_TICKET_ALLOCATION[tierName] || 0
+          <CollapsibleSection
+            title="Sponsor Ticket Allocations"
+            defaultOpen={false}
+          >
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Sponsor Tier
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Sponsors
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Tickets per Sponsor
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Total Tickets
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                    >
+                      Percentage
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                  {Object.entries(sponsorTicketsByTier)
+                    .sort(([, a], [, b]) => b.tickets - a.tickets)
+                    .map(([tierName, tierData]) => {
+                      const ticketsPerSponsor =
+                        TIER_TICKET_ALLOCATION[tierName] || 0
 
-                        return (
-                          <tr
-                            key={tierName}
-                            className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                          >
-                            <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
-                              {tierName}
-                            </td>
-                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                              <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-300">
-                                {tierData.sponsors}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                              {ticketsPerSponsor}
-                            </td>
-                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
-                              <span className="font-medium text-purple-600 dark:text-purple-400">
-                                {tierData.tickets}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
-                              <div className="flex items-center">
-                                <div className="flex-1">
-                                  <div className="flex items-center">
-                                    <div className="mr-2 text-xs">
-                                      {(
-                                        (tierData.tickets /
-                                          totalSponsorTickets) *
-                                        100
-                                      ).toFixed(1)}
-                                      %
-                                    </div>
-                                    <div className="h-2 w-16 rounded-full bg-gray-200">
-                                      <div
-                                        className="h-2 rounded-full bg-purple-600"
-                                        style={{
-                                          width: `${(tierData.tickets / totalSponsorTickets) * 100}%`,
-                                        }}
-                                      ></div>
-                                    </div>
+                      return (
+                        <tr
+                          key={tierName}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
+                            {tierName}
+                          </td>
+                          <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                            <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                              {tierData.sponsors}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                            {ticketsPerSponsor}
+                          </td>
+                          <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                            <span className="font-medium text-purple-600 dark:text-purple-400">
+                              {tierData.tickets}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
+                            <div className="flex items-center">
+                              <div className="flex-1">
+                                <div className="flex items-center">
+                                  <div className="mr-2 text-xs">
+                                    {(
+                                      (tierData.tickets / totalSponsorTickets) *
+                                      100
+                                    ).toFixed(1)}
+                                    %
+                                  </div>
+                                  <div className="h-2 w-16 rounded-full bg-gray-200">
+                                    <div
+                                      className="h-2 rounded-full bg-purple-600"
+                                      style={{
+                                        width: `${(tierData.tickets / totalSponsorTickets) * 100}%`,
+                                      }}
+                                    ></div>
                                   </div>
                                 </div>
                               </div>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-                <p>
-                  <strong>Note:</strong> Sponsor tickets are allocated through
-                  sponsorship agreements. Pod sponsors receive 2 tickets,
-                  Service sponsors receive 3 tickets, and Ingress sponsors
-                  receive 5 tickets each. Speaker tickets are allocated one per
-                  confirmed speaker.
-                </p>
-              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
             </div>
-          </div>
+            <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+              <p>
+                <strong>Note:</strong> Sponsor tickets are allocated through
+                sponsorship agreements. Pod sponsors receive 2 tickets, Service
+                sponsors receive 3 tickets, and Ingress sponsors receive 5
+                tickets each. Speaker tickets are allocated one per confirmed
+                speaker.
+              </p>
+            </div>
+          </CollapsibleSection>
         </div>
       )}
 
@@ -385,6 +366,26 @@ export default async function AdminTickets() {
           <div>Customer ID: {conference.checkin_customer_id}</div>
           <div>Event ID: {conference.checkin_event_id}</div>
           <div>API Response: {tickets.length} tickets loaded</div>
+          <div>Ticket Capacity: {conference.ticket_capacity || 'Not set'}</div>
+          <div>
+            Target Tracking Enabled:{' '}
+            {conference.ticket_targets?.enabled ? 'Yes' : 'No'}
+          </div>
+          {conference.ticket_targets?.enabled && (
+            <>
+              <div>
+                Sales Start Date:{' '}
+                {conference.ticket_targets.sales_start_date || 'Not set'}
+              </div>
+              <div>
+                Target Curve:{' '}
+                {conference.ticket_targets.target_curve || 'linear'}
+              </div>
+              <div>
+                Milestones: {conference.ticket_targets.milestones?.length || 0}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

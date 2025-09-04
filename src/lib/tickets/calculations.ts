@@ -11,7 +11,7 @@ export const TIER_TICKET_ALLOCATION: Record<string, number> = {
 }
 
 export interface TicketStatistics {
-  // Paid ticket statistics (from CheckIn.no orders)
+  // Paid ticket statistics (simplified - each ticket = 1)
   paidTickets: number
   totalRevenue: number
   totalOrders: number
@@ -34,19 +34,18 @@ export async function calculateTicketStatistics(
   tickets: EventTicket[],
   conference: Conference,
 ): Promise<TicketStatistics> {
-  // Group tickets by order_id to get correct totals (same as admin page)
-  const orders = groupTicketsByOrder(tickets)
+  // Simple counting - each ticket record = 1 ticket
+  const paidTickets = tickets.length
 
-  // Calculate paid ticket statistics from orders
-  const paidTickets = orders.reduce((sum, order) => sum + order.totalTickets, 0)
+  // Group tickets by order for revenue calculation
+  const orders = groupTicketsByOrder(tickets)
   const totalRevenue = orders.reduce((sum, order) => sum + order.totalAmount, 0)
   const totalOrders = orders.length
 
-  // Calculate tickets by category from individual tickets (not orders)
+  // Calculate tickets by category - simple count
   const ticketsByCategory: Record<string, number> = {}
   tickets.forEach((ticket) => {
     const category = ticket.category || 'Unknown'
-    // Each ticket record represents 1 ticket
     ticketsByCategory[category] = (ticketsByCategory[category] || 0) + 1
   })
 
