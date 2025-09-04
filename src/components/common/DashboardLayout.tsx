@@ -227,6 +227,7 @@ export function DashboardLayout({
                         <li key={item.name}>
                           <Link
                             href={item.href}
+                            onClick={() => setSidebarOpen(false)}
                             className={clsx(
                               isCurrent
                                 ? colors.sidebar.active
