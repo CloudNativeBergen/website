@@ -5,6 +5,69 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Critical chart styles - prevent tree shaking */
+.chart-container {
+  min-height: 300px !important;
+  width: 100% !important;
+  position: relative !important;
+}
+
+.apexcharts-canvas {
+  min-height: 300px !important;
+}
+
+/* ApexCharts specific overrides for production builds */
+.apexcharts-svg {
+  min-height: 300px !important;
+}
+
+/* Critical utilities for production builds - Force arbitrary values to be included */
+/* Using explicit class names instead of @layer utilities for better compatibility */
+.chart-height-300 {
+  height: 300px !important;
+}
+
+.chart-height-400 {
+  height: 400px !important;
+}
+
+.chart-height-450 {
+  height: 450px !important;
+}
+
+.chart-min-height-300 {
+  min-height: 300px !important;
+}
+
+.chart-min-height-400 {
+  min-height: 400px !important;
+}
+
+.chart-min-height-450 {
+  min-height: 450px !important;
+}
+
+/* Responsive height classes */
+@media (min-width: 640px) {
+  .sm\:chart-height-400 {
+    height: 400px !important;
+  }
+
+  .sm\:chart-min-height-400 {
+    min-height: 400px !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .lg\:chart-height-450 {
+    height: 450px !important;
+  }
+
+  .lg\:chart-min-height-450 {
+    min-height: 450px !important;
+  }
+}
+
 /* Enable dark mode with class strategy */
 @media (prefers-color-scheme: dark) {
   :root {

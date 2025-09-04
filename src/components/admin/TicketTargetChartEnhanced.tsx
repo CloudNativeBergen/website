@@ -262,6 +262,8 @@ export function TicketTargetChartEnhanced({
         pan: { enabled: false },
         background: 'transparent',
         fontFamily: 'Inter, system-ui, sans-serif',
+        redrawOnParentResize: true, // Force redraw when container resizes
+        redrawOnWindowResize: true, // Force redraw on window resize
         animations: {
           enabled: true,
           easing: 'easeinout',
@@ -534,12 +536,16 @@ export function TicketTargetChartEnhanced({
           </div>
         </div>
 
-        <div className="h-[300px] sm:h-[400px] lg:h-[450px]">
+        <div
+          className="chart-container chart-height-300 sm:chart-height-400 lg:chart-height-450 relative w-full"
+          suppressHydrationWarning
+        >
           <Chart
             options={chartOptions}
             series={chartData.series}
             type="line"
             height="100%"
+            width="100%"
           />
         </div>
       </div>
