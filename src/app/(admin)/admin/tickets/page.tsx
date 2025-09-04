@@ -14,6 +14,7 @@ import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import type { EventTicket } from '@/lib/tickets/checkin'
 import { formatCurrency } from '@/lib/format'
+import Link from 'next/link'
 
 export default async function AdminTickets() {
   let tickets: EventTicket[] = []
@@ -104,7 +105,15 @@ export default async function AdminTickets() {
         description="Manage sold tickets and attendee information for"
         contextHighlight={conference.title}
         stats={[]}
-      ></AdminPageHeader>
+        actions={
+          <Link
+            href="/admin/tickets/discount"
+            className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+          >
+            Manage Discount Codes
+          </Link>
+        }
+      />
 
       {/* Target Configuration Setup */}
       {!targetAnalysis && (

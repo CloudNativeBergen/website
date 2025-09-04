@@ -22,6 +22,8 @@ export interface AdminPageHeaderProps {
   contextHighlight?: string
   /** Array of stat cards to display */
   stats: StatCardProps[]
+  /** Optional action buttons/links to display on the right side */
+  actions?: React.ReactNode
   /** Optional additional content to render below the stats */
   children?: React.ReactNode
 }
@@ -82,6 +84,7 @@ export function AdminPageHeader({
   description,
   contextHighlight,
   stats,
+  actions,
   children,
 }: AdminPageHeaderProps) {
   // Determine grid columns based on number of stats
@@ -132,6 +135,13 @@ export function AdminPageHeader({
             </div>
           </div>
         </div>
+
+        {/* Action buttons/links on the right */}
+        {actions && (
+          <div className="ml-4 flex-shrink-0">
+            <div className="flex flex-col gap-2 sm:flex-row">{actions}</div>
+          </div>
+        )}
       </div>
 
       {/* Stats grid */}

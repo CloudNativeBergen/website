@@ -37,3 +37,22 @@ export const TicketSettingsUpdateSchema = z.object({
 export const ConferenceIdSchema = z.object({
   conferenceId: z.string().min(1, 'Conference ID is required'),
 })
+
+// Discount code schemas
+export const CreateDiscountCodeSchema = z.object({
+  eventId: z.number().min(1, 'Event ID is required'),
+  discountCode: z.string().min(1, 'Discount code is required'),
+  numberOfTickets: z.number().min(1, 'Number of tickets must be at least 1'),
+  sponsorName: z.string().min(1, 'Sponsor name is required'),
+  tierTitle: z.string().optional(),
+  selectedTicketTypes: z.array(z.string()).optional().default([]),
+})
+
+export const GetDiscountsSchema = z.object({
+  eventId: z.number().min(1, 'Event ID is required'),
+})
+
+export const DeleteDiscountCodeSchema = z.object({
+  eventId: z.number().min(1, 'Event ID is required'),
+  discountCode: z.string().min(1, 'Discount code is required'),
+})

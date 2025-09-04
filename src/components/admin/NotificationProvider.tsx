@@ -72,35 +72,35 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
       case 'success':
         return {
           container:
-            'border-brand-fresh-green/30 bg-gradient-to-r from-brand-glacier-white to-green-50/50 backdrop-blur-sm',
-          icon: 'text-brand-fresh-green',
-          title: 'text-brand-slate-gray',
-          message: 'text-brand-slate-gray/80',
+            'border-brand-fresh-green/30 bg-gradient-to-r from-brand-glacier-white to-green-50/50 backdrop-blur-sm dark:border-green-400/30 dark:from-gray-800 dark:to-green-900/30',
+          icon: 'text-brand-fresh-green dark:text-green-400',
+          title: 'text-brand-slate-gray dark:text-white',
+          message: 'text-brand-slate-gray/80 dark:text-gray-300',
         }
       case 'error':
         return {
           container:
-            'border-red-300/50 bg-gradient-to-r from-brand-glacier-white to-red-50/50 backdrop-blur-sm',
-          icon: 'text-red-500',
-          title: 'text-brand-slate-gray',
-          message: 'text-brand-slate-gray/80',
+            'border-red-300/50 bg-gradient-to-r from-brand-glacier-white to-red-50/50 backdrop-blur-sm dark:border-red-400/30 dark:from-gray-800 dark:to-red-900/30',
+          icon: 'text-red-500 dark:text-red-400',
+          title: 'text-brand-slate-gray dark:text-white',
+          message: 'text-brand-slate-gray/80 dark:text-gray-300',
         }
       case 'warning':
         return {
           container:
-            'border-brand-sunbeam-yellow/40 bg-gradient-to-r from-brand-glacier-white to-yellow-50/50 backdrop-blur-sm',
-          icon: 'text-brand-sunbeam-yellow',
-          title: 'text-brand-slate-gray',
-          message: 'text-brand-slate-gray/80',
+            'border-brand-sunbeam-yellow/40 bg-gradient-to-r from-brand-glacier-white to-yellow-50/50 backdrop-blur-sm dark:border-yellow-400/30 dark:from-gray-800 dark:to-yellow-900/30',
+          icon: 'text-brand-sunbeam-yellow dark:text-yellow-400',
+          title: 'text-brand-slate-gray dark:text-white',
+          message: 'text-brand-slate-gray/80 dark:text-gray-300',
         }
       case 'info':
       default:
         return {
           container:
-            'border-brand-cloud-blue/30 bg-gradient-to-r from-brand-glacier-white to-brand-sky-mist/70 backdrop-blur-sm',
-          icon: 'text-brand-cloud-blue',
-          title: 'text-brand-slate-gray',
-          message: 'text-brand-slate-gray/80',
+            'border-brand-cloud-blue/30 bg-gradient-to-r from-brand-glacier-white to-brand-sky-mist/70 backdrop-blur-sm dark:border-blue-400/30 dark:from-gray-800 dark:to-blue-900/30',
+          icon: 'text-brand-cloud-blue dark:text-blue-400',
+          title: 'text-brand-slate-gray dark:text-white',
+          message: 'text-brand-slate-gray/80 dark:text-gray-300',
         }
     }
   }
@@ -121,7 +121,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
             <div
               key={notification.id}
               className={clsx(
-                'pointer-events-auto w-full max-w-sm transform rounded-lg border-2 p-6 shadow-2xl ring-1 ring-black/5 transition-all duration-300 ease-in-out sm:max-w-md md:max-w-lg',
+                'pointer-events-auto w-full max-w-sm transform rounded-lg border-2 p-6 shadow-2xl ring-1 ring-black/5 transition-all duration-300 ease-in-out sm:max-w-md md:max-w-lg dark:ring-white/10',
                 styles.container,
                 'animate-in slide-in-from-right-2 fade-in-0',
               )}
@@ -153,7 +153,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
                 <div className="flex-shrink-0">
                   <button
                     className={clsx(
-                      'inline-flex rounded-md p-1.5 transition-all duration-200 hover:bg-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue',
+                      'inline-flex rounded-md p-1.5 transition-all duration-200 hover:bg-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:hover:bg-white/10',
                       styles.icon,
                     )}
                     onClick={() => removeNotification(notification.id)}

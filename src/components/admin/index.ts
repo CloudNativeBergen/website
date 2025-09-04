@@ -49,6 +49,9 @@ export { SponsorActions } from './SponsorActions'
 export { SponsorContactTable } from './SponsorContactTable'
 export { SponsorContactActions } from './SponsorContactActions'
 
+// Ticket Management Components
+export { DiscountCodeManager } from './DiscountCodeManager'
+
 // Featured Content Management Components
 export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'
 export { FeaturedTalksManager } from './FeaturedTalksManager'
