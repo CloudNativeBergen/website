@@ -107,136 +107,138 @@ export function SpeakerTable({
   }
 
   return (
-    <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700">
-      <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-        <thead className="bg-gray-50 dark:bg-gray-800">
-          <tr>
-            <th
-              scope="col"
-              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-            >
-              Speaker
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-            >
-              Indicators
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-            >
-              Contact
-            </th>
-            <th
-              scope="col"
-              className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
-            >
-              Talks
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
-          {speakers.map((speaker) => (
-            <tr
-              key={speaker._id}
-              className="hover:bg-gray-50 dark:hover:bg-gray-800"
-            >
-              <td className="px-4 py-3">
-                <div className="flex min-w-0 items-center">
-                  <div className="h-8 w-8 flex-shrink-0">
-                    {speaker.image ? (
-                      <img
-                        className="h-8 w-8 rounded-full object-cover"
-                        src={speaker.image}
-                        alt={speaker.name}
-                      />
-                    ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600">
-                        <UserIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="ml-3 min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
-                      {speaker.name}
-                    </div>
-                    {speaker.title && (
-                      <div className="max-w-[180px] truncate text-xs text-gray-500 dark:text-gray-400">
-                        {speaker.title}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-3">
-                <SpeakerIndicators
-                  speakers={[speaker]}
-                  size="md"
-                  maxVisible={5}
-                  className="justify-start"
-                  currentConferenceId={currentConferenceId}
-                />
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
-                  <EnvelopeIcon className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400 dark:text-gray-500" />
-                  <a
-                    href={`mailto:${speaker.email}`}
-                    className="truncate hover:text-blue-600 dark:hover:text-blue-400"
-                    title={speaker.email}
-                  >
-                    {speaker.email}
-                  </a>
-                  <CopyEmailButton email={speaker.email} />
-                </div>
-              </td>
-              <td className="px-4 py-3">
-                <div className="space-y-1">
-                  {speaker.proposals
-                    .filter((proposal) => {
-                      // Only show proposals from the current conference
-                      if (!currentConferenceId) return true
-
-                      const proposalConferenceId =
-                        typeof proposal.conference === 'object' &&
-                        proposal.conference &&
-                        '_id' in proposal.conference
-                          ? proposal.conference._id
-                          : typeof proposal.conference === 'string'
-                            ? proposal.conference
-                            : null
-
-                      return proposalConferenceId === currentConferenceId
-                    })
-                    .map((proposal) => (
-                      <div
-                        key={proposal._id}
-                        className="flex items-center gap-2 text-xs"
-                      >
-                        <StatusBadge status={proposal.status} />
-                        <span
-                          className="max-w-[200px] truncate text-gray-900 dark:text-white"
-                          title={proposal.title}
-                        >
-                          {proposal.title}
-                        </span>
-                        <span
-                          className="flex-shrink-0 text-gray-500 dark:text-gray-400"
-                          title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
-                        >
-                          {getCompactFormat(proposal.format)} •{' '}
-                          {languages.get(proposal.language)}
-                        </span>
-                      </div>
-                    ))}
-                </div>
-              </td>
+    <div className="overflow-x-auto">
+      <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700">
+        <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-800">
+            <tr>
+              <th
+                scope="col"
+                className="min-w-0 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+              >
+                Speaker
+              </th>
+              <th
+                scope="col"
+                className="hidden px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase sm:table-cell dark:text-gray-400"
+              >
+                Indicators
+              </th>
+              <th
+                scope="col"
+                className="min-w-0 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+              >
+                Contact
+              </th>
+              <th
+                scope="col"
+                className="min-w-0 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+              >
+                Talks
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+            {speakers.map((speaker) => (
+              <tr
+                key={speaker._id}
+                className="hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                <td className="px-4 py-3">
+                  <div className="flex min-w-0 items-center">
+                    <div className="h-8 w-8 flex-shrink-0">
+                      {speaker.image ? (
+                        <img
+                          className="h-8 w-8 rounded-full object-cover"
+                          src={speaker.image}
+                          alt={speaker.name}
+                        />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-300 dark:bg-gray-600">
+                          <UserIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-3 min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-gray-900 dark:text-white">
+                        {speaker.name}
+                      </div>
+                      {speaker.title && (
+                        <div className="max-w-[180px] truncate text-xs text-gray-500 dark:text-gray-400">
+                          {speaker.title}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td className="hidden px-4 py-3 sm:table-cell">
+                  <SpeakerIndicators
+                    speakers={[speaker]}
+                    size="md"
+                    maxVisible={5}
+                    className="justify-start"
+                    currentConferenceId={currentConferenceId}
+                  />
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
+                    <EnvelopeIcon className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                    <a
+                      href={`mailto:${speaker.email}`}
+                      className="truncate hover:text-blue-600 dark:hover:text-blue-400"
+                      title={speaker.email}
+                    >
+                      {speaker.email}
+                    </a>
+                    <CopyEmailButton email={speaker.email} />
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="space-y-1">
+                    {speaker.proposals
+                      .filter((proposal) => {
+                        // Only show proposals from the current conference
+                        if (!currentConferenceId) return true
+
+                        const proposalConferenceId =
+                          typeof proposal.conference === 'object' &&
+                          proposal.conference &&
+                          '_id' in proposal.conference
+                            ? proposal.conference._id
+                            : typeof proposal.conference === 'string'
+                              ? proposal.conference
+                              : null
+
+                        return proposalConferenceId === currentConferenceId
+                      })
+                      .map((proposal) => (
+                        <div
+                          key={proposal._id}
+                          className="flex items-center gap-2 text-xs"
+                        >
+                          <StatusBadge status={proposal.status} />
+                          <span
+                            className="max-w-[200px] truncate text-gray-900 dark:text-white"
+                            title={proposal.title}
+                          >
+                            {proposal.title}
+                          </span>
+                          <span
+                            className="flex-shrink-0 text-gray-500 dark:text-gray-400"
+                            title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
+                          >
+                            {getCompactFormat(proposal.format)} •{' '}
+                            {languages.get(proposal.language)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

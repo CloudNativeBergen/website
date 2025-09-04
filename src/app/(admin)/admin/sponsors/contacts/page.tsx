@@ -79,7 +79,7 @@ export default async function AdminSponsorContacts() {
             />
           </div>
 
-          <div className="font-inter mt-4 flex items-center gap-4 text-sm text-brand-slate-gray dark:text-gray-400">
+          <div className="font-inter mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-brand-slate-gray dark:text-gray-400">
             <span>
               Active sponsors: <strong>{sponsorsWithContacts.length}</strong>
             </span>
