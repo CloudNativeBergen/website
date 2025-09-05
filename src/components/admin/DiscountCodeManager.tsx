@@ -111,15 +111,19 @@ export function DiscountCodeManager({
     [getSponsorDiscounts],
   )
 
-  // Initialize selected ticket types with existing discounts
+  // Initialize selected ticket types with existing discounts or default to first ticket type
   useEffect(() => {
     if (availableTicketTypes.length > 0) {
       const initialSelections: Record<string, string[]> = {}
 
       sponsors.forEach((sponsor) => {
+        // Check if sponsor already has existing discount codes
         const existingTypes = getExistingTicketTypes(sponsor)
         if (existingTypes.length > 0) {
           initialSelections[sponsor.id] = existingTypes
+        } else {
+          // Default: select first ticket type
+          initialSelections[sponsor.id] = [String(availableTicketTypes[0].id)]
         }
       })
 
