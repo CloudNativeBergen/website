@@ -160,11 +160,7 @@ export const sponsorRouter = router({
               sponsor,
             )
 
-            if (audienceResult.success) {
-              console.log(
-                `Sponsor audience updated for new sponsor ${sponsor.name}: ${audienceResult.addedCount} added`,
-              )
-            } else {
+            if (!audienceResult.success) {
               console.warn(
                 `Failed to update sponsor audience for new sponsor ${sponsor.name}:`,
                 audienceResult.error,

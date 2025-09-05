@@ -56,3 +56,8 @@ export const DeleteDiscountCodeSchema = z.object({
   eventId: z.number().min(1, 'Event ID is required'),
   discountCode: z.string().min(1, 'Discount code is required'),
 })
+
+// Payment details schema
+export const GetPaymentDetailsSchema = z.object({
+  orderId: z.number().min(1, 'Order ID is required'),
+})

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { CheckinPayOrder } from '@/lib/tickets/client'
 import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/client'
+import { api } from '@/lib/trpc/client'
 
 export interface PaymentSummary {
   totalOrders: number
@@ -16,6 +17,19 @@ export function usePaymentSummary(orderIds: number[]) {
   const [summary, setSummary] = useState<PaymentSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [paymentDetails, setPaymentDetails] = useState<CheckinPayOrder[]>([])
+
+  // Create individual queries for each order ID (tRPC will batch them automatically)
+  const paymentQueries = orderIds.map((orderId) =>
+    api.tickets.getPaymentDetails.useQuery(
+      { orderId },
+      {
+        enabled: orderId > 0,
+        retry: 1,
+        staleTime: 5 * 60 * 1000, // 5 minutes
+      },
+    ),
+  )
 
   useEffect(() => {
     if (orderIds.length === 0) {
@@ -29,75 +43,57 @@ export function usePaymentSummary(orderIds: number[]) {
       return
     }
 
-    const fetchPaymentSummary = async () => {
-      setLoading(true)
-      setError(null)
+    // Check if all queries are done loading
+    const allLoaded = paymentQueries.every((query) => !query.isLoading)
+    const hasErrors = paymentQueries.some((query) => query.isError)
 
-      try {
-        // Fetch payment details for all orders
-        const promises = orderIds.map(async (orderId) => {
-          try {
-            const response = await fetch(
-              `/admin/api/payment-details?orderId=${orderId}`,
-            )
-            if (response.ok) {
-              return (await response.json()) as CheckinPayOrder
-            }
-            return null
-          } catch (err) {
-            console.warn(
-              `Failed to fetch payment details for order ${orderId}:`,
-              err,
-            )
-            return null
-          }
-        })
+    setLoading(!allLoaded)
 
-        const paymentDetails = (await Promise.allSettled(promises))
-          .map((result) =>
-            result.status === 'fulfilled' ? result.value : null,
-          )
-          .filter((detail): detail is CheckinPayOrder => detail !== null)
-
-        // Calculate summary statistics
-        const totalOrders = paymentDetails.length
-        const paidOrders = paymentDetails.filter((detail) => detail.paid).length
-        const overduePayments = paymentDetails.filter((detail) =>
-          isPaymentOverdue(detail),
-        )
-        const overdueOrders = overduePayments.length
-        const totalOverdueAmount = overduePayments.reduce(
-          (sum, detail) => sum + parseFloat(detail.sumLeft),
-          0,
-        )
-        const averageDaysOverdue =
-          overdueOrders > 0
-            ? overduePayments.reduce(
-                (sum, detail) => sum + getDaysOverdue(detail),
-                0,
-              ) / overdueOrders
-            : 0
-
-        setSummary({
-          totalOrders,
-          paidOrders,
-          overdueOrders,
-          totalOverdueAmount,
-          averageDaysOverdue: Math.round(averageDaysOverdue),
-        })
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to fetch payment summary',
-        )
-      } finally {
-        setLoading(false)
-      }
+    if (hasErrors) {
+      const firstError = paymentQueries.find((query) => query.isError)?.error
+      setError(firstError?.message || 'Failed to fetch payment details')
+      return
     }
 
-    fetchPaymentSummary()
-  }, [orderIds])
+    if (allLoaded) {
+      // Extract successful payment details
+      const validPaymentDetails = paymentQueries
+        .map((query) => query.data?.paymentDetails)
+        .filter((detail): detail is CheckinPayOrder => detail !== undefined)
 
-  return { summary, loading, error }
+      setPaymentDetails(validPaymentDetails)
+
+      // Calculate summary statistics
+      const totalOrders = validPaymentDetails.length
+      const paidOrders = validPaymentDetails.filter(
+        (detail) => detail.paid,
+      ).length
+      const overduePayments = validPaymentDetails.filter((detail) =>
+        isPaymentOverdue(detail),
+      )
+      const overdueOrders = overduePayments.length
+      const totalOverdueAmount = overduePayments.reduce(
+        (sum, detail) => sum + parseFloat(detail.sumLeft),
+        0,
+      )
+      const averageDaysOverdue =
+        overdueOrders > 0
+          ? overduePayments.reduce(
+              (sum, detail) => sum + getDaysOverdue(detail),
+              0,
+            ) / overdueOrders
+          : 0
+
+      setSummary({
+        totalOrders,
+        paidOrders,
+        overdueOrders,
+        totalOverdueAmount,
+        averageDaysOverdue: Math.round(averageDaysOverdue),
+      })
+      setError(null)
+    }
+  }, [paymentQueries, orderIds])
+
+  return { summary, loading, error, paymentDetails }
 }

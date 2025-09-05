@@ -21,6 +21,7 @@ import { Speaker } from '@/lib/speaker/types'
 import { postProposalAction } from '@/lib/proposal'
 import { TrashIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
+import { createLocalhostWarning } from '@/lib/localhost-warning'
 
 function capitalizeFirstLetter(string: string) {
   return string.charAt(0).toUpperCase() + string.slice(1)
@@ -193,34 +194,13 @@ export function ProposalActionModal({
                         </p>
                       </div>
                     )}
-                    {domain &&
-                      domain.includes('localhost') &&
-                      (action === Action.accept ||
-                        action === Action.remind ||
-                        action === Action.reject) &&
-                      notify && (
-                        <div className="mt-2 rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30">
-                          <div className="flex">
-                            <div className="flex-shrink-0">
-                              <BellIcon
-                                className="h-5 w-5 text-yellow-400 dark:text-yellow-300"
-                                aria-hidden="true"
-                              />
-                            </div>
-                            <div className="ml-3">
-                              <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                                Development Environment Warning
-                              </h3>
-                              <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                                <p>
-                                  You are running on localhost. Email
-                                  notifications will contain invalid links
-                                  pointing to localhost URLs that speakers
-                                  cannot access.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
+                    {(action === Action.accept ||
+                      action === Action.remind ||
+                      action === Action.reject) &&
+                      notify &&
+                      createLocalhostWarning(domain, 'speakers') && (
+                        <div className="mt-2">
+                          {createLocalhostWarning(domain, 'speakers')}
                         </div>
                       )}
                     {adminUI ? (

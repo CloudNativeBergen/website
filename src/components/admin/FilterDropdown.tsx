@@ -61,10 +61,7 @@ export function FilterDropdown({
 
   // More aggressive detection using a larger threshold
   const checkDropDirection = () => {
-    console.log('🔍 checkDropDirection called')
-
     if (!menuRef.current) {
-      console.log('❌ No menuRef.current')
       return
     }
 
@@ -74,37 +71,19 @@ export function FilterDropdown({
     // Much more aggressive: if we're in the bottom third of the screen, drop up
     const isInBottomThird = rect.bottom > viewportHeight * 0.67
 
-    console.log('📊 Dropdown position analysis:', {
-      buttonTop: rect.top,
-      buttonBottom: rect.bottom,
-      buttonHeight: rect.height,
-      viewportHeight,
-      bottomThirdThreshold: viewportHeight * 0.67,
-      isInBottomThird,
-      currentShouldDropUp: shouldDropUp,
-      willChange: isInBottomThird !== shouldDropUp,
-    })
-
     if (isInBottomThird !== shouldDropUp) {
-      console.log(
-        `🔄 Changing shouldDropUp from ${shouldDropUp} to ${isInBottomThird}`,
-      )
       setShouldDropUp(isInBottomThird)
     }
   }
 
   // Use intersection observer for more reliable detection
   useEffect(() => {
-    console.log('🚀 Setting up IntersectionObserver')
-
     if (!menuRef.current) {
-      console.log('❌ No menuRef.current for observer')
       return
     }
 
     const observer = new IntersectionObserver(
       (entries) => {
-        console.log('👁️ IntersectionObserver triggered')
         const entry = entries[0]
         if (entry) {
           // If less than 50% of the button is visible, we're probably near the bottom
@@ -112,17 +91,7 @@ export function FilterDropdown({
             entry.intersectionRatio < 0.5 ||
             entry.boundingClientRect.bottom > window.innerHeight * 0.7
 
-          console.log('📏 Intersection data:', {
-            intersectionRatio: entry.intersectionRatio,
-            boundingClientRect: entry.boundingClientRect,
-            isNearBottom,
-            currentState: shouldDropUp,
-          })
-
           if (isNearBottom !== shouldDropUp) {
-            console.log(
-              `🔄 Observer changing shouldDropUp from ${shouldDropUp} to ${isNearBottom}`,
-            )
             setShouldDropUp(isNearBottom)
           }
         }
@@ -134,19 +103,15 @@ export function FilterDropdown({
     )
 
     observer.observe(menuRef.current)
-    console.log('✅ Observer attached to menu element')
 
     return () => {
-      console.log('🧹 Cleaning up observer')
       observer.disconnect()
     }
   }, [shouldDropUp])
 
   // Force check on click
   const handleMenuButtonClick = () => {
-    console.log('🖱️ Menu button clicked')
     requestAnimationFrame(() => {
-      console.log('🎬 requestAnimationFrame callback executing')
       checkDropDirection()
     })
   }
@@ -166,20 +131,11 @@ export function FilterDropdown({
             : 'left-0 origin-top-left'
         }`
 
-    console.log('🎨 Generated dropdown classes:', {
-      shouldDropUp,
-      classes,
-      baseClasses,
-      position,
-    })
-
     return classes
   }
   return (
     <Menu as="div" className="relative" ref={menuRef}>
       {({ open }) => {
-        console.log('🔄 Menu render:', { open, shouldDropUp, label })
-
         return (
           <>
             <MenuButton
@@ -213,13 +169,7 @@ export function FilterDropdown({
                 leaveFrom="transform opacity-100 scale-100"
                 leaveTo="transform opacity-0 scale-95"
                 beforeEnter={() => {
-                  console.log(
-                    '🚪 Dropdown about to open, beforeEnter triggered',
-                  )
                   checkDropDirection()
-                }}
-                afterEnter={() => {
-                  console.log('✅ Dropdown has opened, afterEnter triggered')
                 }}
               >
                 <MenuItems className={getDropdownClasses()}>

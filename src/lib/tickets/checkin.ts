@@ -252,7 +252,6 @@ export function calculateDiscountUsage(
     const discountCode = ticket.coupon || ticket.discount
 
     if (discountCode) {
-      // Convert to uppercase for case-insensitive matching
       const normalizedCode = discountCode.toUpperCase()
 
       if (!stats[normalizedCode]) {

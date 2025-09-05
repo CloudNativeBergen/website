@@ -366,14 +366,24 @@ export function PortableTextEditor({
   value,
   onChange,
   helpText,
+  forceRemountKey, // Add a prop to force remounting
 }: {
   label: ReactNode
   value: PortableTextBlock[] | undefined
   onChange: (value: PortableTextBlock[]) => void
   helpText?: ReactNode
+  forceRemountKey?: string | number // Optional key to force remount
 }) {
   const id = useId()
   const [isClient, setIsClient] = useState(false)
+
+  // Ensure we always have a valid value
+  const safeValue = value || []
+
+  // Use the forceRemountKey if provided, otherwise use a static key
+  const editorKey = forceRemountKey
+    ? `editor-${id}-${forceRemountKey}`
+    : `editor-${id}`
 
   useEffect(() => {
     setIsClient(true)
@@ -402,15 +412,17 @@ export function PortableTextEditor({
   return (
     <>
       <EditorProvider
+        key={editorKey}
         initialConfig={{
           schemaDefinition,
-          initialValue: value,
+          initialValue: safeValue,
         }}
       >
         <EventListenerPlugin
           on={(event) => {
             if (event.type === 'mutation') {
-              onChange(event.value ?? [])
+              const newValue = event.value ?? []
+              onChange(newValue)
             }
           }}
         />

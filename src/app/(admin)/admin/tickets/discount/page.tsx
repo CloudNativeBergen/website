@@ -3,7 +3,12 @@ import { getEventDiscounts } from '@/lib/tickets/server'
 import { TIER_TICKET_ALLOCATION } from '@/lib/tickets/calculations'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
-import { TicketIcon } from '@heroicons/react/24/outline'
+import {
+  TicketIcon,
+  BuildingOfficeIcon,
+  HomeIcon,
+} from '@heroicons/react/24/outline'
+import Link from 'next/link'
 
 interface SponsorWithTierInfo {
   id: string
@@ -19,11 +24,13 @@ interface SponsorWithTierInfo {
 }
 
 export default async function DiscountCodesAdminPage() {
-  // Get conference data to retrieve Checkin.no IDs and sponsors
-  const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({
-      sponsors: true,
-    })
+  const {
+    conference,
+    domain,
+    error: conferenceError,
+  } = await getConferenceForCurrentDomain({
+    sponsors: true,
+  })
 
   if (
     conferenceError ||
@@ -47,13 +54,6 @@ export default async function DiscountCodesAdminPage() {
     )
   }
 
-  console.log('Using Checkin.no configuration:', {
-    customer_id: conference.checkin_customer_id,
-    event_id: conference.checkin_event_id,
-    conference_title: conference.title,
-  })
-
-  // Prepare sponsor data with tier information
   const sponsorsWithTierInfo: SponsorWithTierInfo[] =
     conference.sponsors?.map((sponsorData) => {
       const tierTitle = sponsorData.tier?.title || 'Unknown'
@@ -75,7 +75,6 @@ export default async function DiscountCodesAdminPage() {
       }
     }) || []
 
-  // Get discount codes data for stats calculation
   let discounts
   try {
     const discountData = await getEventDiscounts(conference.checkin_event_id)
@@ -136,7 +135,82 @@ export default async function DiscountCodesAdminPage() {
         <DiscountCodeManager
           sponsors={sponsorsWithTierInfo}
           eventId={conference.checkin_event_id}
+          conference={{
+            title: conference.title,
+            city: conference.city,
+            country: conference.country,
+            start_date: conference.start_date,
+            domains: conference.domains,
+            social_links: conference.social_links,
+            contact_email: conference.contact_email || conference.cfp_email,
+            domain: domain,
+          }}
         />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mt-12">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          Quick Actions
+        </h2>
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/admin/tickets"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <TicketIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Tickets Overview
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  View all ticket management tools
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/sponsors"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <BuildingOfficeIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Manage Sponsors
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Edit sponsor tiers and entitlements
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <HomeIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Back to Dashboard
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Return to the main admin dashboard
+                </p>
+              </div>
+            </div>
+          </Link>
+        </div>
       </div>
     </div>
   )

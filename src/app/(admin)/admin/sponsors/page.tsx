@@ -247,6 +247,37 @@ export default async function AdminSponsors() {
           </Link>
 
           <Link
+            href="/admin/tickets/discount"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-6 w-6 text-gray-400 dark:text-gray-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125V15.75a2.999 2.999 0 0 1 0-5.198V8.376c0-.621-.504-1.125-1.125-1.125H3.375Z"
+                  />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Sponsor Discount Codes
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Manage and distribute ticket discount codes
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
             href="/sponsor"
             className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
@@ -260,25 +291,6 @@ export default async function AdminSponsors() {
                 </p>
                 <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                   See the public sponsorship information
-                </p>
-              </div>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin"
-            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
-                <BuildingOffice2Icon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Back to Dashboard
-                </p>
-                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                  Return to the main admin dashboard
                 </p>
               </div>
             </div>

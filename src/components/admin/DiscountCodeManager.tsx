@@ -1,16 +1,18 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Button } from '@/components/Button'
 import {
   PlusIcon,
   TrashIcon,
   ExclamationTriangleIcon,
   ArrowPathIcon,
+  EnvelopeIcon,
+  ClipboardIcon,
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
+import { SponsorDiscountEmailModal } from './SponsorDiscountEmailModal'
 import type { EventDiscountWithUsage } from '@/lib/tickets/client'
 
 interface SponsorWithTierInfo {
@@ -29,16 +31,26 @@ interface SponsorWithTierInfo {
 interface DiscountCodeManagerProps {
   sponsors: SponsorWithTierInfo[]
   eventId: number
+  conference: {
+    title: string
+    city: string
+    country: string
+    start_date: string
+    domains: string[]
+    social_links?: string[]
+    contact_email: string
+    domain: string
+  }
 }
 
 export function DiscountCodeManager({
   sponsors,
   eventId,
+  conference,
 }: DiscountCodeManagerProps) {
   const utils = api.useUtils()
   const { showNotification } = useNotification()
 
-  // Fetch existing discounts via tRPC
   const {
     data: discountData,
     isLoading: discountsLoading,
@@ -48,7 +60,6 @@ export function DiscountCodeManager({
     staleTime: 30000, // 30 seconds
   })
 
-  // Show error notifications
   useEffect(() => {
     if (discountsError) {
       showNotification({
@@ -68,12 +79,10 @@ export function DiscountCodeManager({
     [discountData],
   )
 
-  // State for ticket type selection per sponsor
   const [selectedTicketTypes, setSelectedTicketTypes] = useState<
     Record<string, string[]>
   >({})
 
-  // Helper function to get sponsor discounts
   const getSponsorDiscounts = useCallback(
     (sponsor: SponsorWithTierInfo) => {
       return existingDiscounts.filter((discount) =>
@@ -251,6 +260,55 @@ export function DiscountCodeManager({
 
   const [loading, setLoading] = useState<string | null>(null)
 
+  // Email modal state
+  const [emailModal, setEmailModal] = useState<{
+    isOpen: boolean
+    sponsor: SponsorWithTierInfo | null
+    discountCode: string
+  }>({
+    isOpen: false,
+    sponsor: null,
+    discountCode: '',
+  })
+
+  const openEmailModal = (
+    sponsor: SponsorWithTierInfo,
+    discountCode: string,
+  ) => {
+    setEmailModal({
+      isOpen: true,
+      sponsor,
+      discountCode,
+    })
+  }
+
+  const closeEmailModal = () => {
+    setEmailModal({
+      isOpen: false,
+      sponsor: null,
+      discountCode: '',
+    })
+  }
+
+  // Copy discount code to clipboard
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      showNotification({
+        type: 'success',
+        title: 'Copied to clipboard',
+        message: `${label} copied to clipboard`,
+      })
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error)
+      showNotification({
+        type: 'error',
+        title: 'Copy failed',
+        message: 'Failed to copy to clipboard',
+      })
+    }
+  }
+
   // tRPC mutations
   const createDiscountMutation = api.tickets.createDiscountCode.useMutation({
     onSuccess: (data) => {
@@ -411,8 +469,24 @@ export function DiscountCodeManager({
                   className="hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">
-                      {discount.triggerValue || 'N/A'}
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+                        {discount.triggerValue || 'N/A'}
+                      </span>
+                      {discount.triggerValue && (
+                        <button
+                          onClick={() =>
+                            copyToClipboard(
+                              discount.triggerValue || '',
+                              'Discount code',
+                            )
+                          }
+                          className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                          title="Copy discount code"
+                        >
+                          <ClipboardIcon className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -466,19 +540,18 @@ export function DiscountCodeManager({
                     {discount.ticketsOnly ? 'Tickets Only' : 'All Items'}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium whitespace-nowrap">
-                    <Button
+                    <button
                       onClick={() => deleteDiscountCode(discount.triggerValue)}
                       disabled={loading === discount.triggerValue}
-                      variant="outline"
-                      size="sm"
-                      className="border-rose-300 bg-rose-50 text-rose-700 hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
+                      className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
+                      title="Delete Code"
                     >
                       {loading === discount.triggerValue ? (
                         <ArrowPathIcon className="h-4 w-4 animate-spin" />
                       ) : (
                         <TrashIcon className="h-4 w-4" />
                       )}
-                    </Button>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -634,11 +707,23 @@ export function DiscountCodeManager({
                         {getSponsorDiscounts(sponsor).map((discount, index) => (
                           <div
                             key={index}
-                            className="flex items-center justify-between rounded bg-gray-50 px-2 py-1 dark:bg-gray-800"
+                            className="flex items-center space-x-2"
                           >
-                            <span className="font-mono text-sm text-gray-900 dark:text-white">
+                            <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
                               {discount.triggerValue || 'N/A'}
                             </span>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(
+                                  discount.triggerValue || '',
+                                  'Discount code',
+                                )
+                              }
+                              className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                              title="Copy discount code"
+                            >
+                              <ClipboardIcon className="h-4 w-4" />
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -650,59 +735,67 @@ export function DiscountCodeManager({
                   </td>
                   <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
                     {getSponsorDiscounts(sponsor).length > 0 ? (
-                      <Button
-                        onClick={() => {
-                          const sponsorDiscounts = getSponsorDiscounts(sponsor)
-                          if (sponsorDiscounts.length > 0) {
-                            deleteDiscountCode(sponsorDiscounts[0].triggerValue)
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            const sponsorDiscounts =
+                              getSponsorDiscounts(sponsor)
+                            if (sponsorDiscounts.length > 0) {
+                              openEmailModal(
+                                sponsor,
+                                sponsorDiscounts[0].triggerValue || '',
+                              )
+                            }
+                          }}
+                          disabled={loading !== null}
+                          className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400"
+                          title="Send Email"
+                        >
+                          <EnvelopeIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const sponsorDiscounts =
+                              getSponsorDiscounts(sponsor)
+                            if (sponsorDiscounts.length > 0) {
+                              deleteDiscountCode(
+                                sponsorDiscounts[0].triggerValue,
+                              )
+                            }
+                          }}
+                          disabled={
+                            getSponsorDiscounts(sponsor).length > 0 &&
+                            loading ===
+                              getSponsorDiscounts(sponsor)[0]?.triggerValue
                           }
-                        }}
-                        disabled={
-                          getSponsorDiscounts(sponsor).length > 0 &&
-                          loading ===
-                            getSponsorDiscounts(sponsor)[0]?.triggerValue
-                        }
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center space-x-1 border-rose-300 bg-rose-50 text-rose-700 hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
-                      >
-                        {getSponsorDiscounts(sponsor).length > 0 &&
-                        loading ===
-                          getSponsorDiscounts(sponsor)[0]?.triggerValue ? (
-                          <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <TrashIcon className="h-4 w-4" />
-                        )}
-                        <span>
+                          className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
+                          title="Delete Code"
+                        >
                           {getSponsorDiscounts(sponsor).length > 0 &&
                           loading ===
-                            getSponsorDiscounts(sponsor)[0]?.triggerValue
-                            ? 'Deleting...'
-                            : 'Delete Code'}
-                        </span>
-                      </Button>
+                            getSponsorDiscounts(sponsor)[0]?.triggerValue ? (
+                            <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <TrashIcon className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                     ) : (
-                      <Button
+                      <button
                         onClick={() => createDiscountCode(sponsor)}
                         disabled={
                           loading === sponsor.id ||
                           sponsor.ticketEntitlement === 0
                         }
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center space-x-1"
+                        className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400"
+                        title="Create Code"
                       >
                         {loading === sponsor.id ? (
                           <ArrowPathIcon className="h-4 w-4 animate-spin" />
                         ) : (
                           <PlusIcon className="h-4 w-4" />
                         )}
-                        <span>
-                          {loading === sponsor.id
-                            ? 'Creating...'
-                            : 'Create Code'}
-                        </span>
-                      </Button>
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -723,6 +816,19 @@ export function DiscountCodeManager({
           </div>
         )}
       </div>
+
+      {/* Email Modal */}
+      {emailModal.sponsor && (
+        <SponsorDiscountEmailModal
+          isOpen={emailModal.isOpen}
+          onClose={closeEmailModal}
+          sponsor={emailModal.sponsor}
+          discountCode={emailModal.discountCode}
+          domain={conference.domain}
+          fromEmail={conference.contact_email}
+          conference={conference}
+        />
+      )}
     </div>
   )
 }

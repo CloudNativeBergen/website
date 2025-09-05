@@ -14,6 +14,7 @@ import {
   CreateDiscountCodeSchema,
   GetDiscountsSchema,
   DeleteDiscountCodeSchema,
+  GetPaymentDetailsSchema,
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -23,6 +24,7 @@ import {
   deleteEventDiscount,
   fetchEventTickets,
   calculateDiscountUsage,
+  fetchOrderPaymentDetails,
   type DiscountUsageStats,
 } from '@/lib/tickets/server'
 
@@ -476,6 +478,29 @@ export const ticketsRouter = router({
             error instanceof Error
               ? error.message
               : 'Failed to delete discount code',
+        })
+      }
+    }),
+
+  /**
+   * Get payment details for a specific order
+   */
+  getPaymentDetails: adminProcedure
+    .input(GetPaymentDetailsSchema)
+    .query(async ({ input }) => {
+      const { orderId } = input
+
+      try {
+        const paymentDetails = await fetchOrderPaymentDetails(orderId)
+        return {
+          success: true,
+          paymentDetails,
+        }
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch payment details',
+          cause: error,
         })
       }
     }),

@@ -125,6 +125,7 @@ export function GeneralBroadcastModal({
       recipientInfo={recipientDisplay}
       onSend={handleSend}
       submitButtonText={`Send to ${recipientCount} ${recipientType}`}
+      storageKey={`broadcast-email-${recipientType}`}
       previewComponent={createPreview}
       fromAddress={fromEmail}
       initialValues={initialValues}

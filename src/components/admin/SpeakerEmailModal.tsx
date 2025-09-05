@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BellIcon } from '@heroicons/react/20/solid'
 import { useNotification } from './NotificationProvider'
 import { EmailModal } from './EmailModal'
 import { ProposalExisting } from '@/lib/proposal/types'
@@ -10,6 +9,7 @@ import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import { createLocalhostWarning } from '@/lib/localhost-warning'
 
 interface SpeakerEmailModalProps {
   isOpen: boolean
@@ -116,31 +116,7 @@ export function SpeakerEmailModal({
     })
   }
 
-  const localhostWarning =
-    domain && domain.includes('localhost') ? (
-      <div className="rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30">
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <BellIcon
-              className="h-5 w-5 text-yellow-400 dark:text-yellow-300"
-              aria-hidden="true"
-            />
-          </div>
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-              Development Environment Warning
-            </h3>
-            <div className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-              <p>
-                You are running on localhost. Email notifications will contain
-                invalid links pointing to localhost URLs that speakers cannot
-                access.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    ) : undefined
+  const localhostWarning = createLocalhostWarning(domain, 'speakers')
 
   // Create preview component
   const createPreview = ({
@@ -183,6 +159,7 @@ export function SpeakerEmailModal({
       contextInfo={`Email about: ${proposal.title}`}
       onSend={handleSend}
       submitButtonText="Send Email"
+      storageKey={`speaker-email-${proposal._id}`}
       warningContent={localhostWarning}
       previewComponent={createPreview}
       fromAddress={fromEmail}

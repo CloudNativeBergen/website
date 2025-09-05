@@ -7,9 +7,10 @@ import {
   ChevronRightIcon,
   CreditCardIcon,
 } from '@heroicons/react/24/outline'
-import type { GroupedOrder, CheckinPayOrder } from '@/lib/tickets/client'
+import type { GroupedOrder } from '@/lib/tickets/client'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
 import { formatCurrency } from '@/lib/format'
+import { api } from '@/lib/trpc/client'
 
 interface ExpandableOrdersTableProps {
   orders: GroupedOrder[]
@@ -24,11 +25,19 @@ export function ExpandableOrdersTable({
 }: ExpandableOrdersTableProps) {
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set())
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
-  const [selectedPaymentDetails, setSelectedPaymentDetails] =
-    useState<CheckinPayOrder | null>(null)
-  const [paymentDetailsLoading, setPaymentDetailsLoading] = useState(false)
-  const [paymentDetailsError, setPaymentDetailsError] = useState<string | null>(
-    null,
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
+
+  // Use tRPC query for payment details - only enabled when we have a selected order
+  const {
+    data: paymentDetailsData,
+    isLoading: paymentDetailsLoading,
+    error: paymentDetailsError,
+  } = api.tickets.getPaymentDetails.useQuery(
+    { orderId: selectedOrderId! },
+    {
+      enabled: selectedOrderId !== null,
+      retry: 1,
+    },
   )
 
   const toggleExpanded = (orderId: number) => {
@@ -43,35 +52,14 @@ export function ExpandableOrdersTable({
     })
   }
 
-  const handleViewPaymentDetails = async (orderId: number) => {
-    setPaymentDetailsLoading(true)
-    setPaymentDetailsError(null)
+  const handleViewPaymentDetails = (orderId: number) => {
+    setSelectedOrderId(orderId)
     setPaymentModalOpen(true)
-
-    try {
-      const response = await fetch(
-        `/admin/api/payment-details?orderId=${orderId}`,
-      )
-      if (!response.ok) {
-        throw new Error('Failed to fetch payment details')
-      }
-      const details: CheckinPayOrder = await response.json()
-      setSelectedPaymentDetails(details)
-    } catch (error) {
-      setPaymentDetailsError(
-        error instanceof Error
-          ? error.message
-          : 'Failed to load payment details',
-      )
-    } finally {
-      setPaymentDetailsLoading(false)
-    }
   }
 
   const closePaymentModal = () => {
     setPaymentModalOpen(false)
-    setSelectedPaymentDetails(null)
-    setPaymentDetailsError(null)
+    setSelectedOrderId(null)
   }
 
   // Function to format category labels
@@ -348,9 +336,9 @@ export function ExpandableOrdersTable({
       <PaymentDetailsModal
         isOpen={paymentModalOpen}
         onClose={closePaymentModal}
-        paymentDetails={selectedPaymentDetails}
+        paymentDetails={paymentDetailsData?.paymentDetails || null}
         isLoading={paymentDetailsLoading}
-        error={paymentDetailsError}
+        error={paymentDetailsError?.message || null}
       />
     </div>
   )

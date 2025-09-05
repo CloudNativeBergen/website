@@ -41,10 +41,6 @@ export class CheckinGraphQLClient {
       console.warn(
         '   Without these credentials, ticket and discount management features will not work.',
       )
-    } else {
-      console.log(
-        `✅ Checkin API configured with key length: ${this.apiKey.length}, secret length: ${this.apiSecret.length}`,
-      )
     }
   }
 
