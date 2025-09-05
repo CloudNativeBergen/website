@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchEventTickets } from '@/lib/tickets/server'
 import { calculateTicketStatistics } from '@/lib/tickets/calculations'
+import { analyzeTicketTargets } from '@/lib/tickets/target-calculations'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 
@@ -80,6 +81,9 @@ export async function POST(request: NextRequest) {
     // Calculate comprehensive ticket statistics (same logic as admin/tickets page)
     const stats = await calculateTicketStatistics(tickets, conference)
 
+    // Analyze ticket targets vs actual performance
+    const targetAnalysis = await analyzeTicketTargets(conference, tickets)
+
     // Send update to Slack
     await sendSalesUpdateToSlack({
       conference,
@@ -89,6 +93,7 @@ export async function POST(request: NextRequest) {
       speakerTickets: stats.speakerTickets,
       totalTickets: stats.totalTickets,
       totalRevenue: stats.totalRevenue,
+      targetAnalysis, // Include target analysis results
       lastUpdated: new Date().toISOString(),
     })
 
@@ -102,6 +107,20 @@ export async function POST(request: NextRequest) {
         totalTickets: stats.totalTickets,
         totalRevenue: stats.totalRevenue,
         categories: stats.ticketsByCategory,
+        targetAnalysis: targetAnalysis
+          ? {
+              enabled: targetAnalysis.config.enabled,
+              capacity: targetAnalysis.capacity,
+              currentTargetPercentage:
+                targetAnalysis.performance.currentTargetPercentage,
+              actualPercentage: targetAnalysis.performance.actualPercentage,
+              variance: targetAnalysis.performance.variance,
+              isOnTrack: targetAnalysis.performance.isOnTrack,
+              nextMilestone: targetAnalysis.performance.nextMilestone,
+              daysToNextMilestone:
+                targetAnalysis.performance.daysToNextMilestone,
+            }
+          : null,
         lastUpdated: new Date().toISOString(),
       },
     })

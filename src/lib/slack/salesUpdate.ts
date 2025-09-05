@@ -1,4 +1,5 @@
 import { Conference } from '@/lib/conference/types'
+import type { TicketTargetAnalysis } from '@/lib/tickets/targets'
 
 type SlackBlock = {
   type: string
@@ -25,6 +26,7 @@ interface SalesUpdateData {
   speakerTickets: number
   totalTickets: number
   totalRevenue: number
+  targetAnalysis?: TicketTargetAnalysis | null
   lastUpdated: string
 }
 
@@ -118,6 +120,7 @@ export async function sendSalesUpdateToSlack(
     speakerTickets,
     totalTickets,
     totalRevenue,
+    targetAnalysis,
     lastUpdated,
   } = data
 
@@ -184,6 +187,63 @@ export async function sendSalesUpdateToSlack(
       ],
     },
   ]
+
+  // Add target analysis if available
+  if (targetAnalysis?.config.enabled) {
+    const { performance } = targetAnalysis
+    const statusEmoji = performance.isOnTrack ? '✅' : '⚠️'
+    const varianceText =
+      performance.variance >= 0
+        ? `+${performance.variance.toFixed(1)}% ahead`
+        : `${performance.variance.toFixed(1)}% behind`
+
+    blocks.push(
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${statusEmoji} Target Progress*`,
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Current Target:*\n${performance.currentTargetPercentage.toFixed(1)}%`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Actual Progress:*\n${performance.actualPercentage.toFixed(1)}%`,
+          },
+        ],
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Variance:*\n${varianceText}`,
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Capacity:*\n${totalTickets}/${targetAnalysis.capacity} tickets`,
+          },
+        ],
+      },
+    )
+
+    // Add next milestone information if available
+    if (performance.nextMilestone && performance.daysToNextMilestone) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*🎯 Next Milestone:* ${performance.nextMilestone.label || 'Milestone'} in ${performance.daysToNextMilestone} days (${performance.nextMilestone.target_percentage}% target)`,
+        },
+      })
+    }
+  }
 
   // Add category breakdown if there are multiple categories of paid tickets
   if (Object.keys(ticketsByCategory).length > 1) {
