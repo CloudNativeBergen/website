@@ -88,7 +88,8 @@ export function EmailModal({
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(false)
   const [editorRemountKey, setEditorRemountKey] = useState(0) // Key to force editor remount
   const { showNotification } = useNotification()
-  const initializedRef = useRef(false)
+  const initializedKeysRef = useRef<Set<string>>(new Set())
+  const isInitializingRef = useRef(false)
   const lastAutoSaveRef = useRef<{ subject: string; message: string } | null>(
     null,
   )
@@ -99,10 +100,16 @@ export function EmailModal({
   })
 
   useEffect(() => {
-    if (isOpen && !initializedRef.current) {
+    const currentStorageKey = storageKey || 'email-modal-default'
+    const isCurrentKeyInitialized =
+      initializedKeysRef.current.has(currentStorageKey)
+
+    if (isOpen && !isCurrentKeyInitialized) {
       if (storage.isLoading) {
         return
       }
+
+      isInitializingRef.current = true
 
       if (storageKey && storage.hasStoredData && storage.storedData) {
         setSubject(storage.storedData.subject || '')
@@ -124,7 +131,7 @@ export function EmailModal({
           onAdditionalFieldsChange(storage.storedData.additionalFields)
         }
 
-        initializedRef.current = true
+        initializedKeysRef.current.add(currentStorageKey)
       } else {
         setSubject(initialValues.subject || '')
 
@@ -140,18 +147,18 @@ export function EmailModal({
         } else {
           setRichTextValue([])
         }
-        initializedRef.current = true
+        initializedKeysRef.current.add(currentStorageKey)
       }
 
       setTimeout(() => {
+        isInitializingRef.current = false
         setAutoSaveEnabled(true)
-      }, 200)
+      }, 500)
     }
   }, [
     isOpen,
     storage.isLoading,
     storage.hasStoredData,
-    storage.storedData,
     storageKey,
     initialValues,
     onAdditionalFieldsChange,
@@ -160,7 +167,7 @@ export function EmailModal({
   useEffect(() => {
     if (!isOpen) {
       setAutoSaveEnabled(false)
-      initializedRef.current = false
+      isInitializingRef.current = false
     }
   }, [isOpen])
 
@@ -189,7 +196,7 @@ export function EmailModal({
   }
 
   useEffect(() => {
-    if (!autoSaveEnabled || !storage) return
+    if (!autoSaveEnabled || !storage || isInitializingRef.current) return
 
     const editorValue = richTextValue
     const messageText = getCurrentMessage()
@@ -256,15 +263,17 @@ export function EmailModal({
         message: richTextValue,
       })
 
-      if (storageKey) {
+      // Only clear storage and reset form for non-shared storage keys
+      // Shared storage keys (like "sponsor-discount-email-shared") should preserve the template
+      const isSharedStorage = storageKey?.includes('shared')
+
+      if (storageKey && !isSharedStorage) {
         storage.clearStorage()
+        setAutoSaveEnabled(false)
+        setSubject('')
+        setRichTextValue([])
       }
 
-      setAutoSaveEnabled(false)
-
-      setSubject('')
-      setRichTextValue([])
-      initializedRef.current = false
       onClose()
     } catch (error) {
       showNotification({
@@ -289,16 +298,23 @@ export function EmailModal({
   const handleClearDraft = () => {
     if (storageKey) {
       setAutoSaveEnabled(false)
+      isInitializingRef.current = true
+
+      const currentStorageKey = storageKey
+      initializedKeysRef.current.delete(currentStorageKey)
+
       storage.clearStorage()
       setSubject('')
       setRichTextValue([])
-      initializedRef.current = false
       showNotification({
         type: 'success',
         title: 'Draft cleared',
         message: 'Saved draft has been removed.',
       })
-      setTimeout(() => setAutoSaveEnabled(true), 100)
+      setTimeout(() => {
+        isInitializingRef.current = false
+        setAutoSaveEnabled(true)
+      }, 100)
     }
   }
 
