@@ -89,7 +89,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: 'Sponsor not found' }, { status: 404 })
     }
 
-    // Collect all contact emails
+    // Collect contact person emails only (exclude billing email)
     const ccEmails: string[] = []
 
     if (sponsor.contact_persons) {
@@ -108,36 +108,12 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // Add billing email if different from contact persons
-    if (sponsor.billing?.email && sponsor.billing.email.trim().length > 0) {
-      const billingEmail = sponsor.billing.email.trim()
-      if (!ccEmails.includes(billingEmail)) {
-        ccEmails.push(billingEmail)
-      }
-    }
+    // Do not include billing email for discount codes - they should only go to contact persons
 
     if (ccEmails.length === 0) {
-      const hasContactPersons =
-        sponsor.contact_persons && sponsor.contact_persons.length > 0
-      const hasBillingInfo = sponsor.billing && sponsor.billing.email
-
-      let errorDetails = ''
-      if (!hasContactPersons && !hasBillingInfo) {
-        errorDetails = 'No contact persons or billing information found.'
-      } else if (hasContactPersons && !hasBillingInfo) {
-        errorDetails =
-          'Contact persons exist but have no valid email addresses.'
-      } else if (!hasContactPersons && hasBillingInfo) {
-        errorDetails =
-          'Billing information exists but has no valid email address.'
-      } else {
-        errorDetails =
-          'Contact persons and billing information exist but have no valid email addresses.'
-      }
-
       return Response.json(
         {
-          error: `No valid email addresses found for sponsor ${sponsor.name}. ${errorDetails} Please update the sponsor contact information in the sponsor settings.`,
+          error: `No valid contact person email addresses found for sponsor ${sponsor.name}. Please add contact persons with valid email addresses in the sponsor settings. Billing emails are not used for discount code distribution.`,
         },
         { status: 400 },
       )

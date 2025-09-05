@@ -257,7 +257,7 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
 
   const recipientDisplay = (
     <span className="font-inter rounded-full bg-brand-sky-mist px-3 py-1 text-sm text-brand-slate-gray dark:bg-gray-700 dark:text-gray-300">
-      {sponsor.name} contacts
+      {sponsor.name} contact persons
     </span>
   )
 
@@ -278,6 +278,7 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       warningContent={
         localhostWarning && <div className="space-y-4">{localhostWarning}</div>
       }
+      helpText="This email will be sent to contact persons only. Billing emails are not included in discount code distribution. Templates: {{{SPONSOR_NAME}}}, {{{SPONSOR_TIER}}}, {{{TICKET_COUNT}}}, {{{TICKET_COUNT_PLURAL}}}."
       previewComponent={createPreview}
       fromAddress={fromEmail}
       initialValues={{
@@ -288,7 +289,6 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
         subject: 'Enter email subject...',
         message: 'Enter your message here...',
       }}
-      helpText={`Templates: {{{SPONSOR_NAME}}}, {{{SPONSOR_TIER}}}, {{{TICKET_COUNT}}}, {{{TICKET_COUNT_PLURAL}}}.`}
     />
   )
 }
