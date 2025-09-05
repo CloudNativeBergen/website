@@ -131,13 +131,13 @@ export async function createEventDiscount(
           trigger: coupon
           triggerValue: "${discountCode}"
           value: "100"
-          affects: total
-          affectsValue: 100
+          affects: first
+          affectsValue: ${numberOfTickets}
           includeBooking: false
           modes: default
           tickets: ${ticketsParam}
-          ticketsOnly: true
-          timesTotal: ${numberOfTickets}
+          ticketsOnly: false
+          timesTotal: 1
           type: percent
         }
       ) {
@@ -161,14 +161,14 @@ export async function createEventDiscount(
     type: 'percent',
     value: '100',
     triggerValue: discountCode,
-    affects: 'total',
+    affects: 'first',
     includeBooking: false,
-    affectsValue: '100',
+    affectsValue: numberOfTickets.toString(),
     modes: ['default'],
     tickets: ticketTypes,
-    ticketsOnly: true,
+    ticketsOnly: false,
     times: 0,
-    timesTotal: numberOfTickets,
+    timesTotal: 1,
   }
 }
 
