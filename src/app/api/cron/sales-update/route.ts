@@ -25,16 +25,8 @@ export async function POST(request: NextRequest) {
     }
 
     const url = new URL(request.url)
-
-    // Log request details for debugging
     const hostname = request.headers.get('host') || url.hostname
-    const userAgent = request.headers.get('user-agent') || 'unknown'
-    console.log(
-      `Sales update cron triggered - Host: ${hostname}, User-Agent: ${userAgent}, Environment: ${process.env.NODE_ENV}`,
-    )
 
-    // Get conference configuration with sponsors for ticket calculations
-    console.log(`Attempting to load conference for domain: ${hostname}`)
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({
         sponsors: true,
@@ -52,16 +44,6 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       )
     }
-
-    console.log(
-      `Successfully loaded conference: ${conference.title} (ID: ${conference._id})`,
-    )
-    console.log(
-      `Conference domains: ${conference.domains ? conference.domains.join(', ') : 'none'}`,
-    )
-    console.log(
-      `CheckIn configuration: Customer ID ${conference.checkin_customer_id}, Event ID ${conference.checkin_event_id}`,
-    )
 
     // Check if checkin configuration is available
     if (!conference.checkin_customer_id || !conference.checkin_event_id) {

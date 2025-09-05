@@ -53,7 +53,6 @@ export default async function AdminTickets() {
       conference.checkin_customer_id,
       conference.checkin_event_id,
     )
-    console.log(tickets.length)
   } catch (err) {
     error = err as Error
   }

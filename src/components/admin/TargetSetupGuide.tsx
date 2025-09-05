@@ -9,6 +9,7 @@ import {
   PlusIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline'
+import { CheckIcon, ChevronDownIcon } from '@heroicons/react/16/solid'
 import { api } from '@/lib/trpc/client'
 import type {
   TicketTargetConfig,
@@ -201,19 +202,7 @@ export function TargetSetupGuide({
                     }
                     className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-blue-600 checked:bg-blue-600 indeterminate:border-blue-600 indeterminate:bg-blue-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 dark:border-white/10 dark:bg-white/5 dark:checked:border-blue-500 dark:checked:bg-blue-500 dark:focus-visible:outline-blue-500 forced-colors:appearance-auto"
                   />
-                  <svg
-                    fill="none"
-                    viewBox="0 0 14 14"
-                    className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-white/25"
-                  >
-                    <path
-                      d="M3 8L6 11L11 3.5"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="opacity-0 group-has-checked:opacity-100"
-                    />
-                  </svg>
+                  <CheckIcon className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white opacity-0 group-has-checked:opacity-100 group-has-disabled:stroke-white/25" />
                 </div>
                 <label
                   htmlFor="enable-tracking"
@@ -279,20 +268,7 @@ export function TargetSetupGuide({
                             S-Curve - Slow start, rapid middle, slow end
                           </option>
                         </select>
-                        <svg
-                          aria-hidden="true"
-                          className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
-                          fill="none"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            stroke="currentColor"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.5}
-                            d="m6 9 4 4 4-4"
-                          />
-                        </svg>
+                        <ChevronDownIcon className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4" />
                       </div>
                     </div>
                   </div>

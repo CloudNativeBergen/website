@@ -93,99 +93,56 @@ export function EmailModal({
     null,
   )
 
-  // Local storage support
   const storage = useEmailModalStorage({
     storageKey: storageKey || 'email-modal-default',
     isOpen,
   })
 
-  // Initialize content when modal opens
   useEffect(() => {
-    console.log('[EmailModal] Initialization effect triggered:', {
-      isOpen,
-      initializedRef: initializedRef.current,
-      storageKey,
-      hasStoredData: storage.hasStoredData,
-      isLoading: storage.isLoading,
-      storedData: storage.storedData,
-    })
-
     if (isOpen && !initializedRef.current) {
-      // Check if storage is still loading
       if (storage.isLoading) {
-        console.log('[EmailModal] Storage still loading, waiting...')
         return
       }
 
-      // Restore from storage if available and we have stored data
       if (storageKey && storage.hasStoredData && storage.storedData) {
-        console.log('[EmailModal] Restoring from storage:', storage.storedData)
         setSubject(storage.storedData.subject || '')
 
-        // Handle stored message data - restore PortableText blocks directly
         const storedMessage = storage.storedData.message
         if (Array.isArray(storedMessage)) {
-          console.log(
-            '[EmailModal] Setting richTextValue from array:',
-            storedMessage,
-          )
           setRichTextValue(storedMessage)
-          // Force editor remount to restore the content properly
           setEditorRemountKey((prev) => prev + 1)
         } else if (typeof storedMessage === 'string' && storedMessage) {
-          console.log(
-            '[EmailModal] Converting string to PortableText:',
-            storedMessage,
-          )
           const convertedBlocks =
             convertStringToPortableTextBlocks(storedMessage)
           setRichTextValue(convertedBlocks)
-          // Force editor remount to restore the content properly
           setEditorRemountKey((prev) => prev + 1)
         } else {
-          console.log('[EmailModal] Setting empty richTextValue')
           setRichTextValue([])
         }
 
-        // Restore additional fields if available
         if (storage.storedData.additionalFields && onAdditionalFieldsChange) {
           onAdditionalFieldsChange(storage.storedData.additionalFields)
         }
 
         initializedRef.current = true
       } else {
-        console.log('[EmailModal] Using initial values:', initialValues)
-        // Use initial values when no stored data is available and not yet initialized
         setSubject(initialValues.subject || '')
 
-        // Handle both string and PortableTextBlock[] initial values
         const initialMessage = initialValues.message
         if (Array.isArray(initialMessage)) {
-          console.log(
-            '[EmailModal] Setting richTextValue from initial array:',
-            initialMessage,
-          )
           setRichTextValue(initialMessage)
-          // Force editor remount for consistency
           setEditorRemountKey((prev) => prev + 1)
         } else if (initialMessage) {
-          console.log(
-            '[EmailModal] Converting initial string to PortableText:',
-            initialMessage,
-          )
           const convertedBlocks =
             convertStringToPortableTextBlocks(initialMessage)
           setRichTextValue(convertedBlocks)
-          // Force editor remount for consistency
           setEditorRemountKey((prev) => prev + 1)
         } else {
-          console.log('[EmailModal] Setting empty richTextValue from initial')
           setRichTextValue([])
         }
         initializedRef.current = true
       }
 
-      // Enable auto-save when initialized
       setTimeout(() => {
         setAutoSaveEnabled(true)
       }, 200)
@@ -195,21 +152,18 @@ export function EmailModal({
     storage.isLoading,
     storage.hasStoredData,
     storage.storedData,
-    // Remove storage.storedData from dependencies to prevent re-initialization loop
     storageKey,
     initialValues,
     onAdditionalFieldsChange,
   ])
 
-  // Disable auto-save when modal closes
   useEffect(() => {
     if (!isOpen) {
       setAutoSaveEnabled(false)
-      initializedRef.current = false // Reset initialization flag when modal closes
+      initializedRef.current = false
     }
   }, [isOpen])
 
-  // Helper function to convert PortableText to plain text for fallback
   const convertPortableTextToString = (blocks: PortableTextBlock[]): string => {
     return blocks
       .map((block) => {
@@ -231,29 +185,24 @@ export function EmailModal({
   }, [richTextValue])
 
   const getCurrentMessageHTML = (): string => {
-    // The PortableTextBlock from @portabletext/editor is compatible with @portabletext/types
-    // but TypeScript needs help understanding this
     return portableTextToHTML(richTextValue as PortableTextBlockForHTML[])
   }
 
-  // Auto-save when subject or message changes
   useEffect(() => {
     if (!autoSaveEnabled || !storage) return
 
     const editorValue = richTextValue
     const messageText = getCurrentMessage()
 
-    // Skip saving if content is empty and no additional fields
     const hasContent = subject.trim() || messageText.trim()
     const hasAdditionalFields = Object.keys(additionalFields).length > 0
 
     if (!hasContent && !hasAdditionalFields) return
 
-    // Check if content or additional fields have changed
     const currentContent = {
       subject,
       message: messageText,
-      additionalFields: JSON.stringify(additionalFields), // Include additional fields in change detection
+      additionalFields: JSON.stringify(additionalFields),
     }
 
     const lastSave = lastAutoSaveRef.current as {
@@ -270,15 +219,10 @@ export function EmailModal({
       return
     }
 
-    // Auto-save with debouncing to prevent interference with user typing
     const autoSaveTimeoutRef = setTimeout(() => {
-      console.log('[EmailModal] Auto-saving after debounce...', {
-        subject,
-        additionalFields,
-      })
       storage.autoSave(subject, editorValue, additionalFields)
       lastAutoSaveRef.current = currentContent
-    }, 1000) // Longer delay to reduce interference
+    }, 1000)
 
     return () => {
       clearTimeout(autoSaveTimeoutRef)
@@ -312,21 +256,17 @@ export function EmailModal({
         message: richTextValue,
       })
 
-      // Clear stored data on successful send
       if (storageKey) {
         storage.clearStorage()
       }
 
-      // Disable auto-save before clearing form
       setAutoSaveEnabled(false)
 
-      // Reset form and close modal on success
       setSubject('')
       setRichTextValue([])
-      initializedRef.current = false // Allow re-initialization with fresh data
+      initializedRef.current = false
       onClose()
     } catch (error) {
-      console.error('Failed to send email:', error)
       showNotification({
         type: 'error',
         title: 'Failed to send email',
@@ -342,24 +282,22 @@ export function EmailModal({
 
   const handleClose = () => {
     if (!isLoading) {
-      // Don't clear form state on close - preserve draft for next time
       onClose()
     }
   }
 
   const handleClearDraft = () => {
     if (storageKey) {
-      setAutoSaveEnabled(false) // Disable auto-save before clearing
+      setAutoSaveEnabled(false)
       storage.clearStorage()
       setSubject('')
       setRichTextValue([])
-      initializedRef.current = false // Allow re-initialization with initial values
+      initializedRef.current = false
       showNotification({
         type: 'success',
         title: 'Draft cleared',
         message: 'Saved draft has been removed.',
       })
-      // Re-enable auto-save after clearing
       setTimeout(() => setAutoSaveEnabled(true), 100)
     }
   }
@@ -443,9 +381,7 @@ export function EmailModal({
                     <div className="space-y-4 p-6 pb-0">{warningContent}</div>
                   )}
 
-                  {/* Show either form or preview */}
                   {showPreview && previewComponent ? (
-                    /* Preview Mode */
                     <div className="space-y-4 p-6">
                       <div className="flex items-center justify-between">
                         <h4 className="font-space-grotesk text-lg font-semibold text-gray-900 dark:text-white">
@@ -460,7 +396,7 @@ export function EmailModal({
                           <span className="sm:hidden">Cancel</span>
                         </button>
                       </div>
-                      <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                      <div className="rounded-xl bg-white p-6 dark:bg-gray-800">
                         {previewComponent({
                           subject,
                           message: richTextValue,
@@ -469,11 +405,8 @@ export function EmailModal({
                       </div>
                     </div>
                   ) : (
-                    /* Email Composition Form */
                     <div className="space-y-0">
-                      {/* Email Header Fields */}
                       <div className="border-b border-gray-200 dark:border-gray-700">
-                        {/* To Field */}
                         <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
                           <label className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300">
                             To:
@@ -491,7 +424,6 @@ export function EmailModal({
                           </div>
                         </div>
 
-                        {/* From Field */}
                         <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
                           <label className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300">
                             From:
@@ -503,7 +435,6 @@ export function EmailModal({
                           </div>
                         </div>
 
-                        {/* Subject Field */}
                         <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
                           <label
                             htmlFor="subject"
@@ -526,7 +457,6 @@ export function EmailModal({
                           </div>
                         </div>
 
-                        {/* Ticket URL Field (for sponsor emails) */}
                         {ticketUrl !== undefined && onTicketUrlChange && (
                           <div className="flex items-center px-6 py-3">
                             <label
@@ -552,14 +482,13 @@ export function EmailModal({
                         )}
                       </div>
 
-                      {/* Message Body */}
                       <div className="p-6">
                         <div className="mb-2">
                           <label className="font-space-grotesk text-sm font-medium text-gray-700 dark:text-gray-300">
                             Message
                           </label>
                         </div>
-                        <div className="min-h-[200px] rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="min-h-[200px] rounded-lg">
                           <PortableTextEditor
                             label=""
                             value={richTextValue}
