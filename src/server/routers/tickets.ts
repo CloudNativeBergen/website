@@ -24,7 +24,7 @@ import {
   fetchEventTickets,
   calculateDiscountUsage,
   type DiscountUsageStats,
-} from '@/lib/tickets/checkin'
+} from '@/lib/tickets/server'
 
 /**
  * Update ticket capacity for a conference

@@ -1,5 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getEventDiscounts } from '@/lib/tickets/checkin'
+import { getEventDiscounts } from '@/lib/tickets/server'
 import { TIER_TICKET_ALLOCATION } from '@/lib/tickets/calculations'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
@@ -30,17 +30,28 @@ export default async function DiscountCodesAdminPage() {
     !conference.checkin_customer_id ||
     !conference.checkin_event_id
   ) {
+    const missingFields = []
+    if (!conference.checkin_customer_id) missingFields.push('Customer ID')
+    if (!conference.checkin_event_id) missingFields.push('Event ID')
+
     return (
       <ErrorDisplay
-        title="Configuration Error"
+        title="Checkin.no Configuration Error"
         message={
           conferenceError
-            ? conferenceError.message
-            : 'Checkin.no Customer ID and Event ID must be configured in the conference settings'
+            ? `Failed to load conference data: ${conferenceError.message}`
+            : `Missing required Checkin.no configuration: ${missingFields.join(', ')}. Please configure these values in the conference settings to enable discount code management.`
         }
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
     )
   }
+
+  console.log('Using Checkin.no configuration:', {
+    customer_id: conference.checkin_customer_id,
+    event_id: conference.checkin_event_id,
+    conference_title: conference.title,
+  })
 
   // Prepare sponsor data with tier information
   const sponsorsWithTierInfo: SponsorWithTierInfo[] =
@@ -65,7 +76,19 @@ export default async function DiscountCodesAdminPage() {
     }) || []
 
   // Get discount codes data for stats calculation
-  const { discounts } = await getEventDiscounts(conference.checkin_event_id)
+  let discounts
+  try {
+    const discountData = await getEventDiscounts(conference.checkin_event_id)
+    discounts = discountData.discounts
+  } catch (error) {
+    return (
+      <ErrorDisplay
+        title="Failed to Load Discount Data"
+        message={`Unable to fetch discount codes from Checkin.no: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your API credentials and event configuration.`}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
+      />
+    )
+  }
 
   // Calculate sponsors with existing discounts using the same logic as DiscountCodeManager
   const sponsorsWithDiscounts = sponsorsWithTierInfo.filter((sponsor) => {

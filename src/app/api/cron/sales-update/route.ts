@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchEventTickets } from '@/lib/tickets/checkin'
+import { fetchEventTickets } from '@/lib/tickets/server'
 import { calculateTicketStatistics } from '@/lib/tickets/calculations'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'

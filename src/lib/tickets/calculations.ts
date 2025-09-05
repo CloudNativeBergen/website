@@ -1,5 +1,5 @@
-import type { EventTicket } from '@/lib/tickets/checkin'
-import { groupTicketsByOrder, type GroupedOrder } from '@/lib/tickets/checkin'
+import type { EventTicket } from './types'
+import { groupTicketsByOrder, type GroupedOrder } from './checkin'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import type { Conference } from '@/lib/conference/types'
 

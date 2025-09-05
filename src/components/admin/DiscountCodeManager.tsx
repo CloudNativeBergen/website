@@ -11,28 +11,7 @@ import {
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
-
-interface EventDiscount {
-  trigger: string
-  type: string
-  value: string
-  triggerValue: string | null
-  affects: string
-  includeBooking: boolean
-  affectsValue: string | null
-  modes: string[]
-  tickets: string[]
-  ticketsOnly: boolean
-  times: number
-  timesTotal: number
-  startsAt?: string
-  stopsAt?: string
-  actualUsage?: {
-    usageCount: number
-    ticketIds: number[]
-    totalValue: number
-  }
-}
+import type { EventDiscountWithUsage } from '@/lib/tickets/client'
 
 interface SponsorWithTierInfo {
   id: string
@@ -120,7 +99,7 @@ export function DiscountCodeManager({
 
       return Array.from(allTicketTypes)
     },
-    [existingDiscounts, getSponsorDiscounts],
+    [getSponsorDiscounts],
   )
 
   // Initialize selected ticket types with existing discounts
@@ -246,7 +225,7 @@ export function DiscountCodeManager({
   )
 
   // Helper function to determine discount status
-  const getDiscountStatus = (discount: EventDiscount) => {
+  const getDiscountStatus = (discount: EventDiscountWithUsage) => {
     const now = new Date()
     const startsAt = discount.startsAt ? new Date(discount.startsAt) : null
     const stopsAt = discount.stopsAt ? new Date(discount.stopsAt) : null

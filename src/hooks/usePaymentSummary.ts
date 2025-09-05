@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { CheckinPayOrder } from '@/lib/tickets/checkin'
-import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/checkin'
+import type { CheckinPayOrder } from '@/lib/tickets/client'
+import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/client'
 
 export interface PaymentSummary {
   totalOrders: number

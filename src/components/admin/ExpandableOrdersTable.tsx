@@ -7,7 +7,7 @@ import {
   ChevronRightIcon,
   CreditCardIcon,
 } from '@heroicons/react/24/outline'
-import type { GroupedOrder, CheckinPayOrder } from '@/lib/tickets/checkin'
+import type { GroupedOrder, CheckinPayOrder } from '@/lib/tickets/client'
 import { PaymentDetailsModal } from './PaymentDetailsModal'
 import { formatCurrency } from '@/lib/format'
 

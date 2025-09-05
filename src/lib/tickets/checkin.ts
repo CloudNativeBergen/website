@@ -1,212 +1,115 @@
-const CHECKIN_API_URL = 'https://api.checkin.no/graphql'
-const CHECKIN_API_KEY = process.env.CHECKIN_API_KEY
-const CHECKIN_API_SECRET = process.env.CHECKIN_API_SECRET
+import { checkinQuery, checkinMutation } from './graphql-client'
+import type {
+  EventTicket,
+  CheckinPayOrder,
+  GroupedOrder,
+  EventDiscount,
+  EventDiscountWithUsage,
+  TicketType,
+  CreateEventDiscountInput,
+  DiscountUsageStats,
+  EventTicketsResponse,
+  CheckinPayOrderResponse,
+  EventDiscountsResponse,
+  CreateEventDiscountResponse,
+  DeleteEventDiscountResponse,
+  ValidateDiscountCodeResponse,
+} from './types'
 
-interface GraphQLError {
-  message: string
-}
-
-export interface EventTicket {
-  id: number
-  order_id: number
-  category: string
-  customer_name: string | null
-  sum: string // price without vat
-  sum_left: string // outstanding amount
-  coupon?: string
-  discount?: string
-  fields: { key: string; value: string }[]
-  crm: {
-    first_name: string
-    last_name: string
-    email: string
-  }
-}
-
-export interface CheckinPayOrder {
-  id: number
-  belongsTo: number
-  orderId: number
-  orderType: string
-  documentType: string
-  kid: string | null
-  invoiceReference: string | null
-  archivedAt: string | null
-  createdAt: string
-  invoiceDate: string | null
-  deliveryDate: string | null
-  dueAt: string
-  contactCrm: {
-    firstName: string
-    lastName: string
-    email: {
-      email: string
-    }
-  }
-  billingCrm: {
-    firstName: string
-    lastName: string
-    email: {
-      email: string
-    }
-  } | null
-  currency: string | null
-  country: string | null
-  paymentMethod: string
-  paymentStatus: string
-  actionRequired: string | null
-  debtStatus: string | null
-  debtLastUpdatedAt: string | null
-  sum: string
-  sumLeft: string
-  paid: boolean
-  sumVat: string
-}
-
-export interface GroupedOrder {
-  order_id: number
-  tickets: EventTicket[]
-  totalTickets: number
-  totalAmount: number
-  amountLeft: number
-  categories: string[]
-  fields: { key: string; value: string }[]
-}
-
-interface EventTicketsResponse {
-  data: {
-    eventTickets: EventTicket[]
-  }
-}
-
-interface CheckinPayOrderResponse {
-  data: {
-    findCheckinPayOrderByID: CheckinPayOrder
-  }
-}
-
-interface EventDiscount {
-  id?: string
-  trigger: string
-  type: string
-  value: string
-  triggerValue: string | null
-  affects: string
-  includeBooking: boolean
-  affectsValue: string | null
-  modes: string[]
-  tickets: string[]
-  ticketsOnly: boolean
-  times: number
-  timesTotal: number
-  // Optional fields for date ranges
-  startsAt?: string
-  stopsAt?: string
-}
-
-export interface TicketType {
-  id: string | number // Allow both string and number to handle API response
-  name: string
-  description: string
-}
-
-export interface CreateEventDiscountInput {
-  eventId: number
-  discountCode: string
-  numberOfTickets: number
-  ticketTypes: string[]
-  discountType?: 'percentage' | 'fixed'
-  discountValue?: number
-  startsAt?: string
-  stopsAt?: string
+// Re-export types for convenience
+export type {
+  EventTicket,
+  CheckinPayOrder,
+  GroupedOrder,
+  EventDiscount,
+  EventDiscountWithUsage,
+  TicketType,
+  DiscountUsageStats,
 }
 
 export async function getEventDiscounts(
   eventId: number,
 ): Promise<{ discounts: EventDiscount[]; ticketTypes: TicketType[] }> {
-  const query = `
-    query findEventByIdQuery($id: Int!) {
-      findEventById(id: $id) {
-        id
-        tickets {
+  if (!eventId || eventId <= 0) {
+    throw new Error('Valid event ID is required')
+  }
+
+  try {
+    const query = `
+      query findEventByIdQuery($id: Int!) {
+        findEventById(id: $id) {
           id
-          name
-          description
-        }
-        settings {
-          discounts {
-            trigger
-            triggerValue
-            type
-            value
-            affects
-            affectsValue
-            includeBooking
-            modes
-            tickets
-            ticketsOnly
-            times
-            timesTotal
-            startsAt
-            stopsAt
+          tickets {
+            id
+            name
+            description
+          }
+          settings {
+            discounts {
+              trigger
+              triggerValue
+              type
+              value
+              affects
+              affectsValue
+              includeBooking
+              modes
+              tickets
+              ticketsOnly
+              times
+              timesTotal
+              startsAt
+              stopsAt
+            }
           }
         }
       }
+    `
+
+    const variables = { id: eventId }
+    const responseData = await checkinQuery<EventDiscountsResponse>(
+      query,
+      variables,
+    )
+
+    const eventData = responseData.findEventById
+    if (!eventData) {
+      throw new Error(`Event with ID ${eventId} not found`)
     }
-  `
 
-  const variables = { id: eventId }
+    return {
+      discounts: eventData.settings?.discounts || [],
+      ticketTypes: eventData.tickets || [],
+    }
+  } catch (error) {
+    // Enhanced error context for debugging
+    const errorMessage = error instanceof Error ? error.message : String(error)
 
-  const response = await fetch(CHECKIN_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  })
+    console.error('Failed to fetch event discounts:', {
+      eventId,
+      error: errorMessage,
+      stack: error instanceof Error ? error.stack : undefined,
+    })
 
-  if (!response.ok) {
-    console.error(
-      'Failed to fetch event discounts:',
-      response.status,
-      response.statusText,
-    )
-    throw new Error(`Failed to fetch event discounts: ${response.statusText}`)
+    // Check for authorization errors and provide helpful context
+    if (errorMessage.toLowerCase().includes('authorize')) {
+      throw new Error(
+        `Access denied to event ${eventId}. This usually means:\n` +
+          `1. The API credentials don't have access to this event\n` +
+          `2. The event ID ${eventId} is incorrect or doesn't exist\n` +
+          `3. The event belongs to a different organization\n` +
+          `\nPlease verify the checkin_event_id in your conference settings.`,
+      )
+    }
+
+    // Re-throw with additional context for other errors
+    if (error instanceof Error) {
+      throw new Error(
+        `Failed to fetch discounts for event ${eventId}: ${error.message}`,
+      )
+    }
+    throw error
   }
-
-  const responseData = await response.json()
-
-  if (responseData.errors) {
-    console.error('GraphQL errors in discount query:', responseData.errors)
-    throw new Error(
-      'Failed to fetch discounts: ' +
-        responseData.errors.map((e: GraphQLError) => e.message).join(', '),
-    )
-  }
-
-  if (!responseData.data || !responseData.data.findEventById) {
-    console.error('Invalid event discounts response:', responseData)
-    throw new Error('Invalid event discounts response')
-  }
-
-  const eventData = responseData.data.findEventById
-
-  return {
-    discounts: eventData.settings?.discounts || [],
-    ticketTypes: eventData.tickets || [],
-  }
-}
-
-export interface CreateEventDiscountInput {
-  eventId: number
-  discountCode: string
-  numberOfTickets: number
-  ticketTypes: string[]
-  discountType?: 'percentage' | 'fixed'
-  discountValue?: number
-  startsAt?: string
-  stopsAt?: string
 }
 
 export async function createEventDiscount(
@@ -220,7 +123,7 @@ export async function createEventDiscount(
       ? `[${ticketTypes.map((id) => id).join(', ')}]` // Remove quotes to pass as integers
       : '[]'
 
-  const query = `
+  const mutation = `
     mutation CreateEventDiscount {
       createEventDiscount(
         eventId: ${eventId}
@@ -232,7 +135,7 @@ export async function createEventDiscount(
           affectsValue: 100
           includeBooking: false
           modes: default
-            tickets: ${ticketsParam}
+          tickets: ${ticketsParam}
           ticketsOnly: true
           timesTotal: ${numberOfTickets}
           type: percent
@@ -243,46 +146,16 @@ export async function createEventDiscount(
     }
   `
 
-  const response = await fetch(CHECKIN_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
-    },
-    body: JSON.stringify({ query }),
-  })
-
-  if (!response.ok) {
-    console.error(
-      'Failed to create event discount:',
-      response.status,
-      response.statusText,
-    )
-    throw new Error(`Failed to create event discount: ${response.statusText}`)
-  }
-
-  const responseData = await response.json()
-
-  if (responseData.errors) {
-    console.error('GraphQL errors in create discount:', responseData.errors)
-    throw new Error(
-      'GraphQL errors in create discount: ' +
-        responseData.errors.map((e: GraphQLError) => e.message).join(', '),
-    )
-  }
-
-  if (!responseData.data || !responseData.data.createEventDiscount) {
-    console.error('Invalid create discount response:', responseData)
-    throw new Error('Invalid create discount response')
-  }
+  const responseData =
+    await checkinMutation<CreateEventDiscountResponse>(mutation)
 
   // Check if the mutation was successful
-  const result = responseData.data.createEventDiscount
+  const result = responseData.createEventDiscount
   if (!result.success) {
     throw new Error('Failed to create discount code')
   }
 
-  // Return a mock object since the mutation returns success/message, not the discount object
+  // Return a properly typed object since the mutation returns success/message, not the discount object
   return {
     trigger: 'coupon',
     type: 'percent',
@@ -292,7 +165,7 @@ export async function createEventDiscount(
     includeBooking: false,
     affectsValue: '100',
     modes: ['default'],
-    tickets: ticketTypes, // Include the selected ticket types
+    tickets: ticketTypes,
     ticketsOnly: true,
     times: 0,
     timesTotal: numberOfTickets,
@@ -303,7 +176,7 @@ export async function deleteEventDiscount(
   eventId: number,
   discountCode: string,
 ): Promise<boolean> {
-  const query = `
+  const mutation = `
     mutation DeleteEventDiscount($eventId: Int!, $id: String!) {
       deleteEventDiscount(eventId: $eventId, id: $id) {
         success
@@ -315,40 +188,12 @@ export async function deleteEventDiscount(
   const discountId = `coupon-${discountCode}`
   const variables = { eventId, id: discountId }
 
-  const response = await fetch(CHECKIN_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  })
+  const responseData = await checkinMutation<DeleteEventDiscountResponse>(
+    mutation,
+    variables,
+  )
 
-  if (!response.ok) {
-    console.error(
-      'Failed to delete event discount:',
-      response.status,
-      response.statusText,
-    )
-    throw new Error(`Failed to delete event discount: ${response.statusText}`)
-  }
-
-  const responseData = await response.json()
-
-  if (responseData.errors) {
-    console.error('GraphQL errors in delete discount:', responseData.errors)
-    throw new Error(
-      'GraphQL errors in delete discount: ' +
-        responseData.errors.map((e: GraphQLError) => e.message).join(', '),
-    )
-  }
-
-  if (!responseData.data || !responseData.data.deleteEventDiscount) {
-    console.error('Invalid delete discount response:', responseData)
-    throw new Error('Invalid delete discount response')
-  }
-
-  const result = responseData.data.deleteEventDiscount
+  const result = responseData.deleteEventDiscount
   return result.success
 }
 
@@ -356,6 +201,13 @@ export async function fetchEventTickets(
   customerId: number,
   eventId: number,
 ): Promise<EventTicket[]> {
+  if (!customerId || customerId <= 0) {
+    throw new Error('Valid customer ID is required')
+  }
+  if (!eventId || eventId <= 0) {
+    throw new Error('Valid event ID is required')
+  }
+
   const query = `
     query FetchEventTickets($customerId: Int!, $eventId: Int!) {
       eventTickets(customer_id: $customerId, id: $eventId) {
@@ -381,35 +233,12 @@ export async function fetchEventTickets(
   `
 
   const variables = { customerId, eventId }
+  const responseData = await checkinQuery<EventTicketsResponse>(
+    query,
+    variables,
+  )
 
-  const response = await fetch(CHECKIN_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch event tickets: ${response.statusText}`)
-  }
-
-  const responseData: EventTicketsResponse = await response.json()
-
-  if (!responseData.data || !responseData.data.eventTickets) {
-    throw new Error('Invalid response data')
-  }
-
-  return responseData.data.eventTickets
-}
-
-export interface DiscountUsageStats {
-  [discountCode: string]: {
-    usageCount: number
-    ticketIds: number[]
-    totalValue: number
-  }
+  return responseData.eventTickets || []
 }
 
 /**
@@ -468,41 +297,12 @@ export async function validateDiscountCode(
   `
 
   const variables = { eventId, coupon: discountCode }
+  const responseData = await checkinQuery<ValidateDiscountCodeResponse>(
+    query,
+    variables,
+  )
 
-  const response = await fetch(CHECKIN_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  })
-
-  if (!response.ok) {
-    console.error(
-      'Failed to validate discount code:',
-      response.status,
-      response.statusText,
-    )
-    throw new Error(`Failed to validate discount code: ${response.statusText}`)
-  }
-
-  const responseData = await response.json()
-
-  if (responseData.errors) {
-    console.error('GraphQL errors in validation query:', responseData.errors)
-    throw new Error(
-      'GraphQL errors in validation query: ' +
-        responseData.errors.map((e: GraphQLError) => e.message).join(', '),
-    )
-  }
-
-  if (!responseData.data || !responseData.data.eventCouponValidate) {
-    console.error('Invalid validation response:', responseData)
-    throw new Error('Invalid validation response')
-  }
-
-  return responseData.data.eventCouponValidate
+  return responseData.eventCouponValidate
 }
 
 export async function fetchOrderPaymentDetails(
@@ -553,33 +353,12 @@ export async function fetchOrderPaymentDetails(
   `
 
   const variables = { id: orderId }
+  const responseData = await checkinQuery<CheckinPayOrderResponse>(
+    query,
+    variables,
+  )
 
-  const response = await fetch(CHECKIN_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${CHECKIN_API_KEY}:${CHECKIN_API_SECRET}`,
-    },
-    body: JSON.stringify({ query, variables }),
-  })
-
-  if (!response.ok) {
-    console.error(
-      'Failed to fetch payment details:',
-      response.status,
-      response.statusText,
-    )
-    throw new Error(`Failed to fetch payment details: ${response.statusText}`)
-  }
-
-  const responseData: CheckinPayOrderResponse = await response.json()
-
-  if (!responseData.data || !responseData.data.findCheckinPayOrderByID) {
-    console.error('Invalid payment details response:', responseData)
-    throw new Error('Invalid payment details response')
-  }
-
-  return responseData.data.findCheckinPayOrderByID
+  return responseData.findCheckinPayOrderByID
 }
 
 export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {

@@ -1,4 +1,4 @@
-import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/checkin'
+import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/server'
 import {
   calculateTicketStatistics,
   TIER_TICKET_ALLOCATION,
@@ -12,7 +12,7 @@ import { TargetSetupGuide } from '@/components/admin/TargetSetupGuide'
 import { TargetTrackingWithPreview } from '@/components/admin/TargetTrackingWithPreview'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { TicketIcon } from '@heroicons/react/24/outline'
-import type { EventTicket } from '@/lib/tickets/checkin'
+import type { EventTicket } from '@/lib/tickets/server'
 import { formatCurrency } from '@/lib/format'
 import Link from 'next/link'
 
@@ -31,14 +31,19 @@ export default async function AdminTickets() {
     !conference.checkin_customer_id ||
     !conference.checkin_event_id
   ) {
+    const missingFields = []
+    if (!conference.checkin_customer_id) missingFields.push('Customer ID')
+    if (!conference.checkin_event_id) missingFields.push('Event ID')
+
     return (
       <ErrorDisplay
-        title="Error Loading Conference Data"
+        title="Checkin.no Configuration Error"
         message={
           conferenceError
-            ? conferenceError.message
-            : 'Checkin.no Customer ID and Event ID must be configured in the conference settings'
+            ? `Failed to load conference data: ${conferenceError.message}`
+            : `Missing required Checkin.no configuration: ${missingFields.join(', ')}. Please configure these values in the conference settings to enable ticket management.`
         }
+        backLink={{ href: '/admin', label: 'Back to Admin Dashboard' }}
       />
     )
   }
@@ -55,7 +60,11 @@ export default async function AdminTickets() {
 
   if (error) {
     return (
-      <ErrorDisplay title="Error Loading Tickets" message={error.message} />
+      <ErrorDisplay
+        title="Failed to Load Ticket Data"
+        message={`Unable to fetch tickets from Checkin.no: ${error.message}. Please check your API credentials and try again.`}
+        backLink={{ href: '/admin', label: 'Back to Admin Dashboard' }}
+      />
     )
   }
 

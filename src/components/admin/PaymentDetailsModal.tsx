@@ -8,9 +8,9 @@ import {
   ClockIcon,
   CreditCardIcon,
 } from '@heroicons/react/24/outline'
-import type { CheckinPayOrder } from '@/lib/tickets/checkin'
+import type { CheckinPayOrder } from '@/lib/tickets/client'
 import { formatCurrency } from '@/lib/format'
-import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/checkin'
+import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/client'
 import { SkeletonModal } from './LoadingSkeleton'
 
 interface PaymentDetailsModalProps {
