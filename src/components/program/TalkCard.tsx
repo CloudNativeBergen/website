@@ -136,7 +136,8 @@ export function TalkCard({
                 </div>
               )}
               <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300">
-                {durationMinutes} min
+                <span className="hidden sm:inline">{durationMinutes} min</span>
+                <span className="sm:hidden">{durationMinutes}m</span>
               </span>
             </div>
           </div>
@@ -249,9 +250,10 @@ export function TalkCard({
                 ) : (
                   <span className="flex items-center gap-2">
                     <span>
-                      {formatType === 'workshop'
-                        ? 'Workshop details to be announced'
-                        : 'Talk details to be announced'}
+                      <span className="hidden sm:inline">
+                        Talk details to be announced
+                      </span>
+                      <span className="sm:hidden">Details TBA</span>
                     </span>
                     <span className="inline-flex items-center gap-1 rounded-md bg-yellow-100 px-2 py-1 text-xs font-medium whitespace-nowrap text-yellow-800">
                       <ClockIcon className="h-3 w-3" />
@@ -313,7 +315,10 @@ export function TalkCard({
                     )}
                   >
                     <div className="font-medium text-gray-400 dark:text-gray-500">
-                      Speaker to be announced
+                      <span className="hidden sm:inline">
+                        Speaker to be announced
+                      </span>
+                      <span className="sm:hidden">Speaker TBA</span>
                     </div>
                   </div>
                 </div>
@@ -425,8 +430,13 @@ export function TalkCard({
         {!compact && !isConfirmed && !isWithdrawnOrRejected && (
           <div className="flex-1">
             <div className="text-sm text-gray-400 italic dark:text-gray-500">
-              Talk description will be available once the speaker confirms their
-              participation.
+              <span className="hidden sm:inline">
+                Talk description will be available once the speaker confirms
+                their participation.
+              </span>
+              <span className="sm:hidden">
+                Description pending speaker confirmation.
+              </span>
             </div>
           </div>
         )}
@@ -435,8 +445,11 @@ export function TalkCard({
         {!compact && isWithdrawnOrRejected && (
           <div className="flex-1">
             <div className="text-sm text-red-400 italic dark:text-red-300">
-              This session has been cancelled and will not be part of the
-              program.
+              <span className="hidden sm:inline">
+                This session has been cancelled and will not be part of the
+                program.
+              </span>
+              <span className="sm:hidden">Session cancelled.</span>
             </div>
           </div>
         )}
@@ -474,7 +487,8 @@ export function TalkCard({
                 compact ? 'text-xs' : 'text-xs',
               )}
             >
-              {durationMinutes} min
+              <span className="hidden sm:inline">{durationMinutes} min</span>
+              <span className="sm:hidden">{durationMinutes}m</span>
             </span>
           </div>
 

@@ -77,11 +77,11 @@ export function FeaturedSpeakers({
             <div className="mx-auto max-w-2xl text-center lg:mx-0">
               <h2
                 id="speakers-title"
-                className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl"
+                className="font-space-grotesk text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl lg:text-5xl"
               >
                 {content.title}
               </h2>
-              <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
+              <p className="font-inter mt-4 text-lg tracking-tight text-brand-slate-gray sm:text-xl lg:text-2xl dark:text-gray-300">
                 Stay tuned for speaker announcements!
               </p>
             </div>
@@ -102,15 +102,15 @@ export function FeaturedSpeakers({
           <div className="mx-auto max-w-2xl lg:mx-0">
             <h2
               id="speakers-title"
-              className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl"
+              className="font-space-grotesk text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl lg:text-5xl"
             >
               {content.title}
             </h2>
-            <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
+            <p className="font-inter mt-4 text-lg tracking-tight text-brand-slate-gray sm:text-xl lg:text-2xl dark:text-gray-300">
               {content.subtitle}
             </p>
           </div>
-          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {/* Featured Speaker - Show randomly selected speaker prominently */}
             {featuredSpeaker && (
               <div className="mt-20 mb-16">

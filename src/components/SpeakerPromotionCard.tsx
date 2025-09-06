@@ -56,9 +56,9 @@ const variantConfig = {
   },
   featured: {
     containerClass:
-      'group relative flex flex-col h-full overflow-hidden rounded-xl border-2 border-brand-cloud-blue dark:border-brand-cloud-blue bg-gradient-to-br from-brand-cloud-blue/20 via-brand-cloud-blue/10 to-brand-fresh-green/10 dark:from-brand-cloud-blue/30 dark:via-brand-cloud-blue/20 dark:to-brand-fresh-green/20 p-8 shadow-md transition-all duration-300 hover:shadow-lg dark:hover:shadow-xl',
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border-2 border-brand-cloud-blue dark:border-brand-cloud-blue bg-gradient-to-br from-brand-cloud-blue/20 via-brand-cloud-blue/10 to-brand-fresh-green/10 dark:from-brand-cloud-blue/30 dark:via-brand-cloud-blue/20 dark:to-brand-fresh-green/20 p-4 sm:p-6 lg:p-8 shadow-md transition-all duration-300 hover:shadow-lg dark:hover:shadow-xl',
     titleClass:
-      'font-space-grotesk text-2xl font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue dark:group-hover:text-brand-cloud-blue',
+      'font-space-grotesk text-xl sm:text-2xl font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue dark:group-hover:text-brand-cloud-blue',
     showFeaturedBadge: true,
     showCloudNativePattern: true,
   },
@@ -222,18 +222,18 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
 
       {/* Left side badges */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex h-8 items-center space-x-2 rounded-full border border-brand-cloud-blue/30 bg-brand-cloud-blue/15 px-4 backdrop-blur-sm">
-          <UserIcon className="h-4 w-4 text-brand-cloud-blue" />
-          <span className="font-inter text-sm font-medium text-brand-cloud-blue">
+        <div className="relative flex h-8 items-center space-x-2 rounded-full border border-brand-cloud-blue/30 bg-brand-cloud-blue/15 px-3 backdrop-blur-sm sm:px-4">
+          <UserIcon className="h-3 w-3 text-brand-cloud-blue sm:h-4 sm:w-4" />
+          <span className="font-inter text-xs font-medium text-brand-cloud-blue sm:text-sm">
             Speaker
           </span>
         </div>
 
         {/* Featured Badge - More Prominent */}
         {variantSettings.showFeaturedBadge && (
-          <div className="relative flex h-8 items-center space-x-2 rounded-full border-2 border-accent-yellow bg-gradient-to-r from-accent-yellow to-accent-yellow/90 px-4 shadow-md backdrop-blur-sm">
-            <StarIcon className="h-4 w-4 text-white" />
-            <span className="font-inter text-sm font-bold text-white">
+          <div className="relative flex h-8 items-center space-x-1 rounded-full border-2 border-accent-yellow bg-gradient-to-r from-accent-yellow to-accent-yellow/90 px-3 shadow-md backdrop-blur-sm sm:space-x-2 sm:px-4">
+            <StarIcon className="h-3 w-3 text-white sm:h-4 sm:w-4" />
+            <span className="font-inter text-xs font-bold text-white sm:text-sm">
               Featured
             </span>
           </div>
@@ -241,17 +241,17 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
 
         {/* Talk Count Badge for Featured */}
         {variant === 'featured' && talkCount > 0 && (
-          <div className="relative flex h-8 items-center rounded-full border border-brand-fresh-green/30 bg-brand-fresh-green/15 px-3 backdrop-blur-sm">
+          <div className="relative flex h-8 items-center rounded-full border border-brand-fresh-green/30 bg-brand-fresh-green/15 px-2 backdrop-blur-sm sm:px-3">
             <span className="font-inter text-xs font-medium text-brand-fresh-green">
               {talkCount} {talkCount === 1 ? 'Talk' : 'Talks'}
             </span>
           </div>
         )}
 
-        {/* Company Badge for Featured */}
+        {/* Company Badge for Featured - Hidden on smallest screens */}
         {variant === 'featured' && company && (
-          <div className="relative flex h-8 items-center rounded-full border border-gray-300/30 bg-gray-100/60 px-3 backdrop-blur-sm">
-            <span className="font-inter text-xs font-medium text-gray-600">
+          <div className="relative hidden h-8 items-center rounded-full border border-gray-300/30 bg-gray-100/60 px-2 backdrop-blur-sm sm:flex sm:px-3">
+            <span className="font-inter max-w-20 truncate text-xs font-medium text-gray-600 sm:max-w-none">
               {company}
             </span>
           </div>
@@ -263,7 +263,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           speaker.flags.length > 0 && (
             <>
               {speaker.flags.includes(Flags.localSpeaker) && (
-                <div className="relative flex h-8 items-center space-x-1 rounded-full border border-brand-fresh-green/30 bg-brand-fresh-green/15 px-3 backdrop-blur-sm">
+                <div className="relative flex h-8 items-center space-x-1 rounded-full border border-brand-fresh-green/30 bg-brand-fresh-green/15 px-2 backdrop-blur-sm sm:px-3">
                   <MapPinIcon className="h-3 w-3 text-brand-fresh-green" />
                   <span className="font-inter text-xs font-medium text-brand-fresh-green">
                     Local
@@ -271,10 +271,13 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
                 </div>
               )}
               {speaker.flags.includes(Flags.firstTimeSpeaker) && (
-                <div className="relative flex h-8 items-center space-x-1 rounded-full border border-purple-300/30 bg-purple-100/60 px-3 backdrop-blur-sm">
+                <div className="relative flex h-8 items-center space-x-1 rounded-full border border-purple-300/30 bg-purple-100/60 px-2 backdrop-blur-sm sm:px-3">
                   <SparklesIcon className="h-3 w-3 text-purple-600" />
-                  <span className="font-inter text-xs font-medium text-purple-600">
+                  <span className="font-inter hidden text-xs font-medium text-purple-600 sm:inline">
                     First Timer
+                  </span>
+                  <span className="font-inter text-xs font-medium text-purple-600 sm:hidden">
+                    New
                   </span>
                 </div>
               )}
@@ -282,10 +285,10 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           )}
       </div>
 
-      {/* Trophy Icon for isFeatured */}
+      {/* Trophy Icon for isFeatured - Hidden on smallest screens */}
       {isFeatured && (
         <div
-          className={`relative flex items-center justify-center rounded-full bg-accent-yellow shadow-lg ${variant === 'featured' ? 'h-10 w-10' : 'h-8 w-8'}`}
+          className={`relative hidden items-center justify-center rounded-full bg-accent-yellow shadow-lg sm:flex ${variant === 'featured' ? 'h-10 w-10' : 'h-8 w-8'}`}
         >
           <TrophyIcon
             className={`text-white ${variant === 'featured' ? 'h-5 w-5' : 'h-4 w-4'}`}
