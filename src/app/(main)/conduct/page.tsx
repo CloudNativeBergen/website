@@ -18,10 +18,10 @@ export default async function CodeOfConduct() {
         <BackgroundImage className="-top-36 -bottom-14 print:hidden" />
         <Container className="relative print:max-w-none print:px-0">
           <div className="mx-auto max-w-4xl print:max-w-none">
-            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl print:mb-4 print:text-3xl print:font-bold print:text-black">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400 print:mb-4 print:text-3xl print:font-bold print:text-black">
               Community Code of Conduct
             </h1>
-            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray print:mt-4 print:space-y-4 print:text-base print:text-black">
+            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300 print:mt-4 print:space-y-4 print:text-base print:text-black">
               <p className="print:leading-relaxed">
                 As participants, speakers, sponsors, volunteers, organizers, and
                 contributors in the
@@ -41,12 +41,12 @@ export default async function CodeOfConduct() {
             </div>
           </div>
 
-          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm print:mt-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
-            <div className="prose prose-lg print:prose-base max-w-none print:max-w-none">
-              <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
+          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm dark:border-gray-700 dark:bg-gray-800 print:mt-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+            <div className="prose prose-lg print:prose-base dark:prose-invert max-w-none print:max-w-none">
+              <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Scope
               </h2>
-              <div className="font-inter text-brand-slate-gray print:text-black">
+              <div className="font-inter text-brand-slate-gray dark:text-gray-300 print:text-black">
                 <p className="print:leading-relaxed">
                   This code of conduct applies to:
                 </p>
@@ -70,10 +70,10 @@ export default async function CodeOfConduct() {
                 </ul>
               </div>
 
-              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
+              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Our Standards
               </h2>
-              <div className="font-inter text-brand-slate-gray print:text-black">
+              <div className="font-inter text-brand-slate-gray dark:text-gray-300 print:text-black">
                 <p className="print:leading-relaxed">
                   The {organizerName} Community is open, inclusive and
                   respectful. Every member of our community has the right to

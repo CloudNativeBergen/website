@@ -1,7 +1,6 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
-import { DiamondIcon } from '@/components/DiamondIcon'
 import { iconForLink } from '@/components/SocialIcons'
 import {
   InformationCircleIcon,
@@ -168,33 +167,32 @@ export function Hero({ conference }: { conference: Conference }) {
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
           {conference.announcement &&
             !isPortableTextEmpty(conference.announcement) && (
-              <div className="bg-opacity-20 mb-8 rounded-lg border border-accent-yellow bg-brand-sunbeam-yellow p-6 shadow-sm">
+              <div className="bg-opacity-20 mb-8 rounded-lg border border-accent-yellow bg-brand-sunbeam-yellow p-6 shadow-sm dark:border-brand-sunbeam-yellow dark:bg-brand-sunbeam-yellow/20 dark:shadow-md">
                 <div className="flex items-center">
-                  <DiamondIcon className="mr-4 h-7 w-7 flex-shrink-0 text-brand-sunbeam-yellow" />
-                  <div className="font-space-grotesk text-brand-slate-gray">
+                  <div className="font-space-grotesk text-brand-slate-gray dark:text-white">
                     <PortableText
                       value={conference.announcement}
                       components={{
                         block: {
                           normal: ({ children }) => (
-                            <p className="text-lg leading-relaxed font-medium text-brand-slate-gray">
+                            <p className="text-lg leading-relaxed font-medium text-brand-slate-gray dark:text-white">
                               {children}
                             </p>
                           ),
                           h1: ({ children }) => (
-                            <h2 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray">
+                            <h2 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray dark:text-white">
                               {children}
                             </h2>
                           ),
                           h2: ({ children }) => (
-                            <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray">
+                            <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray dark:text-white">
                               {children}
                             </h3>
                           ),
                         },
                         marks: {
                           strong: ({ children }) => (
-                            <strong className="font-bold text-brand-slate-gray">
+                            <strong className="font-bold text-brand-slate-gray dark:text-white">
                               {children}
                             </strong>
                           ),
@@ -227,7 +225,7 @@ export function Hero({ conference }: { conference: Conference }) {
             <span className="sr-only">{conference.title} - </span>
             {conference.tagline}
           </h1>
-          <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray">
+          <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
             <p>
               Cloud Native Day Bergen is the nerdiest tech conference in Bergen.
               Join us to learn about the latest trends, best practices, and
@@ -270,7 +268,7 @@ export function Hero({ conference }: { conference: Conference }) {
                     <dt className="font-jetbrains text-sm text-brand-cloud-blue">
                       {metric.label}
                     </dt>
-                    <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray">
+                    <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray dark:text-gray-200">
                       {metric.value}
                     </dd>
                   </div>

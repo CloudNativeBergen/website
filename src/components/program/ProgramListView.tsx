@@ -46,11 +46,11 @@ export const ProgramListView = React.memo(function ProgramListView({
   if (mergedTalks.length === 0) {
     return (
       <div className="py-16 text-center">
-        <MagnifyingGlassIcon className="mx-auto mb-4 h-16 w-16 text-gray-400" />
-        <h3 className="font-space-grotesk mb-2 text-lg font-medium text-brand-slate-gray">
+        <MagnifyingGlassIcon className="mx-auto mb-4 h-16 w-16 text-gray-400 dark:text-gray-500" />
+        <h3 className="font-space-grotesk mb-2 text-lg font-medium text-brand-slate-gray dark:text-gray-200">
           No talks found
         </h3>
-        <p className="font-inter text-gray-600">
+        <p className="font-inter text-gray-600 dark:text-gray-400">
           Try adjusting your filters to see more content.
         </p>
       </div>
@@ -92,11 +92,11 @@ export const ProgramListView = React.memo(function ProgramListView({
         <div key={date} className="space-y-4">
           {/* Day Header - only show if multiple days */}
           {sortedDays.length > 1 && (
-            <div className="border-b border-brand-frosted-steel pb-4">
-              <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray">
+            <div className="border-b border-brand-frosted-steel pb-4 dark:border-gray-700">
+              <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
                 {formatDate(date)}
               </h2>
-              <p className="font-inter mt-1 text-sm text-gray-600">
+              <p className="font-inter mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {talksByDay[date].length} items scheduled
               </p>
             </div>
@@ -118,8 +118,8 @@ export const ProgramListView = React.memo(function ProgramListView({
       ))}
 
       {/* Summary */}
-      <div className="border-t border-brand-frosted-steel py-8 text-center">
-        <p className="font-inter text-sm text-gray-600">
+      <div className="border-t border-brand-frosted-steel py-8 text-center dark:border-gray-700">
+        <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
           Showing {mergedTalks.length} items from {data.schedules.length} day
           {data.schedules.length !== 1 ? 's' : ''}
         </p>

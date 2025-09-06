@@ -31,9 +31,9 @@ export function BackLink({
   const baseClasses = 'inline-flex items-center space-x-2 transition-colors'
 
   const variantClasses = {
-    link: 'text-sm font-medium text-brand-cloud-blue hover:text-brand-cloud-blue/80',
+    link: 'text-sm font-medium text-brand-cloud-blue hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300',
     button:
-      'rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2',
+      'rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-offset-gray-800',
   }
 
   return (

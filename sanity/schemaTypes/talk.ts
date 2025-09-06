@@ -5,7 +5,7 @@ import {
   levels,
   formats,
   audiences,
-} from '../../src/lib/proposal/types'
+} from '@/lib/proposal/types'
 import { defineField, defineType } from 'sanity'
 
 export default defineType({

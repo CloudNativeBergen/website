@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'

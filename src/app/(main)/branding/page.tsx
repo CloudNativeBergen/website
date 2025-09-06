@@ -72,7 +72,7 @@ import {
   Audience,
 } from '@/lib/proposal/types'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
-import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const metadata: Metadata = {
   title: 'Brand Guidelines - Cloud Native Day Bergen',

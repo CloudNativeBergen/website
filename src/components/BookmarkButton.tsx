@@ -44,14 +44,14 @@ export const BookmarkButton = React.memo<BookmarkButtonProps>(
       () => (
         <div
           className={clsx(
-            'flex items-center justify-center rounded-full bg-gray-100',
+            'flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700',
             buttonSizeClasses[size],
             className,
           )}
         >
           <div
             className={clsx(
-              'animate-pulse rounded bg-gray-300',
+              'animate-pulse rounded bg-gray-300 dark:bg-gray-600',
               sizeClasses[size],
             )}
           />
@@ -69,10 +69,10 @@ export const BookmarkButton = React.memo<BookmarkButtonProps>(
         onClick={handleClick}
         className={clsx(
           'flex items-center justify-center rounded-full transition-all duration-200',
-          'hover:scale-110 focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-1 focus:outline-none',
+          'hover:scale-110 focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-1 focus:outline-none dark:focus:ring-offset-gray-800',
           isBookmarkedTalk
-            ? 'bg-brand-cloud-blue text-white shadow-md hover:bg-brand-cloud-blue/90'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-brand-cloud-blue',
+            ? 'bg-brand-cloud-blue text-white shadow-md hover:bg-brand-cloud-blue/90 dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue/80'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-brand-cloud-blue dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-blue-400',
           buttonSizeClasses[size],
           className,
         )}

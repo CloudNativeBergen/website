@@ -204,14 +204,14 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
               trackIndex !== selectedIndex && 'opacity-70',
             )}
           >
-            <div className="rounded-lg border border-brand-frosted-steel bg-white p-4">
-              <h3 className="font-space-grotesk text-lg font-semibold text-brand-cloud-blue">
+            <div className="rounded-lg border border-brand-frosted-steel bg-white p-4 dark:border-gray-600 dark:bg-gray-800">
+              <h3 className="font-space-grotesk text-lg font-semibold text-brand-cloud-blue dark:text-blue-400">
                 <Tab className="ui-not-focus-visible:outline-none">
                   <span className="absolute inset-0" />
                   <time dateTime={date}>{track.trackTitle}</time>
                 </Tab>
               </h3>
-              <p className="font-inter mt-1 text-sm text-brand-slate-gray">
+              <p className="font-inter mt-1 text-sm text-brand-slate-gray dark:text-gray-300">
                 {track.trackDescription}
               </p>
             </div>
@@ -264,19 +264,19 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
           gridTemplateColumns: `120px repeat(${tracks.length}, minmax(0, 1fr))`,
         }}
       >
-        <div className="font-space-grotesk text-sm font-medium text-brand-slate-gray">
+        <div className="font-space-grotesk text-sm font-medium text-brand-slate-gray dark:text-gray-300">
           Time
         </div>
         {tracks.map((track, trackIndex) => (
           <div
             key={`header-${trackIndex}`}
-            className="rounded-lg border border-brand-frosted-steel bg-white p-3"
+            className="rounded-lg border border-brand-frosted-steel bg-white p-3 dark:border-gray-600 dark:bg-gray-800"
           >
-            <h3 className="font-space-grotesk text-sm font-semibold text-brand-cloud-blue">
+            <h3 className="font-space-grotesk text-sm font-semibold text-brand-cloud-blue dark:text-blue-400">
               {track.trackTitle}
             </h3>
             {track.trackDescription && (
-              <p className="font-inter mt-1 line-clamp-2 text-xs text-brand-slate-gray">
+              <p className="font-inter mt-1 line-clamp-2 text-xs text-brand-slate-gray dark:text-gray-300">
                 {track.trackDescription}
               </p>
             )}
@@ -296,8 +296,8 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
               }}
             >
               {/* Time column */}
-              <div className="sticky left-0 bg-white p-2 text-center">
-                <div className="font-mono text-sm font-medium text-brand-slate-gray">
+              <div className="sticky left-0 bg-white p-2 text-center dark:bg-gray-900">
+                <div className="font-mono text-sm font-medium text-brand-slate-gray dark:text-gray-300">
                   {timeSlot}
                 </div>
               </div>
@@ -345,8 +345,8 @@ const DaySchedule = React.memo(function DaySchedule({
   if (schedule.tracks.length === 0) {
     return (
       <div className="py-12 text-center">
-        <MagnifyingGlassIcon className="mx-auto mb-4 h-12 w-12 text-gray-400" />
-        <p className="font-inter text-gray-600">
+        <MagnifyingGlassIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
+        <p className="font-inter text-gray-600 dark:text-gray-400">
           No talks scheduled for this day with current filters.
         </p>
       </div>
@@ -357,10 +357,10 @@ const DaySchedule = React.memo(function DaySchedule({
     <div className="space-y-6">
       {/* Day Header */}
       <div className="text-center">
-        <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
+        <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
           {formatScheduleDate(schedule.date)}
         </h2>
-        <p className="font-inter mt-1 text-sm text-gray-600">
+        <p className="font-inter mt-1 text-sm text-gray-600 dark:text-gray-400">
           {schedule.tracks.length} track
           {schedule.tracks.length !== 1 ? 's' : ''}
         </p>
@@ -381,11 +381,11 @@ export const ProgramScheduleView = React.memo(function ProgramScheduleView({
   if (data.schedules.length === 0) {
     return (
       <div className="py-16 text-center">
-        <MagnifyingGlassIcon className="mx-auto mb-4 h-16 w-16 text-gray-400" />
-        <h3 className="font-space-grotesk mb-2 text-lg font-medium text-brand-slate-gray">
+        <MagnifyingGlassIcon className="mx-auto mb-4 h-16 w-16 text-gray-400 dark:text-gray-500" />
+        <h3 className="font-space-grotesk mb-2 text-lg font-medium text-brand-slate-gray dark:text-gray-200">
           No scheduled content found
         </h3>
-        <p className="font-inter text-gray-600">
+        <p className="font-inter text-gray-600 dark:text-gray-400">
           Try adjusting your filters to see more content.
         </p>
       </div>
@@ -398,7 +398,7 @@ export const ProgramScheduleView = React.memo(function ProgramScheduleView({
         <div key={schedule._id || `schedule-${index}`}>
           <DaySchedule schedule={schedule} />
           {index < data.schedules.length - 1 && (
-            <div className="mt-8 border-t border-brand-frosted-steel" />
+            <div className="mt-8 border-t border-brand-frosted-steel dark:border-gray-700" />
           )}
         </div>
       ))}

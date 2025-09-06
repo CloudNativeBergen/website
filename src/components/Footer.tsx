@@ -8,7 +8,7 @@ export function Footer({ c }: { c: Conference }) {
   return (
     <footer className="flex-none py-16">
       <Container className="flex flex-col items-center justify-between md:flex-row">
-        <Logo className="h-12 w-auto text-brand-slate-gray" />
+        <Logo className="h-12 w-auto text-brand-slate-gray dark:text-white" />
         <div className="mt-6 flex flex-col items-center space-y-4 md:mt-0 md:flex-row md:space-y-0 md:space-x-8">
           <nav className="flex flex-col items-center space-y-2 md:flex-row md:space-y-0 md:space-x-6">
             <Link

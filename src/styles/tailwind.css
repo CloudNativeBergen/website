@@ -3,6 +3,7 @@
 @source '../app/(admin)';
 @source '../components/admin';
 
+/* Use class strategy for dark mode but ensure media query fallback works */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Critical chart styles - prevent tree shaking */

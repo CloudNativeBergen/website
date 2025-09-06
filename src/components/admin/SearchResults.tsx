@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
-import { SpeakerAvatars } from '../SpeakerAvatars'
+import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { UserIcon } from '@heroicons/react/24/outline'
 import { getStatusBadgeStyle } from './utils'
 import { SkeletonList } from './LoadingSkeleton'

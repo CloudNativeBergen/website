@@ -41,23 +41,23 @@ const levelConfig = {
 const variantConfig = {
   default: {
     containerClass:
-      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 bg-white p-6 transition-all duration-300 hover:border-gray-300 hover:shadow-lg',
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-lg dark:hover:shadow-xl',
     titleClass:
-      'font-space-grotesk text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
+      'font-space-grotesk text-xl font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue',
     showFeaturedBadge: false,
   },
   featured: {
     containerClass:
-      'group relative flex flex-col h-full overflow-hidden rounded-xl border-2 border-brand-cloud-blue bg-white p-6 shadow-md transition-all duration-300 hover:shadow-lg',
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border-2 border-brand-cloud-blue bg-white dark:bg-gray-800 p-6 shadow-md transition-all duration-300 hover:shadow-lg dark:hover:shadow-xl',
     titleClass:
-      'font-space-grotesk text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
+      'font-space-grotesk text-xl font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue',
     showFeaturedBadge: true,
   },
   compact: {
     containerClass:
-      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-lg',
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-lg dark:hover:shadow-xl',
     titleClass:
-      'font-space-grotesk text-lg font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
+      'font-space-grotesk text-lg font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue',
     showFeaturedBadge: false,
   },
 } as const
@@ -134,7 +134,7 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
           {config.label}
         </span>
         {variant !== 'compact' && (
-          <span className="font-inter text-xs text-gray-600">
+          <span className="font-inter text-xs text-gray-600 dark:text-gray-400">
             ({config.duration})
           </span>
         )}
@@ -169,13 +169,13 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
               maxVisible={3}
             />
             <div className="min-w-0">
-              <div className="font-inter text-sm font-semibold text-brand-slate-gray">
+              <div className="font-inter text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
                 <ClickableSpeakerNames
                   speakers={speakers as Speaker[]}
-                  linkClassName="hover:text-brand-slate-gray/80 transition-colors"
+                  linkClassName="hover:text-brand-slate-gray/80 dark:hover:text-gray-300 transition-colors"
                 />
               </div>
-              <p className="font-inter text-xs text-gray-500">
+              <p className="font-inter text-xs text-gray-500 dark:text-gray-400">
                 {speakers.length > 1 ? 'Speakers' : 'Speaker'}
               </p>
             </div>
@@ -189,8 +189,8 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
           {/* Duration (for compact variant) */}
           {variant === 'compact' && (
             <div className="flex items-center space-x-1">
-              <ClockIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-sm text-gray-600">
+              <ClockIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <span className="font-inter text-sm text-gray-600 dark:text-gray-400">
                 {config.duration}
               </span>
             </div>
@@ -199,7 +199,7 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
           {/* Level */}
           {level && (
             <div className="flex items-center space-x-1">
-              <AcademicCapIcon className="h-4 w-4 text-gray-400" />
+              <AcademicCapIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
               <span
                 className={`font-inter text-sm ${levelConfig[level].color}`}
               >
@@ -210,8 +210,10 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
 
           {/* Topic */}
           {topic && (
-            <div className="rounded-full bg-gray-100 px-2 py-1">
-              <span className="font-inter text-xs text-gray-600">{topic}</span>
+            <div className="rounded-full bg-gray-100 px-2 py-1 dark:bg-gray-700">
+              <span className="font-inter text-xs text-gray-600 dark:text-gray-400">
+                {topic}
+              </span>
             </div>
           )}
         </div>
@@ -220,7 +222,7 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
       {/* Description */}
       {description && variant !== 'compact' && (
         <p
-          className={`font-inter text-gray-600 ${
+          className={`font-inter text-gray-600 dark:text-gray-400 ${
             variant === 'featured' ? 'text-base' : 'text-sm'
           } ${variant === 'featured' ? 'line-clamp-3' : 'line-clamp-3'} mb-4`}
         >
@@ -235,7 +237,7 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
    * Always positioned at the bottom using mt-auto
    */
   const TalkFooter = () => (
-    <footer className="mt-auto border-t border-gray-100 pt-4">
+    <footer className="mt-auto border-t border-gray-100 pt-4 dark:border-gray-700">
       <div className="flex items-center justify-between">
         {/* Event Details */}
         <div className="flex items-center space-x-2">
@@ -252,7 +254,7 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
                 className={`font-inter text-sm ${
                   variant === 'featured'
                     ? 'font-semibold text-brand-cloud-blue'
-                    : 'text-gray-600'
+                    : 'text-gray-600 dark:text-gray-400'
                 }`}
               >
                 {time}
@@ -260,20 +262,22 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
             </>
           ) : date ? (
             <>
-              <CalendarIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-sm text-gray-600">{date}</span>
+              <CalendarIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <span className="font-inter text-sm text-gray-600 dark:text-gray-400">
+                {date}
+              </span>
             </>
           ) : location ? (
             <>
-              <MapPinIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-sm text-gray-600">
+              <MapPinIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <span className="font-inter text-sm text-gray-600 dark:text-gray-400">
                 {location}
               </span>
             </>
           ) : (
             <div className="flex items-center space-x-1">
-              <ClockIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-sm text-gray-600">
+              <ClockIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <span className="font-inter text-sm text-gray-600 dark:text-gray-400">
                 {config.duration}
               </span>
             </div>

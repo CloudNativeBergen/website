@@ -73,7 +73,7 @@ export function FeaturedSpeakers({
         className="py-20 sm:py-32"
       >
         <Container>
-          <div className="bg-white py-32">
+          <div className="py-32">
             <div className="mx-auto max-w-2xl text-center lg:mx-0">
               <h2
                 id="speakers-title"
@@ -81,7 +81,7 @@ export function FeaturedSpeakers({
               >
                 {content.title}
               </h2>
-              <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray">
+              <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
                 Stay tuned for speaker announcements!
               </p>
             </div>
@@ -98,7 +98,7 @@ export function FeaturedSpeakers({
       className="py-20 sm:py-32"
     >
       <Container>
-        <div className="bg-white py-32">
+        <div className="py-32">
           <div className="mx-auto max-w-2xl lg:mx-0">
             <h2
               id="speakers-title"
@@ -106,7 +106,7 @@ export function FeaturedSpeakers({
             >
               {content.title}
             </h2>
-            <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray">
+            <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
               {content.subtitle}
             </p>
           </div>

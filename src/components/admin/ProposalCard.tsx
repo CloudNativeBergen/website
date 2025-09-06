@@ -10,7 +10,7 @@ import {
   audiences,
 } from '@/lib/proposal/types'
 import { SpeakerWithReviewInfo } from '@/lib/speaker/types'
-import { SpeakerAvatars } from '../SpeakerAvatars'
+import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import {
   StatusBadge,
   SpeakerIndicators,

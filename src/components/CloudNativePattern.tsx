@@ -106,24 +106,26 @@ const SPECIALIZED_ICONS: BaseIcon[] = [
 
 const COLOR_SCHEMES = {
   dark: [
-    'text-blue-400',
-    'text-cyan-400',
-    'text-purple-400',
-    'text-indigo-400',
-    'text-teal-400',
-    'text-blue-300',
-    'text-purple-300',
-    'text-cyan-300',
+    'text-white',
+    'text-gray-100',
+    'text-blue-200',
+    'text-cyan-200',
+    'text-purple-200',
+    'text-indigo-200',
+    'text-teal-200',
+    'text-sky-200',
   ],
   light: [
-    'text-slate-800',
     'text-gray-800',
-    'text-zinc-800',
     'text-blue-800',
     'text-cyan-800',
     'text-purple-800',
     'text-indigo-800',
-    'text-slate-900',
+    'text-teal-800',
+    'text-sky-800',
+    'text-violet-800',
+    'text-slate-800',
+    'text-emerald-800',
   ],
   brand: [
     'text-blue-400',
@@ -187,31 +189,34 @@ const createDepthLayers = (
     name: 'background',
     zIndex: 1,
     sizeRange: [baseSize * 0.5, baseSize * 0.7],
-    opacityMultiplier: variant === 'light' ? 0.4 : 0.5,
+    opacityMultiplier:
+      variant === 'light' ? 0.5 : variant === 'dark' ? 0.4 : 0.5,
     blur: 2.0,
     frequency: 0.5,
     animationSpeedMultiplier: 1.5,
-    brightness: variant === 'light' ? 0.6 : 0.9,
+    brightness: variant === 'light' ? 1.0 : variant === 'dark' ? 0.8 : 0.9,
   },
   {
     name: 'midground',
     zIndex: 10,
     sizeRange: [baseSize * 0.8, baseSize * 1.2],
-    opacityMultiplier: variant === 'light' ? 0.7 : 0.8,
+    opacityMultiplier:
+      variant === 'light' ? 0.7 : variant === 'dark' ? 0.6 : 0.8,
     blur: 0.8,
     frequency: 0.35,
     animationSpeedMultiplier: 1.0,
-    brightness: variant === 'light' ? 0.8 : 1.1,
+    brightness: variant === 'light' ? 1.1 : variant === 'dark' ? 0.9 : 1.1,
   },
   {
     name: 'foreground',
     zIndex: 20,
     sizeRange: [baseSize * 1.3, baseSize * 1.6],
-    opacityMultiplier: variant === 'light' ? 1.0 : 1.2,
+    opacityMultiplier:
+      variant === 'light' ? 0.9 : variant === 'dark' ? 0.8 : 1.2,
     blur: 0,
     frequency: 0.15,
     animationSpeedMultiplier: 0.7,
-    brightness: variant === 'light' ? 1.0 : 1.3,
+    brightness: variant === 'light' ? 1.2 : variant === 'dark' ? 1.0 : 1.3,
   },
 ]
 
@@ -406,8 +411,10 @@ export function CloudNativePattern({
         // Create filter styles based on variant
         const filterStyle =
           variant === 'light'
-            ? `invert(1) brightness(${layer.brightness * 0.7}) contrast(1.5) sepia(0.3) saturate(1.1)`
-            : `brightness(${layer.brightness}) sepia(${0.3 * layer.brightness}) saturate(${1.3 * layer.brightness})`
+            ? `invert(1) brightness(${layer.brightness * 0.3}) contrast(1.2) saturate(1.1)`
+            : variant === 'dark'
+              ? `brightness(${layer.brightness * 1.2}) contrast(1.3) saturate(0.8) hue-rotate(5deg)`
+              : `brightness(${layer.brightness}) sepia(${0.3 * layer.brightness}) saturate(${1.3 * layer.brightness})`
 
         elements.push(
           <div
@@ -457,17 +464,27 @@ export function CloudNativePattern({
 
   // Memoized background gradients
   const backgroundGradients = useMemo(() => {
-    const isLight = variant === 'light'
-    return {
-      deep: isLight
-        ? 'bg-gradient-to-r from-blue-50/5 via-purple-50/8 to-cyan-50/5'
-        : 'bg-gradient-to-r from-blue-900/15 via-purple-900/20 to-cyan-900/15',
-      mid: isLight
-        ? 'bg-gradient-to-br from-cyan-50/6 via-transparent to-indigo-50/6'
-        : 'bg-gradient-to-br from-cyan-900/12 via-transparent to-indigo-900/12',
-      foreground: isLight
-        ? 'bg-gradient-to-t from-transparent via-transparent to-blue-50/3'
-        : 'bg-gradient-to-t from-transparent via-transparent to-blue-900/8',
+    if (variant === 'light') {
+      return {
+        deep: 'bg-gradient-to-r from-blue-50/5 via-purple-50/8 to-cyan-50/5',
+        mid: 'bg-gradient-to-br from-cyan-50/6 via-transparent to-indigo-50/6',
+        foreground:
+          'bg-gradient-to-t from-transparent via-transparent to-blue-50/3',
+      }
+    } else if (variant === 'dark') {
+      return {
+        deep: 'bg-gradient-to-r from-blue-950/10 via-purple-950/12 to-cyan-950/10',
+        mid: 'bg-gradient-to-br from-cyan-950/8 via-transparent to-indigo-950/8',
+        foreground:
+          'bg-gradient-to-t from-transparent via-slate-950/5 to-blue-950/6',
+      }
+    } else {
+      return {
+        deep: 'bg-gradient-to-r from-blue-900/15 via-purple-900/20 to-cyan-900/15',
+        mid: 'bg-gradient-to-br from-cyan-900/12 via-transparent to-indigo-900/12',
+        foreground:
+          'bg-gradient-to-t from-transparent via-transparent to-blue-900/8',
+      }
     }
   }, [variant])
 

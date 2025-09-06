@@ -21,7 +21,7 @@ import { useState, useEffect } from 'react'
 import { SkeletonList } from './LoadingSkeleton'
 import { useProposalSearch } from './hooks/useProposalSearch'
 import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
-import { SpeakerAvatars } from '../SpeakerAvatars'
+import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { getStatusBadgeStyle } from './utils'
 
 interface SearchModalProps {

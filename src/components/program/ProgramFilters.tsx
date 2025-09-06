@@ -49,9 +49,9 @@ interface ProgramFiltersProps {
 
 // Constants for better performance
 const DEFAULT_SELECT_CLASSES =
-  'col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6'
+  'col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600'
 const CHEVRON_DOWN_CLASSES =
-  'pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 @sm:size-4'
+  'pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 @sm:size-4 dark:text-gray-400'
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString)
@@ -169,20 +169,20 @@ export const ProgramFilters = React.memo(function ProgramFilters({
   )
 
   return (
-    <div className="@container space-y-4 rounded-lg border border-brand-frosted-steel bg-brand-glacier-white p-4">
+    <div className="@container space-y-4 rounded-lg border border-brand-frosted-steel bg-brand-glacier-white p-4 dark:border-gray-700 dark:bg-gray-800">
       {/* Compact Header with View Mode Selector */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <FunnelIcon className="h-4 w-4 text-brand-cloud-blue" />
-            <h3 className="font-space-grotesk text-base font-semibold text-brand-slate-gray">
+            <FunnelIcon className="h-4 w-4 text-brand-cloud-blue dark:text-blue-400" />
+            <h3 className="font-space-grotesk text-base font-semibold text-brand-slate-gray dark:text-white">
               Filters
             </h3>
           </div>
           {/* Hide count on mobile and tablet (@lg:block) to reduce clutter */}
-          <div className="hidden rounded-md bg-brand-sky-mist px-2 py-1 @lg:block">
-            <p className="font-inter text-xs text-brand-slate-gray">
-              <span className="font-semibold text-brand-cloud-blue">
+          <div className="hidden rounded-md bg-brand-sky-mist px-2 py-1 @lg:block dark:bg-gray-700">
+            <p className="font-inter text-xs text-brand-slate-gray dark:text-gray-300">
+              <span className="font-semibold text-brand-cloud-blue dark:text-blue-400">
                 {filteredTalks}
               </span>{' '}
               / {totalTalks}
@@ -203,7 +203,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             {hasActiveFilters && (
               <button
                 onClick={onClearFilters}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-brand-cloud-blue transition-colors hover:bg-brand-sky-mist"
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-brand-cloud-blue transition-colors hover:bg-brand-sky-mist dark:text-blue-400 dark:hover:bg-gray-700"
               >
                 <XMarkIcon className="h-3 w-3" />
                 <span className="hidden @sm:inline">Clear</span>
@@ -211,7 +211,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             )}
             <button
               onClick={handleToggleExpanded}
-              className="flex min-w-[60px] items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-sky-mist @sm:min-w-[unset]"
+              className="flex min-w-[60px] items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-sky-mist @sm:min-w-[unset] dark:text-gray-300 dark:hover:bg-gray-700"
             >
               {isExpanded ? (
                 <>
@@ -231,24 +231,24 @@ export const ProgramFilters = React.memo(function ProgramFilters({
 
       {/* Always Visible: Search */}
       <div className="relative">
-        <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
         <input
           type="text"
           placeholder="Search talks, speakers, topics..."
           value={filters.searchQuery}
           onChange={handleSearchChange}
-          className="block w-full rounded-md bg-white py-1.5 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6"
+          className="block w-full rounded-md bg-white py-1.5 pr-3 pl-10 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600 dark:placeholder:text-gray-400"
         />
       </div>
 
       {/* Expandable Filters */}
       {isExpanded && (
-        <div className="space-y-4 border-t border-brand-frosted-steel pt-4">
+        <div className="space-y-4 border-t border-brand-frosted-steel pt-4 dark:border-gray-700">
           {/* Show talk count on mobile and tablet when expanded */}
           <div className="@lg:hidden">
-            <p className="font-inter text-center text-xs text-brand-slate-gray">
+            <p className="font-inter text-center text-xs text-brand-slate-gray dark:text-gray-300">
               Showing{' '}
-              <span className="font-semibold text-brand-cloud-blue">
+              <span className="font-semibold text-brand-cloud-blue dark:text-blue-400">
                 {filteredTalks}
               </span>{' '}
               of {totalTalks} talks
@@ -260,7 +260,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             {/* Day Filter */}
             {availableFilters.days.length > 1 && (
               <div>
-                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray">
+                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
                   <CalendarDaysIcon className="h-3 w-3" />
                   Day
                 </label>
@@ -288,7 +288,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             {/* Track Filter */}
             {availableFilters.tracks.length > 1 && (
               <div>
-                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray">
+                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
                   <MapIcon className="h-3 w-3" />
                   Track
                 </label>
@@ -316,7 +316,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             {/* Format Filter */}
             {availableFilters.formats.length > 0 && (
               <div>
-                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray">
+                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
                   <TagIcon className="h-3 w-3" />
                   Format
                 </label>
@@ -344,7 +344,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             {/* Level Filter */}
             {availableFilters.levels.length > 0 && (
               <div>
-                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray">
+                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
                   <AcademicCapIcon className="h-3 w-3" />
                   Level
                 </label>
@@ -372,7 +372,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             {/* Audience Filter */}
             {availableFilters.audiences.length > 0 && (
               <div>
-                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray">
+                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
                   <UserGroupIcon className="h-3 w-3" />
                   Audience
                 </label>
@@ -400,7 +400,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             {/* Topic Filter */}
             {availableFilters.topics.length > 0 && (
               <div className="@sm:col-span-2 @lg:col-span-2">
-                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray">
+                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
                   <TagIcon className="h-3 w-3" />
                   Topic
                 </label>

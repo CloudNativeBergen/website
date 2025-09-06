@@ -32,16 +32,16 @@ type ButtonProps = LinkButtonProps | ButtonElementProps
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-brand-cloud-blue hover:bg-brand-cloud-blue-hover text-white focus-visible:outline-brand-cloud-blue',
+    'bg-brand-cloud-blue hover:bg-brand-cloud-blue-hover text-white dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover focus-visible:outline-brand-cloud-blue',
   secondary:
-    'bg-brand-nordic-purple hover:bg-brand-nordic-purple-hover text-white focus-visible:outline-brand-nordic-purple',
+    'bg-brand-nordic-purple hover:bg-brand-nordic-purple-hover text-white dark:bg-brand-nordic-purple dark:hover:bg-brand-nordic-purple-hover focus-visible:outline-brand-nordic-purple',
   success:
-    'bg-brand-fresh-green hover:bg-brand-fresh-green-hover text-white focus-visible:outline-brand-fresh-green',
+    'bg-brand-fresh-green hover:bg-brand-fresh-green-hover text-white dark:bg-brand-fresh-green dark:hover:bg-brand-fresh-green-hover focus-visible:outline-brand-fresh-green',
   warning:
-    'bg-brand-sunbeam-yellow hover:bg-brand-sunbeam-yellow-hover text-black focus-visible:outline-brand-sunbeam-yellow',
-  info: 'bg-brand-slate-gray hover:bg-brand-slate-gray-hover text-white focus-visible:outline-brand-slate-gray',
+    'bg-brand-sunbeam-yellow hover:bg-brand-sunbeam-yellow-hover text-black dark:bg-brand-sunbeam-yellow dark:hover:bg-brand-sunbeam-yellow-hover dark:text-gray-900 focus-visible:outline-brand-sunbeam-yellow',
+  info: 'bg-brand-slate-gray hover:bg-brand-slate-gray-hover text-white dark:bg-brand-slate-gray dark:hover:bg-brand-slate-gray-hover focus-visible:outline-brand-slate-gray',
   outline:
-    'bg-transparent text-brand-cloud-blue hover:bg-brand-cloud-blue hover:text-white focus-visible:outline-brand-cloud-blue shadow-[inset_0_0_0_2px_var(--color-brand-cloud-blue)] hover:shadow-[inset_0_0_0_2px_var(--color-brand-cloud-blue)]',
+    'bg-transparent text-brand-cloud-blue hover:bg-brand-cloud-blue hover:text-white dark:text-brand-cloud-blue dark:hover:bg-brand-cloud-blue dark:hover:text-white focus-visible:outline-brand-cloud-blue shadow-[inset_0_0_0_2px_var(--color-brand-cloud-blue)] hover:shadow-[inset_0_0_0_2px_var(--color-brand-cloud-blue)]',
 }
 
 const sizeStyles: Record<ButtonSize, string> = {

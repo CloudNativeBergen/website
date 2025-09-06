@@ -1,4 +1,4 @@
-import { formats } from '../../src/lib/proposal/types'
+import { formats } from '@/lib/proposal/types'
 import { defineField, defineType, ValidationContext } from 'sanity'
 
 export default defineType({

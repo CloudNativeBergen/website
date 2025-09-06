@@ -100,10 +100,10 @@ function TrackSummary({
 }) {
   return (
     <>
-      <h3 className="text-2xl font-semibold tracking-tight text-blue-900">
+      <h3 className="text-2xl font-semibold tracking-tight text-brand-cloud-blue dark:text-brand-cloud-blue">
         <time dateTime={date}>{track.name}</time>
       </h3>
-      <p className="mt-1.5 text-base tracking-tight text-blue-900">
+      <p className="mt-1.5 text-base tracking-tight text-brand-cloud-blue dark:text-brand-cloud-blue">
         {track.trackTitle}: {track.trackDescription}
       </p>
     </>
@@ -121,9 +121,11 @@ function PlaceholderTimeSlot({
     <Link
       type="button"
       href="/cfp"
-      className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 py-3 pb-4 hover:border-gray-400 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
+      className="relative block w-full rounded-lg border-2 border-dashed border-gray-300 py-3 pb-4 hover:border-gray-400 focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:border-gray-600 dark:hover:border-gray-500"
     >
-      <p className="mt-1 font-mono text-sm text-slate-500">Submit to speak</p>
+      <p className="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">
+        Submit to speak
+      </p>
       <TimeSlotTime date={date} start={talk.startTime} end={talk.endTime} />
     </Link>
   )
@@ -160,15 +162,15 @@ function TalkTimeSlot({ date, talk }: { date: string; talk: TrackTalk }) {
       {!talk.talk ||
       !primarySpeaker ||
       !(primarySpeaker && 'slug' in primarySpeaker) ? (
-        <h4 className="text-lg font-semibold tracking-tight text-blue-900">
+        <h4 className="text-lg font-semibold tracking-tight text-brand-cloud-blue dark:text-brand-cloud-blue">
           {talk.talk?.title || talk.placeholder || 'TBD'}
         </h4>
       ) : (
         <div className="block">
-          <h4 className="text-lg font-semibold tracking-tight text-blue-900">
+          <h4 className="text-lg font-semibold tracking-tight text-brand-cloud-blue dark:text-brand-cloud-blue">
             <Link
               href={`/speaker/${primarySpeaker.slug}`}
-              className="hover:text-blue-700"
+              className="hover:text-brand-cloud-blue-hover dark:hover:text-brand-cloud-blue"
             >
               {talk.talk.title}
             </Link>
@@ -179,17 +181,17 @@ function TalkTimeSlot({ date, talk }: { date: string; talk: TrackTalk }) {
             <div className="mt-2 flex items-center gap-2">
               <SpeakerAvatars speakers={speakers} maxVisible={3} size="sm" />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-blue-800">
+                <div className="text-sm font-medium text-brand-cloud-blue dark:text-brand-cloud-blue">
                   <ClickableSpeakerNames
                     speakers={speakers}
                     showFirstNameOnly={true}
                     maxVisible={2}
-                    linkClassName="hover:text-blue-600 transition-colors"
-                    separatorClassName="text-blue-600"
+                    linkClassName="hover:text-brand-cloud-blue-hover dark:hover:text-brand-cloud-blue transition-colors"
+                    separatorClassName="text-brand-cloud-blue dark:text-brand-cloud-blue"
                   />
                 </div>
                 {hasMultipleSpeakers && (
-                  <p className="text-xs text-blue-600">
+                  <p className="text-xs text-brand-cloud-blue dark:text-brand-cloud-blue">
                     {speakers.length} speakers
                   </p>
                 )}
@@ -214,7 +216,7 @@ function TimeSlotTime({
   end: string
 }) {
   return (
-    <p className="mt-1 font-mono text-sm text-slate-500">
+    <p className="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">
       <time dateTime={`${date}T${start} CEST`}>{start}</time> -{' '}
       <time dateTime={`${date}T${end} CEST`}>{end}</time>{' '}
     </p>
@@ -237,7 +239,7 @@ function TimeSlots({
       role="list"
       className={clsx(
         className,
-        'space-y-8 bg-white/60 px-10 py-14 text-center shadow-xl shadow-blue-900/5 backdrop-blur',
+        'space-y-8 bg-white/60 px-10 py-14 text-center shadow-xl shadow-blue-900/5 backdrop-blur dark:bg-gray-800/60 dark:shadow-gray-900/20',
       )}
     >
       {track.talks.map((talk, talkIndex) => (
@@ -246,7 +248,7 @@ function TimeSlots({
           aria-label={`${talk.talk?.title || 'TBD'} talking about ${talk.talk?.description || ''} at ${talk.startTime} - ${talk.endTime}`}
         >
           {talkIndex > 0 && (
-            <div className="mx-auto mb-8 h-px w-48 bg-indigo-500/10" />
+            <div className="mx-auto mb-8 h-px w-48 bg-brand-cloud-blue/10 dark:bg-brand-cloud-blue/20" />
           )}
           {!talk.talk && !talk.placeholder ? (
             <PlaceholderTimeSlot date={date} talk={talk} />
@@ -294,11 +296,11 @@ export function Schedule({ schedule }: { schedule: ConferenceSchedule }) {
     <section id="schedule" aria-label="Schedule" className="py-20 sm:py-32">
       <Container className="relative z-10">
         <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">
-          <h2 className="font-display text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl">
+          <h2 className="font-display text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-brand-cloud-blue">
             Our three-track schedule: Expertly configured and deployed with
             brilliant sessions from the cloud-native ecosystem.
           </h2>
-          <p className="font-display mt-4 text-2xl tracking-tight text-blue-900">
+          <p className="font-display mt-4 text-2xl tracking-tight text-brand-cloud-blue dark:text-brand-cloud-blue">
             Dive into our multi-cluster mesh of cloud-native knowledge.
             Orchestrate your conference experience by selecting the sessions
             that best scale your expertise.

@@ -435,11 +435,11 @@ export function ProgramHighlights({
         <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">
           <h2
             id="program-highlights-title"
-            className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl"
+            className="font-space-grotesk text-4xl font-medium tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-blue-400"
           >
             Program Highlights
           </h2>
-          <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray">
+          <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
             Experience world-class content from industry experts. From hands-on
             workshops to cutting-edge talks, get ready for {stats.days} days of
             learning and networking.
@@ -449,68 +449,68 @@ export function ProgramHighlights({
         {/* Program Stats */}
         <div className="mt-12 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
           <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cloud-blue/10">
-              <PresentationChartBarIcon className="h-6 w-6 text-brand-cloud-blue" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cloud-blue/10 dark:bg-blue-900/20">
+              <PresentationChartBarIcon className="h-6 w-6 text-brand-cloud-blue dark:text-blue-400" />
             </div>
-            <dt className="font-jetbrains mt-2 text-sm text-brand-cloud-blue">
+            <dt className="font-jetbrains mt-2 text-sm text-brand-cloud-blue dark:text-blue-400">
               Sessions
             </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
+            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
               {stats.totalSessions}+
             </dd>
           </div>
           <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-fresh-green/10">
-              <UserGroupIcon className="h-6 w-6 text-brand-fresh-green" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-fresh-green/10 dark:bg-green-900/20">
+              <UserGroupIcon className="h-6 w-6 text-brand-fresh-green dark:text-green-400" />
             </div>
-            <dt className="font-jetbrains mt-2 text-sm text-brand-fresh-green">
+            <dt className="font-jetbrains mt-2 text-sm text-brand-fresh-green dark:text-green-400">
               Speakers
             </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
+            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
               {stats.totalSpeakers}+
             </dd>
           </div>
           <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-accent-yellow/10">
-              <MicrophoneIcon className="h-6 w-6 text-accent-yellow" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-accent-yellow/10 dark:bg-yellow-900/20">
+              <MicrophoneIcon className="h-6 w-6 text-accent-yellow dark:text-yellow-400" />
             </div>
-            <dt className="font-jetbrains mt-2 text-sm text-accent-yellow">
+            <dt className="font-jetbrains mt-2 text-sm text-accent-yellow dark:text-yellow-400">
               Workshops
             </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
+            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
               {stats.workshopCount}
             </dd>
           </div>
           <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cloud-blue/10">
-              <CalendarDaysIcon className="h-6 w-6 text-brand-cloud-blue" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-cloud-blue/10 dark:bg-blue-900/20">
+              <CalendarDaysIcon className="h-6 w-6 text-brand-cloud-blue dark:text-blue-400" />
             </div>
-            <dt className="font-jetbrains mt-2 text-sm text-brand-cloud-blue">
+            <dt className="font-jetbrains mt-2 text-sm text-brand-cloud-blue dark:text-blue-400">
               Days
             </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
+            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
               {stats.days}
             </dd>
           </div>
           <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-fresh-green/10">
-              <ClockIcon className="h-6 w-6 text-brand-fresh-green" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-brand-fresh-green/10 dark:bg-green-900/20">
+              <ClockIcon className="h-6 w-6 text-brand-fresh-green dark:text-green-400" />
             </div>
-            <dt className="font-jetbrains mt-2 text-sm text-brand-fresh-green">
+            <dt className="font-jetbrains mt-2 text-sm text-brand-fresh-green dark:text-green-400">
               Topics
             </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
+            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
               {stats.topicCount}+
             </dd>
           </div>
           <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10">
-              <Squares2X2Icon className="h-6 w-6 text-purple-500" />
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 dark:bg-purple-900/20">
+              <Squares2X2Icon className="h-6 w-6 text-purple-500 dark:text-purple-400" />
             </div>
-            <dt className="font-jetbrains mt-2 text-sm text-purple-500">
+            <dt className="font-jetbrains mt-2 text-sm text-purple-500 dark:text-purple-400">
               Tracks
             </dt>
-            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray">
+            <dd className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-gray-200">
               {stats.trackCount}
             </dd>
           </div>
@@ -521,26 +521,26 @@ export function ProgramHighlights({
           <div className="mt-8 grid grid-cols-2 gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {stats.localSpeakerCount > 0 && (
               <div className="text-center">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-brand-fresh-green/10">
-                  <MapPinIcon className="h-5 w-5 text-brand-fresh-green" />
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-brand-fresh-green/10 dark:bg-green-900/20">
+                  <MapPinIcon className="h-5 w-5 text-brand-fresh-green dark:text-green-400" />
                 </div>
-                <dt className="font-jetbrains mt-2 text-xs text-brand-fresh-green">
+                <dt className="font-jetbrains mt-2 text-xs text-brand-fresh-green dark:text-green-400">
                   Local Speakers
                 </dt>
-                <dd className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+                <dd className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
                   {stats.localSpeakerCount}
                 </dd>
               </div>
             )}
             {stats.firstTimeSpeakerCount > 0 && (
               <div className="text-center">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
-                  <SparklesIcon className="h-5 w-5 text-purple-500" />
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10 dark:bg-purple-900/20">
+                  <SparklesIcon className="h-5 w-5 text-purple-500 dark:text-purple-400" />
                 </div>
-                <dt className="font-jetbrains mt-2 text-xs text-purple-500">
+                <dt className="font-jetbrains mt-2 text-xs text-purple-500 dark:text-purple-400">
                   First Timers
                 </dt>
-                <dd className="font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+                <dd className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
                   {stats.firstTimeSpeakerCount}
                 </dd>
               </div>
@@ -555,10 +555,10 @@ export function ProgramHighlights({
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cloud-blue to-brand-fresh-green">
                 <StarIcon className="h-8 w-8 text-white" />
               </div>
-              <h3 className="font-space-grotesk mt-4 text-3xl font-bold text-brand-slate-gray">
+              <h3 className="font-space-grotesk mt-4 text-3xl font-bold text-brand-slate-gray dark:text-white">
                 Don&apos;t Miss These Standouts
               </h3>
-              <p className="font-inter mt-2 text-lg text-brand-slate-gray">
+              <p className="font-inter mt-2 text-lg text-brand-slate-gray dark:text-gray-300">
                 Reserve your spot now to experience these exceptional sessions
                 and connect with industry leaders
               </p>
@@ -606,7 +606,7 @@ export function ProgramHighlights({
               {/* Featured Session */}
               {todaysFeaturedTalk && (
                 <div className="flex flex-col">
-                  <h4 className="font-space-grotesk mb-6 flex items-center space-x-2 text-xl font-bold text-brand-fresh-green">
+                  <h4 className="font-space-grotesk mb-6 flex items-center space-x-2 text-xl font-bold text-brand-fresh-green dark:text-green-400">
                     <RocketLaunchIcon className="h-6 w-6" />
                     <span>Must-See Session</span>
                   </h4>
@@ -632,12 +632,12 @@ export function ProgramHighlights({
         {regularTalks.length > 0 && (
           <div className="mt-20">
             <div className="mb-8 flex items-center justify-between">
-              <h3 className="font-space-grotesk text-2xl font-bold text-brand-slate-gray">
+              <h3 className="font-space-grotesk text-2xl font-bold text-brand-slate-gray dark:text-white">
                 More Amazing Sessions
               </h3>
               <Link
                 href="/program"
-                className="font-inter text-sm font-semibold text-brand-cloud-blue hover:text-brand-cloud-blue/80"
+                className="font-inter text-sm font-semibold text-brand-cloud-blue hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 View all sessions →
               </Link>

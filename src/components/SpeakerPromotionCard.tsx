@@ -48,25 +48,25 @@ interface ComputedSpeakerData {
 const variantConfig = {
   default: {
     containerClass:
-      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 bg-white p-6 transition-all duration-300 hover:border-gray-300 hover:shadow-lg',
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-lg dark:hover:shadow-xl',
     titleClass:
-      'font-space-grotesk text-xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
+      'font-space-grotesk text-xl font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue dark:group-hover:text-brand-cloud-blue',
     showFeaturedBadge: false,
     showCloudNativePattern: false,
   },
   featured: {
     containerClass:
-      'group relative flex flex-col h-full overflow-hidden rounded-xl border-2 border-brand-cloud-blue bg-gradient-to-br from-brand-cloud-blue/20 via-brand-cloud-blue/10 to-brand-fresh-green/10 p-8 shadow-md transition-all duration-300 hover:shadow-lg',
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border-2 border-brand-cloud-blue dark:border-brand-cloud-blue bg-gradient-to-br from-brand-cloud-blue/20 via-brand-cloud-blue/10 to-brand-fresh-green/10 dark:from-brand-cloud-blue/30 dark:via-brand-cloud-blue/20 dark:to-brand-fresh-green/20 p-8 shadow-md transition-all duration-300 hover:shadow-lg dark:hover:shadow-xl',
     titleClass:
-      'font-space-grotesk text-2xl font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
+      'font-space-grotesk text-2xl font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue dark:group-hover:text-brand-cloud-blue',
     showFeaturedBadge: true,
     showCloudNativePattern: true,
   },
   compact: {
     containerClass:
-      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 bg-white p-4 transition-all duration-300 hover:border-gray-300 hover:shadow-lg',
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-lg dark:hover:shadow-xl',
     titleClass:
-      'font-space-grotesk text-lg font-bold text-brand-slate-gray transition-colors group-hover:text-brand-cloud-blue',
+      'font-space-grotesk text-lg font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue dark:group-hover:text-brand-cloud-blue',
     showFeaturedBadge: false,
     showCloudNativePattern: false,
   },
@@ -321,7 +321,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           <h3 className={`mb-3 ${variantSettings.titleClass}`}>{name}</h3>
 
           {title && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-700">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-700 dark:text-gray-300">
               <span
                 className={`font-inter line-clamp-2 font-semibold ${variant === 'featured' ? 'text-lg' : ''}`}
               >
@@ -333,8 +333,8 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           {/* Company */}
           {company && variant !== 'compact' && variant !== 'featured' && (
             <div className="mt-3 flex items-center justify-center space-x-2">
-              <BuildingOfficeIcon className="h-4 w-4 flex-shrink-0 text-gray-400" />
-              <span className="font-inter line-clamp-1 text-sm text-gray-600">
+              <BuildingOfficeIcon className="h-4 w-4 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+              <span className="font-inter line-clamp-1 text-sm text-gray-600 dark:text-gray-400">
                 {company}
               </span>
             </div>
@@ -345,10 +345,10 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
       {/* Bio */}
       {bio && variant !== 'compact' && (
         <div
-          className={`mb-6 rounded-xl border border-white/20 bg-white/60 backdrop-blur-sm ${variant === 'featured' ? 'p-5' : 'p-3'}`}
+          className={`mb-6 rounded-xl border border-white/20 bg-white/60 backdrop-blur-sm dark:border-gray-600/20 dark:bg-gray-700/60 ${variant === 'featured' ? 'p-5' : 'p-3'}`}
         >
           <p
-            className={`font-inter text-gray-700 ${variant === 'featured' ? 'line-clamp-2 text-base leading-relaxed' : 'line-clamp-3 text-sm'}`}
+            className={`font-inter text-gray-700 dark:text-gray-300 ${variant === 'featured' ? 'line-clamp-2 text-base leading-relaxed' : 'line-clamp-3 text-sm'}`}
           >
             {bio}
           </p>
@@ -386,7 +386,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
    */
   const SpeakerFooter = () => (
     <footer
-      className={`relative mt-auto border-t border-gray-100/50 backdrop-blur-sm ${variant === 'featured' ? 'pt-6' : 'pt-4'}`}
+      className={`relative mt-auto border-t border-gray-100/50 backdrop-blur-sm dark:border-gray-700/50 ${variant === 'featured' ? 'pt-6' : 'pt-4'}`}
     >
       <div className="flex items-center justify-between">
         {/* Left side content */}
@@ -394,15 +394,17 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           {/* Talk Count - only show for non-featured variants */}
           {variant !== 'featured' && talkCount > 0 ? (
             <>
-              <SpeakerWaveIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-sm text-gray-600">
+              <SpeakerWaveIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <span className="font-inter text-sm text-gray-600 dark:text-gray-400">
                 {talkCount} {talkCount === 1 ? 'Talk' : 'Talks'}
               </span>
             </>
           ) : variant !== 'featured' ? (
             <>
-              <MicrophoneIcon className="h-4 w-4 text-gray-400" />
-              <span className="font-inter text-sm text-gray-600">Speaker</span>
+              <MicrophoneIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+              <span className="font-inter text-sm text-gray-600 dark:text-gray-400">
+                Speaker
+              </span>
             </>
           ) : null}
 

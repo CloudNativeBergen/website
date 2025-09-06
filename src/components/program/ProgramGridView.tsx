@@ -18,11 +18,11 @@ export const ProgramGridView = React.memo(function ProgramGridView({
   if (talksOnly.length === 0) {
     return (
       <div className="py-16 text-center">
-        <MagnifyingGlassIcon className="mx-auto mb-4 h-16 w-16 text-gray-400" />
-        <h3 className="font-space-grotesk mb-2 text-lg font-medium text-brand-slate-gray">
+        <MagnifyingGlassIcon className="mx-auto mb-4 h-16 w-16 text-gray-400 dark:text-gray-500" />
+        <h3 className="font-space-grotesk mb-2 text-lg font-medium text-brand-slate-gray dark:text-gray-200">
           No talks found
         </h3>
-        <p className="font-inter text-gray-600">
+        <p className="font-inter text-gray-600 dark:text-gray-400">
           Try adjusting your filters to see more content.
         </p>
       </div>
@@ -44,8 +44,8 @@ export const ProgramGridView = React.memo(function ProgramGridView({
       </div>
 
       {/* Summary */}
-      <div className="border-t border-brand-frosted-steel py-8 text-center">
-        <p className="font-inter text-sm text-gray-600">
+      <div className="border-t border-brand-frosted-steel py-8 text-center dark:border-gray-700">
+        <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
           Showing {talksOnly.length} talks from {data.schedules.length} day
           {data.schedules.length !== 1 ? 's' : ''}
         </p>

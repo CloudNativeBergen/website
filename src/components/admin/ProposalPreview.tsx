@@ -29,7 +29,7 @@ import {
 import { Flags } from '@/lib/speaker/types'
 import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
-import { SpeakerAvatarsWithNames } from '../SpeakerAvatars'
+import { SpeakerAvatarsWithNames } from '@/components/SpeakerAvatars'
 import { calculateAverageRating } from '@/lib/proposal'
 import { formatDateSafe } from '@/lib/time'
 

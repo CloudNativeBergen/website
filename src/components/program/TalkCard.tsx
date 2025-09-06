@@ -96,7 +96,7 @@ export function TalkCard({
     return (
       <div
         className={clsx(
-          'rounded-lg border border-brand-frosted-steel bg-brand-sky-mist',
+          'rounded-lg border border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-600 dark:bg-gray-700',
           compact ? 'p-2' : 'p-4',
         )}
         style={fixedHeight ? { minHeight } : {}}
@@ -105,7 +105,7 @@ export function TalkCard({
           <div className="flex-1">
             <h3
               className={clsx(
-                'font-space-grotesk font-medium text-brand-slate-gray',
+                'font-space-grotesk font-medium text-brand-slate-gray dark:text-gray-200',
                 compact ? 'text-sm' : 'text-base',
               )}
             >
@@ -113,7 +113,7 @@ export function TalkCard({
             </h3>
             <div
               className={clsx(
-                'flex flex-wrap items-center gap-2 text-gray-600',
+                'flex flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
                 compact ? 'mt-1 text-xs' : 'mt-2 text-sm',
               )}
             >
@@ -135,7 +135,7 @@ export function TalkCard({
                   <span>{talk.trackTitle}</span>
                 </div>
               )}
-              <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-700">
+              <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300">
                 {durationMinutes} min
               </span>
             </div>
@@ -193,12 +193,12 @@ export function TalkCard({
         !isConfirmed && !isWithdrawnOrRejected && 'opacity-75', // Reduce opacity for unconfirmed talks
         isWithdrawnOrRejected && 'opacity-60', // More reduced opacity for withdrawn/rejected
         isBookmarkedTalk
-          ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80'
+          ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80 dark:border-brand-cloud-blue dark:bg-blue-900/30'
           : isConfirmed
-            ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue'
+            ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:hover:border-brand-cloud-blue'
             : isWithdrawnOrRejected
-              ? 'border-red-300 bg-red-50 hover:border-red-400' // Red styling for withdrawn/rejected
-              : 'border-gray-300 bg-gray-50 hover:border-gray-400', // Different styling for unconfirmed
+              ? 'border-red-300 bg-red-50 hover:border-red-400 dark:border-red-600 dark:bg-red-900/30 dark:hover:border-red-500' // Red styling for withdrawn/rejected
+              : 'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500', // Different styling for unconfirmed
         compact ? 'p-3' : 'p-6',
       )}
       style={fixedHeight ? { minHeight } : {}}
@@ -216,9 +216,11 @@ export function TalkCard({
               <h3
                 className={clsx(
                   'font-space-grotesk font-semibold',
-                  isWithdrawnOrRejected && 'text-red-500', // Red text for withdrawn/rejected
-                  !isConfirmed && !isWithdrawnOrRejected && 'text-gray-500', // Grayed out for unconfirmed
-                  isConfirmed && 'text-brand-slate-gray',
+                  isWithdrawnOrRejected && 'text-red-500 dark:text-red-400', // Red text for withdrawn/rejected
+                  !isConfirmed &&
+                    !isWithdrawnOrRejected &&
+                    'text-gray-500 dark:text-gray-400', // Grayed out for unconfirmed
+                  isConfirmed && 'text-brand-slate-gray dark:text-white',
                   compact ? 'text-sm leading-tight' : 'text-base',
                   fixedHeight && compact && 'line-clamp-2', // Clamp to 2 lines for schedule view
                 )}
@@ -283,7 +285,7 @@ export function TalkCard({
                       <div className="truncate font-medium text-brand-cloud-blue">
                         <ClickableSpeakerNames
                           speakers={talkData.speakers}
-                          showFirstNameOnly={compact}
+                          showFirstNameOnly={talkData.speakers.length > 1}
                           maxVisible={compact ? 2 : undefined}
                           linkClassName="hover:text-brand-cloud-blue/80 transition-colors"
                         />
@@ -301,8 +303,8 @@ export function TalkCard({
                   )}
                 >
                   <div className="flex -space-x-2">
-                    <div className="h-8 w-8 rounded-full bg-gray-300"></div>
-                    <div className="h-8 w-8 rounded-full bg-gray-200"></div>
+                    <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                    <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-500"></div>
                   </div>
                   <div
                     className={clsx(
@@ -310,7 +312,7 @@ export function TalkCard({
                       compact ? 'text-xs' : 'text-sm',
                     )}
                   >
-                    <div className="font-medium text-gray-400">
+                    <div className="font-medium text-gray-400 dark:text-gray-500">
                       Speaker to be announced
                     </div>
                   </div>
@@ -326,8 +328,8 @@ export function TalkCard({
                   )}
                 >
                   <div className="flex -space-x-2">
-                    <div className="h-8 w-8 rounded-full bg-red-200"></div>
-                    <div className="h-8 w-8 rounded-full bg-red-100"></div>
+                    <div className="h-8 w-8 rounded-full bg-red-200 dark:bg-red-800"></div>
+                    <div className="h-8 w-8 rounded-full bg-red-100 dark:bg-red-700"></div>
                   </div>
                   <div
                     className={clsx(
@@ -335,7 +337,7 @@ export function TalkCard({
                       compact ? 'text-xs' : 'text-sm',
                     )}
                   >
-                    <div className="font-medium text-red-400">
+                    <div className="font-medium text-red-400 dark:text-red-300">
                       Session cancelled
                     </div>
                   </div>
@@ -346,7 +348,7 @@ export function TalkCard({
             {/* Video Indicator */}
             <div className="flex items-center gap-2">
               {isConfirmed && talkData.video && (
-                <div className="rounded-full bg-red-100 p-2 text-red-800">
+                <div className="rounded-full bg-red-100 p-2 text-red-800 dark:bg-red-900/50 dark:text-red-300">
                   <PlayIcon className="h-4 w-4" />
                 </div>
               )}
@@ -370,7 +372,7 @@ export function TalkCard({
             <div className="flex-1">
               <div
                 className={clsx(
-                  'text-sm text-gray-600 transition-all duration-200',
+                  'text-sm text-gray-600 transition-all duration-200 dark:text-gray-300',
                   !isDescriptionExpanded && 'line-clamp-3',
                 )}
               >
@@ -422,7 +424,7 @@ export function TalkCard({
         {/* Placeholder description for unconfirmed talks */}
         {!compact && !isConfirmed && !isWithdrawnOrRejected && (
           <div className="flex-1">
-            <div className="text-sm text-gray-400 italic">
+            <div className="text-sm text-gray-400 italic dark:text-gray-500">
               Talk description will be available once the speaker confirms their
               participation.
             </div>
@@ -432,7 +434,7 @@ export function TalkCard({
         {/* Placeholder description for withdrawn/rejected talks */}
         {!compact && isWithdrawnOrRejected && (
           <div className="flex-1">
-            <div className="text-sm text-red-400 italic">
+            <div className="text-sm text-red-400 italic dark:text-red-300">
               This session has been cancelled and will not be part of the
               program.
             </div>
@@ -444,7 +446,7 @@ export function TalkCard({
           {/* Time and Location */}
           <div
             className={clsx(
-              'flex flex-wrap items-center gap-2 text-gray-600',
+              'flex flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
               compact ? 'text-xs' : 'text-sm',
             )}
           >
@@ -468,7 +470,7 @@ export function TalkCard({
             )}
             <span
               className={clsx(
-                'rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700',
+                'rounded-full bg-gray-100 px-2 py-1 font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300',
                 compact ? 'text-xs' : 'text-xs',
               )}
             >
@@ -528,7 +530,7 @@ export function TalkCard({
           {/* Basic info for unconfirmed talks */}
           {!compact && !isConfirmed && !isWithdrawnOrRejected && (
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">
+              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
                 Details pending
               </span>
             </div>
@@ -537,7 +539,7 @@ export function TalkCard({
           {/* Basic info for withdrawn/rejected talks */}
           {!compact && isWithdrawnOrRejected && (
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-600">
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-600 dark:bg-red-900/50 dark:text-red-300">
                 <XMarkIcon className="h-3 w-3" />
                 Session cancelled
               </span>

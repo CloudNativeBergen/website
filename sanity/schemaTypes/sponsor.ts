@@ -1,5 +1,5 @@
 import { defineField, defineType } from 'sanity'
-import { CONTACT_ROLE_OPTIONS } from '../../src/lib/sponsor/types'
+import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 
 export default defineType({
   name: 'sponsor',

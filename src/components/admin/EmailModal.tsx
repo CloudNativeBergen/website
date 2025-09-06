@@ -159,6 +159,7 @@ export function EmailModal({
     isOpen,
     storage.isLoading,
     storage.hasStoredData,
+    storage.storedData,
     storageKey,
     initialValues,
     onAdditionalFieldsChange,

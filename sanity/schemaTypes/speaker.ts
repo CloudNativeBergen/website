@@ -1,4 +1,4 @@
-import { Flags } from '../../src/lib/speaker/types'
+import { Flags } from '@/lib/speaker/types'
 import { defineField, defineType } from 'sanity'
 
 export default defineType({

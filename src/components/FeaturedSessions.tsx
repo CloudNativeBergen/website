@@ -61,7 +61,7 @@ export function FeaturedSessions({ schedules }: FeaturedSessionsProps) {
           >
             Featured Sessions
           </h2>
-          <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray">
+          <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
             A quick taste of the cloud-native content waiting for you. Explore
             workshops &amp; talks from experts shaping the ecosystem.
           </p>

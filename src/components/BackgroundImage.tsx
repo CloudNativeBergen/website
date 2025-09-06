@@ -1,5 +1,6 @@
-import clsx from 'clsx'
+'use client'
 
+import clsx from 'clsx'
 import { CloudNativePattern } from './CloudNativePattern'
 
 export function BackgroundImage({ className }: { className?: string }) {
@@ -7,24 +8,40 @@ export function BackgroundImage({ className }: { className?: string }) {
     <div className={clsx('absolute inset-0 overflow-hidden', className)}>
       {/* Branding colored background that fades to white */}
       <div className="absolute inset-0 bg-brand-gradient opacity-20" />
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white dark:to-gray-950" />
 
-      {/* Cloud Native Pattern - full width */}
+      {/* Cloud Native Pattern - rendered with both light and dark variants, CSS controls visibility */}
       <div className="absolute inset-0">
-        <CloudNativePattern
-          variant="light"
-          opacity={0.05}
-          animated={true}
-          baseSize={100}
-          iconCount={50}
-          className="h-full w-full"
-          seed={new Date().setHours(0, 0, 0, 0)}
-        />
+        {/* Light mode pattern - hidden in dark mode */}
+        <div className="block dark:hidden">
+          <CloudNativePattern
+            variant="light"
+            opacity={0.1}
+            animated={true}
+            baseSize={100}
+            iconCount={50}
+            className="h-full w-full"
+            seed={new Date().setHours(0, 0, 0, 0)}
+          />
+        </div>
+
+        {/* Dark mode pattern - hidden in light mode */}
+        <div className="hidden dark:block">
+          <CloudNativePattern
+            variant="dark"
+            opacity={0.1}
+            animated={true}
+            baseSize={100}
+            iconCount={50}
+            className="h-full w-full"
+            seed={new Date().setHours(0, 0, 0, 0)}
+          />
+        </div>
       </div>
 
       {/* Gradient overlays to maintain the diffused effect */}
-      <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white" />
-      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white" />
+      <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white dark:from-gray-950" />
+      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white dark:from-gray-950" />
     </div>
   )
 }

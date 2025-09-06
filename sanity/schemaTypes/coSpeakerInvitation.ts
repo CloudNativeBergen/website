@@ -1,5 +1,5 @@
 import { defineType, defineField } from 'sanity'
-import { INVITATION_STATUSES } from '../../src/lib/cospeaker/types'
+import { INVITATION_STATUSES } from '@/lib/cospeaker/types'
 
 export type InvitationStatus = (typeof INVITATION_STATUSES)[number]
 

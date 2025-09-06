@@ -2,7 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { getSpeakers } from '@/lib/speaker/sanity'
-import { getConferenceForCurrentDomain } from '../../../lib/conference/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 
 export const revalidate = 3600

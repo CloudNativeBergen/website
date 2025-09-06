@@ -216,7 +216,7 @@ export function DashboardLayout({
                 <div className="flex h-16 shrink-0 items-center">
                   <Logomark
                     className="h-8 w-auto text-white"
-                    variant={mode === 'speaker' ? 'white' : 'gradient'}
+                    variant={mode === 'speaker' ? 'monochrome' : 'gradient'}
                   />
                 </div>
                 <nav className="flex flex-1 flex-col">
@@ -262,7 +262,7 @@ export function DashboardLayout({
             <div className="flex h-16 shrink-0 items-center justify-center">
               <Logomark
                 className="h-8 w-auto text-white"
-                variant={mode === 'speaker' ? 'white' : 'gradient'}
+                variant={mode === 'speaker' ? 'monochrome' : 'gradient'}
               />
             </div>
             <nav className="flex flex-1 flex-col">

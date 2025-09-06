@@ -34,7 +34,7 @@ const BUTTON_BASE_CLASSES =
   'flex min-w-[2.5rem] items-center justify-center gap-1 rounded-md px-2 py-2 text-xs font-medium transition-all duration-200 sm:min-w-[unset] sm:justify-start sm:px-3 hover:shadow-sm focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-1 focus:outline-none'
 const ACTIVE_CLASSES = 'bg-brand-cloud-blue text-white shadow-sm'
 const INACTIVE_CLASSES =
-  'text-brand-slate-gray hover:bg-brand-sky-mist hover:text-brand-cloud-blue'
+  'text-brand-slate-gray hover:bg-brand-sky-mist hover:text-brand-cloud-blue dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-blue-400'
 
 const getViewModeIcon = (iconName: string) => {
   return (
@@ -73,7 +73,7 @@ export const ViewModeSelector = React.memo(function ViewModeSelector({
   )
 
   return (
-    <div className="flex items-center gap-1 rounded-lg border border-brand-frosted-steel bg-white p-1">
+    <div className="flex items-center gap-1 rounded-lg border border-brand-frosted-steel bg-white p-1 dark:border-gray-600 dark:bg-gray-800">
       {viewModeData.map((mode) => (
         <button
           key={mode.id}

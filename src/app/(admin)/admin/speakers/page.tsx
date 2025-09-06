@@ -200,15 +200,14 @@ export default async function AdminSpeakers() {
               color: 'green',
             },
           ]}
-        >
-          <div className="flex justify-end">
+          actions={
             <SpeakerActions
               eligibleSpeakersCount={confirmedSpeakers.length}
               fromEmail={`Cloud Native Bergen <${conference.contact_email}>`}
               conference={conference}
             />
-          </div>
-        </AdminPageHeader>
+          }
+        />
 
         <div className="mt-8">
           <SpeakerTable
