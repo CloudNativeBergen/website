@@ -124,18 +124,18 @@ export default async function Profile({ params }: Props) {
     <div className="relative py-20 sm:pt-36 sm:pb-24">
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
-        {/* Back Link - Top Left */}
-        <div className="mb-8">
-          <BackLink fallbackUrl="/speaker" variant="link">
-            Back to Speakers
-          </BackLink>
-        </div>
-
         <div className="mx-auto max-w-7xl">
           <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-3">
             {/* Speaker Image & Basic Info */}
             <div className="lg:col-span-1">
               <div className="sticky top-8 z-10">
+                {/* Back Link - Moved to top of sidebar */}
+                <div className="mb-6">
+                  <BackLink fallbackUrl="/speaker" variant="link">
+                    Back to Speakers
+                  </BackLink>
+                </div>
+
                 {/* Speaker Image */}
                 <div className="mb-6 flex justify-center lg:justify-start">
                   {speaker.image ? (
