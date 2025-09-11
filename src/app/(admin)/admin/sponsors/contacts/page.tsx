@@ -17,7 +17,7 @@ export default async function AdminSponsorContacts() {
   try {
     // Get conference
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain()
+      await getConferenceForCurrentDomain({ revalidate: 0 })
 
     if (conferenceError || !conference) {
       return (

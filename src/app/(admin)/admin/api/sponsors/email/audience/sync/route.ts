@@ -19,6 +19,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       await getConferenceForCurrentDomain({
         sponsors: true,
         sponsorContact: true,
+        revalidate: 0,
       })
 
     if (conferenceError) {

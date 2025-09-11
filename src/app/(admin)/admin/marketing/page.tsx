@@ -41,7 +41,7 @@ export default async function MarketingPage() {
   }
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForCurrentDomain({ revalidate: 0 })
 
   if (conferenceError || !conference) {
     console.error('Error loading conference:', conferenceError)

@@ -14,7 +14,7 @@ export const GET = auth(async (req: NextAuthRequest) => {
 
   try {
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain()
+      await getConferenceForCurrentDomain({ revalidate: 0 })
 
     if (conferenceError) {
       return Response.json({ error: conferenceError.message }, { status: 500 })

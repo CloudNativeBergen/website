@@ -30,6 +30,7 @@ export default async function DiscountCodesAdminPage() {
     error: conferenceError,
   } = await getConferenceForCurrentDomain({
     sponsors: true,
+    revalidate: 0,
   })
 
   if (

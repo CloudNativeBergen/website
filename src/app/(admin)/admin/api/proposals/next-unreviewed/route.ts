@@ -19,7 +19,7 @@ export const GET = auth(async (req: NextAuthRequest) => {
 
   // Get the conference from the current domain
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForCurrentDomain({ revalidate: 0 })
 
   if (conferenceError || !conference) {
     return NextResponse.json(

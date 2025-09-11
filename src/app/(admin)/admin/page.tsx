@@ -18,7 +18,7 @@ export default async function AdminDashboard() {
   const currentUserId = session?.speaker?._id
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForCurrentDomain({ revalidate: 0 })
 
   let proposals: ProposalExisting[] = []
   if (!conferenceError && conference) {

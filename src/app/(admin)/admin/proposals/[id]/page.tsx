@@ -29,7 +29,9 @@ export default async function ProposalDetailPage({
   const session = await getAuthSession()
 
   try {
-    const { conference, domain } = await getConferenceForCurrentDomain({})
+    const { conference, domain } = await getConferenceForCurrentDomain({
+      revalidate: 0,
+    })
     const { proposal, proposalError } = await getProposalSanity({
       id,
       speakerId: '', // For admin view, we don't need to filter by speaker

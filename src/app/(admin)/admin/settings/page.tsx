@@ -253,6 +253,7 @@ export default async function AdminSettings() {
     sponsors: true,
     sponsorTiers: true,
     topics: true,
+    revalidate: 0,
   })
 
   if (error) {

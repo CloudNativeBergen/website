@@ -8,7 +8,7 @@ export default async function AdminProposals() {
   const session = await getAuthSession()
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForCurrentDomain({ revalidate: 0 })
 
   if (conferenceError) {
     return (

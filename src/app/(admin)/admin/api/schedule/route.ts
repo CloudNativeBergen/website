@@ -25,7 +25,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
     }
 
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain()
+      await getConferenceForCurrentDomain({ revalidate: 0 })
 
     if (conferenceError || !conference) {
       return NextResponse.json(

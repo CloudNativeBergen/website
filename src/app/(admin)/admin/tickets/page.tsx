@@ -24,6 +24,7 @@ export default async function AdminTickets() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       sponsors: true,
+      revalidate: 0,
     })
 
   if (
@@ -53,6 +54,11 @@ export default async function AdminTickets() {
       conference.checkin_customer_id,
       conference.checkin_event_id,
     )
+
+    for (const ticket of tickets) {
+      // Process each ticket as needed
+      console.log(JSON.stringify(ticket))
+    }
   } catch (err) {
     error = err as Error
   }
