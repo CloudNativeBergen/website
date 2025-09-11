@@ -4,20 +4,20 @@ import {
   TIER_TICKET_ALLOCATION,
   createCategoryStatsForAdmin,
 } from '@/lib/tickets/calculations'
-import { analyzeTicketTargets } from '@/lib/tickets/target-calculations'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
 import { TargetSetupGuide } from '@/components/admin/TargetSetupGuide'
-import { TargetTrackingWithPreview } from '@/components/admin/TargetTrackingWithPreview'
+import { TicketSalesChart } from '@/components/admin/TicketSalesChart'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { TicketIcon } from '@heroicons/react/24/outline'
-import type { EventTicket } from '@/lib/tickets/server'
+import type { EventOrderUser } from '@/lib/tickets/server'
+import type { SalesChartConfig } from '@/lib/tickets/sales-chart'
 import { formatCurrency } from '@/lib/format'
 import Link from 'next/link'
 
 export default async function AdminTickets() {
-  let tickets: EventTicket[] = []
+  let tickets: EventOrderUser[] = []
   let error: Error | null = null
 
   // Get conference data to retrieve Checkin.no IDs and sponsors
@@ -53,6 +53,8 @@ export default async function AdminTickets() {
       conference.checkin_customer_id,
       conference.checkin_event_id,
     )
+    console.log(tickets[tickets.length - 1])
+    console.log(tickets[tickets.length - 2])
   } catch (err) {
     error = err as Error
   }
@@ -70,8 +72,19 @@ export default async function AdminTickets() {
   // Calculate comprehensive ticket statistics using reusable function
   const stats = await calculateTicketStatistics(tickets, conference)
 
-  // Analyze ticket targets if enabled
-  const targetAnalysis = await analyzeTicketTargets(conference, tickets)
+  // Create sales chart configuration
+  const chartConfig: SalesChartConfig = {
+    salesStartDate:
+      conference.ticket_targets?.sales_start_date || conference.cfp_end_date,
+    conferenceDate: conference.start_date,
+    targetCurve:
+      conference.ticket_targets?.target_curve === 'early_push'
+        ? 'early_push'
+        : conference.ticket_targets?.target_curve === 'linear'
+          ? 'linear'
+          : 'late_push',
+    capacity: conference.ticket_capacity || 250,
+  }
 
   // Group tickets by order_id for the orders table
   const orders = groupTicketsByOrder(tickets)
@@ -123,8 +136,13 @@ export default async function AdminTickets() {
         }
       />
 
+      {/* Sales Chart */}
+      <div className="mt-8">
+        <TicketSalesChart tickets={tickets} config={chartConfig} />
+      </div>
+
       {/* Target Configuration Setup */}
-      {!targetAnalysis && (
+      {!conference.ticket_targets?.enabled && (
         <div className="mt-8">
           <TargetSetupGuide
             conferenceId={conference._id}
@@ -133,14 +151,6 @@ export default async function AdminTickets() {
             currentCapacity={conference.ticket_capacity}
           />
         </div>
-      )}
-
-      {/* Ticket Target Tracking with Live Preview */}
-      {targetAnalysis && (
-        <TargetTrackingWithPreview
-          conference={conference}
-          targetAnalysis={targetAnalysis}
-        />
       )}
 
       {/* Breakdown by Ticket Type */}

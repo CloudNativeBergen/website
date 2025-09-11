@@ -1,0 +1,44 @@
+// Updated chart series generation with future transparency
+const today = new Date()
+const categorySeries: ChartSeries[] = categories.map((category, index) => {
+  const baseColor = CATEGORY_COLORS[index % CATEGORY_COLORS.length]
+
+  return {
+    name: category,
+    type: 'column',
+    data: weeklyDataPoints.map((point) => {
+      const pointDate = new Date(point.date)
+      const isFuture = pointDate > today
+
+      return {
+        x: new Date(point.date).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        }),
+        y: point.actual[category] || 0,
+        fillColor: isFuture ? `${baseColor}40` : baseColor, // Add 40 for 25% opacity in hex
+      }
+    }),
+    color: baseColor,
+  }
+})
+
+// Generate target line series (separate from stacked columns) with future transparency
+const targetSeries: ChartSeries = {
+  name: 'Sales Target',
+  type: 'line',
+  data: weeklyDataPoints.map((point) => {
+    const pointDate = new Date(point.date)
+    const isFuture = pointDate > today
+
+    return {
+      x: new Date(point.date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+      }),
+      y: point.target,
+      strokeColor: isFuture ? '#EA580C80' : '#EA580C', // Add 80 for 50% opacity in hex
+    }
+  }),
+  color: '#EA580C', // orange-600 - very visible in both light and dark modes
+}

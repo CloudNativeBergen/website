@@ -187,25 +187,23 @@ export function ExpandableOrdersTable({
                     <td className="px-3 py-4">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-gray-900 dark:text-white">
-                          {primaryTicket.crm.first_name}{' '}
-                          {primaryTicket.crm.last_name}
+                          {primaryTicket.crm.firstName}{' '}
+                          {primaryTicket.crm.lastName}
                         </div>
                         <div className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
                           <a
-                            href={`mailto:${primaryTicket.crm.email}`}
+                            href={`mailto:${primaryTicket.crm.email.email}`}
                             className="text-indigo-600 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                           >
-                            {primaryTicket.crm.email}
+                            {primaryTicket.crm.email.email}
                           </a>
                         </div>
                         {(() => {
-                          const workTitle = order.fields.find(
-                            (f: { key: string; value: string }) =>
-                              f.key === 'work_title',
+                          const workTitle = order.propertyValues.find(
+                            (p) => p.propertyKey === 'work_title',
                           )?.value
-                          const company = order.fields.find(
-                            (f: { key: string; value: string }) =>
-                              f.key === 'company',
+                          const company = order.propertyValues.find(
+                            (p) => p.propertyKey === 'company',
                           )?.value
 
                           if (workTitle || company) {
@@ -303,8 +301,7 @@ export function ExpandableOrdersTable({
                                   <UserIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
                                   <div>
                                     <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                      {ticket.customer_name ||
-                                        `${ticket.crm.first_name} ${ticket.crm.last_name}`}
+                                      {`${ticket.crm.firstName} ${ticket.crm.lastName}`}
                                     </div>
                                     <div className="text-xs text-gray-500 dark:text-gray-400">
                                       Ticket ID: {ticket.id}
@@ -313,10 +310,14 @@ export function ExpandableOrdersTable({
                                 </div>
                                 <div className="text-right">
                                   <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {formatCategoryLabel(ticket.category)}
+                                    {formatCategoryLabel(
+                                      ticket.ticket?.name || 'Unknown',
+                                    )}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {formatCurrency(parseFloat(ticket.sum))}
+                                    {formatCurrency(
+                                      Number(ticket.ticket?.price?.price || 0),
+                                    )}
                                   </div>
                                 </div>
                               </div>

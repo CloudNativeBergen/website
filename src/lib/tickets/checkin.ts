@@ -8,12 +8,14 @@ import type {
   TicketType,
   CreateEventDiscountInput,
   DiscountUsageStats,
-  EventTicketsResponse,
   CheckinPayOrderResponse,
   EventDiscountsResponse,
   CreateEventDiscountResponse,
   DeleteEventDiscountResponse,
   ValidateDiscountCodeResponse,
+  EventOrderUser,
+  EventOrderUserPage,
+  AllEventOrderUsersResponse,
 } from './types'
 
 // Re-export types for convenience
@@ -25,6 +27,9 @@ export type {
   EventDiscountWithUsage,
   TicketType,
   DiscountUsageStats,
+  EventOrderUser,
+  EventOrderUserPage,
+  AllEventOrderUsersResponse,
 }
 
 export async function getEventDiscounts(
@@ -200,7 +205,7 @@ export async function deleteEventDiscount(
 export async function fetchEventTickets(
   customerId: number,
   eventId: number,
-): Promise<EventTicket[]> {
+): Promise<EventOrderUser[]> {
   if (!customerId || customerId <= 0) {
     throw new Error('Valid customer ID is required')
   }
@@ -208,48 +213,32 @@ export async function fetchEventTickets(
     throw new Error('Valid event ID is required')
   }
 
-  const query = `
-    query FetchEventTickets($customerId: Int!, $eventId: Int!) {
-      eventTickets(customer_id: $customerId, id: $eventId) {
-        id
-        order_id
-        category
-        customer_name
-        sum
-        sum_left
-        coupon
-        discount
-        fields {
-          key
-          value
-        }
-        crm {
-          first_name
-          last_name
-          email
-        }
-      }
-    }
-  `
-
-  const variables = { customerId, eventId }
-  const responseData = await checkinQuery<EventTicketsResponse>(
-    query,
-    variables,
-  )
-
-  return responseData.eventTickets || []
+  try {
+    // Use the new fetchAllEventOrderUsers function which provides purchase dates
+    return await fetchAllEventOrderUsers(customerId, eventId)
+  } catch (error) {
+    console.error('Failed to fetch event tickets:', error)
+    throw new Error(
+      `Failed to fetch event tickets: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
+  }
 }
 
 /**
- * Calculate discount usage statistics from event tickets
- * This processes tickets that already include coupon/discount fields
+ * Calculate discount usage statistics from event order users
+ * This processes EventOrderUser data to extract discount/coupon usage
  */
 export function calculateDiscountUsage(
-  tickets: EventTicket[],
+  eventOrderUsers: EventOrderUser[],
 ): DiscountUsageStats {
-  return tickets.reduce((stats, ticket) => {
-    const discountCode = ticket.coupon || ticket.discount
+  return eventOrderUsers.reduce((stats, orderUser) => {
+    // Extract discount codes from property values
+    const discountProperty = orderUser.propertyValues?.find(
+      (prop) =>
+        prop.propertyKey === 'discount' || prop.propertyKey === 'coupon',
+    )
+
+    const discountCode = discountProperty?.value
 
     if (discountCode) {
       const normalizedCode = discountCode.toUpperCase()
@@ -263,8 +252,11 @@ export function calculateDiscountUsage(
       }
 
       stats[normalizedCode].usageCount++
-      stats[normalizedCode].ticketIds.push(ticket.id)
-      stats[normalizedCode].totalValue += parseFloat(ticket.sum) || 0
+      stats[normalizedCode].ticketIds.push(orderUser.id)
+
+      // Calculate discount value from price information
+      const totalPrice = Number(orderUser.ticket?.price?.price || 0)
+      stats[normalizedCode].totalValue += totalPrice
     }
 
     return stats
@@ -360,31 +352,36 @@ export async function fetchOrderPaymentDetails(
   return responseData.findCheckinPayOrderByID
 }
 
-export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
+export function groupTicketsByOrder(
+  eventOrderUsers: EventOrderUser[],
+): GroupedOrder[] {
   const ordersMap = new Map<number, GroupedOrder>()
 
-  tickets.forEach((ticket) => {
-    const orderId = ticket.order_id
+  eventOrderUsers.forEach((orderUser) => {
+    const orderId = orderUser.orderId
 
     if (!ordersMap.has(orderId)) {
+      const totalAmount = Number(orderUser.ticket?.price?.price || 0)
+
       ordersMap.set(orderId, {
         order_id: orderId,
         tickets: [],
         totalTickets: 0,
-        totalAmount: parseFloat(ticket.sum) || 0, // sum is the total amount for the order
-        amountLeft: parseFloat(ticket.sum_left) || 0, // sum_left is the outstanding amount for the order
+        totalAmount,
+        amountLeft: 0, // EventOrderUser doesn't have sum_left equivalent
         categories: [],
-        fields: ticket.fields,
+        propertyValues: orderUser.propertyValues || [],
       })
     }
 
     const order = ordersMap.get(orderId)!
     order.totalTickets = order.totalTickets + 1
-    order.tickets.push(ticket)
+    order.tickets.push(orderUser)
 
-    // Add unique categories
-    if (!order.categories.includes(ticket.category)) {
-      order.categories.push(ticket.category)
+    // Add unique ticket categories
+    const ticketName = orderUser.ticket?.name
+    if (ticketName && !order.categories.includes(ticketName)) {
+      order.categories.push(ticketName)
     }
   })
 
@@ -409,4 +406,276 @@ export function getDaysOverdue(paymentDetails: CheckinPayOrder): number {
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
 
   return diffDays
+}
+
+/**
+ * Fetch all event order users (tickets) with purchase dates for an event
+ * This is the most efficient way to get all tickets/orders with minimal requests
+ *
+ * @param customerId - The customer/organization ID
+ * @param eventId - Optional event ID to filter by specific event
+ * @param options - Additional options for pagination and filtering
+ * @returns Promise<EventOrderUser[]> - Array of all event order users with purchase dates
+ */
+export async function fetchAllEventOrderUsers(
+  customerId: number,
+  eventId?: number,
+  options: {
+    offset?: number
+    length?: number
+    reportFilters?: Array<{
+      rule: 'AND' | 'OR' | 'AND_NOT' | 'OR_NOT'
+      conditions?: Array<{
+        rule: 'AND' | 'OR' | 'AND_NOT' | 'OR_NOT'
+        field: string
+        operator:
+          | 'EQUALS'
+          | 'NOT_EQUALS'
+          | 'GREATER_THAN'
+          | 'LESS_THAN'
+          | 'GREATER_THAN_OR_EQUAL'
+          | 'LESS_THAN_OR_EQUAL'
+          | 'CONTAINS'
+          | 'STARTS_WITH'
+        value: string
+      }>
+    }>
+  } = {},
+): Promise<EventOrderUser[]> {
+  if (!customerId || customerId <= 0) {
+    throw new Error('Valid customer ID is required')
+  }
+
+  const { offset = 0, length = 1000, reportFilters = [] } = options
+
+  // Add event ID filter if provided
+  const filters = eventId
+    ? [
+        {
+          rule: 'AND',
+          conditions: [
+            {
+              rule: 'AND',
+              field: 'EVENT_ID',
+              operator: 'EQUALS',
+              value: eventId.toString(),
+            },
+          ],
+        },
+      ]
+    : reportFilters
+
+  try {
+    const query = `
+      query allEventOrderUsers(
+        $customerId: Int!
+        $offset: Int
+        $length: Int
+        $reportFilters: [EventOrderUserReportFilterInput!]
+      ) {
+        allEventOrderUsers(
+          customerId: $customerId
+          offset: $offset
+          length: $length
+          reportFilters: $reportFilters
+        ) {
+          records
+          offset
+          length
+          data {
+            id
+            orderId
+            eventId
+            createdAt
+            cancelledAt
+            arrivedAt
+            isPaid
+            isCompleted
+            isOnWaitingList
+            barcode
+            crm {
+              id
+              firstName
+              lastName
+              email {
+                email
+              }
+              tlf {
+                prefix
+                number
+              }
+            }
+            ticket {
+              id
+              name
+              discount
+              fee
+              price {
+                price
+                vat
+              }
+            }
+            propertyValues {
+              propertyId
+              propertyKey
+              name
+              type
+              value
+            }
+            courseCertificateSentAt
+            courseCertificateStatus
+          }
+          pageInfo {
+            hasNextPage
+          }
+          cachedAt
+        }
+      }
+    `
+
+    const variables = {
+      customerId,
+      offset,
+      length,
+      reportFilters: filters.length > 0 ? filters : undefined,
+    }
+
+    const responseData = await checkinQuery<AllEventOrderUsersResponse>(
+      query,
+      variables,
+    )
+
+    if (!responseData.allEventOrderUsers?.data) {
+      console.warn('No event order users found in response')
+      return []
+    }
+
+    return responseData.allEventOrderUsers.data
+  } catch (error) {
+    console.error('Failed to fetch event order users:', error)
+    throw new Error(
+      `Failed to fetch event order users: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
+  }
+}
+
+/**
+ * Fetch all event order users for a specific event with pagination support
+ * Automatically handles pagination to fetch all records
+ *
+ * @param customerId - The customer/organization ID
+ * @param eventId - The specific event ID to fetch tickets for
+ * @param batchSize - Number of records to fetch per request (default: 1000)
+ * @returns Promise<EventOrderUser[]> - Array of all event order users for the event
+ */
+export async function fetchAllEventTicketsWithPurchaseDates(
+  customerId: number,
+  eventId: number,
+  batchSize: number = 1000,
+): Promise<EventOrderUser[]> {
+  if (!customerId || customerId <= 0) {
+    throw new Error('Valid customer ID is required')
+  }
+
+  if (!eventId || eventId <= 0) {
+    throw new Error('Valid event ID is required')
+  }
+
+  const allTickets: EventOrderUser[] = []
+  let offset = 0
+  let hasMore = true
+
+  while (hasMore) {
+    try {
+      const batch = await fetchAllEventOrderUsers(customerId, eventId, {
+        offset,
+        length: batchSize,
+      })
+
+      if (batch.length === 0) {
+        hasMore = false
+      } else {
+        allTickets.push(...batch)
+        offset += batchSize
+
+        // If we got fewer results than requested, we've reached the end
+        if (batch.length < batchSize) {
+          hasMore = false
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to fetch batch at offset ${offset}:`, error)
+      throw error
+    }
+  }
+
+  return allTickets
+}
+
+/**
+ * Group event order users by their order ID
+ * Useful for analyzing orders that contain multiple tickets
+ *
+ * @param eventOrderUsers - Array of event order users
+ * @returns Map<number, EventOrderUser[]> - Map where key is orderId and value is array of tickets in that order
+ */
+export function groupEventOrderUsersByOrder(
+  eventOrderUsers: EventOrderUser[],
+): Map<number, EventOrderUser[]> {
+  const orderMap = new Map<number, EventOrderUser[]>()
+
+  eventOrderUsers.forEach((user) => {
+    if (!orderMap.has(user.orderId)) {
+      orderMap.set(user.orderId, [])
+    }
+    orderMap.get(user.orderId)!.push(user)
+  })
+
+  return orderMap
+}
+
+/**
+ * Get purchase statistics from event order users
+ *
+ * @param eventOrderUsers - Array of event order users
+ * @returns Object with purchase statistics
+ */
+export function getEventOrderStatistics(eventOrderUsers: EventOrderUser[]) {
+  const totalTickets = eventOrderUsers.length
+  const paidTickets = eventOrderUsers.filter((user) => user.isPaid).length
+  const cancelledTickets = eventOrderUsers.filter(
+    (user) => user.cancelledAt,
+  ).length
+  const checkedInTickets = eventOrderUsers.filter(
+    (user) => user.arrivedAt,
+  ).length
+  const waitingListTickets = eventOrderUsers.filter(
+    (user) => user.isOnWaitingList,
+  ).length
+
+  const purchaseDates = eventOrderUsers
+    .map((user) => new Date(user.createdAt))
+    .sort((a, b) => a.getTime() - b.getTime())
+
+  const firstPurchase = purchaseDates[0]
+  const lastPurchase = purchaseDates[purchaseDates.length - 1]
+
+  const totalRevenue = eventOrderUsers
+    .filter((user) => user.isPaid)
+    .reduce((sum, user) => {
+      const ticketPrice = Number(user.ticket?.price?.price || 0)
+      return sum + ticketPrice
+    }, 0)
+
+  return {
+    totalTickets,
+    paidTickets,
+    cancelledTickets,
+    checkedInTickets,
+    waitingListTickets,
+    firstPurchase,
+    lastPurchase,
+    totalRevenue,
+    uniqueOrders: new Set(eventOrderUsers.map((user) => user.orderId)).size,
+  }
 }

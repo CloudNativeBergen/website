@@ -31,7 +31,4 @@ export {
 
 // Calculation utilities (safe but commonly used with server data)
 export * from './calculations'
-export * from './chart-data'
-export * from './target-calculations'
-export * from './target-curves'
-export * from './targets'
+export * from './sales-chart'

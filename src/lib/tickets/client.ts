@@ -26,10 +26,7 @@ export {
 
 // Client-safe calculation utilities
 export * from './calculations'
-export * from './chart-data'
-export * from './target-calculations'
-export * from './target-curves'
-export * from './targets'
+export * from './sales-chart'
 
 // Note: GraphQL client and API functions are server-only
 // Import those directly from './server' in server-side code

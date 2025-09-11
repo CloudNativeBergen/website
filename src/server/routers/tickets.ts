@@ -27,6 +27,7 @@ import {
   fetchOrderPaymentDetails,
   type DiscountUsageStats,
 } from '@/lib/tickets/server'
+import { fetchAllEventOrderUsers } from '@/lib/tickets/checkin'
 
 /**
  * Update ticket capacity for a conference
@@ -504,4 +505,308 @@ export const ticketsRouter = router({
         })
       }
     }),
+
+  /**
+   * Debug: Get raw EventOrderUser data from Checkin API
+   */
+  debugEventOrderUsers: adminProcedure
+    .input(
+      z.object({
+        eventId: z.number().optional(),
+        limit: z.number().min(1).max(1000).default(50),
+      }),
+    )
+    .query(async ({ input }) => {
+      try {
+        // Get conference data to access checkin event ID and customer ID
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain()
+
+        if (
+          conferenceError ||
+          !conference.checkin_event_id ||
+          !conference.checkin_customer_id
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Conference checkin configuration not found',
+          })
+        }
+
+        const eventId = input.eventId || conference.checkin_event_id
+        const customerId = conference.checkin_customer_id
+
+        const eventOrderUsers = await fetchAllEventOrderUsers(
+          customerId,
+          eventId,
+          {
+            length: input.limit,
+          },
+        )
+
+        return {
+          success: true,
+          data: eventOrderUsers,
+          count: eventOrderUsers.length,
+          eventId,
+          customerId,
+          sampleData: eventOrderUsers.slice(0, 3), // First 3 for inspection
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch EventOrderUser debug data',
+          cause: error,
+        })
+      }
+    }),
+
+  /**
+   * Debug: Get raw EventTicket data from legacy API
+   */
+  debugEventTickets: adminProcedure
+    .input(
+      z.object({
+        eventId: z.number().optional(),
+        limit: z.number().min(1).max(1000).default(50),
+      }),
+    )
+    .query(async ({ input }) => {
+      try {
+        // Get conference data to access checkin event ID and customer ID
+        const { conference, error: conferenceError } =
+          await getConferenceForCurrentDomain()
+
+        if (
+          conferenceError ||
+          !conference.checkin_event_id ||
+          !conference.checkin_customer_id
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Conference checkin configuration not found',
+          })
+        }
+
+        const eventId = input.eventId || conference.checkin_event_id
+        const customerId = conference.checkin_customer_id
+
+        const eventTickets = await fetchEventTickets(customerId, eventId)
+
+        // Limit the results
+        const limitedTickets = eventTickets.slice(0, input.limit)
+
+        return {
+          success: true,
+          data: limitedTickets,
+          totalCount: eventTickets.length,
+          returnedCount: limitedTickets.length,
+          eventId,
+          customerId,
+          sampleData: limitedTickets.slice(0, 3), // First 3 for inspection
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error
+        }
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch EventTicket debug data',
+          cause: error,
+        })
+      }
+    }),
+
+  /**
+   * Debug: Get conference settings and configuration
+   */
+  debugConferenceConfig: adminProcedure.query(async () => {
+    try {
+      const { conference, domain, error } =
+        await getConferenceForCurrentDomain()
+
+      if (error) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: error.message || 'Conference configuration error',
+        })
+      }
+
+      return {
+        success: true,
+        conference: {
+          id: conference._id,
+          title: conference.title,
+          start_date: conference.start_date,
+          end_date: conference.end_date,
+          checkin_customer_id: conference.checkin_customer_id,
+          checkin_event_id: conference.checkin_event_id,
+          ticket_capacity: conference.ticket_capacity,
+          ticket_targets: conference.ticket_targets,
+        },
+        domain,
+        hasCheckinConfig: !!(
+          conference.checkin_customer_id && conference.checkin_event_id
+        ),
+      }
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error
+      }
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch conference debug data',
+        cause: error,
+      })
+    }
+  }),
+
+  /**
+   * Debug endpoint for ticket data inspection
+   */
+  getDebugData: adminProcedure.query(async () => {
+    try {
+      // Get conference data to access checkin credentials
+      const {
+        conference,
+        error: conferenceError,
+        domain,
+      } = await getConferenceForCurrentDomain()
+
+      if (conferenceError || !conference) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            typeof conferenceError === 'string'
+              ? conferenceError
+              : conferenceError?.message || 'Conference not found',
+        })
+      }
+
+      const result = {
+        conferenceInfo: {
+          id: conference._id,
+          title: conference.title,
+          start_date: conference.start_date,
+          end_date: conference.end_date,
+          domain,
+          hasCheckinConfig: !!(
+            conference.checkin_customer_id && conference.checkin_event_id
+          ),
+          checkin_customer_id: conference.checkin_customer_id,
+          checkin_event_id: conference.checkin_event_id,
+          ticket_capacity: conference.ticket_capacity,
+          ticket_targets: conference.ticket_targets,
+        },
+        ticketData: null as {
+          totalCount: number
+          sampleTicket: object | null
+          ticketCategories: string[]
+          paidTickets: number
+          unpaidTickets: number
+          ticketsWithDates: number
+          ticketsWithoutDates: number
+          priceDataAvailable: number
+          rawSamples: object[]
+          legacyApiComparison?: object
+        } | null,
+        transformedData: null as {
+          filteredTickets: number
+          categories: string[]
+          dateRange: { earliest: number; latest: number }
+        } | null,
+        error: null as string | null,
+      }
+
+      // Only fetch ticket data if checkin is configured
+      if (conference.checkin_customer_id && conference.checkin_event_id) {
+        try {
+          const customerId = conference.checkin_customer_id
+          const eventId = conference.checkin_event_id
+
+          // Fetch raw ticket data using EventOrderUser (the new API)
+          const tickets = await fetchAllEventOrderUsers(customerId, eventId, {
+            length: 100, // Limit for debug purposes
+          })
+
+          result.ticketData = {
+            totalCount: tickets.length,
+            sampleTicket: tickets[0] || null,
+            ticketCategories: [
+              ...new Set(tickets.map((t) => t.ticket?.name).filter(Boolean)),
+            ] as string[],
+            paidTickets: tickets.filter((t) => t.isPaid).length,
+            unpaidTickets: tickets.filter((t) => !t.isPaid).length,
+            ticketsWithDates: tickets.filter((t) => t.createdAt).length,
+            ticketsWithoutDates: tickets.filter((t) => !t.createdAt).length,
+            priceDataAvailable: tickets.filter(
+              (t) => t.price && Array.isArray(t.price) && t.price.length > 0,
+            ).length,
+            rawSamples: tickets.slice(0, 3), // First 3 tickets for detailed inspection
+          }
+
+          // Try to also fetch using the old API for comparison
+          try {
+            const oldTickets = await fetchEventTickets(customerId, eventId)
+            if (result.ticketData) {
+              result.ticketData.legacyApiComparison = {
+                legacyCount: oldTickets.length,
+                legacySample: oldTickets[0] || null,
+                hasLegacyPricing: oldTickets.filter((t) => t.isPaid).length,
+              }
+            }
+          } catch (legacyError) {
+            if (result.ticketData) {
+              result.ticketData.legacyApiComparison = {
+                error: 'Legacy API not available or failed',
+                details:
+                  legacyError instanceof Error
+                    ? legacyError.message
+                    : String(legacyError),
+              }
+            }
+          }
+
+          // Transform data as we do in the chart
+          result.transformedData = {
+            filteredTickets: tickets.filter((t) => t.isPaid).length,
+            categories: [
+              ...new Set(tickets.map((t) => t.ticket?.name).filter(Boolean)),
+            ] as string[],
+            dateRange: {
+              earliest: Math.min(
+                ...tickets
+                  .map((t) => new Date(t.createdAt).getTime())
+                  .filter((d) => !isNaN(d)),
+              ),
+              latest: Math.max(
+                ...tickets
+                  .map((t) => new Date(t.createdAt).getTime())
+                  .filter((d) => !isNaN(d)),
+              ),
+            },
+          }
+        } catch (ticketError) {
+          result.error =
+            ticketError instanceof Error
+              ? ticketError.message
+              : String(ticketError)
+        }
+      }
+
+      return result
+    } catch (error) {
+      if (error instanceof TRPCError) {
+        throw error
+      }
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch debug data',
+        cause: error,
+      })
+    }
+  }),
 })
