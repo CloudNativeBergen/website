@@ -17,6 +17,11 @@ export interface EventTicket {
     last_name: string
     email: string
   }
+  order?: {
+    createdAt: string
+    paymentStatus: string
+    paid: boolean
+  }
 }
 
 export interface CheckinPayOrder {
@@ -160,4 +165,40 @@ export interface ValidateDiscountCodeResponse {
     usageCount?: number
     maxUsage?: number
   }
+}
+
+// Event Order User Types for bulk ticket/order fetching
+export interface EventOrderUser {
+  id: number
+  orderId: number
+  eventId: number
+  createdAt: string // Purchase date
+}
+
+export interface EventOrderUserPage {
+  records: number
+  offset: number
+  length: number
+  data: EventOrderUser[]
+  pageInfo: {
+    hasNextPage: boolean
+  }
+  cachedAt?: string | null
+}
+
+export interface AllEventOrderUsersResponse {
+  allEventOrderUsers: EventOrderUserPage
+}
+
+export interface EventOrderUserReportFilter {
+  property: string
+  operator: string
+  value: string
+}
+
+export interface FetchAllEventOrderUsersOptions {
+  customerId?: number
+  offset?: number
+  length?: number
+  reportFilters?: EventOrderUserReportFilter[]
 }

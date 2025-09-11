@@ -14,6 +14,9 @@ import type {
   CreateEventDiscountResponse,
   DeleteEventDiscountResponse,
   ValidateDiscountCodeResponse,
+  EventOrderUser,
+  EventOrderUserPage,
+  AllEventOrderUsersResponse,
 } from './types'
 
 // Re-export types for convenience
@@ -25,6 +28,9 @@ export type {
   EventDiscountWithUsage,
   TicketType,
   DiscountUsageStats,
+  EventOrderUser,
+  EventOrderUserPage,
+  AllEventOrderUsersResponse,
 }
 
 export async function getEventDiscounts(
@@ -409,4 +415,193 @@ export function getDaysOverdue(paymentDetails: CheckinPayOrder): number {
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
 
   return diffDays
+}
+
+/**
+ * Fetch all event order users (tickets) with purchase dates for an event
+ * This is the most efficient way to get all tickets/orders with minimal requests
+ *
+ * @param customerId - The customer/organization ID
+ * @param eventId - Optional event ID to filter by specific event
+ * @param options - Additional options for pagination and filtering
+ * @returns Promise<EventOrderUser[]> - Array of all event order users with purchase dates
+ */
+export async function fetchAllEventOrderUsers(
+  customerId: number,
+  eventId?: number,
+  options: {
+    offset?: number
+    length?: number
+    reportFilters?: Array<{
+      rule: 'AND' | 'OR' | 'AND_NOT' | 'OR_NOT'
+      conditions?: Array<{
+        rule: 'AND' | 'OR' | 'AND_NOT' | 'OR_NOT'
+        field: string
+        operator:
+          | 'EQUALS'
+          | 'NOT_EQUALS'
+          | 'GREATER_THAN'
+          | 'LESS_THAN'
+          | 'GREATER_THAN_OR_EQUAL'
+          | 'LESS_THAN_OR_EQUAL'
+          | 'CONTAINS'
+          | 'STARTS_WITH'
+        value: string
+      }>
+    }>
+  } = {},
+): Promise<EventOrderUser[]> {
+  if (!customerId || customerId <= 0) {
+    throw new Error('Valid customer ID is required')
+  }
+
+  const { offset = 0, length = 1000, reportFilters = [] } = options
+
+  // Add event ID filter if provided
+  const filters = eventId
+    ? [
+        {
+          rule: 'AND',
+          conditions: [
+            {
+              rule: 'AND',
+              field: 'EVENT_ID',
+              operator: 'EQUALS',
+              value: eventId.toString(),
+            },
+          ],
+        },
+      ]
+    : reportFilters
+
+  try {
+    const query = `
+      query allEventOrderUsers(
+        $customerId: Int!
+        $offset: Int
+        $length: Int
+        $reportFilters: [EventOrderUserReportFilterInput!]
+      ) {
+        allEventOrderUsers(
+          customerId: $customerId
+          offset: $offset
+          length: $length
+          reportFilters: $reportFilters
+        ) {
+          records
+          offset
+          length
+          data {
+            id
+            orderId
+            eventId
+            createdAt
+          }
+          pageInfo {
+            hasNextPage
+          }
+          cachedAt
+        }
+      }
+    `
+
+    const variables = {
+      customerId,
+      offset,
+      length,
+      reportFilters: filters.length > 0 ? filters : undefined,
+    }
+
+    const responseData = await checkinQuery<AllEventOrderUsersResponse>(
+      query,
+      variables,
+    )
+
+    if (!responseData.allEventOrderUsers?.data) {
+      console.warn('No event order users found in response')
+      return []
+    }
+
+    return responseData.allEventOrderUsers.data
+  } catch (error) {
+    console.error('Failed to fetch event order users:', error)
+    throw new Error(
+      `Failed to fetch event order users: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
+  }
+}
+
+/**
+ * Fetch all event order users for a specific event with pagination support
+ * Automatically handles pagination to fetch all records
+ *
+ * @param customerId - The customer/organization ID
+ * @param eventId - The specific event ID to fetch tickets for
+ * @param batchSize - Number of records to fetch per request (default: 1000)
+ * @returns Promise<EventOrderUser[]> - Array of all event order users for the event
+ */
+export async function fetchAllEventTicketsWithPurchaseDates(
+  customerId: number,
+  eventId: number,
+  batchSize: number = 1000,
+): Promise<EventOrderUser[]> {
+  if (!customerId || customerId <= 0) {
+    throw new Error('Valid customer ID is required')
+  }
+
+  if (!eventId || eventId <= 0) {
+    throw new Error('Valid event ID is required')
+  }
+
+  const allTickets: EventOrderUser[] = []
+  let offset = 0
+  let hasMore = true
+
+  while (hasMore) {
+    try {
+      const batch = await fetchAllEventOrderUsers(customerId, eventId, {
+        offset,
+        length: batchSize,
+      })
+
+      if (batch.length === 0) {
+        hasMore = false
+      } else {
+        allTickets.push(...batch)
+        offset += batchSize
+
+        // If we got fewer results than requested, we've reached the end
+        if (batch.length < batchSize) {
+          hasMore = false
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to fetch batch at offset ${offset}:`, error)
+      throw error
+    }
+  }
+
+  return allTickets
+}
+
+/**
+ * Group event order users by their order ID
+ * Useful for analyzing orders that contain multiple tickets
+ *
+ * @param eventOrderUsers - Array of event order users
+ * @returns Map<number, EventOrderUser[]> - Map where key is orderId and value is array of tickets in that order
+ */
+export function groupEventOrderUsersByOrder(
+  eventOrderUsers: EventOrderUser[],
+): Map<number, EventOrderUser[]> {
+  const orderMap = new Map<number, EventOrderUser[]>()
+
+  eventOrderUsers.forEach((user) => {
+    if (!orderMap.has(user.orderId)) {
+      orderMap.set(user.orderId, [])
+    }
+    orderMap.get(user.orderId)!.push(user)
+  })
+
+  return orderMap
 }

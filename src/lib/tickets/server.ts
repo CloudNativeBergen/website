@@ -20,6 +20,7 @@ export {
   createEventDiscount,
   deleteEventDiscount,
   fetchEventTickets,
+  fetchAllEventTicketsWithPurchaseDates,
   validateDiscountCode,
   fetchOrderPaymentDetails,
   // Also re-export client-safe functions for convenience

@@ -1,4 +1,8 @@
-import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/server'
+import {
+  fetchEventTickets,
+  fetchAllEventTicketsWithPurchaseDates,
+  groupTicketsByOrder,
+} from '@/lib/tickets/server'
 import {
   calculateTicketStatistics,
   TIER_TICKET_ALLOCATION,
@@ -12,12 +16,13 @@ import { TargetSetupGuide } from '@/components/admin/TargetSetupGuide'
 import { TargetTrackingWithPreview } from '@/components/admin/TargetTrackingWithPreview'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { TicketIcon } from '@heroicons/react/24/outline'
-import type { EventTicket } from '@/lib/tickets/server'
+import type { EventTicket, EventOrderUser } from '@/lib/tickets/server'
 import { formatCurrency } from '@/lib/format'
 import Link from 'next/link'
 
 export default async function AdminTickets() {
   let tickets: EventTicket[] = []
+  let orderUsers: EventOrderUser[] = []
   let error: Error | null = null
 
   // Get conference data to retrieve Checkin.no IDs and sponsors
@@ -50,10 +55,20 @@ export default async function AdminTickets() {
   }
 
   try {
-    tickets = await fetchEventTickets(
-      conference.checkin_customer_id,
-      conference.checkin_event_id,
-    )
+    // Fetch both tickets and order users for complete data
+    const [ticketsData, orderUsersData] = await Promise.all([
+      fetchEventTickets(
+        conference.checkin_customer_id,
+        conference.checkin_event_id,
+      ),
+      fetchAllEventTicketsWithPurchaseDates(
+        conference.checkin_customer_id,
+        conference.checkin_event_id,
+      ),
+    ])
+
+    tickets = ticketsData
+    orderUsers = orderUsersData
 
     for (const ticket of tickets) {
       // Process each ticket as needed
@@ -77,7 +92,11 @@ export default async function AdminTickets() {
   const stats = await calculateTicketStatistics(tickets, conference)
 
   // Analyze ticket targets if enabled
-  const targetAnalysis = await analyzeTicketTargets(conference, tickets)
+  const targetAnalysis = await analyzeTicketTargets(
+    conference,
+    tickets,
+    orderUsers,
+  )
 
   // Group tickets by order_id for the orders table
   const orders = groupTicketsByOrder(tickets)

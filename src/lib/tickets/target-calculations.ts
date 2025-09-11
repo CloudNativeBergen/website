@@ -1,4 +1,4 @@
-import type { EventTicket, GroupedOrder } from './checkin'
+import type { EventTicket, GroupedOrder, EventOrderUser } from './checkin'
 import type {
   TicketTargetAnalysis,
   TicketTargetConfig,
@@ -7,8 +7,12 @@ import type {
   TargetVsActualData,
   ConferenceWithTargets,
 } from './targets'
-import { groupTicketsByOrder, fetchOrderPaymentDetails } from './checkin'
+import {
+  groupTicketsByOrder,
+  fetchAllEventTicketsWithPurchaseDates,
+} from './checkin'
 import { calculateCurveValue } from './target-curves'
+import { extractPurchaseTimeline } from './adapters'
 
 // Constants for better maintainability
 const DEFAULT_CAPACITY = 250
@@ -21,11 +25,13 @@ const DAYS_BUFFER_FOR_RECENT_DATA = 7
  * Main function to analyze ticket targets vs actual sales
  * @param conference - Conference configuration with target settings
  * @param tickets - Array of event tickets from CheckIn.no
+ * @param orderUsers - Array of event order users with purchase dates (optional, will fetch if not provided)
  * @returns Complete ticket target analysis or null if not enabled
  */
 export async function analyzeTicketTargets(
   conference: ConferenceWithTargets,
   tickets: EventTicket[],
+  orderUsers?: EventOrderUser[],
 ): Promise<TicketTargetAnalysis | null> {
   try {
     const config = conference.ticket_targets
@@ -39,8 +45,20 @@ export async function analyzeTicketTargets(
     const capacity = conference.ticket_capacity || DEFAULT_CAPACITY
     const targetProgression = generateTargetProgression(config, capacity)
 
+    // Fetch order users if not provided
+    let eventOrderUsers = orderUsers
+    if (!eventOrderUsers) {
+      eventOrderUsers = await fetchAllEventTicketsWithPurchaseDates(
+        conference.checkin_customer_id!,
+        conference.checkin_event_id!,
+      )
+    }
+
     // Generate actual sales progression
-    const actualProgression = await generateActualProgression(tickets, orders)
+    const actualProgression = generateActualProgression(
+      tickets,
+      eventOrderUsers,
+    )
 
     // Combine data for visualization
     const combinedData = combineSalesData(targetProgression, actualProgression)
@@ -157,44 +175,101 @@ function generateTargetProgression(
 
 /**
  * Generate actual sales progression over time based on purchase dates
+ * Uses EventOrderUser data to get purchase dates in a single API call
  * @param tickets - Array of event tickets
- * @param orders - Array of grouped orders
+ * @param orderUsers - Array of event order users with purchase dates
  * @returns Array of sales data points showing cumulative progress
  */
-async function generateActualProgression(
+function generateActualProgression(
   tickets: EventTicket[],
-  orders: GroupedOrder[],
-): Promise<SalesDataPoint[]> {
+  orderUsers: EventOrderUser[],
+): SalesDataPoint[] {
   try {
-    // Fetch purchase dates for all orders
-    const orderPurchaseDates = new Map<number, Date>()
+    // Extract purchase timeline from order users and tickets
+    const purchaseTimeline = extractPurchaseTimeline(orderUsers, tickets)
 
-    // Fetch payment details for each order to get purchase dates
-    const paymentDetailsPromises = orders.map(async (order) => {
-      try {
-        const paymentDetails = await fetchOrderPaymentDetails(order.order_id)
-        const purchaseDate = new Date(paymentDetails.createdAt)
-        orderPurchaseDates.set(order.order_id, purchaseDate)
-        return { orderId: order.order_id, date: purchaseDate, order }
-      } catch {
-        // Fallback to current date if we can't get the purchase date
-        const fallbackDate = new Date()
-        orderPurchaseDates.set(order.order_id, fallbackDate)
-        return { orderId: order.order_id, date: fallbackDate, order }
-      }
-    })
+    // Sort by purchase date
+    purchaseTimeline.sort((a, b) => a.date.getTime() - b.date.getTime())
 
-    const orderDates = await Promise.all(paymentDetailsPromises)
-
-    // Sort orders by purchase date
-    orderDates.sort((a, b) => a.date.getTime() - b.date.getTime())
-
-    // Build progression by cumulating sales over time
-    return buildCumulativeProgression(orderDates)
+    // Build cumulative progression
+    return buildCumulativeProgressionFromTimeline(purchaseTimeline)
   } catch (error) {
     console.error('Error generating sales progression:', error)
-    return createFallbackProgression(tickets, orders)
+    return createFallbackProgression(tickets, [])
   }
+}
+
+/**
+ * Build cumulative sales progression from purchase timeline data
+ * @param timeline - Array of purchase events with dates and ticket counts
+ * @returns Array of cumulative sales data points
+ */
+function buildCumulativeProgressionFromTimeline(
+  timeline: Array<{
+    orderId: number
+    date: Date
+    ticketCount: number
+    revenue: number
+    categories: string[]
+  }>,
+): SalesDataPoint[] {
+  const progression: SalesDataPoint[] = []
+  let cumulativeTickets = 0
+  let cumulativeRevenue = 0
+  const cumulativeCategories: Record<string, number> = {}
+
+  // Track unique dates to avoid duplicate entries
+  const processedDates = new Set<string>()
+
+  for (const { date, ticketCount, revenue, categories } of timeline) {
+    const dateKey = date.toISOString().split('T')[0] // Use date only, not time
+
+    // Add tickets and revenue from this order
+    cumulativeTickets += ticketCount
+    cumulativeRevenue += revenue
+
+    // Add category breakdown from this order
+    for (const category of categories) {
+      // Approximate category distribution based on ticket count
+      const categoryTickets = Math.ceil(ticketCount / categories.length)
+      cumulativeCategories[category] =
+        (cumulativeCategories[category] || 0) + categoryTickets
+    }
+
+    // Only add one entry per day (the latest state for that day)
+    if (!processedDates.has(dateKey)) {
+      const dataPoint: SalesDataPoint = {
+        date: date.toISOString(),
+        paidTickets: cumulativeTickets,
+        sponsorTickets: 0,
+        speakerTickets: 0,
+        totalTickets: cumulativeTickets,
+        revenue: cumulativeRevenue,
+        categories: { ...cumulativeCategories },
+      }
+
+      progression.push(dataPoint)
+      processedDates.add(dateKey)
+    } else {
+      // Update the existing entry for this date with the latest cumulative values
+      const existingIndex = progression.findIndex(
+        (p) => p.date.split('T')[0] === dateKey,
+      )
+      if (existingIndex !== -1) {
+        progression[existingIndex] = {
+          date: date.toISOString(),
+          paidTickets: cumulativeTickets,
+          sponsorTickets: 0,
+          speakerTickets: 0,
+          totalTickets: cumulativeTickets,
+          revenue: cumulativeRevenue,
+          categories: { ...cumulativeCategories },
+        }
+      }
+    }
+  }
+
+  return progression
 }
 
 /**
