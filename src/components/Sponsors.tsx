@@ -6,6 +6,47 @@ import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
 import Link from 'next/link'
 
+/**
+ * Deterministic shuffle based on a seed (current date)
+ * This ensures consistent ordering between server and client renders
+ */
+function deterministicShuffle<T>(array: T[], seed: number): T[] {
+  const shuffled = [...array]
+  let currentIndex = shuffled.length
+
+  // Simple LCG (Linear Congruential Generator) for deterministic "randomness"
+  let random = seed
+  const next = () => {
+    random = (random * 1664525 + 1013904223) % 2 ** 32
+    return random / 2 ** 32
+  }
+
+  while (currentIndex !== 0) {
+    const randomIndex = Math.floor(next() * currentIndex)
+    currentIndex--
+    ;[shuffled[currentIndex], shuffled[randomIndex]] = [
+      shuffled[randomIndex],
+      shuffled[currentIndex],
+    ]
+  }
+
+  return shuffled
+}
+
+/**
+ * Get a deterministic seed based on the current date
+ * Changes daily to provide variation while maintaining consistency
+ */
+function getDailySeed(): number {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = today.getMonth() + 1
+  const day = today.getDate()
+
+  // Create a seed that changes daily but is consistent throughout the day
+  return year * 10000 + month * 100 + day
+}
+
 export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
   // Early return if no sponsors
   if (!sponsors || sponsors.length === 0) {
@@ -26,15 +67,17 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
     {} as Record<string, ConferenceSponsor[]>,
   )
 
-  // Sort sponsors within each tier by value (most expensive first) for standard tiers
+  // Get deterministic seed based on current date
+  const dailySeed = getDailySeed()
+
+  // Randomize sponsors within each tier using deterministic shuffle
   Object.keys(groupedSponsors).forEach((tierName) => {
-    if (tierName !== 'SPECIAL') {
-      groupedSponsors[tierName].sort((a, b) => {
-        const aPrice = a.tier.price?.[0]?.amount || 0
-        const bPrice = b.tier.price?.[0]?.amount || 0
-        return bPrice - aPrice // Sort descending (most expensive first)
-      })
-    }
+    // Use tier name + daily seed to ensure different shuffling for each tier
+    const tierSeed = dailySeed + tierName.charCodeAt(0) * 1000
+    groupedSponsors[tierName] = deterministicShuffle(
+      groupedSponsors[tierName],
+      tierSeed,
+    )
   })
 
   // Sort tier names by hierarchy and value
