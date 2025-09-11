@@ -21,6 +21,7 @@ export default async function AdminSponsors() {
       sponsors: true,
       sponsorContact: true,
       sponsorTiers: true,
+      revalidate: 0,
     })
 
   if (conferenceError) {
