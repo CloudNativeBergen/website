@@ -1,13 +1,11 @@
 'use client'
 
-import { useMemo } from 'react'
 import dynamic from 'next/dynamic'
-import type {
-  TicketTargetAnalysis,
-  ConferenceWithTargets,
-  TargetVsActualData,
-} from '@/lib/tickets/types'
-import { processChartData } from '@/lib/tickets/data-processing'
+import type { TicketAnalysisResult } from '@/lib/tickets/types'
+import {
+  adaptForChart,
+  createTooltipContent,
+} from '@/lib/tickets/chart-adapter'
 import { formatCurrency } from '@/lib/format'
 import {
   ChartBarIcon,
@@ -48,8 +46,7 @@ const Chart = dynamic(() => import('react-apexcharts'), {
 })
 
 interface ChartProps {
-  analysis: TicketTargetAnalysis
-  conference?: ConferenceWithTargets
+  analysis: TicketAnalysisResult
   className?: string
 }
 
@@ -107,319 +104,138 @@ const PerformanceCard = ({
   </div>
 )
 
-function createTooltip(point: TargetVsActualData, today: Date): string {
-  if (!point) return ''
-
-  const date = new Date(point.date)
-  const isToday = date.toDateString() === today.toDateString()
-  const isFuture = date > today
-  const formattedDate = date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-
-  const badges: string[] = []
-  if (isToday) {
-    badges.push(
-      '<span class="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">Today</span>',
-    )
-  }
-  if (isFuture) {
-    badges.push(
-      '<span class="ml-2 text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full">Future</span>',
-    )
-  }
-  if (point.isMilestone) {
-    badges.push(
-      `<span class="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded-full">${point.milestoneLabel || 'Milestone'}</span>`,
-    )
-  }
-
-  const categoryHTML = Object.entries(point.categories)
-    .filter(([, count]) => (count as number) > 0)
-    .map(
-      ([category, count]) =>
-        `<div class="flex justify-between items-center py-1">
-        <span class="text-sm text-gray-600 dark:text-gray-400">${category}:</span>
-        <span class="font-medium text-gray-900 dark:text-white">${count}</span>
-      </div>`,
-    )
-    .join('')
-
-  const avgPriceHTML =
-    point.actualPaid > 0
-      ? `<div class="flex justify-between items-center">
-        <span class="text-sm text-gray-600 dark:text-gray-400">Avg. Price:</span>
-        <span class="text-sm text-gray-700 dark:text-gray-300">${formatCurrency(point.revenue / point.actualPaid)}</span>
-      </div>`
-      : ''
-
-  return `
-    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 min-w-[280px]">
-      <div class="font-semibold text-gray-900 dark:text-white mb-3 text-center">
-        ${formattedDate}
-        ${badges.join('')}
-      </div>
-      ${categoryHTML ? `<div class="mb-3">${categoryHTML}</div>` : ''}
-      <div class="border-t border-gray-200 dark:border-gray-600 pt-3 mt-3 space-y-2">
-        <div class="flex justify-between items-center">
-          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Total Sold:</span>
-          <span class="font-semibold text-gray-900 dark:text-white">${point.actual}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-sm text-gray-600 dark:text-gray-400">Target:</span>
-          <span class="font-medium ${point.actual >= point.target ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">${point.target}</span>
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-sm text-gray-600 dark:text-gray-400">Revenue:</span>
-          <span class="font-medium text-green-600 dark:text-green-400">${formatCurrency(point.revenue)}</span>
-        </div>
-        ${avgPriceHTML}
-      </div>
-    </div>
-  `
-}
-
 export function TicketSalesChartDisplay({
   analysis,
-  conference,
   className = '',
 }: ChartProps) {
-  const chartData = useMemo(() => {
-    try {
-      return processChartData(analysis)
-    } catch (error) {
-      console.error('Error processing chart data:', error)
-      return {
-        series: [],
-        combinedData: [],
-        debugInfo: {
-          totalCategories: 0,
-          categoriesList: [],
-          dataPointsCount: 0,
-          maxActualValue: 0,
-          maxTargetValue: 0,
-        },
-      }
-    }
-  }, [analysis])
+  const chartData = adaptForChart(analysis)
+  const { statistics, performance } = analysis
 
-  const chartOptions = useMemo(() => {
-    const { series, combinedData, debugInfo } = chartData
-    const today = new Date()
+  // Calculate display values
+  const StatusIcon = getStatusIcon(performance.variance)
+  const statusColorClasses = getStatusColors(performance.variance)
+  const capacityPercentage = (
+    (statistics.totalCapacityUsed / analysis.capacity) *
+    100
+  ).toFixed(1)
+  const avgTicketPrice = formatCurrency(statistics.averageTicketPrice)
 
-    if (!combinedData.length) {
-      return null
-    }
-
-    const maxTarget = analysis.capacity
-
-    return {
-      chart: {
-        type: 'line' as const,
-        height: '100%',
-        stacked: true,
-        toolbar: { show: false },
-        zoom: { enabled: false },
-        selection: { enabled: false },
-        pan: { enabled: false },
-        background: 'transparent',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        redrawOnParentResize: true,
-        redrawOnWindowResize: true,
-        animations: {
-          enabled: true,
-          easing: 'easeinout',
-          speed: CHART_CONFIG.ANIMATION_SPEED,
-          animateGradually: {
-            enabled: true,
-            delay: 50,
-          },
-        },
-        sparkline: {
-          enabled: false,
-        },
+  // Create chart options
+  const chartOptions = {
+    chart: {
+      type: 'line' as const,
+      height: '100%',
+      stacked: true,
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      background: 'transparent',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      animations: {
+        enabled: true,
+        easing: 'easeinout',
+        speed: CHART_CONFIG.ANIMATION_SPEED,
       },
-      plotOptions: {
-        bar: {
-          horizontal: false,
-          columnWidth: CHART_CONFIG.COLUMN_WIDTH,
-          borderRadius: CHART_CONFIG.BORDER_RADIUS,
-        },
+    },
+    plotOptions: {
+      bar: {
+        horizontal: false,
+        columnWidth: CHART_CONFIG.COLUMN_WIDTH,
+        borderRadius: CHART_CONFIG.BORDER_RADIUS,
       },
-      dataLabels: { enabled: false },
-      stroke: {
-        width: Array(debugInfo.totalCategories)
-          .fill(0)
-          .concat([CHART_CONFIG.TARGET_LINE_WIDTH]),
-        curve: 'monotoneCubic' as const,
-        lineCap: 'round' as const,
-        dashArray: Array(debugInfo.totalCategories)
-          .fill(0)
-          .concat([CHART_CONFIG.TARGET_DASH_ARRAY]),
-      },
-      fill: {
-        opacity: Array(debugInfo.totalCategories)
-          .fill(1)
-          .concat([CHART_CONFIG.TARGET_OPACITY]),
-      },
-      xaxis: {
-        type: 'datetime' as const,
-        labels: {
-          formatter: formatDate,
-          style: {
-            colors: CHART_COLORS.TEXT_PRIMARY,
-            fontSize: '12px',
-          },
-        },
-        axisBorder: {
-          show: true,
-          color: CHART_COLORS.AXIS_BORDER,
-        },
-        axisTicks: {
-          show: true,
-          color: CHART_COLORS.AXIS_BORDER,
-        },
-        tooltip: { enabled: false },
-      },
-      yaxis: {
-        title: {
-          style: {
-            color: CHART_COLORS.TEXT_PRIMARY,
-            fontSize: '12px',
-            fontWeight: 500,
-          },
-        },
-        labels: {
-          style: {
-            colors: CHART_COLORS.TEXT_PRIMARY,
-            fontSize: '12px',
-          },
-          formatter: (value: number) => Math.round(value).toString(),
-        },
-        min: 0,
-        max: maxTarget,
-        tickAmount: 5,
-        axisBorder: {
-          show: true,
-          color: CHART_COLORS.AXIS_BORDER,
-        },
-        axisTicks: {
-          show: true,
-          color: CHART_COLORS.AXIS_BORDER,
-        },
-      },
-      tooltip: {
-        shared: true,
-        intersect: false,
-        theme: 'light',
+    },
+    dataLabels: { enabled: false },
+    stroke: {
+      width: [
+        ...Array(chartData.categories.length).fill(0),
+        CHART_CONFIG.TARGET_LINE_WIDTH,
+      ],
+      curve: 'monotoneCubic' as const,
+      lineCap: 'round' as const,
+      dashArray: [
+        ...Array(chartData.categories.length).fill(0),
+        CHART_CONFIG.TARGET_DASH_ARRAY,
+      ],
+    },
+    fill: {
+      opacity: [
+        ...Array(chartData.categories.length).fill(1),
+        CHART_CONFIG.TARGET_OPACITY,
+      ],
+    },
+    xaxis: {
+      type: 'datetime' as const,
+      labels: {
+        formatter: formatDate,
         style: {
+          colors: CHART_COLORS.TEXT_PRIMARY,
           fontSize: '12px',
-          fontFamily: 'Inter, system-ui, sans-serif',
-        },
-        custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
-          const point = chartData.combinedData[dataPointIndex]
-          return createTooltip(point, today)
         },
       },
-      legend: {
+      axisBorder: {
         show: true,
-        position: 'bottom' as const,
-        horizontalAlign: 'center' as const,
-        fontSize: '12px',
-        fontWeight: 500,
-        labels: { colors: CHART_COLORS.TEXT_PRIMARY },
-        markers: {
-          size: 12,
-          strokeWidth: 0,
-          shape: 'square' as const,
-        },
-        itemMargin: {
-          horizontal: 10,
-          vertical: 6,
-        },
-        showForSingleSeries: false,
-        showForNullSeries: false,
-        formatter: (seriesName: string) => seriesName,
+        color: CHART_COLORS.AXIS_BORDER,
       },
-      grid: {
-        show: true,
-        borderColor: CHART_COLORS.GRID_BORDER,
-        strokeDashArray: 2,
-        position: 'back' as const,
-        xaxis: { lines: { show: false } },
-        yaxis: { lines: { show: true } },
-        padding: { top: 0, right: 0, bottom: 0, left: 0 },
+    },
+    yaxis: {
+      labels: {
+        style: {
+          colors: CHART_COLORS.TEXT_PRIMARY,
+          fontSize: '12px',
+        },
+        formatter: (value: number) => Math.round(value).toString(),
       },
-      annotations: {
-        xaxis: [
-          {
-            x: today.getTime(),
-            borderColor: CHART_COLORS.TODAY_MARKER,
-            borderWidth: 1,
-            strokeDashArray: 3,
-            label: {
-              style: {
-                color: CHART_COLORS.TODAY_MARKER,
-                background: CHART_COLORS.TODAY_BACKGROUND,
-                fontSize: '10px',
-                borderRadius: 3,
-              },
-              text: 'Today',
-              position: 'top',
-              offsetY: -5,
+      min: 0,
+      max: chartData.maxValue,
+      tickAmount: 5,
+    },
+    tooltip: {
+      shared: true,
+      intersect: false,
+      theme: 'light',
+      custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
+        const point = analysis.progression[dataPointIndex]
+        return createTooltipContent(point, point.actualTickets, point.revenue)
+      },
+    },
+    legend: {
+      show: true,
+      position: 'bottom' as const,
+      horizontalAlign: 'center' as const,
+      fontSize: '12px',
+      fontWeight: 500,
+      labels: { colors: CHART_COLORS.TEXT_PRIMARY },
+    },
+    grid: {
+      show: true,
+      borderColor: CHART_COLORS.GRID_BORDER,
+      strokeDashArray: 2,
+      yaxis: { lines: { show: true } },
+    },
+    annotations: {
+      xaxis: [
+        {
+          x: new Date().getTime(),
+          borderColor: CHART_COLORS.TODAY_MARKER,
+          borderWidth: 1,
+          strokeDashArray: 3,
+          label: {
+            style: {
+              color: CHART_COLORS.TODAY_MARKER,
+              background: CHART_COLORS.TODAY_BACKGROUND,
+              fontSize: '10px',
             },
+            text: 'Today',
+            position: 'top',
           },
-          ...(conference?.program_date
-            ? [
-                {
-                  x: new Date(conference.program_date).getTime(),
-                  borderColor: '#8B5CF6',
-                  borderWidth: 1,
-                  strokeDashArray: 5,
-                  label: {
-                    style: {
-                      color: '#8B5CF6',
-                      background: '#F3E8FF',
-                      fontSize: '10px',
-                      borderRadius: 3,
-                    },
-                    text: 'Program',
-                    position: 'top',
-                    offsetY: -5,
-                  },
-                },
-              ]
-            : []),
-        ],
-      },
-      series,
-    }
-  }, [chartData, conference?.program_date, analysis.capacity])
+        },
+      ],
+    },
+    series: chartData.series,
+  }
 
-  const performanceData = useMemo(() => {
-    const { performance, currentSales, capacity } = analysis
-    const StatusIcon = getStatusIcon(performance.variance)
-
-    return {
-      statusColorClasses: getStatusColors(performance.variance),
-      StatusIcon,
-      capacityPercentage: (
-        (currentSales.totalTickets / capacity) *
-        100
-      ).toFixed(1),
-      avgTicketPrice:
-        currentSales.paidTickets > 0
-          ? formatCurrency(currentSales.revenue / currentSales.paidTickets)
-          : formatCurrency(0),
-    }
-  }, [analysis])
-
-  if (!chartData.series.length || !chartOptions) {
+  if (!chartData.series.length) {
     return (
-      <div className={`${className}`}>
+      <div className={className}>
         <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
           <div className="py-12 text-center">
             <ChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
@@ -440,41 +256,38 @@ export function TicketSalesChartDisplay({
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <PerformanceCard
           title="Current Sales"
-          value={`${analysis.currentSales.totalTickets} / ${analysis.capacity}`}
-          subtitle={`${performanceData.capacityPercentage}% of capacity`}
+          value={`${statistics.totalPaidTickets} / ${analysis.capacity}`}
+          subtitle={`${capacityPercentage}% of capacity`}
         />
 
         <PerformanceCard
           title="Target Progress"
-          value={`${analysis.performance.actualPercentage.toFixed(1)}%`}
+          value={`${performance.currentPercentage.toFixed(1)}%`}
           subtitle={
-            <span
-              className={`flex items-center ${performanceData.statusColorClasses}`}
-            >
-              <performanceData.StatusIcon className="mr-1 h-3 w-3 flex-shrink-0" />
-              {analysis.performance.isOnTrack ? 'On Track' : 'Behind'} (
-              {analysis.performance.variance > 0 ? '+' : ''}
-              {analysis.performance.variance.toFixed(1)}%)
+            <span className={`flex items-center ${statusColorClasses}`}>
+              <StatusIcon className="mr-1 h-3 w-3 flex-shrink-0" />
+              {performance.isOnTrack ? 'On Track' : 'Behind'} (
+              {performance.variance > 0 ? '+' : ''}
+              {performance.variance.toFixed(1)}%)
             </span>
           }
         />
 
         <PerformanceCard
           title="Revenue"
-          value={formatCurrency(analysis.currentSales.revenue)}
-          subtitle={`${performanceData.avgTicketPrice} per ticket`}
+          value={formatCurrency(statistics.totalRevenue)}
+          subtitle={`${avgTicketPrice} per ticket`}
         />
 
         <PerformanceCard
           title="Next Milestone"
           value={
-            analysis.performance.nextMilestone
-              ? `${analysis.performance.daysToNextMilestone} days`
+            performance.nextMilestone
+              ? `${performance.nextMilestone.daysAway} days`
               : 'None'
           }
           subtitle={
-            analysis.performance.nextMilestone?.label ||
-            'No upcoming milestones'
+            performance.nextMilestone?.label || 'No upcoming milestones'
           }
         />
       </div>

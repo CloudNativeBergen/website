@@ -10,7 +10,7 @@ import { router, adminProcedure } from '../trpc'
 import {
   TicketSettingsUpdateSchema,
   ConferenceIdSchema,
-  TicketTargetConfigSchema,
+  SalesTargetConfigSchema,
   CreateDiscountCodeSchema,
   GetDiscountsSchema,
   DeleteDiscountCodeSchema,
@@ -22,11 +22,13 @@ import {
   createEventDiscount,
   getEventDiscounts,
   deleteEventDiscount,
-  fetchEventTickets,
   calculateDiscountUsage,
+} from '@/lib/tickets/discounts'
+import {
+  fetchEventTickets,
   fetchOrderPaymentDetails,
-  type DiscountUsageStats,
-} from '@/lib/tickets/server'
+} from '@/lib/tickets/checkin'
+import type { DiscountUsageStats } from '@/lib/tickets/types'
 
 /**
  * Update ticket capacity for a conference
@@ -55,12 +57,12 @@ async function updateTicketTargets(
   conferenceId: string,
   targets: {
     enabled: boolean
-    sales_start_date?: string
-    target_curve?: 'linear' | 'early_push' | 'late_push' | 's_curve'
-    milestones?: Array<{
+    sales_start_date: string
+    target_curve: 'linear' | 'early_push' | 'late_push' | 's_curve'
+    milestones: Array<{
       date: string
       target_percentage: number
-      label?: string
+      label: string
     }>
   },
 ) {
@@ -201,7 +203,7 @@ export const ticketsRouter = router({
   updateTargets: adminProcedure
     .input(
       ConferenceIdSchema.extend({
-        targets: TicketTargetConfigSchema,
+        targets: SalesTargetConfigSchema,
       }),
     )
     .mutation(async ({ input }) => {

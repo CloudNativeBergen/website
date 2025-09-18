@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { CheckinPayOrder } from '@/lib/tickets/client'
-import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/client'
+import type { CheckinPayOrder } from '@/lib/tickets/types'
+import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/checkin'
 import { api } from '@/lib/trpc/client'
 
 export interface PaymentSummary {

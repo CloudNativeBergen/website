@@ -6,7 +6,7 @@ import {
   generateCurveData,
   generateCurveSVGPath,
   getCurveMetadata,
-} from '@/lib/tickets/target-calculations'
+} from '@/lib/tickets/curve-utils'
 
 interface CurvePreviewProps {
   curve: TargetCurve

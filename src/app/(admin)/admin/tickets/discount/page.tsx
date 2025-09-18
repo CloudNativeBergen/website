@@ -1,6 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getEventDiscounts } from '@/lib/tickets/server'
-import { SPONSOR_TIER_TICKET_ALLOCATION } from '@/lib/tickets/data-processing'
+import { getEventDiscounts } from '@/lib/tickets/discounts'
+import { SPONSOR_TIER_TICKET_ALLOCATION } from '@/lib/tickets/processor'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
 import {

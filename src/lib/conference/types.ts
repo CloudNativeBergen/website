@@ -7,7 +7,7 @@ import {
   ConferenceSponsor,
   ConferenceSponsorWithContact,
 } from '@/lib/sponsor/types'
-import type { TicketTargetConfig } from '@/lib/tickets/types'
+import type { SalesTargetConfig } from '@/lib/tickets/types'
 
 export interface ConferenceProposals {
   conference: Conference | Reference
@@ -60,7 +60,7 @@ export interface Conference {
   checkin_customer_id?: number
   checkin_event_id?: number
   ticket_capacity?: number
-  ticket_targets?: TicketTargetConfig
+  ticket_targets?: SalesTargetConfig
   social_links?: string[]
   organizers: Speaker[]
   featured_speakers?: SpeakerWithTalks[]

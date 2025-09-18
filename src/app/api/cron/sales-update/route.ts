@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchEventTickets } from '@/lib/tickets/server'
-import { calculateTicketStatistics } from '@/lib/tickets/data-processing'
-import { analyzeTicketSales } from '@/lib/tickets/target-calculations'
+import { fetchEventTickets } from '@/lib/tickets/checkin'
+import { TicketSalesProcessor } from '@/lib/tickets/processor'
+import type {
+  ProcessTicketSalesInput,
+  TicketAnalysisResult,
+} from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 
@@ -60,30 +63,38 @@ export async function POST(request: NextRequest) {
       conference.checkin_event_id,
     )
 
-    // Calculate comprehensive ticket statistics (same logic as admin/tickets page)
-    const stats = await calculateTicketStatistics(tickets, conference)
-
-    // Analyze ticket targets vs actual performance
-    let targetAnalysis = null
+    // Process tickets using the new simplified processor
+    let analysis: TicketAnalysisResult | null = null
 
     // Validate target configuration before analysis
-    const config = conference.ticket_targets
+    const targetConfig = conference.ticket_targets
     if (
-      config?.enabled &&
+      targetConfig &&
+      targetConfig.enabled &&
       conference.ticket_capacity &&
-      config.sales_start_date &&
-      config.target_curve &&
+      targetConfig.sales_start_date &&
+      targetConfig.target_curve &&
       tickets.length > 0
     ) {
       try {
-        targetAnalysis = analyzeTicketSales({
+        const input: ProcessTicketSalesInput = {
+          tickets: tickets.map((t) => ({
+            order_id: t.order_id,
+            order_date: t.order_date,
+            category: t.category,
+            sum: t.sum,
+          })),
+          config: targetConfig, // Use as-is since it already has the correct field names
           capacity: conference.ticket_capacity,
-          salesStartDate: config.sales_start_date,
-          conferenceStartDate: conference.start_date,
-          targetCurve: config.target_curve,
-          milestones: config.milestones,
-          tickets,
-        })
+          conference,
+          conferenceDate:
+            conference.start_date ||
+            conference.program_date ||
+            new Date().toISOString(),
+        }
+
+        const processor = new TicketSalesProcessor(input)
+        analysis = await processor.process()
       } catch (error) {
         console.log(
           'Target analysis calculation failed:',
@@ -92,16 +103,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Extract statistics from analysis or calculate basic stats
+    const statistics = analysis?.statistics || {
+      totalPaidTickets: tickets.length,
+      totalRevenue: tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
+      totalOrders: new Set(tickets.map((t) => t.order_id)).size,
+      averageTicketPrice: 0,
+      categoryBreakdown: {},
+      sponsorTickets: 0,
+      speakerTickets: 0,
+      totalCapacityUsed: tickets.length,
+    }
+
     // Send update to Slack
     await sendSalesUpdateToSlack({
       conference,
-      ticketsByCategory: stats.ticketsByCategory,
-      paidTickets: stats.paidTickets,
-      sponsorTickets: stats.sponsorTickets,
-      speakerTickets: stats.speakerTickets,
-      totalTickets: stats.totalTickets,
-      totalRevenue: stats.totalRevenue,
-      targetAnalysis, // Include target analysis results
+      ticketsByCategory: statistics.categoryBreakdown,
+      paidTickets: statistics.totalPaidTickets,
+      sponsorTickets: statistics.sponsorTickets,
+      speakerTickets: statistics.speakerTickets,
+      totalTickets: statistics.totalCapacityUsed,
+      totalRevenue: statistics.totalRevenue,
+      targetAnalysis: analysis, // Include target analysis results
       lastUpdated: new Date().toISOString(),
     })
 
@@ -109,24 +132,21 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         conference: conference.title,
-        paidTickets: stats.paidTickets,
-        sponsorTickets: stats.sponsorTickets,
-        speakerTickets: stats.speakerTickets,
-        totalTickets: stats.totalTickets,
-        totalRevenue: stats.totalRevenue,
-        categories: stats.ticketsByCategory,
-        targetAnalysis: targetAnalysis
+        paidTickets: statistics.totalPaidTickets,
+        sponsorTickets: statistics.sponsorTickets,
+        speakerTickets: statistics.speakerTickets,
+        totalTickets: statistics.totalCapacityUsed,
+        totalRevenue: statistics.totalRevenue,
+        categories: statistics.categoryBreakdown,
+        targetAnalysis: analysis
           ? {
-              enabled: targetAnalysis.config.enabled,
-              capacity: targetAnalysis.capacity,
-              currentTargetPercentage:
-                targetAnalysis.performance.currentTargetPercentage,
-              actualPercentage: targetAnalysis.performance.actualPercentage,
-              variance: targetAnalysis.performance.variance,
-              isOnTrack: targetAnalysis.performance.isOnTrack,
-              nextMilestone: targetAnalysis.performance.nextMilestone,
-              daysToNextMilestone:
-                targetAnalysis.performance.daysToNextMilestone,
+              enabled: true,
+              capacity: analysis.capacity,
+              currentTargetPercentage: analysis.performance.targetPercentage,
+              actualPercentage: analysis.performance.currentPercentage,
+              variance: analysis.performance.variance,
+              isOnTrack: analysis.performance.isOnTrack,
+              nextMilestone: analysis.performance.nextMilestone,
             }
           : null,
         lastUpdated: new Date().toISOString(),

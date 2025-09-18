@@ -1,5 +1,5 @@
 import { Conference } from '@/lib/conference/types'
-import type { TicketTargetAnalysis } from '@/lib/tickets/types'
+import type { TicketAnalysisResult } from '@/lib/tickets/types'
 
 type SlackBlock = {
   type: string
@@ -26,7 +26,7 @@ interface SalesUpdateData {
   speakerTickets: number
   totalTickets: number
   totalRevenue: number
-  targetAnalysis?: TicketTargetAnalysis | null
+  targetAnalysis?: TicketAnalysisResult | null
   lastUpdated: string
 }
 
@@ -189,7 +189,7 @@ export async function sendSalesUpdateToSlack(
   ]
 
   // Add target analysis if available
-  if (targetAnalysis?.config.enabled) {
+  if (targetAnalysis && targetAnalysis.performance) {
     const { performance } = targetAnalysis
     const statusEmoji = performance.isOnTrack ? '✅' : '⚠️'
     const varianceText =
@@ -210,11 +210,11 @@ export async function sendSalesUpdateToSlack(
         fields: [
           {
             type: 'mrkdwn',
-            text: `*Current Target:*\n${performance.currentTargetPercentage.toFixed(1)}%`,
+            text: `*Current Target:*\n${performance.targetPercentage.toFixed(1)}%`,
           },
           {
             type: 'mrkdwn',
-            text: `*Actual Progress:*\n${performance.actualPercentage.toFixed(1)}%`,
+            text: `*Actual Progress:*\n${performance.currentPercentage.toFixed(1)}%`,
           },
         ],
       },
@@ -234,12 +234,12 @@ export async function sendSalesUpdateToSlack(
     )
 
     // Add next milestone information if available
-    if (performance.nextMilestone && performance.daysToNextMilestone) {
+    if (performance.nextMilestone) {
       blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*🎯 Next Milestone:* ${performance.nextMilestone.label || 'Milestone'} in ${performance.daysToNextMilestone} days (${performance.nextMilestone.target_percentage}% target)`,
+          text: `*🎯 Next Milestone:* ${performance.nextMilestone.label} in ${performance.nextMilestone.daysAway} days`,
         },
       })
     }

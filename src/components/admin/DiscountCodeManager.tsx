@@ -13,7 +13,7 @@ import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
 import { SponsorDiscountEmailModal } from './SponsorDiscountEmailModal'
-import type { EventDiscountWithUsage } from '@/lib/tickets/client'
+import type { EventDiscountWithUsage } from '@/lib/tickets/types'
 
 interface SponsorWithTierInfo {
   id: string

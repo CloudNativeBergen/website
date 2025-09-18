@@ -1,15 +1,114 @@
 import type { Conference } from '@/lib/conference/types'
 
-/**
- * TypeScript types for Checkin.no GraphQL API responses
- */
+export type TargetCurve = 'linear' | 'early_push' | 'late_push' | 's_curve'
+
+export interface DailySales {
+  date: string
+  paidTickets: number
+  totalRevenue: number
+  categoryBreakdown: Record<string, number>
+  orderCount: number
+}
+
+export interface CumulativeSales {
+  date: string
+  totalPaidTickets: number
+  totalRevenue: number
+  categoryBreakdown: Record<string, number>
+  totalOrders: number
+}
+
+export interface TargetPoint {
+  date: string
+  targetTickets: number
+  targetPercentage: number
+  isMilestone: boolean
+  milestoneLabel: string | null
+}
+
+export interface CombinedDataPoint {
+  date: string
+  actualTickets: number
+  targetTickets: number
+  revenue: number
+  categoryBreakdown: Record<string, number>
+  isMilestone: boolean
+  milestoneLabel: string | null
+}
+
+export interface PerformanceMetrics {
+  currentPercentage: number
+  targetPercentage: number
+  variance: number
+  isOnTrack: boolean
+  nextMilestone: {
+    date: string
+    label: string
+    daysAway: number
+  } | null
+}
+
+export interface TicketStatistics {
+  totalPaidTickets: number
+  totalRevenue: number
+  totalOrders: number
+  averageTicketPrice: number
+  categoryBreakdown: Record<string, number>
+  sponsorTickets: number
+  speakerTickets: number
+  totalCapacityUsed: number
+}
+
+export interface TicketAnalysisResult {
+  statistics: TicketStatistics
+  progression: CombinedDataPoint[]
+  performance: PerformanceMetrics
+  capacity: number
+}
+
+export interface SalesTargetConfig {
+  enabled: boolean
+  sales_start_date: string
+  target_curve: TargetCurve
+  milestones: Array<{
+    date: string
+    target_percentage: number
+    label: string
+  }>
+}
+
+export interface ChartSeries {
+  name: string
+  type: 'column' | 'line'
+  data: Array<{ x: string; y: number }>
+  color: string
+}
+
+export interface ChartData {
+  series: ChartSeries[]
+  maxValue: number
+  categories: string[]
+}
+
+export interface ProcessTicketSalesInput {
+  tickets: Array<{
+    order_id: number
+    order_date: string
+    category: string
+    sum: string
+  }>
+  config: SalesTargetConfig
+  capacity: number
+  conference: Conference
+  conferenceDate: string
+}
 
 export interface EventTicketWithoutDate {
   id: number
   order_id: number
   category: string
   customer_name: string | null
-  sum: string // price without vat
+  sum: string // price of the order without vat, not the ticket
   sum_left: string // outstanding amount
   coupon?: string
   discount?: string
@@ -90,9 +189,9 @@ export interface EventDiscount {
 }
 
 export interface TicketType {
-  id: string | number // Allow both string and number to handle API response
+  id: string | number
   name: string
-  description: string | null // Allow null descriptions
+  description: string | null
 }
 
 export interface GroupedOrder {
@@ -113,7 +212,6 @@ export interface DiscountUsageStats {
   }
 }
 
-// Extended EventDiscount type with usage statistics for UI components
 export interface EventDiscountWithUsage extends EventDiscount {
   actualUsage?: {
     usageCount: number
@@ -133,7 +231,6 @@ export interface CreateEventDiscountInput {
   stopsAt?: string
 }
 
-// GraphQL Response Types
 export interface EventTicketsResponse {
   eventTickets: EventTicket[]
 }
@@ -173,12 +270,11 @@ export interface ValidateDiscountCodeResponse {
   }
 }
 
-// Event Order User Types for bulk ticket/order fetching
 export interface EventOrderUser {
   id: number
   orderId: number
   eventId: number
-  createdAt: string // Purchase date
+  createdAt: string
 }
 
 export interface EventOrderUserPage {
@@ -207,132 +303,4 @@ export interface FetchAllEventOrderUsersOptions {
   offset?: number
   length?: number
   reportFilters?: EventOrderUserReportFilter[]
-}
-
-// === TARGET TRACKING TYPES ===
-
-/**
- * Combined target and actual data for visualization
- */
-export interface TargetVsActualData {
-  date: string // ISO date string
-  target: number
-  actual: number
-  actualPaid: number
-  actualSponsor: number
-  actualSpeaker: number
-  categories: TicketCategoryBreakdown
-  revenue: number
-  isMilestone?: boolean
-  milestoneLabel?: string
-  isFuture?: boolean // indicates if this is a future projection
-}
-
-/**
- * Different progression curve types for calculating ticket sales targets over time
- */
-export type TargetCurve = 'linear' | 'early_push' | 'late_push' | 's_curve'
-
-/**
- * A milestone represents a specific date with a target percentage
- */
-export interface SalesMilestone {
-  date: string // ISO date string
-  target_percentage: number // 0-100
-  label?: string
-}
-
-/**
- * Configuration for ticket sales target tracking
- */
-export interface TicketTargetConfig {
-  enabled: boolean
-  sales_start_date?: string // ISO date string
-  target_curve?: TargetCurve
-  milestones?: SalesMilestone[]
-}
-
-/**
- * A calculated target point for a specific date
- */
-export interface TargetDataPoint {
-  date: string // ISO date string
-  targetTickets: number
-  targetPercentage: number
-  isMilestone?: boolean
-  milestoneLabel?: string
-  isFuture?: boolean // indicates if this target is in the future
-}
-
-/**
- * Ticket category breakdown for a specific date
- */
-export interface TicketCategoryBreakdown {
-  [category: string]: number
-}
-
-/**
- * Actual sales data point for a specific date
- */
-export interface SalesDataPoint {
-  date: string // ISO date string
-  paidTickets: number
-  sponsorTickets: number
-  speakerTickets: number
-  totalTickets: number
-  revenue: number
-  categories: TicketCategoryBreakdown // e.g., { "Early Bird": 25, "Regular": 40, "Student": 3 }
-  isFuture?: boolean // indicates if this data point is in the future
-}
-
-/**
- * Complete target tracking analysis for a conference
- */
-export interface TicketTargetAnalysis {
-  config: TicketTargetConfig
-  capacity: number
-  currentSales: SalesDataPoint
-  targetProgression: TargetDataPoint[]
-  actualProgression: SalesDataPoint[]
-  combinedData: TargetVsActualData[]
-  performance: {
-    currentTargetPercentage: number
-    actualPercentage: number
-    variance: number // positive = ahead of target, negative = behind
-    isOnTrack: boolean
-    nextMilestone?: SalesMilestone
-    daysToNextMilestone?: number
-  }
-}
-
-/**
- * Options for generating target progression
- */
-export interface TargetGenerationOptions {
-  startDate: Date
-  endDate: Date
-  capacity: number
-  curve: TargetCurve
-  milestones?: SalesMilestone[]
-  granularity?: 'daily' | 'weekly' // default: weekly
-}
-
-/**
- * Extended conference type with ticket target fields
- */
-export interface ConferenceWithTargets extends Conference {
-  ticket_capacity: number
-  ticket_targets?: TicketTargetConfig
-}
-
-/**
- * Strict input type for analyzeTicketSales function with all required fields
- */
-export interface AnalyzeTicketSalesInput {
-  capacity: number
-  salesStartDate: string // ISO date string
-  conferenceStartDate: string // ISO date string - when the conference starts
-  targetCurve: TargetCurve
-  milestones?: SalesMilestone[]
-  tickets: EventTicket[]
 }
