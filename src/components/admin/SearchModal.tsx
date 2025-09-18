@@ -102,9 +102,13 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
               className="mx-auto max-w-xl transform divide-y divide-gray-100 overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/5 transition-all data-closed:scale-95 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in dark:divide-gray-700 dark:bg-gray-900 dark:ring-gray-700"
             >
               <Combobox
-                onChange={(proposal: ProposalExisting | null) => {
-                  if (proposal && proposal._id) {
-                    handleSelect(proposal)
+                onChange={(proposal) => {
+                  if (
+                    proposal &&
+                    typeof proposal === 'object' &&
+                    '_id' in proposal
+                  ) {
+                    handleSelect(proposal as ProposalExisting)
                   }
                 }}
               >
