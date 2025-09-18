@@ -9,6 +9,8 @@ export function convertJsonToSpeaker(json: any): SpeakerInput {
     bio: json.bio as string,
     links: json.links || [],
     flags: json.flags || [],
+    image: json.image as string | undefined,
+    consent: json.consent,
   }
 }
 
