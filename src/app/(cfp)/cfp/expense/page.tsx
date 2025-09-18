@@ -1,18 +1,9 @@
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { TravelSupportPage } from '@/components/travel-support/TravelSupportPage'
 import { Flags } from '@/lib/speaker/types'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
-
-function ErrorDisplay({ message }: { message: string }) {
-  return (
-    <div className="flex h-full items-center justify-center">
-      <p className="text-red-500 dark:text-red-400">{message}</p>
-    </div>
-  )
-}
 
 function NotEligibleDisplay() {
   return (
