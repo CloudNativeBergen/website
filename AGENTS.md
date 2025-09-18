@@ -75,6 +75,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Keep code clean, concise, and maintainable.
 - Avoid overly clever and complicated code whenever possible.
 - Prefer straightforward, readable solutions over complex abstractions.
+- **Comments:** Minimize comments and avoid verbose or unnecessary explanations. Only add comments when absolutely required to explain complex business logic or non-obvious implementation decisions. Self-documenting code is preferred over commented code.
 - Keep chat interactions short and concise.
 - Prefer working code over lengthy examples.
 - Do not provide lengthy summaries.
