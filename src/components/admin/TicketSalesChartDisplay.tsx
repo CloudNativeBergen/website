@@ -16,7 +16,6 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
-// Constants for better maintainability
 const PERFORMANCE_THRESHOLDS = {
   EXCELLENT: 10,
   GOOD: 0,
@@ -33,13 +32,12 @@ const CHART_COLORS = {
 const CHART_CONFIG = {
   ANIMATION_SPEED: 800,
   TARGET_LINE_WIDTH: 6,
-  TARGET_DASH_ARRAY: 10, // Increased dash pattern for clear target line indication
-  TARGET_OPACITY: 0.6, // Slightly increased opacity for better visibility
+  TARGET_DASH_ARRAY: 10,
+  TARGET_OPACITY: 0.6,
   COLUMN_WIDTH: '65%',
   BORDER_RADIUS: 3,
 } as const
 
-// Dynamically import ApexCharts to avoid SSR issues
 const Chart = dynamic(() => import('react-apexcharts'), {
   ssr: false,
   loading: () => (
@@ -49,17 +47,12 @@ const Chart = dynamic(() => import('react-apexcharts'), {
   ),
 })
 
-interface TicketTargetChartProps {
+interface ChartProps {
   analysis: TicketTargetAnalysis
-  conference?: ConferenceWithTargets // Add conference prop for program date annotation
+  conference?: ConferenceWithTargets
   className?: string
 }
 
-/**
- * Formats a date string for display in chart labels
- * @param dateStr - ISO date string
- * @returns Formatted date string (e.g., "Sep 4")
- */
 const formatDate = (dateStr: string): string => {
   const date = new Date(dateStr)
   return date.toLocaleDateString('en-US', {
@@ -68,12 +61,7 @@ const formatDate = (dateStr: string): string => {
   })
 }
 
-/**
- * Gets the appropriate status color classes based on performance variance
- * @param variance - Performance variance percentage
- * @returns Tailwind color classes
- */
-const getStatusColorClasses = (variance: number): string => {
+const getStatusColors = (variance: number): string => {
   if (variance >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
     return 'text-green-600 dark:text-green-400'
   }
@@ -83,11 +71,6 @@ const getStatusColorClasses = (variance: number): string => {
   return 'text-red-600 dark:text-red-400'
 }
 
-/**
- * Gets the appropriate status icon component based on performance variance
- * @param variance - Performance variance percentage
- * @returns React component for the status icon
- */
 const getStatusIcon = (variance: number) => {
   if (variance >= PERFORMANCE_THRESHOLDS.EXCELLENT) {
     return ArrowTrendingUpIcon
@@ -98,14 +81,7 @@ const getStatusIcon = (variance: number) => {
   return ArrowTrendingDownIcon
 }
 
-/**
- * Performance statistics card component
- * @param title - Card title
- * @param value - Main value to display
- * @param subtitle - Subtitle content (string or JSX)
- * @param className - Additional CSS classes
- */
-interface PerformanceCardProps {
+interface CardProps {
   title: string
   value: string | number
   subtitle: string | React.ReactNode
@@ -117,7 +93,7 @@ const PerformanceCard = ({
   value,
   subtitle,
   className = '',
-}: PerformanceCardProps) => (
+}: CardProps) => (
   <div
     className={`rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900 ${className}`}
   >
@@ -131,13 +107,7 @@ const PerformanceCard = ({
   </div>
 )
 
-/**
- * Generates custom tooltip HTML for chart data points
- * @param point - Chart data point
- * @param today - Current date
- * @returns HTML string for tooltip
- */
-function generateTooltipHTML(point: TargetVsActualData, today: Date): string {
+function createTooltip(point: TargetVsActualData, today: Date): string {
   if (!point) return ''
 
   const date = new Date(point.date)
@@ -212,15 +182,11 @@ function generateTooltipHTML(point: TargetVsActualData, today: Date): string {
   `
 }
 
-/**
- * Enhanced ticket target chart component with category breakdowns and improved visualization
- * Optimized for production use with performance improvements and error handling
- */
 export function TicketSalesChartDisplay({
   analysis,
   conference,
   className = '',
-}: TicketTargetChartProps) {
+}: ChartProps) {
   const chartData = useMemo(() => {
     try {
       return processChartData(analysis)
@@ -248,7 +214,6 @@ export function TicketSalesChartDisplay({
       return null
     }
 
-    // Use consistent capacity for Y-axis max to prevent chart scaling changes
     const maxTarget = analysis.capacity
 
     return {
@@ -262,8 +227,8 @@ export function TicketSalesChartDisplay({
         pan: { enabled: false },
         background: 'transparent',
         fontFamily: 'Inter, system-ui, sans-serif',
-        redrawOnParentResize: true, // Force redraw when container resizes
-        redrawOnWindowResize: true, // Force redraw on window resize
+        redrawOnParentResize: true,
+        redrawOnWindowResize: true,
         animations: {
           enabled: true,
           easing: 'easeinout',
@@ -289,7 +254,7 @@ export function TicketSalesChartDisplay({
         width: Array(debugInfo.totalCategories)
           .fill(0)
           .concat([CHART_CONFIG.TARGET_LINE_WIDTH]),
-        curve: 'monotoneCubic' as const, // Changed to monotoneCubic for better smooth interpolation
+        curve: 'monotoneCubic' as const,
         lineCap: 'round' as const,
         dashArray: Array(debugInfo.totalCategories)
           .fill(0)
@@ -334,9 +299,9 @@ export function TicketSalesChartDisplay({
           },
           formatter: (value: number) => Math.round(value).toString(),
         },
-        min: 0, // Ensure Y-axis starts at 0
-        max: maxTarget, // Set max to target for even grid lines and optimal space usage
-        tickAmount: 5, // Limit to 5 horizontal grid lines for cleaner look
+        min: 0,
+        max: maxTarget,
+        tickAmount: 5,
         axisBorder: {
           show: true,
           color: CHART_COLORS.AXIS_BORDER,
@@ -356,7 +321,7 @@ export function TicketSalesChartDisplay({
         },
         custom: ({ dataPointIndex }: { dataPointIndex: number }) => {
           const point = chartData.combinedData[dataPointIndex]
-          return generateTooltipHTML(point, today)
+          return createTooltip(point, today)
         },
       },
       legend: {
@@ -407,18 +372,17 @@ export function TicketSalesChartDisplay({
               offsetY: -5,
             },
           },
-          // Program announcement date annotation
           ...(conference?.program_date
             ? [
                 {
                   x: new Date(conference.program_date).getTime(),
-                  borderColor: '#8B5CF6', // violet-500 - distinctive color for program announcement
+                  borderColor: '#8B5CF6',
                   borderWidth: 1,
                   strokeDashArray: 5,
                   label: {
                     style: {
                       color: '#8B5CF6',
-                      background: '#F3E8FF', // violet-50 background
+                      background: '#F3E8FF',
                       fontSize: '10px',
                       borderRadius: 3,
                     },
@@ -435,13 +399,12 @@ export function TicketSalesChartDisplay({
     }
   }, [chartData, conference?.program_date, analysis.capacity])
 
-  // Memoized performance calculations
   const performanceData = useMemo(() => {
     const { performance, currentSales, capacity } = analysis
     const StatusIcon = getStatusIcon(performance.variance)
 
     return {
-      statusColorClasses: getStatusColorClasses(performance.variance),
+      statusColorClasses: getStatusColors(performance.variance),
       StatusIcon,
       capacityPercentage: (
         (currentSales.totalTickets / capacity) *
@@ -454,7 +417,6 @@ export function TicketSalesChartDisplay({
     }
   }, [analysis])
 
-  // Early return if no chart data
   if (!chartData.series.length || !chartOptions) {
     return (
       <div className={`${className}`}>
@@ -475,7 +437,6 @@ export function TicketSalesChartDisplay({
 
   return (
     <div className={className}>
-      {/* Compact Performance Overview */}
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <PerformanceCard
           title="Current Sales"
@@ -518,7 +479,6 @@ export function TicketSalesChartDisplay({
         />
       </div>
 
-      {/* Chart Container */}
       <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-6 dark:border-gray-800 dark:bg-gray-900">
         <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
