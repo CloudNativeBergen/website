@@ -81,7 +81,7 @@ export default async function CodeOfConduct() {
                   welcoming environment.
                 </p>
 
-                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
+                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray dark:text-gray-400 print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
                   Examples of behavior that contributes to a positive
                   environment:
                 </h3>
@@ -110,7 +110,7 @@ export default async function CodeOfConduct() {
                   <li>Supporting and encouraging fellow community members</li>
                 </ul>
 
-                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
+                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray dark:text-gray-400 print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
                   Examples of unacceptable behavior:
                 </h3>
                 <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
@@ -158,7 +158,7 @@ export default async function CodeOfConduct() {
                   </li>
                 </ul>
 
-                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
+                <h3 className="font-space-grotesk mt-6 text-lg font-semibold text-brand-slate-gray dark:text-gray-400 print:mt-4 print:mb-2 print:text-base print:font-bold print:text-black">
                   Additional prohibited behaviors:
                 </h3>
                 <ul className="mt-4 ml-6 list-disc space-y-2 print:mt-3 print:ml-4 print:space-y-1 print:leading-relaxed">
@@ -189,10 +189,10 @@ export default async function CodeOfConduct() {
                 </p>
               </div>
 
-              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
+              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Reporting
               </h2>
-              <div className="font-inter text-brand-slate-gray print:text-black">
+              <div className="font-inter text-brand-slate-gray dark:text-gray-300 print:text-black">
                 <p className="print:leading-relaxed">
                   We encourage reporting of any incidents that violate this Code
                   of Conduct. Reports can be made in the following ways:
@@ -239,10 +239,10 @@ export default async function CodeOfConduct() {
                 </p>
               </div>
 
-              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
+              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Enforcement
               </h2>
-              <div className="font-inter text-brand-slate-gray print:text-black">
+              <div className="font-inter text-brand-slate-gray dark:text-gray-300 print:text-black">
                 <p className="print:leading-relaxed">
                   Upon review and investigation of a reported incident, the
                   Cloud Native Bergen organizing team will determine what action
@@ -280,10 +280,10 @@ export default async function CodeOfConduct() {
                 </p>
               </div>
 
-              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
+              <h2 className="font-space-grotesk mt-8 text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
                 Acknowledgements
               </h2>
-              <div className="font-inter text-brand-slate-gray print:text-black">
+              <div className="font-inter text-brand-slate-gray dark:text-gray-300 print:text-black">
                 <p className="print:leading-relaxed">
                   This Code of Conduct is adapted from the{' '}
                   <a

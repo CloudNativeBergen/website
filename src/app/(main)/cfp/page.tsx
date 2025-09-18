@@ -45,10 +45,10 @@ export default async function CFP() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:max-w-4xl lg:px-8">
-      <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
+      <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
         Call for Presentations
       </h1>
-      <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
+      <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
         <p>
           Become our next speaker and share your knowledge with the community!
           We are especially interested in local speakers who can provide unique
@@ -73,10 +73,10 @@ export default async function CFP() {
           ['Workshop formats', workshopFormats],
         ].map(([name, value]) => (
           <div key={String(name)}>
-            <dt className="font-jetbrains text-sm text-brand-cloud-blue">
+            <dt className="font-jetbrains text-sm text-brand-cloud-blue dark:text-blue-400">
               {name}
             </dt>
-            <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray">
+            <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray dark:text-gray-300">
               {Array.isArray(value) ? (
                 <ul className="space-y-1">
                   {value.map((item, index) => (
@@ -91,10 +91,10 @@ export default async function CFP() {
         ))}
       </dl>
       {hasWorkshops && (
-        <div className="mt-10 rounded-xl bg-gradient-to-br from-brand-sky-mist/80 to-brand-cloud-blue/10 p-1 shadow-lg">
-          <div className="rounded-lg bg-white px-6 py-6 sm:p-8">
-            <h2 className="font-space-grotesk mb-2 flex items-center gap-2 text-2xl font-semibold tracking-tight text-brand-cloud-blue sm:text-3xl">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-sky-mist text-brand-cloud-blue">
+        <div className="mt-10 rounded-xl bg-gradient-to-br from-brand-sky-mist/80 to-brand-cloud-blue/10 p-1 shadow-lg dark:from-blue-900/50 dark:to-blue-800/20">
+          <div className="rounded-lg bg-white px-6 py-6 sm:p-8 dark:bg-gray-800">
+            <h2 className="font-space-grotesk mb-2 flex items-center gap-2 text-2xl font-semibold tracking-tight text-brand-cloud-blue sm:text-3xl dark:text-blue-400">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-sky-mist text-brand-cloud-blue dark:bg-blue-900/50 dark:text-blue-400">
                 <ClipboardDocumentCheckIcon
                   className="h-5 w-5"
                   aria-hidden="true"
@@ -102,13 +102,13 @@ export default async function CFP() {
               </span>
               Hands-on Workshops
             </h2>
-            <p className="font-inter mt-2 text-lg text-brand-slate-gray">
+            <p className="font-inter mt-2 text-lg text-brand-slate-gray dark:text-gray-300">
               This conference also includes hands-on workshops led by
               experienced instructors. These sessions are designed to provide
               practical, in-depth learning opportunities. If you have a workshop
               idea, we encourage you to submit a proposal.
             </p>
-            <ul className="font-inter mt-4 list-disc pl-6 text-base text-brand-slate-gray">
+            <ul className="font-inter mt-4 list-disc pl-6 text-base text-brand-slate-gray dark:text-gray-300">
               {workshopFormats.map((format, idx) => (
                 <li key={idx}>{format}</li>
               ))}
@@ -117,10 +117,10 @@ export default async function CFP() {
         </div>
       )}
 
-      <h2 className="font-jetbrains mt-10 text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl">
+      <h2 className="font-jetbrains mt-10 text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl dark:text-blue-400">
         Process and Details
       </h2>
-      <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
+      <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
         <p>
           We are looking for content that is relevant to the community and that
           provide valuable insights. We welcome speakers of all levels of
@@ -181,21 +181,25 @@ export default async function CFP() {
             const topicCardStyles = [
               {
                 gradient: 'from-sky-300 to-cyan-400',
+                darkGradient: 'dark:from-sky-600 dark:to-cyan-700',
                 shadow: 'hover:shadow-cyan-300/50',
                 descriptionColor: 'text-sky-100/90',
               },
               {
                 gradient: 'from-teal-300 to-emerald-400',
+                darkGradient: 'dark:from-teal-600 dark:to-emerald-700',
                 shadow: 'hover:shadow-emerald-300/50',
                 descriptionColor: 'text-teal-100/90',
               },
               {
                 gradient: 'from-indigo-300 to-blue-400',
+                darkGradient: 'dark:from-indigo-600 dark:to-blue-700',
                 shadow: 'hover:shadow-blue-300/50',
                 descriptionColor: 'text-indigo-100/90',
               },
               {
                 gradient: 'from-purple-300 to-violet-400',
+                darkGradient: 'dark:from-purple-600 dark:to-violet-700',
                 shadow: 'hover:shadow-violet-300/50',
                 descriptionColor: 'text-purple-100/90',
               },
@@ -206,11 +210,11 @@ export default async function CFP() {
               // Special handling for the default topic to match its previous styling
               const isDefaultTopic = topic._id.startsWith('default-topic-')
               const cardGradient = isDefaultTopic
-                ? 'from-gray-500 to-slate-600'
-                : style.gradient
+                ? 'from-gray-500 to-slate-600 dark:from-gray-700 dark:to-slate-800'
+                : `${style.gradient} ${style.darkGradient}`
               const cardShadow = isDefaultTopic ? '' : style.shadow
               const descColor = isDefaultTopic
-                ? 'text-slate-200/90'
+                ? 'text-slate-200/90 dark:text-slate-300/90'
                 : style.descriptionColor
 
               return (
@@ -218,10 +222,10 @@ export default async function CFP() {
                   key={topic._id}
                   className={`group overflow-hidden rounded-xl border border-transparent bg-gradient-to-br ${cardGradient} p-1 shadow-2xl transition-all duration-300 ease-in-out ${cardShadow} ${rotationClass}`}
                 >
-                  <div className="h-full rounded-lg bg-slate-800/70 px-4 py-5 backdrop-blur-sm sm:p-6">
-                    <h3 className="flex items-center text-lg font-semibold text-white">
+                  <div className="h-full rounded-lg bg-slate-800/70 px-4 py-5 backdrop-blur-sm sm:p-6 dark:bg-slate-900/80">
+                    <h3 className="flex items-center text-lg font-semibold text-white dark:text-gray-100">
                       {isDefaultTopic && (
-                        <span className="mr-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-400/20 text-slate-300">
+                        <span className="mr-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-400/20 text-slate-300 dark:bg-slate-500/30 dark:text-slate-400">
                           <svg
                             className="h-5 w-5"
                             fill="none"
@@ -262,7 +266,7 @@ export default async function CFP() {
         </p>
       </div>
 
-      <h3 className="font-space-grotesk mt-5 mb-5 text-2xl font-medium tracking-tighter text-brand-cloud-blue sm:text-3xl">
+      <h3 className="font-space-grotesk mt-5 mb-5 text-2xl font-medium tracking-tighter text-brand-cloud-blue sm:text-3xl dark:text-blue-400">
         Dates to Remember
       </h3>
 
@@ -280,21 +284,23 @@ export default async function CFP() {
             >
               <date.icon className="h-5 w-5" aria-hidden="true" />
             </div>
-            <div className="flex flex-1 items-center justify-between truncate rounded-r-md border-t border-r border-b border-gray-200 bg-white">
+            <div className="flex flex-1 items-center justify-between truncate rounded-r-md border-t border-r border-b border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800">
               <div className="text-m flex-1 truncate px-4 py-2">
-                <p className="font-medium text-gray-900">{date.name}</p>
-                <p className="text-gray-500">{date.date}</p>
+                <p className="font-medium text-gray-900 dark:text-white">
+                  {date.name}
+                </p>
+                <p className="text-gray-500 dark:text-gray-400">{date.date}</p>
               </div>
             </div>
           </li>
         ))}
       </ul>
 
-      <h2 className="font-jetbrains mt-10 text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl">
+      <h2 className="font-jetbrains mt-10 text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl dark:text-blue-400">
         Diversity and Inclusion
       </h2>
 
-      <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray">
+      <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
         <p>
           Cloud Native Day Bergen is committed to creating a diverse and
           inclusive event that welcomes speakers and attendees of all
@@ -308,7 +314,7 @@ export default async function CFP() {
           appropriate action against anyone who violates our{' '}
           <Link
             href="/conduct"
-            className="text-indigo-500 underline hover:text-indigo-700"
+            className="text-indigo-500 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             code of conduct
           </Link>

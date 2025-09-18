@@ -57,10 +57,10 @@ export default async function PrivacyPolicyPage() {
         <BackgroundImage className="-top-36 -bottom-14 print:hidden" />
         <Container className="relative print:max-w-none print:px-0">
           <div className="mx-auto max-w-4xl print:max-w-none">
-            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl print:mb-4 print:text-3xl print:font-bold print:text-black">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400 print:mb-4 print:text-3xl print:font-bold print:text-black">
               Privacy Policy
             </h1>
-            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray print:mt-4 print:space-y-4 print:text-base print:text-black">
+            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300 print:mt-4 print:space-y-4 print:text-base print:text-black">
               <p className="print:leading-relaxed">
                 We collect your information to organize conferences and manage
                 speaker applications, using privacy-friendly analytics to
@@ -79,8 +79,8 @@ export default async function PrivacyPolicyPage() {
             </div>
           </div>
 
-          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm print:mt-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
-            <div className="prose prose-lg print:prose-base max-w-none print:max-w-none">
+          <div className="mx-auto mt-16 max-w-4xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:shadow-gray-900/20 print:mt-8 print:max-w-none print:rounded-none print:border-0 print:bg-white print:p-0 print:shadow-none">
+            <div className="prose prose-lg dark:prose-invert print:prose-base max-w-none print:max-w-none">
               <div className="space-y-8 print:space-y-6">
                 {/* Section 1: Who We Are */}
                 <section
@@ -89,7 +89,7 @@ export default async function PrivacyPolicyPage() {
                 >
                   <div className="flex items-center space-x-3 print:space-x-0">
                     <BuildingOfficeIcon className="h-6 w-6 text-gray-600 dark:text-gray-400 print:hidden" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue print:mb-3 print:text-xl print:font-bold print:text-black">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mb-3 print:text-xl print:font-bold print:text-black">
                       1. Who We Are
                     </h2>
                   </div>{' '}
@@ -305,7 +305,7 @@ export default async function PrivacyPolicyPage() {
                       3. Why We Collect This Information (Legal Basis)
                     </h2>
                   </div>{' '}
-                  <div className="font-inter text-brand-slate-gray">
+                  <div className="font-inter text-brand-slate-gray dark:text-gray-300">
                     <p className="text-base leading-7">
                       We process your personal data based on the following legal
                       grounds under GDPR:
@@ -388,7 +388,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="how-we-use-information" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <CogIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       4. How We Use Your Information
                     </h2>
                   </div>
@@ -492,7 +492,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="data-sharing" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <UserGroupIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       5. Who We Share Your Data With
                     </h2>
                   </div>
@@ -691,7 +691,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="international-transfers" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <GlobeAltIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       6. International Data Transfers
                     </h2>
                   </div>
@@ -738,7 +738,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="data-retention" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <ClockIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       7. How Long We Keep Your Data
                     </h2>
                   </div>
@@ -907,7 +907,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="gdpr-rights" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <ShieldCheckIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       8. Your Rights Under GDPR
                     </h2>
                   </div>
@@ -1036,7 +1036,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="data-security" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <LockClosedIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       9. Data Security
                     </h2>
                   </div>
@@ -1132,7 +1132,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="cookies-tracking" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <CogIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       10. Cookies and Tracking
                     </h2>
                   </div>
@@ -1183,7 +1183,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="childrens-privacy" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <UserIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       11. Children&rsquo;s Privacy
                     </h2>
                   </div>
@@ -1204,7 +1204,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="policy-changes" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <DocumentTextIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       12. Changes to This Privacy Policy
                     </h2>
                   </div>
@@ -1257,7 +1257,7 @@ export default async function PrivacyPolicyPage() {
                 <section id="contact-complaints" className="space-y-6">
                   <div className="flex items-center space-x-3">
                     <PhoneIcon className="h-6 w-6 text-gray-600 dark:text-gray-400" />
-                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue">
+                    <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400">
                       13. Contact Information and Complaints
                     </h2>
                   </div>

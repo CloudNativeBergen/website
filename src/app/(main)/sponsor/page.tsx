@@ -12,7 +12,7 @@ function PriceFormat({
   price: { amount: number; currency: string }[]
 }) {
   return (
-    <span className="text-3xl font-bold tracking-tight text-gray-900">
+    <span className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
       {price[0].amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')}{' '}
       {price[0].currency}
     </span>
@@ -27,10 +27,10 @@ export default async function Sponsor() {
     console.error('Failed to load conference data:', error)
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
-        <h2 className="mb-4 text-2xl font-bold text-red-600">
+        <h2 className="mb-4 text-2xl font-bold text-red-600 dark:text-red-400">
           Unable to load sponsor information
         </h2>
-        <p className="mb-6 text-gray-700">
+        <p className="mb-6 text-gray-700 dark:text-gray-300">
           We&apos;re experiencing technical difficulties. Please try again
           later.
         </p>
@@ -72,10 +72,10 @@ export default async function Sponsor() {
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl">
+            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
               Become a Sponsor
             </h1>
-            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900">
+            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-300">
               <p>
                 Showcase your brand to {conference.city}&apos;s cloud-native
                 community by sponsoring {conference.title}. We&apos;ve designed
@@ -106,7 +106,7 @@ export default async function Sponsor() {
                     index === standardSponsorTiers.length - 1
                       ? 'lg:rounded-l-none'
                       : '',
-                    'flex flex-col justify-between rounded-3xl bg-white p-8 ring-1 ring-gray-200 xl:p-10',
+                    'flex flex-col justify-between rounded-3xl bg-white p-8 ring-1 ring-gray-200 xl:p-10 dark:bg-gray-800 dark:ring-gray-700',
                   )}
                 >
                   <div>
@@ -114,33 +114,35 @@ export default async function Sponsor() {
                       <h3
                         id={`tier-${index}`}
                         className={clsx(
-                          tier.most_popular ? 'text-blue-600' : 'text-gray-900',
+                          tier.most_popular
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-gray-900 dark:text-white',
                           'text-xl leading-8 font-semibold',
                         )}
                       >
                         {tier.title}
                       </h3>
                       {tier.most_popular ? (
-                        <p className="rounded-full bg-blue-600/10 px-2.5 py-1 text-sm leading-5 font-semibold text-blue-600">
+                        <p className="rounded-full bg-blue-600/10 px-2.5 py-1 text-sm leading-5 font-semibold text-blue-600 dark:bg-blue-400/20 dark:text-blue-400">
                           Most popular
                         </p>
                       ) : null}
                     </div>
-                    <p className="text-md mt-4 leading-6 text-gray-600">
+                    <p className="text-md mt-4 leading-6 text-gray-600 dark:text-gray-400">
                       {tier.tagline}
                     </p>
                     {tier.price && tier.price.length > 0 && (
                       <p className="mt-6 flex items-baseline gap-x-1">
-                        <span className="text-3xl font-bold tracking-tight text-gray-900">
+                        <span className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
                           <PriceFormat price={tier.price} />
                         </span>
-                        <span className="text-sm leading-6 font-semibold text-gray-600"></span>
+                        <span className="text-sm leading-6 font-semibold text-gray-600 dark:text-gray-400"></span>
                       </p>
                     )}
                     {tier.perks && tier.perks.length > 0 && (
                       <ul
                         role="list"
-                        className="text-md mt-8 space-y-3 leading-6 text-gray-600"
+                        className="text-md mt-8 space-y-3 leading-6 text-gray-600 dark:text-gray-400"
                       >
                         {tier.perks.map((perk, perkIndex) => (
                           <li
@@ -167,7 +169,7 @@ export default async function Sponsor() {
                       Become a &apos;{tier.title}&apos; sponsor
                     </Button>
                   ) : (
-                    <p className="mt-8 text-center text-sm leading-6 font-semibold text-gray-600">
+                    <p className="mt-8 text-center text-sm leading-6 font-semibold text-gray-600 dark:text-gray-400">
                       Sold out
                     </p>
                   )}
@@ -179,12 +181,12 @@ export default async function Sponsor() {
           {/* Special Sponsor Types */}
           {specialSponsorTiers.length > 0 && (
             <div className="mt-20">
-              <div className="relative rounded-3xl bg-gray-50 px-6 py-16 sm:px-12 sm:py-20">
+              <div className="relative rounded-3xl bg-gray-50 px-6 py-16 sm:px-12 sm:py-20 dark:bg-gray-800">
                 <div className="mx-auto max-w-2xl text-center">
-                  <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                  <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-white">
                     Special Partnership Opportunities
                   </h2>
-                  <p className="mt-4 text-lg leading-8 text-gray-600">
+                  <p className="mt-4 text-lg leading-8 text-gray-600 dark:text-gray-300">
                     Unique collaboration opportunities for media partners,
                     community organizations, and other special sponsors
                   </p>
@@ -194,18 +196,18 @@ export default async function Sponsor() {
                   {specialSponsorTiers.map((tier) => (
                     <div
                       key={tier._id}
-                      className="flex flex-col rounded-2xl border border-gray-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"
+                      className="flex flex-col rounded-2xl border border-gray-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:shadow-lg"
                     >
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-xl leading-8 font-semibold text-gray-900">
+                          <h3 className="text-xl leading-8 font-semibold text-gray-900 dark:text-white">
                             {tier.title}
                           </h3>
-                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800">
+                          <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                             Special Partner
                           </span>
                         </div>
-                        <p className="mt-4 text-base leading-7 text-gray-600">
+                        <p className="mt-4 text-base leading-7 text-gray-600 dark:text-gray-400">
                           {tier.tagline}
                         </p>
 
@@ -220,7 +222,7 @@ export default async function Sponsor() {
                                   className="h-6 w-5 flex-none text-blue-600"
                                   aria-hidden="true"
                                 />
-                                <span className="text-sm leading-6 text-gray-600">
+                                <span className="text-sm leading-6 text-gray-600 dark:text-gray-400">
                                   {perk.label && perk.description ? (
                                     <>
                                       <span className="font-medium">
