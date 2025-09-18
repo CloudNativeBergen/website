@@ -52,7 +52,6 @@ export default async function TravelExpensePage() {
     return redirect('/api/auth/signin?callbackUrl=/cfp/expense')
   }
 
-  // Check if speaker is eligible for travel funding
   const isEligibleForTravelSupport =
     AppEnvironment.isTestMode ||
     session.speaker.flags?.includes(Flags.requiresTravelFunding)
@@ -78,14 +77,6 @@ export default async function TravelExpensePage() {
         </div>
       </>
     )
-  }
-
-  const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
-
-  if (conferenceError || !conference) {
-    console.error('Error loading conference:', conferenceError)
-    return <ErrorDisplay message="Error loading conference" />
   }
 
   return (
