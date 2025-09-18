@@ -1,6 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getEventDiscounts } from '@/lib/tickets/server'
-import { TIER_TICKET_ALLOCATION } from '@/lib/tickets/calculations'
+import { SPONSOR_TIER_TICKET_ALLOCATION } from '@/lib/tickets/data-processing'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
 import {
@@ -58,7 +58,7 @@ export default async function DiscountCodesAdminPage() {
   const sponsorsWithTierInfo: SponsorWithTierInfo[] =
     conference.sponsors?.map((sponsorData) => {
       const tierTitle = sponsorData.tier?.title || 'Unknown'
-      const ticketEntitlement = TIER_TICKET_ALLOCATION[tierTitle] || 0
+      const ticketEntitlement = SPONSOR_TIER_TICKET_ALLOCATION[tierTitle] || 0
 
       return {
         id: sponsorData.sponsor._id,

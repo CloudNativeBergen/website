@@ -6,8 +6,8 @@ import type {
   TicketTargetAnalysis,
   ConferenceWithTargets,
   TargetVsActualData,
-} from '@/lib/tickets/targets'
-import { processChartData } from '@/lib/tickets/chart-data'
+} from '@/lib/tickets/types'
+import { processChartData } from '@/lib/tickets/data-processing'
 import { formatCurrency } from '@/lib/format'
 import {
   ChartBarIcon,
@@ -216,7 +216,7 @@ function generateTooltipHTML(point: TargetVsActualData, today: Date): string {
  * Enhanced ticket target chart component with category breakdowns and improved visualization
  * Optimized for production use with performance improvements and error handling
  */
-export function TicketTargetChartEnhanced({
+export function TicketSalesChartDisplay({
   analysis,
   conference,
   className = '',

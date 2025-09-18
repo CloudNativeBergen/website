@@ -18,18 +18,17 @@ export type {
 
 // Client-safe utility functions (no API calls, no secrets)
 export {
-  calculateDiscountUsage,
   groupTicketsByOrder,
   isPaymentOverdue,
   getDaysOverdue,
 } from './checkin'
 
+export { calculateDiscountUsage } from './discounts'
+
 // Client-safe calculation utilities
-export * from './calculations'
-export * from './chart-data'
+export * from './data-processing'
 export * from './target-calculations'
-export * from './target-curves'
-export * from './targets'
+export * from './types'
 
 // Note: GraphQL client and API functions are server-only
 // Import those directly from './server' in server-side code

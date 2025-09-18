@@ -1,28 +1,23 @@
-import {
-  fetchEventTickets,
-  fetchAllEventTicketsWithPurchaseDates,
-  groupTicketsByOrder,
-} from '@/lib/tickets/server'
+import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/server'
 import {
   calculateTicketStatistics,
-  TIER_TICKET_ALLOCATION,
+  SPONSOR_TIER_TICKET_ALLOCATION,
   createCategoryStatsForAdmin,
-} from '@/lib/tickets/calculations'
-import { analyzeTicketTargets } from '@/lib/tickets/target-calculations'
+} from '@/lib/tickets/data-processing'
+import { analyzeTicketSales } from '@/lib/tickets/target-calculations'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
 import { TargetSetupGuide } from '@/components/admin/TargetSetupGuide'
-import { TargetTrackingWithPreview } from '@/components/admin/TargetTrackingWithPreview'
+import { TicketSalesChart } from '@/components/admin/TicketSalesChart'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { TicketIcon } from '@heroicons/react/24/outline'
-import type { EventTicket, EventOrderUser } from '@/lib/tickets/server'
+import type { EventTicket } from '@/lib/tickets/server'
 import { formatCurrency } from '@/lib/format'
 import Link from 'next/link'
 
 export default async function AdminTickets() {
   let tickets: EventTicket[] = []
-  let orderUsers: EventOrderUser[] = []
   let error: Error | null = null
 
   // Get conference data to retrieve Checkin.no IDs and sponsors
@@ -55,25 +50,12 @@ export default async function AdminTickets() {
   }
 
   try {
-    // Fetch both tickets and order users for complete data
-    const [ticketsData, orderUsersData] = await Promise.all([
-      fetchEventTickets(
-        conference.checkin_customer_id,
-        conference.checkin_event_id,
-      ),
-      fetchAllEventTicketsWithPurchaseDates(
-        conference.checkin_customer_id,
-        conference.checkin_event_id,
-      ),
-    ])
+    tickets = await fetchEventTickets(
+      conference.checkin_customer_id,
+      conference.checkin_event_id,
+    )
 
-    tickets = ticketsData
-    orderUsers = orderUsersData
-
-    for (const ticket of tickets) {
-      // Process each ticket as needed
-      console.log(JSON.stringify(ticket))
-    }
+    console.log(tickets)
   } catch (err) {
     error = err as Error
   }
@@ -91,12 +73,34 @@ export default async function AdminTickets() {
   // Calculate comprehensive ticket statistics using reusable function
   const stats = await calculateTicketStatistics(tickets, conference)
 
-  // Analyze ticket targets if enabled
-  const targetAnalysis = await analyzeTicketTargets(
-    conference,
-    tickets,
-    orderUsers,
-  )
+  // Analyze ticket targets if enabled and properly configured
+  let ticketSales = null
+
+  // Validate target configuration before analysis
+  const config = conference.ticket_targets
+  if (
+    config?.enabled &&
+    conference.ticket_capacity &&
+    config.sales_start_date &&
+    config.target_curve &&
+    tickets.length > 0
+  ) {
+    try {
+      ticketSales = analyzeTicketSales({
+        capacity: conference.ticket_capacity,
+        salesStartDate: config.sales_start_date,
+        conferenceStartDate: conference.start_date,
+        targetCurve: config.target_curve,
+        milestones: config.milestones,
+        tickets,
+      })
+    } catch (error) {
+      console.log(
+        'Target analysis calculation failed:',
+        (error as Error).message,
+      )
+    }
+  }
 
   // Group tickets by order_id for the orders table
   const orders = groupTicketsByOrder(tickets)
@@ -120,7 +124,7 @@ export default async function AdminTickets() {
   if (conference.sponsors && conference.sponsors.length > 0) {
     conference.sponsors.forEach((sponsorData) => {
       const tierTitle = sponsorData.tier?.title || 'Unknown'
-      const ticketsForTier = TIER_TICKET_ALLOCATION[tierTitle] || 0
+      const ticketsForTier = SPONSOR_TIER_TICKET_ALLOCATION[tierTitle] || 0
 
       if (!sponsorTicketsByTier[tierTitle]) {
         sponsorTicketsByTier[tierTitle] = { sponsors: 0, tickets: 0 }
@@ -149,7 +153,7 @@ export default async function AdminTickets() {
       />
 
       {/* Target Configuration Setup */}
-      {!targetAnalysis && (
+      {!ticketSales && (
         <div className="mt-8">
           <TargetSetupGuide
             conferenceId={conference._id}
@@ -161,10 +165,12 @@ export default async function AdminTickets() {
       )}
 
       {/* Ticket Target Tracking with Live Preview */}
-      {targetAnalysis && (
-        <TargetTrackingWithPreview
-          conference={conference}
-          targetAnalysis={targetAnalysis}
+      {ticketSales && (
+        <TicketSalesChart
+          conference={
+            conference as import('@/lib/tickets/types').ConferenceWithTargets
+          }
+          targetAnalysis={ticketSales}
         />
       )}
 
@@ -310,7 +316,7 @@ export default async function AdminTickets() {
                     .sort(([, a], [, b]) => b.tickets - a.tickets)
                     .map(([tierName, tierData]) => {
                       const ticketsPerSponsor =
-                        TIER_TICKET_ALLOCATION[tierName] || 0
+                        SPONSOR_TIER_TICKET_ALLOCATION[tierName] || 0
 
                       return (
                         <tr

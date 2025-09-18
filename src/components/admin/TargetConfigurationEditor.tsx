@@ -6,7 +6,7 @@ import { CurveSelectionGrid } from './CurvePreview'
 import {
   calculateCurveValue,
   getCurveMetadata,
-} from '@/lib/tickets/target-curves'
+} from '@/lib/tickets/target-calculations'
 import {
   CheckIcon,
   XMarkIcon,
@@ -24,7 +24,7 @@ import type {
   TargetDataPoint,
   SalesDataPoint,
   TargetVsActualData,
-} from '@/lib/tickets/targets'
+} from '@/lib/tickets/types'
 
 interface TargetConfigurationEditorProps {
   conference: ConferenceWithTargets
@@ -95,8 +95,8 @@ function generatePreviewAnalysis(
     baseAnalysis.combinedData.forEach((point, index) => {
       const timeProgress = index / (12 - 1) // Match DEFAULT_TARGET_WEEKS - 1
       const progressionFactor = calculateCurveValue(
-        config.target_curve || 'late_push',
         timeProgress,
+        config.target_curve || 'late_push',
       )
       const targetPercentage = progressionFactor * 100
       const targetTickets = Math.round((targetPercentage / 100) * capacity)
@@ -114,8 +114,8 @@ function generatePreviewAnalysis(
       targetDate.setDate(targetDate.getDate() + week * 7)
 
       const progressionFactor = calculateCurveValue(
-        config.target_curve || 'late_push',
         week / (12 - 1),
+        config.target_curve || 'late_push',
       )
       const targetPercentage = progressionFactor * 100
       const targetTickets = Math.round((targetPercentage / 100) * capacity)

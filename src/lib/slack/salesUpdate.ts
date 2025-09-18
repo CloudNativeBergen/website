@@ -1,5 +1,5 @@
 import { Conference } from '@/lib/conference/types'
-import type { TicketTargetAnalysis } from '@/lib/tickets/targets'
+import type { TicketTargetAnalysis } from '@/lib/tickets/types'
 
 type SlackBlock = {
   type: string

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchEventTickets } from '@/lib/tickets/server'
-import { calculateTicketStatistics } from '@/lib/tickets/calculations'
-import { analyzeTicketTargets } from '@/lib/tickets/target-calculations'
+import { calculateTicketStatistics } from '@/lib/tickets/data-processing'
+import { analyzeTicketSales } from '@/lib/tickets/target-calculations'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 
@@ -64,7 +64,33 @@ export async function POST(request: NextRequest) {
     const stats = await calculateTicketStatistics(tickets, conference)
 
     // Analyze ticket targets vs actual performance
-    const targetAnalysis = await analyzeTicketTargets(conference, tickets)
+    let targetAnalysis = null
+
+    // Validate target configuration before analysis
+    const config = conference.ticket_targets
+    if (
+      config?.enabled &&
+      conference.ticket_capacity &&
+      config.sales_start_date &&
+      config.target_curve &&
+      tickets.length > 0
+    ) {
+      try {
+        targetAnalysis = analyzeTicketSales({
+          capacity: conference.ticket_capacity,
+          salesStartDate: config.sales_start_date,
+          conferenceStartDate: conference.start_date,
+          targetCurve: config.target_curve,
+          milestones: config.milestones,
+          tickets,
+        })
+      } catch (error) {
+        console.log(
+          'Target analysis calculation failed:',
+          (error as Error).message,
+        )
+      }
+    }
 
     // Send update to Slack
     await sendSalesUpdateToSlack({

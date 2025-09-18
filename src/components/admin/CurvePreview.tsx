@@ -1,12 +1,12 @@
 'use client'
 
 import { useMemo } from 'react'
-import type { TargetCurve } from '@/lib/tickets/targets'
+import type { TargetCurve } from '@/lib/tickets/types'
 import {
   generateCurveData,
   generateCurveSVGPath,
   getCurveMetadata,
-} from '@/lib/tickets/target-curves'
+} from '@/lib/tickets/target-calculations'
 
 interface CurvePreviewProps {
   curve: TargetCurve
@@ -31,12 +31,12 @@ export function CurvePreview({
   onClick,
   className = '',
 }: CurvePreviewProps) {
-  const curveData = useMemo(() => generateCurveData(curve, 12, 100), [curve])
+  const curveData = useMemo(() => generateCurveData(curve, 100), [curve])
   const metadata = getCurveMetadata(curve)
   const color = CURVE_COLORS[curve]
 
   const svgPath = useMemo(() => {
-    return generateCurveSVGPath(curve, 80, 40, 12)
+    return generateCurveSVGPath(curve, 80, 40)
   }, [curve])
 
   return (
@@ -98,10 +98,10 @@ export function CurvePreview({
           />
 
           {/* Data points */}
-          {curveData.map((value, index) => {
+          {curveData.map((point, index) => {
             if (index % 3 !== 0) return null // Show every 3rd point
             const x = (index / (curveData.length - 1)) * 80
-            const y = 40 - (value / 100) * 40
+            const y = 40 - (point.y / 1) * 40
 
             return (
               <circle

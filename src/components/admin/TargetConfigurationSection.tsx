@@ -6,7 +6,7 @@ import { TargetConfigurationEditor } from './TargetConfigurationEditor'
 import type {
   ConferenceWithTargets,
   TicketTargetAnalysis,
-} from '@/lib/tickets/targets'
+} from '@/lib/tickets/types'
 import { api } from '@/lib/trpc/client'
 
 interface TargetConfigurationSectionProps {
@@ -20,7 +20,7 @@ interface TargetConfigurationSectionProps {
  * Client component for managing target configuration editing
  * Only shows editor mode - no read-only view
  */
-export function TargetConfigurationSection({
+export function TicketSalesChartConfig({
   conference,
   targetAnalysis,
   onPreviewChange,

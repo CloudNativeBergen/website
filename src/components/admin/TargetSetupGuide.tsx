@@ -15,7 +15,7 @@ import type {
   TicketTargetConfig,
   SalesMilestone,
   TargetCurve,
-} from '@/lib/tickets/targets'
+} from '@/lib/tickets/types'
 
 interface TargetSetupGuideProps {
   conferenceId: string

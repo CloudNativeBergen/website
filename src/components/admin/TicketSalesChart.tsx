@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { TicketTargetChartEnhanced } from './TicketTargetChartEnhanced'
-import { TargetConfigurationSection } from './TargetConfigurationSection'
+import { TicketSalesChartDisplay } from './TicketSalesChartDisplay'
+import { TicketSalesChartConfig } from './TargetConfigurationSection'
 import type {
   ConferenceWithTargets,
   TicketTargetAnalysis,
-} from '@/lib/tickets/targets'
+} from '@/lib/tickets/types'
 
-interface TargetTrackingWithPreviewProps {
+interface TicketSalesChartProps {
   conference: ConferenceWithTargets
   targetAnalysis: TicketTargetAnalysis
 }
@@ -16,10 +16,10 @@ interface TargetTrackingWithPreviewProps {
 /**
  * Client wrapper component that manages chart preview state
  */
-export function TargetTrackingWithPreview({
+export function TicketSalesChart({
   conference,
   targetAnalysis,
-}: TargetTrackingWithPreviewProps) {
+}: TicketSalesChartProps) {
   const [previewAnalysis, setPreviewAnalysis] =
     useState<TicketTargetAnalysis | null>(null)
 
@@ -35,14 +35,14 @@ export function TargetTrackingWithPreview({
     <>
       {/* Ticket Target Tracking Chart */}
       <div className="mt-8">
-        <TicketTargetChartEnhanced
+        <TicketSalesChartDisplay
           analysis={displayAnalysis}
           conference={conference}
         />
       </div>
 
       {/* Target Configuration Section */}
-      <TargetConfigurationSection
+      <TicketSalesChartConfig
         conference={conference}
         targetAnalysis={targetAnalysis}
         onPreviewChange={setPreviewAnalysis}

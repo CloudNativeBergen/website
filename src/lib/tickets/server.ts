@@ -16,23 +16,17 @@ export {
 
 // Server-only API functions (make external API calls with secrets)
 export {
-  getEventDiscounts,
-  createEventDiscount,
-  deleteEventDiscount,
   fetchEventTickets,
-  fetchAllEventTicketsWithPurchaseDates,
-  validateDiscountCode,
   fetchOrderPaymentDetails,
   // Also re-export client-safe functions for convenience
-  calculateDiscountUsage,
   groupTicketsByOrder,
   isPaymentOverdue,
   getDaysOverdue,
 } from './checkin'
 
+export * from './discounts'
+
 // Calculation utilities (safe but commonly used with server data)
-export * from './calculations'
-export * from './chart-data'
+export * from './data-processing'
 export * from './target-calculations'
-export * from './target-curves'
-export * from './targets'
+export * from './types'

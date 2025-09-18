@@ -5,7 +5,7 @@ import type {
   TicketTargetConfig,
   SalesMilestone,
   TargetCurve,
-} from '@/lib/tickets/targets'
+} from '@/lib/tickets/types'
 import { Button } from '@/components/Button'
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 

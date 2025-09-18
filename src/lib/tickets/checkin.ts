@@ -1,4 +1,4 @@
-import { checkinQuery, checkinMutation } from './graphql-client'
+import { checkinQuery } from './graphql-client'
 import type {
   EventTicket,
   CheckinPayOrder,
@@ -6,17 +6,13 @@ import type {
   EventDiscount,
   EventDiscountWithUsage,
   TicketType,
-  CreateEventDiscountInput,
   DiscountUsageStats,
   EventTicketsResponse,
   CheckinPayOrderResponse,
-  EventDiscountsResponse,
-  CreateEventDiscountResponse,
-  DeleteEventDiscountResponse,
-  ValidateDiscountCodeResponse,
-  EventOrderUser,
+  EventOrderUser as EventOrder,
   EventOrderUserPage,
   AllEventOrderUsersResponse,
+  EventTicketWithoutDate,
 } from './types'
 
 // Re-export types for convenience
@@ -28,185 +24,54 @@ export type {
   EventDiscountWithUsage,
   TicketType,
   DiscountUsageStats,
-  EventOrderUser,
+  EventOrder as EventOrderUser,
   EventOrderUserPage,
   AllEventOrderUsersResponse,
-}
-
-export async function getEventDiscounts(
-  eventId: number,
-): Promise<{ discounts: EventDiscount[]; ticketTypes: TicketType[] }> {
-  if (!eventId || eventId <= 0) {
-    throw new Error('Valid event ID is required')
-  }
-
-  try {
-    const query = `
-      query findEventByIdQuery($id: Int!) {
-        findEventById(id: $id) {
-          id
-          tickets {
-            id
-            name
-            description
-          }
-          settings {
-            discounts {
-              trigger
-              triggerValue
-              type
-              value
-              affects
-              affectsValue
-              includeBooking
-              modes
-              tickets
-              ticketsOnly
-              times
-              timesTotal
-              startsAt
-              stopsAt
-            }
-          }
-        }
-      }
-    `
-
-    const variables = { id: eventId }
-    const responseData = await checkinQuery<EventDiscountsResponse>(
-      query,
-      variables,
-    )
-
-    const eventData = responseData.findEventById
-    if (!eventData) {
-      throw new Error(`Event with ID ${eventId} not found`)
-    }
-
-    return {
-      discounts: eventData.settings?.discounts || [],
-      ticketTypes: eventData.tickets || [],
-    }
-  } catch (error) {
-    // Enhanced error context for debugging
-    const errorMessage = error instanceof Error ? error.message : String(error)
-
-    console.error('Failed to fetch event discounts:', {
-      eventId,
-      error: errorMessage,
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    // Check for authorization errors and provide helpful context
-    if (errorMessage.toLowerCase().includes('authorize')) {
-      throw new Error(
-        `Access denied to event ${eventId}. This usually means:\n` +
-          `1. The API credentials don't have access to this event\n` +
-          `2. The event ID ${eventId} is incorrect or doesn't exist\n` +
-          `3. The event belongs to a different organization\n` +
-          `\nPlease verify the checkin_event_id in your conference settings.`,
-      )
-    }
-
-    // Re-throw with additional context for other errors
-    if (error instanceof Error) {
-      throw new Error(
-        `Failed to fetch discounts for event ${eventId}: ${error.message}`,
-      )
-    }
-    throw error
-  }
-}
-
-export async function createEventDiscount(
-  input: CreateEventDiscountInput,
-): Promise<EventDiscount> {
-  const { eventId, discountCode, numberOfTickets, ticketTypes } = input
-
-  // Format ticket types for GraphQL - if empty array, it means all ticket types are eligible
-  const ticketsParam =
-    ticketTypes.length > 0
-      ? `[${ticketTypes.map((id) => id).join(', ')}]` // Remove quotes to pass as integers
-      : '[]'
-
-  const mutation = `
-    mutation CreateEventDiscount {
-      createEventDiscount(
-        eventId: ${eventId}
-        input: {
-          trigger: coupon
-          triggerValue: "${discountCode}"
-          value: "100"
-          affects: total
-          affectsValue: ${numberOfTickets}
-          includeBooking: false
-          modes: default
-          tickets: ${ticketsParam}
-          ticketsOnly: false
-          timesTotal: ${numberOfTickets}
-          type: percent
-        }
-      ) {
-        success
-      }
-    }
-  `
-
-  const responseData =
-    await checkinMutation<CreateEventDiscountResponse>(mutation)
-
-  // Check if the mutation was successful
-  const result = responseData.createEventDiscount
-  if (!result.success) {
-    throw new Error('Failed to create discount code')
-  }
-
-  // Return a properly typed object since the mutation returns success/message, not the discount object
-  return {
-    trigger: 'coupon',
-    type: 'percent',
-    value: '100',
-    triggerValue: discountCode,
-    affects: 'first',
-    includeBooking: false,
-    affectsValue: numberOfTickets.toString(),
-    modes: ['default'],
-    tickets: ticketTypes,
-    ticketsOnly: false,
-    times: 0,
-    timesTotal: 1,
-  }
-}
-
-export async function deleteEventDiscount(
-  eventId: number,
-  discountCode: string,
-): Promise<boolean> {
-  const mutation = `
-    mutation DeleteEventDiscount($eventId: Int!, $id: String!) {
-      deleteEventDiscount(eventId: $eventId, id: $id) {
-        success
-      }
-    }
-  `
-
-  // The ID format appears to be "coupon-{discountCode}"
-  const discountId = `coupon-${discountCode}`
-  const variables = { eventId, id: discountId }
-
-  const responseData = await checkinMutation<DeleteEventDiscountResponse>(
-    mutation,
-    variables,
-  )
-
-  const result = responseData.deleteEventDiscount
-  return result.success
 }
 
 export async function fetchEventTickets(
   customerId: number,
   eventId: number,
 ): Promise<EventTicket[]> {
+  if (!customerId || customerId <= 0) {
+    throw new Error('Valid customer ID is required')
+  }
+  if (!eventId || eventId <= 0) {
+    throw new Error('Valid event ID is required')
+  }
+
+  try {
+    // Fetch both datasets in parallel
+    const [tickets, orderUsers] = await Promise.all([
+      _fetchEventTickets(customerId, eventId),
+      _fetchAllEventOrders(customerId, eventId),
+    ])
+
+    // Create a map of order IDs to purchase dates
+    const orderDateMap = new Map<number, string>()
+    orderUsers.forEach((orderUser) => {
+      orderDateMap.set(orderUser.orderId, orderUser.createdAt)
+    })
+
+    // Enrich tickets with order dates
+    return tickets.map(
+      (ticket): EventTicket => ({
+        ...ticket,
+        order_date: orderDateMap.get(ticket.order_id) || '',
+      }),
+    )
+  } catch (error) {
+    console.error('Failed to fetch event tickets with dates:', error)
+    throw new Error(
+      `Failed to fetch tickets with dates for event ${eventId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
+  }
+}
+
+async function _fetchEventTickets(
+  customerId: number,
+  eventId: number,
+): Promise<EventTicketWithoutDate[]> {
   if (!customerId || customerId <= 0) {
     throw new Error('Valid customer ID is required')
   }
@@ -245,69 +110,6 @@ export async function fetchEventTickets(
   )
 
   return responseData.eventTickets || []
-}
-
-/**
- * Calculate discount usage statistics from event tickets
- * This processes tickets that already include coupon/discount fields
- */
-export function calculateDiscountUsage(
-  tickets: EventTicket[],
-): DiscountUsageStats {
-  return tickets.reduce((stats, ticket) => {
-    const discountCode = ticket.coupon || ticket.discount
-
-    if (discountCode) {
-      const normalizedCode = discountCode.toUpperCase()
-
-      if (!stats[normalizedCode]) {
-        stats[normalizedCode] = {
-          usageCount: 0,
-          ticketIds: [],
-          totalValue: 0,
-        }
-      }
-
-      stats[normalizedCode].usageCount++
-      stats[normalizedCode].ticketIds.push(ticket.id)
-      stats[normalizedCode].totalValue += parseFloat(ticket.sum) || 0
-    }
-
-    return stats
-  }, {} as DiscountUsageStats)
-}
-
-/**
- * Validate a discount code and get usage information
- * This is useful for real-time validation during checkout
- */
-export async function validateDiscountCode(
-  eventId: number,
-  discountCode: string,
-): Promise<{
-  valid: boolean
-  message: string
-  usageCount?: number
-  maxUsage?: number
-}> {
-  const query = `
-    query ValidateEventCoupon($eventId: Int!, $coupon: String!) {
-      eventCouponValidate(id: $eventId, coupon: $coupon) {
-        valid
-        message
-        usageCount
-        maxUsage
-      }
-    }
-  `
-
-  const variables = { eventId, coupon: discountCode }
-  const responseData = await checkinQuery<ValidateDiscountCodeResponse>(
-    query,
-    variables,
-  )
-
-  return responseData.eventCouponValidate
 }
 
 export async function fetchOrderPaymentDetails(
@@ -417,16 +219,7 @@ export function getDaysOverdue(paymentDetails: CheckinPayOrder): number {
   return diffDays
 }
 
-/**
- * Fetch all event order users (tickets) with purchase dates for an event
- * This is the most efficient way to get all tickets/orders with minimal requests
- *
- * @param customerId - The customer/organization ID
- * @param eventId - Optional event ID to filter by specific event
- * @param options - Additional options for pagination and filtering
- * @returns Promise<EventOrderUser[]> - Array of all event order users with purchase dates
- */
-export async function fetchAllEventOrderUsers(
+async function _fetchEventOrders(
   customerId: number,
   eventId?: number,
   options: {
@@ -450,7 +243,7 @@ export async function fetchAllEventOrderUsers(
       }>
     }>
   } = {},
-): Promise<EventOrderUser[]> {
+): Promise<EventOrder[]> {
   if (!customerId || customerId <= 0) {
     throw new Error('Valid customer ID is required')
   }
@@ -531,20 +324,11 @@ export async function fetchAllEventOrderUsers(
   }
 }
 
-/**
- * Fetch all event order users for a specific event with pagination support
- * Automatically handles pagination to fetch all records
- *
- * @param customerId - The customer/organization ID
- * @param eventId - The specific event ID to fetch tickets for
- * @param batchSize - Number of records to fetch per request (default: 1000)
- * @returns Promise<EventOrderUser[]> - Array of all event order users for the event
- */
-export async function fetchAllEventTicketsWithPurchaseDates(
+async function _fetchAllEventOrders(
   customerId: number,
   eventId: number,
   batchSize: number = 1000,
-): Promise<EventOrderUser[]> {
+): Promise<EventOrder[]> {
   if (!customerId || customerId <= 0) {
     throw new Error('Valid customer ID is required')
   }
@@ -553,13 +337,13 @@ export async function fetchAllEventTicketsWithPurchaseDates(
     throw new Error('Valid event ID is required')
   }
 
-  const allTickets: EventOrderUser[] = []
+  const allTickets: EventOrder[] = []
   let offset = 0
   let hasMore = true
 
   while (hasMore) {
     try {
-      const batch = await fetchAllEventOrderUsers(customerId, eventId, {
+      const batch = await _fetchEventOrders(customerId, eventId, {
         offset,
         length: batchSize,
       })
@@ -584,17 +368,10 @@ export async function fetchAllEventTicketsWithPurchaseDates(
   return allTickets
 }
 
-/**
- * Group event order users by their order ID
- * Useful for analyzing orders that contain multiple tickets
- *
- * @param eventOrderUsers - Array of event order users
- * @returns Map<number, EventOrderUser[]> - Map where key is orderId and value is array of tickets in that order
- */
 export function groupEventOrderUsersByOrder(
-  eventOrderUsers: EventOrderUser[],
-): Map<number, EventOrderUser[]> {
-  const orderMap = new Map<number, EventOrderUser[]>()
+  eventOrderUsers: EventOrder[],
+): Map<number, EventOrder[]> {
+  const orderMap = new Map<number, EventOrder[]>()
 
   eventOrderUsers.forEach((user) => {
     if (!orderMap.has(user.orderId)) {
