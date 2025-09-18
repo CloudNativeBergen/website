@@ -26,6 +26,7 @@ interface SpeakerDetailsFormProps {
   showImageUpload?: boolean
   showLinks?: boolean
   className?: string
+  onImageUpload?: () => Promise<void>
 }
 
 export function SpeakerDetailsForm({
@@ -38,6 +39,7 @@ export function SpeakerDetailsForm({
   showImageUpload = true,
   showLinks = true,
   className = '',
+  onImageUpload,
 }: SpeakerDetailsFormProps) {
   const [speakerName, setSpeakerName] = useState(speaker?.name ?? '')
   const [speakerTitle, setSpeakerTitle] = useState(speaker?.title ?? '')
@@ -107,6 +109,10 @@ export function SpeakerDetailsForm({
         setImageError(error.message)
       } else if (image) {
         setSpeakerImage(image.image)
+        // Call the callback if provided (for profile mode to refresh data)
+        if (onImageUpload) {
+          await onImageUpload()
+        }
       }
 
       setIsUploading(false)

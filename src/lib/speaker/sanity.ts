@@ -238,7 +238,18 @@ export async function updateSpeaker(
   let updatedSpeaker: Speaker = {} as Speaker
 
   try {
-    updatedSpeaker = await clientWrite.patch(spekaerId).set(speaker).commit()
+    // Exclude image field from speaker updates as it's handled separately
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { image, ...speakerWithoutImage } = speaker
+    await clientWrite.patch(spekaerId).set(speakerWithoutImage).commit()
+
+    // Fetch the updated speaker with the correct image URL
+    const { speaker: fetchedSpeaker, err: fetchErr } =
+      await getSpeaker(spekaerId)
+    if (fetchErr) {
+      throw fetchErr
+    }
+    updatedSpeaker = fetchedSpeaker
   } catch (error) {
     err = error as Error
   }

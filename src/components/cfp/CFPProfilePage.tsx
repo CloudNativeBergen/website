@@ -173,6 +173,7 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
             showImageUpload={true}
             showLinks={true}
             className="space-y-6"
+            onImageUpload={refreshProfile}
           />
 
           {/* Submit Button */}
