@@ -84,10 +84,21 @@ export interface ChartSeries {
   color: string
 }
 
+export interface ChartAnnotation {
+  id: string
+  type: 'xaxis' | 'yaxis' | 'point'
+  value: number | string
+  label?: string
+  color?: string
+  strokeDashArray?: number
+  position?: 'top' | 'bottom' | 'left' | 'right'
+}
+
 export interface ChartData {
   series: ChartSeries[]
   maxValue: number
   categories: string[]
+  annotations: ChartAnnotation[]
 }
 
 export interface ProcessTicketSalesInput {

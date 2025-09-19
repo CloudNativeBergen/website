@@ -1,10 +1,15 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import type { TicketAnalysisResult } from '@/lib/tickets/types'
+import type {
+  TicketAnalysisResult,
+  SalesTargetConfig,
+} from '@/lib/tickets/types'
 import {
   adaptForChart,
   createTooltipContent,
+  createConfigAnnotations,
+  convertAnnotationsToApexFormat,
 } from '@/lib/tickets/chart-adapter'
 import { formatCurrency } from '@/lib/format'
 import {
@@ -47,6 +52,7 @@ const Chart = dynamic(() => import('react-apexcharts'), {
 
 interface ChartProps {
   analysis: TicketAnalysisResult
+  salesConfig?: SalesTargetConfig
   className?: string
 }
 
@@ -106,9 +112,13 @@ const PerformanceCard = ({
 
 export function TicketSalesChartDisplay({
   analysis,
+  salesConfig,
   className = '',
 }: ChartProps) {
-  const chartData = adaptForChart(analysis)
+  const configAnnotations = salesConfig
+    ? createConfigAnnotations(salesConfig)
+    : []
+  const chartData = adaptForChart(analysis, configAnnotations)
   const { statistics, performance } = analysis
 
   // Calculate display values
@@ -211,25 +221,7 @@ export function TicketSalesChartDisplay({
       strokeDashArray: 2,
       yaxis: { lines: { show: true } },
     },
-    annotations: {
-      xaxis: [
-        {
-          x: new Date().getTime(),
-          borderColor: CHART_COLORS.TODAY_MARKER,
-          borderWidth: 1,
-          strokeDashArray: 3,
-          label: {
-            style: {
-              color: CHART_COLORS.TODAY_MARKER,
-              background: CHART_COLORS.TODAY_BACKGROUND,
-              fontSize: '10px',
-            },
-            text: 'Today',
-            position: 'top',
-          },
-        },
-      ],
-    },
+    annotations: convertAnnotationsToApexFormat(chartData.annotations),
     series: chartData.series,
   }
 

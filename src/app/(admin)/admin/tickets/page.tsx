@@ -256,6 +256,7 @@ export default async function AdminTickets() {
               },
             }
           }
+          salesConfig={conference.ticket_targets || DEFAULT_TARGET_CONFIG}
         />
       </div>
 

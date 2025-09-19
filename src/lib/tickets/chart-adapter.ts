@@ -3,6 +3,8 @@ import type {
   ChartData,
   ChartSeries,
   CombinedDataPoint,
+  ChartAnnotation,
+  SalesTargetConfig,
 } from './types'
 
 const CATEGORY_COLORS = [
@@ -20,17 +22,23 @@ const CATEGORY_COLORS = [
 
 const TARGET_LINE_COLOR = '#FDE047'
 
-export function adaptForChart(analysis: TicketAnalysisResult): ChartData {
+export function adaptForChart(
+  analysis: TicketAnalysisResult,
+  additionalAnnotations: ChartAnnotation[] = [],
+): ChartData {
   const categories = extractCategories(analysis.progression)
   const maxValue = analysis.capacity
 
   const categorySeries = createCategorySeries(categories, analysis.progression)
   const targetSeries = createTargetSeries(analysis.progression)
+  const baseAnnotations = createAnnotations(analysis)
+  const allAnnotations = [...baseAnnotations, ...additionalAnnotations]
 
   return {
     series: [...categorySeries, targetSeries],
     maxValue,
     categories,
+    annotations: allAnnotations,
   }
 }
 
@@ -72,6 +80,125 @@ function createTargetSeries(progression: CombinedDataPoint[]): ChartSeries {
     color: TARGET_LINE_COLOR,
   }
 }
+
+function createAnnotations(analysis: TicketAnalysisResult): ChartAnnotation[] {
+  const annotations: ChartAnnotation[] = []
+
+  // Add "Today" marker
+  annotations.push({
+    id: 'today',
+    type: 'xaxis',
+    value: new Date().getTime(),
+    label: 'Today',
+    color: '#6B7280',
+    strokeDashArray: 3,
+    position: 'top',
+  })
+
+  // Add milestone annotations
+  analysis.progression
+    .filter((point) => point.isMilestone && point.milestoneLabel)
+    .forEach((milestone, index) => {
+      annotations.push({
+        id: `milestone-${index}`,
+        type: 'xaxis',
+        value: new Date(milestone.date).getTime(),
+        label: milestone.milestoneLabel!,
+        color: '#EF4444',
+        strokeDashArray: 5,
+        position: 'top',
+      })
+    })
+
+  return annotations
+}
+
+export function createConfigAnnotations(
+  config: SalesTargetConfig,
+): ChartAnnotation[] {
+  const annotations: ChartAnnotation[] = []
+
+  if (config.sales_start_date) {
+    annotations.push({
+      id: 'sales-start',
+      type: 'xaxis',
+      value: new Date(config.sales_start_date).getTime(),
+      label: 'Sales Started',
+      color: '#10B981',
+      strokeDashArray: 4,
+      position: 'top',
+    })
+  }
+
+  return annotations
+}
+
+function convertAnnotationsToApexFormat(annotations: ChartAnnotation[]) {
+  const xaxisAnnotations = annotations
+    .filter((annotation) => annotation.type === 'xaxis')
+    .map((annotation) => ({
+      x: annotation.value,
+      borderColor: annotation.color || '#6B7280',
+      borderWidth: 1,
+      strokeDashArray: annotation.strokeDashArray || 3,
+      label: {
+        style: {
+          color: annotation.color || '#6B7280',
+          background: '#F9FAFB',
+          fontSize: '10px',
+        },
+        text: annotation.label || '',
+        position: annotation.position || 'top',
+      },
+    }))
+
+  const yaxisAnnotations = annotations
+    .filter((annotation) => annotation.type === 'yaxis')
+    .map((annotation) => ({
+      y: annotation.value,
+      borderColor: annotation.color || '#6B7280',
+      borderWidth: 2,
+      strokeDashArray: annotation.strokeDashArray || 5,
+      label: {
+        style: {
+          color: annotation.color || '#6B7280',
+          background: '#F9FAFB',
+          fontSize: '10px',
+        },
+        text: annotation.label || '',
+        position: annotation.position || 'left',
+      },
+    }))
+
+  const pointAnnotations = annotations
+    .filter((annotation) => annotation.type === 'point')
+    .map((annotation) => ({
+      x: annotation.value,
+      y: 0, // You might want to calculate a proper y value
+      marker: {
+        size: 6,
+        fillColor: annotation.color || '#6B7280',
+        strokeColor: '#FFF',
+        strokeWidth: 2,
+      },
+      label: {
+        text: annotation.label || '',
+        style: {
+          color: annotation.color || '#6B7280',
+          background: '#F9FAFB',
+          fontSize: '10px',
+        },
+      },
+    }))
+
+  return {
+    xaxis: xaxisAnnotations,
+    yaxis: yaxisAnnotations,
+    points: pointAnnotations,
+  }
+}
+
+export { convertAnnotationsToApexFormat }
 
 export function createTooltipContent(
   point: CombinedDataPoint,
