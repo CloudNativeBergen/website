@@ -11,8 +11,10 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import { CheckIcon } from '@heroicons/react/24/solid'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ContactRoleSelect } from '@/components/common/ContactRoleSelect'
+import { api } from '@/lib/trpc/client'
+import { useNotification } from './NotificationProvider'
 
 interface SponsorContactTableProps {
   sponsors: SponsorWithContactInfo[]
@@ -20,14 +22,26 @@ interface SponsorContactTableProps {
 
 const CopyEmailButton = ({ email }: { email: string }) => {
   const [copied, setCopied] = useState(false)
+  const { showNotification } = useNotification()
 
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(email)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      showNotification({
+        type: 'success',
+        title: 'Email copied',
+        message: `${email} copied to clipboard`,
+        duration: 2000,
+      })
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (err) {
-      console.error('Failed to copy email:', err)
+      showNotification({
+        type: 'error',
+        title: 'Copy failed',
+        message: 'Failed to copy email to clipboard',
+      })
     }
   }
 
@@ -46,7 +60,6 @@ const CopyEmailButton = ({ email }: { email: string }) => {
   )
 }
 
-// Create unrolled contact rows for table display
 interface ContactRow {
   sponsor: SponsorWithContactInfo
   contact: ContactPerson
@@ -65,7 +78,11 @@ interface EditingContact {
   }
 }
 
-export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
+export function SponsorContactTable({
+  sponsors: initialSponsors,
+}: SponsorContactTableProps) {
+  const [sponsors, setSponsors] =
+    useState<SponsorWithContactInfo[]>(initialSponsors)
   const [editingRowId, setEditingRowId] = useState<string | null>(null)
   const [editingContact, setEditingContact] = useState<EditingContact>({
     name: '',
@@ -79,6 +96,60 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
     },
   })
   const [savingRowId, setSavingRowId] = useState<string | null>(null)
+  const { showNotification } = useNotification()
+  const utils = api.useUtils()
+
+  // Sync local sponsors state with prop changes
+  useEffect(() => {
+    setSponsors(initialSponsors)
+  }, [initialSponsors])
+
+  const resetEditingState = () => {
+    setEditingRowId(null)
+    setEditingContact({
+      name: '',
+      email: '',
+      phone: '',
+      role: '',
+      billing: {
+        email: '',
+        reference: '',
+        comments: '',
+      },
+    })
+  }
+
+  const updateSponsorMutation = api.sponsor.update.useMutation({
+    onSuccess: async (updatedSponsor) => {
+      // Optimistically update local state
+      setSponsors((prevSponsors) =>
+        prevSponsors.map((sponsor) =>
+          sponsor._id === updatedSponsor._id ? updatedSponsor : sponsor,
+        ),
+      )
+
+      // Also invalidate queries for other components that might use sponsor data
+      await utils.sponsor.list.invalidate()
+
+      showNotification({
+        type: 'success',
+        title: 'Contact updated',
+        message: 'Sponsor contact information has been successfully updated.',
+      })
+      setSavingRowId(null)
+      resetEditingState()
+    },
+    onError: (error: { message: string }) => {
+      showNotification({
+        type: 'error',
+        title: 'Update failed',
+        message:
+          error.message ||
+          'Failed to update contact information. Please try again.',
+      })
+      setSavingRowId(null)
+    },
+  })
 
   const handleStartEdit = (row: ContactRow) => {
     const rowId = `${row.sponsor._id}-${row.contact._key}`
@@ -97,18 +168,7 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
   }
 
   const handleCancelEdit = () => {
-    setEditingRowId(null)
-    setEditingContact({
-      name: '',
-      email: '',
-      phone: '',
-      role: '',
-      billing: {
-        email: '',
-        reference: '',
-        comments: '',
-      },
-    })
+    resetEditingState()
   }
 
   const handleAddContact = (sponsorId: string) => {
@@ -130,12 +190,16 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
   const handleSaveEdit = async (row: ContactRow) => {
     const rowId = `${row.sponsor._id}-${row.contact._key}`
 
-    // Validate billing reference contact
     if (
       editingContact.role === 'Billing Reference' &&
       !editingContact.billing?.email
     ) {
-      alert('Billing email is required for Billing Reference contacts.')
+      showNotification({
+        type: 'warning',
+        title: 'Billing email required',
+        message:
+          'Please provide a billing email for Billing Reference contacts.',
+      })
       return
     }
 
@@ -148,9 +212,8 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
         row.contact._key === 'no-contact' ||
         row.contact._key === 'new-contact-temp'
       ) {
-        // Adding a new contact to a sponsor (either with no contacts or adding additional contact)
         const newContact: ContactPerson = {
-          _key: `contact-${Date.now()}`, // Generate a unique key
+          _key: `contact-${Date.now()}`,
           name: editingContact.name,
           email: editingContact.email,
           phone: editingContact.phone || undefined,
@@ -158,17 +221,14 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
         }
 
         if (row.contact._key === 'no-contact') {
-          // First contact for sponsor with no contacts
           updatedContactPersons = [newContact]
         } else {
-          // Adding additional contact to sponsor with existing contacts
           updatedContactPersons = [
             ...(row.sponsor.contact_persons || []),
             newContact,
           ]
         }
       } else {
-        // Updating an existing contact
         updatedContactPersons =
           row.sponsor.contact_persons?.map((contact) =>
             contact._key === row.contact._key
@@ -183,57 +243,69 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
           ) || []
       }
 
-      // Prepare billing data if this is a billing reference contact
       const isBillingReference = editingContact.role === 'Billing Reference'
-      const billingData =
-        isBillingReference && editingContact.billing
-          ? {
-              email: editingContact.billing.email,
-              reference: editingContact.billing.reference || undefined,
-              comments: editingContact.billing.comments || undefined,
-            }
-          : row.sponsor.billing
+      let billingData = undefined
 
-      // API call to update the sponsor with new contact information
-      const response = await fetch(`/admin/api/sponsor/${row.sponsor._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...row.sponsor,
-          contact_persons: updatedContactPersons,
-          billing: billingData,
-        }),
-      })
+      if (isBillingReference && editingContact.billing?.email?.trim()) {
+        // Only set billing data if this is a billing reference with a valid email
+        billingData = {
+          email: editingContact.billing.email.trim(),
+          reference: editingContact.billing.reference?.trim() || undefined,
+          comments: editingContact.billing.comments?.trim() || undefined,
+        }
+      } else if (
+        !isBillingReference &&
+        row.sponsor.billing &&
+        row.sponsor.billing.email
+      ) {
+        // Keep existing billing data only if this is NOT a billing reference contact
+        // and the sponsor already has valid billing data
+        billingData = {
+          email: row.sponsor.billing.email,
+          reference: row.sponsor.billing.reference || undefined,
+          comments: row.sponsor.billing.comments || undefined,
+        }
+      }
+      // If isBillingReference is true but no valid email, or if we're changing away from billing reference,
+      // billingData remains undefined, which will exclude it from the update
 
-      if (!response.ok) {
-        throw new Error('Failed to update contact')
+      const updateData: {
+        name: string
+        website: string
+        logo: string
+        org_number?: string
+        contact_persons: ContactPerson[]
+        billing?: {
+          email: string
+          reference?: string
+          comments?: string
+        }
+      } = {
+        name: row.sponsor.name,
+        website: row.sponsor.website,
+        logo: row.sponsor.logo,
+        contact_persons: updatedContactPersons,
       }
 
-      // Refresh the page to show updated data
-      window.location.reload()
-    } catch (error) {
-      console.error('Failed to save contact:', error)
-      alert('Failed to save contact. Please try again.')
-    } finally {
-      setSavingRowId(null)
-      setEditingRowId(null)
-      setEditingContact({
-        name: '',
-        email: '',
-        phone: '',
-        role: '',
-        billing: {
-          email: '',
-          reference: '',
-          comments: '',
-        },
+      if (row.sponsor.org_number) {
+        updateData.org_number = row.sponsor.org_number
+      }
+
+      // Only include billing if we have valid billing data
+      if (billingData && billingData.email && billingData.email.trim()) {
+        updateData.billing = billingData
+      }
+
+      await updateSponsorMutation.mutateAsync({
+        id: row.sponsor._id,
+        data: updateData,
       })
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (error) {
+      // Error handling managed by onError callback
     }
   }
 
-  // Create unrolled contact rows
   const contactRows: ContactRow[] = []
 
   sponsors.forEach((sponsor) => {
@@ -246,7 +318,6 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
         })
       })
 
-      // If we're adding a new contact for this sponsor, add a temporary row
       if (
         editingRowId &&
         editingRowId.startsWith(`${sponsor._id}-new-contact-`)
@@ -264,7 +335,6 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
         })
       }
     } else {
-      // Add row for sponsors without contacts to still show them
       contactRows.push({
         sponsor,
         contact: {
@@ -349,7 +419,8 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
                   ? editingRowId
                   : `${row.sponsor._id}-${row.contact._key}`
               const isEditing = editingRowId === rowId
-              const isSaving = savingRowId === rowId
+              const isSaving =
+                savingRowId === rowId || updateSponsorMutation.isPending
 
               return (
                 <tr
@@ -589,10 +660,31 @@ export function SponsorContactTable({ sponsors }: SponsorContactTableProps) {
                             onClick={() => handleSaveEdit(row)}
                             disabled={isSaving}
                             className="inline-flex items-center rounded p-1 text-green-600 hover:bg-green-50 disabled:opacity-50 dark:text-green-400 dark:hover:bg-green-900/20"
-                            title="Save changes"
+                            title={
+                              isSaving ? 'Saving changes...' : 'Save changes'
+                            }
                           >
                             {isSaving ? (
-                              <div className="h-4 w-4 animate-pulse rounded bg-green-600/30 dark:bg-green-400/30" />
+                              <svg
+                                className="h-4 w-4 animate-spin text-green-600 dark:text-green-400"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </svg>
                             ) : (
                               <CheckIconOutline className="h-4 w-4" />
                             )}

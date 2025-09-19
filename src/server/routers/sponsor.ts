@@ -34,7 +34,10 @@ import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { updateSponsorAudience } from '@/lib/sponsor/audience'
 import { clientWrite } from '@/lib/sanity/client'
-import type { SponsorTierExisting } from '@/lib/sponsor/types'
+import type {
+  SponsorTierExisting,
+  SponsorWithContactInfo,
+} from '@/lib/sponsor/types'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -195,7 +198,7 @@ export const sponsorRouter = router({
         // Only validate if we have data (partial update validation)
         if (Object.keys(input.data).length > 0) {
           // For partial updates, we need to merge with existing data for validation
-          const { sponsor: existingSponsor } = await getSponsor(input.id)
+          const { sponsor: existingSponsor } = await getSponsor(input.id, true)
           if (!existingSponsor) {
             throw new TRPCError({
               code: 'NOT_FOUND',
@@ -232,6 +235,31 @@ export const sponsorRouter = router({
               code: 'NOT_FOUND',
               message: 'Sponsor not found',
             })
+          }
+
+          // Update sponsor audience when contact information changes
+          try {
+            const { conference } = await getConferenceForCurrentDomain()
+            if (conference && existingSponsor && sponsor) {
+              const audienceResult = await updateSponsorAudience(
+                conference,
+                existingSponsor as SponsorWithContactInfo,
+                sponsor,
+              )
+
+              if (!audienceResult.success) {
+                console.warn(
+                  `Failed to update sponsor audience for updated sponsor ${sponsor.name}:`,
+                  audienceResult.error,
+                )
+              }
+            }
+          } catch (audienceError) {
+            // Don't fail the sponsor update if audience sync fails
+            console.warn(
+              'Failed to sync sponsor audience, but sponsor was updated:',
+              audienceError,
+            )
           }
 
           return sponsor
