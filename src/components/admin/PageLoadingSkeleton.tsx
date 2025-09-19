@@ -4,6 +4,10 @@
  */
 
 import { SkeletonCard, SkeletonTable, SkeletonGrid } from './LoadingSkeleton'
+import { TicketPageLoadingSkeleton } from './TicketPageLoadingSkeleton'
+
+// Re-export ticket page loading for convenience
+export { TicketPageLoadingSkeleton }
 
 /**
  * Generic admin page loading layout

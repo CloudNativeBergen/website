@@ -3,32 +3,26 @@ import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput, EventTicket } from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import type { Conference } from '@/lib/conference/types'
-import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
+import {
+  ErrorDisplay,
+  AdminPageHeader,
+  TicketAnalysisClient,
+} from '@/components/admin'
 import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
-import { TicketSalesChartDisplay } from '@/components/admin/TicketSalesChartDisplay'
-import { TargetConfigEditor } from '@/components/admin/TargetConfigEditor'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
 import { TicketIcon } from '@heroicons/react/24/outline'
 
 import { formatCurrency } from '@/lib/format'
+import {
+  SPONSOR_TIER_TICKET_ALLOCATION,
+  DEFAULT_TARGET_CONFIG,
+  DEFAULT_CAPACITY,
+} from '@/lib/tickets/config'
+import {
+  calculateCategoryStats,
+  calculateSponsorTickets,
+} from '@/lib/tickets/utils'
 import Link from 'next/link'
-
-const SPONSOR_TIER_TICKET_ALLOCATION: Record<string, number> = {
-  Pod: 2,
-  Service: 3,
-  Ingress: 5,
-}
-
-const DEFAULT_TARGET_CONFIG = {
-  enabled: true,
-  sales_start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split('T')[0],
-  target_curve: 'late_push' as const,
-  milestones: [],
-}
-
-const DEFAULT_CAPACITY = 250
 
 async function getTicketData(conference: Conference) {
   if (!conference.checkin_customer_id || !conference.checkin_event_id) {
@@ -79,65 +73,6 @@ async function processTicketAnalysis(
   }
 }
 
-function calculateCategoryStats(
-  tickets: EventTicket[],
-  totalPaidTickets: number,
-) {
-  const categoryBreakdown: Record<string, number> = {}
-
-  tickets.forEach((ticket) => {
-    categoryBreakdown[ticket.category] =
-      (categoryBreakdown[ticket.category] || 0) + 1
-  })
-
-  return Object.entries(categoryBreakdown)
-    .map(([category, count]) => {
-      const categoryTickets = tickets.filter((t) => t.category === category)
-      const categoryOrders = new Set(categoryTickets.map((t) => t.order_id))
-      const revenue = categoryTickets.reduce(
-        (sum, ticket) =>
-          sum +
-          parseFloat(ticket.sum) /
-            categoryTickets.filter((t) => t.order_id === ticket.order_id)
-              .length,
-        0,
-      )
-
-      return {
-        category,
-        count,
-        orders: categoryOrders.size,
-        revenue,
-        percentage: (count / totalPaidTickets) * 100,
-      }
-    })
-    .sort((a, b) => b.count - a.count)
-}
-
-function calculateSponsorTickets(conference: {
-  sponsors?: Array<{ tier?: { title?: string } }>
-}) {
-  const sponsorTicketsByTier: Record<
-    string,
-    { sponsors: number; tickets: number }
-  > = {}
-
-  if (!conference.sponsors?.length) return sponsorTicketsByTier
-
-  conference.sponsors.forEach((sponsorData) => {
-    const tierTitle = sponsorData.tier?.title || 'Unknown'
-    const ticketsForTier = SPONSOR_TIER_TICKET_ALLOCATION[tierTitle] || 0
-
-    if (!sponsorTicketsByTier[tierTitle]) {
-      sponsorTicketsByTier[tierTitle] = { sponsors: 0, tickets: 0 }
-    }
-    sponsorTicketsByTier[tierTitle].sponsors += 1
-    sponsorTicketsByTier[tierTitle].tickets += ticketsForTier
-  })
-
-  return sponsorTicketsByTier
-}
-
 export default async function AdminTickets() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
@@ -167,14 +102,20 @@ export default async function AdminTickets() {
     )
   }
 
-  let tickets: EventTicket[] = []
+  let allTickets: EventTicket[] = []
   let error: string | null = null
 
   try {
-    tickets = await getTicketData(conference)
+    allTickets = await getTicketData(conference)
   } catch (err) {
     error = (err as Error).message
   }
+
+  // Separate paid and free tickets
+  const paidTickets = allTickets.filter((ticket) => parseFloat(ticket.sum) > 0)
+  const freeTickets = allTickets.filter(
+    (ticket) => parseFloat(ticket.sum) === 0,
+  )
 
   if (error) {
     return (
@@ -186,25 +127,32 @@ export default async function AdminTickets() {
     )
   }
 
-  const analysis = await processTicketAnalysis(tickets, conference)
-  const orders = groupTicketsByOrder(tickets)
+  // Process analysis for both paid-only and all tickets
+  const paidAnalysis = await processTicketAnalysis(paidTickets, conference)
+  const allTicketsAnalysis = await processTicketAnalysis(allTickets, conference)
 
-  const statistics = analysis?.statistics || {
-    totalPaidTickets: tickets.length,
-    totalRevenue: tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
-    totalOrders: new Set(tickets.map((t) => t.order_id)).size,
+  // Orders table always shows all tickets (both paid and free)
+  const orders = groupTicketsByOrder(allTickets)
+
+  const statistics = paidAnalysis?.statistics || {
+    totalPaidTickets: paidTickets.length,
+    totalRevenue: paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
+    totalOrders: new Set(paidTickets.map((t) => t.order_id)).size,
     averageTicketPrice: 0,
     categoryBreakdown: {},
     sponsorTickets: 0,
     speakerTickets: 0,
-    totalCapacityUsed: tickets.length,
+    totalCapacityUsed: paidTickets.length,
   }
 
   const categoryStats = calculateCategoryStats(
-    tickets,
+    paidTickets,
     statistics.totalPaidTickets,
   )
-  const sponsorTicketsByTier = calculateSponsorTickets(conference)
+  const sponsorTicketsByTier = calculateSponsorTickets(
+    conference,
+    SPONSOR_TIER_TICKET_ALLOCATION,
+  )
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -224,50 +172,24 @@ export default async function AdminTickets() {
         }
       />
 
-      <div className="mt-8">
-        <TicketSalesChartDisplay
-          analysis={
-            analysis || {
-              progression: [],
-              performance: {
-                currentPercentage: 0,
-                targetPercentage: 0,
-                variance: 0,
-                isOnTrack: true,
-                nextMilestone: null,
-              },
-              capacity: conference.ticket_capacity || DEFAULT_CAPACITY,
-              statistics: {
-                totalPaidTickets: tickets.length,
-                totalRevenue: tickets.reduce(
-                  (sum, t) => sum + parseFloat(t.sum),
-                  0,
-                ),
-                totalOrders: new Set(tickets.map((t) => t.order_id)).size,
-                averageTicketPrice:
-                  tickets.length > 0
-                    ? tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
-                      tickets.length
-                    : 0,
-                categoryBreakdown: {},
-                sponsorTickets: 0,
-                speakerTickets: 0,
-                totalCapacityUsed: tickets.length,
-              },
-            }
-          }
-          salesConfig={conference.ticket_targets || DEFAULT_TARGET_CONFIG}
-        />
-      </div>
-
-      <div className="mt-8">
-        <TargetConfigEditor
-          conferenceId={conference._id}
-          currentConfig={conference.ticket_targets || DEFAULT_TARGET_CONFIG}
-          capacity={conference.ticket_capacity || DEFAULT_CAPACITY}
-          currentTicketsSold={tickets.length}
-        />
-      </div>
+      <TicketAnalysisClient
+        ticketData={{
+          allTickets,
+          paidTickets,
+          freeTickets,
+        }}
+        conference={{
+          _id: conference._id,
+          ticket_capacity: conference.ticket_capacity,
+          ticket_targets: conference.ticket_targets,
+        }}
+        analysisData={{
+          paidAnalysis,
+          allTicketsAnalysis,
+        }}
+        defaultTargetConfig={DEFAULT_TARGET_CONFIG}
+        defaultCapacity={DEFAULT_CAPACITY}
+      />
 
       {/* Breakdown by Ticket Type */}
       {categoryStats.length > 0 && (
@@ -476,10 +398,10 @@ export default async function AdminTickets() {
         </div>
       )}
 
-      {/* Orders List */}
+      {/* Orders List - Always shows all tickets (paid and free) */}
       <div className="mt-12">
         <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
-          Orders
+          Orders (All Tickets)
         </h2>
         {orders.length === 0 ? (
           <div className="py-12 text-center">
@@ -498,19 +420,6 @@ export default async function AdminTickets() {
             eventId={conference.checkin_event_id}
           />
         )}
-      </div>
-
-      <div className="mt-8 rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-        <h3 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
-          Configuration
-        </h3>
-        <div className="space-y-1 text-xs text-gray-600 dark:text-gray-400">
-          <div>Tickets: {tickets.length} loaded</div>
-          <div>Capacity: {conference.ticket_capacity || DEFAULT_CAPACITY}</div>
-          <div>
-            Target Config: {conference.ticket_targets ? 'Custom' : 'Default'}
-          </div>
-        </div>
       </div>
     </div>
   )

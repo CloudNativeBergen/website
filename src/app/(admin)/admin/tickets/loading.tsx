@@ -1,5 +1,5 @@
-import { AdminTablePageLoading } from '@/components/admin/PageLoadingSkeleton'
+import { TicketPageLoadingSkeleton } from '@/components/admin'
 
 export default function Loading() {
-  return <AdminTablePageLoading />
+  return <TicketPageLoadingSkeleton />
 }

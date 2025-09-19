@@ -51,6 +51,9 @@ export { SponsorContactActions } from './SponsorContactActions'
 
 // Ticket Management Components
 export { DiscountCodeManager } from './DiscountCodeManager'
+export { TicketAnalysisClient } from './TicketAnalysisClient'
+export { TicketPageLoadingSkeleton } from './TicketPageLoadingSkeleton'
+export { TicketVisibilityToggle } from './TicketVisibilityToggle'
 
 // Featured Content Management Components
 export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'

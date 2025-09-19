@@ -18,6 +18,7 @@ import {
   ArrowTrendingDownIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
+import { TicketVisibilityToggle } from './TicketVisibilityToggle'
 
 const PERFORMANCE_THRESHOLDS = {
   EXCELLENT: 10,
@@ -54,6 +55,11 @@ interface ChartProps {
   analysis: TicketAnalysisResult
   salesConfig?: SalesTargetConfig
   className?: string
+  // Toggle controls
+  includeFreeTickets?: boolean
+  onToggleChange?: (include: boolean) => void
+  paidCount?: number
+  freeCount?: number
 }
 
 const formatDate = (dateStr: string): string => {
@@ -114,6 +120,10 @@ export function TicketSalesChartDisplay({
   analysis,
   salesConfig,
   className = '',
+  includeFreeTickets = false,
+  onToggleChange,
+  paidCount = 0,
+  freeCount = 0,
 }: ChartProps) {
   const configAnnotations = salesConfig
     ? createConfigAnnotations(salesConfig)
@@ -299,6 +309,15 @@ export function TicketSalesChartDisplay({
               </p>
             </div>
           </div>
+
+          {onToggleChange && (
+            <TicketVisibilityToggle
+              includeFreeTickets={includeFreeTickets}
+              onToggle={onToggleChange}
+              paidCount={paidCount}
+              freeCount={freeCount}
+            />
+          )}
         </div>
 
         <div
