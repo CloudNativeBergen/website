@@ -23,12 +23,9 @@ import {
   getEventDiscounts,
   deleteEventDiscount,
   calculateDiscountUsage,
-} from '@/lib/tickets/discounts'
-import {
-  fetchEventTickets,
-  fetchOrderPaymentDetails,
-} from '@/lib/tickets/checkin'
-import type { DiscountUsageStats } from '@/lib/tickets/types'
+} from '@/lib/discounts'
+import { fetchEventTickets, fetchOrderPaymentDetails } from '@/lib/tickets/api'
+import type { DiscountUsageStats } from '@/lib/discounts/types'
 
 /**
  * Update ticket capacity for a conference

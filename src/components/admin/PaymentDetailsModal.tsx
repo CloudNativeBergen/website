@@ -10,7 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 import type { CheckinPayOrder } from '@/lib/tickets/types'
 import { formatCurrency } from '@/lib/format'
-import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/checkin'
+import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/api'
 import { SkeletonModal } from './LoadingSkeleton'
 
 interface PaymentDetailsModalProps {

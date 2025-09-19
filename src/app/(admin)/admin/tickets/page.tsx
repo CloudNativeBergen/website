@@ -1,4 +1,4 @@
-import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/checkin'
+import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/api'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput, EventTicket } from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'

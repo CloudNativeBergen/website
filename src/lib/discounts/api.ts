@@ -1,13 +1,15 @@
-import { checkinQuery, checkinMutation } from './graphql-client'
-import {
+/**
+ * Core discount API functions for interacting with the checkin.no GraphQL API
+ */
+
+import { checkinQuery, checkinMutation } from '@/lib/tickets/graphql-client'
+import type {
   EventDiscount,
   TicketType,
   EventDiscountsResponse,
   CreateEventDiscountInput,
   CreateEventDiscountResponse,
   DeleteEventDiscountResponse,
-  EventTicket,
-  DiscountUsageStats,
   ValidateDiscountCodeResponse,
 } from './types'
 
@@ -179,32 +181,6 @@ export async function deleteEventDiscount(
 
   const result = responseData.deleteEventDiscount
   return result.success
-}
-
-export function calculateDiscountUsage(
-  tickets: EventTicket[],
-): DiscountUsageStats {
-  return tickets.reduce((stats, ticket) => {
-    const discountCode = ticket.coupon || ticket.discount
-
-    if (discountCode) {
-      const normalizedCode = discountCode.toUpperCase()
-
-      if (!stats[normalizedCode]) {
-        stats[normalizedCode] = {
-          usageCount: 0,
-          ticketIds: [],
-          totalValue: 0,
-        }
-      }
-
-      stats[normalizedCode].usageCount++
-      stats[normalizedCode].ticketIds.push(ticket.id)
-      stats[normalizedCode].totalValue += parseFloat(ticket.sum) || 0
-    }
-
-    return stats
-  }, {} as DiscountUsageStats)
 }
 
 export async function validateDiscountCode(

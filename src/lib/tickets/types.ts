@@ -180,31 +180,6 @@ export interface CheckinPayOrder {
   sumVat: string
 }
 
-export interface EventDiscount {
-  id?: string
-  trigger: string
-  type: string
-  value: string
-  triggerValue: string | null
-  affects: string
-  includeBooking: boolean
-  affectsValue: string | null
-  modes: string[]
-  tickets: string[]
-  ticketsOnly: boolean
-  times: number
-  timesTotal: number
-  // Optional fields for date ranges
-  startsAt?: string
-  stopsAt?: string
-}
-
-export interface TicketType {
-  id: string | number
-  name: string
-  description: string | null
-}
-
 export interface GroupedOrder {
   order_id: number
   tickets: EventTicket[]
@@ -215,70 +190,12 @@ export interface GroupedOrder {
   fields: { key: string; value: string }[]
 }
 
-export interface DiscountUsageStats {
-  [discountCode: string]: {
-    usageCount: number
-    ticketIds: number[]
-    totalValue: number
-  }
-}
-
-export interface EventDiscountWithUsage extends EventDiscount {
-  actualUsage?: {
-    usageCount: number
-    ticketIds: number[]
-    totalValue: number
-  }
-}
-
-export interface CreateEventDiscountInput {
-  eventId: number
-  discountCode: string
-  numberOfTickets: number
-  ticketTypes: string[]
-  discountType?: 'percentage' | 'fixed'
-  discountValue?: number
-  startsAt?: string
-  stopsAt?: string
-}
-
 export interface EventTicketsResponse {
   eventTickets: EventTicket[]
 }
 
 export interface CheckinPayOrderResponse {
   findCheckinPayOrderByID: CheckinPayOrder
-}
-
-export interface EventDiscountsResponse {
-  findEventById: {
-    id: number
-    tickets: TicketType[]
-    settings: {
-      discounts: EventDiscount[]
-    }
-  }
-}
-
-export interface CreateEventDiscountResponse {
-  createEventDiscount: {
-    success: boolean
-  }
-}
-
-export interface DeleteEventDiscountResponse {
-  deleteEventDiscount: {
-    success: boolean
-  }
-}
-
-export interface ValidateDiscountCodeResponse {
-  eventCouponValidate: {
-    valid: boolean
-    message: string
-    usageCount?: number
-    maxUsage?: number
-  }
 }
 
 export interface EventOrderUser {

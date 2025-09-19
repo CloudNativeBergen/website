@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { CheckinPayOrder } from '@/lib/tickets/types'
-import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/checkin'
+import { isPaymentOverdue, getDaysOverdue } from '@/lib/tickets/api'
 import { api } from '@/lib/trpc/client'
 
 export interface PaymentSummary {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchEventTickets } from '@/lib/tickets/checkin'
+import { fetchEventTickets } from '@/lib/tickets/api'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type {
   ProcessTicketSalesInput,
