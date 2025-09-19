@@ -5,7 +5,6 @@
 
 'use client'
 
-import { Switch } from '@headlessui/react'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 
 interface TicketVisibilityToggleProps {
@@ -45,16 +44,20 @@ export function TicketVisibilityToggle({
         )}
         <div className="text-right">
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Current View
+            {includeFreeTickets ? 'All Tickets View' : 'Paid Tickets Only'}
           </div>
           <div className="text-sm font-medium text-gray-900 dark:text-white">
             {currentCount} {includeFreeTickets ? 'total' : 'paid'} tickets
           </div>
-          {includeFreeTickets && freeCount > 0 && (
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              ({paidCount} paid + {freeCount} free)
-            </div>
-          )}
+          <div className="min-h-[1rem] text-xs text-gray-500 dark:text-gray-400">
+            {includeFreeTickets && freeCount > 0 ? (
+              <>
+                ({paidCount} paid + {freeCount} free)
+              </>
+            ) : (
+              <>&nbsp;</>
+            )}
+          </div>
         </div>
       </div>
 
@@ -65,26 +68,19 @@ export function TicketVisibilityToggle({
         >
           Include free tickets in analysis
         </label>
-        <Switch
-          id={toggleId}
-          checked={includeFreeTickets}
-          onChange={onToggle}
-          className={`${
-            includeFreeTickets
-              ? 'bg-blue-600 dark:bg-blue-500'
-              : 'bg-gray-200 dark:bg-gray-700'
-          } relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-gray-900`}
-          aria-describedby={`${toggleId}-description`}
-        >
-          <span className="sr-only">
-            {includeFreeTickets ? 'Hide' : 'Show'} free tickets
-          </span>
-          <span
-            className={`${
-              includeFreeTickets ? 'translate-x-5' : 'translate-x-1'
-            } inline-block h-3 w-3 transform rounded-full bg-white transition-transform`}
+        <div className="group relative inline-flex w-11 shrink-0 rounded-full bg-gray-200 p-0.5 inset-ring inset-ring-gray-300 outline-offset-2 outline-indigo-500 transition-colors duration-200 ease-in-out has-checked:bg-indigo-500 has-focus-visible:outline-2 dark:bg-gray-700 dark:inset-ring-gray-600 dark:has-checked:bg-indigo-400">
+          <span className="size-5 rounded-full bg-white shadow-xs ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out group-has-checked:translate-x-5 dark:bg-gray-100 dark:ring-gray-800/20" />
+          <input
+            id={toggleId}
+            name="include-free-tickets"
+            type="checkbox"
+            checked={includeFreeTickets}
+            onChange={(e) => onToggle(e.target.checked)}
+            aria-label="Include free tickets in analysis"
+            aria-describedby={`${toggleId}-description`}
+            className="absolute inset-0 appearance-none focus:outline-hidden"
           />
-        </Switch>
+        </div>
         <p id={`${toggleId}-description`} className="sr-only">
           Toggle to {includeFreeTickets ? 'exclude' : 'include'} speaker tickets
           and other complimentary tickets in charts and statistics
