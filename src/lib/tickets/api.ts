@@ -169,10 +169,11 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
     if (!ordersMap.has(orderId)) {
       ordersMap.set(orderId, {
         order_id: orderId,
+        order_date: ticket.order_date,
         tickets: [],
         totalTickets: 0,
-        totalAmount: parseFloat(ticket.sum) || 0, // sum is the total amount for the order
-        amountLeft: parseFloat(ticket.sum_left) || 0, // sum_left is the outstanding amount for the order
+        totalAmount: parseFloat(ticket.sum) || 0,
+        amountLeft: parseFloat(ticket.sum_left) || 0,
         categories: [],
         fields: ticket.fields,
       })
@@ -182,7 +183,6 @@ export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
     order.totalTickets = order.totalTickets + 1
     order.tickets.push(ticket)
 
-    // Add unique categories
     if (!order.categories.includes(ticket.category)) {
       order.categories.push(ticket.category)
     }

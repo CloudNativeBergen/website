@@ -160,37 +160,6 @@ export async function fetchOrderPaymentDetails(
   return responseData.findCheckinPayOrderByID
 }
 
-export function groupTicketsByOrder(tickets: EventTicket[]): GroupedOrder[] {
-  const ordersMap = new Map<number, GroupedOrder>()
-
-  tickets.forEach((ticket) => {
-    const orderId = ticket.order_id
-
-    if (!ordersMap.has(orderId)) {
-      ordersMap.set(orderId, {
-        order_id: orderId,
-        tickets: [],
-        totalTickets: 0,
-        totalAmount: parseFloat(ticket.sum) || 0, // sum is the total amount for the order
-        amountLeft: parseFloat(ticket.sum_left) || 0, // sum_left is the outstanding amount for the order
-        categories: [],
-        fields: ticket.fields,
-      })
-    }
-
-    const order = ordersMap.get(orderId)!
-    order.totalTickets = order.totalTickets + 1
-    order.tickets.push(ticket)
-
-    // Add unique categories
-    if (!order.categories.includes(ticket.category)) {
-      order.categories.push(ticket.category)
-    }
-  })
-
-  return Array.from(ordersMap.values())
-}
-
 export function isPaymentOverdue(paymentDetails: CheckinPayOrder): boolean {
   if (paymentDetails.paid) return false
 

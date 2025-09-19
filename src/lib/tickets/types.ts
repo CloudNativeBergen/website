@@ -119,8 +119,8 @@ export interface EventTicketWithoutDate {
   order_id: number
   category: string
   customer_name: string | null
-  sum: string // price of the order without vat, not the ticket
-  sum_left: string // outstanding amount
+  sum: string
+  sum_left: string
   coupon?: string
   discount?: string
   fields: { key: string; value: string }[]
@@ -182,6 +182,7 @@ export interface CheckinPayOrder {
 
 export interface GroupedOrder {
   order_id: number
+  order_date: string
   tickets: EventTicket[]
   totalTickets: number
   totalAmount: number

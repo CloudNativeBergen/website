@@ -54,6 +54,7 @@ export { DiscountCodeManager } from './DiscountCodeManager'
 export { TicketAnalysisClient } from './TicketAnalysisClient'
 export { TicketPageLoadingSkeleton } from './TicketPageLoadingSkeleton'
 export { TicketVisibilityToggle } from './TicketVisibilityToggle'
+export { OrdersTableWithSearch } from './OrdersTableWithSearch'
 
 // Featured Content Management Components
 export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'

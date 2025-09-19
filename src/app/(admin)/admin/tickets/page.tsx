@@ -1,4 +1,4 @@
-import { fetchEventTickets, groupTicketsByOrder } from '@/lib/tickets/api'
+import { fetchEventTickets } from '@/lib/tickets/api'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput, EventTicket } from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -8,9 +8,8 @@ import {
   AdminPageHeader,
   TicketAnalysisClient,
 } from '@/components/admin'
-import { ExpandableOrdersTable } from '@/components/admin/ExpandableOrdersTable'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
-import { TicketIcon } from '@heroicons/react/24/outline'
+import { TicketIcon, ShoppingBagIcon } from '@heroicons/react/24/outline'
 
 import { formatCurrency } from '@/lib/format'
 import {
@@ -131,9 +130,6 @@ export default async function AdminTickets() {
   const paidAnalysis = await processTicketAnalysis(paidTickets, conference)
   const allTicketsAnalysis = await processTicketAnalysis(allTickets, conference)
 
-  // Orders table always shows all tickets (both paid and free)
-  const orders = groupTicketsByOrder(allTickets)
-
   const statistics = paidAnalysis?.statistics || {
     totalPaidTickets: paidTickets.length,
     totalRevenue: paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
@@ -163,12 +159,21 @@ export default async function AdminTickets() {
         contextHighlight={conference.title}
         stats={[]}
         actions={
-          <Link
-            href="/admin/tickets/discount"
-            className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-          >
-            Manage Discount Codes
-          </Link>
+          <div className="flex space-x-3">
+            <Link
+              href="/admin/tickets/orders"
+              className="inline-flex items-center rounded-lg bg-gray-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600 dark:bg-gray-500 dark:hover:bg-gray-400"
+            >
+              <ShoppingBagIcon className="mr-2 h-4 w-4" />
+              View Orders
+            </Link>
+            <Link
+              href="/admin/tickets/discount"
+              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            >
+              Manage Discount Codes
+            </Link>
+          </div>
         }
       />
 
@@ -397,30 +402,6 @@ export default async function AdminTickets() {
           </CollapsibleSection>
         </div>
       )}
-
-      {/* Orders List - Always shows all tickets (paid and free) */}
-      <div className="mt-12">
-        <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
-          Orders (All Tickets)
-        </h2>
-        {orders.length === 0 ? (
-          <div className="py-12 text-center">
-            <TicketIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
-            <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-              No orders found
-            </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              No tickets have been sold for this event yet.
-            </p>
-          </div>
-        ) : (
-          <ExpandableOrdersTable
-            orders={orders}
-            customerId={conference.checkin_customer_id}
-            eventId={conference.checkin_event_id}
-          />
-        )}
-      </div>
     </div>
   )
 }
