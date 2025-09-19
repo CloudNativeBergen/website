@@ -9,7 +9,12 @@ import {
   TicketAnalysisClient,
 } from '@/components/admin'
 import { CollapsibleSection } from '@/components/admin/CollapsibleSection'
-import { TicketIcon, ShoppingBagIcon } from '@heroicons/react/24/outline'
+import {
+  TicketIcon,
+  ShoppingBagIcon,
+  HomeIcon,
+  CreditCardIcon,
+} from '@heroicons/react/24/outline'
 
 import { formatCurrency } from '@/lib/format'
 import {
@@ -162,7 +167,7 @@ export default async function AdminTickets() {
           <div className="flex space-x-3">
             <Link
               href="/admin/tickets/orders"
-              className="inline-flex items-center rounded-lg bg-gray-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600 dark:bg-gray-500 dark:hover:bg-gray-400"
+              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
             >
               <ShoppingBagIcon className="mr-2 h-4 w-4" />
               View Orders
@@ -171,7 +176,8 @@ export default async function AdminTickets() {
               href="/admin/tickets/discount"
               className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
             >
-              Manage Discount Codes
+              <CreditCardIcon className="mr-2 h-4 w-4" />
+              Discount Codes
             </Link>
           </div>
         }
@@ -402,6 +408,71 @@ export default async function AdminTickets() {
           </CollapsibleSection>
         </div>
       )}
+
+      {/* Quick Actions */}
+      <div className="mt-12">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          Quick Actions
+        </h2>
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/admin/tickets/orders"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <ShoppingBagIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Order Management
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  View and manage all ticket orders
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/tickets/discount"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <CreditCardIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Discount Codes
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Manage sponsor discount codes
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <HomeIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Back to Dashboard
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Return to the main admin dashboard
+                </p>
+              </div>
+            </div>
+          </Link>
+        </div>
+      </div>
     </div>
   )
 }
