@@ -56,7 +56,6 @@ export function ProposalForm({
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
-  // Initialize co-speakers from existing proposal (exclude current user)
   const [coSpeakers, setCoSpeakers] = useState<Speaker[]>(() => {
     if (initialProposal.speakers && Array.isArray(initialProposal.speakers)) {
       return initialProposal.speakers.filter(
@@ -70,7 +69,6 @@ export function ProposalForm({
     return []
   })
 
-  // State for co-speaker invitations
   const [coSpeakerInvitations, setCoSpeakerInvitations] = useState<
     CoSpeakerInvitationMinimal[]
   >(
@@ -82,7 +80,6 @@ export function ProposalForm({
   const buttonPrimary = proposalId ? 'Update' : 'Submit'
   const buttonPrimaryLoading = proposalId ? 'Updating...' : 'Submitting...'
 
-  // Handlers for co-speaker invitations
   const handleInvitationSent = (invitation: CoSpeakerInvitationMinimal) => {
     setCoSpeakerInvitations((prev) => [...prev, invitation])
   }
@@ -116,7 +113,6 @@ export function ProposalForm({
     event.preventDefault()
     setIsSubmitting(true)
 
-    // Validate required GDPR consent
     if (!speaker.consent?.dataProcessing?.granted) {
       setProposalSubmitError({
         type: 'Validation Error',
@@ -152,7 +148,6 @@ export function ProposalForm({
       return
     }
 
-    // Create the proposal with speakers array (current user first, then co-speakers)
     const allSpeakers = [currentUserSpeaker, ...coSpeakers]
     const proposalWithSpeakers = {
       ...proposal,

@@ -47,7 +47,6 @@ export function TicketAnalysisClient({
   const { allTickets, paidTickets, freeTickets } = ticketData
   const { paidAnalysis, allTicketsAnalysis } = analysisData
 
-  // Memoize current analysis and tickets to avoid recalculation
   const currentData = useMemo(() => {
     const analysis = includeFreeTickets ? allTicketsAnalysis : paidAnalysis
     const tickets = includeFreeTickets ? allTickets : paidTickets

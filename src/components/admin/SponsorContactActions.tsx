@@ -31,14 +31,10 @@ export function SponsorContactActions({
   const exportSponsorContacts = async () => {
     setIsExporting(true)
     try {
-      // This would typically call an API endpoint to generate the export
-      // For now, we'll just simulate it
       console.log('Exporting sponsor contacts...')
 
-      // Simulate export delay
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // In a real implementation, this would trigger a download
       alert('Export functionality would be implemented here')
     } catch (error) {
       console.error('Export failed:', error)

@@ -68,7 +68,6 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       const portableTextBlocks = convertStringToPortableTextBlocks(greeting)
       setInitialMessage(portableTextBlocks)
 
-      // Set default ticket URL
       const defaultTicketUrl = `https://${conference.domains[0]}/tickets`
       setTicketUrl(defaultTicketUrl)
       setAdditionalFields({ ticketUrl: defaultTicketUrl })
@@ -85,7 +84,6 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
   const handleAdditionalFieldsChange = (
     fields: Record<string, string | number | boolean>,
   ) => {
-    // Only restore ticket URL from storage if user hasn't manually edited it
     if (
       fields.ticketUrl &&
       typeof fields.ticketUrl === 'string' &&
@@ -102,11 +100,10 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
     setAdditionalFields((prev) => ({ ...prev, ticketUrl: newUrl }))
   }
 
-  // Template processor for sponsor-specific variables
   const processTemplates = (text: string): string => {
     return text
       .replace(/\{\{\{SPONSOR_NAME\}\}\}/g, sponsor.name)
-      .replace(/\{\{\{SPONSOR_NAME\|([^}]+)\}\}\}/g, sponsor.name) // Handle fallback syntax
+      .replace(/\{\{\{SPONSOR_NAME\|([^}]+)\}\}\}/g, sponsor.name)
       .replace(/\{\{\{SPONSOR_TIER\}\}\}/g, sponsor.tier.title)
       .replace(/\{\{\{SPONSOR_TIER\|([^}]+)\}\}\}/g, sponsor.tier.title)
       .replace(
@@ -127,7 +124,6 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       )
   }
 
-  // Process templates in PortableText blocks
   const processPortableTextTemplates = (
     blocks: PortableTextBlock[],
   ): PortableTextBlock[] => {
@@ -172,7 +168,6 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
       return
     }
 
-    // Process templates in subject and message
     const processedSubject = processTemplates(subject)
     const processedMessage = processPortableTextTemplates(message)
 
@@ -210,7 +205,6 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
 
   const localhostWarning = createLocalhostWarning(domain, 'sponsors')
 
-  // Create preview component
   const createPreview = ({
     subject,
     messageHTML,
@@ -218,11 +212,9 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
     subject: string
     messageHTML: string
   }) => {
-    // Process templates in the preview content
     const processedSubject = processTemplates(subject)
     const processedMessageHTML = processTemplates(messageHTML)
 
-    // Add discount code info to preview
     const discountInfo = `
       <div style="background-color: #E0F2FE; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #CBD5E1;">
         <h3 style="color: #1D4ED8; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">

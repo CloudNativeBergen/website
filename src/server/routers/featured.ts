@@ -1,8 +1,3 @@
-/**
- * tRPC Router for Featured Content Management
- * Complete CRUD operations for featured speakers and talks
- */
-
 import { TRPCError } from '@trpc/server'
 import { revalidatePath } from 'next/cache'
 import { router, adminProcedure } from '../trpc'
@@ -24,7 +19,6 @@ import {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const featuredRouter = router({
-  // Get current featured speakers
   featuredSpeakers: adminProcedure.query(async () => {
     try {
       const { conference, error } = await getConferenceForCurrentDomain()
@@ -59,7 +53,6 @@ export const featuredRouter = router({
     }
   }),
 
-  // Get current featured talks
   featuredTalks: adminProcedure.query(async () => {
     try {
       const { conference, error } = await getConferenceForCurrentDomain()
@@ -94,7 +87,6 @@ export const featuredRouter = router({
     }
   }),
 
-  // Add featured speaker
   addSpeaker: adminProcedure
     .input(FeaturedSpeakerInputSchema)
     .mutation(async ({ input }) => {
@@ -121,7 +113,6 @@ export const featuredRouter = router({
           })
         }
 
-        // Revalidate front page and related pages that might show featured content
         revalidatePath('/')
         revalidatePath('/speakers')
         revalidatePath('/program')
@@ -138,7 +129,6 @@ export const featuredRouter = router({
       }
     }),
 
-  // Remove featured speaker
   removeSpeaker: adminProcedure
     .input(FeaturedSpeakerRemoveSchema)
     .mutation(async ({ input }) => {
@@ -165,7 +155,6 @@ export const featuredRouter = router({
           })
         }
 
-        // Revalidate front page and related pages that might show featured content
         revalidatePath('/')
         revalidatePath('/speakers')
         revalidatePath('/program')
@@ -182,7 +171,6 @@ export const featuredRouter = router({
       }
     }),
 
-  // Add featured talk
   addTalk: adminProcedure
     .input(FeaturedTalkInputSchema)
     .mutation(async ({ input }) => {
@@ -209,7 +197,6 @@ export const featuredRouter = router({
           })
         }
 
-        // Revalidate front page and related pages that might show featured content
         revalidatePath('/')
         revalidatePath('/speakers')
         revalidatePath('/program')
@@ -226,7 +213,6 @@ export const featuredRouter = router({
       }
     }),
 
-  // Remove featured talk
   removeTalk: adminProcedure
     .input(FeaturedTalkRemoveSchema)
     .mutation(async ({ input }) => {
@@ -253,7 +239,6 @@ export const featuredRouter = router({
           })
         }
 
-        // Revalidate front page and related pages that might show featured content
         revalidatePath('/')
         revalidatePath('/speakers')
         revalidatePath('/program')
@@ -270,7 +255,6 @@ export const featuredRouter = router({
       }
     }),
 
-  // Get summary statistics
   summary: adminProcedure.query(async () => {
     try {
       const { conference, error } = await getConferenceForCurrentDomain()

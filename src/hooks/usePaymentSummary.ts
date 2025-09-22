@@ -19,14 +19,13 @@ export function usePaymentSummary(orderIds: number[]) {
   const [error, setError] = useState<string | null>(null)
   const [paymentDetails, setPaymentDetails] = useState<CheckinPayOrder[]>([])
 
-  // Create individual queries for each order ID (tRPC will batch them automatically)
   const paymentQueries = orderIds.map((orderId) =>
     api.tickets.getPaymentDetails.useQuery(
       { orderId },
       {
         enabled: orderId > 0,
         retry: 1,
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 5 * 60 * 1000,
       },
     ),
   )
@@ -43,7 +42,6 @@ export function usePaymentSummary(orderIds: number[]) {
       return
     }
 
-    // Check if all queries are done loading
     const allLoaded = paymentQueries.every((query) => !query.isLoading)
     const hasErrors = paymentQueries.some((query) => query.isError)
 
@@ -56,14 +54,12 @@ export function usePaymentSummary(orderIds: number[]) {
     }
 
     if (allLoaded) {
-      // Extract successful payment details
       const validPaymentDetails = paymentQueries
         .map((query) => query.data?.paymentDetails)
         .filter((detail): detail is CheckinPayOrder => detail !== undefined)
 
       setPaymentDetails(validPaymentDetails)
 
-      // Calculate summary statistics
       const totalOrders = validPaymentDetails.length
       const paidOrders = validPaymentDetails.filter(
         (detail) => detail.paid,

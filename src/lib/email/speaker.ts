@@ -17,7 +17,7 @@ export interface SpeakerEmailRequest {
   speakerId: string
   subject: string
   message: string
-  /** Whether to add the speaker to the conference audience for future broadcasts */
+
   addToAudience?: boolean
 }
 
@@ -33,9 +33,6 @@ export interface SpeakerEmailError {
   status: number
 }
 
-/**
- * Send an email to a specific speaker about their proposal
- */
 export async function sendSpeakerEmail({
   proposalId,
   speakerId,
@@ -47,7 +44,6 @@ export async function sendSpeakerEmail({
   EmailResult<SpeakerEmailResponse>
 > {
   try {
-    // Get the conference details
     const { conference } = await getConferenceForCurrentDomain({})
 
     if (!conference) {
@@ -56,10 +52,9 @@ export async function sendSpeakerEmail({
       }
     }
 
-    // Get the proposal details
     const { proposal, proposalError } = await getProposal({
       id: proposalId,
-      speakerId: '', // For organizer view, we don't need to filter by speaker
+      speakerId: '',
       isOrganizer: true,
       includeReviews: false,
       includePreviousAcceptedTalks: false,
@@ -81,7 +76,6 @@ export async function sendSpeakerEmail({
       }
     }
 
-    // Find the speaker in the proposal
     const speakers = Array.isArray(proposal.speakers)
       ? proposal.speakers.filter(
           (speaker): speaker is Speaker =>
@@ -102,7 +96,6 @@ export async function sendSpeakerEmail({
       }
     }
 
-    // Send the email with rate limiting and retry logic
     const emailResult = await sendFormattedSpeakerEmail({
       speaker,
       proposal,
@@ -116,13 +109,11 @@ export async function sendSpeakerEmail({
       return { error: emailResult.error }
     }
 
-    // Optionally add speaker to conference audience for future communications
     if (addToAudience) {
       try {
         const { audienceId, error: audienceError } =
           await getOrCreateConferenceAudience(conference)
         if (!audienceError && audienceId) {
-          // Create a minimal Speaker object for audience management
           const speakerForAudience: Partial<Speaker> &
             Pick<Speaker, '_id' | 'name' | 'email'> = {
             _id: speaker._id,
@@ -132,7 +123,6 @@ export async function sendSpeakerEmail({
           await addSpeakerToAudience(audienceId, speakerForAudience as Speaker)
         }
       } catch (error) {
-        // Don't fail the email if audience sync fails
         console.warn('Failed to add speaker to audience:', error)
       }
     }
@@ -153,9 +143,6 @@ export async function sendSpeakerEmail({
   }
 }
 
-/**
- * Send a formatted email using the speaker email template
- */
 export async function sendFormattedSpeakerEmail({
   speaker,
   proposal,
@@ -172,10 +159,8 @@ export async function sendFormattedSpeakerEmail({
   senderName: string
 }): Promise<EmailResult<{ emailId: string }>> {
   try {
-    // Create the proposal URL
     const proposalUrl = `${conference.domains[0]}/cfp/admin/proposals/${proposal._id}`
 
-    // Create the email template
     const emailTemplate = SpeakerEmailTemplate({
       speakers: [{ name: speaker.name, email: speaker.email }],
       proposalTitle: proposal.title,
@@ -190,7 +175,6 @@ export async function sendFormattedSpeakerEmail({
       socialLinks: conference.social_links || [],
     })
 
-    // Send the email with retry logic for production reliability
     const emailResult = await retryWithBackoff(async () => {
       const result = await resend.emails.send({
         from: `${conference.organizer} <${conference.cfp_email}>`,
@@ -219,9 +203,6 @@ export async function sendFormattedSpeakerEmail({
   }
 }
 
-/**
- * Validate speaker email request
- */
 export function validateSpeakerEmailRequest(
   request: Partial<SpeakerEmailRequest>,
 ): { isValid: boolean; error?: string } {
@@ -251,14 +232,12 @@ export function validateSpeakerEmailRequest(
   return { isValid: true }
 }
 
-// Multi-speaker email interfaces and functions
-
 export interface MultiSpeakerEmailRequest {
   proposalId: string
   speakerIds: string[]
   subject: string
   message: string
-  /** Whether to add the speakers to the conference audience for future broadcasts */
+
   addToAudience?: boolean
 }
 
@@ -269,9 +248,6 @@ export interface MultiSpeakerEmailResponse {
   proposalTitle: string
 }
 
-/**
- * Send an email to multiple speakers about their proposal
- */
 export async function sendMultiSpeakerEmail({
   proposalId,
   speakerIds,
@@ -283,7 +259,6 @@ export async function sendMultiSpeakerEmail({
   EmailResult<MultiSpeakerEmailResponse>
 > {
   try {
-    // Get the conference details
     const { conference } = await getConferenceForCurrentDomain({})
 
     if (!conference) {
@@ -292,10 +267,9 @@ export async function sendMultiSpeakerEmail({
       }
     }
 
-    // Get the proposal details
     const { proposal, proposalError } = await getProposal({
       id: proposalId,
-      speakerId: '', // For organizer view, we don't need to filter by speaker
+      speakerId: '',
       isOrganizer: true,
       includeReviews: false,
       includePreviousAcceptedTalks: false,
@@ -317,7 +291,6 @@ export async function sendMultiSpeakerEmail({
       }
     }
 
-    // Find the speakers in the proposal
     const allSpeakers = Array.isArray(proposal.speakers)
       ? proposal.speakers.filter(
           (speaker): speaker is Speaker =>
@@ -339,7 +312,6 @@ export async function sendMultiSpeakerEmail({
       }
     }
 
-    // Send the email with rate limiting and retry logic
     const emailResult = await sendFormattedMultiSpeakerEmail({
       speakers: targetSpeakers,
       proposal,
@@ -353,14 +325,12 @@ export async function sendMultiSpeakerEmail({
       return { error: emailResult.error }
     }
 
-    // Optionally add speakers to conference audience for future communications
     if (addToAudience) {
       try {
         const { audienceId, error: audienceError } =
           await getOrCreateConferenceAudience(conference)
         if (!audienceError && audienceId) {
           for (const speaker of targetSpeakers) {
-            // Create a minimal Speaker object for audience management
             const speakerForAudience: Partial<Speaker> &
               Pick<Speaker, '_id' | 'name' | 'email'> = {
               _id: speaker._id,
@@ -374,7 +344,6 @@ export async function sendMultiSpeakerEmail({
           }
         }
       } catch (error) {
-        // Don't fail the email if audience sync fails
         console.warn('Failed to add speakers to audience:', error)
       }
     }
@@ -395,9 +364,6 @@ export async function sendMultiSpeakerEmail({
   }
 }
 
-/**
- * Send a formatted email to multiple speakers using the multi-speaker email template
- */
 export async function sendFormattedMultiSpeakerEmail({
   speakers,
   proposal,
@@ -414,10 +380,8 @@ export async function sendFormattedMultiSpeakerEmail({
   senderName: string
 }): Promise<EmailResult<{ emailId: string }>> {
   try {
-    // Create the proposal URL
     const proposalUrl = `${conference.domains[0]}/cfp/admin/proposals/${proposal._id}`
 
-    // Create the email template
     const emailTemplate = SpeakerEmailTemplate({
       speakers: speakers.map((s) => ({ name: s.name, email: s.email })),
       proposalTitle: proposal.title,
@@ -432,7 +396,6 @@ export async function sendFormattedMultiSpeakerEmail({
       socialLinks: conference.social_links || [],
     })
 
-    // Send the email with retry logic for production reliability
     const emailResult = await retryWithBackoff(async () => {
       const result = await resend.emails.send({
         from: `${conference.organizer} <${conference.cfp_email}>`,
@@ -461,9 +424,6 @@ export async function sendFormattedMultiSpeakerEmail({
   }
 }
 
-/**
- * Validate multi-speaker email request
- */
 export function validateMultiSpeakerEmailRequest(
   request: Partial<MultiSpeakerEmailRequest>,
 ): { isValid: boolean; error?: string } {

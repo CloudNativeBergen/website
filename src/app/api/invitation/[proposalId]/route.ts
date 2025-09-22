@@ -45,7 +45,6 @@ export const POST = auth(
         )
       }
 
-      // Prevent self-invitation (case-insensitive comparison)
       if (inviteeEmail.toLowerCase() === req.auth.user.email!.toLowerCase()) {
         return NextResponse.json(
           { error: 'You cannot invite yourself as a co-speaker' },
@@ -53,7 +52,6 @@ export const POST = auth(
         )
       }
 
-      // Verify the proposal exists and belongs to the current user
       const isTestMode = AppEnvironment.getTestModeFromRequest(req)
       const { proposal, proposalError } = await getProposal({
         id: proposalId as string,
@@ -70,18 +68,16 @@ export const POST = auth(
         )
       }
 
-      // Check speaker limits based on format
       const maxSpeakers = getTotalSpeakerLimit(proposal.format)
       const currentSpeakerCount = proposal.speakers?.length || 0
 
-      // Count pending invitations
       const pendingInvitations = await clientWrite.fetch(
         `count(*[_type == "coSpeakerInvitation" && proposal._ref == $proposalId && status == "pending"])`,
         { proposalId },
       )
 
       const totalPotentialSpeakers =
-        currentSpeakerCount + pendingInvitations + 1 // +1 for this new invitation
+        currentSpeakerCount + pendingInvitations + 1
 
       if (totalPotentialSpeakers > maxSpeakers) {
         return NextResponse.json(
@@ -92,7 +88,6 @@ export const POST = auth(
         )
       }
 
-      // Create the invitation
       const invitation = await createCoSpeakerInvitation({
         invitedByEmail: req.auth.user.email!,
         invitedByName: req.auth.speaker.name,
@@ -110,7 +105,6 @@ export const POST = auth(
         )
       }
 
-      // Send the invitation email (skip in test mode)
       if (!isTestMode) {
         const emailSent = await sendInvitationEmail(invitation)
 
@@ -168,7 +162,6 @@ export const DELETE = auth(
         )
       }
 
-      // Verify the proposal exists and belongs to the current user
       const isTestMode = AppEnvironment.getTestModeFromRequest(req)
       const { proposal, proposalError } = await getProposal({
         id: proposalId as string,
@@ -185,7 +178,6 @@ export const DELETE = auth(
         )
       }
 
-      // Fetch the invitation to verify it belongs to this proposal
       const invitation = await clientWrite.fetch(
         `*[_type == "coSpeakerInvitation" && _id == $invitationId && proposal._ref == $proposalId][0]`,
         { invitationId, proposalId },
@@ -198,7 +190,6 @@ export const DELETE = auth(
         )
       }
 
-      // Only allow canceling pending invitations
       if (invitation.status !== 'pending') {
         return NextResponse.json(
           { error: 'Can only cancel pending invitations' },
@@ -206,7 +197,6 @@ export const DELETE = auth(
         )
       }
 
-      // Update the invitation status to canceled
       await clientWrite
         .patch(invitationId)
         .set({

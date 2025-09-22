@@ -25,10 +25,8 @@ export default async function InvitationResponsePage({
   const session = await auth()
   const params = await searchParams
 
-  // Test mode for development (bypasses auth)
   const isTestMode = AppEnvironment.isDevelopment && params.test === 'true'
 
-  // Require authentication (unless in test mode)
   if (!session?.user?.email && !isTestMode) {
     const callbackUrl = `/invitation/respond?token=${params.token || ''}`
     console.log('Redirecting to sign-in with callback URL:', callbackUrl)
@@ -54,7 +52,6 @@ export default async function InvitationResponsePage({
     )
   }
 
-  // Get invitation by token (optimized single database call)
   const invitation = await getInvitationByToken(token)
 
   if (!invitation) {
@@ -103,8 +100,6 @@ export default async function InvitationResponsePage({
     )
   }
 
-  // Pass data to client component for interactive response
-  // Create a compatible invitation object for the client component
   const clientInvitation = {
     _id: invitation._id,
     status: invitation.status as 'pending' | 'accepted' | 'declined',
@@ -119,7 +114,7 @@ export default async function InvitationResponsePage({
         ? {
             _id: invitation.proposal._id,
             title: invitation.proposal.title || 'Unknown Proposal',
-            format: 'talk' as const, // We'll need to fetch this if needed
+            format: 'talk' as const,
           }
         : {
             _id: 'unknown',

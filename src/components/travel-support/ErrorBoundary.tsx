@@ -26,19 +26,15 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error to monitoring service
     console.error(
       'Travel Support Error Boundary caught an error:',
       error,
       errorInfo,
     )
 
-    // Call custom error handler if provided
     this.props.onError?.(error, errorInfo)
 
-    // In production, you might want to send this to a service like Sentry
     if (process.env.NODE_ENV === 'production') {
-      // Example: Sentry.captureException(error, { extra: errorInfo })
     }
   }
 

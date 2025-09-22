@@ -18,7 +18,6 @@ export function useProposalFilter(proposals: ProposalExisting[]) {
     undefined,
   )
 
-  // Filter proposals based on status
   const filteredProposals = useMemo(() => {
     return proposals.filter((p) => {
       if (!statusFilter) return true
@@ -26,12 +25,10 @@ export function useProposalFilter(proposals: ProposalExisting[]) {
     })
   }, [proposals, statusFilter])
 
-  // Calculate statistics for different statuses
   const filterStats = useMemo<FilterStats>(() => {
     const speakerSet = new Set<string>()
     const stats = proposals.reduce(
       (acc, proposal) => {
-        // Add speakers to the set
         if (proposal.speakers && Array.isArray(proposal.speakers)) {
           proposal.speakers.forEach((speaker) => {
             if (typeof speaker === 'object' && 'name' in speaker) {
@@ -44,7 +41,6 @@ export function useProposalFilter(proposals: ProposalExisting[]) {
           speakerSet.add('Unknown author')
         }
 
-        // Increment status counts
         acc.total++
         if (proposal.status === Status.submitted) acc.submitted++
         if (proposal.status === Status.accepted) acc.accepted++

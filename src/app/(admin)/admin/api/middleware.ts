@@ -3,10 +3,8 @@ import { getAuthSession } from '@/lib/auth'
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function middleware(request: NextRequest) {
-  // Get the session
   const session = await getAuthSession()
 
-  // Check if user is authenticated
   if (!session || !session.user || !session.speaker) {
     return NextResponse.json(
       { message: 'Unauthorized - Authentication required' },
@@ -14,7 +12,6 @@ export async function middleware(request: NextRequest) {
     )
   }
 
-  // Check if user is an organizer
   if (!session.speaker.is_organizer) {
     return NextResponse.json(
       { message: 'Forbidden - Organizer access required' },
@@ -22,7 +19,6 @@ export async function middleware(request: NextRequest) {
     )
   }
 
-  // Allow the request to continue
   return NextResponse.next()
 }
 

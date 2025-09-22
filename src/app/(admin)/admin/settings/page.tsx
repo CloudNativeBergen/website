@@ -18,7 +18,6 @@ import {
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
 
-// Type definitions for array items
 interface NamedItem {
   name?: string
   title?: string
@@ -26,7 +25,6 @@ interface NamedItem {
 
 type ArrayItem = string | NamedItem
 
-// Type guard to check if a string is a valid Format
 function isValidFormat(key: string): key is Format {
   return Object.values(Format).includes(key as Format)
 }
@@ -288,9 +286,7 @@ export default async function AdminSettings() {
       </div>
 
       <div className="mt-8">
-        {/* Settings Grid */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Basic Information */}
           <InfoCard title="Basic Information" icon={InformationCircleIcon}>
             <FieldRow label="Title" value={conference.title} />
             <FieldRow label="Organizer" value={conference.organizer} />
@@ -300,13 +296,11 @@ export default async function AdminSettings() {
             <FieldRow label="Description" value={conference.description} />
           </InfoCard>
 
-          {/* Venue Information */}
           <InfoCard title="Venue Information" icon={MapPinIcon}>
             <FieldRow label="Venue Name" value={conference.venue_name} />
             <FieldRow label="Venue Address" value={conference.venue_address} />
           </InfoCard>
 
-          {/* Dates & Timeline */}
           <InfoCard title="Dates & Timeline" icon={CalendarIcon}>
             <FieldRow
               label="Start Date"
@@ -340,7 +334,6 @@ export default async function AdminSettings() {
             />
           </InfoCard>
 
-          {/* Configuration */}
           <InfoCard title="Configuration" icon={DocumentTextIcon}>
             <FieldRow
               label="Registration Enabled"
@@ -359,7 +352,6 @@ export default async function AdminSettings() {
             />
           </InfoCard>
 
-          {/* Domain Configuration */}
           <InfoCard title="Domain Configuration" icon={GlobeAltIcon}>
             <FieldRow label="Domains" value={conference.domains} type="array" />
             <FieldRow
@@ -369,7 +361,6 @@ export default async function AdminSettings() {
             />
           </InfoCard>
 
-          {/* External Integrations */}
           <InfoCard title="External Integrations" icon={LinkIcon}>
             <FieldRow
               label="Checkin Customer ID"
@@ -381,7 +372,6 @@ export default async function AdminSettings() {
             />
           </InfoCard>
 
-          {/* Content Configuration */}
           <InfoCard title="Content Configuration" icon={TagIcon}>
             <FieldRow
               label="Available Formats"
@@ -400,7 +390,6 @@ export default async function AdminSettings() {
             />
           </InfoCard>
 
-          {/* Team */}
           <InfoCard title="Team" icon={UserGroupIcon}>
             <FieldRow
               label="Organizers"
@@ -409,7 +398,6 @@ export default async function AdminSettings() {
             />
           </InfoCard>
 
-          {/* Sponsorship */}
           {conference.sponsor_tiers && conference.sponsor_tiers.length > 0 && (
             <InfoCard title="Sponsorship Tiers" icon={CurrencyDollarIcon}>
               {conference.sponsor_tiers.map((tier, idx) => (
@@ -446,7 +434,6 @@ export default async function AdminSettings() {
             </InfoCard>
           )}
 
-          {/* Current Sponsors */}
           {conference.sponsors && conference.sponsors.length > 0 && (
             <InfoCard title="Current Sponsors" icon={CurrencyDollarIcon}>
               <FieldRow
@@ -459,7 +446,6 @@ export default async function AdminSettings() {
             </InfoCard>
           )}
 
-          {/* Vanity Metrics */}
           {conference.vanity_metrics &&
             conference.vanity_metrics.length > 0 && (
               <InfoCard title="Vanity Metrics" icon={ChartPieIcon}>

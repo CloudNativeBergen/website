@@ -57,7 +57,7 @@ export function DiscountCodeManager({
     error: discountsError,
   } = api.tickets.getDiscountCodesWithUsage.useQuery(undefined, {
     refetchOnWindowFocus: false,
-    staleTime: 30000, // 30 seconds
+    staleTime: 30000,
   })
 
   useEffect(() => {
@@ -94,7 +94,6 @@ export function DiscountCodeManager({
     [existingDiscounts],
   )
 
-  // Helper function to get existing ticket types for a sponsor's discounts
   const getExistingTicketTypes = useCallback(
     (sponsor: SponsorWithTierInfo): string[] => {
       const sponsorDiscounts = getSponsorDiscounts(sponsor)
@@ -111,18 +110,15 @@ export function DiscountCodeManager({
     [getSponsorDiscounts],
   )
 
-  // Initialize selected ticket types with existing discounts or default to first ticket type
   useEffect(() => {
     if (availableTicketTypes.length > 0) {
       const initialSelections: Record<string, string[]> = {}
 
       sponsors.forEach((sponsor) => {
-        // Check if sponsor already has existing discount codes
         const existingTypes = getExistingTicketTypes(sponsor)
         if (existingTypes.length > 0) {
           initialSelections[sponsor.id] = existingTypes
         } else {
-          // Default: select first ticket type
           initialSelections[sponsor.id] = [String(availableTicketTypes[0].id)]
         }
       })
@@ -136,7 +132,6 @@ export function DiscountCodeManager({
     getExistingTicketTypes,
   ])
 
-  // Helper function to get usage statistics for a sponsor
   const getSponsorUsageStats = (
     sponsor: SponsorWithTierInfo,
   ): { used: number; total: number } => {
@@ -145,7 +140,6 @@ export function DiscountCodeManager({
       return { used: 0, total: sponsor.ticketEntitlement }
     }
 
-    // Sum up usage from all discount codes for this sponsor
     const totalUsed = sponsorDiscounts.reduce((sum, discount) => {
       const usage = discountData?.hasUsageData
         ? discount.actualUsage?.usageCount || 0
@@ -156,7 +150,6 @@ export function DiscountCodeManager({
     return { used: totalUsed, total: sponsor.ticketEntitlement }
   }
 
-  // Helper function to get ticket type display for selected types
   const getSelectedTicketTypesDisplay = (sponsorId: string): string => {
     const selectedTypes = selectedTicketTypes[sponsorId] || []
     if (selectedTypes.length === 0) {
@@ -180,14 +173,12 @@ export function DiscountCodeManager({
     return `${selectedTypes.length} selected`
   }
 
-  // Helper function to get ticket types from existing discount codes
   const getExistingDiscountTicketTypes = (
     sponsor: SponsorWithTierInfo,
   ): string => {
     const sponsorDiscounts = getSponsorDiscounts(sponsor)
     if (sponsorDiscounts.length === 0) return ''
 
-    // Get ticket types from the first discount (assuming all discounts for a sponsor have same ticket types)
     const discount = sponsorDiscounts[0]
     const ticketIds = discount.tickets || []
 
@@ -211,7 +202,7 @@ export function DiscountCodeManager({
     }
 
     return `${ticketNames.length} ticket types`
-  } // Helper function to toggle ticket type selection for a sponsor
+  }
   const toggleTicketType = (sponsorId: string, ticketTypeId: string) => {
     setSelectedTicketTypes((prev) => {
       const sponsorTypes = prev[sponsorId] || []
@@ -222,8 +213,6 @@ export function DiscountCodeManager({
     })
   }
 
-  // Function to get discount codes for a specific sponsor
-  // Get all sponsor discount codes to exclude from custom discounts
   const sponsorDiscountCodes = new Set(
     sponsors
       .flatMap((sponsor) =>
@@ -232,12 +221,10 @@ export function DiscountCodeManager({
       .filter(Boolean),
   )
 
-  // Filter out sponsor discount codes from the custom discounts list
   const customDiscounts = existingDiscounts.filter(
     (discount) => !sponsorDiscountCodes.has(discount.triggerValue),
   )
 
-  // Helper function to determine discount status
   const getDiscountStatus = (discount: EventDiscountWithUsage) => {
     const now = new Date()
     const startsAt = discount.startsAt ? new Date(discount.startsAt) : null
@@ -264,7 +251,6 @@ export function DiscountCodeManager({
 
   const [loading, setLoading] = useState<string | null>(null)
 
-  // Email modal state
   const [emailModal, setEmailModal] = useState<{
     isOpen: boolean
     sponsor: SponsorWithTierInfo | null
@@ -294,7 +280,6 @@ export function DiscountCodeManager({
     })
   }
 
-  // Copy discount code to clipboard
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -313,7 +298,6 @@ export function DiscountCodeManager({
     }
   }
 
-  // tRPC mutations
   const createDiscountMutation = api.tickets.createDiscountCode.useMutation({
     onSuccess: (data) => {
       showNotification({
@@ -357,7 +341,6 @@ export function DiscountCodeManager({
   })
 
   const generateDiscountCode = (sponsorName: string): string => {
-    // Generate a unique discount code based on sponsor name and timestamp
     const cleanName = sponsorName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
     const timestamp = Date.now().toString().slice(-4)
     return `${cleanName}${timestamp}`
@@ -407,11 +390,8 @@ export function DiscountCodeManager({
     })
   }
 
-  // Helper functions for rendering
-
   return (
     <div className="space-y-6">
-      {/* Loading State */}
       {discountsLoading && (
         <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-900">
           <div className="flex items-center justify-center">
@@ -423,7 +403,6 @@ export function DiscountCodeManager({
         </div>
       )}
 
-      {/* Custom Discount Codes Section */}
       <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
         <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -572,7 +551,6 @@ export function DiscountCodeManager({
         )}
       </div>
 
-      {/* Sponsors Table */}
       <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900">
         <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -821,7 +799,6 @@ export function DiscountCodeManager({
         )}
       </div>
 
-      {/* Email Modal */}
       {emailModal.sponsor && (
         <SponsorDiscountEmailModal
           isOpen={emailModal.isOpen}

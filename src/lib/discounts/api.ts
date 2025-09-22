@@ -1,7 +1,3 @@
-/**
- * Core discount API functions for interacting with the checkin.no GraphQL API
- */
-
 import { checkinQuery, checkinMutation } from '@/lib/tickets/graphql-client'
 import type {
   EventDiscount,
@@ -77,7 +73,6 @@ export async function getEventDiscounts(
       stack: error instanceof Error ? error.stack : undefined,
     })
 
-    // Check for authorization errors and provide helpful context
     if (errorMessage.toLowerCase().includes('authorize')) {
       throw new Error(
         `Access denied to event ${eventId}. This usually means:\n` +
@@ -88,7 +83,6 @@ export async function getEventDiscounts(
       )
     }
 
-    // Re-throw with additional context for other errors
     if (error instanceof Error) {
       throw new Error(
         `Failed to fetch discounts for event ${eventId}: ${error.message}`,
@@ -103,10 +97,9 @@ export async function createEventDiscount(
 ): Promise<EventDiscount> {
   const { eventId, discountCode, numberOfTickets, ticketTypes } = input
 
-  // Format ticket types for GraphQL - if empty array, it means all ticket types are eligible
   const ticketsParam =
     ticketTypes.length > 0
-      ? `[${ticketTypes.map((id) => id).join(', ')}]` // Remove quotes to pass as integers
+      ? `[${ticketTypes.map((id) => id).join(', ')}]`
       : '[]'
 
   const mutation = `
@@ -135,13 +128,11 @@ export async function createEventDiscount(
   const responseData =
     await checkinMutation<CreateEventDiscountResponse>(mutation)
 
-  // Check if the mutation was successful
   const result = responseData.createEventDiscount
   if (!result.success) {
     throw new Error('Failed to create discount code')
   }
 
-  // Return a properly typed object since the mutation returns success/message, not the discount object
   return {
     trigger: 'coupon',
     type: 'percent',
@@ -170,7 +161,6 @@ export async function deleteEventDiscount(
     }
   `
 
-  // The ID format appears to be "coupon-{discountCode}"
   const discountId = `coupon-${discountCode}`
   const variables = { eventId, id: discountId }
 

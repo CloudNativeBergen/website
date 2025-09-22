@@ -8,7 +8,6 @@ export function useProposalSearch(proposals: ProposalExisting[]) {
   const filteredProposals = useMemo(() => {
     let filtered = proposals
 
-    // Apply search query filter
     if (searchQuery) {
       filtered = filtered.filter(
         (proposal) =>
@@ -24,7 +23,6 @@ export function useProposalSearch(proposals: ProposalExisting[]) {
       )
     }
 
-    // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter((proposal) => proposal.status === statusFilter)
     }

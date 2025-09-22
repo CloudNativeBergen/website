@@ -193,10 +193,10 @@ export function Speakers({ tracks }: { tracks: ScheduleTrack[] }) {
                         'slug' in talk.talk.speakers[0]
                       ) {
                         const speaker = talk.talk.speakers[0]
-                        // Convert speaker to SpeakerWithTalks format
+
                         const speakerWithTalks: SpeakerWithTalks = {
                           ...speaker,
-                          talks: [talk.talk], // Just include the current talk for now
+                          talks: [talk.talk],
                         }
                         acc.set(speaker.slug, speakerWithTalks)
                       }

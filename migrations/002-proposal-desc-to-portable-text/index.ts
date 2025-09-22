@@ -19,7 +19,6 @@ export default defineMigration({
 
   migrate: {
     document(doc) {
-      // Skip documents where the description is not string
       const shouldSkip = typeof doc.description !== 'string'
       if (shouldSkip) {
         console.log(
@@ -38,6 +37,5 @@ export default defineMigration({
       )
       return at('description', set(blocks))
     },
-    // No need for other migration handlers as we're only adding a reference at the document level
   },
 })

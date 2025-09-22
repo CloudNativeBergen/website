@@ -1,8 +1,3 @@
-/**
- * tRPC Client Setup
- * This provides the client-side tRPC configuration and React hooks
- */
-
 import { createTRPCReact } from '@trpc/react-query'
 import { httpBatchLink, loggerLink } from '@trpc/client'
 import type { AppRouter } from '@/server/_app'
@@ -19,11 +14,9 @@ export function getTRPCClient() {
       }),
       httpBatchLink({
         url: '/api/trpc',
-        // You can pass headers here if needed for authentication
+
         headers() {
-          return {
-            // Custom headers can go here
-          }
+          return {}
         },
       }),
     ],

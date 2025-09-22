@@ -117,24 +117,23 @@ export default defineType({
             const document = context.document
             if (!document?.format) return true
 
-            // Import format-specific limits (this is a simplified check since we can't import the full utility in Sanity)
-            let maxSpeakers = 2 // Default for most presentations
+            let maxSpeakers = 2
 
             switch (document.format) {
               case 'lightning_10':
-                maxSpeakers = 1 // Lightning talks: single speaker only
+                maxSpeakers = 1
                 break
               case 'presentation_20':
               case 'presentation_25':
-                maxSpeakers = 2 // Short presentations: 1 primary + 1 co-speaker
+                maxSpeakers = 2
                 break
               case 'presentation_40':
               case 'presentation_45':
-                maxSpeakers = 3 // Longer presentations: 1 primary + 2 co-speakers
+                maxSpeakers = 3
                 break
               case 'workshop_120':
               case 'workshop_240':
-                maxSpeakers = 4 // Workshops: 1 primary + 3 co-speakers
+                maxSpeakers = 4
                 break
             }
 

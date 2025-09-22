@@ -65,7 +65,6 @@ export class TicketSalesProcessor {
       dailyGroups.get(date)!.push(ticket)
     })
 
-    // Calculate daily metrics
     const dailySales = new Map<string, DailySales>()
     for (const [date, tickets] of dailyGroups) {
       const categoryBreakdown: Record<string, number> = {}
@@ -138,7 +137,6 @@ export class TicketSalesProcessor {
     const targets: TargetPoint[] = []
     const currentDate = new Date(startDate)
 
-    // Generate weekly targets
     while (currentDate <= endDate) {
       const daysElapsed =
         (currentDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -166,7 +164,6 @@ export class TicketSalesProcessor {
       currentDate.setDate(currentDate.getDate() + 7)
     }
 
-    // Ensure we always have a final target point at the conference date
     const lastTarget = targets[targets.length - 1]
     const endDateStr = endDate.toISOString().split('T')[0]
 
@@ -181,7 +178,7 @@ export class TicketSalesProcessor {
 
       targets.push({
         date: endDateStr,
-        targetTickets: this.capacity, // Should reach full capacity at conference date
+        targetTickets: this.capacity,
         targetPercentage: 100,
         isMilestone: !!finalMilestone,
         milestoneLabel: finalMilestone?.label || null,
@@ -220,7 +217,6 @@ export class TicketSalesProcessor {
     const combined: CombinedDataPoint[] = []
 
     for (const target of targets) {
-      // Find the most recent actual sales data up to this target date
       let latestActual: CumulativeSales | undefined
       for (const actual of actuals) {
         if (actual.date <= target.date) {

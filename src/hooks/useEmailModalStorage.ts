@@ -7,20 +7,20 @@ export interface EmailModalStorageData {
   subject: string
   message: string | PortableTextBlock[]
   lastModified: number
-  additionalFields?: Record<string, string | number | boolean> // For storing extra fields like ticket URLs
+  additionalFields?: Record<string, string | number | boolean>
 }
 
 export interface UseEmailModalStorageProps {
   storageKey: string
   isOpen: boolean
-  autoSaveDelay?: number // Delay in milliseconds before auto-saving
+  autoSaveDelay?: number
   debug?: boolean // Enable debug logging
 }
 
 export function useEmailModalStorage({
   storageKey,
   isOpen,
-  autoSaveDelay = 1000, // Default 1 second delay
+  autoSaveDelay = 1000,
   debug = false,
 }: UseEmailModalStorageProps) {
   const [storedData, setStoredData] = useState<EmailModalStorageData | null>(
@@ -32,7 +32,6 @@ export function useEmailModalStorage({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
   const savingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Load stored data when modal opens
   useEffect(() => {
     if (isOpen && typeof window !== 'undefined') {
       if (debug)
@@ -84,7 +83,6 @@ export function useEmailModalStorage({
     }
   }, [isOpen, storageKey, debug])
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (timeoutRef.current) {
@@ -96,7 +94,6 @@ export function useEmailModalStorage({
     }
   }, [])
 
-  // Debounced save function
   const saveToStorage = useCallback(
     (
       subject: string,
@@ -119,7 +116,6 @@ export function useEmailModalStorage({
           additionalFields,
         })
 
-      // Don't save if both subject and message are empty
       const hasContent =
         subject.trim() ||
         (typeof message === 'string'
@@ -135,7 +131,6 @@ export function useEmailModalStorage({
             }))
 
       if (!hasContent && !additionalFields) {
-        // Remove from storage if empty
         if (debug)
           console.log(`[EmailStorage] Removing empty data from storage`)
         localStorage.removeItem(storageKey)
@@ -168,7 +163,6 @@ export function useEmailModalStorage({
         localStorage.setItem(storageKey, serializedData)
 
         if (debug) {
-          // Immediately read back to verify it was saved correctly
           const readBack = localStorage.getItem(storageKey)
           const parsedBack = readBack ? JSON.parse(readBack) : null
           console.log(
@@ -186,13 +180,12 @@ export function useEmailModalStorage({
         setLastSaved(Date.now())
         setIsSaving(false)
 
-        // Show save indicator briefly
         if (savingTimeoutRef.current) {
           clearTimeout(savingTimeoutRef.current)
         }
         savingTimeoutRef.current = setTimeout(() => {
           setLastSaved(null)
-        }, 2000) // Hide "saved" indicator after 2 seconds
+        }, 2000)
       } catch (error) {
         console.warn(`Failed to save email modal data to localStorage:`, error)
         setIsSaving(false)
@@ -201,7 +194,6 @@ export function useEmailModalStorage({
     [storageKey, debug],
   )
 
-  // Debounced auto-save
   const autoSave = useCallback(
     (
       subject: string,
@@ -212,7 +204,6 @@ export function useEmailModalStorage({
         clearTimeout(timeoutRef.current)
       }
 
-      // Show saving indicator
       setIsSaving(true)
       setLastSaved(null)
 
@@ -223,7 +214,6 @@ export function useEmailModalStorage({
     [saveToStorage, autoSaveDelay],
   )
 
-  // Clear stored data
   const clearStorage = useCallback(() => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(storageKey)
@@ -231,7 +221,6 @@ export function useEmailModalStorage({
       setIsSaving(false)
       setLastSaved(null)
 
-      // Clear any pending saves
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
         timeoutRef.current = null
@@ -243,7 +232,6 @@ export function useEmailModalStorage({
     }
   }, [storageKey])
 
-  // Get formatted last modified time
   const getLastModifiedText = useCallback(() => {
     if (!storedData?.lastModified) return null
 

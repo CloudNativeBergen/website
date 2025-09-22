@@ -50,10 +50,6 @@ interface ProposalsFilterProps {
   allowedFormats?: Format[]
 }
 
-/**
- * Comprehensive filtering interface for proposals
- * Provides status, format, level filters and sorting options
- */
 export function ProposalsFilter({
   filters,
   onFilterChange,
@@ -77,7 +73,6 @@ export function ProposalsFilter({
             </span>
           </div>
 
-          {/* Status Filter */}
           <FilterDropdown
             label="Status"
             activeCount={filters.status.length}
@@ -100,7 +95,6 @@ export function ProposalsFilter({
             ))}
           </FilterDropdown>
 
-          {/* Format Filter */}
           <FilterDropdown
             label="Format"
             activeCount={filters.format.length}
@@ -119,7 +113,6 @@ export function ProposalsFilter({
             ))}
           </FilterDropdown>
 
-          {/* Level Filter */}
           <FilterDropdown
             label="Level"
             activeCount={filters.level.length}
@@ -138,7 +131,6 @@ export function ProposalsFilter({
             ))}
           </FilterDropdown>
 
-          {/* Hide Multiple Talks Filter */}
           <FilterDropdown
             label="Speakers"
             activeCount={
@@ -217,7 +209,6 @@ export function ProposalsFilter({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Review Status Filter - only show if user is logged in */}
           {currentUserId && (
             <FilterDropdown
               label="Reviews"
@@ -242,7 +233,6 @@ export function ProposalsFilter({
             </FilterDropdown>
           )}
 
-          {/* Sort Options */}
           <FilterDropdown
             label={`Sort: ${filters.sortBy === 'created' ? 'Date' : filters.sortBy === 'speaker' ? 'Speaker' : filters.sortBy === 'rating' ? 'Rating' : filters.sortBy === 'title' ? 'Title' : 'Status'}`}
             activeCount={0}

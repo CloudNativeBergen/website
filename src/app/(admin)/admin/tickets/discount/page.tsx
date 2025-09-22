@@ -90,7 +90,6 @@ export default async function DiscountCodesAdminPage() {
     )
   }
 
-  // Calculate sponsors with existing discounts using the same logic as DiscountCodeManager
   const sponsorsWithDiscounts = sponsorsWithTierInfo.filter((sponsor) => {
     return discounts.some((discount) =>
       discount.triggerValue
@@ -149,7 +148,6 @@ export default async function DiscountCodesAdminPage() {
         />
       </div>
 
-      {/* Quick Actions */}
       <div className="mt-12">
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions

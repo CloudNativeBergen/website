@@ -9,7 +9,7 @@ import { formatDateSafe } from '@/lib/time'
 interface ProposalReviewListProps {
   reviews: Review[]
   currentUserId?: string
-  minimal?: boolean // When true, shows only the review items without container/header
+  minimal?: boolean
 }
 
 import clsx from 'clsx'
@@ -40,7 +40,6 @@ export function ProposalReviewList({
   }
 
   const sortedReviews = [...reviews].sort((a, b) => {
-    // Put current user's review first
     const aIsCurrentUser =
       typeof a.reviewer === 'object' &&
       '_id' in a.reviewer &&
@@ -53,7 +52,6 @@ export function ProposalReviewList({
     if (aIsCurrentUser && !bIsCurrentUser) return -1
     if (!aIsCurrentUser && bIsCurrentUser) return 1
 
-    // Then sort by creation date (newest first)
     return new Date(b._createdAt).getTime() - new Date(a._createdAt).getTime()
   })
 

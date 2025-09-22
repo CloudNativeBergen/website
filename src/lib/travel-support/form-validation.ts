@@ -2,13 +2,6 @@ import { z, ZodError, ZodSchema } from 'zod'
 import { BankingDetailsSchema, TravelExpenseInputSchema } from './validation'
 import type { BankingDetails, TravelExpenseInput } from './types'
 
-/**
- * Validation utilities that work with existing Zod schemas
- */
-
-/**
- * Format Zod validation errors for form display
- */
 export function formatZodErrors(error: ZodError): Record<string, string> {
   const errors: Record<string, string> = {}
 
@@ -20,9 +13,6 @@ export function formatZodErrors(error: ZodError): Record<string, string> {
   return errors
 }
 
-/**
- * Validate banking details and return formatted errors
- */
 export function validateBankingDetailsForm(
   values: Partial<BankingDetails>,
 ): Record<string, string> {
@@ -37,9 +27,6 @@ export function validateBankingDetailsForm(
   }
 }
 
-/**
- * Validate expense form and return formatted errors
- */
 export function validateExpenseForm(
   values: Partial<TravelExpenseInput>,
 ): Record<string, string> {
@@ -54,9 +41,6 @@ export function validateExpenseForm(
   }
 }
 
-/**
- * Check if a field has an error
- */
 export function hasFieldError(
   errors: Record<string, string>,
   field: string,
@@ -64,9 +48,6 @@ export function hasFieldError(
   return Boolean(errors[field])
 }
 
-/**
- * Get field error message
- */
 export function getFieldError(
   errors: Record<string, string>,
   field: string,
@@ -74,23 +55,16 @@ export function getFieldError(
   return errors[field]
 }
 
-/**
- * Check if any validation errors exist
- */
 export function hasValidationErrors(errors: Record<string, string>): boolean {
   return Object.keys(errors).length > 0
 }
 
-/**
- * Validate a single field
- */
 export function validateSingleField<T>(
   schema: z.ZodSchema<T>,
   values: T,
   fieldName: keyof T,
 ): string | undefined {
   try {
-    // Create a partial schema for the specific field
     const fieldSchema = (schema as z.ZodObject<z.ZodRawShape>).pick({
       [fieldName]: true,
     } as Record<string, true>)
@@ -105,9 +79,6 @@ export function validateSingleField<T>(
   }
 }
 
-/**
- * Safe validation that returns both success status and errors
- */
 export function validateData<T>(
   schema: ZodSchema<T>,
   values: T,
@@ -123,17 +94,11 @@ export function validateData<T>(
   }
 }
 
-/**
- * Custom validation rules for specific business logic
- */
 export const CustomValidationRules = {
-  /**
-   * Validate that the expense date is not in the future
-   */
   expenseDateNotFuture: (date: string): string | undefined => {
     const expenseDate = new Date(date)
     const today = new Date()
-    today.setHours(23, 59, 59, 999) // End of today
+    today.setHours(23, 59, 59, 999)
 
     if (expenseDate > today) {
       return 'Expense date cannot be in the future'
@@ -141,9 +106,6 @@ export const CustomValidationRules = {
     return undefined
   },
 
-  /**
-   * Validate that the expense date is not too old (e.g., more than 2 years)
-   */
   expenseDateNotTooOld: (date: string): string | undefined => {
     const expenseDate = new Date(date)
     const twoYearsAgo = new Date()
@@ -155,9 +117,6 @@ export const CustomValidationRules = {
     return undefined
   },
 
-  /**
-   * Validate reasonable expense amounts based on category
-   */
   reasonableExpenseAmount: (
     amount: number,
     category: string,
@@ -179,16 +138,11 @@ export const CustomValidationRules = {
   },
 }
 
-/**
- * Validate expense with custom business rules
- */
 export function validateExpenseWithBusinessRules(
   values: Partial<TravelExpenseInput>,
 ): Record<string, string> {
-  // Start with schema validation
   const schemaErrors = validateExpenseForm(values)
 
-  // Add custom business rule validations
   const customErrors: Record<string, string> = {}
 
   if (values.expenseDate) {

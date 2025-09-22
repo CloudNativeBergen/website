@@ -16,7 +16,6 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
 }: ProgramAgendaViewProps) {
   const { bookmarks, isBookmarked, isLoaded } = useBookmarks()
 
-  // Filter out placeholder sessions and then filter by bookmark status
   const talksOnly = data.allTalks.filter(
     (talk) => talk.talk !== null && talk.talk !== undefined,
   )
@@ -28,9 +27,8 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
           `${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}`
         return isBookmarked(talkId)
       })
-    : [] // Show empty while loading
+    : []
 
-  // Group talks by day and sort them
   const talksByDay = filteredTalks.reduce(
     (acc, talk) => {
       if (!acc[talk.scheduleDate]) {
@@ -89,10 +87,8 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
 
   return (
     <div className="space-y-8">
-      {/* Talks */}
       {sortedDays.map((date) => (
         <div key={date} className="space-y-4">
-          {/* Day Header - only show if multiple days */}
           {sortedDays.length > 1 && (
             <div className="border-b border-brand-frosted-steel pb-4 dark:border-gray-700">
               <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
@@ -104,7 +100,6 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
             </div>
           )}
 
-          {/* Talks List */}
           <div className="space-y-4">
             {talksByDay[date].map((talk, index) => (
               <TalkCard
@@ -119,7 +114,6 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
         </div>
       ))}
 
-      {/* Summary */}
       <div className="border-t border-brand-frosted-steel py-8 text-center dark:border-gray-700">
         <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
           Your agenda: {filteredTalks.length} talk

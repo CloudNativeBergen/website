@@ -10,13 +10,11 @@ export function InteractivePatternPreview() {
   const [baseSize, setBaseSize] = useState(45)
   const [iconCount, setIconCount] = useState(50)
 
-  // Calculate size range for display
   const minDisplaySize = Math.round(baseSize * 0.5)
   const maxDisplaySize = Math.round(baseSize * 1.6)
 
   return (
     <div className="flex h-full flex-col space-y-6">
-      {/* Pattern Display */}
       <div
         className={`relative h-80 overflow-hidden rounded-xl ${
           variant === 'light'
@@ -58,15 +56,12 @@ export function InteractivePatternPreview() {
         </div>
       </div>
 
-      {/* Controls */}
       <div className="flex-1 space-y-6 rounded-xl bg-brand-sky-mist p-6">
         <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
           Pattern Controls
         </h4>
 
-        {/* Basic Controls Row */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Variant Selector */}
           <div>
             <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
               Variant
@@ -84,7 +79,6 @@ export function InteractivePatternPreview() {
             </select>
           </div>
 
-          {/* Animation Toggle */}
           <div>
             <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
               Animation
@@ -114,9 +108,7 @@ export function InteractivePatternPreview() {
           </div>
         </div>
 
-        {/* Sliders Row */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {/* Opacity Slider */}
           <div>
             <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
               Opacity: {opacity.toFixed(2)}
@@ -136,7 +128,6 @@ export function InteractivePatternPreview() {
             </div>
           </div>
 
-          {/* Base Size */}
           <div>
             <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
               Base Size: {baseSize}px
@@ -159,7 +150,6 @@ export function InteractivePatternPreview() {
             </div>
           </div>
 
-          {/* Icon Count */}
           <div>
             <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
               Icon Count: {iconCount}
@@ -180,9 +170,7 @@ export function InteractivePatternPreview() {
           </div>
         </div>
 
-        {/* Configuration Display and Presets Row */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Current Settings Display */}
           <div className="rounded-lg bg-white p-4">
             <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
               Current Configuration
@@ -196,7 +184,6 @@ export function InteractivePatternPreview() {
             </div>
           </div>
 
-          {/* Preset Buttons */}
           <div>
             <h5 className="font-space-grotesk mb-3 text-sm font-semibold text-brand-slate-gray">
               Quick Presets

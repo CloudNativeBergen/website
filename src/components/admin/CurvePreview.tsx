@@ -16,15 +16,12 @@ interface CurvePreviewProps {
 }
 
 const CURVE_COLORS = {
-  linear: '#3B82F6', // blue-500
-  early_push: '#10B981', // emerald-500
-  late_push: '#F59E0B', // amber-500
-  s_curve: '#8B5CF6', // violet-500
+  linear: '#3B82F6',
+  early_push: '#10B981',
+  late_push: '#F59E0B',
+  s_curve: '#8B5CF6',
 } as const
 
-/**
- * Mini curve preview component for target selection
- */
 export function CurvePreview({
   curve,
   isSelected = false,
@@ -50,12 +47,10 @@ export function CurvePreview({
           : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500'
       } ${onClick ? 'cursor-pointer' : 'cursor-default'} ${className} `}
     >
-      {/* Selected indicator */}
       {isSelected && (
         <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-blue-500 ring-2 ring-white dark:ring-gray-800"></div>
       )}
 
-      {/* Curve preview */}
       <div className="mb-2 flex justify-center">
         <svg
           width="80"
@@ -64,7 +59,6 @@ export function CurvePreview({
           className="overflow-visible"
           suppressHydrationWarning
         >
-          {/* Grid lines */}
           <defs>
             <pattern
               id={`grid-${curve}`}
@@ -83,10 +77,8 @@ export function CurvePreview({
             </pattern>
           </defs>
 
-          {/* Grid background */}
           <rect width="80" height="40" fill={`url(#grid-${curve})`} />
 
-          {/* Curve line */}
           <path
             d={svgPath}
             fill="none"
@@ -97,9 +89,8 @@ export function CurvePreview({
             className="transition-colors duration-200"
           />
 
-          {/* Data points */}
           {curveData.map((point, index) => {
-            if (index % 3 !== 0) return null // Show every 3rd point
+            if (index % 3 !== 0) return null
             const x = (index / (curveData.length - 1)) * 80
             const y = 40 - (point.y / 1) * 40
 
@@ -117,7 +108,6 @@ export function CurvePreview({
         </svg>
       </div>
 
-      {/* Labels */}
       <div className="text-center">
         <div
           className={`text-sm font-medium transition-colors duration-200 ${
@@ -142,9 +132,6 @@ export function CurvePreview({
   )
 }
 
-/**
- * Grid of curve selection previews
- */
 interface CurveSelectionGridProps {
   selected: TargetCurve
   onSelect: (curve: TargetCurve) => void

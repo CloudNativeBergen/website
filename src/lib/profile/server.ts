@@ -20,9 +20,6 @@ export function defaultEmails(session: Session) {
   ]
 }
 
-/**
- * Check if a user is an organizer based on their email
- */
 export async function isUserOrganizer(email: string): Promise<boolean> {
   try {
     const { speaker, err } = await findSpeakerByEmail(email)

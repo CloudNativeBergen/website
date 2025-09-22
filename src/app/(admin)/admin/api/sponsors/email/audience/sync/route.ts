@@ -7,14 +7,12 @@ import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
 export const dynamic = 'force-dynamic'
 
 export const POST = auth(async (req: NextAuthRequest) => {
-  // Check organizer access
   const accessError = checkOrganizerAccess(req)
   if (accessError) {
     return accessError
   }
 
   try {
-    // Get conference with sponsors and contact information
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({
         sponsors: true,
@@ -26,11 +24,9 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: conferenceError.message }, { status: 500 })
     }
 
-    // Get sponsors from conference data
     const sponsors = (conference.sponsors ||
       []) as ConferenceSponsorWithContact[]
 
-    // Filter sponsors that have contact persons with email addresses
     const eligibleSponsors = sponsors.filter(
       (sponsor: ConferenceSponsorWithContact) =>
         sponsor.sponsor.contact_persons &&
@@ -38,7 +34,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
         sponsor.sponsor.contact_persons.some((contact) => contact.email),
     )
 
-    // Transform sponsors to contact list
     const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
       (sponsor: ConferenceSponsorWithContact) =>
         sponsor.sponsor.contact_persons
@@ -51,7 +46,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
           })) || [],
     )
 
-    // Sync the sponsor audience
     const {
       success,
       audienceId,

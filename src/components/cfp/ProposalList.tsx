@@ -60,7 +60,6 @@ export function ProposalList({
   const success = searchParams.get('success') ?? undefined
   const confirm = searchParams.get('confirm') ?? ''
 
-  // Get current domain for warning purposes
   const currentDomain =
     typeof window !== 'undefined' ? window.location.hostname : ''
 
@@ -82,15 +81,12 @@ export function ProposalList({
 
   function actionCloseHandler() {
     setActionOpen(false)
-    // Wait for the modal to close before resetting the action and proposal.
     setTimeout(() => {
       setActionProposal({} as ProposalExisting)
       setActionAction(Action.submit)
     }, 400)
   }
 
-  // actionUpdateHandler updates the status of a proposal in the list
-  // of proposals without making a request to the server.
   function actionUpdateHandler(id: string, status: Status) {
     if (status === Status.deleted) {
       setProposals(proposals.filter((p) => p._id !== id))
@@ -109,20 +105,16 @@ export function ProposalList({
 
   const actionHandler = useCallback(
     async (proposal: ProposalExisting, action: Action) => {
-      // Handle navigation actions
       if (action === Action.view) {
-        // Redirect to speaker-accessible view page
         router.push(`/cfp/proposal/${proposal._id}`)
         return
       }
 
       if (action === Action.edit) {
-        // Use the submit page with id parameter
         router.push(`/cfp/submit?id=${proposal._id}`)
         return
       }
 
-      // Handle modal actions
       setActionAction(action)
       setActionProposal(proposal)
       setActionOpen(true)
@@ -175,23 +167,19 @@ export function ProposalList({
             domain={currentDomain}
           />
           <div className="mx-auto mt-6 max-w-2xl lg:max-w-6xl">
-            {/* Group proposals by conference */}
             {Object.entries(
               proposals.reduce(
                 (groups, proposal) => {
-                  // Get conference name safely
                   const conferenceName =
                     typeof proposal.conference === 'object' &&
                     'title' in proposal.conference
                       ? proposal.conference.title
                       : 'Unknown Conference'
 
-                  // Initialize array if it doesn't exist
                   if (!groups[conferenceName]) {
                     groups[conferenceName] = []
                   }
 
-                  // Add proposal to appropriate group
                   groups[conferenceName].push(proposal)
                   return groups
                 },
@@ -207,14 +195,12 @@ export function ProposalList({
                   className="grid grid-cols-1 gap-6 sm:grid-cols-2"
                 >
                   {conferenceProposals.map((proposal) => {
-                    // Check if this proposal belongs to a different conference
                     const isFromDifferentConference =
                       typeof proposal.conference === 'object' &&
                       proposal.conference !== null &&
                       '_id' in proposal.conference &&
                       proposal.conference._id !== currentConferenceId
 
-                    // Check if CFP has ended for the current conference
                     const isCfpEnded = Boolean(
                       typeof proposal.conference === 'object' &&
                         proposal.conference !== null &&
@@ -224,7 +210,6 @@ export function ProposalList({
                           new Date(),
                     )
 
-                    // Mark as read-only if from different conference OR CFP has ended
                     const readOnly = isFromDifferentConference || isCfpEnded
 
                     return (

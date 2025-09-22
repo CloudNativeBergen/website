@@ -1,7 +1,3 @@
-/**
- * Types and interfaces for discount code management
- */
-
 export interface EventDiscount {
   id?: string
   trigger: string
@@ -16,7 +12,7 @@ export interface EventDiscount {
   ticketsOnly: boolean
   times: number
   timesTotal: number
-  // Optional fields for date ranges
+
   startsAt?: string
   stopsAt?: string
 }

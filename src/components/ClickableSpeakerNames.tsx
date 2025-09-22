@@ -7,17 +7,12 @@ interface ClickableSpeakerNamesProps {
   className?: string
   linkClassName?: string
   separatorClassName?: string
-  /** Show only first names (for compact display) */
+
   showFirstNameOnly?: boolean
-  /** Maximum number of speakers to show before truncating with "& X more" */
+
   maxVisible?: number
 }
 
-/**
- * Component that renders speaker names as individual clickable links
- * Properly handles both Speaker objects and References
- * Supports compact mode with first names only and speaker count limits
- */
 export function ClickableSpeakerNames({
   speakers,
   className = '',
@@ -30,7 +25,6 @@ export function ClickableSpeakerNames({
     return null
   }
 
-  // Filter out references and only include populated Speaker objects
   const populatedSpeakers = speakers.filter(
     (speaker): speaker is Speaker =>
       speaker &&
@@ -43,15 +37,12 @@ export function ClickableSpeakerNames({
     return null
   }
 
-  // Determine how many speakers to show
   const speakersToShow = maxVisible
     ? populatedSpeakers.slice(0, maxVisible)
     : populatedSpeakers
   const remainingCount = maxVisible ? populatedSpeakers.length - maxVisible : 0
 
-  // Helper function to get display name
   const getDisplayName = (speaker: Speaker): string => {
-    // Always show full name if there's only one speaker, regardless of showFirstNameOnly setting
     if (populatedSpeakers.length === 1) {
       return speaker.name
     }

@@ -84,7 +84,6 @@ function createTargetSeries(progression: CombinedDataPoint[]): ChartSeries {
 function createAnnotations(analysis: TicketAnalysisResult): ChartAnnotation[] {
   const annotations: ChartAnnotation[] = []
 
-  // Add "Today" marker
   annotations.push({
     id: 'today',
     type: 'xaxis',
@@ -95,7 +94,6 @@ function createAnnotations(analysis: TicketAnalysisResult): ChartAnnotation[] {
     position: 'top',
   })
 
-  // Add milestone annotations
   analysis.progression
     .filter((point) => point.isMilestone && point.milestoneLabel)
     .forEach((milestone, index) => {
@@ -174,7 +172,7 @@ function convertAnnotationsToApexFormat(annotations: ChartAnnotation[]) {
     .filter((annotation) => annotation.type === 'point')
     .map((annotation) => ({
       x: annotation.value,
-      y: 0, // You might want to calculate a proper y value
+      y: 0,
       marker: {
         size: 6,
         fillColor: annotation.color || '#6B7280',

@@ -13,22 +13,18 @@ interface UseFormReturn<T> {
   isSubmitting: boolean
   isDirty: boolean
 
-  // Form actions
   setValue: (field: keyof T, value: T[keyof T]) => void
   setValues: (values: Partial<T>) => void
   setFieldTouched: (field: keyof T, touched?: boolean) => void
   setErrors: (errors: Record<string, string>) => void
 
-  // Form handlers
   handleChange: (field: keyof T) => (value: T[keyof T]) => void
   handleSubmit: (e?: React.FormEvent) => Promise<void>
   handleReset: () => void
 
-  // Validation
   validateField: (field: keyof T) => string | undefined
   validateForm: () => boolean
 
-  // Utility
   getFieldProps: (field: keyof T) => {
     value: T[keyof T]
     onChange: (value: T[keyof T]) => void
@@ -37,9 +33,6 @@ interface UseFormReturn<T> {
   }
 }
 
-/**
- * Reusable form management hook with validation and error handling
- */
 export function useForm<T extends Record<string, unknown>>(
   options: UseFormOptions<T>,
 ): UseFormReturn<T> {
@@ -50,7 +43,6 @@ export function useForm<T extends Record<string, unknown>>(
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Check if form is dirty (has changes)
   const isDirty = Object.keys(values).some(
     (key) => values[key] !== initialValues[key],
   )
@@ -59,7 +51,6 @@ export function useForm<T extends Record<string, unknown>>(
     (field: keyof T, value: T[keyof T]) => {
       setValuesState((prev) => ({ ...prev, [field]: value }))
 
-      // Clear error when user starts typing
       if (errors[field as string]) {
         setErrors((prev) => {
           const newErrors = { ...prev }
@@ -116,25 +107,22 @@ export function useForm<T extends Record<string, unknown>>(
       setIsSubmitting(true)
 
       try {
-        // Mark all fields as touched
         const allTouched = Object.keys(values).reduce(
           (acc, key) => ({ ...acc, [key]: true }),
           {},
         )
         setTouched(allTouched)
 
-        // Validate form
         if (!validateForm()) {
           return
         }
 
-        // Submit form
         if (onSubmit) {
           await onSubmit(values)
         }
       } catch (error) {
         console.error('Form submission error:', error)
-        // Let the parent component handle submission errors
+
         throw error
       } finally {
         setIsSubmitting(false)

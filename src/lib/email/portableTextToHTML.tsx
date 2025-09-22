@@ -1,10 +1,6 @@
 import { toHTML } from '@portabletext/to-html'
 import { PortableTextBlock } from '@portabletext/types'
 
-/**
- * Convert PortableText blocks to HTML string for email rendering
- * Uses the official @portabletext/to-html library with custom email-friendly styling
- */
 export function portableTextToHTML(blocks: PortableTextBlock[]): string {
   if (!blocks || blocks.length === 0) {
     return ''

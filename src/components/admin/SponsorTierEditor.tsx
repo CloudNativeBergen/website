@@ -60,7 +60,6 @@ function SponsorTierModal({
     most_popular: false,
   })
 
-  // tRPC mutations
   const createMutation = api.sponsor.tiers.create.useMutation({
     onSuccess: (createdTier) => {
       if (createdTier) {
@@ -100,7 +99,6 @@ function SponsorTierModal({
     },
   })
 
-  // Initialize form data when tier changes
   useEffect(() => {
     if (tier) {
       setFormData({
@@ -138,18 +136,14 @@ function SponsorTierModal({
 
     try {
       if (tier) {
-        // Update existing tier
         await updateMutation.mutateAsync({
           id: tier._id,
           data: formData,
         })
       } else {
-        // Create new tier
         await createMutation.mutateAsync(formData)
       }
-    } catch {
-      // Error handling is done by the mutation onError callbacks
-    }
+    } catch {}
   }
 
   const handleDelete = async () => {
@@ -162,9 +156,7 @@ function SponsorTierModal({
     if (confirmed) {
       try {
         await deleteMutation.mutateAsync({ id: tier._id })
-      } catch {
-        // Error handling is done by the mutation onError callback
-      }
+      } catch {}
     }
   }
 
@@ -276,7 +268,6 @@ function SponsorTierModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                  {/* Basic Information */}
                   <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <div>
                       <label
@@ -331,7 +322,6 @@ function SponsorTierModal({
                     </div>
                   </div>
 
-                  {/* Tier Type and Status */}
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
                       <label
@@ -441,7 +431,6 @@ function SponsorTierModal({
                     </div>
                   </div>
 
-                  {/* Pricing */}
                   <div>
                     <div className="flex items-center justify-between">
                       <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
@@ -516,7 +505,6 @@ function SponsorTierModal({
                     </div>
                   </div>
 
-                  {/* Perks */}
                   <div>
                     <div className="flex items-center justify-between">
                       <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
@@ -583,7 +571,6 @@ function SponsorTierModal({
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="flex justify-between pt-4">
                     <div>
                       {tier && onDelete && (
@@ -637,7 +624,7 @@ export default function SponsorTierEditor({
   sponsorTiers: initialTiers,
   onTierUpdate,
 }: SponsorTierProps) {
-  useTheme() // initialize theme context for consistent dark mode classes
+  useTheme()
   const [sponsorTiers, setSponsorTiers] =
     useState<SponsorTierExisting[]>(initialTiers)
   const [selectedTier, setSelectedTier] = useState<
@@ -645,7 +632,6 @@ export default function SponsorTierEditor({
   >()
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  // Sync with parent when tiers change
   useEffect(() => {
     setSponsorTiers(initialTiers)
   }, [initialTiers])
@@ -667,14 +653,12 @@ export default function SponsorTierEditor({
 
   const handleSave = (tier: SponsorTierExisting) => {
     if (selectedTier) {
-      // Update existing tier
       const updatedTiers = sponsorTiers.map((t) =>
         t._id === tier._id ? tier : t,
       )
       setSponsorTiers(updatedTiers)
       onTierUpdate?.(updatedTiers)
     } else {
-      // Add new tier
       const updatedTiers = [...sponsorTiers, tier]
       setSponsorTiers(updatedTiers)
       onTierUpdate?.(updatedTiers)
@@ -730,7 +714,6 @@ export default function SponsorTierEditor({
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {sponsorTiers
             .sort((a, b) => {
-              // Sort by highest price first
               const getMaxPrice = (tier: SponsorTierExisting) => {
                 if (!tier.price || tier.price.length === 0) return 0
                 return Math.max(...tier.price.map((p) => p.amount))

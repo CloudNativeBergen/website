@@ -1,8 +1,3 @@
-/**
- * tRPC Router for Travel Support Management
- * Handles travel support requests, expenses, and administrative operations
- */
-
 import { TRPCError } from '@trpc/server'
 import { router, adminProcedure, protectedProcedure } from '../trpc'
 import {
@@ -47,7 +42,6 @@ import {
 import { clientReadUncached as clientRead } from '@/lib/sanity/client'
 
 export const travelSupportRouter = router({
-  // Get travel support for current speaker
   getMine: protectedProcedure.query(async ({ ctx }) => {
     try {
       const { conference, error: confError } =
@@ -60,7 +54,6 @@ export const travelSupportRouter = router({
         })
       }
 
-      // Check if speaker is eligible for travel funding
       const { isEligible, error: eligibilityError } =
         await checkSpeakerEligibility(ctx.speaker._id)
 
@@ -97,7 +90,6 @@ export const travelSupportRouter = router({
     }
   }),
 
-  // Get travel support by ID (admin only)
   getById: adminProcedure
     .input(GetTravelSupportByIdSchema)
     .query(async ({ input }) => {
@@ -131,7 +123,6 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // List all travel support requests (admin only)
   list: adminProcedure
     .input(GetTravelSupportSchema)
     .query(async ({ input }) => {
@@ -170,12 +161,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Create travel support request
   create: protectedProcedure
     .input(TravelSupportClientInputSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Ensure speaker is creating for themselves
         if (input.speaker._ref !== ctx.speaker._id) {
           throw new TRPCError({
             code: 'FORBIDDEN',
@@ -183,7 +172,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Get current conference from domain (multi-tenant)
         const { conference, error: confError } =
           await getConferenceForCurrentDomain()
         if (confError || !conference) {
@@ -194,7 +182,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Check if speaker is eligible for travel funding
         const { isEligible, error: eligibilityError } =
           await checkSpeakerEligibility(ctx.speaker._id)
 
@@ -206,7 +193,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Construct full input with resolved conference
         const fullInput = {
           ...input,
           conference: { _ref: conference._id, _type: 'reference' as const },
@@ -234,12 +220,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Update banking details
   updateBankingDetails: protectedProcedure
     .input(UpdateBankingDetailsSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Use enhanced authorization
         const { authorized, error: authError } =
           await authorizeTravelSupportOperation(
             input.travelSupportId,
@@ -252,7 +236,6 @@ export const travelSupportRouter = router({
           throw authError || createAuthError('FORBIDDEN', 'Access denied')
         }
 
-        // Log banking details update for audit purposes
         auditLog(
           'Banking Details Update',
           ctx.speaker._id,
@@ -289,12 +272,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Submit travel support for review
   submit: protectedProcedure
     .input(SubmitTravelSupportSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Use enhanced authorization
         const {
           authorized,
           travelSupport,
@@ -310,7 +291,6 @@ export const travelSupportRouter = router({
           throw authError || createAuthError('FORBIDDEN', 'Access denied')
         }
 
-        // Validate that banking details are complete before submission
         if (!travelSupport?.bankingDetails) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -356,12 +336,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Update travel support status (admin only)
   updateStatus: adminProcedure
     .input(UpdateTravelSupportStatusSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Verify the travel support exists and get current status for audit
         const { travelSupport, error: fetchError } = await getTravelSupportById(
           input.travelSupportId,
         )
@@ -374,7 +352,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Authorization check - prevent admins from approving their own requests
         const { authorized, error: authError } =
           await authorizeTravelSupportOperation(
             input.travelSupportId,
@@ -387,7 +364,6 @@ export const travelSupportRouter = router({
           throw authError || createAuthError('FORBIDDEN', 'Access denied')
         }
 
-        // Log status change for audit purposes
         auditLog(
           'Travel Support Status Update',
           ctx.speaker._id,
@@ -432,12 +408,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Add expense
   addExpense: protectedProcedure
     .input(AddExpenseSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Verify ownership
         const {
           travelSupport,
           hasAccess,
@@ -457,7 +431,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Check if expenses can be added based on status
         if (!canAddExpenses(travelSupport.status)) {
           throw new TRPCError({
             code: 'FORBIDDEN',
@@ -490,12 +463,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Update expense (speaker only, for draft travel support)
   updateExpense: protectedProcedure
     .input(UpdateExpenseSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Get the expense first to get the travel support ID
         const existingExpense = await clientRead.fetch<TravelExpense>(
           `*[_type == "travelExpense" && _id == $expenseId][0] {
             ...,
@@ -518,7 +489,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Verify ownership
         const {
           travelSupport,
           hasAccess,
@@ -537,7 +507,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Check if expenses can be updated based on status
         if (!canAddExpenses(travelSupport.status)) {
           throw new TRPCError({
             code: 'FORBIDDEN',
@@ -570,12 +539,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Update expense status (admin only)
   updateExpenseStatus: adminProcedure
     .input(UpdateExpenseStatusSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Log expense status change for audit purposes
         auditLog(
           'Expense Status Update',
           ctx.speaker._id,
@@ -614,12 +581,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Delete expense
   deleteExpense: protectedProcedure
     .input(DeleteExpenseSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // First, get the expense to find its travel support relationship
         const expense = await clientRead.fetch<{
           travelSupport: { _ref: string }
         }>(
@@ -636,7 +601,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Verify travel support ownership
         const {
           travelSupport,
           hasAccess,
@@ -656,7 +620,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Check if expenses can be modified based on status
         if (!canAddExpenses(travelSupport.status)) {
           throw new TRPCError({
             code: 'FORBIDDEN',
@@ -686,12 +649,10 @@ export const travelSupportRouter = router({
       }
     }),
 
-  // Delete receipt from expense (speaker only, for draft travel support)
   deleteReceipt: protectedProcedure
     .input(DeleteReceiptSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Get the expense first to get the travel support ID
         const existingExpense = await clientRead.fetch<TravelExpense>(
           `*[_type == "travelExpense" && _id == $expenseId][0] {
             ...,
@@ -714,7 +675,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Verify ownership
         const {
           travelSupport,
           hasAccess,
@@ -733,7 +693,6 @@ export const travelSupportRouter = router({
           })
         }
 
-        // Check if expenses can be modified based on status
         if (!canAddExpenses(travelSupport.status)) {
           throw new TRPCError({
             code: 'FORBIDDEN',

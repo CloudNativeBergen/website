@@ -8,9 +8,6 @@ export interface SaveScheduleResult {
   error?: string
 }
 
-/**
- * Save schedule to Sanity and link it to the conference
- */
 export async function saveScheduleToSanity(
   schedule: ConferenceSchedule,
   conference: Conference,
@@ -18,7 +15,6 @@ export async function saveScheduleToSanity(
   try {
     console.log('Saving schedule to Sanity:', schedule)
 
-    // Transform tracks to match Sanity schema with required _key properties
     const sanitizedTracks = schedule.tracks.map((track, trackIndex) => ({
       _key: generateKey(`track-${trackIndex}`),
       trackTitle: track.trackTitle,
@@ -26,7 +22,6 @@ export async function saveScheduleToSanity(
       talks: track.talks.map((talk, talkIndex) => {
         const baseKey = `talk-${trackIndex}-${talkIndex}-${talk.startTime.replace(':', '')}`
 
-        // For service sessions (placeholder text), don't include talk reference
         if (talk.placeholder) {
           return {
             _key: generateKey(`${baseKey}-service`),
@@ -36,7 +31,6 @@ export async function saveScheduleToSanity(
           }
         }
 
-        // For regular talks, save as reference
         if (talk.talk) {
           return {
             _key: generateKey(`${baseKey}-${talk.talk._id}`),
@@ -46,7 +40,6 @@ export async function saveScheduleToSanity(
           }
         }
 
-        // Fallback - this shouldn't happen in normal usage
         return {
           _key: generateKey(`${baseKey}-fallback`),
           startTime: talk.startTime,
@@ -58,7 +51,6 @@ export async function saveScheduleToSanity(
     let savedSchedule: ConferenceSchedule
 
     if (schedule._id && schedule._id !== '') {
-      // Update existing schedule
       await clientWrite
         .patch(schedule._id)
         .set({
@@ -67,10 +59,8 @@ export async function saveScheduleToSanity(
         })
         .commit()
 
-      // Return the original schedule since the structure is already correct
       savedSchedule = schedule
     } else {
-      // Create new schedule
       const newScheduleDoc = {
         _type: 'schedule',
         date: schedule.date,
@@ -79,13 +69,11 @@ export async function saveScheduleToSanity(
 
       const createdSchedule = await clientWrite.create(newScheduleDoc)
 
-      // Return the original schedule structure with the new ID
       savedSchedule = {
         ...schedule,
         _id: createdSchedule._id,
       }
 
-      // Update the conference to reference this schedule if not already linked
       const existingScheduleIds = conference.schedules?.map((s) => s._id) || []
       if (!existingScheduleIds.includes(savedSchedule._id)) {
         await clientWrite

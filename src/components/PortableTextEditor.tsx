@@ -108,7 +108,6 @@ const renderStyle: RenderStyleFunction = ({ schemaType, children }) => {
       )
 
     case 'normal': {
-      // Use div instead of p to avoid nesting issues
       return (
         <div
           style={{
@@ -296,7 +295,6 @@ function LinkButton() {
 
   const handleLinkClick = () => {
     if (isActive) {
-      // Remove existing link
       editor.send({
         type: 'annotation.remove',
         annotation: {
@@ -307,7 +305,6 @@ function LinkButton() {
       return
     }
 
-    // Check if text is selected for adding new link
     if (isSelectionCollapsed) {
       alert('Please select some text first before adding a link.')
       return
@@ -366,21 +363,19 @@ export function PortableTextEditor({
   value,
   onChange,
   helpText,
-  forceRemountKey, // Add a prop to force remounting
+  forceRemountKey,
 }: {
   label: ReactNode
   value: PortableTextBlock[] | undefined
   onChange: (value: PortableTextBlock[]) => void
   helpText?: ReactNode
-  forceRemountKey?: string | number // Optional key to force remount
+  forceRemountKey?: string | number
 }) {
   const id = useId()
   const [isClient, setIsClient] = useState(false)
 
-  // Ensure we always have a valid value
   const safeValue = value || []
 
-  // Use the forceRemountKey if provided, otherwise use a static key
   const editorKey = forceRemountKey
     ? `editor-${id}-${forceRemountKey}`
     : `editor-${id}`
@@ -390,7 +385,6 @@ export function PortableTextEditor({
   }, [])
 
   if (!isClient) {
-    // Show a placeholder during server-side rendering
     return (
       <div>
         <label

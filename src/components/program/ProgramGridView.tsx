@@ -10,7 +10,6 @@ interface ProgramGridViewProps {
 export const ProgramGridView = React.memo(function ProgramGridView({
   data,
 }: ProgramGridViewProps) {
-  // Filter out placeholder sessions for grid view
   const talksOnly = data.allTalks.filter(
     (talk) => talk.talk !== null && talk.talk !== undefined,
   )
@@ -31,7 +30,6 @@ export const ProgramGridView = React.memo(function ProgramGridView({
 
   return (
     <div className="space-y-8">
-      {/* Grid of talk cards */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
         {talksOnly.map((talk, index) => (
           <TalkCard
@@ -43,7 +41,6 @@ export const ProgramGridView = React.memo(function ProgramGridView({
         ))}
       </div>
 
-      {/* Summary */}
       <div className="border-t border-brand-frosted-steel py-8 text-center dark:border-gray-700">
         <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
           Showing {talksOnly.length} talks from {data.schedules.length} day

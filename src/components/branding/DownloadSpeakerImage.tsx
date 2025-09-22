@@ -9,10 +9,6 @@ interface DownloadSpeakerImageProps {
   children: React.ReactNode
 }
 
-/**
- * Component that wraps speaker promotion cards with download functionality
- * Uses html2canvas-pro for better CSS and modern web feature support
- */
 export function DownloadSpeakerImage({
   filename = 'speaker-image',
   children,
@@ -20,9 +16,6 @@ export function DownloadSpeakerImage({
   const [isDownloading, setIsDownloading] = useState(false)
   const componentRef = useRef<HTMLDivElement>(null)
 
-  /**
-   * Wait for all images in the component to load
-   */
   const waitForImages = async (element: HTMLElement): Promise<void> => {
     const images = element.querySelectorAll('img')
     if (images.length === 0) return
@@ -36,9 +29,9 @@ export function DownloadSpeakerImage({
             img.onload = () => resolve()
             img.onerror = () => {
               console.warn('Image failed to load:', img.src.substring(0, 100))
-              resolve() // Continue even if image fails
+              resolve()
             }
-            // Timeout after 3 seconds per image
+
             setTimeout(resolve, 3000)
           }
         })
@@ -46,9 +39,6 @@ export function DownloadSpeakerImage({
     )
   }
 
-  /**
-   * Update external image sources to use our proxy for CORS-free access
-   */
   const updateImageSources = async (element: HTMLElement): Promise<void> => {
     const images = element.querySelectorAll('img')
     const externalImages = Array.from(images).filter(
@@ -57,36 +47,30 @@ export function DownloadSpeakerImage({
         !img.src.includes(window.location.hostname),
     )
 
-    // Simply update src to use proxy - no need for data URL conversion
     externalImages.forEach((img) => {
       const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.src)}`
       img.src = proxyUrl
     })
 
-    // Wait for proxied images to load
     if (externalImages.length > 0) {
       await waitForImages(element)
     }
   }
 
-  /**
-   * Generate canvas from element using html2canvas-pro
-   */
   const generateCanvas = async (
     element: HTMLElement,
   ): Promise<HTMLCanvasElement> => {
     const canvas = await html2canvas(element, {
-      backgroundColor: null, // Set to null for transparent background
-      scale: 4, // Increased to 4x for much higher resolution (was 2x)
+      backgroundColor: null,
+      scale: 4,
       useCORS: true,
       allowTaint: false,
       removeContainer: false,
-      imageTimeout: 12000, // Increased timeout for higher resolution processing
+      imageTimeout: 12000,
       width: element.offsetWidth,
       height: element.offsetHeight,
-      logging: false, // Disable logging in production
+      logging: false,
       onclone: (clonedDoc: Document) => {
-        // Ensure QR code elements are visible in the cloned document
         const qrElements = clonedDoc.querySelectorAll('[data-qr-code]')
         qrElements.forEach((el: Element) => {
           if (el instanceof HTMLElement) {
@@ -96,7 +80,6 @@ export function DownloadSpeakerImage({
           }
         })
 
-        // Ensure all text is visible and properly styled
         const textElements = clonedDoc.querySelectorAll(
           'h1, h2, h3, p, span, div',
         )
@@ -115,9 +98,6 @@ export function DownloadSpeakerImage({
     return canvas
   }
 
-  /**
-   * Convert canvas to blob and trigger download
-   */
   const downloadCanvas = async (canvas: HTMLCanvasElement): Promise<void> => {
     return new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -129,7 +109,6 @@ export function DownloadSpeakerImage({
 
           let url: string | null = null
           try {
-            // Create download link
             url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             const fileName = `${filename}-${Date.now()}.png`
@@ -138,12 +117,10 @@ export function DownloadSpeakerImage({
             link.download = fileName
             link.style.display = 'none'
 
-            // Trigger download
             document.body.appendChild(link)
             link.click()
             document.body.removeChild(link)
 
-            // Clean up memory
             setTimeout(() => {
               if (url) URL.revokeObjectURL(url)
               resolve()
@@ -154,14 +131,11 @@ export function DownloadSpeakerImage({
           }
         },
         'image/png',
-        1.0, // Maximum quality (was 0.95)
+        1.0,
       )
     })
   }
 
-  /**
-   * Main download handler
-   */
   const downloadAsImage = async () => {
     if (!componentRef.current) {
       console.error('Component ref not available')
@@ -171,7 +145,6 @@ export function DownloadSpeakerImage({
 
     const element = componentRef.current
 
-    // Validate element has dimensions
     if (element.offsetWidth === 0 || element.offsetHeight === 0) {
       console.error('Element has zero dimensions')
       alert(
@@ -183,28 +156,21 @@ export function DownloadSpeakerImage({
     setIsDownloading(true)
 
     try {
-      // Wait for all content to load (especially QR codes)
       await waitForImages(element)
 
-      // Update external images to use proxy URLs for CORS-free access
       await updateImageSources(element)
 
-      // Brief pause to ensure DOM updates are complete
       await new Promise((resolve) => setTimeout(resolve, 300))
 
-      // Generate the canvas
       const canvas = await generateCanvas(element)
 
-      // Download the image
       await downloadCanvas(canvas)
 
-      // Clean up canvas to free memory
       canvas.width = 0
       canvas.height = 0
     } catch (error) {
       console.error('Download failed:', error)
 
-      // More user-friendly error messages
       let message = 'Failed to generate image. Please try again.'
 
       if (error instanceof Error) {
@@ -238,7 +204,6 @@ export function DownloadSpeakerImage({
         {children}
       </div>
 
-      {/* Download Button */}
       <div className="mt-4">
         <button
           onClick={downloadAsImage}

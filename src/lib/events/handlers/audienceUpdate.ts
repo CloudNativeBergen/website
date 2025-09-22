@@ -6,9 +6,6 @@ import {
 } from '@/lib/email/audience'
 import { Action, Status } from '@/lib/proposal/types'
 
-/**
- * Helper function to check if an error is a rate limit error
- */
 const isRateLimitError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') {
     return false
@@ -23,13 +20,9 @@ const isRateLimitError = (error: unknown): boolean => {
   )
 }
 
-/**
- * Handler for email audience management
- */
 export async function handleAudienceUpdate(
   event: ProposalStatusChangeEvent,
 ): Promise<void> {
-  // Only update audience for actions that can change confirmed status
   const relevantActions = [
     Action.confirm,
     Action.withdraw,
@@ -46,11 +39,9 @@ export async function handleAudienceUpdate(
     return
   }
 
-  // Determine if this is a status change that affects audience membership
   const wasConfirmed = event.previousStatus === Status.confirmed
   const isNowConfirmed = event.newStatus === Status.confirmed
 
-  // No audience change needed if confirmation status didn't change
   if (wasConfirmed === isNowConfirmed) {
     console.log(
       `No audience change needed - status transition: ${event.previousStatus} → ${event.newStatus}`,
@@ -58,7 +49,6 @@ export async function handleAudienceUpdate(
     return
   }
 
-  // Get or create audience once for all speakers (with rate limiting)
   const { audienceId, error: audienceError } =
     await getOrCreateConferenceAudience(event.conference)
 
@@ -76,7 +66,6 @@ export async function handleAudienceUpdate(
     `${action === 'add' ? 'Adding' : 'Removing'} ${event.speakers.length} speaker(s) ${action === 'add' ? 'to' : 'from'} audience due to status change: ${event.previousStatus} → ${event.newStatus}`,
   )
 
-  // Process speakers sequentially to avoid rate limit issues
   for (let i = 0; i < event.speakers.length; i++) {
     const speaker = event.speakers[i]
 
@@ -87,7 +76,6 @@ export async function handleAudienceUpdate(
       }
 
       if (isNowConfirmed) {
-        // Add to audience (newly confirmed)
         const result = await addSpeakerToAudience(audienceId, speaker)
         if (result.success) {
           console.log(`Added speaker ${speaker.name} to audience`)
@@ -104,7 +92,6 @@ export async function handleAudienceUpdate(
           }
         }
       } else {
-        // Remove from audience (no longer confirmed)
         const result = await removeSpeakerFromAudience(
           audienceId,
           speaker.email,
@@ -131,9 +118,8 @@ export async function handleAudienceUpdate(
       )
     }
 
-    // Add delay between speakers to prevent rate limiting (except for the last one)
     if (i < event.speakers.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 1000)) // 1 second delay
+      await new Promise((resolve) => setTimeout(resolve, 1000))
     }
   }
 

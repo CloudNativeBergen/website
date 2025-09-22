@@ -17,11 +17,9 @@ interface UnassignedProposalsProps {
   proposals: ProposalExisting[]
 }
 
-// Constants for better performance
-const VIRTUAL_SCROLL_THRESHOLD = 50 // Enable virtualization for large lists
-const PROPOSAL_HEIGHT = 120 // Estimated height per proposal in pixels
+const VIRTUAL_SCROLL_THRESHOLD = 50
+const PROPOSAL_HEIGHT = 120
 
-// Constants for better maintainability
 const FILTER_STYLES = {
   container: 'space-y-3',
   searchContainer: 'relative',
@@ -37,7 +35,6 @@ const FILTER_STYLES = {
     'absolute top-2 right-2 inline-flex items-center gap-1 rounded-md bg-white/90 backdrop-blur-sm px-2 py-1 text-xs font-medium text-gray-600 hover:bg-white hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all shadow-sm border border-gray-200 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100 dark:border-gray-600',
 } as const
 
-// Memoized filter components
 const SearchFilter = ({
   searchQuery,
   onSearchChange,
@@ -145,14 +142,12 @@ const EmptyState = ({ hasProposals }: { hasProposals: boolean }) => (
 )
 
 export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
-  // Performance optimization for rapid filter changes
   const { batchUpdate } = useBatchUpdates()
 
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedFormat, setSelectedFormat] = useState<string>('')
   const [selectedLevel, setSelectedLevel] = useState<string>('')
 
-  // Memoized filter options for performance
   const filterOptions = useMemo(() => {
     const formats = new Set(proposals.map((p) => p.format).filter(Boolean))
     const levels = new Set(proposals.map((p) => p.level).filter(Boolean))
@@ -163,14 +158,12 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     }
   }, [proposals])
 
-  // Optimized filtering with better search logic
   const filteredProposals = useMemo(() => {
     if (!searchQuery && !selectedFormat && !selectedLevel) {
       return proposals
     }
 
     return proposals.filter((proposal) => {
-      // Search logic - check title, speaker name, and format
       if (searchQuery) {
         const query = searchQuery.toLowerCase().trim()
         const titleMatch = proposal.title.toLowerCase().includes(query)
@@ -192,12 +185,10 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         }
       }
 
-      // Format filter
       if (selectedFormat && proposal.format !== selectedFormat) {
         return false
       }
 
-      // Level filter
       if (selectedLevel && proposal.level !== selectedLevel) {
         return false
       }
@@ -206,7 +197,6 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     })
   }, [proposals, searchQuery, selectedFormat, selectedLevel])
 
-  // Memoized event handlers for performance with batched updates
   const handleSearchChange = useCallback(
     (value: string) => {
       batchUpdate(() => setSearchQuery(value))
@@ -236,7 +226,6 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     })
   }, [batchUpdate])
 
-  // Memoized computed values
   const hasActiveFilters = useMemo(() => {
     return Boolean(searchQuery || selectedFormat || selectedLevel)
   }, [searchQuery, selectedFormat, selectedLevel])
@@ -248,7 +237,6 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
     return `${filteredProposals.length} of ${proposals.length} talks`
   }, [filteredProposals.length, proposals.length])
 
-  // Virtual scrolling for performance with large lists
   const useVirtualScrolling =
     filteredProposals.length > VIRTUAL_SCROLL_THRESHOLD
   const [scrollTop, setScrollTop] = useState(0)
@@ -284,7 +272,6 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
       className="sticky flex h-full w-80 flex-col bg-white shadow-sm dark:bg-gray-900"
       style={{ top: '80px' }}
     >
-      {/* Header */}
       <div className="relative border-b border-gray-200 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
         <div className="mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -295,13 +282,11 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
           </p>
         </div>
 
-        {/* Clear filters button - positioned absolutely to prevent layout shift */}
         <ClearFiltersButton
           onClear={handleClearFilters}
           hasActiveFilters={hasActiveFilters}
         />
 
-        {/* Filters */}
         <div className={FILTER_STYLES.container}>
           <SearchFilter
             searchQuery={searchQuery}
@@ -322,7 +307,6 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         </div>
       </div>
 
-      {/* Proposals list with virtual scrolling */}
       <div
         className="flex-1 overflow-y-auto"
         onScroll={handleScroll}
@@ -367,7 +351,6 @@ export function UnassignedProposals({ proposals }: UnassignedProposalsProps) {
         )}
       </div>
 
-      {/* Legend */}
       <div className="border-t border-gray-200 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-800/50">
         <h3 className="mb-2 text-xs font-medium text-gray-700 dark:text-gray-300">
           Legend

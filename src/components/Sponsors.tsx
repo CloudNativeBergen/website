@@ -1,20 +1,14 @@
 'use client'
-// Use client due to the use of InlineSvgPreviewComponent that renders SVGs
 
 import { Container } from '@/components/Container'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
 import Link from 'next/link'
 
-/**
- * Deterministic shuffle based on a seed (current date)
- * This ensures consistent ordering between server and client renders
- */
 function deterministicShuffle<T>(array: T[], seed: number): T[] {
   const shuffled = [...array]
   let currentIndex = shuffled.length
 
-  // Simple LCG (Linear Congruential Generator) for deterministic "randomness"
   let random = seed
   const next = () => {
     random = (random * 1664525 + 1013904223) % 2 ** 32
@@ -33,27 +27,20 @@ function deterministicShuffle<T>(array: T[], seed: number): T[] {
   return shuffled
 }
 
-/**
- * Get a deterministic seed based on the current date
- * Changes daily to provide variation while maintaining consistency
- */
 function getDailySeed(): number {
   const today = new Date()
   const year = today.getFullYear()
   const month = today.getMonth() + 1
   const day = today.getDate()
 
-  // Create a seed that changes daily but is consistent throughout the day
   return year * 10000 + month * 100 + day
 }
 
 export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
-  // Early return if no sponsors
   if (!sponsors || sponsors.length === 0) {
     return null
   }
 
-  // Group sponsors by tier, but treat all special tiers as one "SPECIAL" group
   const groupedSponsors = sponsors.reduce(
     (acc, sponsor) => {
       const tierTitle =
@@ -67,12 +54,9 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
     {} as Record<string, ConferenceSponsor[]>,
   )
 
-  // Get deterministic seed based on current date
   const dailySeed = getDailySeed()
 
-  // Randomize sponsors within each tier using deterministic shuffle
   Object.keys(groupedSponsors).forEach((tierName) => {
-    // Use tier name + daily seed to ensure different shuffling for each tier
     const tierSeed = dailySeed + tierName.charCodeAt(0) * 1000
     groupedSponsors[tierName] = deterministicShuffle(
       groupedSponsors[tierName],
@@ -80,14 +64,11 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
     )
   })
 
-  // Sort tier names by hierarchy and value
   const sortedTierNames = Object.keys(groupedSponsors).sort((a, b) => {
-    // Special group always goes last
     if (a === 'SPECIAL' && b !== 'SPECIAL') return 1
     if (b === 'SPECIAL' && a !== 'SPECIAL') return -1
     if (a === 'SPECIAL' && b === 'SPECIAL') return 0
 
-    // For standard tiers, sort by highest price in tier (most expensive tier first)
     const aTierSponsors = groupedSponsors[a]
     const bTierSponsors = groupedSponsors[b]
 
@@ -99,10 +80,9 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
     )
 
     if (aMaxPrice !== bMaxPrice) {
-      return bMaxPrice - aMaxPrice // Sort descending (most expensive tier first)
+      return bMaxPrice - aMaxPrice
     }
 
-    // If prices are equal, sort alphabetically
     return a.localeCompare(b)
   })
 
@@ -121,7 +101,6 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
           </div>
         </div>
 
-        {/* Unified responsive sponsor grid */}
         <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-none">
           {sortedTierNames.map((tierName) => {
             const tierSponsors = groupedSponsors[tierName]
@@ -131,7 +110,6 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                 key={tierName}
                 className="mb-12 last:mb-0 lg:relative lg:mb-0"
               >
-                {/* Tier header - responsive positioning */}
                 <div className="mb-6 flex items-center gap-3 lg:absolute lg:top-8 lg:left-0 lg:mb-0 lg:w-32">
                   <div className="h-0.5 w-4 bg-brand-cloud-blue dark:bg-brand-cloud-blue"></div>
                   <h3 className="font-display text-lg font-bold tracking-wider whitespace-nowrap text-brand-cloud-blue uppercase dark:text-brand-cloud-blue">
@@ -139,7 +117,6 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                   </h3>
                 </div>
 
-                {/* Tier sponsors grid - responsive columns */}
                 <div className="lg:ml-40">
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                     {tierSponsors.map((sponsor, i) => (
@@ -168,7 +145,6 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
           })}
         </div>
 
-        {/* Become a Sponsor Call-to-Action */}
         <div className="mt-20 text-center">
           <div className="rounded-2xl bg-brand-sky-mist px-8 py-12 sm:px-12 dark:bg-gray-800/60">
             <h3 className="font-display mb-4 text-2xl font-bold tracking-tight text-brand-cloud-blue dark:text-blue-400">

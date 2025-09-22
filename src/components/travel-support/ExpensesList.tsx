@@ -68,7 +68,6 @@ function ExpenseItem({
     }
   }
 
-  // If in editing mode, show the form
   if (isEditing) {
     return (
       <div className="rounded-lg border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/50 to-blue-50/50 p-4 shadow-sm transition-all duration-200 dark:border-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20">
@@ -169,7 +168,6 @@ function ExpenseItem({
         )}
       </div>
 
-      {/* Receipts Section */}
       {expense.receipts && expense.receipts.length > 0 && (
         <div className="mt-4 border-t border-gray-100 pt-3 dark:border-gray-700">
           <div className="space-y-2">
@@ -235,10 +233,9 @@ export function ExpensesList({
     if (onEdit) {
       try {
         await onEdit(expenseId, expense)
-        // Only reset editing state on successful update
+
         setEditingExpenseId(null)
       } catch (error) {
-        // Keep editing mode on error so user can retry
         console.error('Failed to update expense:', error)
       }
     }

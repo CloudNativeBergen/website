@@ -49,24 +49,22 @@ interface ServiceSessionModalProps {
   onSave: (title: string, duration: number) => void
 }
 
-// Constants for better maintainability
 const SCHEDULE_CONFIG = {
   START_TIME: '08:00',
   END_TIME: '21:00',
   SLOT_INTERVAL: 5,
   PIXELS_PER_MINUTE: 2.4,
-  LABEL_INTERVAL: 15, // Show time labels every 15 minutes
+  LABEL_INTERVAL: 15,
 } as const
 
 const TRACK_CONSTRAINTS = {
-  MIN_WIDTH: 320, // min-w-80 = 320px
-  MAX_WIDTH: 384, // max-w-96 = 384px
+  MIN_WIDTH: 320,
+  MAX_WIDTH: 384,
 } as const
 
-// Memoized time calculation functions
 const calculateTimePosition = (time: string): number => {
   const [hours, minutes] = time.split(':').map(Number)
-  const startHour = 8 // 08:00
+  const startHour = 8
   const totalMinutes = (hours - startHour) * 60 + minutes
   return Math.max(0, totalMinutes * SCHEDULE_CONFIG.PIXELS_PER_MINUTE)
 }
@@ -89,7 +87,6 @@ const shouldShowTimeLabel = (time: string): boolean => {
   return minutes % SCHEDULE_CONFIG.LABEL_INTERVAL === 0
 }
 
-// Helper function to add minutes to a time string
 const addMinutesToTime = (time: string, minutes: number): string => {
   const [hours, mins] = time.split(':').map(Number)
   const date = new Date(2000, 0, 1, hours, mins)
@@ -97,10 +94,8 @@ const addMinutesToTime = (time: string, minutes: number): string => {
   return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 
-// Calculate total minutes of real talk content (excluding service sessions)
 const calculateTalkContentMinutes = (track: ScheduleTrack): number => {
   return track.talks.reduce((total, talk) => {
-    // Only count real talks, not service sessions (placeholder sessions)
     if (!talk.talk) return total
 
     const start = new Date(`2000-01-01T${talk.startTime}:00`)
@@ -113,7 +108,6 @@ const calculateTalkContentMinutes = (track: ScheduleTrack): number => {
   }, 0)
 }
 
-// Service Session Modal Component
 const ServiceSessionModal = ({
   isOpen,
   timeSlot,
@@ -121,7 +115,7 @@ const ServiceSessionModal = ({
   onSave,
 }: ServiceSessionModalProps) => {
   const [title, setTitle] = useState('')
-  const [duration, setDuration] = useState(10) // Default 10 minutes
+  const [duration, setDuration] = useState(10)
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -218,7 +212,6 @@ const ServiceSessionModal = ({
   )
 }
 
-// Service Session Component with resize handle and drag functionality
 const ServiceSession = ({
   talk,
   talkIndex,
@@ -285,7 +278,7 @@ const ServiceSession = ({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
-      e.stopPropagation() // Prevent event bubbling
+      e.stopPropagation()
       setIsResizing(true)
       setStartY(e.clientY)
       setStartHeight(position.height)
@@ -297,15 +290,14 @@ const ServiceSession = ({
     (e: MouseEvent) => {
       if (!isResizing) return
 
-      e.preventDefault() // Prevent text selection during drag
+      e.preventDefault()
 
       const deltaY = e.clientY - startY
-      const newHeight = Math.max(12, startHeight + deltaY) // Minimum 5 minutes (12px)
+      const newHeight = Math.max(12, startHeight + deltaY)
       const newDuration =
-        Math.round(newHeight / SCHEDULE_CONFIG.PIXELS_PER_MINUTE / 5) * 5 // Round to 5-minute intervals
+        Math.round(newHeight / SCHEDULE_CONFIG.PIXELS_PER_MINUTE / 5) * 5
 
       if (newDuration >= 5 && newDuration <= 180) {
-        // Max 3 hours
         onUpdateSession(talkIndex, newDuration)
       }
     },
@@ -317,22 +309,16 @@ const ServiceSession = ({
     setIsResizing(false)
   }, [])
 
-  // Add global mouse listeners for resizing:
-  // These listeners are necessary to track mouse movements and actions outside the component
-  // during resizing, ensuring the resizing logic works even if the cursor leaves the component's bounds.
-  // Potential side effects include interference with other global listeners and performance overhead.
-  // Cleanup is handled in the useEffect cleanup function to prevent memory leaks or unintended behavior.
   useEffect(() => {
     if (isResizing) {
       const handleMouseMoveGlobal = (e: MouseEvent) => handleMouseMove(e)
       const handleMouseUpGlobal = (e: MouseEvent) => handleMouseUp(e)
-      const handleMouseLeave = () => setIsResizing(false) // Stop resizing if mouse leaves window
+      const handleMouseLeave = () => setIsResizing(false)
 
       document.addEventListener('mousemove', handleMouseMoveGlobal)
       document.addEventListener('mouseup', handleMouseUpGlobal)
       document.addEventListener('mouseleave', handleMouseLeave)
 
-      // Also listen for escape key to cancel resize
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           setIsResizing(false)
@@ -360,14 +346,12 @@ const ServiceSession = ({
       }}
     >
       <div className="relative h-full">
-        {/* Use DraggableServiceSession for the main content */}
         <DraggableServiceSession
           serviceSession={talk}
           sourceTrackIndex={trackIndex}
           sourceTimeSlot={talk.startTime}
         />
 
-        {/* Editing overlay */}
         {isEditing && (
           <div className="absolute inset-0 z-30 rounded-md border-2 border-blue-400 bg-blue-50 p-2 dark:border-blue-500 dark:bg-blue-900/20">
             <div className="space-y-1">
@@ -400,7 +384,6 @@ const ServiceSession = ({
           </div>
         )}
 
-        {/* Resize handle */}
         <div
           className={`absolute right-0 bottom-0 left-0 z-20 h-2 cursor-ns-resize border-t transition-all ${
             isResizing
@@ -419,7 +402,6 @@ const ServiceSession = ({
           ></div>
         </div>
 
-        {/* Action buttons */}
         <div className="absolute top-0.5 right-0.5 z-20 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button
             onClick={handleStartEdit}
@@ -451,7 +433,6 @@ const ServiceSession = ({
   )
 }
 
-// Memoized TimeSlotDropZone component
 const TimeSlotDropZone = ({
   timeSlot,
   trackIndex,
@@ -469,7 +450,6 @@ const TimeSlotDropZone = ({
     },
   })
 
-  // Handle swap hover detection
   useEffect(() => {
     if (!onSwapHover) return
 
@@ -483,7 +463,6 @@ const TimeSlotDropZone = ({
       activeDragItem.proposal &&
       isOver
 
-    // Prevent self-swap indication - don't trigger hover for the same talk being dragged
     const isSelfSwap =
       isSwapOperation &&
       activeDragItem?.proposal?._id === occupiedTalk?.talk?._id &&
@@ -496,27 +475,21 @@ const TimeSlotDropZone = ({
     }
   }, [isOver, timeSlot.time, track.talks, activeDragItem, onSwapHover])
 
-  // Memoize canDrop calculation
   const canDrop = useMemo(() => {
     if (!activeDragItem) return true
 
-    // Only check conflicts for proposals (talks), not service sessions
     if (!activeDragItem.proposal) return true
 
-    // Check if this time slot is occupied by another talk
     const occupiedTalk = track.talks.find(
       (talk) => talk.startTime === timeSlot.time,
     )
 
     if (occupiedTalk && occupiedTalk.talk) {
-      // Slot is occupied - check if we can swap
-      // Only allow swapping for scheduled talks (not unassigned proposals)
       if (
         activeDragItem.type === 'scheduled-talk' &&
         activeDragItem.sourceTrackIndex !== undefined &&
         activeDragItem.sourceTimeSlot !== undefined
       ) {
-        // Prevent self-swap - don't allow dropping on the same talk
         if (
           activeDragItem.proposal._id === occupiedTalk.talk._id &&
           activeDragItem.sourceTimeSlot === timeSlot.time
@@ -532,12 +505,9 @@ const TimeSlotDropZone = ({
         )
       }
 
-      // Can't drop unassigned proposal on occupied slot
       return false
     }
 
-    // Slot is empty - use existing conflict detection
-    // If moving a scheduled talk within the same track, exclude it from conflict detection
     const excludeTalk =
       activeDragItem.type === 'scheduled-talk' &&
       activeDragItem.sourceTrackIndex === trackIndex
@@ -557,12 +527,10 @@ const TimeSlotDropZone = ({
     )
   }, [activeDragItem, track, timeSlot.time, trackIndex])
 
-  // Check if this time slot is occupied
   const isOccupied = useMemo(() => {
     return track.talks.some((talk) => talk.startTime === timeSlot.time)
   }, [track.talks, timeSlot.time])
 
-  // Memoize position and class calculations
   const position = useMemo(
     () => calculateTimePosition(timeSlot.time),
     [timeSlot.time],
@@ -577,7 +545,7 @@ const TimeSlotDropZone = ({
       'absolute right-0 left-0 h-3 border-b border-gray-100 dark:border-gray-700'
 
     if (isOver && canDrop) {
-      return `${baseClasses} border-blue-300 bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30` // Blue for valid drop
+      return `${baseClasses} border-blue-300 bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30`
     }
 
     if (isOver && !canDrop)
@@ -601,7 +569,6 @@ const TimeSlotDropZone = ({
         </div>
       )}
 
-      {/* Swap indicator - show when dragging over occupied slot for swap */}
       {isOccupied &&
         activeDragItem?.type === 'scheduled-talk' &&
         isOver &&
@@ -615,7 +582,6 @@ const TimeSlotDropZone = ({
           </div>
         )}
 
-      {/* Add service session button - only show when not occupied and not dragging */}
       {!isOccupied && !activeDragItem && (
         <button
           onClick={handleAddServiceSession}
@@ -635,7 +601,6 @@ const TimeSlotDropZone = ({
   )
 }
 
-// Memoized ScheduledTalk component
 const ScheduledTalk = ({
   talk,
   talkIndex,
@@ -657,15 +622,12 @@ const ScheduledTalk = ({
     onRemoveTalk(talkIndex)
   }, [onRemoveTalk, talkIndex])
 
-  // Check if this talk is the target of a potential swap
   const isSwapTarget = useMemo(() => {
     if (!activeDragItem?.proposal || !talk.talk || !hoveredSwapTimeSlot)
       return false
 
-    // Only show swap indication for scheduled talk drags (not unassigned proposals)
     if (activeDragItem.type !== 'scheduled-talk') return false
 
-    // Don't show swap indication for the talk being dragged itself
     if (
       activeDragItem.proposal._id === talk.talk._id &&
       activeDragItem.sourceTimeSlot === talk.startTime
@@ -673,7 +635,6 @@ const ScheduledTalk = ({
       return false
     }
 
-    // Show swap indication only for the talk at the hovered time slot
     return talk.startTime === hoveredSwapTimeSlot
   }, [activeDragItem, talk.talk, talk.startTime, hoveredSwapTimeSlot])
 
@@ -721,7 +682,6 @@ const ScheduledTalk = ({
   )
 }
 
-// Memoized TrackHeader component
 const TrackHeader = ({
   track,
   isEditing,
@@ -745,7 +705,6 @@ const TrackHeader = ({
   onStartEdit: () => void
   onRemoveTrack: () => void
 }) => {
-  // Calculate talk content minutes
   const talkContentMinutes = calculateTalkContentMinutes(track)
   const realTalks = track.talks.filter((talk) => talk.talk).length
 
@@ -848,7 +807,6 @@ function DroppableTrack({
     null,
   )
 
-  // Memoize expensive calculations
   const timeSlots = useMemo(
     () =>
       generateTimeSlots(
@@ -874,7 +832,6 @@ function DroppableTrack({
     },
   })
 
-  // Memoized event handlers
   const handleSaveEdit = useCallback(() => {
     onUpdateTrack({
       ...track,
@@ -986,7 +943,6 @@ function DroppableTrack({
     [onDuplicateServiceSession, trackIndex],
   )
 
-  // Memoize track container classes
   const trackContainerClasses = useMemo(() => {
     const baseClasses =
       'relative rounded-b-lg border-r border-b border-l border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900'
@@ -1004,7 +960,6 @@ function DroppableTrack({
         maxWidth: `${TRACK_CONSTRAINTS.MAX_WIDTH}px`,
       }}
     >
-      {/* Track Header */}
       <TrackHeader
         track={track}
         isEditing={isEditing}
@@ -1018,13 +973,11 @@ function DroppableTrack({
         onRemoveTrack={onRemoveTrack}
       />
 
-      {/* Track Timeline */}
       <div
         ref={setNodeRef}
         className={trackContainerClasses}
         style={{ height: `${trackHeight}px` }}
       >
-        {/* Time slots grid */}
         {timeSlots.map((timeSlot) => (
           <TimeSlotDropZone
             key={timeSlot.time}
@@ -1037,10 +990,8 @@ function DroppableTrack({
           />
         ))}
 
-        {/* Scheduled talks and service sessions */}
         {track.talks.map((talk, talkIndex) => {
           if (talk.placeholder) {
-            // Render service session
             return (
               <ServiceSession
                 key={`service-${talk.startTime}-${talkIndex}`}
@@ -1054,7 +1005,6 @@ function DroppableTrack({
               />
             )
           } else {
-            // Render regular talk
             return (
               <ScheduledTalk
                 key={`${talk.talk?._id}-${talk.startTime}-${talkIndex}`}
@@ -1069,7 +1019,6 @@ function DroppableTrack({
           }
         })}
 
-        {/* Empty state */}
         {track.talks.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-sm text-gray-400 dark:text-gray-500">
@@ -1079,7 +1028,6 @@ function DroppableTrack({
         )}
       </div>
 
-      {/* Service Session Modal */}
       <ServiceSessionModal
         isOpen={showServiceModal}
         timeSlot={selectedTimeSlot}
@@ -1090,7 +1038,6 @@ function DroppableTrack({
   )
 }
 
-// Export memoized version for better performance
 export const MemoizedDroppableTrack = React.memo(DroppableTrack)
 MemoizedDroppableTrack.displayName = 'MemoizedDroppableTrack'
 export { MemoizedDroppableTrack as DroppableTrack }

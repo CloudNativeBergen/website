@@ -88,20 +88,19 @@ export function EmailButton({
   children,
   variant = 'primary',
 }: EmailButtonProps) {
-  // Email-safe button styles matching the Primary CTA Cloud Blue from the brand guidelines
   const buttonStyle: React.CSSProperties = {
     backgroundColor: variant === 'primary' ? '#1D4ED8' : '#6366F1',
     color: 'white',
     padding: '16px 32px',
     textDecoration: 'none',
-    borderRadius: '16px', // rounded-2xl equivalent (16px)
+    borderRadius: '16px',
     fontWeight: '600',
     fontSize: '16px',
     fontFamily:
       '"Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     display: 'inline-block',
     textAlign: 'center' as const,
-    // Email-safe hover effect simulation (some clients support this)
+
     transition: 'background-color 0.2s ease',
     border: 'none',
     boxShadow: '0 4px 12px rgba(29, 78, 216, 0.25)',

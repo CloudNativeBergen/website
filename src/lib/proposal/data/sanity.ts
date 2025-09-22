@@ -234,7 +234,6 @@ export async function updateProposal(
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
 
-  // Process speakers field to ensure proper format with _key attributes
   const speakers = prepareReferenceArray(
     proposal.speakers as Array<Reference | { _id: string }>,
     'speaker',
@@ -245,7 +244,7 @@ export async function updateProposal(
       .patch(proposalId)
       .set({
         ...proposal,
-        ...(speakers && { speakers }), // Only include speakers if defined
+        ...(speakers && { speakers }),
       })
       .commit()
   } catch (error) {
@@ -299,7 +298,6 @@ export async function createProposal(
   const _id = randomUUID().toString()
   const status = Status.submitted
 
-  // Use speakers from proposal input if provided, otherwise fallback to single speaker
   const speakers = proposal.speakers
     ? prepareReferenceArray(
         proposal.speakers as Array<Reference | { _id: string }>,
@@ -344,8 +342,6 @@ export async function fetchNextUnreviewedProposal({
   error: Error | null
 }> {
   try {
-    // Get all unreviewed proposals for this reviewer
-    // A proposal is unreviewed if this reviewer hasn't created a review for it
     const query = groq`
       *[
         _type == "talk" &&
@@ -371,22 +367,18 @@ export async function fetchNextUnreviewedProposal({
       return { nextProposal: null, error: null }
     }
 
-    // If no current proposal, return the first one
     if (!currentProposalId) {
       return { nextProposal: unreviewedProposals[0], error: null }
     }
 
-    // Find the index of the current proposal
     const currentIndex = unreviewedProposals.findIndex(
       (p: { _id: string }) => p._id === currentProposalId,
     )
 
-    // If current proposal not found in unreviewed list, return the first one
     if (currentIndex === -1) {
       return { nextProposal: unreviewedProposals[0], error: null }
     }
 
-    // Get the next proposal, wrapping around to the beginning if needed
     const nextIndex = (currentIndex + 1) % unreviewedProposals.length
     return { nextProposal: unreviewedProposals[nextIndex], error: null }
   } catch (err) {
@@ -423,7 +415,7 @@ export async function searchProposals({
 
   const searchQuery = groq`
     *[${filters} &&
-      // Search in various proposal and speaker fields
+     
       (pt::text(description) match $searchTerm
       || title match $searchTerm
       || outline match $searchTerm
@@ -521,9 +513,6 @@ export async function searchProposals({
   return { proposals, proposalsError }
 }
 
-/**
- * Fix missing _key attributes in speakers arrays for existing proposals
- */
 export async function fixProposalSpeakerKeys(): Promise<{
   error?: Error
   fixed?: number

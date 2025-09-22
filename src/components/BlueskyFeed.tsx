@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { BlueskyIcon } from '@/components/SocialIcons'
 import { extractHandleFromUrl } from '@/lib/bluesky/utils'
 
-// Proper TypeScript interfaces for Bluesky API responses
 interface BlueskyAuthor {
   did: string
   handle: string
@@ -47,7 +46,6 @@ interface BlueskyFeedProps {
   compact?: boolean
 }
 
-// Utility function for relative time formatting
 const formatRelativeTime = (date: Date): string => {
   const now = new Date()
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
@@ -64,10 +62,8 @@ const formatRelativeTime = (date: Date): string => {
   })
 }
 
-// Extract post ID from AT URI
 const extractPostId = (uri: string): string => uri.split('/').pop() || ''
 
-// Enhanced error types
 type FetchError = {
   message: string
   status?: number
@@ -84,13 +80,11 @@ export function BlueskyFeed({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<FetchError | null>(null)
 
-  // Memoize the handle extraction to avoid recalculation
   const handle = useMemo(
     () => extractHandleFromUrl(blueskyHandle) || blueskyHandle,
     [blueskyHandle],
   )
 
-  // Memoized fetch function with proper error handling and cancellation
   const fetchBlueskyPosts = useCallback(
     async (signal: AbortSignal): Promise<BlueskyPost[]> => {
       const response = await fetch(
@@ -148,7 +142,6 @@ export function BlueskyFeed({
 
         const fetchError = err as FetchError
 
-        // Retry logic for retryable errors
         if (fetchError.retryable && retryCount < maxRetries) {
           retryCount++
           setTimeout(
@@ -158,7 +151,7 @@ export function BlueskyFeed({
               }
             },
             Math.pow(2, retryCount) * 1000,
-          ) // Exponential backoff
+          )
           return
         }
 
@@ -173,14 +166,11 @@ export function BlueskyFeed({
 
     fetchWithRetry()
 
-    // Cleanup function to cancel ongoing requests
     return () => {
       abortController.abort()
     }
   }, [handle, postCount, fetchBlueskyPosts])
 
-  // Memoized post items to prevent unnecessary re-renders
-  // This must be before any conditional returns to follow Rules of Hooks
   const postItems = useMemo(() => {
     if (!posts || posts.length === 0) return []
 
@@ -196,7 +186,6 @@ export function BlueskyFeed({
           className={`${compact ? 'space-y-2' : 'space-y-3'} ${index > 0 ? 'border-t border-gray-100 pt-3 dark:border-gray-700' : ''}`}
           aria-label={`Post by ${post.author.displayName || post.author.handle}`}
         >
-          {/* Author information */}
           <header
             className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}
           >
@@ -235,7 +224,6 @@ export function BlueskyFeed({
             </div>
           </header>
 
-          {/* Post content */}
           <div
             className={`${compact ? 'text-sm leading-relaxed' : 'text-sm leading-relaxed'} text-gray-700 dark:text-gray-300`}
           >
@@ -244,7 +232,6 @@ export function BlueskyFeed({
               : post.record.text}
           </div>
 
-          {/* Post footer */}
           <footer
             className={`flex items-center justify-between ${compact ? 'text-xs' : 'text-xs'} text-gray-500 dark:text-gray-400`}
           >
@@ -269,7 +256,6 @@ export function BlueskyFeed({
     })
   }, [posts, compact])
 
-  // Optimized loading component with better skeleton UI
   if (loading) {
     return (
       <div
@@ -289,7 +275,6 @@ export function BlueskyFeed({
               key={i}
               className={`${compact ? 'space-y-2' : 'space-y-3'} ${i > 0 ? 'border-t border-gray-100 pt-3 dark:border-gray-700' : ''}`}
             >
-              {/* Author skeleton */}
               <div
                 className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}
               >
@@ -305,7 +290,6 @@ export function BlueskyFeed({
                   )}
                 </div>
               </div>
-              {/* Content skeleton */}
               <div className="space-y-2">
                 <div
                   className={`${compact ? 'h-3' : 'h-4'} w-full animate-pulse rounded bg-gray-200 dark:bg-gray-700`}
@@ -314,7 +298,6 @@ export function BlueskyFeed({
                   className={`${compact ? 'h-3' : 'h-4'} w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700`}
                 />
               </div>
-              {/* Footer skeleton */}
               <div className="flex items-center justify-between">
                 <div
                   className={`${compact ? 'h-2.5 w-12' : 'h-3 w-16'} animate-pulse rounded bg-gray-200 dark:bg-gray-700`}
@@ -330,12 +313,10 @@ export function BlueskyFeed({
     )
   }
 
-  // Enhanced error handling - only show for non-retryable errors
   if (error && !error.retryable) {
-    return null // Gracefully hide component on error
+    return null
   }
 
-  // No posts state
   if (!posts || posts.length === 0) {
     return null
   }

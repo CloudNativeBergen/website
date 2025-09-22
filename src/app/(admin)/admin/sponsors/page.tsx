@@ -36,7 +36,6 @@ export default async function AdminSponsors() {
   const sponsors: ConferenceSponsorWithContact[] = conference?.sponsors || []
   const sponsorTiers = conference?.sponsor_tiers || []
 
-  // Group sponsors by tier
   const sponsorsByTier = sponsors.reduce(
     (acc, sponsorData) => {
       const tierTitle = sponsorData.tier?.title || 'No Tier'
@@ -49,23 +48,19 @@ export default async function AdminSponsors() {
     {} as Record<string, typeof sponsors>,
   )
 
-  // Sort tier names by priority (highest value first, then "No Tier")
   const sortedTierNames = Object.keys(sponsorsByTier).sort((a, b) => {
     if (a === 'No Tier') return 1
     if (b === 'No Tier') return -1
 
-    // Find the tier objects
     const tierA = sponsorTiers.find((tier) => tier.title === a)
     const tierB = sponsorTiers.find((tier) => tier.title === b)
 
-    // Handle special sponsors separately
     if (tierA?.tier_type === 'special' && tierB?.tier_type === 'special') {
       return a.localeCompare(b)
     }
-    if (tierA?.tier_type === 'special') return 1 // Special sponsors go last
+    if (tierA?.tier_type === 'special') return 1
     if (tierB?.tier_type === 'special') return -1
 
-    // Get the maximum price for each tier (in case there are multiple currencies)
     const maxPriceA = tierA?.price
       ? Math.max(...tierA.price.map((p) => p.amount))
       : 0
@@ -73,16 +68,13 @@ export default async function AdminSponsors() {
       ? Math.max(...tierB.price.map((p) => p.amount))
       : 0
 
-    // Sort by highest value first
     return maxPriceB - maxPriceA
   })
 
-  // Calculate total sponsorship value (only from standard sponsors with pricing)
   const totalSponsorshipValue = sponsors.reduce((total, sponsorData) => {
     if (sponsorData.tier && sponsorData.tier.tier_type !== 'special') {
       const tier = sponsorTiers.find((t) => t.title === sponsorData.tier?.title)
       if (tier && tier.price && tier.price.length > 0) {
-        // Use the first price entry or the maximum price
         const tierValue = Math.max(...tier.price.map((p) => p.amount))
         return total + tierValue
       }
@@ -90,7 +82,6 @@ export default async function AdminSponsors() {
     return total
   }, 0)
 
-  // Get the primary currency (most common currency in sponsor tiers)
   const currencies = sponsorTiers
     .filter((tier) => tier.price)
     .flatMap((tier) => tier.price!.map((p) => p.currency))
@@ -103,7 +94,6 @@ export default async function AdminSponsors() {
         )
       : 'NOK'
 
-  // Helper functions to check missing information
   const isMissingContactInfo = (
     sponsor: ConferenceSponsorWithContact,
   ): boolean => {
@@ -119,11 +109,9 @@ export default async function AdminSponsors() {
     return !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
   }
 
-  // Count missing information
   const sponsorsWithMissingContactInfo = sponsors.filter(isMissingContactInfo)
   const sponsorsWithMissingBillingInfo = sponsors.filter(isMissingBillingInfo)
 
-  // Calculate summary statistics
   const availableTiers = sponsorTiers.length
   const formattedTotalValue = formatCurrency(
     totalSponsorshipValue,
@@ -182,7 +170,6 @@ export default async function AdminSponsors() {
         ]}
       />
 
-      {/* Sponsor Communications */}
       {sponsors.length > 0 && (
         <div className="mt-8">
           <SponsorActions
@@ -204,7 +191,6 @@ export default async function AdminSponsors() {
         </div>
       )}
 
-      {/* Editable Sponsor Tiers */}
       <div className="mt-8">
         <SponsorTierEditor
           conferenceId={conference?._id || ''}
@@ -212,7 +198,6 @@ export default async function AdminSponsors() {
         />
       </div>
 
-      {/* Sponsor Management */}
       <div className="mt-12">
         <SponsorTierManagement
           sponsors={sponsors}
@@ -222,7 +207,6 @@ export default async function AdminSponsors() {
         />
       </div>
 
-      {/* Quick Actions */}
       <div className="mt-12">
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions

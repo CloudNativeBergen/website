@@ -8,9 +8,8 @@ import type {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Verify authentication token
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
 
@@ -48,7 +47,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if checkin configuration is available
     if (!conference.checkin_customer_id || !conference.checkin_event_id) {
       console.error('Conference missing checkin configuration')
       return NextResponse.json(
@@ -57,16 +55,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch ticket data from CheckIn.no
     const tickets = await fetchEventTickets(
       conference.checkin_customer_id,
       conference.checkin_event_id,
     )
 
-    // Process tickets using the new simplified processor
     let analysis: TicketAnalysisResult | null = null
 
-    // Validate target configuration before analysis
     const targetConfig = conference.ticket_targets
     if (
       targetConfig &&
@@ -84,7 +79,7 @@ export async function POST(request: NextRequest) {
             category: t.category,
             sum: t.sum,
           })),
-          config: targetConfig, // Use as-is since it already has the correct field names
+          config: targetConfig,
           capacity: conference.ticket_capacity,
           conference,
           conferenceDate:
@@ -103,7 +98,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Extract statistics from analysis or calculate basic stats
     const statistics = analysis?.statistics || {
       totalPaidTickets: tickets.length,
       totalRevenue: tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
@@ -115,7 +109,6 @@ export async function POST(request: NextRequest) {
       totalCapacityUsed: tickets.length,
     }
 
-    // Send update to Slack
     await sendSalesUpdateToSlack({
       conference,
       ticketsByCategory: statistics.categoryBreakdown,
@@ -124,7 +117,7 @@ export async function POST(request: NextRequest) {
       speakerTickets: statistics.speakerTickets,
       totalTickets: statistics.totalCapacityUsed,
       totalRevenue: statistics.totalRevenue,
-      targetAnalysis: analysis, // Include target analysis results
+      targetAnalysis: analysis,
       lastUpdated: new Date().toISOString(),
     })
 
@@ -162,9 +155,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     )
   }
-}
-
-// Only allow POST requests
-export async function GET() {
-  return NextResponse.json({ error: 'Method not allowed' }, { status: 405 })
 }

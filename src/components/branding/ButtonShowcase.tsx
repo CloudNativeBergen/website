@@ -10,7 +10,6 @@ import { CheckCircleIcon } from '@heroicons/react/24/solid'
 export function ButtonShowcase() {
   return (
     <div className="space-y-12">
-      {/* Primary Action Buttons */}
       <div>
         <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
           Primary Action Buttons
@@ -47,7 +46,6 @@ export function ButtonShowcase() {
         </div>
       </div>
 
-      {/* Secondary Action Buttons */}
       <div>
         <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
           Secondary Action Buttons
@@ -84,7 +82,6 @@ export function ButtonShowcase() {
         </div>
       </div>
 
-      {/* State Variations */}
       <div>
         <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
           Button States & Variations
@@ -130,7 +127,6 @@ export function ButtonShowcase() {
         </div>
       </div>
 
-      {/* Size Variations */}
       <div>
         <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
           Size Variations
@@ -171,7 +167,6 @@ export function ButtonShowcase() {
         </div>
       </div>
 
-      {/* Usage Guidelines */}
       <div className="rounded-lg border border-brand-cloud-blue/20 bg-brand-sky-mist p-6">
         <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
           Interactive Demo - Hover Over These Buttons
@@ -192,7 +187,6 @@ export function ButtonShowcase() {
         </p>
       </div>
 
-      {/* Usage Guidelines */}
       <div className="rounded-lg border border-brand-cloud-blue/20 bg-brand-sky-mist p-6">
         <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
           Button Usage Guidelines

@@ -61,7 +61,6 @@ export async function generateMetadata(): Promise<Metadata> {
   const headersList = await headers()
   const host = headersList.get('host') || 'localhost:3000'
 
-  // Construct the base URL with the correct protocol
   const protocol = host.includes('localhost') ? 'http' : 'https'
   const metadataBase = new URL(`${protocol}://${host}`)
 
@@ -85,7 +84,7 @@ export default async function RootLayout({
   const session = await auth()
   if (session?.user) {
     // TODO: Look into https://react.dev/reference/react/experimental_taintObjectReference
-    // filter out sensitive data before passing to client.
+
     session.user = {
       name: session.user.name,
       email: session.user.email,
@@ -125,7 +124,6 @@ export default async function RootLayout({
                     document.documentElement.classList.remove('dark');
                   }
                 } catch (e) {
-                  // Fallback for localStorage access issues
                   if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     document.documentElement.classList.add('dark');
                   }

@@ -48,7 +48,6 @@ export function SpeakerEmailModal({
     </div>
   )
 
-  // Generate greeting for the message
   const speakerNames = speakers.map((s) => s.name)
   const greetingNames =
     speakerNames.length === 1
@@ -59,7 +58,6 @@ export function SpeakerEmailModal({
           ', and ' +
           speakerNames[speakerNames.length - 1]
 
-  // Set initial message with greeting when modal opens
   useEffect(() => {
     if (isOpen) {
       const greeting = `Dear ${greetingNames},\n\n`
@@ -68,7 +66,6 @@ export function SpeakerEmailModal({
     }
   }, [isOpen, greetingNames])
 
-  // Generate default subject
   const conference = proposal.conference
   const conferenceName =
     conference && typeof conference === 'object' && !('_ref' in conference)
@@ -83,12 +80,10 @@ export function SpeakerEmailModal({
     subject: string
     message: PortableTextBlock[]
   }) => {
-    // Convert PortableText to HTML for individual speaker emails
     const messageHTML = await portableTextToHTML(
       message as PortableTextBlockForHTML[],
     )
 
-    // Use the multi-speaker endpoint for all cases
     const response = await fetch('/admin/api/speakers/email/multi', {
       method: 'POST',
       headers: {
@@ -98,7 +93,7 @@ export function SpeakerEmailModal({
         proposalId: proposal._id,
         speakerIds: speakers.map((s) => s.id),
         subject,
-        message: messageHTML, // Use the HTML version for email
+        message: messageHTML,
       }),
     })
 
@@ -118,7 +113,6 @@ export function SpeakerEmailModal({
 
   const localhostWarning = createLocalhostWarning(domain, 'speakers')
 
-  // Create preview component
   const createPreview = ({
     subject,
     messageHTML,
@@ -127,7 +121,6 @@ export function SpeakerEmailModal({
     message: PortableTextBlock[]
     messageHTML: string
   }) => {
-    // Extract conference information with type guard
     const conference = proposal.conference
     if (!conference || typeof conference !== 'object' || '_ref' in conference) {
       return <div>Conference information not available for preview</div>
@@ -143,7 +136,7 @@ export function SpeakerEmailModal({
         eventDate={conference.start_date || 'TBD'}
         eventUrl={`https://${domain}/`}
         subject={subject}
-        message={messageHTML} // Use the HTML version for proper formatting
+        message={messageHTML}
         senderName="Conference Team"
         socialLinks={conference.social_links || []}
       />

@@ -2,10 +2,6 @@ import { ExclamationTriangleIcon } from '@heroicons/react/20/solid'
 import Link from 'next/link'
 import { ErrorDisplayProps } from './utils'
 
-/**
- * Reusable error display component for admin pages
- * Provides consistent error messaging across the admin interface with dark mode support
- */
 export function ErrorDisplay({
   title,
   message,

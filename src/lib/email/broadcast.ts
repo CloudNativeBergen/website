@@ -34,9 +34,6 @@ export interface BroadcastEmailResponse {
   sent: boolean
 }
 
-/**
- * Send a broadcast email with standard setup and error handling
- */
 export async function sendBroadcastEmail({
   conference,
   subject,
@@ -46,7 +43,6 @@ export async function sendBroadcastEmail({
   additionalContent = '',
 }: BroadcastEmailRequest): Promise<Response> {
   try {
-    // Get or create the conference audience
     const { audienceId } =
       audienceType === 'speakers'
         ? await getOrCreateConferenceAudience(conference)
@@ -56,17 +52,14 @@ export async function sendBroadcastEmail({
       return createEmailErrorResponse('Failed to prepare email audience')
     }
 
-    // Convert PortableText content to HTML
     const { htmlContent, error: htmlError } =
       await convertPortableTextToHTML(messagePortableText)
     if (htmlError) {
       return htmlError
     }
 
-    // Add any additional content
     const finalHtmlContent = htmlContent! + additionalContent
 
-    // Determine from email based on audience type and conference config
     const determineFromEmail = (): string => {
       if (fromEmail) return fromEmail
 
@@ -93,17 +86,15 @@ export async function sendBroadcastEmail({
       )
     }
 
-    // Render the email template
     const emailHtml = await renderEmailTemplate({
       conference,
       subject,
       htmlContent: finalHtmlContent,
     })
 
-    // Create broadcast email with rate limiting
     const broadcastResponse = await retryWithBackoff(async () => {
       return await resend.broadcasts.create({
-        name: subject, // Use subject as the broadcast name
+        name: subject,
         audienceId,
         from: resolvedFromEmail,
         subject,
@@ -115,10 +106,8 @@ export async function sendBroadcastEmail({
       return createEmailErrorResponse('Failed to create broadcast email')
     }
 
-    // Add delay to respect rate limits before sending
     await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
 
-    // Actually send the broadcast with rate limiting
     const sendResponse = await retryWithBackoff(async () => {
       return await resend.broadcasts.send(broadcastResponse.data!.id)
     })
@@ -138,9 +127,6 @@ export async function sendBroadcastEmail({
   }
 }
 
-/**
- * Send individual emails with CC support (for sponsor discount codes)
- */
 export interface IndividualEmailRequest {
   conference: Conference
   subject: string
@@ -161,17 +147,14 @@ export async function sendIndividualEmail({
   fromEmail,
 }: IndividualEmailRequest): Promise<Response> {
   try {
-    // Convert PortableText content to HTML
     const { htmlContent, error: htmlError } =
       await convertPortableTextToHTML(messagePortableText)
     if (htmlError) {
       return htmlError
     }
 
-    // Add any additional content
     const finalHtmlContent = htmlContent! + additionalContent
 
-    // Determine from email
     const resolvedFromEmail =
       fromEmail ||
       (conference.contact_email
@@ -185,15 +168,13 @@ export async function sendIndividualEmail({
       )
     }
 
-    // Render the email template
     const emailHtml = await renderEmailTemplate({
       conference,
       subject,
       htmlContent: finalHtmlContent,
-      unsubscribeUrl: undefined, // Individual emails don't use unsubscribe URLs
+      unsubscribeUrl: undefined,
     })
 
-    // Send email with rate limiting
     const emailResponse = await retryWithBackoff(async () => {
       return await resend.emails.send({
         from: resolvedFromEmail,

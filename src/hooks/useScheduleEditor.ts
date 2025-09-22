@@ -49,7 +49,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       proposals: ProposalExisting[],
       allSchedules?: ConferenceSchedule[],
     ) => {
-      // Only update if the schedule has actually changed
       setSchedule((prevSchedule) => {
         if (prevSchedule?._id === initialSchedule?._id) {
           return prevSchedule
@@ -57,12 +56,10 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         return initialSchedule
       })
 
-      // Calculate unassigned proposals based on ALL schedules, not just current one
       const schedulesToCheck =
         allSchedules || (initialSchedule ? [initialSchedule] : [])
 
       if (schedulesToCheck.length > 0) {
-        // Filter out proposals that are already scheduled in ANY day
         const scheduledProposalIds = new Set(
           schedulesToCheck.flatMap(
             (schedule) =>
@@ -76,7 +73,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
           (p) => !scheduledProposalIds.has(p._id),
         )
 
-        // Only update if the proposals have actually changed
         setUnassignedProposals((prevProposals) => {
           if (
             prevProposals.length === unscheduled.length &&
@@ -87,7 +83,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
           return unscheduled
         })
       } else {
-        // No schedules available, show all proposals as unassigned
         setUnassignedProposals((prevProposals) => {
           if (
             prevProposals.length === proposals.length &&
@@ -149,7 +144,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
     [],
   )
 
-  // Helper function to perform swap operation
   const performSwap = useCallback(
     (
       dragItem: DragItem,
@@ -162,7 +156,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       const { proposal } = dragItem
       const { trackIndex, timeSlot } = dropPosition
 
-      // Calculate durations and end times
       const draggedDuration = getProposalDurationMinutes(proposal)
       const draggedEndTime = calculateEndTime(timeSlot, draggedDuration)
 
@@ -180,8 +173,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         const newSchedule = { ...prev }
         const newTracks = [...newSchedule.tracks]
 
-        // Remove both talks from their current positions
-        // 1. Remove dragged talk from source
         if (
           dragItem.sourceTrackIndex !== undefined &&
           dragItem.sourceTimeSlot !== undefined
@@ -200,7 +191,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
           }
         }
 
-        // 2. Remove target talk from its current position
         const currentTargetTrack = newTracks[trackIndex]
         const newTargetTalks = currentTargetTrack.talks.filter(
           (talk) =>
@@ -210,7 +200,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
             ),
         )
 
-        // 3. Add dragged proposal to target position
         const newDraggedTalk: TrackTalk = {
           talk: proposal,
           startTime: timeSlot,
@@ -224,7 +213,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
           ),
         }
 
-        // 4. Add target talk to source position
         if (
           dragItem.sourceTrackIndex !== undefined &&
           dragItem.sourceTimeSlot !== undefined
@@ -271,23 +259,19 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       const durationMinutes = getProposalDurationMinutes(proposal)
       const endTime = calculateEndTime(timeSlot, durationMinutes)
 
-      // Simple duplicate detection: Check if this talk already exists elsewhere in the schedule
-      // (unless we're just moving it within the same schedule)
       if (dragItem.type !== 'scheduled-talk') {
         const isDuplicate = schedule.tracks.some((track) =>
           track.talks.some((talk) => talk.talk?._id === proposal._id),
         )
         if (isDuplicate) {
-          return { success: false } // Talk already exists in schedule
+          return { success: false }
         }
       }
 
-      // Check if target slot is occupied
       const occupiedTalk = targetTrack.talks.find(
         (talk) => talk.startTime === timeSlot,
       )
 
-      // Handle swap operation
       if (
         occupiedTalk &&
         occupiedTalk.talk &&
@@ -295,7 +279,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         dragItem.sourceTrackIndex !== undefined &&
         dragItem.sourceTimeSlot !== undefined
       ) {
-        // Validate swap is possible
         if (!canSwapTalks(targetTrack, proposal, occupiedTalk, timeSlot)) {
           return { success: false }
         }
@@ -303,12 +286,10 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         return performSwap(dragItem, occupiedTalk, dropPosition)
       }
 
-      // Handle normal move (to empty slot)
       if (occupiedTalk) {
-        return { success: false } // Slot is occupied and we can't swap
+        return { success: false }
       }
 
-      // Check for conflicts in normal move
       const excludeTalk =
         dragItem.type === 'scheduled-talk' &&
         dragItem.sourceTrackIndex === trackIndex
@@ -322,7 +303,7 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         excludeTalk,
       )
       if (!availableTime || availableTime !== timeSlot) {
-        return { success: false } // Cannot place here due to conflict
+        return { success: false }
       }
 
       let updatedSchedule: ConferenceSchedule | null = null
@@ -333,7 +314,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         const newSchedule = { ...prev }
         const newTracks = [...newSchedule.tracks]
 
-        // If moving from another track, remove from source
         if (
           dragItem.type === 'scheduled-talk' &&
           dragItem.sourceTrackIndex !== undefined &&
@@ -353,7 +333,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
           }
         }
 
-        // Add to target track
         const targetTrack = newTracks[trackIndex]
         const newTalk: TrackTalk = {
           talk: proposal,
@@ -391,7 +370,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
       if (trackIndex < 0 || trackIndex >= schedule.tracks.length)
         return { success: false }
 
-      // Calculate end time based on the service session duration
       const startTime = new Date(`2000-01-01T${serviceSession.startTime}:00`)
       const endTime = new Date(`2000-01-01T${serviceSession.endTime}:00`)
       const durationMinutes =
@@ -406,7 +384,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
         const newSchedule = { ...prev }
         const newTracks = [...newSchedule.tracks]
 
-        // If moving from another track, remove from source
         if (
           dragItem.type === 'scheduled-service' &&
           dragItem.sourceTrackIndex !== undefined &&
@@ -426,7 +403,6 @@ export function useScheduleEditor(): UseScheduleEditorReturn {
           }
         }
 
-        // Add to target track
         const targetTrack = newTracks[trackIndex]
         const newServiceSession: TrackTalk = {
           placeholder: serviceSession.placeholder,

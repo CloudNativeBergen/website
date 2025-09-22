@@ -1,8 +1,3 @@
-/**
- * tRPC Provider Component
- * This wraps the app to provide tRPC React Query functionality
- */
-
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -20,9 +15,7 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            // With SSR, we usually want to set some default staleTime
-            // above 0 to avoid refetching immediately on the client
-            staleTime: 60 * 1000, // 1 minute
+            staleTime: 60 * 1000,
           },
         },
       }),

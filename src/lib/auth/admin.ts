@@ -1,13 +1,7 @@
 import { NextAuthRequest } from '@/lib/auth'
 import { NextResponse } from 'next/server'
 
-/**
- * Check if the authenticated user is an organizer
- * @param req The NextAuth request object
- * @returns Response object if unauthorized, null if authorized
- */
 export function checkOrganizerAccess(req: NextAuthRequest) {
-  // Check if user is authenticated
   if (
     !req.auth ||
     !req.auth.user ||
@@ -29,7 +23,6 @@ export function checkOrganizerAccess(req: NextAuthRequest) {
     return response
   }
 
-  // Check if user is an organizer
   if (!req.auth.speaker.is_organizer) {
     const response = new NextResponse(
       JSON.stringify({

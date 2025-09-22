@@ -55,7 +55,7 @@ interface ChartProps {
   analysis: TicketAnalysisResult
   salesConfig?: SalesTargetConfig
   className?: string
-  // Toggle controls
+
   includeFreeTickets?: boolean
   onToggleChange?: (include: boolean) => void
   paidCount?: number
@@ -131,7 +131,6 @@ export function TicketSalesChartDisplay({
   const chartData = adaptForChart(analysis, configAnnotations)
   const { statistics, performance } = analysis
 
-  // Calculate display values
   const StatusIcon = getStatusIcon(performance.variance)
   const statusColorClasses = getStatusColors(performance.variance)
   const capacityPercentage = (
@@ -140,7 +139,6 @@ export function TicketSalesChartDisplay({
   ).toFixed(1)
   const avgTicketPrice = formatCurrency(statistics.averageTicketPrice)
 
-  // Create chart options
   const chartOptions = {
     chart: {
       type: 'line' as const,

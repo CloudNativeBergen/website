@@ -41,7 +41,6 @@ interface ScheduleEditorProps {
   initialProposals: ProposalExisting[]
 }
 
-// Constants for better maintainability
 const BUTTON_STYLES = {
   primary:
     'inline-flex items-center gap-2 rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 dark:bg-blue-700 dark:hover:bg-blue-600',
@@ -52,21 +51,20 @@ const BUTTON_STYLES = {
 }
 
 const LAYOUT_CLASSES = {
-  container: 'flex h-[calc(100vh-5rem)]', // Reduced height calculation to account for added padding
+  container: 'flex h-[calc(100vh-5rem)]',
   sidebar:
     'border-r border-gray-200 bg-gray-50 flex-shrink-0 dark:border-gray-700 dark:bg-gray-800',
   mainArea: 'flex flex-1 flex-col min-h-0 min-w-0',
   header:
     'border-b border-gray-200 bg-white px-4 py-2 flex-shrink-0 dark:border-gray-700 dark:bg-gray-900',
-  content: 'flex-1 min-h-0 overflow-x-auto px-2 pt-4', // Keep horizontal scroll, remove vertical
-  tracksContainer: 'h-full', // Removed overflow-y-auto since this class isn't used
-  tracksGrid: 'flex gap-4 h-max', // Use content height instead of full height
+  content: 'flex-1 min-h-0 overflow-x-auto px-2 pt-4',
+  tracksContainer: 'h-full',
+  tracksGrid: 'flex gap-4 h-max',
   emptyState: 'flex flex-1 items-center justify-center',
   errorBanner:
     'border-b border-red-200 bg-red-50 px-4 py-2 flex-shrink-0 dark:border-red-800 dark:bg-red-900/20',
 } as const
 
-// Memoized HeaderSection component
 const HeaderSection = ({
   schedule,
   schedules,
@@ -96,7 +94,6 @@ const HeaderSection = ({
     return `${schedule.date} • ${trackCount} tracks`
   }, [schedule, trackCount])
 
-  // Memoized day navigation
   const dayNavigation = useMemo(() => {
     if (!schedules || schedules.length <= 1) return null
 
@@ -191,7 +188,6 @@ const HeaderSection = ({
 const MemoizedHeaderSection = React.memo(HeaderSection)
 MemoizedHeaderSection.displayName = 'MemoizedHeaderSection'
 
-// Memoized ErrorBanner component
 const ErrorBanner = React.memo(({ error }: { error: string }) => (
   <div className={LAYOUT_CLASSES.errorBanner}>
     <p className="text-red-800 dark:text-red-300">{error}</p>
@@ -199,7 +195,6 @@ const ErrorBanner = React.memo(({ error }: { error: string }) => (
 ))
 ErrorBanner.displayName = 'ErrorBanner'
 
-// Memoized EmptyState component
 const EmptyState = React.memo(({ onAddTrack }: { onAddTrack: () => void }) => (
   <div className={LAYOUT_CLASSES.emptyState}>
     <div className="text-center">
@@ -219,7 +214,6 @@ const EmptyState = React.memo(({ onAddTrack }: { onAddTrack: () => void }) => (
 ))
 EmptyState.displayName = 'EmptyState'
 
-// Memoized TracksGrid component
 const TracksGrid = ({
   tracks,
   onUpdateTrack,
@@ -242,7 +236,7 @@ const TracksGrid = ({
     <div className={LAYOUT_CLASSES.tracksGrid}>
       {tracks.map((track, index) => (
         <DroppableTrack
-          key={`track-${index}-${track.trackTitle}`} // More stable key
+          key={`track-${index}-${track.trackTitle}`}
           track={track}
           trackIndex={index}
           onUpdateTrack={(updatedTrack) => onUpdateTrack(index, updatedTrack)}
@@ -259,7 +253,6 @@ const TracksGrid = ({
 const MemoizedTracksGrid = React.memo(TracksGrid)
 MemoizedTracksGrid.displayName = 'MemoizedTracksGrid'
 
-// Memoized AddTrackModal component
 const AddTrackModal = ({
   onAdd,
   onCancel,
@@ -365,12 +358,10 @@ export function ScheduleEditor({
   conference: _,
   initialProposals,
 }: ScheduleEditorProps) {
-  // Performance monitoring setup
   const dragTimer = usePerformanceTimer('ScheduleEditor', 'drag-operation')
   const saveTimer = usePerformanceTimer('ScheduleEditor', 'save-operation')
   const dayChangeTimer = usePerformanceTimer('ScheduleEditor', 'day-change')
 
-  // Performance optimization hooks
   const { cancelUpdates } = useDragPerformance()
 
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
@@ -379,17 +370,15 @@ export function ScheduleEditor({
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentDayIndex, setCurrentDayIndex] = useState(0)
-  // Store modified schedules separately to persist changes across day switches
+
   const [modifiedSchedules, setModifiedSchedules] =
     useState<ConferenceSchedule[]>(initialSchedules)
   const hasInitialized = useRef(false)
 
   const scheduleEditor = useScheduleEditor()
 
-  // Get current schedule based on selected day from modified schedules
   const currentSchedule = modifiedSchedules[currentDayIndex] || null
 
-  // Initialize data when component mounts or when initial data changes
   useEffect(() => {
     if (
       !hasInitialized.current ||
@@ -404,7 +393,6 @@ export function ScheduleEditor({
     }
   }, [currentSchedule, initialProposals, currentDayIndex, modifiedSchedules]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Recalculate unassigned proposals whenever any schedule changes
   useEffect(() => {
     if (hasInitialized.current) {
       scheduleEditor.setInitialData(
@@ -415,7 +403,6 @@ export function ScheduleEditor({
     }
   }, [modifiedSchedules, currentSchedule, initialProposals, scheduleEditor])
 
-  // Memoized event handlers
   const handleSave = useCallback(async () => {
     if (!scheduleEditor.schedule) return
 
@@ -424,7 +411,6 @@ export function ScheduleEditor({
     setError(null)
     setSaveSuccess(false)
 
-    // Sync current editor state to modifiedSchedules before saving
     if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
       setModifiedSchedules((prev) => {
         const updated = [...prev]
@@ -440,7 +426,6 @@ export function ScheduleEditor({
         throw new Error(response.error?.message || 'Failed to save schedule')
       }
 
-      // Update the schedule with the saved version (in case _id was added)
       if (response.schedule) {
         scheduleEditor.setSchedule(response.schedule)
       }
@@ -448,7 +433,6 @@ export function ScheduleEditor({
       setSaveSuccess(true)
       const saveDuration = saveTimer.end()
 
-      // Log save performance
       if (process.env.NODE_ENV === 'development') {
         console.log('Schedule save completed:', {
           duration: saveDuration,
@@ -457,7 +441,6 @@ export function ScheduleEditor({
         })
       }
 
-      // Reset success state after 3 seconds
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (err) {
       const errorMessage =
@@ -484,7 +467,7 @@ export function ScheduleEditor({
 
       if (!over || !active.data.current) {
         setActiveItem(null)
-        cancelUpdates() // Cancel any pending drag updates
+        cancelUpdates()
         dragTimer.end()
         return
       }
@@ -493,7 +476,6 @@ export function ScheduleEditor({
       const dropData = over.data.current
 
       if (dropData?.type === 'time-slot') {
-        // Handle proposal drops
         if (dragItem.proposal) {
           const result = scheduleEditor.moveTalkToTrack(dragItem, {
             trackIndex: dropData.trackIndex,
@@ -501,7 +483,6 @@ export function ScheduleEditor({
           })
 
           if (result.success && result.updatedSchedule) {
-            // Update the current day's schedule in modifiedSchedules to trigger unassigned proposals recalculation
             if (
               currentDayIndex >= 0 &&
               currentDayIndex < modifiedSchedules.length &&
@@ -511,7 +492,6 @@ export function ScheduleEditor({
               updatedSchedules[currentDayIndex] = result.updatedSchedule
               setModifiedSchedules(updatedSchedules)
 
-              // Force immediate recalculation of unassigned proposals
               scheduleEditor.setInitialData(
                 result.updatedSchedule,
                 initialProposals,
@@ -519,19 +499,15 @@ export function ScheduleEditor({
               )
             }
           } else {
-            // Handle failed drop (show notification, etc.)
             console.warn('Failed to drop proposal:', dragItem.proposal.title)
           }
-        }
-        // Handle service session drops
-        else if (dragItem.serviceSession) {
+        } else if (dragItem.serviceSession) {
           const result = scheduleEditor.moveServiceSessionToTrack(dragItem, {
             trackIndex: dropData.trackIndex,
             timeSlot: dropData.timeSlot,
           })
 
           if (result.success && result.updatedSchedule) {
-            // Update the current day's schedule in modifiedSchedules
             if (
               currentDayIndex >= 0 &&
               currentDayIndex < modifiedSchedules.length &&
@@ -541,7 +517,6 @@ export function ScheduleEditor({
               updatedSchedules[currentDayIndex] = result.updatedSchedule
               setModifiedSchedules(updatedSchedules)
 
-              // Force immediate recalculation
               scheduleEditor.setInitialData(
                 result.updatedSchedule,
                 initialProposals,
@@ -549,7 +524,6 @@ export function ScheduleEditor({
               )
             }
           } else {
-            // Handle failed drop
             console.warn(
               'Failed to drop service session:',
               dragItem.serviceSession.placeholder,
@@ -561,7 +535,6 @@ export function ScheduleEditor({
       setActiveItem(null)
       const dragDuration = dragTimer.end()
 
-      // Log performance metrics for slow drags
       if (dragDuration && dragDuration > 100) {
         console.warn('Slow drag operation detected:', {
           duration: dragDuration,
@@ -589,7 +562,6 @@ export function ScheduleEditor({
       }
       scheduleEditor.addTrack(newTrack)
 
-      // Update the current day's schedule in modifiedSchedules
       if (
         currentDayIndex >= 0 &&
         currentDayIndex < modifiedSchedules.length &&
@@ -626,7 +598,6 @@ export function ScheduleEditor({
       if (dayIndex >= 0 && dayIndex < modifiedSchedules.length) {
         dayChangeTimer.start()
 
-        // Save current editor state before switching days
         if (
           scheduleEditor.schedule &&
           currentDayIndex >= 0 &&
@@ -640,13 +611,12 @@ export function ScheduleEditor({
         }
 
         setCurrentDayIndex(dayIndex)
-        // Reset save success state when switching days
+
         setSaveSuccess(false)
         setError(null)
 
         const dayChangeDuration = dayChangeTimer.end()
 
-        // Log slow day changes in development
         if (
           process.env.NODE_ENV === 'development' &&
           dayChangeDuration &&
@@ -671,7 +641,6 @@ export function ScheduleEditor({
     ],
   )
 
-  // Development performance metrics display
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       const interval = setInterval(() => {
@@ -703,27 +672,22 @@ export function ScheduleEditor({
               : 'N/A',
           })
         }
-      }, 30000) // Log every 30 seconds
+      }, 30000)
 
       return () => clearInterval(interval)
     }
   }, [])
 
-  // Cleanup performance utilities on unmount
   useEffect(() => {
     return () => {
       cancelUpdates()
     }
   }, [cancelUpdates])
 
-  // Remove automatic sync effect - it causes race conditions
-  // Manual sync happens only during save to preserve schedule data integrity
-
   const handleUpdateTrack = useCallback(
     (index: number, track: ScheduleTrack) => {
       scheduleEditor.updateTrack(index, track)
 
-      // Update the current day's schedule in modifiedSchedules
       if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
         const updatedSchedules = [...modifiedSchedules]
         const currentSchedule = updatedSchedules[currentDayIndex]
@@ -736,7 +700,6 @@ export function ScheduleEditor({
           }
           setModifiedSchedules(updatedSchedules)
 
-          // Force immediate recalculation of unassigned proposals
           scheduleEditor.setInitialData(
             updatedSchedules[currentDayIndex],
             initialProposals,
@@ -752,7 +715,6 @@ export function ScheduleEditor({
     (index: number) => {
       scheduleEditor.removeTrack(index)
 
-      // Update the current day's schedule in modifiedSchedules
       if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
         const updatedSchedules = [...modifiedSchedules]
         const currentSchedule = updatedSchedules[currentDayIndex]
@@ -766,7 +728,6 @@ export function ScheduleEditor({
           }
           setModifiedSchedules(updatedSchedules)
 
-          // Force immediate recalculation of unassigned proposals
           scheduleEditor.setInitialData(
             updatedSchedules[currentDayIndex],
             initialProposals,
@@ -782,7 +743,6 @@ export function ScheduleEditor({
     (trackIndex: number, talkIndex: number) => {
       scheduleEditor.removeTalkFromSchedule(trackIndex, talkIndex)
 
-      // Update the current day's schedule in modifiedSchedules
       if (currentDayIndex >= 0 && currentDayIndex < modifiedSchedules.length) {
         setModifiedSchedules((prev) => {
           const updated = [...prev]
@@ -806,21 +766,18 @@ export function ScheduleEditor({
     [scheduleEditor, currentDayIndex, modifiedSchedules.length],
   )
 
-  // Memoized data
   const { schedule, unassignedProposals } = scheduleEditor
 
   const handleDuplicateServiceSession = useCallback(
     (serviceSession: TrackTalk, sourceTrackIndex: number) => {
       if (!schedule?.tracks) return
 
-      // Check if the service session conflicts with existing talks in other tracks
       const conflictingTracks: number[] = []
 
       schedule.tracks.forEach((track, trackIndex) => {
-        if (trackIndex === sourceTrackIndex) return // Skip source track
+        if (trackIndex === sourceTrackIndex) return
 
         const hasConflict = track.talks.some((talk) => {
-          // Check if times overlap
           const sessionStart = new Date(
             `2000-01-01T${serviceSession.startTime}:00`,
           )
@@ -837,14 +794,11 @@ export function ScheduleEditor({
       })
 
       if (conflictingTracks.length > 0) {
-        // Show warning but still allow duplication
       }
 
-      // Duplicate to all other tracks
       const updatedTracks = schedule.tracks.map((track, trackIndex) => {
-        if (trackIndex === sourceTrackIndex) return track // Skip source track
+        if (trackIndex === sourceTrackIndex) return track
 
-        // Add the service session to this track
         const newTrack = {
           ...track,
           talks: [...track.talks, { ...serviceSession }].sort((a, b) => {
@@ -855,7 +809,6 @@ export function ScheduleEditor({
         return newTrack
       })
 
-      // Update all tracks
       updatedTracks.forEach((track, index) => {
         if (index !== sourceTrackIndex) {
           scheduleEditor.updateTrack(index, track)
@@ -893,12 +846,9 @@ export function ScheduleEditor({
         onDragEnd={handleDragEnd}
         collisionDetection={pointerWithin}
       >
-        {/* Sidebar with unassigned proposals */}
         <UnassignedProposals proposals={unassignedProposals} />
 
-        {/* Main schedule area */}
         <div className={LAYOUT_CLASSES.mainArea}>
-          {/* Header with actions */}
           <MemoizedHeaderSection
             schedule={scheduleEditor.schedule}
             schedules={modifiedSchedules}
@@ -910,10 +860,8 @@ export function ScheduleEditor({
             saveSuccess={saveSuccess}
           />
 
-          {/* Error display */}
           {error && <ErrorBanner error={error} />}
 
-          {/* Schedule tracks */}
           <div className={LAYOUT_CLASSES.content}>
             {hasTracks ? (
               <MemoizedTracksGrid
@@ -930,11 +878,9 @@ export function ScheduleEditor({
           </div>
         </div>
 
-        {/* Drag overlay */}
         <DragOverlay>{dragOverlay}</DragOverlay>
       </DndContext>
 
-      {/* Add Track Modal */}
       {showAddTrackModal && (
         <AddTrackModal
           onAdd={handleAddTrack}

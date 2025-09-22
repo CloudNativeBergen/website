@@ -31,10 +31,8 @@ export default async function AdminDashboard() {
     proposals = proposalData || []
   }
 
-  // Calculate comprehensive stats
   const totalProposals = proposals.length
 
-  // Status breakdown
   const submittedProposals = proposals.filter(
     (p) => p.status === Status.submitted,
   ).length
@@ -48,7 +46,6 @@ export default async function AdminDashboard() {
     (p) => p.status === Status.confirmed,
   ).length
 
-  // Speaker stats
   const uniqueSpeakers = new Set(
     proposals
       .flatMap((p) =>
@@ -64,7 +61,6 @@ export default async function AdminDashboard() {
       .filter(Boolean),
   ).size
 
-  // Review stats
   const totalReviews = proposals.reduce((acc, proposal) => {
     return acc + (proposal.reviews?.length || 0)
   }, 0)
@@ -74,7 +70,6 @@ export default async function AdminDashboard() {
   ).length
   const unreviewedProposals = totalProposals - reviewedProposals
 
-  // Average rating
   const ratingsWithScores = proposals.flatMap((p) =>
     (p.reviews || [])
       .map((review) => {
@@ -92,7 +87,6 @@ export default async function AdminDashboard() {
       ? ratingsWithScores.reduce((a, b) => a + b, 0) / ratingsWithScores.length
       : 0
 
-  // Format stats
   const formatBreakdown = proposals.reduce(
     (acc, p) => {
       acc[p.format] = (acc[p.format] || 0) + 1
@@ -101,7 +95,6 @@ export default async function AdminDashboard() {
     {} as Record<string, number>,
   )
 
-  // Acceptance rate
   const acceptanceRate =
     totalProposals > 0
       ? Math.round(
@@ -109,7 +102,6 @@ export default async function AdminDashboard() {
         )
       : 0
 
-  // User-specific review stats
   const userReviewedProposals = currentUserId
     ? proposals.filter((p) =>
         p.reviews?.some((review) => {
@@ -167,7 +159,6 @@ export default async function AdminDashboard() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      {/* Header */}
       <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
         <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
           Admin Dashboard
@@ -177,7 +168,6 @@ export default async function AdminDashboard() {
         </p>
       </div>
 
-      {/* Stats */}
       <div className="mt-8">
         <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((item) => (
@@ -219,9 +209,7 @@ export default async function AdminDashboard() {
         </dl>
       </div>
 
-      {/* Detailed Breakdown */}
       <div className="mt-12 grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Status Breakdown */}
         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
@@ -286,7 +274,6 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        {/* Review Stats */}
         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
@@ -343,7 +330,6 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        {/* Format Breakdown */}
         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
@@ -376,7 +362,6 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        {/* Review Progress */}
         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
@@ -444,7 +429,6 @@ export default async function AdminDashboard() {
         </div>
       </div>
 
-      {/* Quick Actions */}
       <div className="mt-12">
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions
@@ -509,7 +493,6 @@ export default async function AdminDashboard() {
         </div>
       </div>
 
-      {/* Recent Activity */}
       <div className="mt-12">
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Recent Proposals

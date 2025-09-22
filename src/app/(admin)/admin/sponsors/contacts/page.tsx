@@ -8,18 +8,23 @@ import {
   BuildingOffice2Icon,
   HomeIcon,
 } from '@heroicons/react/24/outline'
-import { SponsorWithContactInfo } from '@/lib/sponsor/types'
+import {
+  SponsorWithContactInfo,
+  ConferenceSponsorWithContact,
+} from '@/lib/sponsor/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getSponsorsForConference } from '@/lib/sponsor/sanity'
 import Link from 'next/link'
 
 export default async function AdminSponsorContacts() {
   try {
-    // Get conference
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain({ revalidate: 0 })
+      await getConferenceForCurrentDomain({
+        sponsors: true,
+        sponsorContact: true,
+        revalidate: 0,
+      })
 
-    if (conferenceError || !conference) {
+    if (conferenceError || !conference || !conference.sponsors) {
       return (
         <ErrorDisplay
           title="Conference Not Found"
@@ -28,30 +33,28 @@ export default async function AdminSponsorContacts() {
       )
     }
 
-    // Get sponsors for the current conference only
-    const { sponsors, error: sponsorsError } = await getSponsorsForConference(
-      conference._id,
-      true,
+    const sponsorsWithContacts = (
+      conference.sponsors as ConferenceSponsorWithContact[]
+    ).map(
+      (conferenceSponsor): SponsorWithContactInfo => ({
+        _id: conferenceSponsor.sponsor._id,
+        _createdAt: '',
+        _updatedAt: '',
+        name: conferenceSponsor.sponsor.name,
+        website: conferenceSponsor.sponsor.website,
+        logo: conferenceSponsor.sponsor.logo,
+        org_number: conferenceSponsor.sponsor.org_number,
+        contact_persons: conferenceSponsor.sponsor.contact_persons,
+        billing: conferenceSponsor.sponsor.billing,
+      }),
     )
 
-    if (sponsorsError) {
-      return (
-        <ErrorDisplay
-          title="Error Loading Sponsors"
-          message={sponsorsError.message}
-        />
-      )
-    }
-
-    const sponsorsWithContacts = sponsors as SponsorWithContactInfo[]
-
-    // Filter sponsors with contact information
-    const sponsorsWithContactInfo = sponsorsWithContacts.filter(
+    const sponsorsWithContactPersons = sponsorsWithContacts.filter(
       (sponsor) =>
-        sponsor.contact_persons && sponsor.contact_persons.length > 0,
+        Array.isArray(sponsor.contact_persons) &&
+        sponsor.contact_persons.length > 0,
     )
 
-    // Count sponsors with billing info
     const sponsorsWithBillingInfo = sponsorsWithContacts.filter(
       (sponsor) => sponsor.billing && sponsor.billing.email,
     )
@@ -78,7 +81,7 @@ export default async function AdminSponsorContacts() {
             </div>
 
             <SponsorContactActions
-              sponsorsWithContactsCount={sponsorsWithContactInfo.length}
+              sponsorsWithContactsCount={sponsorsWithContactPersons.length}
               fromEmail={`Cloud Native Bergen <${conference.contact_email}>`}
               conference={conference}
             />
@@ -90,7 +93,7 @@ export default async function AdminSponsorContacts() {
             </span>
             <span>
               With contact information:{' '}
-              <strong>{sponsorsWithContactInfo.length}</strong>
+              <strong>{sponsorsWithContactPersons.length}</strong>
             </span>
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-brand-fresh-green dark:bg-green-400"></div>
@@ -100,7 +103,9 @@ export default async function AdminSponsorContacts() {
             </div>
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-brand-cloud-blue dark:bg-indigo-400"></div>
-              <span>{sponsorsWithContactInfo.length} with contact persons</span>
+              <span>
+                {sponsorsWithContactPersons.length} with contact persons
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-3 w-3 rounded-full bg-brand-frosted-steel dark:bg-gray-500"></div>
@@ -113,7 +118,6 @@ export default async function AdminSponsorContacts() {
           <SponsorContactTable sponsors={sponsorsWithContacts} />
         </div>
 
-        {/* Quick Actions */}
         <div className="mt-12">
           <h2 className="text-lg font-medium text-gray-900 dark:text-white">
             Related Actions

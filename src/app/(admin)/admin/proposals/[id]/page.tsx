@@ -17,11 +17,6 @@ interface ProposalDetailPageProps {
   }>
 }
 
-/**
- * Admin proposal detail page
- * Displays comprehensive proposal information for admin review
- * Includes metadata, review history, and admin actions
- */
 export default async function ProposalDetailPage({
   params,
 }: ProposalDetailPageProps) {
@@ -34,7 +29,7 @@ export default async function ProposalDetailPage({
     })
     const { proposal, proposalError } = await getProposalSanity({
       id,
-      speakerId: '', // For admin view, we don't need to filter by speaker
+      speakerId: '',
       isOrganizer: true,
       includeReviews: true,
       includePreviousAcceptedTalks: true,
@@ -57,15 +52,12 @@ export default async function ProposalDetailPage({
 
     return (
       <div className="flex h-full min-h-screen flex-col lg:flex-row">
-        {/* Main Content Area */}
         <div className="min-w-0 flex-1">
           <div className="mx-auto max-w-4xl p-4 lg:p-0">
-            {/* Header with Navigation and Metadata */}
             <div className="mb-8">
               <div className="mb-4 flex items-center justify-between">
                 <BackToProposalsButton />
 
-                {/* Quick Actions */}
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                     <ClockIcon className="mr-1 h-4 w-4" />
@@ -76,7 +68,6 @@ export default async function ProposalDetailPage({
                   </div>
                 </div>
               </div>
-              {/* Enhanced Admin Action Bar */}
               <AdminActionBar
                 proposal={proposal}
                 domain={domain}

@@ -15,12 +15,10 @@ export default async function Tickets() {
     return <div>Error loading conference data</div>
   }
 
-  // If registration link is available, redirect to it
   if (conference.registration_link && conference.registration_enabled) {
     redirect(conference.registration_link)
   }
 
-  // Show tickets not available page
   return (
     <div className="relative">
       <BackgroundImage className="-top-24 -bottom-24" />

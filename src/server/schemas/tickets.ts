@@ -1,10 +1,5 @@
-/**
- * Zod schemas for ticket target configuration validation
- */
-
 import { z } from 'zod'
 
-// Sales milestone schema to match Sanity data structure
 export const SalesMilestoneSchema = z.object({
   date: z
     .string()
@@ -13,7 +8,6 @@ export const SalesMilestoneSchema = z.object({
   label: z.string(),
 })
 
-// Sales target configuration schema to match Sanity data structure
 export const SalesTargetConfigSchema = z.object({
   enabled: z.boolean(),
   sales_start_date: z
@@ -23,19 +17,16 @@ export const SalesTargetConfigSchema = z.object({
   milestones: z.array(SalesMilestoneSchema),
 })
 
-// Conference ticket settings update schema
 export const TicketSettingsUpdateSchema = z.object({
   conferenceId: z.string().min(1, 'Conference ID is required'),
   ticket_capacity: z.number().min(1, 'Capacity must be at least 1').optional(),
   ticket_targets: SalesTargetConfigSchema.optional(),
 })
 
-// ID parameter schema
 export const ConferenceIdSchema = z.object({
   conferenceId: z.string().min(1, 'Conference ID is required'),
 })
 
-// Discount code schemas
 export const CreateDiscountCodeSchema = z.object({
   eventId: z.number().min(1, 'Event ID is required'),
   discountCode: z.string().min(1, 'Discount code is required'),
@@ -54,7 +45,6 @@ export const DeleteDiscountCodeSchema = z.object({
   discountCode: z.string().min(1, 'Discount code is required'),
 })
 
-// Payment details schema
 export const GetPaymentDetailsSchema = z.object({
   orderId: z.number().min(1, 'Order ID is required'),
 })

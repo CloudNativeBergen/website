@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { ConferenceSponsorResponse } from './types'
 
-// Conference sponsor response helpers - Used by remaining email functionality
 export function conferenceSponsorResponse(
   success: boolean = true,
 ): NextResponse {

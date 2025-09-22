@@ -8,8 +8,8 @@ export interface BroadcastTemplateProps {
   eventDate: string
   eventUrl: string
   socialLinks?: string[]
-  unsubscribeUrl?: string // Optional unsubscribe URL for Resend broadcasts
-  content: React.ReactNode // Rich text content from PortableText
+  unsubscribeUrl?: string
+  content: React.ReactNode
 }
 
 export function BroadcastTemplate({

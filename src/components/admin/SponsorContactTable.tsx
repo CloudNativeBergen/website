@@ -99,7 +99,6 @@ export function SponsorContactTable({
   const { showNotification } = useNotification()
   const utils = api.useUtils()
 
-  // Sync local sponsors state with prop changes
   useEffect(() => {
     setSponsors(initialSponsors)
   }, [initialSponsors])
@@ -121,14 +120,12 @@ export function SponsorContactTable({
 
   const updateSponsorMutation = api.sponsor.update.useMutation({
     onSuccess: async (updatedSponsor) => {
-      // Optimistically update local state
       setSponsors((prevSponsors) =>
         prevSponsors.map((sponsor) =>
           sponsor._id === updatedSponsor._id ? updatedSponsor : sponsor,
         ),
       )
 
-      // Also invalidate queries for other components that might use sponsor data
       await utils.sponsor.list.invalidate()
 
       showNotification({
@@ -247,7 +244,6 @@ export function SponsorContactTable({
       let billingData = undefined
 
       if (isBillingReference && editingContact.billing?.email?.trim()) {
-        // Only set billing data if this is a billing reference with a valid email
         billingData = {
           email: editingContact.billing.email.trim(),
           reference: editingContact.billing.reference?.trim() || undefined,
@@ -258,16 +254,12 @@ export function SponsorContactTable({
         row.sponsor.billing &&
         row.sponsor.billing.email
       ) {
-        // Keep existing billing data only if this is NOT a billing reference contact
-        // and the sponsor already has valid billing data
         billingData = {
           email: row.sponsor.billing.email,
           reference: row.sponsor.billing.reference || undefined,
           comments: row.sponsor.billing.comments || undefined,
         }
       }
-      // If isBillingReference is true but no valid email, or if we're changing away from billing reference,
-      // billingData remains undefined, which will exclude it from the update
 
       const updateData: {
         name: string
@@ -291,7 +283,6 @@ export function SponsorContactTable({
         updateData.org_number = row.sponsor.org_number
       }
 
-      // Only include billing if we have valid billing data
       if (billingData && billingData.email && billingData.email.trim()) {
         updateData.billing = billingData
       }
@@ -301,9 +292,7 @@ export function SponsorContactTable({
         data: updateData,
       })
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
-      // Error handling managed by onError callback
-    }
+    } catch (error) {}
   }
 
   const contactRows: ContactRow[] = []

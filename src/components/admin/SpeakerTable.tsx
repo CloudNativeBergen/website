@@ -27,12 +27,10 @@ interface SpeakerTableProps {
   currentConferenceId?: string
 }
 
-// Helper function to get a compact format display
 const getCompactFormat = (format: Format): string => {
   const fullFormat = formats.get(format)
   if (!fullFormat) return format
 
-  // Extract just the duration and type for compact display
   if (fullFormat.includes('Lightning Talk')) return '10min Lightning'
   if (fullFormat.includes('Presentation')) {
     const match = fullFormat.match(/\((\d+) min\)/)
@@ -197,7 +195,6 @@ export function SpeakerTable({
                   <div className="space-y-1">
                     {speaker.proposals
                       .filter((proposal) => {
-                        // Only show proposals from the current conference
                         if (!currentConferenceId) return true
 
                         const proposalConferenceId =

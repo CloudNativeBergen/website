@@ -19,7 +19,6 @@ export function TravelSupportAdminPage() {
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
   const { data: session } = useSession()
 
-  // Get all travel support requests
   const {
     data: requests,
     isLoading,
@@ -27,14 +26,12 @@ export function TravelSupportAdminPage() {
     refetch,
   } = api.travelSupport.list.useQuery({})
 
-  // Get detailed view of selected request
   const { data: selectedRequestDetails, isLoading: isLoadingDetails } =
     api.travelSupport.getById.useQuery(
       { id: selectedRequest! },
       { enabled: !!selectedRequest },
     )
 
-  // Mutations
   const updateStatusMutation = api.travelSupport.updateStatus.useMutation({
     onSuccess: () => {
       refetch()
@@ -46,7 +43,6 @@ export function TravelSupportAdminPage() {
       onSuccess: () => {
         refetch()
         if (selectedRequest) {
-          // Refetch details
         }
       },
     })
@@ -88,7 +84,6 @@ export function TravelSupportAdminPage() {
   if (isLoading) {
     return (
       <div className="mx-auto max-w-7xl">
-        {/* Header skeleton */}
         <div className="pb-6">
           <div className="animate-pulse">
             <div className="flex items-center gap-3">
@@ -101,7 +96,6 @@ export function TravelSupportAdminPage() {
           </div>
         </div>
 
-        {/* Two-column content skeleton */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <SkeletonCard rows={8} />
           <SkeletonCard rows={8} />
@@ -122,7 +116,6 @@ export function TravelSupportAdminPage() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      {/* Header */}
       <div className="pb-6">
         <div className="flex items-center gap-3">
           <CurrencyDollarIcon className="h-8 w-8 text-brand-cloud-blue" />
@@ -136,7 +129,6 @@ export function TravelSupportAdminPage() {
           </div>
         </div>
 
-        {/* Summary Stats */}
         {requests && (
           <div className="font-inter mt-4">
             <SummaryStats requests={requests} />
@@ -144,10 +136,8 @@ export function TravelSupportAdminPage() {
         )}
       </div>
 
-      {/* Requests List */}
       <ErrorBoundary>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Left Column - Requests List */}
           <div className="rounded-lg bg-white shadow ring-1 ring-brand-frosted-steel/20 dark:bg-gray-800 dark:ring-gray-700">
             <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -171,7 +161,6 @@ export function TravelSupportAdminPage() {
             </div>
           </div>
 
-          {/* Right Column - Details */}
           <div className="rounded-lg bg-white shadow ring-1 ring-brand-frosted-steel/20 dark:bg-gray-800 dark:ring-gray-700">
             <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -219,7 +208,6 @@ export function TravelSupportAdminPage() {
   )
 }
 
-// Helper components
 function SummaryStats({ requests }: { requests: TravelSupportWithSpeaker[] }) {
   const stats = {
     total: requests.length,
@@ -230,7 +218,6 @@ function SummaryStats({ requests }: { requests: TravelSupportWithSpeaker[] }) {
     paid: requests.filter((r) => r.status === TravelSupportStatus.PAID).length,
   }
 
-  // Calculate total amounts
   const totalRequested = requests.reduce(
     (sum, r) => sum + (r.totalAmount || 0),
     0,
@@ -372,19 +359,17 @@ function RequestDetails({
     request.totalAmount || 0,
   )
 
-  // Check if current user can approve this request
   const canApprove =
     request.status === TravelSupportStatus.SUBMITTED &&
     currentUserId &&
     TravelSupportService.canUserApprove(
-      true, // We know they're admin since they can access this page
+      true,
       request.speaker._id,
       currentUserId,
     )
 
   return (
     <div className="space-y-6">
-      {/* Speaker Info */}
       <div>
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
           {request.speaker.name}
@@ -395,7 +380,6 @@ function RequestDetails({
         <StatusBadge status={request.status} />
       </div>
 
-      {/* Banking Details */}
       <div>
         <h4 className="mb-2 font-medium text-gray-900 dark:text-white">
           Banking Details
@@ -426,7 +410,6 @@ function RequestDetails({
         </div>
       </div>
 
-      {/* Expenses */}
       <div>
         <h4 className="mb-2 font-medium text-gray-900 dark:text-white">
           Expenses
@@ -500,7 +483,6 @@ function RequestDetails({
         )}
       </div>
 
-      {/* Expense Summary */}
       {request.expenses && request.expenses.length > 0 && (
         <ExpenseSummary
           expenses={request.expenses}
@@ -508,7 +490,6 @@ function RequestDetails({
         />
       )}
 
-      {/* Review Actions */}
       {canApprove && (
         <div className="border-t border-gray-200 pt-6 dark:border-gray-600">
           <h4 className="mb-3 font-medium text-gray-900 dark:text-white">
@@ -577,7 +558,6 @@ function RequestDetails({
         </div>
       )}
 
-      {/* Self-approval restriction notice */}
       {request.status === TravelSupportStatus.SUBMITTED &&
         currentUserId === request.speaker._id && (
           <div className="border-t border-gray-200 pt-6 dark:border-gray-600">

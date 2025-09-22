@@ -61,10 +61,9 @@ export default async function SpeakerDashboard() {
         </div>
       </div>
 
-      {/* Two-column layout */}
       <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
         <div className="mt-12 grid grid-cols-1 gap-12 lg:grid-cols-3">
-          {/* Main content - Proposals list (left side, 2/3 width) */}
+          {/* Main content */}
           <div className="lg:col-span-2">
             <ProposalList
               initialProposals={initialProposals}
@@ -73,7 +72,6 @@ export default async function SpeakerDashboard() {
             />
           </div>
 
-          {/* Social cards sidebar (right side, 1/3 width) */}
           <div className="lg:col-span-1">
             {(() => {
               const confirmedProposals = initialProposals.filter(
@@ -82,7 +80,6 @@ export default async function SpeakerDashboard() {
 
               return confirmedProposals.length > 0 ? (
                 <div className="sticky top-8">
-                  {/* Header aligned with proposals list */}
                   <div className="mt-6 mb-4">
                     <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                       Share Your Talks
@@ -91,7 +88,6 @@ export default async function SpeakerDashboard() {
 
                   <div className="space-y-6">
                     {confirmedProposals.map((proposal) => {
-                      // Use the current authenticated user as the speaker
                       const currentSpeaker = session.speaker
 
                       return currentSpeaker ? (
@@ -114,7 +110,7 @@ export default async function SpeakerDashboard() {
                               <SpeakerShare
                                 speaker={{
                                   ...currentSpeaker,
-                                  talks: [proposal], // Include the confirmed proposal as a talk
+                                  talks: [proposal],
                                 }}
                                 variant="speaker-share"
                                 isFeatured={true}

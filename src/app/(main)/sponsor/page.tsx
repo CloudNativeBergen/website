@@ -43,11 +43,9 @@ export default async function Sponsor() {
 
   const allSponsorTiers = conference?.sponsor_tiers || []
 
-  // Separate standard and special sponsor tiers
   const standardSponsorTiers = allSponsorTiers
     .filter((tier) => tier.tier_type === 'standard')
     .sort((a, b) => {
-      // Sort by highest price first
       const getMaxPrice = (tier: SponsorTier) => {
         if (!tier.price || tier.price.length === 0) return 0
         return Math.max(...tier.price.map((p) => p.amount))
@@ -58,7 +56,6 @@ export default async function Sponsor() {
   const specialSponsorTiers = allSponsorTiers
     .filter((tier) => tier.tier_type === 'special')
     .sort((a, b) => {
-      // Sort by highest price first for special tiers too
       const getMaxPrice = (tier: SponsorTier) => {
         if (!tier.price || tier.price.length === 0) return 0
         return Math.max(...tier.price.map((p) => p.amount))
@@ -93,7 +90,6 @@ export default async function Sponsor() {
         </Container>
 
         <Container>
-          {/* Standard Sponsor Tiers */}
           {standardSponsorTiers.length > 0 && (
             <div className="isolate mx-auto mt-16 grid max-w-md grid-cols-1 gap-y-8 sm:mt-20 lg:mx-0 lg:max-w-none lg:grid-cols-3">
               {standardSponsorTiers.map((tier, index) => (
@@ -178,7 +174,6 @@ export default async function Sponsor() {
             </div>
           )}
 
-          {/* Special Sponsor Types */}
           {specialSponsorTiers.length > 0 && (
             <div className="mt-20">
               <div className="relative rounded-3xl bg-gray-50 px-6 py-16 sm:px-12 sm:py-20 dark:bg-gray-800">

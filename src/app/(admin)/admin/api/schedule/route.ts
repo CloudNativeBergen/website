@@ -8,7 +8,6 @@ import { revalidatePath } from 'next/cache'
 export const dynamic = 'force-dynamic'
 
 export const POST = auth(async (req: NextAuthRequest) => {
-  // Check organizer access
   const accessError = checkOrganizerAccess(req)
   if (accessError) {
     return accessError
@@ -44,7 +43,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // Revalidate the schedule and program to refresh cached data
     revalidatePath('/admin/schedule')
     revalidatePath('/program')
 

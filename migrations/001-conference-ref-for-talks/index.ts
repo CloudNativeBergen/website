@@ -9,7 +9,6 @@ import { at, defineMigration, setIfMissing } from 'sanity/migrate'
  *    npx sanity@latest documents validate -y
  */
 
-// The conference ID to add to all talk items
 const conferenceId = '0d9747cd-e128-4698-8ba7-3dfd4029d692'
 
 export default defineMigration({
@@ -20,7 +19,6 @@ export default defineMigration({
 
   migrate: {
     document(doc, context) {
-      // Skip documents that already have a conference set
       if (doc.conference) {
         console.log(
           `Talk "${doc.title}" (${doc._id}) already has a conference, skipping`,
@@ -32,7 +30,6 @@ export default defineMigration({
         `Adding conference reference to talk "${doc.title}" (${doc._id})`,
       )
 
-      // Add conference reference to talks that don't have it
       return at(
         'conference',
         setIfMissing({
@@ -41,6 +38,5 @@ export default defineMigration({
         }),
       )
     },
-    // No need for other migration handlers as we're only adding a reference at the document level
   },
 })

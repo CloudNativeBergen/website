@@ -9,7 +9,6 @@ import {
 export const dynamic = 'force-dynamic'
 
 export const POST = auth(async (req: NextAuthRequest) => {
-  // Check organizer access
   const accessError = checkOrganizerAccess(req)
   if (accessError) {
     return accessError
@@ -18,7 +17,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
   try {
     const requestData: MultiSpeakerEmailRequest = await req.json()
 
-    // Validate the request
     const validation = validateMultiSpeakerEmailRequest(requestData)
     if (!validation.isValid) {
       return Response.json({ error: validation.error }, { status: 400 })
@@ -26,7 +24,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     const senderName = req.auth?.speaker?.name || 'Conference Organizer'
 
-    // Send the email
     const result = await sendMultiSpeakerEmail({
       ...requestData,
       senderName,

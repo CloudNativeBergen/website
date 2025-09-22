@@ -16,7 +16,6 @@ export const POST = auth(
     // https://stackoverflow.com/questions/79145063/params-should-be-awaited-nextjs15
     const { id } = await context.params
 
-    // Check organizer access
     const accessError = checkOrganizerAccess(req)
     if (accessError) {
       return accessError

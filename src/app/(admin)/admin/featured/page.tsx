@@ -1,8 +1,3 @@
-/**
- * Featured Content Management Admin Page
- * Provides interface for managing featured speakers and talks
- */
-
 'use client'
 
 import { api } from '@/lib/trpc/client'
@@ -20,7 +15,6 @@ import {
 import Link from 'next/link'
 
 export default function AdminFeaturedPage() {
-  // Get summary statistics
   const {
     data: summary,
     isLoading: summaryLoading,
@@ -89,14 +83,11 @@ export default function AdminFeaturedPage() {
 
       {/* Management Sections */}
       <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Featured Speakers Management */}
         <FeaturedSpeakersManager />
 
-        {/* Featured Talks Management */}
         <FeaturedTalksManager />
       </div>
 
-      {/* Quick Actions */}
       <div className="mt-12">
         <h2 className="mb-6 text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions

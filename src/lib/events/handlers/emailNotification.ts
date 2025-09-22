@@ -3,13 +3,9 @@ import { sendAcceptRejectNotification } from '@/lib/proposal/server'
 import { Action } from '@/lib/proposal/types'
 import { formatDate } from '@/lib/time'
 
-/**
- * Handler for email notifications to speakers
- */
 export async function handleEmailNotification(
   event: ProposalStatusChangeEvent,
 ): Promise<void> {
-  // Only send email notifications for specific actions and when requested
   if (
     !event.metadata.shouldNotify ||
     ![Action.accept, Action.reject, Action.remind].includes(event.action)

@@ -14,21 +14,17 @@ import { Topic } from '@/lib/topic/types'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 
-/**
- * Props for the TalkPromotionCard component
- */
 interface TalkPromotionCardProps {
-  /** Full talk object (required) */
   talk: ProposalExisting
-  /** Optional schedule slot meta */
+
   slot?: { date?: string; time?: string; location?: string }
-  /** Call-to-action button text */
+
   ctaText?: string
-  /** Call-to-action button URL */
+
   ctaUrl?: string
-  /** Visual variant of the component */
+
   variant?: 'default' | 'featured' | 'compact'
-  /** Additional CSS classes */
+
   className?: string
 }
 
@@ -81,14 +77,12 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
   const variantSettings = variantConfig[variant]
   const Icon = config.icon
 
-  // Derive speakers (filter out references)
   const speakers = Array.isArray(talk.speakers)
     ? talk.speakers.filter((s): s is Speaker =>
         Boolean(s && typeof s === 'object' && 'name' in s && s.name),
       )
     : []
 
-  // Derive level & topic (first concrete topic object with title)
   const level = talk.level as 'beginner' | 'intermediate' | 'advanced'
   const topic = Array.isArray(talk.topics)
     ? talk.topics.find((t): t is Topic => {
@@ -101,7 +95,6 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
       })?.title
     : undefined
 
-  // Extract simple plaintext from portable text description (first block)
   const description = useMemo(() => {
     if (!Array.isArray(talk.description)) return undefined
     const blocks = talk.description
@@ -120,12 +113,8 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
 
   const { date, time, location } = slot || {}
 
-  /**
-   * Header Component - Format badge and featured badge
-   */
   const TalkHeader = () => (
     <header className="mb-4 flex items-start justify-between">
-      {/* Format Badge */}
       <div
         className={`flex items-center space-x-2 rounded-full px-3 py-1 ${config.bgColor} ${config.borderColor} border`}
       >
@@ -140,7 +129,6 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
         )}
       </div>
 
-      {/* Featured Badge */}
       {variantSettings.showFeaturedBadge && (
         <div className="rounded-full bg-brand-cloud-blue/10 px-3 py-1">
           <span className="font-inter text-sm font-medium text-brand-cloud-blue">
@@ -151,15 +139,10 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
     </header>
   )
 
-  /**
-   * Body Component - Title, speakers, meta info, and description
-   */
   const TalkBody = () => (
     <div className="flex-1">
-      {/* Title */}
       <h3 className={`mb-3 ${variantSettings.titleClass}`}>{talk.title}</h3>
 
-      {/* Speakers */}
       {speakers && speakers.length > 0 && (
         <div className={`mb-4 ${variant === 'compact' ? 'mb-3' : ''}`}>
           <div className="flex items-center space-x-3">
@@ -183,10 +166,8 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
         </div>
       )}
 
-      {/* Meta Info - Level and Topic */}
       {(level || topic) && (
         <div className="mb-4 flex flex-wrap items-center gap-4">
-          {/* Duration (for compact variant) */}
           {variant === 'compact' && (
             <div className="flex items-center space-x-1">
               <ClockIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
@@ -196,7 +177,6 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
             </div>
           )}
 
-          {/* Level */}
           {level && (
             <div className="flex items-center space-x-1">
               <AcademicCapIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
@@ -208,7 +188,6 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
             </div>
           )}
 
-          {/* Topic */}
           {topic && (
             <div className="rounded-full bg-gray-100 px-2 py-1 dark:bg-gray-700">
               <span className="font-inter text-xs text-gray-600 dark:text-gray-400">
@@ -219,7 +198,6 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
         </div>
       )}
 
-      {/* Description */}
       {description && variant !== 'compact' && (
         <p
           className={`font-inter text-gray-600 dark:text-gray-400 ${
@@ -232,14 +210,9 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
     </div>
   )
 
-  /**
-   * Footer Component - Event details and CTA
-   * Always positioned at the bottom using mt-auto
-   */
   const TalkFooter = () => (
     <footer className="mt-auto border-t border-gray-100 pt-4 dark:border-gray-700">
       <div className="flex items-center justify-between">
-        {/* Event Details */}
         <div className="flex items-center space-x-2">
           {time ? (
             <>
@@ -284,7 +257,6 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
           )}
         </div>
 
-        {/* CTA Link */}
         <Link
           href={ctaUrl}
           className="group/cta font-inter inline-flex items-center space-x-1 text-sm font-semibold text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80"
@@ -296,7 +268,6 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
     </footer>
   )
 
-  // Main component structure
   return (
     <div className={`${variantSettings.containerClass} ${className}`}>
       <TalkHeader />

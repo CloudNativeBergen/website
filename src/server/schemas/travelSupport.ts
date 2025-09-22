@@ -16,7 +16,6 @@ import {
   GetTravelSupportByIdSchema,
 } from '@/lib/travel-support/validation'
 
-// Re-export validation schemas for tRPC
 export {
   BankingDetailsSchema,
   TravelExpenseInputSchema,
@@ -34,7 +33,6 @@ export {
   GetTravelSupportByIdSchema,
 }
 
-// Additional tRPC-specific schemas
 export const IdParamSchema = z.object({
   id: z.string().min(1, 'ID is required'),
 })

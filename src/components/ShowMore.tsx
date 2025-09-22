@@ -17,7 +17,6 @@ export function ShowMore({
 
   useEffect(() => {
     if (contentRef.current) {
-      // Compare scroll height with client height to detect overflow
       const hasOverflow =
         contentRef.current.scrollHeight > contentRef.current.clientHeight
       setNeedsExpansion(hasOverflow)
@@ -28,10 +27,7 @@ export function ShowMore({
     <section {...props}>
       <div
         ref={contentRef}
-        className={clsx(
-          'text-base leading-7',
-          !isExpanded && 'line-clamp-6', // Show 5-6 lines initially
-        )}
+        className={clsx('text-base leading-7', !isExpanded && 'line-clamp-6')}
       >
         {children}
       </div>

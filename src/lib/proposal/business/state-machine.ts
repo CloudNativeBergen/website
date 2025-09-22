@@ -1,9 +1,5 @@
 import { Action, Status } from '../types'
 
-/**
- * Finite state machine that determines the next status of a proposal
- * based on the current status and the action to be taken.
- */
 export function actionStateMachine(
   currentStatus: Status | undefined,
   action: Action,
@@ -35,7 +31,6 @@ export function actionStateMachine(
       break
     case Status.accepted:
       if (isOrganizer && action === Action.remind) {
-        // status remains the same
       } else if (action === Action.confirm) {
         status = Status.confirmed
       } else if (action === Action.withdraw) {
@@ -67,9 +62,6 @@ export function actionStateMachine(
   return { status, isValidAction }
 }
 
-/**
- * Get allowed actions for a proposal based on current status and user role
- */
 export function getAllowedActions(
   status: Status,
   isOrganizer: boolean,
@@ -95,7 +87,7 @@ export function getAllowedActions(
   }
 
   if (isOrganizer) {
-    actions.push(Action.view) // Organizers can always view
+    actions.push(Action.view)
 
     switch (status) {
       case Status.submitted:
@@ -110,12 +102,9 @@ export function getAllowedActions(
     }
   }
 
-  return [...new Set(actions)] // Remove duplicates
+  return [...new Set(actions)]
 }
 
-/**
- * Check if a specific action is allowed for a proposal
- */
 export function isActionAllowed(
   action: Action,
   status: Status,

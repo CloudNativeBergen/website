@@ -1,8 +1,3 @@
-/**
- * Featured Speakers Management Component
- * Provides UI for managing featured speakers with search and add/remove functionality
- */
-
 'use client'
 
 import { useState } from 'react'
@@ -28,7 +23,6 @@ export function FeaturedSpeakersManager({
 
   const utils = api.useUtils()
 
-  // Queries
   const {
     data: featuredSpeakers = [],
     isLoading: featuredLoading,
@@ -41,7 +35,6 @@ export function FeaturedSpeakersManager({
       { enabled: showSearch && searchQuery.length > 0 },
     )
 
-  // Mutations
   const addSpeakerMutation = api.featured.addSpeaker.useMutation({
     onSuccess: () => {
       refetchFeatured()
@@ -69,17 +62,13 @@ export function FeaturedSpeakersManager({
   const handleAddSpeaker = async (speakerId: string) => {
     try {
       await addSpeakerMutation.mutateAsync({ speakerId })
-    } catch {
-      // Error handled in onError callback
-    }
+    } catch {}
   }
 
   const handleRemoveSpeaker = async (speakerId: string) => {
     try {
       await removeSpeakerMutation.mutateAsync({ speakerId })
-    } catch {
-      // Error handled in onError callback
-    }
+    } catch {}
   }
 
   if (featuredLoading) {

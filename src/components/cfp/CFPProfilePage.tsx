@@ -18,10 +18,8 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
   const [submitError, setSubmitError] = useState<string[]>([])
   const [successMessage, setSuccessMessage] = useState('')
 
-  // Use initialSpeaker as fallback if profile hasn't loaded yet
   const speaker = profile || initialSpeaker
 
-  // Local state for the form
   const [speakerData, setSpeakerData] = useState(speaker)
 
   useEffect(() => {
@@ -110,7 +108,6 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
 
       <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12 dark:border-gray-700 dark:bg-gray-800">
         <form onSubmit={handleProfileSubmit} className="space-y-8">
-          {/* Success Message */}
           {successMessage && (
             <div className="rounded-lg bg-brand-fresh-green/10 p-4 ring-1 ring-brand-fresh-green/20 dark:bg-green-900/20 dark:ring-green-500/30">
               <p className="font-inter text-sm font-medium text-brand-fresh-green dark:text-green-400">
@@ -119,7 +116,6 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
             </div>
           )}
 
-          {/* Error Messages */}
           {submitError.length > 0 && (
             <div className="rounded-lg bg-red-50 p-4 ring-1 ring-red-200 dark:bg-red-900/20 dark:ring-red-500/30">
               <div className="flex">
@@ -145,7 +141,6 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
             </div>
           )}
 
-          {/* Display Email (read-only) */}
           <div>
             <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
               Email Address
@@ -164,7 +159,6 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
             </div>
           </div>
 
-          {/* Reusable Speaker Details Form */}
           <SpeakerDetailsForm
             speaker={speakerData}
             setSpeaker={handleSpeakerDataChange}
@@ -176,7 +170,6 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
             onImageUpload={refreshProfile}
           />
 
-          {/* Submit Button */}
           <div className="flex justify-end border-t border-brand-frosted-steel pt-6 dark:border-gray-600">
             <button
               type="submit"

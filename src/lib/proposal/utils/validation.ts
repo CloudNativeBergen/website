@@ -9,8 +9,6 @@ import {
 import { PortableTextBlock } from '@portabletext/editor'
 import { Reference } from 'sanity'
 
-// This function converts a JSON object to a Proposal object. This is useful when we receive a Proposal object from the API and we want to convert it to a Proposal object that we can use in our application.
-// This function omits fields that should not be set by the user, such as the ID of the Proposal and the status of the Proposal.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function convertJsonToProposal(json: any): ProposalInput {
   return {
@@ -82,7 +80,6 @@ function convertTopicJsonToReference(topic: any): Reference | null {
   return null
 }
 
-// Utility function to generate a unique key
 function generateUniqueKey(): string {
   return Math.random().toString(36).slice(2, 11)
 }

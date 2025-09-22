@@ -1,8 +1,3 @@
-/**
- * Speaker tRPC Router
- * Handles speaker-related operations including search functionality
- */
-
 import { z } from 'zod'
 import { router, adminProcedure } from '@/server/trpc'
 import { getSpeakers } from '@/lib/speaker/sanity'
@@ -18,7 +13,6 @@ const speakerSearchSchema = z.object({
 export const speakersRouter = router({
   search: adminProcedure.input(speakerSearchSchema).query(async ({ input }) => {
     try {
-      // Get the current conference
       const { conference, error } = await getConferenceForCurrentDomain()
       if (error || !conference) {
         throw new TRPCError({
@@ -28,7 +22,6 @@ export const speakersRouter = router({
         })
       }
 
-      // Get speakers with accepted/confirmed talks and include proposals from other conferences
       const { speakers, err } = await getSpeakers(
         conference._id,
         [Status.confirmed, Status.accepted],
@@ -42,11 +35,9 @@ export const speakersRouter = router({
         })
       }
 
-      // Get current featured speakers to exclude them from search results
       const { speakers: featuredSpeakers, error: featuredError } =
         await getFeaturedSpeakers(conference._id)
       if (featuredError) {
-        // Don't fail the search if we can't get featured speakers, just log a warning
         console.warn(
           'Could not get featured speakers for exclusion:',
           featuredError,
@@ -56,10 +47,7 @@ export const speakersRouter = router({
       const featuredSpeakerIds =
         featuredSpeakers?.map((speaker) => speaker._id) || []
 
-      // Filter speakers by name or title containing the search query (case-insensitive)
-      // and exclude already featured speakers
       const filteredSpeakers = speakers.filter((speaker) => {
-        // Exclude already featured speakers
         if (featuredSpeakerIds.includes(speaker._id)) {
           return false
         }

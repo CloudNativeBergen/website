@@ -19,7 +19,6 @@ export function InvitationBadges({
 }: InvitationBadgesProps) {
   if (!invitations || invitations.length === 0) return null
 
-  // Group invitations by status
   const invitationsByStatus = invitations.reduce(
     (acc, inv) => {
       const displayStatus = getInvitationDisplayStatus(inv)

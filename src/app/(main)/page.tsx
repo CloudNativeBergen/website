@@ -3,7 +3,7 @@ import { ProgramHighlights } from '@/components/ProgramHighlights'
 import { Sponsors } from '@/components/Sponsors'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
-export const revalidate = 300 // 5 minutes
+export const revalidate = 300
 
 export default async function Home() {
   const { conference, error } = await getConferenceForCurrentDomain({

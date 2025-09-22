@@ -5,7 +5,6 @@ export { ExpenseForm } from './ExpenseForm'
 export { ExpenseSummary } from './ExpenseSummary'
 export { ExchangeRateDebugPanel } from './ExchangeRateDebugPanel'
 
-// Optimized components
 export { StatusBadge } from './StatusBadge'
 export { ExpensesList } from './ExpensesList'
 export { BankingDetailsDisplay } from './BankingDetailsDisplay'
@@ -24,5 +23,4 @@ export {
   ValidationErrorSummary,
 } from './ErrorComponents'
 
-// Error handling
 export { ErrorBoundary } from './ErrorBoundary'

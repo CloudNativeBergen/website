@@ -10,12 +10,10 @@ interface ProgramScheduleViewProps {
   data: FilteredProgramData
 }
 
-// Constants for better maintainability
 const SCROLL_THRESHOLD = 5
 const SCROLL_DELAY = 100
 const MOBILE_BREAKPOINT = '(min-width: 640px)'
 
-// Memoized utility functions moved outside component to prevent recreation
 const getAllTimeSlots = (tracks: ScheduleTrack[]): string[] => {
   const timeSlots = new Set<string>()
   tracks.forEach((track) => {
@@ -53,13 +51,11 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
   const hasUserInteracted = useRef(false)
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Memoize expensive calculations
   const trackKeys = useMemo(
     () => tracks.map((_, index) => `track-${index}`),
     [tracks],
   )
 
-  // Enhanced scroll function with error handling and cleanup
   const scrollToSelectedTab = useCallback(
     (index: number) => {
       if (
@@ -80,30 +76,25 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
       }
 
       try {
-        // Clear any existing scroll timeout
         if (scrollTimeoutRef.current) {
           clearTimeout(scrollTimeoutRef.current)
         }
 
-        // Horizontal scrolling with improved calculations
         const containerScrollLeft = tabList.scrollLeft
         const containerWidth = tabList.clientWidth
         const tabLeft = selectedTab.offsetLeft
         const tabWidth = selectedTab.offsetWidth
 
-        // Calculate the center position for the selected tab
         const tabCenter = tabLeft + tabWidth / 2
         const containerCenter = containerWidth / 2
         const newScrollLeft = tabCenter - containerCenter
 
-        // Ensure we don't scroll beyond the boundaries
         const maxScrollLeft = Math.max(0, tabList.scrollWidth - containerWidth)
         const clampedScrollLeft = Math.max(
           0,
           Math.min(newScrollLeft, maxScrollLeft),
         )
 
-        // Only scroll if the position would change significantly
         if (
           Math.abs(clampedScrollLeft - containerScrollLeft) > SCROLL_THRESHOLD
         ) {
@@ -113,7 +104,6 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
           })
         }
 
-        // Vertical page scrolling with timeout cleanup
         scrollTimeoutRef.current = setTimeout(() => {
           const tabListTop =
             tabList.getBoundingClientRect().top + window.scrollY
@@ -129,14 +119,12 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
     [tabOrientation, tracks.length],
   )
 
-  // Optimized tab click handler
   const handleTabClick = useCallback(
     (index: number) => {
       hasUserInteracted.current = true
       const wasAlreadySelected = selectedIndex === index
       setSelectedIndex(index)
 
-      // Always scroll when user clicks, even if it's the same tab
       if (wasAlreadySelected) {
         scrollToSelectedTab(index)
       }
@@ -144,7 +132,6 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
     [selectedIndex, scrollToSelectedTab],
   )
 
-  // Media query effect with cleanup
   useEffect(() => {
     const smMediaQuery = window.matchMedia(MOBILE_BREAKPOINT)
 
@@ -160,7 +147,6 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
     }
   }, [])
 
-  // Scroll effect with cleanup
   useEffect(() => {
     if (!hasUserInteracted.current) {
       return
@@ -175,7 +161,6 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
     }
   }, [selectedIndex, scrollToSelectedTab])
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (scrollTimeoutRef.current) {
@@ -257,7 +242,6 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
 
   return (
     <div className="hidden lg:block">
-      {/* Track Headers */}
       <div
         className="mb-6 grid gap-x-4"
         style={{
@@ -284,7 +268,6 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
         ))}
       </div>
 
-      {/* Time-synchronized grid */}
       <div className="space-y-2">
         {timeSlots.map((timeSlot) => {
           return (
@@ -295,14 +278,12 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
                 gridTemplateColumns: `120px repeat(${tracks.length}, minmax(0, 1fr))`,
               }}
             >
-              {/* Time column */}
               <div className="sticky left-0 bg-white p-2 text-center dark:bg-gray-900">
                 <div className="font-mono text-sm font-medium text-brand-slate-gray dark:text-gray-300">
                   {timeSlot}
                 </div>
               </div>
 
-              {/* Track columns */}
               {tracks.map((track, trackIndex) => {
                 const talk = getTalkAtTime(track, timeSlot)
 
@@ -355,7 +336,6 @@ const DaySchedule = React.memo(function DaySchedule({
 
   return (
     <div className="space-y-6">
-      {/* Day Header */}
       <div className="text-center">
         <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
           {formatScheduleDate(schedule.date)}
@@ -366,7 +346,6 @@ const DaySchedule = React.memo(function DaySchedule({
         </p>
       </div>
 
-      {/* Schedule */}
       <div className="space-y-6">
         <ScheduleTabbed tracks={schedule.tracks} date={schedule.date} />
         <ScheduleStatic tracks={schedule.tracks} date={schedule.date} />

@@ -14,9 +14,6 @@ import {
   ExpenseStatus,
 } from './types'
 
-/**
- * Get travel support request by speaker ID and conference ID
- */
 export async function getTravelSupport(
   speakerId: string,
   conferenceId: string,
@@ -40,9 +37,6 @@ export async function getTravelSupport(
   }
 }
 
-/**
- * Get travel support request by ID
- */
 export async function getTravelSupportById(id: string): Promise<{
   travelSupport:
     | (TravelSupportWithSpeaker & { expenses: TravelExpense[] })
@@ -79,9 +73,6 @@ export async function getTravelSupportById(id: string): Promise<{
   }
 }
 
-/**
- * Get all travel support requests for admin
- */
 export async function getAllTravelSupport(conferenceId?: string): Promise<{
   travelSupports: TravelSupportWithSpeaker[]
   error: Error | null
@@ -113,9 +104,6 @@ export async function getAllTravelSupport(conferenceId?: string): Promise<{
   }
 }
 
-/**
- * Create travel support request
- */
 export async function createTravelSupport(
   data: TravelSupportInput,
 ): Promise<{ travelSupport: TravelSupport | null; error: Error | null }> {
@@ -133,9 +121,6 @@ export async function createTravelSupport(
   }
 }
 
-/**
- * Update banking details
- */
 export async function updateBankingDetails(
   travelSupportId: string,
   bankingDetails: BankingDetails,
@@ -149,9 +134,6 @@ export async function updateBankingDetails(
   }
 }
 
-/**
- * Submit travel support for review
- */
 export async function submitTravelSupport(
   travelSupportId: string,
 ): Promise<{ success: boolean; error: Error | null }> {
@@ -170,9 +152,6 @@ export async function submitTravelSupport(
   }
 }
 
-/**
- * Update travel support status (admin)
- */
 export async function updateTravelSupportStatus(
   travelSupportId: string,
   status: TravelSupportStatus,
@@ -212,9 +191,6 @@ export async function updateTravelSupportStatus(
   }
 }
 
-/**
- * Add expense to travel support
- */
 export async function addTravelExpense(
   travelSupportId: string,
   expense: TravelExpenseInput,
@@ -230,7 +206,6 @@ export async function addTravelExpense(
       status: ExpenseStatus.PENDING,
     })
 
-    // Update total amount on travel support
     await updateTravelSupportTotal(travelSupportId)
 
     return { expense: newExpense as TravelExpense, error: null }
@@ -239,15 +214,11 @@ export async function addTravelExpense(
   }
 }
 
-/**
- * Update expense (for speakers to edit their expenses)
- */
 export async function updateTravelExpense(
   expenseId: string,
   expense: TravelExpenseInput,
 ): Promise<{ expense: TravelExpense | null; error: Error | null }> {
   try {
-    // Get the existing expense to check if it can be updated
     const existingExpense = await clientRead.fetch<TravelExpense>(
       `*[_type == "travelExpense" && _id == $expenseId][0]`,
       { expenseId },
@@ -257,7 +228,6 @@ export async function updateTravelExpense(
       return { expense: null, error: new Error('Expense not found') }
     }
 
-    // Check if expense can be updated (only pending expenses)
     if (existingExpense.status !== ExpenseStatus.PENDING) {
       return {
         expense: null,
@@ -270,7 +240,6 @@ export async function updateTravelExpense(
       .set(expense)
       .commit()
 
-    // Update total amount on travel support
     const travelSupportId = existingExpense.travelSupport._ref
     await updateTravelSupportTotal(travelSupportId)
 
@@ -280,9 +249,6 @@ export async function updateTravelExpense(
   }
 }
 
-/**
- * Update expense status (admin)
- */
 export async function updateExpenseStatus(
   expenseId: string,
   status: ExpenseStatus,
@@ -299,7 +265,6 @@ export async function updateExpenseStatus(
 
     await clientWrite.patch(expenseId).set(updateData).commit()
 
-    // Update total amount on related travel support
     const expense = await clientRead.fetch<{ travelSupport: { _ref: string } }>(
       `*[_type == "travelExpense" && _id == $expenseId][0] { travelSupport }`,
       { expenseId },
@@ -315,14 +280,10 @@ export async function updateExpenseStatus(
   }
 }
 
-/**
- * Delete expense
- */
 export async function deleteTravelExpense(
   expenseId: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
-    // Get travel support reference before deleting
     const expense = await clientRead.fetch<{ travelSupport: { _ref: string } }>(
       `*[_type == "travelExpense" && _id == $expenseId][0] { travelSupport }`,
       { expenseId },
@@ -330,7 +291,6 @@ export async function deleteTravelExpense(
 
     await clientWrite.delete(expenseId)
 
-    // Update total amount on related travel support
     if (expense?.travelSupport?._ref) {
       await updateTravelSupportTotal(expense.travelSupport._ref)
     }
@@ -341,9 +301,6 @@ export async function deleteTravelExpense(
   }
 }
 
-/**
- * Upload receipt file
- */
 export async function uploadReceiptFile(file: File): Promise<{
   asset: { _id: string; url: string } | null
   error: Error | null
@@ -359,9 +316,6 @@ export async function uploadReceiptFile(file: File): Promise<{
   }
 }
 
-/**
- * Helper function to update total amount on travel support
- */
 async function updateTravelSupportTotal(
   travelSupportId: string,
 ): Promise<void> {
@@ -384,9 +338,6 @@ async function updateTravelSupportTotal(
   await clientWrite.patch(travelSupportId).set({ totalAmount }).commit()
 }
 
-/**
- * Delete an expense
- */
 export async function deleteExpense(expenseId: string): Promise<{
   success: boolean
   error: Error | null
@@ -399,9 +350,6 @@ export async function deleteExpense(expenseId: string): Promise<{
   }
 }
 
-/**
- * Delete a receipt from an expense
- */
 export async function deleteReceipt(
   expenseId: string,
   receiptIndex: number,
@@ -410,7 +358,6 @@ export async function deleteReceipt(
   error: Error | null
 }> {
   try {
-    // Get the current expense
     const expense = await clientRead.fetch<{ receipts: unknown[] }>(
       `*[_type == "travelExpense" && _id == $expenseId][0] { receipts }`,
       { expenseId },
@@ -424,12 +371,10 @@ export async function deleteReceipt(
       throw new Error('Invalid receipt index')
     }
 
-    // Remove the receipt at the specified index
     const updatedReceipts = expense.receipts.filter(
       (_, index) => index !== receiptIndex,
     )
 
-    // Update the expense with the new receipts array
     await clientWrite
       .patch(expenseId)
       .set({ receipts: updatedReceipts })

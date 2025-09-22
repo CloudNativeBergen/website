@@ -20,28 +20,20 @@ import {
 } from '@heroicons/react/24/outline'
 import { StarIcon, SparklesIcon } from '@heroicons/react/24/solid'
 
-/**
- * Calculate a stable daily rotation index using modulus arithmetic
- * This ensures the same content is shown for the entire day across all timezones
- */
 function getDailyRotationIndex(arrayLength: number): number {
   if (arrayLength === 0) return 0
 
-  // Use UTC date to ensure consistency across different deployments/timezones
   const now = new Date()
   const utcDate = new Date(now.getTime() + now.getTimezoneOffset() * 60000)
 
-  // Calculate days since epoch (Jan 1, 2024) for consistent rotation
   const epoch = new Date('2024-01-01T00:00:00.000Z')
   const daysSinceEpoch = Math.floor(
     (utcDate.getTime() - epoch.getTime()) / (1000 * 60 * 60 * 24),
   )
 
-  // Use modulus to cycle through the array
   return daysSinceEpoch % arrayLength
 }
 
-// Extract unique speakers from schedules
 function extractSpeakersFromSchedules(
   schedules: ConferenceSchedule[],
 ): SpeakerWithTalks[] {
@@ -50,7 +42,6 @@ function extractSpeakersFromSchedules(
   schedules.forEach((schedule) => {
     schedule.tracks.forEach((track) => {
       track.talks.forEach((slot) => {
-        // Only include talks that exist, are confirmed, and have speakers
         if (slot.talk?.speakers && slot.talk.status === 'confirmed') {
           slot.talk.speakers.forEach((speaker) => {
             if (speaker && typeof speaker === 'object' && '_id' in speaker) {
@@ -58,11 +49,9 @@ function extractSpeakersFromSchedules(
               const existingSpeaker = speakersMap.get(speakerId)
 
               if (existingSpeaker) {
-                // Add this talk to existing speaker
                 if (!existingSpeaker.talks) existingSpeaker.talks = []
                 existingSpeaker.talks.push(slot.talk!)
               } else {
-                // Create new speaker entry with their talk
                 speakersMap.set(speakerId, {
                   ...speaker,
                   talks: [slot.talk!],
@@ -78,7 +67,6 @@ function extractSpeakersFromSchedules(
   return Array.from(speakersMap.values())
 }
 
-// Enhanced selection logic for featured talks
 function selectFeaturedTalks(
   schedules: ConferenceSchedule[],
   featuredTalkIds: string[] = [],
@@ -89,7 +77,6 @@ function selectFeaturedTalks(
   schedules.forEach((schedule) => {
     schedule.tracks.forEach((t) => {
       t.talks.forEach((slot) => {
-        // Only include talks that exist, are confirmed, have proper data, and haven't been used
         if (
           slot.talk &&
           slot.talk.status === 'confirmed' &&
@@ -101,7 +88,6 @@ function selectFeaturedTalks(
     })
   })
 
-  // Separate featured talks from regular talks
   const featured: TrackTalk[] = []
   const remaining: TrackTalk[] = []
 
@@ -130,23 +116,20 @@ function selectFeaturedTalks(
     return score
   }
 
-  // Sort remaining talks by score and take the best ones
   const sortedRemaining = remaining.sort((a, b) => {
     const s = score(b) - score(a)
     if (s !== 0) return s
     return a.startTime.localeCompare(b.startTime)
   })
 
-  // Track used talk IDs
   const newUsedTalkIds = new Set(usedTalkIds)
 
-  // If no featured talks are explicitly provided, select the highest scored talk as featured
   if (featuredTalkIds.length === 0 && sortedRemaining.length > 0) {
     featured.push(sortedRemaining[0])
     if (sortedRemaining[0].talk) {
       newUsedTalkIds.add(sortedRemaining[0].talk._id)
     }
-    const regular = sortedRemaining.slice(1, maxRegular + 1) // Take one extra since we used the first as featured
+    const regular = sortedRemaining.slice(1, maxRegular + 1)
     regular.forEach((talk) => {
       if (talk.talk) {
         newUsedTalkIds.add(talk.talk._id)
@@ -155,7 +138,6 @@ function selectFeaturedTalks(
     return { featured, regular, usedTalkIds: newUsedTalkIds }
   }
 
-  // Add featured talks to used set
   featured.forEach((talk) => {
     if (talk.talk) {
       newUsedTalkIds.add(talk.talk._id)
@@ -172,7 +154,6 @@ function selectFeaturedTalks(
   return { featured, regular, usedTalkIds: newUsedTalkIds }
 }
 
-// Enhanced speaker selection that considers talks and prevents duplicates
 function selectFeaturedSpeakers(
   speakers: SpeakerWithTalks[],
   featuredSpeakerIds: string[] = [],
@@ -192,14 +173,11 @@ function selectFeaturedSpeakers(
     }
   }
 
-  // Filter out speakers who are already used or whose talks are already featured
   const availableSpeakers = speakers.filter((speaker) => {
-    // Skip if speaker is already used
     if (usedSpeakerIds.has(speaker._id)) {
       return false
     }
 
-    // Skip if any of this speaker's talks are already featured
     if (speaker.talks?.some((talk) => usedTalkIds.has(talk._id))) {
       return false
     }
@@ -207,7 +185,6 @@ function selectFeaturedSpeakers(
     return true
   })
 
-  // Separate featured speakers from regular speakers
   const featured: SpeakerWithTalks[] = []
   const remaining: SpeakerWithTalks[] = []
 
@@ -219,15 +196,12 @@ function selectFeaturedSpeakers(
     }
   })
 
-  // Score remaining speakers based on their talks and profile
   const scoredSpeakers = remaining.map((speaker) => {
     let score = 0
     const talkCount = speaker.talks?.length || 0
 
-    // More talks = higher score
     score += talkCount * 10
 
-    // Bonus for workshops or long presentations
     speaker.talks?.forEach((talk) => {
       if (talk.format?.startsWith('workshop')) score += 50
       if (
@@ -237,23 +211,18 @@ function selectFeaturedSpeakers(
         score += 30
     })
 
-    // Bonus for having bio
     if (speaker.bio) score += 20
 
-    // Bonus for having company in title
     if (speaker.title?.includes('@') || speaker.title?.includes(' at '))
       score += 15
 
-    // Bonus for local speakers (support local community)
     if (speaker.flags?.includes(Flags.localSpeaker)) score += 25
 
-    // Bonus for underrepresented speakers (promote diversity)
     if (speaker.flags?.includes(Flags.diverseSpeaker)) score += 25
 
     return { speaker, score }
   })
 
-  // Sort by score, then by name for consistency
   const sorted = scoredSpeakers.sort((a, b) => {
     const scoreDiff = b.score - a.score
     if (scoreDiff !== 0) return scoreDiff
@@ -262,7 +231,6 @@ function selectFeaturedSpeakers(
 
   const regular = sorted.slice(0, maxRegular).map((s) => s.speaker)
 
-  // Track used speaker IDs
   const newUsedSpeakerIds = new Set(usedSpeakerIds)
   featured.forEach((speaker) => newUsedSpeakerIds.add(speaker._id))
   regular.forEach((speaker) => newUsedSpeakerIds.add(speaker._id))
@@ -270,7 +238,6 @@ function selectFeaturedSpeakers(
   return { featured, regular, usedSpeakerIds: newUsedSpeakerIds }
 }
 
-// Calculate program stats
 function calculateProgramStats(
   schedules: ConferenceSchedule[],
   speakers: SpeakerWithTalks[],
@@ -279,12 +246,10 @@ function calculateProgramStats(
   let trackCount = 0
 
   schedules.forEach((schedule) => {
-    // Count tracks across all schedules (usually just one schedule per conference)
     trackCount = Math.max(trackCount, schedule.tracks.length)
 
     schedule.tracks.forEach((track) => {
       track.talks.forEach((slot) => {
-        // Only include confirmed talks in stats
         if (slot.talk && slot.talk.status === 'confirmed') {
           allTalks.push(slot)
         }
@@ -301,7 +266,7 @@ function calculateProgramStats(
   allTalks.forEach((talk) => {
     if (talk.talk?.format) {
       formats.add(talk.talk.format)
-      // Count actual workshop sessions, not just formats
+
       if (talk.talk.format.startsWith('workshop')) {
         workshopCount++
       }
@@ -320,7 +285,6 @@ function calculateProgramStats(
     }
   })
 
-  // Count speaker diversity
   speakers.forEach((speaker) => {
     if (speaker.flags?.includes(Flags.localSpeaker)) {
       localSpeakerCount++
@@ -359,29 +323,23 @@ export function ProgramHighlights({
     return null
   }
 
-  // Extract all speakers from schedules
   const allSpeakers = extractSpeakersFromSchedules(schedules)
 
-  // Get featured talk IDs for filtering
   const featuredTalkIds = featuredTalks.map((talk) => talk._id)
   const featuredSpeakerIds = featuredSpeakers.map((speaker) => speaker._id)
 
-  // Initialize tracking sets for duplicates
   const usedTalkIds = new Set<string>()
   const usedSpeakerIds = new Set<string>()
 
-  // Helper function to determine featured speaker status
   const isSpeakerFeatured = (speakerId: string) =>
     featuredSpeakerIds.includes(speakerId)
 
-  // Select talks first (featured and regular) and track used IDs
   const {
     featured: featuredTalkSlots,
     regular: regularTalks,
     usedTalkIds: updatedUsedTalkIds,
   } = selectFeaturedTalks(schedules, featuredTalkIds, 6, usedTalkIds)
 
-  // Select speakers, avoiding those already featured in talks or previously selected
   const { featured: selectedFeaturedSpeakers, regular: regularSpeakers } =
     selectFeaturedSpeakers(
       allSpeakers,
@@ -393,20 +351,16 @@ export function ProgramHighlights({
 
   const stats = calculateProgramStats(schedules, allSpeakers)
 
-  // Use provided featured speakers if available, otherwise use selected ones
   const displayFeaturedSpeakers =
     featuredSpeakers.length > 0 ? featuredSpeakers : selectedFeaturedSpeakers
 
-  // Use featured talk slots (function automatically selects highest scored if none provided)
   const displayFeaturedTalks = featuredTalkSlots
 
-  // Calculate daily rotation indices for consistent daily cycling
   const featuredSpeakerIndex = getDailyRotationIndex(
     displayFeaturedSpeakers.length,
   )
   const featuredTalkIndex = getDailyRotationIndex(displayFeaturedTalks.length)
 
-  // Get the current day's featured speaker and talk
   const todaysFeaturedSpeaker =
     displayFeaturedSpeakers.length > 0
       ? displayFeaturedSpeakers[featuredSpeakerIndex]
@@ -431,7 +385,6 @@ export function ProgramHighlights({
       className="py-20 sm:py-32"
     >
       <Container>
-        {/* Section Header */}
         <div className="mx-auto max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">
           <h2
             id="program-highlights-title"

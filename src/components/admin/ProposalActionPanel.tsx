@@ -35,10 +35,9 @@ export function ProposalActionPanel({
   const [proposalStatus, setProposalStatus] = useState<Status>(proposal.status)
   const [reviewsExpanded, setReviewsExpanded] = useState(false)
 
-  // Set initial state based on screen size
   useEffect(() => {
     const checkScreenSize = () => {
-      setReviewsExpanded(window.innerWidth >= 1024) // lg breakpoint
+      setReviewsExpanded(window.innerWidth >= 1024)
     }
 
     checkScreenSize()
@@ -47,7 +46,6 @@ export function ProposalActionPanel({
     return () => window.removeEventListener('resize', checkScreenSize)
   }, [])
 
-  // Find current user's review
   const currentUserReview = currentUser
     ? reviews.find(
         (review) =>
@@ -58,7 +56,6 @@ export function ProposalActionPanel({
     : undefined
 
   const handleReviewSubmit = (newReview: Review) => {
-    // Ensure the reviewer is set to the current user
     newReview.reviewer = currentUser!
 
     setReviews((prevReviews) => {
@@ -70,7 +67,6 @@ export function ProposalActionPanel({
       )
 
       if (existingReviewIndex !== -1) {
-        // Update existing review
         const updatedReviews = [...prevReviews]
         updatedReviews[existingReviewIndex] = {
           ...prevReviews[existingReviewIndex],
@@ -80,7 +76,6 @@ export function ProposalActionPanel({
         }
         return updatedReviews
       } else {
-        // Add new review
         return [
           ...prevReviews,
           {
@@ -100,7 +95,7 @@ export function ProposalActionPanel({
 
   const handleActionComplete = (proposalId: string, newStatus: Status) => {
     setProposalStatus(newStatus)
-    // Optionally refresh the page or update the UI
+
     window.location.reload()
   }
 
@@ -118,9 +113,7 @@ export function ProposalActionPanel({
             Admin Actions
           </h3>
 
-          {/* Button Group */}
           <div className="flex w-full rounded-md shadow-sm" role="group">
-            {/* Approve or Remind Button */}
             {canApprove ? (
               <button
                 onClick={() => handleAction(Action.accept)}
@@ -147,7 +140,6 @@ export function ProposalActionPanel({
               </button>
             )}
 
-            {/* Reject Button */}
             <button
               onClick={() => handleAction(Action.reject)}
               disabled={!canReject}
@@ -162,7 +154,6 @@ export function ProposalActionPanel({
             </button>
           </div>
 
-          {/* Status Display */}
           <div className="mt-3 border-t border-gray-200 pt-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">Current Status:</span>
@@ -184,10 +175,8 @@ export function ProposalActionPanel({
           </div>
         </div>
 
-        {/* Review Summary */}
         <ProposalReviewSummary reviews={reviews} />
 
-        {/* Review Form - only show if user is logged in */}
         {currentUser && (
           <ProposalReviewForm
             proposalId={proposal._id}
@@ -196,7 +185,6 @@ export function ProposalActionPanel({
           />
         )}
 
-        {/* Collapsible Reviews List - Default to expanded on desktop, collapsed on mobile */}
         <div className="rounded-lg border border-gray-200 bg-white">
           <button
             onClick={() => setReviewsExpanded(!reviewsExpanded)}
@@ -212,11 +200,9 @@ export function ProposalActionPanel({
             )}
           </button>
 
-          {/* Always show on desktop, conditionally on mobile */}
           <div
             className={`lg:block ${reviewsExpanded ? 'block' : 'hidden lg:block'}`}
           >
-            {/* Header for desktop */}
             <div className="hidden p-4 pb-0 lg:block">
               <h3 className="text-lg font-semibold text-gray-900">
                 Reviews {reviews.length > 0 && `(${reviews.length})`}
@@ -232,7 +218,6 @@ export function ProposalActionPanel({
           </div>
         </div>
 
-        {/* Action Modal */}
         <ProposalActionModal
           open={actionModalOpen}
           close={() => setActionModalOpen(false)}

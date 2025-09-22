@@ -37,7 +37,6 @@ export function useEmails(): UseEmailsReturn {
     }
   }, [])
 
-  // Initial fetch
   useEffect(() => {
     fetchEmails()
   }, [fetchEmails])

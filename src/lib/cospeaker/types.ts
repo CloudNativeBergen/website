@@ -8,8 +8,6 @@ export const INVITATION_STATUSES = [
 
 export type InvitationStatus = (typeof INVITATION_STATUSES)[number]
 
-// Minimal invitation type for use in proposals (to avoid circular dependencies)
-// This matches the Sanity schema field names exactly
 export interface CoSpeakerInvitationMinimal {
   _id: string
   invitedEmail: string
@@ -22,11 +20,10 @@ export interface CoSpeakerInvitationMinimal {
   declineReason?: string
 }
 
-// Full invitation type that matches Sanity schema exactly
 export interface CoSpeakerInvitationFull extends CoSpeakerInvitationMinimal {
   _createdAt?: string
   _updatedAt?: string
-  // References to other documents (matches Sanity schema)
+
   proposal?:
     | {
         _ref: string
@@ -120,7 +117,6 @@ export function formatProposalFormat(format: string): string {
   return formats[format] || format
 }
 
-// Utility function to convert full invitation to minimal
 export function toMinimalInvitation(
   invitation: CoSpeakerInvitationFull,
 ): CoSpeakerInvitationMinimal {

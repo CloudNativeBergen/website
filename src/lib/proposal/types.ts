@@ -38,16 +38,15 @@ export enum Format {
 }
 
 export enum Status {
-  draft = 'draft', // draft by the speaker
-  submitted = 'submitted', // submitted by the speaker
-  accepted = 'accepted', // accepted by the organizers
-  confirmed = 'confirmed', // confirmed by the speaker
-  rejected = 'rejected', // rejected by the organizers
-  withdrawn = 'withdrawn', // withdrawn by the speaker
-  deleted = 'deleted', // deleted by the speaker
+  draft = 'draft',
+  submitted = 'submitted',
+  accepted = 'accepted',
+  confirmed = 'confirmed',
+  rejected = 'rejected',
+  withdrawn = 'withdrawn',
+  deleted = 'deleted',
 }
 
-// Action is an enum that represents the possible actions that can be taken on a proposal.
 export enum Action {
   view = 'view',
   edit = 'edit',

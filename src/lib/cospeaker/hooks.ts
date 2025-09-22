@@ -155,7 +155,6 @@ export function useInvitations(
         `Invitation${result.sentEmails.length > 1 ? 's' : ''} sent to ${result.sentEmails.join(', ')}`,
       )
 
-      // Convert full invitations to minimal format
       const minimalInvitations = result.invitations.map(toMinimalInvitation)
 
       if (onInvitationSent) {

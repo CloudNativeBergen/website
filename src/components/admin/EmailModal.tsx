@@ -50,12 +50,12 @@ export interface EmailModalProps {
     messageHTML: string
   }) => React.ReactNode
   fromAddress: string
-  storageKey?: string // Optional storage key for auto-save
-  additionalFields?: Record<string, string | number | boolean> // Additional fields to save in storage
+  storageKey?: string
+  additionalFields?: Record<string, string | number | boolean>
   onAdditionalFieldsChange?: (
     fields: Record<string, string | number | boolean>,
-  ) => void // Callback for additional field changes
-  // Ticket URL support for sponsor emails
+  ) => void
+
   ticketUrl?: string
   onTicketUrlChange?: (url: string) => void
 }
@@ -86,7 +86,7 @@ export function EmailModal({
   const [isLoading, setIsLoading] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(false)
-  const [editorRemountKey, setEditorRemountKey] = useState(0) // Key to force editor remount
+  const [editorRemountKey, setEditorRemountKey] = useState(0)
   const { showNotification } = useNotification()
   const initializedKeysRef = useRef<Set<string>>(new Set())
   const isInitializingRef = useRef(false)
@@ -187,7 +187,6 @@ export function EmailModal({
       .join('\n\n')
   }
 
-  // Get both plain text and HTML versions of the message
   const getCurrentMessage = useCallback((): string => {
     return convertPortableTextToString(richTextValue)
   }, [richTextValue])
@@ -264,8 +263,6 @@ export function EmailModal({
         message: richTextValue,
       })
 
-      // Only clear storage and reset form for non-shared storage keys
-      // Shared storage keys (like "sponsor-discount-email-shared") should preserve the template
       const isSharedStorage = storageKey?.includes('shared')
 
       if (storageKey && !isSharedStorage) {

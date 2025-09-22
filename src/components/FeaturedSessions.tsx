@@ -2,9 +2,6 @@ import Link from 'next/link'
 import { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import { Container } from '@/components/Container'
 import { TalkPromotionCard } from '@/components/TalkPromotionCard'
-
-// Select a curated list of sessions (talks + workshops) for the front page.
-// Prioritise workshops, then longer presentations, then remaining talks by start time.
 function selectFeaturedTalks(
   schedules: ConferenceSchedule[],
   max = 6,

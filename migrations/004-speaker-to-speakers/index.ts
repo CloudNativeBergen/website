@@ -33,7 +33,6 @@ export default defineMigration({
     document(doc, context) {
       const talk = doc as TalkDocument
 
-      // Skip documents that already have speakers array
       if (talk.speakers && Array.isArray(talk.speakers)) {
         console.log(
           `Talk "${talk.title}" (${talk._id}) already has speakers array, skipping`,
@@ -41,7 +40,6 @@ export default defineMigration({
         return []
       }
 
-      // Determine which field to migrate from
       let sourceRef: string | null = null
       let sourceField: string | null = null
 
@@ -50,7 +48,6 @@ export default defineMigration({
         sourceField = 'speaker'
       }
 
-      // Skip documents that don't have a speaker to migrate
       if (!sourceRef || !sourceField) {
         console.log(
           `Talk "${talk.title}" (${talk._id}) has no speaker to migrate, skipping`,
@@ -62,7 +59,6 @@ export default defineMigration({
         `Migrating talk "${talk.title}" (${talk._id}) - converting ${sourceField} to speakers array`,
       )
 
-      // Convert single reference to array
       const speakersArray = [
         {
           _type: 'reference',
@@ -70,12 +66,9 @@ export default defineMigration({
         },
       ]
 
-      // Return migration operations
       return [
-        // Add the new speakers array
         at('speakers', set(speakersArray)),
-        // Keep the old speaker field for backward compatibility
-        // Do not unset the speaker field
+        // Keep original speaker field for backward compatibility (intentional)
       ]
     },
   },

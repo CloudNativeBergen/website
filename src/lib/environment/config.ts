@@ -41,9 +41,6 @@ export class AppEnvironment {
     )
   }
 
-  /**
-   * Creates a mock authentication context for development/test mode
-   */
   static createMockAuthContext(): Session {
     if (!AppEnvironment.isTestMode) {
       throw new Error('createMockAuthContext can only be used in test mode.')

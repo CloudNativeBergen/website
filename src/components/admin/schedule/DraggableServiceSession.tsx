@@ -12,7 +12,6 @@ interface DraggableServiceSessionProps {
   isDragging?: boolean
 }
 
-// Constants for styling
 const MINUTES_TO_PIXELS = 2.4
 const SERVICE_SESSION_THRESHOLDS = {
   SHORT: 15,
@@ -26,14 +25,11 @@ export function DraggableServiceSession({
   sourceTimeSlot,
   isDragging = false,
 }: DraggableServiceSessionProps) {
-  // Memoize expensive calculations
   const { dragType, durationMinutes, sessionSize, dragId } = useMemo(() => {
-    // Calculate duration
     const startTime = new Date(`2000-01-01T${serviceSession.startTime}:00`)
     const endTime = new Date(`2000-01-01T${serviceSession.endTime}:00`)
     const duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60)
 
-    // Determine session size category
     let size: 'short' | 'medium' | 'long' | 'very-long'
     if (duration <= SERVICE_SESSION_THRESHOLDS.SHORT) size = 'short'
     else if (duration <= SERVICE_SESSION_THRESHOLDS.MEDIUM) size = 'medium'
@@ -72,7 +68,6 @@ export function DraggableServiceSession({
     },
   })
 
-  // Memoize transform style
   const transformStyle = useMemo(() => {
     if (!transform || isBeingDragged) return undefined
     return {
@@ -80,7 +75,6 @@ export function DraggableServiceSession({
     }
   }, [transform, isBeingDragged])
 
-  // Memoize class names
   const containerClasses = useMemo(() => {
     const baseClasses =
       'relative max-w-full overflow-hidden rounded-lg border bg-gray-100 shadow-sm transition-shadow duration-200 hover:shadow-md dark:border-gray-600 dark:bg-gray-700'
@@ -94,7 +88,6 @@ export function DraggableServiceSession({
     return `${baseClasses} ${opacityClass} ${paddingClass}`.trim()
   }, [isBeingDragged, isDragging, sessionSize])
 
-  // Title component based on session size
   const TitleComponent = useMemo(() => {
     const titleClasses = 'pr-1 text-gray-900 truncate dark:text-white'
 
@@ -127,9 +120,7 @@ export function DraggableServiceSession({
       className={containerClasses}
       {...attributes}
     >
-      {/* Header row with drag handle and title */}
       <div className="flex min-h-[16px] items-center gap-1">
-        {/* Drag handle */}
         <div
           className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-200 dark:hover:bg-gray-600"
           {...listeners}
@@ -137,10 +128,8 @@ export function DraggableServiceSession({
           <Bars3Icon className="h-3 w-3 text-gray-500 dark:text-gray-400" />
         </div>
 
-        {/* Title - takes remaining space and aligns with other proposals */}
         <div className="min-w-0 flex-1">{TitleComponent}</div>
 
-        {/* Duration indicator */}
         <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
           <ClockIcon
             className={
@@ -153,15 +142,12 @@ export function DraggableServiceSession({
         </div>
       </div>
 
-      {/* Content below header - only for long and very-long sessions (30+ minutes) */}
       {(sessionSize === 'long' || sessionSize === 'very-long') && (
         <div className="mt-1 space-y-1">
-          {/* Session type indicator - only show for sessions 30+ minutes */}
           <div className="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400">
             <span>Service Session</span>
           </div>
 
-          {/* Time range for very-long sessions */}
           {sessionSize === 'very-long' && (
             <div className="text-xs text-gray-500 dark:text-gray-400">
               {serviceSession.startTime} - {serviceSession.endTime}

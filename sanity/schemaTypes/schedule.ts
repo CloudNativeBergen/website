@@ -99,7 +99,6 @@ export default defineType({
                       endTime,
                       format,
                     }) {
-                      // Extract speaker names from the speakers array
                       const speakerNames = speakers
                         ? speakers
                             .map((s: any) => s.name || 'Unknown')

@@ -26,9 +26,6 @@ interface ProposalDetailProps {
   proposal: ProposalExisting
 }
 
-/**
- * Type guard to check if a topic is a Topic object (not a Reference)
- */
 function isTopicObject(topic: unknown): topic is Topic {
   return (
     topic !== null &&
@@ -38,10 +35,6 @@ function isTopicObject(topic: unknown): topic is Topic {
   )
 }
 
-/**
- * Detailed view component for individual proposals
- * Used in admin proposal detail pages
- */
 export function ProposalDetail({ proposal }: ProposalDetailProps) {
   const speakers =
     proposal.speakers && Array.isArray(proposal.speakers)
@@ -60,7 +53,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
 
   return (
     <div>
-      {/* Header */}
       <div className="border-b border-gray-200 py-5 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div className="min-w-0 flex-1">
@@ -81,12 +73,9 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
         </div>
       </div>
 
-      {/* Content */}
       <div className="py-5">
         <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">
-          {/* Main Content */}
           <div className="space-y-8 lg:col-span-2">
-            {/* Description */}
             <div>
               <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                 Description
@@ -100,7 +89,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               </div>
             </div>
 
-            {/* Outline */}
             {proposal.outline && (
               <div>
                 <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
@@ -112,7 +100,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               </div>
             )}
 
-            {/* Topics */}
             {topics && topics.length > 0 && (
               <div>
                 <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
@@ -132,7 +119,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               </div>
             )}
 
-            {/* Other Submissions */}
             {speakers.length > 0 &&
               speakers.some(
                 (speaker) =>
@@ -145,7 +131,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                   <div className="space-y-3">
                     {speakers
                       .flatMap((speaker) => speaker.submittedTalks || [])
-                      .filter((talk) => talk._id !== proposal._id) // Don't show the current proposal
+                      .filter((talk) => talk._id !== proposal._id)
                       .map((talk) => (
                         <div
                           key={talk._id}
@@ -220,7 +206,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                               {talk.conference && (
                                 <span className="text-xs text-gray-500 dark:text-gray-400">
                                   {(() => {
-                                    // Type guard to check if conference is a Conference object (not a Reference)
                                     const isConferenceObject = (
                                       c: unknown,
                                     ): c is {
@@ -264,16 +249,13 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               )}
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-6">
-            {/* Speaker Information */}
             <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800">
               <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                 {speakers.length > 1 ? 'Speakers' : 'Speaker'}
               </h2>
               {speakers.length > 0 ? (
                 <div className="space-y-6">
-                  {/* Individual speaker details */}
                   {speakers.map((speaker, index) => (
                     <div
                       key={speaker._id || index}

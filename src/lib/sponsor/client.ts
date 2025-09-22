@@ -1,6 +1,5 @@
 import { ConferenceSponsorInput, ConferenceSponsorResponse } from './types'
 
-// Conference sponsor assignment functions - Used by email functionality
 export async function addSponsorToConference(
   data: ConferenceSponsorInput,
 ): Promise<void> {

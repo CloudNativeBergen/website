@@ -8,9 +8,6 @@ import {
 import { Conference } from '@/lib/conference/types'
 import { delay, EMAIL_CONFIG } from '@/lib/email/config'
 
-/**
- * Compare old and new contact lists to determine what changed
- */
 export function diffSponsorContacts(
   oldContacts: ContactPerson[] | undefined,
   newContacts: ContactPerson[] | undefined,
@@ -29,10 +26,6 @@ export function diffSponsorContacts(
   return { added, removed, unchanged }
 }
 
-/**
- * Update sponsor audience when contacts change
- * Only adds/removes specific contacts that changed - no full sync needed
- */
 export async function updateSponsorAudience(
   conference: Conference,
   oldSponsor: SponsorWithContactInfo | null,
@@ -44,7 +37,6 @@ export async function updateSponsorAudience(
   error?: Error
 }> {
   try {
-    // Calculate the diff to know exactly what changed
     const oldContactsWithPerson = oldSponsor?.contact_persons || []
     const newContactsWithPerson = newSponsor.contact_persons || []
     const { added, removed } = diffSponsorContacts(
@@ -52,7 +44,6 @@ export async function updateSponsorAudience(
       newContactsWithPerson,
     )
 
-    // If no changes, skip the sync
     if (added.length === 0 && removed.length === 0) {
       return {
         success: true,
@@ -61,7 +52,6 @@ export async function updateSponsorAudience(
       }
     }
 
-    // Use incremental updates for all changes - no full sync needed
     return await updateSponsorAudienceIncremental(
       conference,
       added,
@@ -79,10 +69,6 @@ export async function updateSponsorAudience(
   }
 }
 
-/**
- * Incremental sponsor audience update - only add/remove specific contacts
- * Uses lib/email/audience functions directly for maximum reuse
- */
 async function updateSponsorAudienceIncremental(
   conference: Conference,
   addedContacts: ContactPerson[],
@@ -95,7 +81,6 @@ async function updateSponsorAudienceIncremental(
   error?: Error
 }> {
   try {
-    // Get or create the sponsor audience using the generic audience function
     const { audienceId, error: audienceError } =
       await getOrCreateConferenceAudienceByType(conference, 'sponsors')
 
@@ -106,7 +91,6 @@ async function updateSponsorAudienceIncremental(
     let addedCount = 0
     let removedCount = 0
 
-    // Add new contacts using the generic addContactToAudience function
     for (const contact of addedContacts) {
       if (contact.email) {
         const contactToAdd: Contact = {
@@ -116,23 +100,19 @@ async function updateSponsorAudienceIncremental(
           organization: sponsorName,
         }
 
-        // Use the generic function which already has retry/backoff logic
         const { success } = await addContactToAudience(audienceId, contactToAdd)
         if (success) {
           addedCount++
         }
 
-        // Add delay to respect rate limits (only if multiple contacts)
         if (addedContacts.length > 1) {
           await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
         }
       }
     }
 
-    // Remove contacts using the generic removeContactFromAudience function
     for (const contact of removedContacts) {
       if (contact.email) {
-        // Use the generic function which already has retry/backoff logic
         const { success } = await removeContactFromAudience(
           audienceId,
           contact.email,
@@ -141,7 +121,6 @@ async function updateSponsorAudienceIncremental(
           removedCount++
         }
 
-        // Add delay to respect rate limits (only if multiple contacts)
         if (removedContacts.length > 1) {
           await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
         }

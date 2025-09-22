@@ -12,9 +12,6 @@ import {
 } from '../types'
 import { getFormatConfig } from './config'
 
-/**
- * Badge styling configuration interfaces
- */
 export interface BadgeConfig {
   text: string
   bgColor: string
@@ -22,9 +19,6 @@ export interface BadgeConfig {
   borderColor?: string
 }
 
-/**
- * STATUS BADGE CONFIGURATION
- */
 export function getStatusBadgeConfig(status: Status): BadgeConfig {
   switch (status) {
     case Status.draft:
@@ -86,9 +80,6 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
   }
 }
 
-/**
- * AUDIENCE BADGE CONFIGURATION
- */
 export function getAudienceBadgeConfig(audience: Audience): BadgeConfig {
   switch (audience) {
     case Audience.developer:
@@ -148,9 +139,6 @@ export function getAudienceBadgeConfig(audience: Audience): BadgeConfig {
   }
 }
 
-/**
- * Extended level configuration for both badges and indicators
- */
 export interface LevelConfig {
   color: string
   label: string
@@ -162,24 +150,24 @@ export interface LevelConfig {
 
 export const LEVEL_CONFIG: Record<Level, LevelConfig> = {
   beginner: {
-    color: '#10b981', // green-500
-    bgColor: '#10b98110', // green-500 with 10% opacity
+    color: '#10b981',
+    bgColor: '#10b98110',
     badgeBgColor: 'bg-green-100',
     badgeTextColor: 'text-green-800',
     label: 'Beginner',
     symbol: '●',
   },
   intermediate: {
-    color: '#f59e0b', // amber-500
-    bgColor: '#f59e0b10', // amber-500 with 10% opacity
+    color: '#f59e0b',
+    bgColor: '#f59e0b10',
     badgeBgColor: 'bg-yellow-100',
     badgeTextColor: 'text-yellow-800',
     label: 'Intermediate',
     symbol: '●',
   },
   advanced: {
-    color: '#ef4444', // red-500
-    bgColor: '#ef444410', // red-500 with 10% opacity
+    color: '#ef4444',
+    bgColor: '#ef444410',
     badgeBgColor: 'bg-red-100',
     badgeTextColor: 'text-red-800',
     label: 'Advanced',
@@ -187,17 +175,11 @@ export const LEVEL_CONFIG: Record<Level, LevelConfig> = {
   },
 }
 
-/**
- * Get level configuration for a proposal level
- */
 export function getLevelConfig(level?: Level): LevelConfig | null {
   if (!level || !(level in LEVEL_CONFIG)) return null
   return LEVEL_CONFIG[level]
 }
 
-/**
- * LEVEL BADGE CONFIGURATION
- */
 export function getLevelBadgeConfig(level: Level): BadgeConfig {
   const config = getLevelConfig(level)
   if (!config) {
@@ -215,9 +197,6 @@ export function getLevelBadgeConfig(level: Level): BadgeConfig {
   }
 }
 
-/**
- * LANGUAGE BADGE CONFIGURATION
- */
 export function getLanguageBadgeConfig(language: Language): BadgeConfig {
   return {
     text: languages.get(language) || 'Unknown',
@@ -226,9 +205,6 @@ export function getLanguageBadgeConfig(language: Language): BadgeConfig {
   }
 }
 
-/**
- * FORMAT BADGE CONFIGURATION
- */
 export function getFormatBadgeConfig(format: Format): BadgeConfig {
   const config = getFormatConfig(format)
   return {
@@ -237,10 +213,6 @@ export function getFormatBadgeConfig(format: Format): BadgeConfig {
     textColor: config.color,
   }
 }
-
-/**
- * REUSABLE BADGE COMPONENTS
- */
 
 interface BaseBadgeProps {
   variant?: 'default' | 'compact'
@@ -379,9 +351,6 @@ export function AudienceBadges({
   )
 }
 
-/**
- * Level Indicator Component for visual level display
- */
 export interface LevelIndicatorProps {
   level?: Level
   className?: string

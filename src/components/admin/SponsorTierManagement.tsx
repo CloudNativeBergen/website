@@ -83,10 +83,8 @@ export default function SponsorTierManagement({
   }
 
   const addSponsorToState = (newSponsor: ConferenceSponsorWithContact) => {
-    // Add to sponsors array
     setSponsors((prev) => [...prev, newSponsor])
 
-    // Add to sponsorsByTier
     setSponsorsByTier((prev) => {
       const tierName = newSponsor.tier.title
       const currentTierSponsors = prev[tierName] || []
@@ -96,7 +94,6 @@ export default function SponsorTierManagement({
       }
     })
 
-    // Add tier to sortedTierNames if it's not already there
     setSortedTierNames((prev) => {
       const tierName = newSponsor.tier.title
       if (!prev.includes(tierName)) {
@@ -105,7 +102,6 @@ export default function SponsorTierManagement({
       return prev
     })
 
-    // Show success notification
     showNotification({
       type: 'success',
       title: 'Sponsor added successfully',
@@ -140,7 +136,6 @@ export default function SponsorTierManagement({
   const updateSponsorInState = (
     updatedSponsor: ConferenceSponsorWithContact,
   ) => {
-    // Update sponsors array
     setSponsors((prev) =>
       prev.map((sponsor) =>
         sponsor.sponsor.name === updatedSponsor.sponsor.name
@@ -149,18 +144,15 @@ export default function SponsorTierManagement({
       ),
     )
 
-    // Update sponsorsByTier
     setSponsorsByTier((prev) => {
       const newSponsorsByTier = { ...prev }
 
-      // Remove from old tier
       Object.keys(newSponsorsByTier).forEach((tierName) => {
         newSponsorsByTier[tierName] = newSponsorsByTier[tierName].filter(
           (sponsor) => sponsor.sponsor.name !== updatedSponsor.sponsor.name,
         )
       })
 
-      // Add to new tier
       const tierName = updatedSponsor.tier.title
       if (!newSponsorsByTier[tierName]) {
         newSponsorsByTier[tierName] = []
@@ -170,7 +162,6 @@ export default function SponsorTierManagement({
       return newSponsorsByTier
     })
 
-    // Show success notification
     showNotification({
       type: 'success',
       title: 'Sponsor updated successfully',
@@ -196,13 +187,11 @@ export default function SponsorTierManagement({
     try {
       await removeSponsorMutation.mutateAsync({ id: sponsorId })
 
-      // Update local state
       const updatedSponsors = sponsors.filter(
         (s) => s.sponsor.name !== sponsorName,
       )
       setSponsors(updatedSponsors)
 
-      // Update sponsorsByTier
       const newSponsorsByTier = { ...sponsorsByTier }
       Object.keys(newSponsorsByTier).forEach((tierName) => {
         newSponsorsByTier[tierName] = newSponsorsByTier[tierName].filter(
@@ -211,22 +200,17 @@ export default function SponsorTierManagement({
       })
       setSponsorsByTier(newSponsorsByTier)
 
-      // Update sorted tier names (remove empty tiers)
       const newSortedTierNames = sortedTierNames.filter(
         (tierName) => newSponsorsByTier[tierName]?.length > 0,
       )
       setSortedTierNames(newSortedTierNames)
-    } catch {
-      // Error handling is done by the mutation
-    }
+    } catch {}
   }
 
   const handleDownloadSvg = (sponsorName: string, svgContent: string) => {
-    // Create blob with SVG content
     const blob = new Blob([svgContent], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
 
-    // Create and trigger download
     const link = document.createElement('a')
     const fileName = `${sponsorName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-logo.svg`
 
@@ -238,7 +222,6 @@ export default function SponsorTierManagement({
     link.click()
     document.body.removeChild(link)
 
-    // Cleanup
     setTimeout(() => URL.revokeObjectURL(url), 100)
   }
 
@@ -452,7 +435,6 @@ export default function SponsorTierManagement({
             )
           })}
 
-          {/* Add sponsors to existing tiers that have no sponsors */}
           {sponsorTiers.some(
             (tier) =>
               !sponsorsByTier[tier.title] ||
@@ -470,7 +452,6 @@ export default function SponsorTierManagement({
                       sponsorsByTier[tier.title].length === 0,
                   )
                   .sort((a, b) => {
-                    // Sort by highest price first
                     const getMaxPrice = (tier: SponsorTierExisting) => {
                       if (!tier.price || tier.price.length === 0) return 0
                       return Math.max(...tier.price.map((p) => p.amount))

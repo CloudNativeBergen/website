@@ -28,17 +28,14 @@ interface DraggableProposalProps {
   isDragging?: boolean
 }
 
-// Talk size thresholds as constants
 const TALK_THRESHOLDS = {
   VERY_SHORT: 10,
   SHORT: 20,
   MEDIUM: 45,
 } as const
 
-// Height calculation constant
 const MINUTES_TO_PIXELS = 2.4
 
-// Audience abbreviations and icons
 const AUDIENCE_CONFIG = {
   developer: { abbr: 'DEV', icon: CodeBracketIcon },
   architect: { abbr: 'ARC', icon: CubeIcon },
@@ -50,7 +47,6 @@ const AUDIENCE_CONFIG = {
   devopsEngineer: { abbr: 'DEVOPS', icon: CogIcon },
 } as const
 
-// Helper function to format color values (ensure # prefix)
 const formatTopicColor = (color: string): string =>
   color.startsWith('#') ? color : `#${color}`
 
@@ -60,10 +56,8 @@ export function DraggableProposal({
   sourceTimeSlot,
   isDragging = false,
 }: DraggableProposalProps) {
-  // Get level configuration using the utility hook
   const levelConfig = getLevelConfig(proposal.level)
 
-  // Memoize expensive calculations
   const { dragType, durationMinutes, talkSize, dragId, speakerInfo } =
     useMemo(() => {
       const duration = getProposalDurationMinutes(proposal)
@@ -71,14 +65,12 @@ export function DraggableProposal({
         sourceTrackIndex !== undefined ? 'scheduled-talk' : 'proposal'
       const id = `${type}-${proposal._id}-${sourceTimeSlot || 'unassigned'}`
 
-      // Determine talk size category
       let size: 'very-short' | 'short' | 'medium' | 'long'
       if (duration <= TALK_THRESHOLDS.VERY_SHORT) size = 'very-short'
       else if (duration <= TALK_THRESHOLDS.SHORT) size = 'short'
       else if (duration <= TALK_THRESHOLDS.MEDIUM) size = 'medium'
       else size = 'long'
 
-      // Extract speaker info if available
       const speaker =
         proposal.speakers &&
         Array.isArray(proposal.speakers) &&
@@ -98,7 +90,6 @@ export function DraggableProposal({
       }
     }, [proposal, sourceTrackIndex, sourceTimeSlot])
 
-  // Process topics and determine styling - optimized approach
   const topicStyling = useMemo(() => {
     const topics = proposal.topics as Topic[]
     if (!topics || topics.length === 0) return { styles: {}, className: '' }
@@ -106,21 +97,18 @@ export function DraggableProposal({
     const color1 = formatTopicColor(topics[0].color)
     const color2 = topics.length >= 2 ? formatTopicColor(topics[1].color) : ''
 
-    // Use CSS custom properties for better performance
     const styles: React.CSSProperties & Record<string, string> = {
       '--topic-1-color': color1,
       '--topic-2-color': color2,
       position: 'relative' as const,
     }
 
-    // Determine which CSS class to use
     const className =
       topics.length === 1 ? 'topic-border-single' : 'topic-border-gradient'
 
     return { styles, className }
   }, [proposal.topics])
 
-  // Enhanced background styling based on topics and status
   const backgroundStyle = useMemo(() => {
     const topics = proposal.topics as Topic[]
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
@@ -128,21 +116,18 @@ export function DraggableProposal({
       proposal.status === Status.withdrawn ||
       proposal.status === Status.rejected
 
-    // For withdrawn/rejected proposals, background will be handled by CSS class
     if (isWithdrawnOrRejected) {
-      return {} // Background handled by Tailwind class
+      return {}
     }
 
-    // For accepted but not confirmed proposals, background will be handled by CSS class
     if (isAcceptedButNotConfirmed) {
-      return {} // Background handled by Tailwind class
+      return {}
     }
 
-    // For confirmed proposals, use topic-based background with low opacity
     if (topics && topics.length > 0) {
       const background =
         topics.length === 1
-          ? `${topics[0].color}08` // Low opacity for confirmed
+          ? `${topics[0].color}08`
           : `linear-gradient(135deg, ${topics[0].color}08 50%, ${topics[1].color}08 50%)`
 
       return { background }
@@ -151,7 +136,6 @@ export function DraggableProposal({
     return {}
   }, [proposal.topics, proposal.status])
 
-  // Process audiences
   const { primaryAudience, audienceCount } = useMemo(() => {
     if (!proposal.audiences || proposal.audiences.length === 0) {
       return { primaryAudience: null, audienceCount: 0 }
@@ -178,7 +162,6 @@ export function DraggableProposal({
     },
   })
 
-  // Memoize transform style
   const transformStyle = useMemo(() => {
     if (!transform || isBeingDragged) return undefined
     return {
@@ -186,7 +169,6 @@ export function DraggableProposal({
     }
   }, [transform, isBeingDragged])
 
-  // Memoize class names with topic styling and status styling
   const containerClasses = useMemo(() => {
     const isAcceptedButNotConfirmed = proposal.status === Status.accepted
     const isWithdrawnOrRejected =
@@ -215,7 +197,7 @@ export function DraggableProposal({
     talkSize,
     topicStyling.className,
     proposal.status,
-  ]) // Title component based on talk size
+  ])
   const TitleComponent = useMemo(() => {
     const titleClasses = 'pr-1 text-gray-900 truncate dark:text-gray-100'
     const isWithdrawnOrRejected =
@@ -263,7 +245,6 @@ export function DraggableProposal({
     }
   }, [talkSize, proposal.title, proposal.status])
 
-  // Speaker component
   const SpeakerComponent = useMemo(() => {
     if (!speakerInfo) return null
 
@@ -275,7 +256,6 @@ export function DraggableProposal({
     )
   }, [speakerInfo])
 
-  // Audience indicator component - now always visible when available
   const AudienceIndicator = useMemo(() => {
     if (!primaryAudience) return null
 
@@ -297,7 +277,6 @@ export function DraggableProposal({
     )
   }, [primaryAudience, audienceCount, proposal.audiences])
 
-  // Topics indicator component
   const TopicsIndicator = useMemo(() => {
     if (!proposal.topics?.length) return null
 
@@ -305,7 +284,6 @@ export function DraggableProposal({
     const displayTopics = topics.slice(0, 2)
     const remainingCount = topics.length - 2
 
-    // Helper function to ensure color has # prefix
     const formatColor = (color: string) =>
       color.startsWith('#') ? color : `#${color}`
 
@@ -331,20 +309,16 @@ export function DraggableProposal({
     )
   }, [proposal.topics])
 
-  // Format display
   const formatDisplay = useMemo(() => {
     return formats.get(proposal.format) || proposal.format
   }, [proposal.format])
 
-  // Enhanced tooltip content
   const tooltipContent = useMemo(() => {
     const parts = []
 
-    // Basic info
     parts.push(`📋 ${proposal.title}`)
     if (speakerInfo) parts.push(`👤 ${speakerInfo}`)
 
-    // Status info
     const statusEmoji =
       proposal.status === Status.withdrawn ||
       proposal.status === Status.rejected
@@ -362,7 +336,6 @@ export function DraggableProposal({
             : 'Confirmed'
     parts.push(`${statusEmoji} Status: ${statusText}`)
 
-    // Level with emoji
     const levelEmoji =
       levelConfig?.label === 'Beginner'
         ? '🟢'
@@ -373,7 +346,6 @@ export function DraggableProposal({
       parts.push(`${levelEmoji} Level: ${levelConfig.label}`)
     }
 
-    // Audiences
     if (proposal.audiences && proposal.audiences.length > 0) {
       const audienceNames = proposal.audiences
         .map((a) => audiences.get(a))
@@ -381,10 +353,8 @@ export function DraggableProposal({
       parts.push(`👥 Audience: ${audienceNames.join(', ')}`)
     }
 
-    // Format and duration
     parts.push(`⏱️ ${formatDisplay} (${durationMinutes} min)`)
 
-    // Topics with color indicators
     if (proposal.topics && proposal.topics.length > 0) {
       const topics = proposal.topics as Topic[]
       const topicList = topics.map((t) => `${t.title} (${t.color})`).join(', ')
@@ -408,9 +378,7 @@ export function DraggableProposal({
         title={tooltipContent}
         {...attributes}
       >
-        {/* Header row with drag handle, title, and duration */}
         <div className="flex min-h-[16px] items-center gap-1">
-          {/* Drag handle */}
           <div
             className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
             {...listeners}
@@ -418,7 +386,6 @@ export function DraggableProposal({
             <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
           </div>
 
-          {/* Title with level indicator and status indicator */}
           <div className="flex min-w-0 flex-1 items-center gap-1">
             <div className="min-w-0 flex-1">{TitleComponent}</div>
             {levelConfig && (
@@ -430,7 +397,6 @@ export function DraggableProposal({
             )}
           </div>
 
-          {/* Duration indicator */}
           <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
             <ClockIcon
               className={
@@ -443,7 +409,6 @@ export function DraggableProposal({
           </div>
         </div>
 
-        {/* Enhanced info row for short talks */}
         {(talkSize === 'short' || talkSize === 'very-short') && (
           <div className="mt-0.5 flex items-center gap-2 text-xs">
             {AudienceIndicator}
@@ -451,19 +416,15 @@ export function DraggableProposal({
           </div>
         )}
 
-        {/* Content below header - only for medium and long talks */}
         {(talkSize === 'medium' || talkSize === 'long') && (
           <div className="mt-1 space-y-1">
-            {/* Enhanced info row for medium/long talks */}
             <div className="flex items-center gap-2 text-xs">
               {AudienceIndicator}
               {TopicsIndicator}
             </div>
 
-            {/* Speaker */}
             {SpeakerComponent}
 
-            {/* Format - only for long talks */}
             {talkSize === 'long' && (
               <div className="text-xs text-gray-500 dark:text-gray-400">
                 {formatDisplay}

@@ -7,7 +7,6 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 export const GET = auth(async (req: NextAuthRequest) => {
-  // Check organizer access
   const accessError = checkOrganizerAccess(req)
   if (accessError) {
     return accessError
@@ -17,7 +16,6 @@ export const GET = auth(async (req: NextAuthRequest) => {
   const currentProposalId =
     req.nextUrl.searchParams.get('currentProposalId') || undefined
 
-  // Get the conference from the current domain
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({ revalidate: 0 })
 
@@ -28,7 +26,6 @@ export const GET = auth(async (req: NextAuthRequest) => {
     )
   }
 
-  // Get the next unreviewed proposal
   const { nextProposal, error } = await fetchNextUnreviewedProposal({
     conferenceId: conference._id,
     reviewerId,

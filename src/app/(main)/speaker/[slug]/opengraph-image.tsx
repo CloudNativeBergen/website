@@ -4,7 +4,6 @@ import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sanityImage } from '@/lib/sanity/client'
 
-// Simple SVG icon components for OpenGraph rendering
 const UserIcon = ({ size = 120 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
     <path
@@ -48,7 +47,6 @@ const LightBulbIcon = ({ size = 26 }: { size?: number }) => (
   </svg>
 )
 
-// Constants for better maintainability
 const STYLES = {
   gradient: 'linear-gradient(135deg, #1e40af, #10b981)',
   fontFamily: 'system-ui, -apple-system, sans-serif',
@@ -79,7 +77,6 @@ const STYLES = {
   },
 } as const
 
-// Optimized sponsor logo rendering with memoization-like behavior
 const createSponsorLogo = (
   logoSvg: string | null | undefined,
   sponsorName: string,
@@ -123,7 +120,6 @@ const createSponsorLogo = (
   }
 }
 
-// Optimized SVG to base64 conversion with better error handling
 function createSvgDataUrl(svgString: string): string | null {
   if (!svgString?.trim()?.startsWith('<svg')) return null
 
@@ -135,7 +131,6 @@ function createSvgDataUrl(svgString: string): string | null {
   }
 }
 
-// Simplified sponsor logo renderer
 const renderSponsorLogo = (
   logoSvg: string | null | undefined,
   sponsorName: string,
@@ -147,7 +142,6 @@ export const alt = 'Cloud Native Bergen Speaker Profile'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
-// Component for background patterns
 const BackgroundPatterns = () => (
   <>
     {/* Decorative circles */}
@@ -195,7 +189,6 @@ const BackgroundPatterns = () => (
   </>
 )
 
-// Component for speaker image
 const SpeakerImage = ({
   imageUrl,
   name,
@@ -254,7 +247,6 @@ const SpeakerImage = ({
     </div>
   )
 
-// Component for talk card
 const TalkCard = ({ title }: { title: string }) => (
   <div
     style={{
@@ -331,7 +323,6 @@ export default async function Image({
     decodedSlug,
   )
 
-  // Early return for error state
   if (err || !speaker || !talks?.length) {
     return new ImageResponse(
       (
@@ -356,7 +347,6 @@ export default async function Image({
     )
   }
 
-  // Prepare data
   const primaryTalk = talks[0]
   const speakerImageUrl = speaker.image
     ? sanityImage(speaker.image).width(500).height(500).fit('crop').url()
@@ -419,7 +409,6 @@ export default async function Image({
                   const startDate = new Date(conference.start_date)
                   const endDate = new Date(conference.end_date)
 
-                  // Check if same day
                   if (startDate.toDateString() === endDate.toDateString()) {
                     return startDate.toLocaleDateString('en-US', {
                       year: 'numeric',
@@ -428,7 +417,6 @@ export default async function Image({
                     })
                   }
 
-                  // Check if same month
                   if (
                     startDate.getMonth() === endDate.getMonth() &&
                     startDate.getFullYear() === endDate.getFullYear()
@@ -436,7 +424,6 @@ export default async function Image({
                     return `${startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${endDate.getDate()}, ${endDate.getFullYear()}`
                   }
 
-                  // Different months
                   return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
                 }
 

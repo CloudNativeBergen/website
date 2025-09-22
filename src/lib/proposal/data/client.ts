@@ -6,10 +6,6 @@ import {
   ProposalResponse,
 } from '../types'
 
-/**
- * Client-side API functions for proposal operations
- */
-
 export async function getProposal(id?: string): Promise<ProposalResponse> {
   let url = `/api/proposal`
   if (id) {

@@ -1,7 +1,3 @@
-/**
- * Centralized business logic exports
- */
-
 export {
   actionStateMachine,
   getAllowedActions,
@@ -17,5 +13,4 @@ export {
   sortProposals,
 } from './utils'
 
-// Legacy export for backward compatibility
 export { actionStateMachine as actionStateMachineLegacy } from './states'

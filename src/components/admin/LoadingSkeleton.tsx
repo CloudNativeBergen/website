@@ -1,13 +1,5 @@
-/**
- * Reusable loading skeleton components for admin interface
- * Provides consistent loading animations across all admin pages
- */
-
 // Note: keep this file minimal; avoid unused types to satisfy strict lint rules
 
-/**
- * Basic skeleton element for simple rectangular content
- */
 export function SkeletonBox({
   className = 'h-4 w-full rounded bg-gray-200 dark:bg-gray-700',
 }: {
@@ -16,9 +8,6 @@ export function SkeletonBox({
   return <div className={`animate-pulse ${className}`} />
 }
 
-/**
- * Skeleton for card/panel content with header and body
- */
 export function SkeletonCard({
   className = '',
   showHeader = true,
@@ -58,9 +47,6 @@ export function SkeletonCard({
   )
 }
 
-/**
- * Skeleton for table-like content
- */
 export function SkeletonTable({
   className = '',
   rows = 5,
@@ -72,7 +58,6 @@ export function SkeletonTable({
 }) {
   return (
     <div className={`animate-pulse ${className}`}>
-      {/* Table header */}
       <div
         className="grid gap-4 border-b border-gray-200 pb-3 dark:border-gray-700"
         style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
@@ -82,7 +67,6 @@ export function SkeletonTable({
         ))}
       </div>
 
-      {/* Table rows */}
       <div className="space-y-3 pt-3">
         {[...Array(rows)].map((_, rowIndex) => (
           <div
@@ -106,9 +90,6 @@ export function SkeletonTable({
   )
 }
 
-/**
- * Skeleton for search results or list items
- */
 export function SkeletonList({
   className = '',
   items = 3,
@@ -130,9 +111,6 @@ export function SkeletonList({
   )
 }
 
-/**
- * Skeleton for modal content
- */
 export function SkeletonModal({
   className = '',
   showHeader = true,
@@ -172,9 +150,6 @@ export function SkeletonModal({
   )
 }
 
-/**
- * Centered loading skeleton for inline use
- */
 export function SkeletonInline({
   message = 'Loading...',
   showMessage = false,
@@ -204,9 +179,6 @@ export function SkeletonInline({
   )
 }
 
-/**
- * Grid of skeleton cards for dashboard-style layouts
- */
 export function SkeletonGrid({
   className = '',
   items = 4,

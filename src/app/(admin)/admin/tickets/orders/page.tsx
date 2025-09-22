@@ -72,10 +72,8 @@ export default async function OrdersAdminPage() {
     )
   }
 
-  // Group tickets into orders
   const orders = groupTicketsByOrder(allTickets)
 
-  // Calculate statistics
   const paidTickets = allTickets.filter((ticket) => parseFloat(ticket.sum) > 0)
   const freeTickets = allTickets.filter(
     (ticket) => parseFloat(ticket.sum) === 0,
@@ -113,7 +111,6 @@ export default async function OrdersAdminPage() {
         ]}
       />
 
-      {/* Orders Table */}
       <div className="mt-12">
         <div className="mb-6">
           <h2 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -140,7 +137,6 @@ export default async function OrdersAdminPage() {
         )}
       </div>
 
-      {/* Quick Actions */}
       <div className="mt-12">
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions

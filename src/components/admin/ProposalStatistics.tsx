@@ -24,10 +24,6 @@ interface StatSection {
   total: number
 }
 
-/**
- * Calculates statistics for a given attribute of proposals
- * Optimized with early returns and efficient counting
- */
 function calculateStats<T extends string>(
   proposals: ProposalExisting[],
   getAttribute: (proposal: ProposalExisting) => T | T[],
@@ -40,23 +36,20 @@ function calculateStats<T extends string>(
   const counts = new Map<T, number>()
   const total = proposals.length
 
-  // Only initialize counts for values that exist in proposals (optimization)
   proposals.forEach((proposal) => {
     const value = getAttribute(proposal)
     if (Array.isArray(value)) {
-      // Handle array values (like audiences)
       value.forEach((v) => {
         counts.set(v, (counts.get(v) || 0) + 1)
       })
     } else if (value) {
-      // Handle single values, skip if falsy
       counts.set(value, (counts.get(value) || 0) + 1)
     }
   })
 
   const items: StatItem[] = Array.from(counts.entries())
-    .filter(([, count]) => count > 0) // Only show categories with proposals
-    .sort(([, a], [, b]) => b - a) // Sort by count descending
+    .filter(([, count]) => count > 0)
+    .sort(([, a], [, b]) => b - a)
     .map(([key, count]) => ({
       label: labelMap.get(key) || key,
       count,
@@ -70,9 +63,6 @@ function calculateStats<T extends string>(
   }
 }
 
-/**
- * Calculates statistics for topics with optimized processing
- */
 function calculateTopicStats(proposals: ProposalExisting[]): StatSection {
   if (proposals.length === 0) {
     return { title: 'Topics', items: [], total: 0 }
@@ -122,9 +112,6 @@ function calculateTopicStats(proposals: ProposalExisting[]): StatSection {
   }
 }
 
-/**
- * Memoized statistics bar component for a single stat item
- */
 const StatBar = memo(function StatBar({
   item,
   maxCount,
@@ -134,7 +121,6 @@ const StatBar = memo(function StatBar({
 }) {
   const width = maxCount > 0 ? Math.round((item.count / maxCount) * 100) : 0
 
-  // Memoize background color calculation
   const backgroundColor = useMemo(() => {
     if (!item.color) return undefined
     return item.color.startsWith('#') ? item.color : `#${item.color}`
@@ -170,9 +156,6 @@ const StatBar = memo(function StatBar({
   )
 })
 
-/**
- * Memoized statistics section component
- */
 const StatSection = memo(function StatSection({
   title,
   section,
@@ -210,10 +193,6 @@ const StatSection = memo(function StatSection({
   )
 })
 
-/**
- * Main collapsible statistics overview component for proposals
- * Optimized with memoization and efficient state management
- */
 export const ProposalStatistics = memo(function ProposalStatistics({
   proposals,
 }: ProposalStatisticsProps) {
@@ -223,8 +202,6 @@ export const ProposalStatistics = memo(function ProposalStatistics({
     setIsExpanded((prev) => !prev)
   }, [])
 
-  // Memoize all statistics calculations to prevent unnecessary recalculations
-  // This must be called before any early returns
   const statistics = useMemo(() => {
     if (proposals.length === 0) {
       return null
@@ -241,14 +218,12 @@ export const ProposalStatistics = memo(function ProposalStatistics({
     }
   }, [proposals])
 
-  // Early return after all hooks have been called
   if (!statistics) {
     return null
   }
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800">
-      {/* Header */}
       <button
         onClick={toggleExpanded}
         className="flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-gray-100 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:ring-inset dark:hover:bg-gray-700 dark:focus:ring-indigo-400"
@@ -280,7 +255,6 @@ export const ProposalStatistics = memo(function ProposalStatistics({
         )}
       </button>
 
-      {/* Expandable content */}
       {isExpanded && (
         <div
           id="proposal-statistics-content"

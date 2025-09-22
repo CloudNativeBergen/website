@@ -6,22 +6,11 @@ import {
   TravelSupportStatus,
 } from './types'
 
-/**
- * Business logic service for travel support operations
- * Keeps business rules separate from UI components
- */
-
 export class TravelSupportService {
-  /**
-   * Check if travel support can be edited
-   */
   static canEdit(travelSupport: TravelSupportWithExpenses): boolean {
     return travelSupport.status === TravelSupportStatus.DRAFT
   }
 
-  /**
-   * Check if travel support can be submitted
-   */
   static canSubmit(travelSupport: TravelSupportWithExpenses): boolean {
     return (
       this.canEdit(travelSupport) &&
@@ -30,9 +19,6 @@ export class TravelSupportService {
     )
   }
 
-  /**
-   * Check if travel support has valid banking details
-   */
   static hasBankingDetails(travelSupport: TravelSupportWithExpenses): boolean {
     const { bankingDetails } = travelSupport
     return Boolean(
@@ -44,16 +30,10 @@ export class TravelSupportService {
     )
   }
 
-  /**
-   * Check if travel support has expenses
-   */
   static hasExpenses(travelSupport: TravelSupportWithExpenses): boolean {
     return travelSupport.expenses && travelSupport.expenses.length > 0
   }
 
-  /**
-   * Calculate total amount for a specific currency
-   */
   static calculateTotalByCurrency(
     expenses: TravelExpense[],
     currency: SupportedCurrency,
@@ -63,15 +43,11 @@ export class TravelSupportService {
       .reduce((total, expense) => total + expense.amount, 0)
   }
 
-  /**
-   * Get all currencies used in expenses
-   */
   static getUsedCurrencies(expenses: TravelExpense[]): SupportedCurrency[] {
     const currencies = new Set<SupportedCurrency>()
 
     expenses.forEach((expense) => {
       if (expense.currency === 'OTHER' && expense.customCurrency) {
-        // For custom currencies, we still track them as 'OTHER'
         currencies.add('OTHER')
       } else {
         currencies.add(expense.currency)
@@ -81,9 +57,6 @@ export class TravelSupportService {
     return Array.from(currencies)
   }
 
-  /**
-   * Group expenses by category
-   */
   static groupExpensesByCategory(
     expenses: TravelExpense[],
   ): Record<ExpenseCategory, TravelExpense[]> {
@@ -102,9 +75,6 @@ export class TravelSupportService {
     return groups
   }
 
-  /**
-   * Get summary statistics for expenses
-   */
   static getExpenseSummary(expenses: TravelExpense[]) {
     const currencies = this.getUsedCurrencies(expenses)
     const totalsByCategory = Object.values(ExpenseCategory).map((category) => ({
@@ -132,13 +102,9 @@ export class TravelSupportService {
     }
   }
 
-  /**
-   * Validate expense business rules
-   */
   static validateExpenseBusiness(expense: TravelExpense): string[] {
     const errors: string[] = []
 
-    // Check expense date is reasonable
     const expenseDate = new Date(expense.expenseDate)
     const now = new Date()
     const twoYearsAgo = new Date()
@@ -152,7 +118,6 @@ export class TravelSupportService {
       errors.push('Expense date cannot be more than 2 years old')
     }
 
-    // Check amount is reasonable for category
     const reasonableAmounts = {
       [ExpenseCategory.ACCOMMODATION]: 5000,
       [ExpenseCategory.TRANSPORTATION]: 10000,
@@ -168,7 +133,6 @@ export class TravelSupportService {
       )
     }
 
-    // Require receipts
     if (!expense.receipts || expense.receipts.length === 0) {
       errors.push('At least one receipt is required')
     }
@@ -176,9 +140,6 @@ export class TravelSupportService {
     return errors
   }
 
-  /**
-   * Get display name for expense category
-   */
   static getCategoryDisplayName(category: ExpenseCategory): string {
     const names = {
       [ExpenseCategory.ACCOMMODATION]: 'Accommodation',
@@ -190,9 +151,6 @@ export class TravelSupportService {
     return names[category]
   }
 
-  /**
-   * Get display name for travel support status
-   */
   static getStatusDisplayName(status: TravelSupportStatus): string {
     const names = {
       [TravelSupportStatus.DRAFT]: 'Draft',
@@ -204,9 +162,6 @@ export class TravelSupportService {
     return names[status]
   }
 
-  /**
-   * Get status color for UI display
-   */
   static getStatusColor(status: TravelSupportStatus): string {
     const colors = {
       [TravelSupportStatus.DRAFT]: 'gray',
@@ -218,9 +173,6 @@ export class TravelSupportService {
     return colors[status]
   }
 
-  /**
-   * Check if status allows certain actions
-   */
   static statusAllows(
     status: TravelSupportStatus,
     action: 'edit' | 'submit' | 'approve' | 'pay' | 'reject',
@@ -236,10 +188,6 @@ export class TravelSupportService {
     return permissions[status].includes(action)
   }
 
-  /**
-   * Check if a user can approve a travel support request
-   * Admins can approve requests, but not their own
-   */
   static canUserApprove(
     isAdmin: boolean,
     requestOwnerId: string,
@@ -249,13 +197,9 @@ export class TravelSupportService {
       return false
     }
 
-    // Admins cannot approve their own requests
     return requestOwnerId !== approverUserId
   }
 
-  /**
-   * Format currency display
-   */
   static formatCurrency(
     amount: number,
     currency: SupportedCurrency,
@@ -264,11 +208,9 @@ export class TravelSupportService {
     const displayCurrency = currency === 'OTHER' ? customCurrency : currency
 
     if (currency === 'OTHER' && customCurrency) {
-      // For custom currencies, format manually
       return `${amount.toFixed(2)} ${customCurrency}`
     }
 
-    // Map of supported currencies that can be used with Intl.NumberFormat
     const supportedIntlCurrencies = ['NOK', 'USD', 'EUR', 'GBP', 'SEK', 'DKK']
 
     if (supportedIntlCurrencies.includes(displayCurrency || '')) {
@@ -280,18 +222,13 @@ export class TravelSupportService {
         })
         return formatter.format(amount)
       } catch {
-        // If Intl.NumberFormat fails, fall back to manual formatting
         return `${amount.toFixed(2)} ${displayCurrency}`
       }
     }
 
-    // Fallback for unsupported currencies
     return `${amount.toFixed(2)} ${displayCurrency || 'USD'}`
   }
 
-  /**
-   * Sort expenses by date (newest first)
-   */
   static sortExpensesByDate(expenses: TravelExpense[]): TravelExpense[] {
     return [...expenses].sort(
       (a, b) =>
@@ -299,16 +236,10 @@ export class TravelSupportService {
     )
   }
 
-  /**
-   * Sort expenses by amount (highest first)
-   */
   static sortExpensesByAmount(expenses: TravelExpense[]): TravelExpense[] {
     return [...expenses].sort((a, b) => b.amount - a.amount)
   }
 
-  /**
-   * Filter expenses by date range
-   */
   static filterExpensesByDateRange(
     expenses: TravelExpense[],
     startDate: Date,
@@ -320,18 +251,13 @@ export class TravelSupportService {
     })
   }
 
-  /**
-   * Get expense validation warnings (non-blocking)
-   */
   static getExpenseWarnings(expense: TravelExpense): string[] {
     const warnings: string[] = []
 
-    // Round amount warning
     if (expense.amount % 1 === 0 && expense.amount > 100) {
       warnings.push('Round amounts might need additional documentation')
     }
 
-    // Old expense warning
     const expenseDate = new Date(expense.expenseDate)
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)

@@ -47,7 +47,6 @@ export function OrdersTableWithSearch({
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
 
-  // Use tRPC query for payment details - only enabled when we have a selected order
   const {
     data: paymentDetailsData,
     isLoading: paymentDetailsLoading,
@@ -193,7 +192,6 @@ export function OrdersTableWithSearch({
       .join(' ')
   }
 
-  // Function to get category display style based on length
   const getCategoryStyle = (category: string) => {
     const formatted = formatCategoryLabel(category)
     const isLong = formatted.length > 15
@@ -207,7 +205,6 @@ export function OrdersTableWithSearch({
     }
   }
 
-  // Function to generate Checkin.no order URL
   const getCheckinOrderUrl = (orderId: number): string | null => {
     if (!customerId || !eventId) return null
     return `https://app.checkin.no/customer/${customerId}/event/${eventId}/order/${orderId}`
@@ -215,9 +212,7 @@ export function OrdersTableWithSearch({
 
   return (
     <div className="space-y-6">
-      {/* Search and Filter Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        {/* Search Bar */}
         <div className="relative flex-1">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
@@ -231,7 +226,6 @@ export function OrdersTableWithSearch({
           />
         </div>
 
-        {/* Payment Status Filter */}
         <div className="relative">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <FunnelIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
@@ -249,7 +243,6 @@ export function OrdersTableWithSearch({
         </div>
       </div>
 
-      {/* Results count */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-700 dark:text-gray-300">
           {searchTerm || paymentFilter !== 'all' ? (
@@ -293,7 +286,6 @@ export function OrdersTableWithSearch({
         </div>
       </div>
 
-      {/* Desktop Table */}
       <div className="hidden overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-gray-900/5 lg:block dark:bg-gray-900 dark:ring-gray-700">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
@@ -506,7 +498,6 @@ export function OrdersTableWithSearch({
         </div>
       </div>
 
-      {/* Mobile Cards */}
       <div className="space-y-4 lg:hidden">
         {filteredOrders.map((order) => {
           const primaryTicket = order.tickets[0]

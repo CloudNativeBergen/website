@@ -2,10 +2,6 @@ import React from 'react'
 import { BellIcon } from '@heroicons/react/24/outline'
 
 export interface LocalhostWarningProps {
-  /**
-   * The target audience that cannot access localhost URLs
-   * @example "speakers", "sponsors", "attendees"
-   */
   audience: string
 }
 
@@ -50,9 +46,6 @@ export function createLocalhostWarning(
   )
 }
 
-/**
- * Hook to check if currently running on localhost
- */
 export function useIsLocalhost(domain?: string): boolean {
   return Boolean(domain?.includes('localhost'))
 }

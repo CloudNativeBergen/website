@@ -15,26 +15,22 @@ interface UseTravelSupportOptions {
 }
 
 interface UseTravelSupportReturn {
-  // Data
   travelSupport: TravelSupportWithExpenses | null | undefined
   isLoading: boolean
   error: string | null
   isEligible: boolean
   canEdit: boolean
 
-  // State management
   showBankingForm: boolean
   showExpenseForm: boolean
   editingExpense: (TravelExpenseInput & { _id?: string }) | null
 
-  // State setters
   setShowBankingForm: (show: boolean) => void
   setShowExpenseForm: (show: boolean) => void
   setEditingExpense: (
     expense: (TravelExpenseInput & { _id?: string }) | null,
   ) => void
 
-  // Operations
   createTravelSupport: () => Promise<void>
   updateBankingDetails: (details: BankingDetails) => Promise<void>
   addExpense: (expense: TravelExpenseInput) => Promise<void>
@@ -46,7 +42,6 @@ interface UseTravelSupportReturn {
   deleteReceipt: (expenseId: string, receiptIndex: number) => Promise<void>
   submitTravelSupport: () => Promise<void>
 
-  // Loading states
   isCreating: boolean
   isUpdatingBanking: boolean
   isAddingExpense: boolean
@@ -55,31 +50,24 @@ interface UseTravelSupportReturn {
   isDeletingReceipt: boolean
   isSubmitting: boolean
 
-  // Error states
   createError: string | null
   bankingError: string | null
   expenseError: string | null
   submitError: string | null
 }
 
-/**
- * Comprehensive hook for managing travel support operations
- * Encapsulates all business logic and state management
- */
 export function useTravelSupport(
   options: UseTravelSupportOptions = {},
 ): UseTravelSupportReturn {
   const { onSuccess, onError } = options
   const { data: session } = useSession()
 
-  // Local state for UI
   const [showBankingForm, setShowBankingForm] = useState(false)
   const [showExpenseForm, setShowExpenseForm] = useState(false)
   const [editingExpense, setEditingExpense] = useState<
     (TravelExpenseInput & { _id?: string }) | null
   >(null)
 
-  // Data
   const {
     data: travelSupport,
     isLoading,
@@ -87,16 +75,13 @@ export function useTravelSupport(
     refetch,
   } = api.travelSupport.getMine.useQuery()
 
-  // Eligibility check
   const isEligible = Boolean(
     session?.speaker?.flags?.includes(Flags.requiresTravelFunding) ||
       (AppEnvironment.isTestMode && session?.speaker),
   )
 
-  // Permission check
   const canEdit = travelSupport?.status === 'draft'
 
-  // Mutations with consistent error handling
   const createMutation = api.travelSupport.create.useMutation({
     onSuccess: () => {
       refetch()
@@ -172,7 +157,6 @@ export function useTravelSupport(
     },
   })
 
-  // Operation handlers with validation
   const createTravelSupport = async (): Promise<void> => {
     if (!session?.speaker?._id) {
       throw new Error('No speaker session available')
@@ -240,7 +224,6 @@ export function useTravelSupport(
       throw new Error('No travel support found')
     }
 
-    // Validation before submission
     if (!travelSupport.bankingDetails.beneficiaryName) {
       throw new Error('Banking details are required before submission')
     }
@@ -255,14 +238,12 @@ export function useTravelSupport(
   }
 
   return {
-    // Data
     travelSupport,
     isLoading,
     error: queryError?.message || null,
     isEligible,
     canEdit,
 
-    // State management
     showBankingForm,
     showExpenseForm,
     editingExpense,
@@ -270,7 +251,6 @@ export function useTravelSupport(
     setShowExpenseForm,
     setEditingExpense,
 
-    // Operations
     createTravelSupport,
     updateBankingDetails,
     addExpense,
@@ -279,7 +259,6 @@ export function useTravelSupport(
     deleteReceipt,
     submitTravelSupport,
 
-    // Loading states
     isCreating: createMutation.isPending,
     isUpdatingBanking: updateBankingMutation.isPending,
     isAddingExpense: addExpenseMutation.isPending,
@@ -288,7 +267,6 @@ export function useTravelSupport(
     isDeletingReceipt: deleteReceiptMutation.isPending,
     isSubmitting: submitMutation.isPending,
 
-    // Error states
     createError: createMutation.error?.message || null,
     bankingError: updateBankingMutation.error?.message || null,
     expenseError:

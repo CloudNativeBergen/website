@@ -10,7 +10,6 @@ interface BrandingPageWrapperProps {
 export function BrandingPageWrapper({ children }: BrandingPageWrapperProps) {
   const [isDarkMode, setIsDarkMode] = useState(false)
 
-  // Add smooth transition class to html element
   useEffect(() => {
     const html = document.documentElement
     html.style.transition = 'background-color 0.3s ease, color 0.3s ease'

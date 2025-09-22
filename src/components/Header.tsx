@@ -23,7 +23,6 @@ export function Header({ c }: { c: Conference }) {
     setIsPast(new Date(c.start_date) < new Date())
   }, [c.start_date])
 
-  // Get the current year's domain and extract the year
   const currentDomain = c.domains?.[0] ?? 'cloudnativebergen.dev'
   const currentYear = parseInt(currentDomain.split('.')[0])
   const previousYear = currentYear - 1

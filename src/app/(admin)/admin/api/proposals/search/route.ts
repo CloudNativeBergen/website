@@ -10,7 +10,6 @@ import {
 export const dynamic = 'force-dynamic'
 
 export const GET = auth(async (req: NextAuthRequest): Promise<Response> => {
-  // Check organizer access
   const accessError = checkOrganizerAccess(req)
   if (accessError) {
     return accessError

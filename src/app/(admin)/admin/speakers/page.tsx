@@ -10,9 +10,6 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakersWithAcceptedTalks } from '@/lib/speaker/sanity'
 
-/**
- * Helper function to check if a speaker has previous accepted talks
- */
 function hasPreviousAcceptedTalks(
   speaker: Speaker & { proposals: ProposalExisting[] },
   currentConferenceId: string,
@@ -21,7 +18,6 @@ function hasPreviousAcceptedTalks(
     return false
   }
 
-  // Look for accepted or confirmed talks from other conferences
   return speaker.proposals.some((proposal) => {
     const isAcceptedOrConfirmed =
       proposal.status === 'accepted' || proposal.status === 'confirmed'
@@ -30,7 +26,6 @@ function hasPreviousAcceptedTalks(
       return false
     }
 
-    // Check if this proposal is from a different conference
     if (proposal.conference) {
       const proposalConferenceId =
         typeof proposal.conference === 'object' && '_id' in proposal.conference
@@ -43,9 +38,6 @@ function hasPreviousAcceptedTalks(
   })
 }
 
-/**
- * Calculate speaker statistics for display
- */
 function calculateSpeakerStats(
   speakers: (Speaker & { proposals: ProposalExisting[] })[],
   currentConferenceId: string,
@@ -84,7 +76,6 @@ function calculateSpeakerStats(
 
 export default async function AdminSpeakers() {
   try {
-    // Get conference
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({ revalidate: 0 })
 
@@ -97,8 +88,6 @@ export default async function AdminSpeakers() {
       )
     }
 
-    // Get speakers (use getSpeakersWithAcceptedTalks to include both accepted and confirmed)
-    // Include proposals from other conferences to enable proper speaker indicators
     const { speakers, err: speakersError } = await getSpeakersWithAcceptedTalks(
       conference._id,
       true,
@@ -113,7 +102,6 @@ export default async function AdminSpeakers() {
       )
     }
 
-    // Only count confirmed speakers for email operations
     const confirmedSpeakers = speakers.filter(
       (speaker: Speaker & { proposals: ProposalExisting[] }) =>
         speaker.email &&
@@ -122,7 +110,6 @@ export default async function AdminSpeakers() {
         ),
     )
 
-    // Calculate speaker statistics
     const stats = calculateSpeakerStats(speakers, conference._id)
 
     return (

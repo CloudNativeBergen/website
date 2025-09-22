@@ -7,36 +7,21 @@ import { formatConfig } from '@/lib/proposal'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 
-// QR code cache to avoid regenerating the same codes
 const qrCodeCache = new Map<string, string>()
 
-// Fallback QR code pattern as a constant
 const FALLBACK_QR_CODE =
   "data:image/svg+xml,%3csvg width='120' height='120' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='120' height='120' fill='white'/%3e%3cpath d='M10,10 L20,10 L20,20 L10,20 Z M30,10 L40,10 L40,20 L30,20 Z M50,10 L60,10 L60,20 L50,20 Z M70,10 L80,10 L80,20 L70,20 Z M10,30 L20,30 L20,40 L10,40 Z M50,30 L60,30 L60,40 L50,40 Z M70,30 L80,30 L80,40 L70,40 Z M10,50 L20,50 L20,60 L10,60 Z M30,50 L40,50 L40,60 L30,60 Z M50,50 L60,50 L60,60 L50,60 Z M70,50 L80,50 L80,60 L70,60 Z M30,70 L40,70 L40,80 L30,80 Z M50,70 L60,70 L60,80 L50,80 Z' fill='black'/%3e%3c/svg%3e"
 
-/**
- * Props for the SpeakerShare component
- */
 interface SpeakerShareProps {
-  /** Speaker data including talks and personal information */
   speaker: SpeakerWithTalks
-  /** Visual variant for sharing */
   variant?: 'speaker-share' | 'speaker-spotlight'
-  /** Additional CSS classes */
   className?: string
-  /** Whether to show as a featured speaker */
   isFeatured?: boolean
-  /** Custom call-to-action URL (used for QR code generation) */
   ctaUrl?: string
-  /** Conference/event name for social variants */
   eventName?: string
-  /** Whether to show Cloud Native pattern background */
   showCloudNativePattern?: boolean
 }
 
-/**
- * Variant configuration for sharing modes
- */
 type VariantConfig = {
   gradient: string
   accentColor: string
@@ -63,9 +48,6 @@ const variantConfig: Record<
   },
 }
 
-/**
- * Generate QR code data URL for the given URL with caching
- */
 async function generateQRCode(
   url: string,
   size: number = 256,
@@ -74,14 +56,12 @@ async function generateQRCode(
     ? url
     : `https://cloudnativebergen.dev${url}`
 
-  // Check cache first with size included in key
   const cacheKey = `${fullUrl}_${size}`
   if (qrCodeCache.has(cacheKey)) {
     return qrCodeCache.get(cacheKey)!
   }
 
   try {
-    // Dynamic import to reduce bundle size
     const QRCode = (await import('qrcode')).default
     const qrCodeDataUrl = await QRCode.toDataURL(fullUrl, {
       width: size,
@@ -93,12 +73,10 @@ async function generateQRCode(
       errorCorrectionLevel: 'M',
     })
 
-    // Cache the result
     qrCodeCache.set(cacheKey, qrCodeDataUrl)
     return qrCodeDataUrl
   } catch (error) {
     console.error('Failed to generate QR code:', error)
-    // Cache the fallback as well
     qrCodeCache.set(fullUrl, FALLBACK_QR_CODE)
     return FALLBACK_QR_CODE
   }
@@ -121,7 +99,7 @@ const SpeakerImage = ({
     return (
       <img
         src={sanityImage(image)
-          .width(size * 2) // 2x for high-DPI
+          .width(size * 2)
           .height(size * 2)
           .fit('crop')
           .url()}
@@ -133,7 +111,6 @@ const SpeakerImage = ({
     )
   }
 
-  // For missing avatars in the container query context, we need to ensure proper sizing
   return (
     <div className={`${className} relative overflow-hidden`}>
       <MissingAvatar
@@ -242,24 +219,18 @@ export async function SpeakerShare({
   eventName = 'Cloud Native Bergen',
   showCloudNativePattern = false,
 }: SpeakerShareProps) {
-  // Get variant config
   const config = variantConfig[variant]
   const Icon = config.icon
 
-  // CTA URL for QR code
   const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug || speaker._id}`
 
-  // Generate QR code for sharing with appropriate size
   const qrCodeUrl = await generateQRCode(finalCtaUrl, 512)
 
-  // Get primary talk
   const primaryTalk =
     speaker.talks && speaker.talks.length > 0 ? speaker.talks[0] : null
 
-  // Extract speaker properties
   const { name, title, image } = speaker
 
-  // Determine background style based on showCloudNativePattern
   const backgroundStyle = showCloudNativePattern
     ? 'from-slate-900 via-blue-900 to-slate-900'
     : config.gradient
@@ -268,7 +239,6 @@ export async function SpeakerShare({
     <div
       className={`group @container relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
     >
-      {/* Cloud Native Pattern Background - Only when showCloudNativePattern is true */}
       {showCloudNativePattern && (
         <CloudNativePattern
           className="absolute inset-0"
@@ -281,9 +251,7 @@ export async function SpeakerShare({
         />
       )}
 
-      {/* Enhanced responsive layout with container query units */}
       <div className="relative flex h-full flex-col p-[3cqw] text-center text-white @xs:p-[4cqw] @md:p-[5cqw] @xl:p-[6cqw]">
-        {/* Header Section */}
         <header className="mb-[3cqw] shrink-0 @xs:mb-[4cqw] @md:mb-[6cqw] @xl:mb-[8cqw]">
           <div className="mb-[1cqw] flex items-center justify-center gap-[2cqw] @xs:mb-[1.5cqw] @xs:gap-[2.5cqw] @md:mb-[2cqw] @md:gap-[3cqw]">
             <Icon className="h-[6cqw] w-[6cqw] @xs:h-[6.5cqw] @xs:w-[6.5cqw] @md:h-[7cqw] @md:w-[7cqw] @xl:h-[8cqw] @xl:w-[8cqw]" />
@@ -296,10 +264,8 @@ export async function SpeakerShare({
           </h1>
         </header>
 
-        {/* Images Section - Much bigger for large containers */}
         <section className="mb-[2cqw] shrink-0 @xs:mb-[3cqw] @md:mb-[4cqw]">
           <div className="flex items-center justify-center gap-[7cqw] @xs:gap-[8cqw] @md:gap-[12cqw] @xl:gap-[15cqw]">
-            {/* Speaker Image - Much larger across all sizes */}
             <div className="flex-shrink-0">
               <SpeakerImage
                 image={image}
@@ -309,7 +275,6 @@ export async function SpeakerShare({
               />
             </div>
 
-            {/* QR Code - Matching speaker image size */}
             <QRCodeDisplay
               qrCodeUrl={qrCodeUrl}
               size={55}
@@ -318,7 +283,6 @@ export async function SpeakerShare({
           </div>
         </section>
 
-        {/* Content Section */}
         <main className="flex flex-1 flex-col justify-center px-[1cqw] @md:px-[2cqw]">
           <h2 className="font-space-grotesk mb-[1cqw] text-[6cqw] leading-tight font-bold @xs:mb-[1.5cqw] @xs:text-[6cqw] @md:mb-[2cqw] @md:text-[7.5cqw] @xl:text-[8.5cqw]">
             {name}
@@ -330,7 +294,6 @@ export async function SpeakerShare({
             </p>
           )}
 
-          {/* Primary Talk */}
           {primaryTalk && (
             <div className="mx-[1cqw] rounded-[1.5cqw] bg-white/20 p-[2cqw] backdrop-blur-sm @xs:p-[2.5cqw] @md:mx-[2cqw] @md:rounded-[2cqw] @md:p-[3cqw] @xl:rounded-[2.5cqw] @xl:p-[3.5cqw]">
               <TalkFormatDisplay talk={primaryTalk} size="lg" />
@@ -338,7 +301,6 @@ export async function SpeakerShare({
           )}
         </main>
 
-        {/* Footer Section */}
         <footer className="mt-[1cqw] shrink-0 @xs:mt-[1.5cqw] @md:mt-[2cqw]">
           <div className="flex items-center justify-center gap-[1.5cqw] @xs:gap-[2cqw] @md:gap-[2.5cqw]">
             <QrCodeIcon className="h-[4cqw] w-[4cqw] @xs:h-[4.5cqw] @xs:w-[4.5cqw] @md:h-[5cqw] @md:w-[5cqw]" />

@@ -5,7 +5,6 @@ import { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
 import { Format, Level, Audience } from '@/lib/proposal/types'
 import { Topic } from '@/lib/topic/types'
 
-// TypeScript interface for PortableText content
 interface PortableTextChild {
   _type: string
   text?: string
@@ -49,7 +48,6 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
     selectedTopic: '',
   })
 
-  // Extract all available filter options from the schedules
   const availableFilters = useMemo(() => {
     const days = schedules.map((s) => s.date).sort()
     const tracks = new Set<string>()
@@ -90,7 +88,6 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
     }
   }, [schedules])
 
-  // Create a flat list of all talks with metadata
   const allTalks = useMemo(() => {
     const talks: (TrackTalk & {
       scheduleDate: string
@@ -114,12 +111,10 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
     return talks
   }, [schedules])
 
-  // Apply filters to schedules and talks
   const filteredData = useMemo<FilteredProgramData>(() => {
     let filteredSchedules = [...schedules]
     let filteredTalks = [...allTalks]
 
-    // Filter by day
     if (filters.selectedDay) {
       filteredSchedules = filteredSchedules.filter(
         (s) => s.date === filters.selectedDay,
@@ -129,7 +124,6 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
       )
     }
 
-    // Filter by track
     if (filters.selectedTrack) {
       filteredSchedules = filteredSchedules
         .map((schedule) => ({
@@ -145,11 +139,9 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
       )
     }
 
-    // Apply other filters to talks
     filteredTalks = filteredTalks.filter((talk) => {
-      if (!talk.talk) return true // Keep placeholder talks
+      if (!talk.talk) return true
 
-      // Search query
       if (filters.searchQuery) {
         const query = filters.searchQuery.toLowerCase()
         const matchesTitle = talk.talk.title?.toLowerCase().includes(query)
@@ -177,7 +169,6 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
         }
       }
 
-      // Format filter
       if (
         filters.selectedFormat &&
         talk.talk.format !== filters.selectedFormat
@@ -185,12 +176,10 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
         return false
       }
 
-      // Level filter
       if (filters.selectedLevel && talk.talk.level !== filters.selectedLevel) {
         return false
       }
 
-      // Audience filter
       if (
         filters.selectedAudience &&
         (!talk.talk.audiences ||
@@ -199,7 +188,6 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
         return false
       }
 
-      // Topic filter
       if (filters.selectedTopic && talk.talk.topics) {
         const matchesTopic = talk.talk.topics.some(
           (topic) =>
@@ -215,7 +203,6 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
       return true
     })
 
-    // Rebuild schedules with filtered talks
     const rebuiltSchedules = filteredSchedules
       .map((schedule) => ({
         ...schedule,
@@ -255,7 +242,6 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
     )
   }, [filters])
 
-  // Memoized filter update functions for better performance
   const updateFilter = useCallback(
     <K extends keyof ProgramFilterOptions>(
       key: K,

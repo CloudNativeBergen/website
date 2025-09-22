@@ -8,13 +8,11 @@ export const POST = auth(async (req: NextAuthRequest) => {
   try {
     const { subject, message } = await req.json()
 
-    // Common setup and validation
     const { context, error } = await setupEmailRoute(req, { subject, message })
     if (error) {
       return error
     }
 
-    // Send broadcast email to speakers
     return await sendBroadcastEmail({
       conference: context!.conference,
       subject: context!.subject,

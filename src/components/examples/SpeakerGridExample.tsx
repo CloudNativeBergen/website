@@ -6,18 +6,12 @@ interface SpeakerGridExampleProps {
   speakers: SpeakerWithTalks[]
 }
 
-/**
- * Example component showing how to use SpeakerPromotionCard in a grid layout
- * with proper footer alignment and featured speakers
- */
 export function SpeakerGridExample({ speakers }: SpeakerGridExampleProps) {
-  // Split speakers into featured and regular
   const featuredSpeakers = speakers.filter((_, index) => index < 2)
   const regularSpeakers = speakers.slice(2)
 
   return (
     <div className="space-y-8">
-      {/* Featured Speakers */}
       {featuredSpeakers.length > 0 && (
         <div className="mb-12">
           <h2 className="font-space-grotesk mb-6 text-2xl font-bold text-brand-slate-gray">
@@ -38,7 +32,6 @@ export function SpeakerGridExample({ speakers }: SpeakerGridExampleProps) {
         </div>
       )}
 
-      {/* Regular Speakers Grid */}
       {regularSpeakers.length > 0 && (
         <div>
           <div className="mb-6 flex items-center justify-between">
@@ -53,7 +46,6 @@ export function SpeakerGridExample({ speakers }: SpeakerGridExampleProps) {
             </Link>
           </div>
 
-          {/* Grid with equal height rows - this ensures footer alignment */}
           <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {regularSpeakers.map((speaker) => (
               <SpeakerPromotionCard
@@ -68,7 +60,6 @@ export function SpeakerGridExample({ speakers }: SpeakerGridExampleProps) {
         </div>
       )}
 
-      {/* Compact Variant Example */}
       <div>
         <h3 className="font-space-grotesk mb-6 text-xl font-bold text-brand-slate-gray">
           Speaker Directory (Compact)

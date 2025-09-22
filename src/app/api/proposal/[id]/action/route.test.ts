@@ -36,7 +36,6 @@ import { Action, Status } from '@/lib/proposal/types'
 // Import the route handler after mocks are set up
 import * as appHandler from './route'
 
-// Import mocked functions - they should now be properly mocked
 import { sendAcceptRejectNotification } from '@/lib/proposal/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
@@ -52,7 +51,6 @@ console.log(
   typeof getConferenceForCurrentDomain,
 )
 
-// These should now be the mock functions we created above
 console.log(
   'mockSendAcceptRejectNotification:',
   mockSendAcceptRejectNotification,
@@ -210,7 +208,6 @@ describe('POST /api/proposal/[id]/action', () => {
   })
 
   it('requires a valid action', async () => {
-    // Mock conference response
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
@@ -238,7 +235,6 @@ describe('POST /api/proposal/[id]/action', () => {
       error: null,
     })
 
-    // Sanity is caching stuff, so let's mock the fetch to return the proposal
     clientReadUncached.fetch = jest.fn<() => Promise<any>>().mockResolvedValue({
       ...draftProposal,
       _type: 'talk',
@@ -270,7 +266,6 @@ describe('POST /api/proposal/[id]/action', () => {
   })
 
   it('sends an email notification when the action is accept', async () => {
-    // Mock conference response
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
@@ -302,7 +297,6 @@ describe('POST /api/proposal/[id]/action', () => {
       id: 'test-email-id',
     })
 
-    // Sanity is caching stuff, so let's mock the fetch to return the proposal
     clientReadUncached.fetch = jest.fn<() => Promise<any>>().mockResolvedValue({
       ...submittedProposal,
       _type: 'talk',
@@ -354,7 +348,6 @@ describe('POST /api/proposal/[id]/action', () => {
   })
 
   it('sends an email notification when the action is reject', async () => {
-    // Mock conference response
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
@@ -386,7 +379,6 @@ describe('POST /api/proposal/[id]/action', () => {
       id: 'test-email-id',
     })
 
-    // Sanity is caching stuff, so let's mock the fetch to return the proposal
     clientReadUncached.fetch = jest.fn<() => Promise<any>>().mockResolvedValue({
       ...submittedProposal,
       _type: 'talk',

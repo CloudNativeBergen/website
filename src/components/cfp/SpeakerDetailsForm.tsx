@@ -51,7 +51,6 @@ export function SpeakerDetailsForm({
     speaker?.links?.length ? speaker.links : [''],
   )
 
-  // Consent tracking state
   const [dataProcessingConsent, setDataProcessingConsent] = useState(
     speaker?.consent?.dataProcessing?.granted ?? false,
   )
@@ -109,7 +108,6 @@ export function SpeakerDetailsForm({
         setImageError(error.message)
       } else if (image) {
         setSpeakerImage(image.image)
-        // Call the callback if provided (for profile mode to refresh data)
         if (onImageUpload) {
           await onImageUpload()
         }

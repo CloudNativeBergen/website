@@ -458,7 +458,6 @@ export async function updateSponsorTierAssignment(
   newTierId: string,
 ): Promise<{ error?: Error }> {
   try {
-    // First, find the sponsor document by name to get its ID
     const sponsor = await clientWrite.fetch(
       `*[_type == "sponsor" && name == $sponsorName][0]{
         _id
@@ -472,7 +471,6 @@ export async function updateSponsorTierAssignment(
 
     const sponsorId = sponsor._id
 
-    // Now find the sponsor in the conference's sponsors array
     const conference = await clientWrite.fetch(
       `*[_type == "conference" && _id == $conferenceId][0]{
         sponsors[sponsor._ref == $sponsorId]{
@@ -499,7 +497,6 @@ export async function updateSponsorTierAssignment(
       return { error: new Error('Sponsor entry missing _key') }
     }
 
-    // Update the tier reference for this specific sponsor entry
     await clientWrite
       .patch(conferenceId)
       .set({

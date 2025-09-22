@@ -6,7 +6,6 @@ import { getSpeakersWithAcceptedTalks } from '@/lib/speaker/sanity'
 export const dynamic = 'force-dynamic'
 
 export const GET = auth(async (req: NextAuthRequest) => {
-  // Check organizer access
   const accessError = checkOrganizerAccess(req)
   if (accessError) {
     return accessError

@@ -6,7 +6,6 @@ import {
   SUPPORTED_CURRENCIES,
 } from './types'
 
-// Banking details validation
 export const BankingDetailsSchema = z
   .object({
     beneficiaryName: z.string().min(1, 'Beneficiary name is required').max(100),
@@ -25,7 +24,6 @@ export const BankingDetailsSchema = z
     path: ['iban'],
   })
 
-// Optional banking details for initial creation (can be empty)
 export const OptionalBankingDetailsSchema = z.object({
   beneficiaryName: z.string().max(100).optional().default(''),
   bankName: z.string().max(100).optional().default(''),
@@ -36,7 +34,6 @@ export const OptionalBankingDetailsSchema = z.object({
   preferredCurrency: z.enum(SUPPORTED_CURRENCIES).default('NOK'),
 })
 
-// Receipt validation
 export const ExpenseReceiptSchema = z.object({
   file: z.object({
     _type: z.literal('file'),
@@ -49,7 +46,6 @@ export const ExpenseReceiptSchema = z.object({
   uploadedAt: z.string(),
 })
 
-// Travel expense validation
 export const TravelExpenseInputSchema = z
   .object({
     category: z.nativeEnum(ExpenseCategory),
@@ -84,7 +80,6 @@ export const TravelExpenseInputSchema = z
     },
   )
 
-// Travel support validation
 export const TravelSupportInputSchema = z.object({
   speaker: z.object({
     _ref: z.string(),
@@ -97,7 +92,6 @@ export const TravelSupportInputSchema = z.object({
   bankingDetails: BankingDetailsSchema,
 })
 
-// Client input schema (without conference - resolved server-side)
 export const TravelSupportClientInputSchema = z.object({
   speaker: z.object({
     _ref: z.string(),
@@ -106,43 +100,36 @@ export const TravelSupportClientInputSchema = z.object({
   bankingDetails: OptionalBankingDetailsSchema,
 })
 
-// Update banking details schema
 export const UpdateBankingDetailsSchema = z.object({
   travelSupportId: z.string(),
   bankingDetails: BankingDetailsSchema,
 })
 
-// Add expense schema
 export const AddExpenseSchema = z.object({
   travelSupportId: z.string(),
   expense: TravelExpenseInputSchema,
 })
 
-// Update expense schema (for speakers to edit their expenses)
 export const UpdateExpenseSchema = z.object({
   expenseId: z.string(),
   expense: TravelExpenseInputSchema,
 })
 
-// Delete expense schema
 export const DeleteExpenseSchema = z.object({
   expenseId: z.string(),
 })
 
-// Delete receipt schema
 export const DeleteReceiptSchema = z.object({
   expenseId: z.string(),
   receiptIndex: z.number().min(0),
 })
 
-// Update expense status schema
 export const UpdateExpenseStatusSchema = z.object({
   expenseId: z.string(),
   status: z.nativeEnum(ExpenseStatus),
   reviewNotes: z.string().optional(),
 })
 
-// Update travel support status schema
 export const UpdateTravelSupportStatusSchema = z.object({
   travelSupportId: z.string(),
   status: z.nativeEnum(TravelSupportStatus),
@@ -150,12 +137,10 @@ export const UpdateTravelSupportStatusSchema = z.object({
   reviewNotes: z.string().optional(),
 })
 
-// Submit travel support schema
 export const SubmitTravelSupportSchema = z.object({
   travelSupportId: z.string(),
 })
 
-// Query schemas
 export const GetTravelSupportSchema = z.object({
   speakerId: z.string().optional(),
   conferenceId: z.string().optional(),
@@ -166,13 +151,11 @@ export const GetTravelSupportByIdSchema = z.object({
   id: z.string(),
 })
 
-// File upload schema
 export const UploadReceiptSchema = z.object({
   file: z.instanceof(File),
   filename: z.string(),
 })
 
-// Types for TypeScript inference
 export type BankingDetailsInput = z.infer<typeof BankingDetailsSchema>
 export type TravelExpenseInputType = z.infer<typeof TravelExpenseInputSchema>
 export type TravelSupportInputType = z.infer<typeof TravelSupportInputSchema>

@@ -29,7 +29,7 @@ export function PaymentDetailsModal({
   error,
 }: PaymentDetailsModalProps) {
   const { theme } = useTheme()
-  // Helper to format currency from string amounts
+
   const formatCurrencyFromString = (amount: string): string => {
     return formatCurrency(parseFloat(amount))
   }

@@ -9,9 +9,6 @@ import {
 import { SpeakerWithReviewInfo, Flags, Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 
-/**
- * Speaker indicator configuration for consistent speaker indicators
- */
 export interface SpeakerIndicator {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   bgColor: string
@@ -19,10 +16,6 @@ export interface SpeakerIndicator {
   title: string
 }
 
-/**
- * Helper function to determine if a speaker has previous accepted talks
- * Works with speakers that have proposals from multiple conferences
- */
 function hasPreviousAcceptedTalks(
   speaker: Speaker & { proposals?: ProposalExisting[] },
   currentConferenceId?: string,
@@ -31,12 +24,10 @@ function hasPreviousAcceptedTalks(
     return false
   }
 
-  // If no current conference ID provided, we can't determine what's "previous"
   if (!currentConferenceId) {
     return false
   }
 
-  // Look for accepted or confirmed talks from other conferences
   return speaker.proposals.some((proposal) => {
     const isAcceptedOrConfirmed =
       proposal.status === Status.accepted ||
@@ -46,7 +37,6 @@ function hasPreviousAcceptedTalks(
       return false
     }
 
-    // Check if this proposal is from a different conference
     if (proposal.conference) {
       const proposalConferenceId =
         typeof proposal.conference === 'object' && '_id' in proposal.conference
@@ -55,7 +45,6 @@ function hasPreviousAcceptedTalks(
       return proposalConferenceId !== currentConferenceId
     }
 
-    // If no conference info on proposal, can't determine if it's previous
     return false
   })
 }
@@ -76,9 +65,7 @@ export function getSpeakerIndicators(
 ): SpeakerIndicator[] {
   const indicators: SpeakerIndicator[] = []
 
-  // Check for seasoned speaker (has previous accepted talks)
   const isSeasonedSpeaker = speakers.some((speaker) => {
-    // Check both old and new data structures
     if ('previousAcceptedTalks' in speaker && speaker.previousAcceptedTalks) {
       return speaker.previousAcceptedTalks.length > 0
     }
@@ -94,11 +81,9 @@ export function getSpeakerIndicators(
     })
   }
 
-  // Check for new speaker (no previous accepted talks)
   const isNewSpeaker =
     speakers.length === 0 ||
     speakers.every((speaker) => {
-      // Check both old and new data structures
       if (
         'previousAcceptedTalks' in speaker &&
         speaker.previousAcceptedTalks !== undefined
@@ -117,7 +102,6 @@ export function getSpeakerIndicators(
     })
   }
 
-  // Check for local speaker
   const isLocalSpeaker = speakers.some((speaker) =>
     speaker?.flags?.includes(Flags.localSpeaker),
   )
@@ -130,7 +114,6 @@ export function getSpeakerIndicators(
     })
   }
 
-  // Check for underrepresented speaker
   const isUnderrepresentedSpeaker = speakers.some((speaker) =>
     speaker?.flags?.includes(Flags.diverseSpeaker),
   )
@@ -143,7 +126,6 @@ export function getSpeakerIndicators(
     })
   }
 
-  // Check for travel funding requirement
   const requiresTravelFunding = speakers.some((speaker) =>
     speaker?.flags?.includes(Flags.requiresTravelFunding),
   )
@@ -159,9 +141,6 @@ export function getSpeakerIndicators(
   return indicators
 }
 
-/**
- * Reusable SpeakerIndicators component
- */
 interface SpeakerIndicatorsProps {
   speakers: (
     | SpeakerWithReviewInfo

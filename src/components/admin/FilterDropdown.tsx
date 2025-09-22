@@ -17,15 +17,10 @@ interface FilterDropdownProps {
   children: ReactNode
   position?: 'left' | 'right'
   width?: 'default' | 'wide' | 'wider'
-  fixedWidth?: boolean // Whether button should have fixed width (default: false)
-  keepOpen?: boolean // For multi-select filters
+  fixedWidth?: boolean
+  keepOpen?: boolean
 }
 
-/**
- * Reusable filter dropdown component
- * Provides consistent styling and behavior for filter menus
- * Automatically drops up when too close to the bottom of the viewport
- */
 export function FilterDropdown({
   label,
   activeCount,
@@ -40,26 +35,25 @@ export function FilterDropdown({
   const getWidthClass = () => {
     switch (width) {
       case 'wide':
-        return 'w-64' // 16rem / 256px
+        return 'w-64'
       case 'wider':
-        return 'w-72' // 18rem / 288px
+        return 'w-72'
       default:
-        return 'w-56' // 14rem / 224px
+        return 'w-56'
     }
   }
 
   const getButtonWidthClass = () => {
     switch (width) {
       case 'wide':
-        return 'w-64 min-w-64' // 16rem / 256px
+        return 'w-64 min-w-64'
       case 'wider':
-        return 'w-72 min-w-72' // 18rem / 288px
+        return 'w-72 min-w-72'
       default:
-        return 'w-56 min-w-56' // 14rem / 224px
+        return 'w-56 min-w-56'
     }
   }
 
-  // More aggressive detection using a larger threshold
   const checkDropDirection = () => {
     if (!menuRef.current) {
       return
@@ -68,7 +62,6 @@ export function FilterDropdown({
     const rect = menuRef.current.getBoundingClientRect()
     const viewportHeight = window.innerHeight
 
-    // Much more aggressive: if we're in the bottom third of the screen, drop up
     const isInBottomThird = rect.bottom > viewportHeight * 0.67
 
     if (isInBottomThird !== shouldDropUp) {
@@ -76,7 +69,6 @@ export function FilterDropdown({
     }
   }
 
-  // Use intersection observer for more reliable detection
   useEffect(() => {
     if (!menuRef.current) {
       return
@@ -86,7 +78,6 @@ export function FilterDropdown({
       (entries) => {
         const entry = entries[0]
         if (entry) {
-          // If less than 50% of the button is visible, we're probably near the bottom
           const isNearBottom =
             entry.intersectionRatio < 0.5 ||
             entry.boundingClientRect.bottom > window.innerHeight * 0.7
@@ -98,7 +89,7 @@ export function FilterDropdown({
       },
       {
         threshold: [0, 0.25, 0.5, 0.75, 1],
-        rootMargin: '0px 0px -30% 0px', // Trigger when entering bottom 30% of viewport
+        rootMargin: '0px 0px -30% 0px',
       },
     )
 
@@ -109,7 +100,6 @@ export function FilterDropdown({
     }
   }, [shouldDropUp])
 
-  // Force check on click
   const handleMenuButtonClick = () => {
     requestAnimationFrame(() => {
       checkDropDirection()
@@ -193,10 +183,6 @@ interface FilterOptionProps {
   keepOpen?: boolean
 }
 
-/**
- * Individual filter option component
- * Used within FilterDropdown for consistent option styling
- */
 export function FilterOption({
   onClick,
   checked,

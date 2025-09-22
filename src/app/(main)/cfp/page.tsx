@@ -207,7 +207,7 @@ export default async function CFP() {
             return topicsToDisplay.map((topic: Topic, index: number) => {
               const style = topicCardStyles[index % topicCardStyles.length]
               const rotationClass = index % 2 === 0 ? 'rotate-1' : '-rotate-1'
-              // Special handling for the default topic to match its previous styling
+
               const isDefaultTopic = topic._id.startsWith('default-topic-')
               const cardGradient = isDefaultTopic
                 ? 'from-gray-500 to-slate-600 dark:from-gray-700 dark:to-slate-800'

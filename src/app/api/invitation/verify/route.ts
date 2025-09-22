@@ -3,12 +3,6 @@ import { verifyInvitationToken } from '@/lib/cospeaker/server'
 import { getInvitationByToken } from '@/lib/cospeaker/sanity'
 import { AppEnvironment } from '@/lib/environment'
 
-/**
- * Verify co-speaker invitation tokens
- *
- * Optimized to use getInvitationByToken for single database call
- * instead of separate token verification and database fetch
- */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
@@ -22,7 +16,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get invitation by token from database (optimized single call)
     const invitation = await getInvitationByToken(token)
 
     if (!invitation) {
@@ -32,7 +25,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // For non-test modes, verify the token signature
     if (!isTestMode) {
       const payload = verifyInvitationToken(token)
       if (!payload) {
@@ -42,7 +34,6 @@ export async function GET(request: NextRequest) {
         )
       }
 
-      // Verify token matches invitation data
       if (
         payload.invitationId !== invitation._id ||
         payload.invitedEmail !== invitation.invitedEmail
@@ -64,7 +55,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Check if invitation is expired
     const isExpired = new Date(invitation.expiresAt) < new Date()
     if (isExpired && invitation.status === 'pending') {
       return NextResponse.json(
@@ -76,7 +66,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Return invitation details
     return NextResponse.json({
       invitation: {
         ...invitation,

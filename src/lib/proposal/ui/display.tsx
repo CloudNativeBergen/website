@@ -1,9 +1,6 @@
 import React from 'react'
 import { StarIcon, StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 
-/**
- * Rating display component for consistent rating visualization
- */
 interface RatingDisplayProps {
   rating: number
   reviewCount: number
@@ -48,9 +45,6 @@ export function RatingDisplay({
   )
 }
 
-/**
- * Metadata row component for consistent proposal metadata display
- */
 interface MetadataRowProps {
   icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>
   children: React.ReactNode

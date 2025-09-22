@@ -14,10 +14,6 @@ import {
 } from '@/lib/travel-support/exchange-rates'
 import type { SupportedCurrency } from '@/lib/travel-support/types'
 
-/**
- * Development utility for testing and monitoring exchange rates
- * Only shown in development mode
- */
 export function ExchangeRateDebugPanel() {
   const { exchangeRates, isLoading, error, convertCurrency, refreshRates } =
     useExchangeRates()
@@ -26,11 +22,9 @@ export function ExchangeRateDebugPanel() {
   const [fromCurrency, setFromCurrency] = useState<SupportedCurrency>('USD')
   const [toCurrency, setToCurrency] = useState<SupportedCurrency>('NOK')
 
-  // Panel visibility state with localStorage persistence
   const [isVisible, setIsVisible] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
 
-  // Load saved state from localStorage on mount
   useEffect(() => {
     try {
       const savedVisible = localStorage.getItem('debug-panel-visible')
@@ -43,28 +37,22 @@ export function ExchangeRateDebugPanel() {
         setIsMinimized(JSON.parse(savedMinimized))
       }
     } catch (error) {
-      // Ignore localStorage errors
       console.warn('Failed to load debug panel state:', error)
     }
   }, [])
 
-  // Save state to localStorage when it changes
   const handleVisibilityChange = (visible: boolean) => {
     setIsVisible(visible)
     try {
       localStorage.setItem('debug-panel-visible', JSON.stringify(visible))
-    } catch {
-      // Ignore localStorage errors
-    }
+    } catch {}
   }
 
   const handleMinimizeChange = (minimized: boolean) => {
     setIsMinimized(minimized)
     try {
       localStorage.setItem('debug-panel-minimized', JSON.stringify(minimized))
-    } catch {
-      // Ignore localStorage errors
-    }
+    } catch {}
   }
 
   const refreshCacheStatus = () => {
@@ -91,7 +79,6 @@ export function ExchangeRateDebugPanel() {
     return null
   }
 
-  // Show button when panel is hidden
   if (!isVisible) {
     return (
       <button
@@ -147,7 +134,6 @@ export function ExchangeRateDebugPanel() {
             </button>
           </div>
 
-          {/* Status */}
           <div className="mb-3 rounded bg-gray-50 p-2 dark:bg-gray-700">
             <div className="mb-1 font-semibold text-gray-900 dark:text-gray-100">
               Status:
@@ -174,7 +160,6 @@ export function ExchangeRateDebugPanel() {
             )}
           </div>
 
-          {/* Actions */}
           <div className="mb-3 space-y-2">
             <button
               onClick={refreshRates}
@@ -191,7 +176,6 @@ export function ExchangeRateDebugPanel() {
             </button>
           </div>
 
-          {/* Currency Converter Test */}
           <div className="mb-3 rounded bg-gray-50 p-2 dark:bg-gray-700">
             <div className="mb-2 font-semibold text-gray-900 dark:text-gray-100">
               Test Converter:
@@ -238,7 +222,6 @@ export function ExchangeRateDebugPanel() {
             </div>
           </div>
 
-          {/* Exchange Rates Table */}
           {exchangeRates && (
             <div className="rounded bg-gray-50 p-2 dark:bg-gray-700">
               <div className="mb-1 font-semibold text-gray-900 dark:text-gray-100">
@@ -260,7 +243,6 @@ export function ExchangeRateDebugPanel() {
             </div>
           )}
 
-          {/* API Info */}
           <div className="mt-3 rounded bg-yellow-50 p-2 text-xs dark:bg-yellow-900/30">
             <div className="mb-1 font-semibold text-gray-900 dark:text-gray-100">
               Exchange Rate Info:

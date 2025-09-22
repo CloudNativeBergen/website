@@ -44,7 +44,6 @@ export function AdminActionBar({
   }
 
   const handleEmailSpeakers = () => {
-    // Get all speakers with email addresses
     const speakersWithValidEmail = speakers
       .filter((speaker) => speaker.email)
       .map((speaker) => ({
@@ -64,7 +63,6 @@ export function AdminActionBar({
   const canReject =
     proposal.status === 'submitted' || proposal.status === 'accepted'
 
-  // Get speaker information for indicators
   const speakers =
     proposal.speakers && Array.isArray(proposal.speakers)
       ? proposal.speakers
@@ -99,9 +97,7 @@ export function AdminActionBar({
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        {/* Left side - Status, Reviews, and Speaker Indicators */}
         <div className="flex min-w-0 flex-wrap items-center gap-4">
-          {/* Status */}
           <div className="flex flex-shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
               Status:
@@ -122,7 +118,6 @@ export function AdminActionBar({
             </span>
           </div>
 
-          {/* Reviews Summary */}
           {proposal.reviews && proposal.reviews.length > 0 && (
             <div className="flex flex-shrink-0 items-center gap-2">
               <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -147,7 +142,6 @@ export function AdminActionBar({
             </div>
           )}
 
-          {/* Speaker Indicators */}
           {speakers.length > 0 && (
             <div className="flex flex-shrink-0 items-center gap-2">
               <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -199,9 +193,7 @@ export function AdminActionBar({
           )}
         </div>
 
-        {/* Right side - Compact Action Buttons */}
         <div className="flex flex-shrink-0 items-center gap-2">
-          {/* Email Speaker Button - Show if there's at least one speaker with email */}
           {speakers.length > 0 && speakers.some((speaker) => speaker.email) && (
             <button
               onClick={handleEmailSpeakers}
@@ -243,7 +235,6 @@ export function AdminActionBar({
         </div>
       </div>
 
-      {/* Email Modal */}
       {showEmailModal && speakersWithEmail.length > 0 && (
         <SpeakerEmailModal
           isOpen={showEmailModal}

@@ -2,22 +2,17 @@ import { Button } from '@/components/Button'
 import { MicrophoneIcon, TicketIcon } from '@heroicons/react/24/outline'
 
 interface CallToActionProps {
-  /** Whether this is for organizers context (affects messaging and button visibility) */
   isOrganizers?: boolean
-  /** Custom title override */
+
   title?: string
-  /** Custom description override */
+
   description?: string
-  /** Whether to show the speaker submission button */
+
   showSpeakerSubmission?: boolean
-  /** Whether to show the ticket reservation button */
+
   showTicketReservation?: boolean
 }
 
-/**
- * Call to Action component for encouraging speaker submissions and ticket reservations.
- * Can be used in different contexts with customizable messaging and button visibility.
- */
 export function CallToAction({
   isOrganizers = false,
   title,

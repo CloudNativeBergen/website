@@ -3,7 +3,6 @@ import { readFile } from 'fs/promises'
 import { join } from 'path'
 
 export async function GET() {
-  // Only allow in development
   if (process.env.NODE_ENV !== 'development') {
     return new NextResponse('Not Found', { status: 404 })
   }

@@ -14,7 +14,7 @@ interface GeneralBroadcastModalProps {
   onSend: (subject: string, message: string) => Promise<void>
   onSyncContacts: () => Promise<void>
   recipientCount: number
-  recipientType: string // 'speakers' or 'sponsors'
+  recipientType: string
   fromEmail: string
   eventName: string
   eventLocation: string
@@ -39,7 +39,6 @@ export function GeneralBroadcastModal({
 }: GeneralBroadcastModalProps) {
   const { showNotification } = useNotification()
 
-  // Memoize initial values to prevent unnecessary re-renders and form resets
   const initialValues = useMemo(
     () => ({
       subject: '',
@@ -47,7 +46,7 @@ export function GeneralBroadcastModal({
         'Hi {{{FIRST_NAME|there}}},\n\n',
       ),
     }),
-    [], // Empty dependency array since these values should be static
+    [],
   )
 
   const handleSend = async ({
@@ -58,18 +57,17 @@ export function GeneralBroadcastModal({
     message: PortableTextBlock[]
   }) => {
     try {
-      await onSend(subject, JSON.stringify(message)) // Send PortableText as JSON string
+      await onSend(subject, JSON.stringify(message))
       showNotification({
         type: 'success',
         title: 'Email sent',
         message: `Email sent to ${recipientCount} ${recipientType}`,
       })
     } catch (error) {
-      throw error // Let EmailModal handle the error
+      throw error
     }
   }
 
-  // Custom recipient display with sync button
   const recipientDisplay = (
     <div className="flex items-center gap-3">
       <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -86,7 +84,6 @@ export function GeneralBroadcastModal({
     </div>
   )
 
-  // Create preview component
   const createPreview = ({
     subject,
     messageHTML,

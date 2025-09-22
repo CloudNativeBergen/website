@@ -13,9 +13,6 @@ interface SpeakerSharingActionsProps {
   children: React.ReactNode
 }
 
-/**
- * Component that wraps speaker promotion cards with download and social sharing functionality
- */
 export function SpeakerSharingActions({
   filename = 'speaker-image',
   speakerUrl,
@@ -26,9 +23,6 @@ export function SpeakerSharingActions({
   const [isDownloading, setIsDownloading] = useState(false)
   const componentRef = useRef<HTMLDivElement>(null)
 
-  /**
-   * Generate random share text options
-   */
   const getRandomShareText = () => {
     const shareTexts = [
       `Ready to deploy my talk "${talkTitle}" to ${eventName}! 🚀 No rollbacks needed - this one's production-ready`,
@@ -44,9 +38,6 @@ export function SpeakerSharingActions({
     return shareTexts[Math.floor(Math.random() * shareTexts.length)]
   }
 
-  /**
-   * Generate LinkedIn share URL
-   */
   const getLinkedInShareUrl = () => {
     const params = new URLSearchParams({
       url: speakerUrl,
@@ -54,9 +45,6 @@ export function SpeakerSharingActions({
     return `https://www.linkedin.com/sharing/share-offsite/?${params.toString()}`
   }
 
-  /**
-   * Generate Bluesky share URL
-   */
   const getBlueskyShareUrl = () => {
     const shareText = `${getRandomShareText()}\n\n${speakerUrl}`
     const params = new URLSearchParams({
@@ -65,16 +53,10 @@ export function SpeakerSharingActions({
     return `https://bsky.app/intent/compose?${params.toString()}`
   }
 
-  /**
-   * Open share URL in new window
-   */
   const handleShare = (url: string) => {
     window.open(url, '_blank', 'width=600,height=400')
   }
 
-  /**
-   * Wait for all images in the component to load
-   */
   const waitForImages = async (element: HTMLElement): Promise<void> => {
     const images = element.querySelectorAll('img')
     if (images.length === 0) return
@@ -86,8 +68,8 @@ export function SpeakerSharingActions({
             resolve()
           } else {
             img.onload = () => resolve()
-            img.onerror = () => resolve() // Continue even if image fails
-            // Timeout after 3 seconds per image
+            img.onerror = () => resolve()
+
             setTimeout(resolve, 3000)
           }
         })
@@ -95,9 +77,6 @@ export function SpeakerSharingActions({
     )
   }
 
-  /**
-   * Update external image sources to use our proxy for CORS-free access
-   */
   const updateImageSources = async (element: HTMLElement): Promise<void> => {
     const images = element.querySelectorAll('img')
     const externalImages = Array.from(images).filter(
@@ -106,21 +85,16 @@ export function SpeakerSharingActions({
         !img.src.includes(window.location.hostname),
     )
 
-    // Simply update src to use proxy - no need for data URL conversion
     externalImages.forEach((img) => {
       const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(img.src)}`
       img.src = proxyUrl
     })
 
-    // Wait for proxied images to load
     if (externalImages.length > 0) {
       await waitForImages(element)
     }
   }
 
-  /**
-   * Generate canvas from element using html2canvas-pro
-   */
   const generateCanvas = async (
     element: HTMLElement,
   ): Promise<HTMLCanvasElement> => {
@@ -130,12 +104,11 @@ export function SpeakerSharingActions({
       useCORS: true,
       allowTaint: false,
       removeContainer: false,
-      imageTimeout: 8000, // Reduced timeout for better UX
+      imageTimeout: 8000,
       width: element.offsetWidth,
       height: element.offsetHeight,
-      logging: false, // Disable logging in production
+      logging: false,
       onclone: (clonedDoc: Document) => {
-        // Ensure QR code elements are visible in the cloned document
         const qrElements = clonedDoc.querySelectorAll('[data-qr-code]')
         qrElements.forEach((el: Element) => {
           if (el instanceof HTMLElement) {
@@ -145,7 +118,6 @@ export function SpeakerSharingActions({
           }
         })
 
-        // Ensure all text is visible and properly styled
         const textElements = clonedDoc.querySelectorAll(
           'h1, h2, h3, p, span, div',
         )
@@ -164,9 +136,6 @@ export function SpeakerSharingActions({
     return canvas
   }
 
-  /**
-   * Convert canvas to blob and trigger download
-   */
   const downloadCanvas = async (canvas: HTMLCanvasElement): Promise<void> => {
     return new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -178,7 +147,6 @@ export function SpeakerSharingActions({
 
           let url: string | null = null
           try {
-            // Create download link
             url = URL.createObjectURL(blob)
             const link = document.createElement('a')
             const fileName = `${filename}-${Date.now()}.png`
@@ -187,12 +155,10 @@ export function SpeakerSharingActions({
             link.download = fileName
             link.style.display = 'none'
 
-            // Trigger download
             document.body.appendChild(link)
             link.click()
             document.body.removeChild(link)
 
-            // Clean up memory
             setTimeout(() => {
               if (url) URL.revokeObjectURL(url)
               resolve()
@@ -203,14 +169,11 @@ export function SpeakerSharingActions({
           }
         },
         'image/png',
-        0.95, // Slightly compress for smaller file size
+        0.95,
       )
     })
   }
 
-  /**
-   * Main download handler with comprehensive error handling and optimization
-   */
   const downloadAsImage = async () => {
     if (!componentRef.current) {
       alert('Component not ready. Please try again.')
@@ -219,7 +182,6 @@ export function SpeakerSharingActions({
 
     const element = componentRef.current
 
-    // Validate element has dimensions
     if (element.offsetWidth === 0 || element.offsetHeight === 0) {
       alert(
         'Cannot capture invisible element. Please ensure the component is visible.',
@@ -230,28 +192,21 @@ export function SpeakerSharingActions({
     setIsDownloading(true)
 
     try {
-      // Wait for all content to load
       await waitForImages(element)
 
-      // Update external images to use proxy URLs for CORS-free access
       await updateImageSources(element)
 
-      // Brief pause to ensure DOM updates are complete
       await new Promise((resolve) => setTimeout(resolve, 300))
 
-      // Generate the canvas
       const canvas = await generateCanvas(element)
 
-      // Download the image
       await downloadCanvas(canvas)
 
-      // Clean up canvas to free memory
       canvas.width = 0
       canvas.height = 0
     } catch (error) {
       console.error('Download failed:', error)
 
-      // More user-friendly error messages
       let message = 'Failed to generate image. Please try again.'
 
       if (error instanceof Error) {
@@ -285,9 +240,7 @@ export function SpeakerSharingActions({
         {children}
       </div>
 
-      {/* Action buttons container */}
       <div className="mt-4 flex flex-col space-y-2">
-        {/* Download Button */}
         <button
           onClick={downloadAsImage}
           disabled={isDownloading}
@@ -297,9 +250,7 @@ export function SpeakerSharingActions({
           <span>{isDownloading ? 'Generating...' : 'Download as PNG'}</span>
         </button>
 
-        {/* Social Share Buttons - Side by side */}
         <div className="flex space-x-2">
-          {/* LinkedIn Share Button */}
           <button
             onClick={() => handleShare(getLinkedInShareUrl())}
             className="font-inter inline-flex flex-1 items-center justify-center space-x-2 rounded-lg bg-[#0077B5] px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-[#0077B5]/90 hover:shadow-md"
@@ -308,7 +259,6 @@ export function SpeakerSharingActions({
             <span>LinkedIn</span>
           </button>
 
-          {/* Bluesky Share Button */}
           <button
             onClick={() => handleShare(getBlueskyShareUrl())}
             className="font-inter inline-flex flex-1 items-center justify-center space-x-2 rounded-lg bg-[#00A8E8] px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-[#00A8E8]/90 hover:shadow-md"

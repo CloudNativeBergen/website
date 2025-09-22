@@ -24,7 +24,6 @@ export function validateSpeaker(speaker: SpeakerInput): FormValidationError[] {
     })
   }
 
-  // check if speaker links contain empty links
   if (speaker.links && speaker.links.some((link) => link === '')) {
     validationErrors.push({
       message: 'Links cannot be empty',

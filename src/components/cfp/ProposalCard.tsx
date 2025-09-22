@@ -157,7 +157,7 @@ export function ProposalCard({
       key={proposal._id}
       className={clsx(
         'col-span-1 divide-y divide-gray-200 rounded-lg border-l-4 bg-gray-50 shadow dark:divide-gray-600 dark:bg-gray-800',
-        // Status-based border styling using consistent configuration
+
         {
           'border-l-green-500': proposal.status === Status.accepted,
           'border-l-blue-500': proposal.status === Status.submitted,

@@ -13,7 +13,7 @@ interface BaseEmailTemplateProps {
   socialLinks: string[]
   children?: React.ReactNode
   footer?: React.ReactNode
-  unsubscribeUrl?: string // Optional unsubscribe URL for broadcasts
+  unsubscribeUrl?: string
   customContent?: {
     heading?: string
     body?: React.ReactNode
@@ -35,7 +35,6 @@ export function BaseEmailTemplate({
   unsubscribeUrl,
   customContent,
 }: BaseEmailTemplateProps) {
-  // Validation: Ensure either speakerName or customContent is provided
   if (!speakerName && !customContent) {
     throw new Error(
       `BaseEmailTemplate requires either speakerName or customContent to be provided. ` +
@@ -44,7 +43,6 @@ export function BaseEmailTemplate({
     )
   }
 
-  // Email-safe styles - using tables for layout and inline styles for maximum compatibility
   const containerStyle: React.CSSProperties = {
     fontFamily:
       'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
@@ -134,7 +132,7 @@ export function BaseEmailTemplate({
   const socialLinkStyle: React.CSSProperties = {
     color: '#1D4ED8',
     textDecoration: 'none',
-    fontSize: '0', // Hide any text content
+    fontSize: '0',
     marginRight: '12px',
     display: 'inline-block',
     padding: '4px',
@@ -147,7 +145,6 @@ export function BaseEmailTemplate({
 
   return (
     <div style={containerStyle}>
-      {/* Use table for better email client compatibility */}
       <table
         role="presentation"
         style={{ width: '100%', borderCollapse: 'collapse' }}
@@ -157,7 +154,6 @@ export function BaseEmailTemplate({
             <td>
               <h1 style={headerStyle}>{customContent?.heading || title}</h1>
 
-              {/* Only show greeting for non-custom content (i.e., not broadcast emails) */}
               {speakerName && !customContent && (
                 <p style={paragraphStyle}>Dear {speakerName},</p>
               )}
@@ -180,7 +176,6 @@ export function BaseEmailTemplate({
                 </>
               )}
 
-              {/* Event Details Section - only show if we have event info and not using custom content */}
               {!customContent && eventName && (
                 <div style={eventDetailsStyle}>
                   <h3 style={eventDetailsHeaderStyle}>Event Details:</h3>
@@ -206,12 +201,10 @@ export function BaseEmailTemplate({
 
               {footer}
 
-              {/* Only show default footer if no custom footer is provided */}
               {!footer && (
                 <>
                   <hr style={hrStyle} />
 
-                  {/* Social Links Section */}
                   {socialLinks.length > 0 && (
                     <div style={socialContainerStyle}>
                       <p

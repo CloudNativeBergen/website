@@ -14,7 +14,6 @@ import {
 import { NetworkErrorDisplay, ValidationErrorSummary } from './ErrorComponents'
 import { ErrorBoundary } from './ErrorBoundary'
 
-// Generate a unique key for receipt items
 const generateReceiptKey = () => {
   return `receipt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
@@ -73,11 +72,9 @@ export function ExpenseForm({
   const [isUploading, setIsUploading] = useState(false)
   const [networkError, setNetworkError] = useState<boolean>(false)
 
-  // Receipt processing consent
   const [receiptProcessingConsent, setReceiptProcessingConsent] =
     useState(false)
 
-  // Track existing receipts separately from new files
   const existingReceipts = initialData?.receipts || []
 
   const validateForm = (): boolean => {
@@ -103,7 +100,6 @@ export function ExpenseForm({
       errors.receipts = 'At least one receipt is required'
     }
 
-    // Add consent validation only if receipts are being uploaded
     if (
       (receiptFiles.length > 0 || existingReceipts.length > 0) &&
       !receiptProcessingConsent
@@ -126,7 +122,6 @@ export function ExpenseForm({
     setIsUploading(true)
 
     try {
-      // Upload new receipt files with better error handling
       const newReceipts = await Promise.all(
         receiptFiles.map(async (file) => {
           try {
@@ -205,7 +200,6 @@ export function ExpenseForm({
         }),
       )
 
-      // Combine existing receipts with new uploads
       const allReceipts = [...existingReceipts, ...newReceipts]
 
       const expense: TravelExpenseInput = {
@@ -225,7 +219,6 @@ export function ExpenseForm({
     } catch (error) {
       console.error('Failed to process expense:', error)
 
-      // Check for network errors
       if (error instanceof Error) {
         if (
           error.message.includes('network') ||
@@ -237,7 +230,6 @@ export function ExpenseForm({
         }
       }
 
-      // Provide more specific error messages for non-network errors
       let errorMessage = 'Failed to upload receipts'
       if (error instanceof Error) {
         if (error.message.includes('timeout')) {
@@ -260,7 +252,7 @@ export function ExpenseForm({
     value: TravelExpenseInput[K],
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-    // Clear validation error for this field
+
     if (validationErrors[field as string]) {
       setValidationErrors((prev) => {
         const newErrors = { ...prev }
@@ -278,7 +270,6 @@ export function ExpenseForm({
   }
 
   const addFiles = (files: File[]) => {
-    // Filter out invalid files and track rejected ones
     const validFiles: File[] = []
     const rejectedFiles: string[] = []
 
@@ -289,7 +280,7 @@ export function ExpenseForm({
         'image/jpg',
         'image/png',
       ]
-      const maxSize = 10 * 1024 * 1024 // 10MB
+      const maxSize = 10 * 1024 * 1024
 
       if (!allowedTypes.includes(file.type)) {
         rejectedFiles.push(`${file.name} (invalid file type)`)
@@ -310,7 +301,6 @@ export function ExpenseForm({
         receipts: `Some files were rejected: ${rejectedFiles.join(', ')}`,
       }))
     } else if (validFiles.length > 0) {
-      // Clear receipts validation error if we successfully added files
       setValidationErrors((prev) => {
         const newErrors = { ...prev }
         delete newErrors.receipts
@@ -477,7 +467,6 @@ export function ExpenseForm({
                 Receipt(s) *
               </label>
 
-              {/* Show existing receipts in edit mode */}
               {mode === 'edit' && existingReceipts.length > 0 && (
                 <div className="mt-2 mb-4">
                   <p className="mb-2 text-sm/6 font-medium text-gray-900 dark:text-white">
@@ -577,7 +566,6 @@ export function ExpenseForm({
           </div>
         </div>
 
-        {/* Receipt Processing Consent - only show if receipts are involved */}
         {(receiptFiles.length > 0 || existingReceipts.length > 0) && (
           <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
             <fieldset>

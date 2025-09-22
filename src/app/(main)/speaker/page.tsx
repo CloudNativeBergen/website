@@ -9,16 +9,15 @@ export const revalidate = 3600
 
 export default async function Speakers() {
   const { conference } = await getConferenceForCurrentDomain()
-  // getSpeakers now defaults to only confirmed speakers, which is what we want for public display
+
   const { speakers, err } = await getSpeakers(conference._id)
   if (err) {
     console.error(err)
   }
 
-  // Transform speakers to SpeakerWithTalks format for SpeakerPromotionCard component
   const speakersWithTalks: SpeakerWithTalks[] = speakers.map((speaker) => ({
     ...speaker,
-    talks: speaker.proposals || [], // Use the proposals from getSpeakers instead of empty array
+    talks: speaker.proposals || [],
   }))
 
   return (
@@ -38,7 +37,6 @@ export default async function Speakers() {
               </p>
             </div>
 
-            {/* Updated grid layout for SpeakerPromotionCard cards */}
             <div className="mx-auto mt-20 grid max-w-2xl auto-rows-fr grid-cols-1 gap-6 md:grid-cols-2 lg:mx-0 lg:max-w-none lg:grid-cols-3">
               {speakersWithTalks.map((speaker) => (
                 <SpeakerPromotionCard

@@ -29,7 +29,6 @@ function ErrorDisplay({ message }: { message: string }) {
 export default async function MarketingPage() {
   const session = await getAuthSession()
 
-  // Check authentication and organizer permissions
   if (!session?.speaker?.is_organizer) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -48,7 +47,6 @@ export default async function MarketingPage() {
     return <ErrorDisplay message="Error loading conference data" />
   }
 
-  // Get all confirmed proposals
   const { proposals: allProposals, proposalsError } = await getProposals({
     conferenceId: conference._id,
     returnAll: true,
@@ -59,12 +57,10 @@ export default async function MarketingPage() {
     return <ErrorDisplay message="Error fetching proposals data" />
   }
 
-  // Filter confirmed proposals and extract unique speakers
   const confirmedProposals = allProposals.filter(
     (proposal) => proposal.status === Status.confirmed,
   )
 
-  // Create a map of speakers with their confirmed talks
   const speakerTalksMap = new Map()
 
   confirmedProposals.forEach((proposal) => {
@@ -159,7 +155,6 @@ export default async function MarketingPage() {
         </div>
       ) : (
         <>
-          {/* Instructions */}
           <div className="mb-8 rounded-lg bg-blue-50 p-6 dark:bg-blue-900/20">
             <div className="flex items-start">
               <DocumentArrowDownIcon className="mt-1 mr-3 h-6 w-6 text-brand-cloud-blue dark:text-blue-300" />
@@ -176,7 +171,6 @@ export default async function MarketingPage() {
             </div>
           </div>
 
-          {/* Compact Speaker Cards Grid */}
           <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4">
             {speakersWithTalks.map(({ speaker, talks }) => (
               <div key={speaker._id} className="flex flex-col items-center">

@@ -10,9 +10,6 @@ interface CollapsibleSectionProps {
   className?: string
 }
 
-/**
- * Collapsible section component for admin interfaces
- */
 export function CollapsibleSection({
   title,
   children,

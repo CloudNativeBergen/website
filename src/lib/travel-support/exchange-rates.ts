@@ -1,18 +1,15 @@
 import type { SupportedCurrency } from './types'
 import { TIMEOUTS, EXCHANGE_RATE_CONFIG } from './config'
 
-// Exchange rate cache interface
 interface ExchangeRateCache {
   rates: Record<string, Record<string, number>>
   lastUpdated: string
   baseCurrency: string
 }
 
-// Cache key for localStorage
 const CACHE_KEY = EXCHANGE_RATE_CONFIG.cacheKey
 const CACHE_DURATION = EXCHANGE_RATE_CONFIG.cacheDuration
 
-// Fallback exchange rates (used when API is unavailable)
 const FALLBACK_RATES: Record<
   SupportedCurrency,
   Record<SupportedCurrency, number>
@@ -74,12 +71,8 @@ const FALLBACK_RATES: Record<
   OTHER: { NOK: 1, USD: 1, EUR: 1, GBP: 1, SEK: 1, DKK: 1, OTHER: 1 },
 }
 
-// Supported currencies for the API (excluding OTHER which is not a real currency)
 const API_CURRENCIES = ['NOK', 'USD', 'EUR', 'GBP', 'SEK', 'DKK'] as const
 
-/**
- * Check if cached data is still valid
- */
 function isCacheValid(cache: ExchangeRateCache): boolean {
   if (!cache.lastUpdated) return false
 
@@ -90,9 +83,6 @@ function isCacheValid(cache: ExchangeRateCache): boolean {
   return timeDiff < CACHE_DURATION
 }
 
-/**
- * Get cached exchange rates from localStorage
- */
 function getCachedRates(): ExchangeRateCache | null {
   try {
     if (typeof window === 'undefined') return null
@@ -106,7 +96,6 @@ function getCachedRates(): ExchangeRateCache | null {
       return cache
     }
 
-    // Cache is expired, remove it
     localStorage.removeItem(CACHE_KEY)
     return null
   } catch (error) {
@@ -115,9 +104,6 @@ function getCachedRates(): ExchangeRateCache | null {
   }
 }
 
-/**
- * Save exchange rates to localStorage cache
- */
 function cacheRates(
   rates: Record<string, Record<string, number>>,
   baseCurrency: string,
@@ -137,16 +123,12 @@ function cacheRates(
   }
 }
 
-/**
- * Fetch exchange rates from API for a specific base currency
- */
 async function fetchExchangeRatesFromAPI(
   baseCurrency: string,
 ): Promise<Record<string, number> | null> {
   try {
     const apiKey = process.env.NEXT_PUBLIC_EXCHANGE_RATE_API_KEY
 
-    // Construct URL based on whether we have an API key
     const url = apiKey
       ? `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${baseCurrency}`
       : `https://open.er-api.com/v6/latest/${baseCurrency}`
@@ -161,7 +143,7 @@ async function fetchExchangeRatesFromAPI(
       headers: {
         Accept: 'application/json',
       },
-      // Add timeout to prevent hanging requests
+
       signal: AbortSignal.timeout(TIMEOUTS.exchangeRateApi),
     })
 
@@ -180,7 +162,6 @@ async function fetchExchangeRatesFromAPI(
 
     const data = await response.json()
 
-    // Both open access and paid tiers use v6 format with 'rates' field
     if (data.result === 'success' && data.rates) {
       return data.rates
     } else {
@@ -199,20 +180,15 @@ async function fetchExchangeRatesFromAPI(
   }
 }
 
-/**
- * Build complete exchange rate matrix from multiple base currencies
- */
 async function buildExchangeRateMatrix(): Promise<
   Record<string, Record<string, number>>
 > {
   const matrix: Record<string, Record<string, number>> = {}
 
-  // Try to fetch rates for each currency as base
   for (const baseCurrency of API_CURRENCIES) {
     const rates = await fetchExchangeRatesFromAPI(baseCurrency)
 
     if (rates) {
-      // Filter to only include our supported currencies
       const filteredRates: Record<string, number> = {}
       for (const currency of API_CURRENCIES) {
         if (rates[currency] !== undefined) {
@@ -220,34 +196,26 @@ async function buildExchangeRateMatrix(): Promise<
         }
       }
 
-      // Add OTHER currency (always 1:1 conversion)
       filteredRates.OTHER = 1
 
       matrix[baseCurrency] = filteredRates
     } else {
-      // Use fallback rates for this base currency
       matrix[baseCurrency] = FALLBACK_RATES[baseCurrency as SupportedCurrency]
     }
 
-    // Add small delay to avoid hitting rate limits
     await new Promise((resolve) =>
       setTimeout(resolve, EXCHANGE_RATE_CONFIG.apiCallDelay),
     )
   }
 
-  // Add OTHER currency conversions (always 1:1)
   matrix.OTHER = FALLBACK_RATES.OTHER
 
   return matrix
 }
 
-/**
- * Get current exchange rates with caching
- */
 export async function getExchangeRates(): Promise<
   Record<SupportedCurrency, Record<SupportedCurrency, number>>
 > {
-  // Check cache first
   const cached = getCachedRates()
   if (cached) {
     console.log('Using cached exchange rates from', cached.lastUpdated)
@@ -260,10 +228,8 @@ export async function getExchangeRates(): Promise<
   console.log('Fetching fresh exchange rates from API...')
 
   try {
-    // Fetch fresh rates
     const matrix = await buildExchangeRateMatrix()
 
-    // Cache the results
     cacheRates(matrix, 'multiple')
 
     return matrix as Record<
@@ -276,9 +242,6 @@ export async function getExchangeRates(): Promise<
   }
 }
 
-/**
- * Convert currency amount using cached exchange rates
- */
 export function convertCurrency(
   amount: number,
   fromCurrency: SupportedCurrency,
@@ -298,9 +261,6 @@ export function convertCurrency(
   return amount * rate
 }
 
-/**
- * Clear exchange rate cache (useful for testing or manual refresh)
- */
 export function clearExchangeRateCache(): void {
   try {
     if (typeof window !== 'undefined') {

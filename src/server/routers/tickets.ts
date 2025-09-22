@@ -1,8 +1,3 @@
-/**
- * tRPC Router for Ticket Management
- * Handles ticket target configuration and capacity settings
- */
-
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
@@ -27,9 +22,6 @@ import {
 import { fetchEventTickets, fetchOrderPaymentDetails } from '@/lib/tickets/api'
 import type { DiscountUsageStats } from '@/lib/discounts/types'
 
-/**
- * Update ticket capacity for a conference
- */
 async function updateTicketCapacity(conferenceId: string, capacity: number) {
   try {
     const result = await clientWrite
@@ -47,9 +39,6 @@ async function updateTicketCapacity(conferenceId: string, capacity: number) {
   }
 }
 
-/**
- * Update ticket target configuration for a conference
- */
 async function updateTicketTargets(
   conferenceId: string,
   targets: {
@@ -79,9 +68,6 @@ async function updateTicketTargets(
   }
 }
 
-/**
- * Get current ticket settings for a conference
- */
 async function getTicketSettings(conferenceId: string) {
   try {
     const query = `*[_type == "conference" && _id == $conferenceId][0]{
@@ -113,9 +99,6 @@ async function getTicketSettings(conferenceId: string) {
 }
 
 export const ticketsRouter = router({
-  /**
-   * Get ticket settings for a conference
-   */
   getSettings: adminProcedure
     .input(ConferenceIdSchema)
     .query(async ({ input }) => {
@@ -123,25 +106,19 @@ export const ticketsRouter = router({
       return getTicketSettings(conferenceId)
     }),
 
-  /**
-   * Update ticket settings (capacity and/or targets)
-   */
   updateSettings: adminProcedure
     .input(TicketSettingsUpdateSchema)
     .mutation(async ({ input }) => {
       const { conferenceId, ticket_capacity, ticket_targets } = input
 
-      // Validate conference exists
       await getTicketSettings(conferenceId)
 
       const updates: Record<string, unknown> = {}
 
-      // Update capacity if provided
       if (ticket_capacity !== undefined) {
         updates.ticket_capacity = ticket_capacity
       }
 
-      // Update targets if provided
       if (ticket_targets !== undefined) {
         updates.ticket_targets = ticket_targets
       }
@@ -159,7 +136,6 @@ export const ticketsRouter = router({
           .set(updates)
           .commit()
 
-        // Revalidate the admin tickets page to refresh server-side data
         revalidatePath('/admin/tickets')
 
         return {
@@ -175,9 +151,6 @@ export const ticketsRouter = router({
       }
     }),
 
-  /**
-   * Update only ticket capacity
-   */
   updateCapacity: adminProcedure
     .input(
       ConferenceIdSchema.extend({
@@ -188,15 +161,11 @@ export const ticketsRouter = router({
       const { conferenceId, capacity } = input
       const result = await updateTicketCapacity(conferenceId, capacity)
 
-      // Revalidate the admin tickets page to refresh server-side data
       revalidatePath('/admin/tickets')
 
       return result
     }),
 
-  /**
-   * Update only ticket targets
-   */
   updateTargets: adminProcedure
     .input(
       ConferenceIdSchema.extend({
@@ -207,15 +176,11 @@ export const ticketsRouter = router({
       const { conferenceId, targets } = input
       const result = await updateTicketTargets(conferenceId, targets)
 
-      // Revalidate the admin tickets page to refresh server-side data
       revalidatePath('/admin/tickets')
 
       return result
     }),
 
-  /**
-   * Quick enable/disable target tracking
-   */
   toggleTargetTracking: adminProcedure
     .input(
       ConferenceIdSchema.extend({
@@ -225,11 +190,9 @@ export const ticketsRouter = router({
     .mutation(async ({ input }) => {
       const { conferenceId, enabled } = input
 
-      // Get current settings
       const conference = await getTicketSettings(conferenceId)
       const currentTargets = conference.ticket_targets || {}
 
-      // Update only the enabled flag
       const updatedTargets = {
         ...currentTargets,
         enabled,
@@ -237,18 +200,13 @@ export const ticketsRouter = router({
 
       const result = await updateTicketTargets(conferenceId, updatedTargets)
 
-      // Revalidate the admin tickets page to refresh server-side data
       revalidatePath('/admin/tickets')
 
       return result
     }),
 
-  /**
-   * Get available ticket types for an event
-   */
   getTicketTypes: adminProcedure.query(async () => {
     try {
-      // Get conference data to access checkin event ID
       const { conference, error: conferenceError } =
         await getConferenceForCurrentDomain()
 
@@ -280,9 +238,6 @@ export const ticketsRouter = router({
     }
   }),
 
-  /**
-   * Get discount codes for an event
-   */
   getDiscountCodes: adminProcedure
     .input(GetDiscountsSchema)
     .query(async ({ input }) => {
@@ -304,12 +259,8 @@ export const ticketsRouter = router({
       }
     }),
 
-  /**
-   * Get all discount codes with usage statistics
-   */
   getDiscountCodesWithUsage: adminProcedure.query(async () => {
     try {
-      // Get conference data to access checkin credentials
       const { conference, error: conferenceError } =
         await getConferenceForCurrentDomain()
 
@@ -324,15 +275,12 @@ export const ticketsRouter = router({
         })
       }
 
-      // Use conference's checkin event ID
       const customerId = conference.checkin_customer_id
       const eventId = conference.checkin_event_id
 
-      // Always fetch discount codes
       const eventData = await getEventDiscounts(eventId)
       const discounts = eventData.discounts
 
-      // Try to fetch usage statistics using proper customer_id and event_id from conference
       let usageStats: DiscountUsageStats = {}
       let totalTickets = 0
 
@@ -342,10 +290,8 @@ export const ticketsRouter = router({
         totalTickets = tickets.length
       } catch (ticketsError) {
         console.warn('Could not fetch tickets for usage stats:', ticketsError)
-        // Continue without usage stats - we'll show what we can from the discount definitions
       }
 
-      // Merge discount definitions with usage data (if available)
       const discountsWithUsage = discounts.map((discount) => ({
         ...discount,
         actualUsage: usageStats[discount.triggerValue?.toUpperCase() || ''] || {
@@ -381,9 +327,6 @@ export const ticketsRouter = router({
     }
   }),
 
-  /**
-   * Create a new discount code
-   */
   createDiscountCode: adminProcedure
     .input(CreateDiscountCodeSchema)
     .mutation(async ({ input }) => {
@@ -397,7 +340,6 @@ export const ticketsRouter = router({
       } = input
 
       try {
-        // Check if discount code already exists
         const eventData = await getEventDiscounts(eventId)
         const codeExists = eventData.discounts.some(
           (discount) => discount.triggerValue === discountCode,
@@ -410,17 +352,15 @@ export const ticketsRouter = router({
           })
         }
 
-        // Create the discount code
         const result = await createEventDiscount({
           eventId,
           discountCode,
           numberOfTickets,
-          ticketTypes: selectedTicketTypes || [], // Use selected ticket types or empty array for all types
+          ticketTypes: selectedTicketTypes || [],
           discountType: 'percentage',
-          discountValue: 100, // 100% discount for sponsor tickets
+          discountValue: 100,
         })
 
-        // Revalidate the discount codes page
         revalidatePath('/admin/tickets/discount')
 
         return {
@@ -444,9 +384,6 @@ export const ticketsRouter = router({
       }
     }),
 
-  /**
-   * Delete a discount code (placeholder - not supported by Checkin.no API)
-   */
   deleteDiscountCode: adminProcedure
     .input(DeleteDiscountCodeSchema)
     .mutation(async ({ input }) => {
@@ -481,9 +418,6 @@ export const ticketsRouter = router({
       }
     }),
 
-  /**
-   * Get payment details for a specific order
-   */
   getPaymentDetails: adminProcedure
     .input(GetPaymentDetailsSchema)
     .query(async ({ input }) => {

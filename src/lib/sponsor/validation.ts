@@ -11,7 +11,6 @@ export function validateSponsorTier(
 ): ValidationError[] {
   const errors: ValidationError[] = []
 
-  // Validate title
   if (!data.title || data.title.trim().length === 0) {
     errors.push({ field: 'title', message: 'Title is required' })
   } else if (data.title.length > 100) {
@@ -21,7 +20,6 @@ export function validateSponsorTier(
     })
   }
 
-  // Validate tagline
   if (!data.tagline || data.tagline.trim().length === 0) {
     errors.push({ field: 'tagline', message: 'Tagline is required' })
   } else if (data.tagline.length > 200) {
@@ -31,7 +29,6 @@ export function validateSponsorTier(
     })
   }
 
-  // Validate tier_type
   if (!data.tier_type || !['standard', 'special'].includes(data.tier_type)) {
     errors.push({
       field: 'tier_type',
@@ -39,7 +36,6 @@ export function validateSponsorTier(
     })
   }
 
-  // Validate price (required for standard sponsors)
   if (data.tier_type === 'standard') {
     if (!data.price || data.price.length === 0) {
       errors.push({
@@ -67,7 +63,6 @@ export function validateSponsorTier(
     }
   }
 
-  // Validate perks (required for standard sponsors, optional for special)
   if (data.tier_type === 'standard') {
     if (!data.perks || data.perks.length === 0) {
       errors.push({
@@ -91,7 +86,6 @@ export function validateSponsorTier(
       })
     }
   } else if (data.perks && data.perks.length > 0) {
-    // Optional validation for special sponsors
     data.perks.forEach((perk, index) => {
       if (perk.label && perk.label.trim().length === 0) {
         errors.push({
@@ -108,7 +102,6 @@ export function validateSponsorTier(
     })
   }
 
-  // Validate conference reference for new sponsor tiers
   if (
     'conference' in data &&
     (!data.conference || data.conference.trim().length === 0)
@@ -125,7 +118,6 @@ export function validateSponsorTier(
 export function validateSponsor(data: SponsorInput): ValidationError[] {
   const errors: ValidationError[] = []
 
-  // Validate name
   if (!data.name || data.name.trim().length === 0) {
     errors.push({ field: 'name', message: 'Name is required' })
   } else if (data.name.length > 100) {
@@ -135,7 +127,6 @@ export function validateSponsor(data: SponsorInput): ValidationError[] {
     })
   }
 
-  // Validate website
   if (!data.website || data.website.trim().length === 0) {
     errors.push({ field: 'website', message: 'Website is required' })
   } else {
@@ -146,14 +137,12 @@ export function validateSponsor(data: SponsorInput): ValidationError[] {
     }
   }
 
-  // Validate logo (SVG content)
   if (!data.logo || data.logo.trim().length === 0) {
     errors.push({ field: 'logo', message: 'Logo is required' })
   } else if (!isSvg(data.logo)) {
     errors.push({ field: 'logo', message: 'Logo must be valid SVG content' })
   }
 
-  // Validate contact persons (optional)
   if (data.contact_persons) {
     data.contact_persons.forEach((contact, index) => {
       if (!contact.name || contact.name.trim().length === 0) {
@@ -168,7 +157,6 @@ export function validateSponsor(data: SponsorInput): ValidationError[] {
           message: 'Contact person email is required',
         })
       } else {
-        // Simple email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(contact.email)) {
           errors.push({
@@ -180,7 +168,6 @@ export function validateSponsor(data: SponsorInput): ValidationError[] {
     })
   }
 
-  // Validate billing info (optional)
   if (data.billing) {
     if (!data.billing.email || data.billing.email.trim().length === 0) {
       errors.push({
@@ -188,7 +175,6 @@ export function validateSponsor(data: SponsorInput): ValidationError[] {
         message: 'Billing email is required when billing info is provided',
       })
     } else {
-      // Simple email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(data.billing.email)) {
         errors.push({

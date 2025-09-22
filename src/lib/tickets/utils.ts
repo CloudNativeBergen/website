@@ -1,7 +1,3 @@
-/**
- * Business logic utilities for ticket analysis
- */
-
 import type { EventTicket } from './types'
 
 export interface CategoryStat {

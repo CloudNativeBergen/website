@@ -1,36 +1,31 @@
 import React from 'react'
 
 export interface StatCardProps {
-  /** The main value to display (number, string, or formatted currency) */
   value: string | number
-  /** The label describing what this stat represents */
+
   label: string
-  /** Optional color variant for the value text */
+
   color?: 'blue' | 'green' | 'purple' | 'slate' | 'indigo'
-  /** Optional icon to display next to the value */
+
   icon?: React.ReactNode
 }
 
 export interface AdminPageHeaderProps {
-  /** The main icon for the page (from Heroicons) */
   icon: React.ReactNode
-  /** The main page title */
+
   title: string
-  /** Description text with context about what this page manages */
+
   description: string | React.ReactNode
-  /** Conference title or other highlighted context */
+
   contextHighlight?: string
-  /** Array of stat cards to display */
+
   stats: StatCardProps[]
-  /** Optional action buttons/links to display on the right side */
+
   actions?: React.ReactNode
-  /** Optional additional content to render below the stats */
+
   children?: React.ReactNode
 }
 
-/**
- * Get Tailwind classes for stat card value colors
- */
 function getValueColorClasses(color: StatCardProps['color'] = 'slate') {
   switch (color) {
     case 'blue':
@@ -47,9 +42,6 @@ function getValueColorClasses(color: StatCardProps['color'] = 'slate') {
   }
 }
 
-/**
- * Individual stat card component
- */
 function StatCard({ value, label, color = 'slate', icon }: StatCardProps) {
   const valueColorClasses = getValueColorClasses(color)
 
@@ -68,16 +60,6 @@ function StatCard({ value, label, color = 'slate', icon }: StatCardProps) {
   )
 }
 
-/**
- * Reusable admin page header component with responsive stats grid
- *
- * Features:
- * - Icon, title, and description
- * - Responsive stats grid (1-6 columns)
- * - Mobile-friendly layout
- * - Customizable stat card colors
- * - Support for additional content via children
- */
 export function AdminPageHeader({
   icon,
   title,
@@ -87,7 +69,6 @@ export function AdminPageHeader({
   actions,
   children,
 }: AdminPageHeaderProps) {
-  // Determine grid columns based on number of stats
   const getGridCols = (statCount: number) => {
     if (statCount <= 1) return 'grid-cols-2'
     if (statCount <= 2) return 'grid-cols-2 sm:grid-cols-3'
@@ -95,23 +76,20 @@ export function AdminPageHeader({
     if (statCount <= 4) return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
     if (statCount <= 6)
       return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
-    // For more than 6 stats, use responsive layout
+
     return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
   }
 
   return (
     <div className="pb-6">
-      {/* Header section */}
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
-          {/* Icon - responsive sizing */}
           <div className="mt-1 flex-shrink-0">
             <div className="h-6 w-6 text-brand-cloud-blue sm:h-8 sm:w-8 dark:text-blue-300">
               {icon}
             </div>
           </div>
 
-          {/* Title and description */}
           <div className="min-w-0 flex-1">
             <h1 className="font-space-grotesk text-xl leading-6 font-bold text-brand-slate-gray sm:text-2xl sm:leading-7 sm:tracking-tight lg:text-3xl lg:leading-8 dark:text-white">
               {title}
@@ -136,7 +114,6 @@ export function AdminPageHeader({
           </div>
         </div>
 
-        {/* Action buttons/links on the right */}
         {actions && (
           <div className="ml-4 flex-shrink-0">
             <div className="flex flex-col gap-2 sm:flex-row">{actions}</div>
@@ -144,7 +121,6 @@ export function AdminPageHeader({
         )}
       </div>
 
-      {/* Stats grid */}
       {stats.length > 0 && (
         <div
           className={`font-inter mt-4 grid sm:mt-6 ${getGridCols(stats.length)} gap-3`}
@@ -161,7 +137,6 @@ export function AdminPageHeader({
         </div>
       )}
 
-      {/* Additional content */}
       {children}
     </div>
   )

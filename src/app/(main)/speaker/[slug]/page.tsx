@@ -24,7 +24,6 @@ type Props = {
   params: Promise<{ slug: string }>
 }
 
-// Utility function to convert PortableText to plain text for metadata
 function portableTextToString(value: PortableTextBlock[]): string {
   return value
     .map((block) =>
@@ -37,7 +36,7 @@ function portableTextToString(value: PortableTextBlock[]): string {
 
 export async function generateMetadata({ params }: Props) {
   const resolvedParams = await params
-  // URL-decode the slug to handle Norwegian characters (æ, ø, å)
+
   const decodedSlug = decodeURIComponent(resolvedParams.slug)
   const { conference } = await getConferenceForCurrentDomain()
   const { speaker, talks, err } = await getPublicSpeaker(
@@ -55,7 +54,6 @@ export async function generateMetadata({ params }: Props) {
 
   const title = `${speaker.name} - ${talks[0].title}`
 
-  // Extract description from the first talk's PortableText description
   let description = ''
   if (talks[0].description) {
     if (typeof talks[0].description === 'string') {
@@ -63,7 +61,7 @@ export async function generateMetadata({ params }: Props) {
     } else {
       description = portableTextToString(talks[0].description)
     }
-    // Truncate description for metadata (ideal length is 150-160 characters)
+
     if (description.length > 160) {
       description = description.substring(0, 157) + '...'
     }
@@ -86,7 +84,7 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function Profile({ params }: Props) {
   const resolvedParams = await params
-  // URL-decode the slug to handle Norwegian characters (æ, ø, å)
+
   const decodedSlug = decodeURIComponent(resolvedParams.slug)
   const { conference } = await getConferenceForCurrentDomain()
   const { speaker, talks, err } = await getPublicSpeaker(
@@ -94,7 +92,6 @@ export default async function Profile({ params }: Props) {
     decodedSlug,
   )
 
-  // Handle errors
   if (err) {
     console.error('Error loading speaker:', err)
   }
@@ -126,17 +123,14 @@ export default async function Profile({ params }: Props) {
       <Container className="relative">
         <div className="mx-auto max-w-7xl">
           <div className="grid grid-cols-1 items-start gap-12 lg:grid-cols-3">
-            {/* Speaker Image & Basic Info */}
             <div className="lg:col-span-1">
               <div className="sticky top-8 z-10">
-                {/* Back Link - Moved to top of sidebar */}
                 <div className="mb-6">
                   <BackLink fallbackUrl="/speaker" variant="link">
                     Back to Speakers
                   </BackLink>
                 </div>
 
-                {/* Speaker Image */}
                 <div className="mb-6 flex justify-center lg:justify-start">
                   {speaker.image ? (
                     <img
@@ -155,7 +149,6 @@ export default async function Profile({ params }: Props) {
                   )}
                 </div>
 
-                {/* Local Speaker Flag */}
                 {speaker.flags?.includes(Flags.localSpeaker) && (
                   <div className="mb-6 flex justify-center lg:justify-start">
                     <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
@@ -164,7 +157,6 @@ export default async function Profile({ params }: Props) {
                   </div>
                 )}
 
-                {/* Social Links */}
                 {speaker.links && speaker.links.length > 0 && (
                   <div className="mb-6 flex flex-wrap justify-center gap-4 lg:justify-start">
                     {speaker.links.map((link, index) => (
@@ -184,7 +176,6 @@ export default async function Profile({ params }: Props) {
                   </div>
                 )}
 
-                {/* Bluesky Feed - Desktop */}
                 {(() => {
                   const blueskyLink = hasBlueskySocial(speaker.links)
                   return blueskyLink ? (
@@ -196,7 +187,6 @@ export default async function Profile({ params }: Props) {
                 })()}
               </div>
 
-              {/* Mobile Bluesky Feed - Show one latest post underneath speaker image on mobile */}
               {(() => {
                 const blueskyLink = hasBlueskySocial(speaker.links)
                 return blueskyLink ? (
@@ -211,9 +201,7 @@ export default async function Profile({ params }: Props) {
               })()}
             </div>
 
-            {/* Speaker Content */}
             <div className="lg:col-span-2">
-              {/* Name & Title */}
               <div className="mb-8 text-center lg:text-left">
                 <h1 className="font-space-grotesk mb-2 text-4xl font-bold text-brand-slate-gray sm:text-5xl dark:text-white">
                   {speaker.name}
@@ -225,7 +213,6 @@ export default async function Profile({ params }: Props) {
                 )}
               </div>
 
-              {/* Bio */}
               {speaker.bio && (
                 <div className="mb-8 rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
                   <h2 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-white">
@@ -233,7 +220,6 @@ export default async function Profile({ params }: Props) {
                   </h2>
                   <ShowMore className="font-inter prose prose-lg max-w-none text-gray-700 dark:text-gray-300">
                     {typeof speaker.bio === 'string' ? (
-                      // Split on new lines and render each as a paragraph
                       speaker.bio.split('\n').map(
                         (paragraph, index) =>
                           paragraph.trim() && (
@@ -249,7 +235,6 @@ export default async function Profile({ params }: Props) {
                 </div>
               )}
 
-              {/* Talks Section */}
               {talks && talks.length > 0 && (
                 <div className="mb-8">
                   <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
@@ -261,14 +246,12 @@ export default async function Profile({ params }: Props) {
                         key={talk._id}
                         className="rounded-xl bg-white p-6 shadow-sm transition-all hover:shadow-md dark:bg-gray-800 dark:hover:shadow-lg"
                       >
-                        {/* Talk Header */}
                         <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
                           <div className="flex-1">
                             <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-brand-slate-gray dark:text-white">
                               {talk.title}
                             </h3>
 
-                            {/* Co-speakers Section - Only show if there are multiple speakers */}
                             {talk.speakers && talk.speakers.length > 1 && (
                               <div className="mb-3 flex items-center gap-3">
                                 <SpeakerAvatars
@@ -291,19 +274,16 @@ export default async function Profile({ params }: Props) {
                             )}
 
                             <div className="flex flex-wrap gap-3">
-                              {/* Format */}
                               {talk.format && (
                                 <span className="inline-flex items-center rounded-full bg-brand-cloud-blue/10 px-3 py-1 text-sm font-medium text-brand-cloud-blue dark:bg-blue-900/30 dark:text-blue-400">
                                   {formats.get(talk.format)}
                                 </span>
                               )}
-                              {/* Level */}
                               {talk.level && (
                                 <span className="inline-flex items-center rounded-full bg-brand-fresh-green/10 px-3 py-1 text-sm font-medium text-brand-fresh-green dark:bg-green-900/30 dark:text-green-400">
                                   {levels.get(talk.level)}
                                 </span>
                               )}
-                              {/* Language */}
                               {talk.language && (
                                 <span className="inline-flex items-center rounded-full bg-accent-purple/10 px-3 py-1 text-sm font-medium text-accent-purple dark:bg-purple-900/30 dark:text-purple-400">
                                   {languages.get(talk.language)}
@@ -311,11 +291,7 @@ export default async function Profile({ params }: Props) {
                               )}
                             </div>
                           </div>
-
-                          {/* Schedule Info - Only show if available */}
                         </div>
-
-                        {/* Talk Description */}
                         {talk.description && (
                           <div className="mb-4">
                             <div className="font-inter prose prose-gray dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 [&>p]:mb-4 [&>p]:leading-relaxed">
@@ -327,12 +303,9 @@ export default async function Profile({ params }: Props) {
                             </div>
                           </div>
                         )}
-
-                        {/* Topics */}
                         {talk.topics && talk.topics.length > 0 && (
                           <div className="flex flex-wrap gap-2">
                             {talk.topics.map((topic, index) => {
-                              // Type guard to check if topic is a Topic object (not a Reference)
                               const isTopicObject = (t: unknown): t is Topic =>
                                 t !== null &&
                                 typeof t === 'object' &&

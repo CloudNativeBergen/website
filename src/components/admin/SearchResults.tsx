@@ -26,7 +26,6 @@ export function SearchResults({
 }: SearchResultsProps) {
   const selectedRef = useRef<HTMLButtonElement>(null)
 
-  // Scroll selected item into view
   useEffect(() => {
     if (selectedIndex >= 0 && selectedRef.current) {
       selectedRef.current.scrollIntoView({

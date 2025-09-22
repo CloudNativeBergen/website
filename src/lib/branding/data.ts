@@ -1,8 +1,3 @@
-/**
- * Brand data definitions for Cloud Native Day Bergen
- * Contains color palette and typography system data
- */
-
 export interface ColorDefinition {
   name: string
   value: string
@@ -20,7 +15,6 @@ export interface TypographyDefinition {
   example: string
 }
 
-// Color palette data
 export const colorPalette = {
   primary: [
     {
@@ -116,7 +110,6 @@ export const colorPalette = {
   ] as ColorDefinition[],
 } as const
 
-// Typography data
 export const typography = {
   primary: [
     {

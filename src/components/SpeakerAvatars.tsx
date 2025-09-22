@@ -38,16 +38,12 @@ const sizeClasses = {
   },
 }
 
-// Image dimensions for retina/high DPI screens (2x the display size)
 const imageDimensions = {
   sm: { width: 64, height: 64 },
   md: { width: 96, height: 96 },
   lg: { width: 128, height: 128 },
 }
 
-/**
- * Component to display multiple speakers with overlapping circular profile images
- */
 export function SpeakerAvatars({
   speakers,
   size = 'md',
@@ -71,7 +67,6 @@ export function SpeakerAvatars({
   const visibleSpeakers = populatedSpeakers.slice(0, maxVisible)
   const remainingCount = populatedSpeakers.length - maxVisible
 
-  // Define spread distances for each size
   const spreadDistances = {
     sm: [16, 24, 32, 40],
     md: [24, 36, 48, 60],
@@ -91,7 +86,6 @@ export function SpeakerAvatars({
       }
     >
       {visibleSpeakers.map((speaker, index) => {
-        // Generate stable key and classes
         const speakerId = speaker._id || `speaker-${index}`
         const isFirstSpeaker = index === 0
         const translateClass =
@@ -129,7 +123,7 @@ export function SpeakerAvatars({
             ) : (
               <MissingAvatar
                 name={speaker.name}
-                size={imageDimensions[size].width / 2} // Use half of the 2x retina dimension for display size
+                size={imageDimensions[size].width / 2}
                 className="absolute inset-0 rounded-full"
                 textSizeClass={classes.text}
               />
@@ -170,9 +164,6 @@ export function SpeakerAvatars({
   )
 }
 
-/**
- * Component to display speaker names alongside avatars
- */
 export function SpeakerAvatarsWithNames({
   speakers,
   size = 'md',

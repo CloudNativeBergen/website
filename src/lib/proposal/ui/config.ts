@@ -6,33 +6,24 @@ import {
 } from '@heroicons/react/24/solid'
 import { Format } from '../types'
 
-/**
- * Comprehensive format configuration for visual components
- * Used by TalkPromotion and SpeakerPromotion components
- */
 export interface FormatConfig {
-  /** Display label for the format */
   label: string
-  /** Duration string for display */
+
   duration: string
-  /** Icon component for the format */
+
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
-  /** Text color class for the format */
+
   color: string
-  /** Background color class for the format */
+
   bgColor: string
-  /** Border color class for the format */
+
   borderColor: string
-  /** Gradient classes for backgrounds */
+
   gradient: string
-  /** Accent color for themed components */
+
   accentColor: string
 }
 
-/**
- * Complete format configuration mapping
- * Provides consistent styling across all components that display talk formats
- */
 export const formatConfig: Record<Format, FormatConfig> = {
   [Format.lightning_10]: {
     label: 'Lightning',
@@ -106,17 +97,10 @@ export const formatConfig: Record<Format, FormatConfig> = {
   },
 }
 
-/**
- * Helper function to get format configuration by format enum
- */
 export function getFormatConfig(format: Format): FormatConfig {
   return formatConfig[format]
 }
 
-/**
- * Helper function to get just the visual properties for a format
- * Useful when you only need display properties
- */
 export function getFormatDisplay(format: Format) {
   const config = formatConfig[format]
   return {
@@ -126,10 +110,6 @@ export function getFormatDisplay(format: Format) {
   }
 }
 
-/**
- * Helper function to get just the color/styling properties for a format
- * Useful for theming components
- */
 export function getFormatStyling(format: Format) {
   const config = formatConfig[format]
   return {

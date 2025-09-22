@@ -26,7 +26,6 @@ export function ProposalsPageClient({
 
   return (
     <div className="flex h-full">
-      {/* Main content area */}
       <div className={`flex-1 ${selectedProposal ? 'lg:mr-96' : ''}`}>
         <ProposalsList
           proposals={proposals}
@@ -38,7 +37,6 @@ export function ProposalsPageClient({
         />
       </div>
 
-      {/* Preview panel */}
       {selectedProposal && (
         <div className="fixed inset-y-0 right-0 hidden w-96 overflow-y-auto border-l border-gray-200 bg-white lg:mt-16 lg:block dark:border-gray-700 dark:bg-gray-900">
           <ProposalPreview

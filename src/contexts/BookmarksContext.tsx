@@ -42,7 +42,6 @@ export function BookmarksProvider({ children }: BookmarksProviderProps) {
   const [bookmarks, setBookmarks] = useState<BookmarkedTalk[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
 
-  // Load bookmarks from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -58,7 +57,6 @@ export function BookmarksProvider({ children }: BookmarksProviderProps) {
     }
   }, [])
 
-  // Save bookmarks to localStorage whenever they change
   useEffect(() => {
     if (isLoaded && typeof window !== 'undefined') {
       try {
@@ -76,7 +74,7 @@ export function BookmarksProvider({ children }: BookmarksProviderProps) {
   const addBookmark = (talk: BookmarkedTalk) => {
     setBookmarks((prev) => {
       if (prev.some((bookmark) => bookmark.talkId === talk.talkId)) {
-        return prev // Already bookmarked
+        return prev
       }
       return [...prev, talk]
     })

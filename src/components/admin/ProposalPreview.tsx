@@ -38,7 +38,6 @@ interface ProposalPreviewProps {
   onClose: () => void
 }
 
-// Helper functions to format data
 function formatStatus(status: Status): string {
   return statuses.get(status) || status
 }
@@ -75,7 +74,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
       speaker?.flags?.includes(Flags.requiresTravelFunding),
     ) || false
 
-  // Scroll to top when proposal changes
   useEffect(() => {
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0
@@ -84,7 +82,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Proposal Preview
@@ -97,13 +94,11 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
         </button>
       </div>
 
-      {/* Content */}
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto px-6 py-6"
       >
         <div className="space-y-6">
-          {/* Speaker Info */}
           {proposal.speakers &&
           Array.isArray(proposal.speakers) &&
           proposal.speakers.length > 0 ? (
@@ -135,14 +130,12 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             </div>
           )}
 
-          {/* Title */}
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-white">
               {proposal.title}
             </h1>
           </div>
 
-          {/* Status Badge */}
           <div>
             <span
               className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
@@ -161,7 +154,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             </span>
           </div>
 
-          {/* Review Summary */}
           {reviewCount > 0 && (
             <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
               <h4 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">
@@ -193,7 +185,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                 </span>
               </div>
 
-              {/* Individual score breakdown */}
               {proposal.reviews && proposal.reviews.length > 0 && (
                 <div className="mt-3 space-y-2">
                   <div className="text-xs text-gray-600 dark:text-gray-400">
@@ -248,7 +239,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             </div>
           )}
 
-          {/* Details */}
           <div className="grid grid-cols-1 gap-4 text-sm">
             <div className="flex items-center space-x-2">
               <ClockIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
@@ -301,7 +291,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             )}
           </div>
 
-          {/* Description */}
           {proposal.description && (
             <div>
               <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
@@ -313,7 +302,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
             </div>
           )}
 
-          {/* Topics */}
           {proposal.topics && proposal.topics.length > 0 && (
             <div>
               <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
@@ -321,7 +309,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
               </h4>
               <div className="flex flex-wrap gap-2">
                 {proposal.topics.map((topic) => {
-                  // Handle both Topic objects and References
                   const topicTitle =
                     typeof topic === 'object' && 'title' in topic
                       ? topic.title
@@ -350,7 +337,6 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
         </div>
       </div>
 
-      {/* Footer Actions */}
       <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-700">
         <Link
           href={`/admin/proposals/${proposal._id}`}

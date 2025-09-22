@@ -1,7 +1,3 @@
-/**
- * Performance monitoring utilities for schedule components
- */
-
 import React from 'react'
 
 interface PerformanceMetrics {
@@ -39,7 +35,6 @@ class SchedulePerformanceMonitor {
 
     this.timers.delete(key)
 
-    // Log slow operations in development
     if (process.env.NODE_ENV === 'development' && duration > 100) {
       console.warn(
         `Slow ${operationType} in ${componentName}: ${duration.toFixed(2)}ms`,
@@ -77,10 +72,8 @@ class SchedulePerformanceMonitor {
   }
 }
 
-// Singleton instance
 export const performanceMonitor = new SchedulePerformanceMonitor()
 
-// React hook for performance monitoring
 export function usePerformanceTimer(
   componentName: string,
   operationType: string = 'render',
@@ -94,7 +87,6 @@ export function usePerformanceTimer(
   }
 }
 
-// HOC for automatic performance monitoring
 export function withPerformanceMonitoring<T extends object>(
   Component: React.ComponentType<T>,
   componentName: string,

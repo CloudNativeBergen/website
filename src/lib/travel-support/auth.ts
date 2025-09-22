@@ -1,7 +1,3 @@
-/**
- * Authentication and Authorization helpers for Travel Support
- */
-
 import { TRPCError } from '@trpc/server'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { Flags } from '@/lib/speaker/types'
@@ -13,9 +9,6 @@ import {
 } from './types'
 import { AppEnvironment } from '@/lib/environment/config'
 
-/**
- * Check if a speaker is eligible for travel funding
- */
 export async function checkSpeakerEligibility(speakerId: string): Promise<{
   isEligible: boolean
   error?: Error
@@ -27,12 +20,10 @@ export async function checkSpeakerEligibility(speakerId: string): Promise<{
       return { isEligible: false, error: err || new Error('Speaker not found') }
     }
 
-    // In test mode, all speakers are eligible for travel funding
     if (AppEnvironment.isTestMode) {
       return { isEligible: true }
     }
 
-    // Check if speaker requires travel funding
     if (!speaker.flags?.includes(Flags.requiresTravelFunding)) {
       return {
         isEligible: false,
@@ -46,23 +37,14 @@ export async function checkSpeakerEligibility(speakerId: string): Promise<{
   }
 }
 
-/**
- * Check if travel support can be modified based on its current status
- */
 export function canModifyTravelSupport(status: TravelSupportStatus): boolean {
   return status === 'draft' || status === 'submitted'
 }
 
-/**
- * Check if expenses can be added/deleted based on travel support status
- */
 export function canAddExpenses(status: TravelSupportStatus): boolean {
   return status === 'draft'
 }
 
-/**
- * Verify travel support ownership and access permissions
- */
 export async function verifyTravelSupportOwnership(
   travelSupportId: string,
   speakerId: string,
@@ -93,9 +75,6 @@ export async function verifyTravelSupportOwnership(
   }
 }
 
-/**
- * Create a standardized authorization error
- */
 export function createAuthError(
   code: 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND',
   message: string,
@@ -108,9 +87,6 @@ export function createAuthError(
   })
 }
 
-/**
- * Audit logging interface for production-ready logging
- */
 interface AuditLogEntry {
   operation: string
   adminId: string
@@ -122,11 +98,6 @@ interface AuditLogEntry {
   ipAddress?: string
 }
 
-/**
- * Production-ready audit logging function
- * In development: logs to console
- * In production: should integrate with your logging service (e.g., DataDog, CloudWatch, etc.)
- */
 export function auditLog(
   operation: string,
   adminId: string,
@@ -143,23 +114,14 @@ export function auditLog(
     severity,
   }
 
-  // Development: log to console with structured format
   if (process.env.NODE_ENV === 'development') {
     console.log(`[AUDIT ${severity.toUpperCase()}]:`, logEntry)
     return
   }
 
-  // Production: integrate with your logging service
   // TODO: Replace with your production logging service
-  // Examples:
-  // - send to DataDog: datadogLogger.log(logEntry)
-  // - send to CloudWatch: cloudWatchLogger.log(logEntry)
-  // - send to Sentry: Sentry.addBreadcrumb(logEntry)
-  // - write to database: auditLogRepository.create(logEntry)
 
   try {
-    // For now, use structured console logging even in production
-    // This should be replaced with proper logging service integration
     console.log(
       JSON.stringify({
         type: 'audit_log',
@@ -167,7 +129,6 @@ export function auditLog(
       }),
     )
   } catch (error) {
-    // Fallback: if logging fails, don't throw error to avoid breaking application
     console.error(
       'Failed to write audit log:',
       error,
@@ -177,9 +138,6 @@ export function auditLog(
   }
 }
 
-/**
- * Enhanced authorization middleware for travel support operations
- */
 export async function authorizeTravelSupportOperation(
   travelSupportId: string,
   speakerId: string,
@@ -191,7 +149,6 @@ export async function authorizeTravelSupportOperation(
   error?: TRPCError
 }> {
   try {
-    // Verify travel support exists and check ownership
     const { travelSupport, hasAccess, error } =
       await verifyTravelSupportOwnership(
         travelSupportId,
@@ -220,10 +177,8 @@ export async function authorizeTravelSupportOperation(
       }
     }
 
-    // Operation-specific checks
     switch (operation) {
       case 'read':
-        // Any authorized user can read
         break
 
       case 'modify':
@@ -261,7 +216,6 @@ export async function authorizeTravelSupportOperation(
           }
         }
 
-        // Prevent admins from approving their own travel support requests
         if (travelSupport.speaker._id === speakerId) {
           return {
             authorized: false,

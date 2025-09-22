@@ -55,7 +55,6 @@ export default async function Submit({
     }
   }
 
-  // Always fetch the current user speaker for the form
   try {
     const { speaker: fetchedSpeaker, err } = await getSpeaker(
       session.speaker._id,
@@ -116,7 +115,6 @@ export default async function Submit({
         }
       }
     } else if (currentUserSpeaker) {
-      // For new proposals, use the current user speaker
       speaker = currentUserSpeaker
     }
   } catch (error) {

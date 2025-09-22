@@ -1,7 +1,3 @@
-/**
- * Centralized email exports
- */
-
 export { sendAcceptRejectNotification } from './notification'
 
 export {

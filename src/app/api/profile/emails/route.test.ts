@@ -142,7 +142,7 @@ describe('GET /api/profile/emails', () => {
 
         const body = await res.json()
         expect(body.emails).toHaveLength(1)
-        expect(body.emails[0].email).toBe('john@acme.com') // defined in __tests__/testdata/speakers.ts
+        expect(body.emails[0].email).toBe('john@acme.com')
       },
     })
   })
@@ -150,7 +150,6 @@ describe('GET /api/profile/emails', () => {
   it('should return default email if upstream request fails', async () => {
     nock('https://api.github.com').get('/user/emails').reply(500)
 
-    // Suppress console.error output for this test since we expect an error to be logged
     jest.spyOn(console, 'error').mockImplementation(() => {})
 
     await testApiHandler({
@@ -163,7 +162,7 @@ describe('GET /api/profile/emails', () => {
         expect(res.status).toBe(200)
         const body = await res.json()
         expect(body.emails).toHaveLength(1)
-        expect(body.emails[0].email).toBe('john@acme.com') // defined in __tests__/testdata/speakers.ts
+        expect(body.emails[0].email).toBe('john@acme.com')
       },
     })
   })

@@ -15,9 +15,6 @@ export function providerAccount(
   return `${provider}:${providerAccountId}`
 }
 
-/**
- * Generate a slug from a speaker's name, similar to the Sanity schema slugify function
- */
 function generateSlug(name: string): string {
   return name.toLowerCase().replace(/\s+/g, '-').slice(0, 96)
 }
@@ -80,7 +77,6 @@ export async function getOrCreateSpeaker(
     return { speaker: {} as Speaker, err }
   }
 
-  // Find speaker by provider
   const providerAccountId = providerAccount(
     account.provider,
     account.providerAccountId,
@@ -96,7 +92,6 @@ export async function getOrCreateSpeaker(
     return { speaker, err }
   }
 
-  // Find speaker by email
   // eslint-disable-next-line no-var
   var { speaker, err } = await findSpeakerByEmail(user.email)
   if (err) {
@@ -118,7 +113,6 @@ export async function getOrCreateSpeaker(
     return { speaker, err }
   }
 
-  // Create new speaker
   speaker = {
     _id: randomUUID(),
     email: user.email,
@@ -139,10 +133,9 @@ export async function getOrCreateSpeaker(
       },
     })
 
-    // Convert the created speaker to match our Speaker interface
     speaker = {
       ...createdSpeaker,
-      slug: slugValue, // Extract the slug value from the object
+      slug: slugValue,
     } as Speaker
   } catch (error) {
     err = error as Error
@@ -210,7 +203,6 @@ export async function getPublicSpeaker(
     err = error as Error
   }
 
-  // Handle case where no speaker is found
   if (!data || Object.keys(data).length === 0) {
     return {
       speaker: null,
@@ -238,12 +230,10 @@ export async function updateSpeaker(
   let updatedSpeaker: Speaker = {} as Speaker
 
   try {
-    // Exclude image field from speaker updates as it's handled separately
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { image, ...speakerWithoutImage } = speaker
     await clientWrite.patch(spekaerId).set(speakerWithoutImage).commit()
 
-    // Fetch the updated speaker with the correct image URL
     const { speaker: fetchedSpeaker, err: fetchErr } =
       await getSpeaker(spekaerId)
     if (fetchErr) {
@@ -274,12 +264,10 @@ export async function getSpeakers(
       : ''
     const statusFilter = statuses.map((status) => `"${status}"`).join(', ')
 
-    // Conference filter for proposals - optional based on parameter
     const proposalsConferenceFilter = includeProposalsFromOtherConferences
       ? ''
       : conferenceFilter
 
-    // Use references() function to check both old 'speaker' field and new 'speakers' array
     const query = groq`*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && status in [${statusFilter}] ${conferenceFilter}]) > 0] {
       ...,
       "slug": slug.current,

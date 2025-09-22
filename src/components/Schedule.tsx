@@ -132,7 +132,6 @@ function PlaceholderTimeSlot({
 }
 
 function YouTubeEmbed({ url }: { url: string }) {
-  // Extract video ID from YouTube URL
   const videoId = url.match(
     /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/,
   )?.[1]

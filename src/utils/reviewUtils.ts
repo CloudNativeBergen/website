@@ -37,5 +37,5 @@ export function getScoreColorClass(score: number): string {
   } else if (score >= 4) {
     return 'text-green-500'
   }
-  return 'text-gray-500' // Default color
+  return 'text-gray-500'
 }

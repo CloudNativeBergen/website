@@ -28,7 +28,6 @@ export function ProposalReviewPanel({
   const [proposalForAction, setProposalForAction] =
     useState<ProposalExisting | null>(null)
 
-  // Find current user's review
   const currentUserReview = currentUser
     ? reviews.find(
         (review) =>
@@ -39,7 +38,6 @@ export function ProposalReviewPanel({
     : undefined
 
   const handleReviewSubmit = (newReview: Review) => {
-    // Ensure the reviewer is set to the current user
     newReview.reviewer = currentUser!
 
     setReviews((prevReviews) => {
@@ -51,7 +49,6 @@ export function ProposalReviewPanel({
       )
 
       if (existingReviewIndex !== -1) {
-        // Update existing review
         const updatedReviews = [...prevReviews]
         updatedReviews[existingReviewIndex] = {
           ...prevReviews[existingReviewIndex],
@@ -61,7 +58,6 @@ export function ProposalReviewPanel({
         }
         return updatedReviews
       } else {
-        // Add new review
         return [
           ...prevReviews,
           {
@@ -75,11 +71,9 @@ export function ProposalReviewPanel({
   }
 
   const handleActionComplete = () => {
-    // Optionally refresh the page or update the UI
     window.location.reload()
   }
 
-  // Listen for action events from the compact buttons
   useEffect(() => {
     const handleProposalAction = (event: CustomEvent) => {
       if (event.detail.proposal._id === proposalId) {
@@ -103,10 +97,8 @@ export function ProposalReviewPanel({
     <>
       <div className="w-full lg:w-96 lg:flex-shrink-0 lg:overflow-y-auto">
         <div className="space-y-4 p-4 lg:p-4">
-          {/* Review Summary */}
           <ProposalReviewSummary reviews={reviews} />
 
-          {/* Review Form - only show if user is logged in */}
           {currentUser && (
             <ProposalReviewForm
               proposalId={proposalId}
@@ -115,7 +107,6 @@ export function ProposalReviewPanel({
             />
           )}
 
-          {/* Reviews List */}
           <ProposalReviewList
             reviews={reviews}
             currentUserId={currentUser?._id}
@@ -123,7 +114,6 @@ export function ProposalReviewPanel({
         </div>
       </div>
 
-      {/* Action Modal */}
       {proposalForAction && (
         <ProposalActionModal
           open={actionModalOpen}

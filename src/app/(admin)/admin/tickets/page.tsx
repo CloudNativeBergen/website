@@ -115,12 +115,6 @@ export default async function AdminTickets() {
     error = (err as Error).message
   }
 
-  // Separate paid and free tickets
-  const paidTickets = allTickets.filter((ticket) => parseFloat(ticket.sum) > 0)
-  const freeTickets = allTickets.filter(
-    (ticket) => parseFloat(ticket.sum) === 0,
-  )
-
   if (error) {
     return (
       <ErrorDisplay
@@ -131,11 +125,13 @@ export default async function AdminTickets() {
     )
   }
 
-  // Process analysis for both paid-only and all tickets
-  const paidAnalysis = await processTicketAnalysis(paidTickets, conference)
+  const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)
+  const freeTickets = allTickets.filter((t) => parseFloat(t.sum) === 0)
+
+  const paidOnlyAnalysis = await processTicketAnalysis(paidTickets, conference)
   const allTicketsAnalysis = await processTicketAnalysis(allTickets, conference)
 
-  const statistics = paidAnalysis?.statistics || {
+  const statistics = paidOnlyAnalysis?.statistics || {
     totalPaidTickets: paidTickets.length,
     totalRevenue: paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
     totalOrders: new Set(paidTickets.map((t) => t.order_id)).size,
@@ -195,14 +191,13 @@ export default async function AdminTickets() {
           ticket_targets: conference.ticket_targets,
         }}
         analysisData={{
-          paidAnalysis,
+          paidAnalysis: paidOnlyAnalysis,
           allTicketsAnalysis,
         }}
         defaultTargetConfig={DEFAULT_TARGET_CONFIG}
         defaultCapacity={DEFAULT_CAPACITY}
       />
 
-      {/* Breakdown by Ticket Type */}
       {categoryStats.length > 0 && (
         <div className="mt-8">
           <CollapsibleSection

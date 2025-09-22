@@ -1,8 +1,3 @@
-/**
- * Ticket visibility toggle control component
- * Used to switch between paid-only and all tickets view
- */
-
 'use client'
 
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'

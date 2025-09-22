@@ -23,12 +23,6 @@ const config = {
     }),
   ],
 
-  //pages: {
-  //  signIn: "/signin",
-  //  signOut: "/signout",
-  //  error: "/signin",
-  //},
-
   secret: process.env.AUTH_SECRET,
 
   session: {
@@ -36,7 +30,6 @@ const config = {
   },
 
   callbacks: {
-    // This is exposed to the client
     async session({ session, token }) {
       const speaker = token.speaker
       const account = token.account
@@ -54,12 +47,6 @@ const config = {
       } as Session
     },
 
-    // token is the JWT token
-    // user is the user object
-    // account is the user's account object from the authentication provider
-    // account.provider is the name of the provider
-    // account.access_token is the provider access token
-    // profile is the user's profile object from the authentication provider
     async jwt({ token, account, trigger }) {
       if (!trigger && !(token.account && token.speaker)) {
         console.error('Invalid auth token', token)
@@ -135,9 +122,6 @@ export const providerMap = config.providers.map((provider: any) => {
 
 export const { handlers, auth: _auth, signIn, signOut } = NextAuth(config)
 
-// This is a workaround to allow the auth function to be used as a route handler
-// while still providing the correct types for the handler function.
-// https://github.com/nextauthjs/next-auth/issues/9344#issuecomment-1891091409
 export const auth = _auth as typeof _auth &
   (<HandlerResponse extends Response | Promise<Response>>(
     ...args: [
@@ -157,7 +141,6 @@ export function isAtuh(req: NextAuthRequest): boolean {
     : false
 }
 
-// Helper function to get authentication session with test mode support
 export async function getAuthSession() {
   if (AppEnvironment.isTestMode) {
     return AppEnvironment.createMockAuthContext()

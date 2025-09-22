@@ -35,7 +35,6 @@ export default defineMigration({
     document(doc, context) {
       const speaker = doc as SpeakerDocument
 
-      // Skip documents that already have a slug
       if (speaker.slug && speaker.slug.current) {
         console.log(
           `Speaker "${speaker.name}" (${speaker._id}) already has a slug: "${speaker.slug.current}", skipping`,
@@ -43,7 +42,6 @@ export default defineMigration({
         return []
       }
 
-      // Skip documents without a name (can't generate slug)
       if (!speaker.name || typeof speaker.name !== 'string') {
         console.warn(
           `Speaker (${speaker._id}) does not have a valid name, cannot generate slug, skipping`,
@@ -57,7 +55,6 @@ export default defineMigration({
         `Adding slug "${slugValue}" to speaker "${speaker.name}" (${speaker._id})`,
       )
 
-      // Add slug to speakers that don't have it
       return at(
         'slug',
         setIfMissing({
@@ -66,6 +63,5 @@ export default defineMigration({
         }),
       )
     },
-    // No need for other migration handlers as we're only adding a slug at the document level
   },
 })

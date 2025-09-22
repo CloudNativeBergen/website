@@ -9,7 +9,7 @@ interface ExpandableEmailTemplateProps {
   title: string
   description: string
   className?: string
-  // Email client frame props
+
   emailFrom: string
   emailTo: string
   emailSubject: string
@@ -37,7 +37,6 @@ export default function ExpandableEmailTemplate({
       </p>
 
       <div className="relative">
-        {/* Email Template Container */}
         <div
           className={`overflow-hidden rounded-xl bg-gray-100 shadow-2xl transition-all duration-700 ease-in-out ${
             isExpanded ? 'max-h-[2000px]' : ''
@@ -46,9 +45,7 @@ export default function ExpandableEmailTemplate({
             maxHeight: isExpanded ? '2000px' : `${previewHeight}px`,
           }}
         >
-          {/* Email Client Frame */}
           <div className="rounded-xl bg-gray-100 shadow-2xl">
-            {/* Email Client Header */}
             <div className="rounded-t-lg bg-gray-200 px-4 py-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -63,7 +60,6 @@ export default function ExpandableEmailTemplate({
               </div>
             </div>
 
-            {/* Email Header Bar */}
             <div className="border-b border-gray-200 bg-white px-4 py-3">
               <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center space-x-4">
@@ -81,18 +77,14 @@ export default function ExpandableEmailTemplate({
               </div>
             </div>
 
-            {/* Email Content */}
             <div className="rounded-b-lg bg-white p-6">{children}</div>
           </div>
         </div>
 
-        {/* Overlay and Expand Button */}
         {!isExpanded && (
           <div className="absolute right-0 bottom-0 left-0">
-            {/* Gradient Overlay */}
             <div className="pointer-events-none h-16 bg-gradient-to-t from-gray-100 via-gray-100/90 to-transparent" />
 
-            {/* Expand Button */}
             <div className="flex justify-center bg-gray-100 px-4 py-4">
               <button
                 onClick={() => setIsExpanded(true)}
@@ -105,7 +97,6 @@ export default function ExpandableEmailTemplate({
           </div>
         )}
 
-        {/* Collapse Button */}
         {isExpanded && (
           <div className="mt-4 flex justify-center">
             <button

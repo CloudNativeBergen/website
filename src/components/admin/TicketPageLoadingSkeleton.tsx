@@ -1,14 +1,8 @@
-/**
- * Tickets page specific loading skeleton
- * Matches the layout with toggle controls, charts, and analysis sections
- */
-
 import { SkeletonCard, SkeletonTable } from './LoadingSkeleton'
 
 export function TicketPageLoadingSkeleton() {
   return (
     <div className="mx-auto max-w-7xl">
-      {/* Page header skeleton */}
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="flex items-center justify-between">
@@ -24,7 +18,6 @@ export function TicketPageLoadingSkeleton() {
         </div>
       </div>
 
-      {/* Performance Cards Skeleton */}
       <div className="mt-8">
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
@@ -41,10 +34,8 @@ export function TicketPageLoadingSkeleton() {
           ))}
         </div>
 
-        {/* Chart Skeleton */}
         <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-6 dark:border-gray-800 dark:bg-gray-900">
           <div className="animate-pulse">
-            {/* Chart header */}
             <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-200 sm:h-10 sm:w-10 dark:bg-gray-700" />
@@ -67,13 +58,11 @@ export function TicketPageLoadingSkeleton() {
               </div>
             </div>
 
-            {/* Chart area */}
             <div className="relative h-80 w-full rounded bg-gray-200 dark:bg-gray-700" />
           </div>
         </div>
       </div>
 
-      {/* Target Configuration Skeleton */}
       <div className="mt-8">
         <SkeletonCard
           showHeader={true}
@@ -83,9 +72,7 @@ export function TicketPageLoadingSkeleton() {
         />
       </div>
 
-      {/* Breakdown Tables Skeleton */}
       <div className="mt-8 space-y-8">
-        {/* Ticket Type Breakdown */}
         <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
           <div className="p-4">
             <div className="animate-pulse">
@@ -100,7 +87,6 @@ export function TicketPageLoadingSkeleton() {
           </div>
         </div>
 
-        {/* Sponsor Tickets Breakdown */}
         <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
           <div className="p-4">
             <div className="animate-pulse">
@@ -116,7 +102,6 @@ export function TicketPageLoadingSkeleton() {
         </div>
       </div>
 
-      {/* Orders Table Skeleton */}
       <div className="mt-12">
         <div className="animate-pulse">
           <div className="mb-4 h-6 w-32 rounded bg-gray-200 dark:bg-gray-700" />

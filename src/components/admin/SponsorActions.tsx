@@ -32,7 +32,6 @@ export function SponsorActions({
     handleSyncContacts,
   } = useSponsorBroadcast()
 
-  // Count sponsors with contact information
   const sponsorsWithContacts = sponsors.filter(
     (sponsor) =>
       sponsor.sponsor.contact_persons &&

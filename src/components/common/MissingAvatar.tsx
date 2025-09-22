@@ -1,4 +1,3 @@
-// Color palette for letter-based avatars
 const avatarColors = [
   'bg-red-500',
   'bg-orange-500',
@@ -19,7 +18,6 @@ const avatarColors = [
   'bg-rose-500',
 ]
 
-// Generate consistent color based on first letter
 function getAvatarColor(name: string): string {
   const firstLetter = name.charAt(0).toUpperCase()
   const charCode = firstLetter.charCodeAt(0)
@@ -27,18 +25,15 @@ function getAvatarColor(name: string): string {
   return avatarColors[colorIndex]
 }
 
-// Get first letter(s) for avatar
 function getAvatarLetter(name: string): string {
   const nameParts = name.trim().split(/\s+/)
 
   if (nameParts.length >= 2) {
-    // First letter of first name + first letter of last name
     return (
       nameParts[0].charAt(0).toUpperCase() +
       nameParts[nameParts.length - 1].charAt(0).toUpperCase()
     )
   } else {
-    // If only one name part, use first two letters or just one if name is short
     const singleName = nameParts[0]
     return singleName.length >= 2
       ? singleName.charAt(0).toUpperCase() + singleName.charAt(1).toUpperCase()
@@ -47,21 +42,15 @@ function getAvatarLetter(name: string): string {
 }
 
 interface MissingAvatarProps {
-  /** The name to generate initials from */
   name: string
-  /** Size of the avatar in pixels */
+
   size: number
-  /** Additional CSS classes */
+
   className?: string
-  /** Text size class override */
+
   textSizeClass?: string
 }
 
-/**
- * Reusable component for displaying letter-based avatars when no image is available.
- * Uses consistent color generation based on the name to ensure the same person
- * always gets the same colored avatar.
- */
 export function MissingAvatar({
   name,
   size,
@@ -71,7 +60,6 @@ export function MissingAvatar({
   const bgColor = getAvatarColor(name)
   const initials = getAvatarLetter(name)
 
-  // Auto-calculate text size based on avatar size if not provided
   const autoTextSize =
     size >= 100
       ? 'text-xl'
@@ -82,8 +70,6 @@ export function MissingAvatar({
           : 'text-xs'
   const finalTextSize = textSizeClass || autoTextSize
 
-  // If the avatar is used with an absolutely positioned fill container ("absolute inset-0"),
-  // we should not apply explicit width/height since the parent already defines the size.
   const usesAbsoluteFill =
     className.includes('absolute') && className.includes('inset-0')
 

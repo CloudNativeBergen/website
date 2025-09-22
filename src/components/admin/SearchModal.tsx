@@ -43,7 +43,6 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
 
   const query = rawQuery.toLowerCase().trim()
 
-  // Handle search with debouncing
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (query) {

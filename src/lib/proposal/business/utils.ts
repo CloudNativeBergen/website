@@ -2,9 +2,6 @@ import { ProposalExisting } from '../types'
 import { Review } from '@/lib/review/types'
 import { Speaker, Flags } from '@/lib/speaker/types'
 
-/**
- * Calculate average rating from proposal reviews
- */
 export function calculateAverageRating(proposal: ProposalExisting): number {
   if (!proposal.reviews || proposal.reviews.length === 0) {
     return 0
@@ -26,13 +23,10 @@ export function calculateAverageRating(proposal: ProposalExisting): number {
     return acc
   }, 0)
 
-  const totalPossibleScore = proposal.reviews.length * 15 // 3 scores * 5 max each
+  const totalPossibleScore = proposal.reviews.length * 15
   return totalPossibleScore > 0 ? (totalScores / totalPossibleScore) * 5 : 0
 }
 
-/**
- * Extract speaker names from proposal
- */
 export function getProposalSpeakerNames(proposal: ProposalExisting): string {
   const speakers =
     proposal.speakers && Array.isArray(proposal.speakers)
@@ -49,9 +43,6 @@ export function getProposalSpeakerNames(proposal: ProposalExisting): string {
     : 'Unknown Speaker'
 }
 
-/**
- * Check if proposal requires travel funding
- */
 export function requiresTravelFunding(proposal: ProposalExisting): boolean {
   if (!proposal.speakers || !Array.isArray(proposal.speakers)) {
     return false
@@ -66,9 +57,6 @@ export function requiresTravelFunding(proposal: ProposalExisting): boolean {
   })
 }
 
-/**
- * Get proposal summary for listings
- */
 export function getProposalSummary(proposal: ProposalExisting) {
   return {
     id: proposal._id,
@@ -87,9 +75,6 @@ export function getProposalSummary(proposal: ProposalExisting) {
   }
 }
 
-/**
- * Group proposals by status
- */
 export function groupProposalsByStatus(proposals: ProposalExisting[]) {
   return proposals.reduce(
     (groups, proposal) => {
@@ -104,9 +89,6 @@ export function groupProposalsByStatus(proposals: ProposalExisting[]) {
   )
 }
 
-/**
- * Sort proposals by multiple criteria
- */
 export function sortProposals(
   proposals: ProposalExisting[],
   sortBy: 'title' | 'status' | 'created' | 'speaker' | 'rating',

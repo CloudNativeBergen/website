@@ -1,21 +1,11 @@
-/**
- * Page-level loading components for admin interface
- * These can be used as loading.tsx files in Next.js app directory
- */
-
 import { SkeletonCard, SkeletonTable, SkeletonGrid } from './LoadingSkeleton'
 import { TicketPageLoadingSkeleton } from './TicketPageLoadingSkeleton'
 
-// Re-export ticket page loading for convenience
 export { TicketPageLoadingSkeleton }
 
-/**
- * Generic admin page loading layout
- */
 export function AdminPageLoading() {
   return (
     <div className="mx-auto max-w-7xl">
-      {/* Page header skeleton */}
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="flex items-center gap-3">
@@ -28,7 +18,6 @@ export function AdminPageLoading() {
         </div>
       </div>
 
-      {/* Main content skeleton */}
       <div className="space-y-6">
         <SkeletonCard rows={4} />
         <SkeletonCard rows={3} />
@@ -37,13 +26,9 @@ export function AdminPageLoading() {
   )
 }
 
-/**
- * Table-based admin page loading (speakers, sponsors, etc.)
- */
 export function AdminTablePageLoading() {
   return (
     <div className="mx-auto max-w-7xl">
-      {/* Page header skeleton */}
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="flex items-center justify-between">
@@ -59,12 +44,10 @@ export function AdminTablePageLoading() {
         </div>
       </div>
 
-      {/* Stats cards */}
       <div className="mb-6">
         <SkeletonGrid items={4} columns={4} cardHeight="h-24" />
       </div>
 
-      {/* Table content */}
       <div className="rounded-lg bg-white shadow dark:bg-gray-800">
         <div className="p-6">
           <SkeletonTable rows={8} columns={5} />
@@ -74,13 +57,9 @@ export function AdminTablePageLoading() {
   )
 }
 
-/**
- * Dashboard-style admin page loading
- */
 export function AdminDashboardLoading() {
   return (
     <div className="mx-auto max-w-7xl">
-      {/* Page header skeleton */}
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="h-8 w-48 rounded bg-gray-200 dark:bg-gray-700" />
@@ -88,12 +67,10 @@ export function AdminDashboardLoading() {
         </div>
       </div>
 
-      {/* Stats grid */}
       <div className="mb-8">
         <SkeletonGrid items={6} columns={3} cardHeight="h-32" />
       </div>
 
-      {/* Content sections */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <SkeletonCard rows={5} />
         <SkeletonCard rows={5} />
@@ -102,13 +79,9 @@ export function AdminDashboardLoading() {
   )
 }
 
-/**
- * Form-based admin page loading (settings, etc.)
- */
 export function AdminFormPageLoading() {
   return (
     <div className="mx-auto max-w-4xl">
-      {/* Page header skeleton */}
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="h-8 w-64 rounded bg-gray-200 dark:bg-gray-700" />
@@ -116,7 +89,6 @@ export function AdminFormPageLoading() {
         </div>
       </div>
 
-      {/* Form sections */}
       <div className="space-y-8">
         {[...Array(3)].map((_, i) => (
           <div
@@ -141,13 +113,9 @@ export function AdminFormPageLoading() {
   )
 }
 
-/**
- * Detail view loading (single proposal, etc.)
- */
 export function AdminDetailPageLoading() {
   return (
     <div className="mx-auto max-w-4xl">
-      {/* Back button and header */}
       <div className="mb-6">
         <div className="animate-pulse">
           <div className="mb-4 h-6 w-32 rounded bg-gray-200 dark:bg-gray-700" />
@@ -156,14 +124,11 @@ export function AdminDetailPageLoading() {
         </div>
       </div>
 
-      {/* Main content */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Main content area */}
         <div className="lg:col-span-2">
           <SkeletonCard rows={8} />
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
           <SkeletonCard rows={4} />
           <SkeletonCard rows={3} />

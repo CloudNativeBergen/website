@@ -23,7 +23,6 @@ import {
 } from '@/lib/proposal/ui/badges'
 import clsx from 'clsx'
 
-// TypeScript interfaces for PortableText content
 interface PortableTextChild {
   _type: string
   text?: string
@@ -54,7 +53,6 @@ const formatTime = (time: string): string => {
   return time
 }
 
-// Calculate duration in minutes between two time strings
 const calculateDurationMinutes = (
   startTime: string,
   endTime: string,
@@ -75,21 +73,17 @@ export function TalkCard({
   const { isBookmarked, isLoaded } = useBookmarks()
   const durationMinutes = calculateDurationMinutes(talk.startTime, talk.endTime)
 
-  // Use smart height calculation for schedule view
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const getSmartHeight = (duration: number): string => {
     if (!fixedHeight) return 'auto'
 
-    // Service sessions (placeholder sessions) should be shorter
     if (!talk.talk) {
-      return compact ? '4rem' : '8rem' // Half height for service sessions
+      return compact ? '4rem' : '8rem'
     }
 
-    // Regular talks get full height for schedule view compact cards
-    return compact ? '8rem' : '16rem' // Normal height for talks
+    return compact ? '8rem' : '16rem'
   }
 
-  // Handle placeholder/service sessions
   if (!talk.talk) {
     const minHeight = getSmartHeight(durationMinutes)
 
@@ -150,16 +144,13 @@ export function TalkCard({
   const primarySpeaker = talkData.speakers?.[0]
   const minHeight = getSmartHeight(durationMinutes)
 
-  // Check if talk is confirmed
   const isConfirmed = talkData.status === Status.confirmed
 
-  // Check if talk is withdrawn or rejected
   const isWithdrawnOrRejected =
     talkData.status === Status.withdrawn || talkData.status === Status.rejected
 
-  // Create bookmark data for this talk
   const split = talkData.format?.split('_') || []
-  const formatType = split[0] // 'workshop', 'presentation', 'lightning', etc.
+  const formatType = split[0]
 
   const bookmarkData = {
     talkId:
@@ -191,15 +182,15 @@ export function TalkCard({
     <div
       className={clsx(
         'rounded-lg border transition-all duration-200 hover:shadow-md',
-        !isConfirmed && !isWithdrawnOrRejected && 'opacity-75', // Reduce opacity for unconfirmed talks
-        isWithdrawnOrRejected && 'opacity-60', // More reduced opacity for withdrawn/rejected
+        !isConfirmed && !isWithdrawnOrRejected && 'opacity-75',
+        isWithdrawnOrRejected && 'opacity-60',
         isBookmarkedTalk
           ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80 dark:border-brand-cloud-blue dark:bg-blue-900/30'
           : isConfirmed
             ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:hover:border-brand-cloud-blue'
             : isWithdrawnOrRejected
-              ? 'border-red-300 bg-red-50 hover:border-red-400 dark:border-red-600 dark:bg-red-900/30 dark:hover:border-red-500' // Red styling for withdrawn/rejected
-              : 'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500', // Different styling for unconfirmed
+              ? 'border-red-300 bg-red-50 hover:border-red-400 dark:border-red-600 dark:bg-red-900/30 dark:hover:border-red-500'
+              : 'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500',
         compact ? 'p-3' : 'p-6',
       )}
       style={fixedHeight ? { minHeight } : {}}
@@ -210,20 +201,19 @@ export function TalkCard({
           compact ? 'space-y-2' : 'space-y-4',
         )}
       >
-        {/* Header */}
         <div>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <h3
                 className={clsx(
                   'font-space-grotesk font-semibold',
-                  isWithdrawnOrRejected && 'text-red-500 dark:text-red-400', // Red text for withdrawn/rejected
+                  isWithdrawnOrRejected && 'text-red-500 dark:text-red-400',
                   !isConfirmed &&
                     !isWithdrawnOrRejected &&
-                    'text-gray-500 dark:text-gray-400', // Grayed out for unconfirmed
+                    'text-gray-500 dark:text-gray-400',
                   isConfirmed && 'text-brand-slate-gray dark:text-white',
                   compact ? 'text-sm leading-tight' : 'text-base',
-                  fixedHeight && compact && 'line-clamp-2', // Clamp to 2 lines for schedule view
+                  fixedHeight && compact && 'line-clamp-2',
                 )}
               >
                 {isConfirmed ? (
@@ -263,7 +253,6 @@ export function TalkCard({
                 )}
               </h3>
 
-              {/* Speaker Info */}
               {isConfirmed &&
                 talkData.speakers &&
                 talkData.speakers.length > 0 && (
@@ -296,7 +285,6 @@ export function TalkCard({
                   </div>
                 )}
 
-              {/* Placeholder for unconfirmed talks */}
               {!isConfirmed && !isWithdrawnOrRejected && (
                 <div
                   className={clsx(
@@ -324,7 +312,6 @@ export function TalkCard({
                 </div>
               )}
 
-              {/* Placeholder for withdrawn/rejected talks */}
               {isWithdrawnOrRejected && (
                 <div
                   className={clsx(
@@ -350,7 +337,6 @@ export function TalkCard({
               )}
             </div>
 
-            {/* Video Indicator */}
             <div className="flex items-center gap-2">
               {isConfirmed && talkData.video && (
                 <div className="rounded-full bg-red-100 p-2 text-red-800 dark:bg-red-900/50 dark:text-red-300">
@@ -358,7 +344,6 @@ export function TalkCard({
                 </div>
               )}
 
-              {/* Bookmark Button - only show for confirmed talks */}
               {isConfirmed && (
                 <BookmarkButton
                   talk={bookmarkData}
@@ -369,7 +354,6 @@ export function TalkCard({
           </div>
         </div>
 
-        {/* Description - only show for confirmed talks */}
         {!compact &&
           isConfirmed &&
           talkData.description &&
@@ -402,7 +386,6 @@ export function TalkCard({
                 })}
               </div>
 
-              {/* Show/Hide More Button */}
               {talkData.description.length > 0 && (
                 <button
                   onClick={() =>
@@ -426,7 +409,6 @@ export function TalkCard({
             </div>
           )}
 
-        {/* Placeholder description for unconfirmed talks */}
         {!compact && !isConfirmed && !isWithdrawnOrRejected && (
           <div className="flex-1">
             <div className="text-sm text-gray-400 italic dark:text-gray-500">
@@ -441,7 +423,6 @@ export function TalkCard({
           </div>
         )}
 
-        {/* Placeholder description for withdrawn/rejected talks */}
         {!compact && isWithdrawnOrRejected && (
           <div className="flex-1">
             <div className="text-sm text-red-400 italic dark:text-red-300">
@@ -454,9 +435,7 @@ export function TalkCard({
           </div>
         )}
 
-        {/* Metadata */}
         <div className={clsx(compact ? 'space-y-2' : 'space-y-3')}>
-          {/* Time and Location */}
           <div
             className={clsx(
               'flex flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
@@ -492,15 +471,12 @@ export function TalkCard({
             </span>
           </div>
 
-          {/* Badges - only show for confirmed talks */}
           {!compact && isConfirmed && (
             <div className="flex flex-wrap gap-2">
-              {/* Format Badge */}
               {talkData.format && (
                 <FormatBadge format={talkData.format} variant="compact" />
               )}
 
-              {/* Level Badge with Indicator */}
               {talkData.level && (
                 <div className="flex items-center gap-1">
                   <LevelIndicator level={talkData.level} size="sm" />
@@ -508,7 +484,6 @@ export function TalkCard({
                 </div>
               )}
 
-              {/* Audience Badge (first one only to save space) */}
               {talkData.audiences && talkData.audiences.length > 0 && (
                 <div className="flex items-center gap-1">
                   <AudienceBadge
@@ -523,7 +498,6 @@ export function TalkCard({
                 </div>
               )}
 
-              {/* Topics (first one only) */}
               {talkData.topics && talkData.topics.length > 0 && (
                 <div className="flex items-center gap-1">
                   <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
@@ -541,7 +515,6 @@ export function TalkCard({
             </div>
           )}
 
-          {/* Basic info for unconfirmed talks */}
           {!compact && !isConfirmed && !isWithdrawnOrRejected && (
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-600 dark:text-gray-300">
@@ -550,7 +523,6 @@ export function TalkCard({
             </div>
           )}
 
-          {/* Basic info for withdrawn/rejected talks */}
           {!compact && isWithdrawnOrRejected && (
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-600 dark:bg-red-900/50 dark:text-red-300">

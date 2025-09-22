@@ -11,9 +11,6 @@ export interface ScheduleData {
   error?: string
 }
 
-/**
- * Generate conference dates from start to end date
- */
 function generateConferenceDates(startDate: string, endDate: string): string[] {
   const start = new Date(startDate)
   const end = new Date(endDate)
@@ -30,12 +27,11 @@ function generateConferenceDates(startDate: string, endDate: string): string[] {
 
 export async function getScheduleData(): Promise<ScheduleData> {
   try {
-    // Fetch conference with schedule data - use shorter cache for admin
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({
         schedule: true,
         confirmedTalksOnly: false,
-        revalidate: 0, // No cache for schedule admin
+        revalidate: 0,
       })
 
     if (conferenceError || !conference) {
@@ -47,21 +43,17 @@ export async function getScheduleData(): Promise<ScheduleData> {
       }
     }
 
-    // Get existing schedules or create default ones for each conference day
     const schedules: ConferenceSchedule[] = conference.schedules || []
 
-    // Generate dates for the conference duration
     const conferenceDates = generateConferenceDates(
       conference.start_date,
       conference.end_date,
     )
 
-    // Ensure we have a schedule for each conference day
     const existingDates = new Set(schedules.map((s) => s.date))
 
     for (const date of conferenceDates) {
       if (!existingDates.has(date)) {
-        // Create default schedule for missing dates
         schedules.push({
           _id: '',
           date: date,
@@ -70,9 +62,7 @@ export async function getScheduleData(): Promise<ScheduleData> {
       }
     }
 
-    // If we only have one date but need more days, generate additional days
     if (schedules.length === 1 && conferenceDates.length === 1) {
-      // If start_date and end_date are the same, create a multi-day conference
       const baseDate = new Date(schedules[0].date)
       const secondDay = new Date(baseDate)
       secondDay.setDate(secondDay.getDate() + 1)
@@ -89,10 +79,8 @@ export async function getScheduleData(): Promise<ScheduleData> {
       )
     }
 
-    // Sort schedules by date
     schedules.sort((a, b) => a.date.localeCompare(b.date))
 
-    // Fetch all proposals for the conference
     const { proposals, proposalsError } = await getProposals({
       conferenceId: conference._id,
       returnAll: true,
@@ -108,7 +96,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
       }
     }
 
-    // Filter for accepted and confirmed proposals (for scheduling)
     const schedulableProposals = proposals.filter(
       (proposal: ProposalExisting) =>
         proposal.status === Status.accepted ||

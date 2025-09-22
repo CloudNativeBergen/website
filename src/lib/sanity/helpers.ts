@@ -1,16 +1,10 @@
 import { Reference } from 'sanity'
 import { clientWrite, clientReadUncached as clientRead } from './client'
 
-/**
- * Generate a unique key for Sanity array items
- */
 export function generateKey(prefix: string = 'item'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 }
 
-/**
- * Add _key properties to array items if they don't exist
- */
 export function ensureArrayKeys<T extends Record<string, unknown>>(
   array: T[],
   prefix: string = 'item',
@@ -22,16 +16,10 @@ export function ensureArrayKeys<T extends Record<string, unknown>>(
   }))
 }
 
-/**
- * Create a Sanity reference object
- */
 export function createReference(id: string): Reference {
   return { _type: 'reference', _ref: id }
 }
 
-/**
- * Create a Sanity reference object with _key
- */
 export function createReferenceWithKey(
   id: string,
   prefix: string = 'ref',
@@ -43,9 +31,6 @@ export function createReferenceWithKey(
   }
 }
 
-/**
- * Prepare any array with _key properties
- */
 export function prepareArrayWithKeys<T extends Record<string, unknown>>(
   items: T[] | undefined,
   prefix: string = 'item',
@@ -54,9 +39,6 @@ export function prepareArrayWithKeys<T extends Record<string, unknown>>(
   return ensureArrayKeys(items, prefix)
 }
 
-/**
- * Prepare reference array with _key properties
- */
 export function prepareReferenceArray<T extends Reference | { _id: string }>(
   items?: T[],
   prefix: string = 'ref',
@@ -75,9 +57,6 @@ export function prepareReferenceArray<T extends Reference | { _id: string }>(
   })) as Array<Reference & { _key: string }>
 }
 
-/**
- * Generic function to fix missing _key attributes in arrays for any document type
- */
 export async function fixArrayKeys(
   documentType: string,
   arrayFields: Array<{
@@ -137,9 +116,6 @@ export async function fixArrayKeys(
   }
 }
 
-/**
- * Generic function to add a reference to an array field in a document
- */
 export async function addReferenceToArray(
   documentId: string,
   arrayField: string,
@@ -148,7 +124,6 @@ export async function addReferenceToArray(
   keyPrefix: string = 'ref',
 ): Promise<{ error?: Error }> {
   try {
-    // Get the current document data
     const document = await clientRead.fetch(
       `*[_id == $documentId][0]{
         _id,
@@ -161,7 +136,6 @@ export async function addReferenceToArray(
       return { error: new Error('Document not found') }
     }
 
-    // Check if reference already exists
     const existingArray = (document[arrayField] || []) as Record<
       string,
       unknown
@@ -177,13 +151,11 @@ export async function addReferenceToArray(
       return { error: new Error('Reference already exists in array') }
     }
 
-    // Ensure all existing items have _key properties
     const arrayWithKeys = existingArray.map((item) => ({
       ...item,
       _key: (item._key as string) || generateKey(keyPrefix),
     }))
 
-    // Add the new reference
     const newReference = {
       _key: generateKey(keyPrefix),
       ...additionalData,
@@ -203,9 +175,6 @@ export async function addReferenceToArray(
   }
 }
 
-/**
- * Generic function to remove a reference from an array field in a document
- */
 export async function removeReferenceFromArray(
   documentId: string,
   arrayField: string,
@@ -213,7 +182,6 @@ export async function removeReferenceFromArray(
   keyPrefix: string = 'ref',
 ): Promise<{ error?: Error }> {
   try {
-    // Get the current document data
     const document = await clientRead.fetch(
       `*[_id == $documentId][0]{
         _id,
@@ -226,21 +194,17 @@ export async function removeReferenceFromArray(
       return { error: new Error('Document not found') }
     }
 
-    // Remove the reference and ensure remaining ones have _key properties
     const existingArray = (document[arrayField] || []) as Record<
       string,
       unknown
     >[]
 
-    // For nested references, use the keyPrefix as the field name directly
     const referenceField = keyPrefix === 'ref' ? '_ref' : keyPrefix
 
     const updatedArray = existingArray
       .filter((item) => {
-        // Check direct reference
         if (item._ref === referenceId) return false
 
-        // Check nested reference
         if (referenceField !== '_ref') {
           const nestedRef = item[referenceField] as Record<string, unknown>
           if (nestedRef && nestedRef._ref === referenceId) return false

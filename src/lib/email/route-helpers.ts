@@ -9,26 +9,17 @@ import React from 'react'
 import { PortableTextBlock } from '@portabletext/types'
 import { Conference } from '@/lib/conference/types'
 
-/**
- * Common request validation and setup for email routes
- */
 export interface EmailRouteContext {
   conference: Conference
   messagePortableText: PortableTextBlock[]
   subject: string
 }
 
-/**
- * Validate organizer access for email routes
- */
 export function validateOrganizerAccess(req: NextAuthRequest): Response | null {
   const accessError = checkOrganizerAccess(req)
   return accessError || null
 }
 
-/**
- * Parse and validate PortableText message
- */
 export function parsePortableTextMessage(message: string): {
   messagePortableText?: PortableTextBlock[]
   error?: Response
@@ -56,9 +47,6 @@ export function parsePortableTextMessage(message: string): {
   }
 }
 
-/**
- * Fetch and validate conference for email routes
- */
 export async function getEmailRouteConference(options?: {
   sponsors?: boolean
   sponsorContact?: boolean
@@ -78,9 +66,6 @@ export async function getEmailRouteConference(options?: {
   return { conference }
 }
 
-/**
- * Validate required fields for email requests
- */
 export function validateRequiredFields(
   fields: Record<string, unknown>,
   requiredFields: string[],
@@ -103,9 +88,6 @@ export function validateRequiredFields(
   return null
 }
 
-/**
- * Common setup for email routes
- */
 export async function setupEmailRoute(
   req: NextAuthRequest,
   requestData: { subject: string; message: string },
@@ -114,13 +96,11 @@ export async function setupEmailRoute(
   context?: EmailRouteContext
   error?: Response
 }> {
-  // Check organizer access
   const accessError = validateOrganizerAccess(req)
   if (accessError) {
     return { error: accessError }
   }
 
-  // Validate required fields
   const validationError = validateRequiredFields(requestData, [
     'subject',
     'message',
@@ -129,7 +109,6 @@ export async function setupEmailRoute(
     return { error: validationError }
   }
 
-  // Parse PortableText message
   const { messagePortableText, error: parseError } = parsePortableTextMessage(
     requestData.message,
   )
@@ -137,7 +116,6 @@ export async function setupEmailRoute(
     return { error: parseError }
   }
 
-  // Get conference
   const { conference, error: conferenceError } =
     await getEmailRouteConference(conferenceOptions)
   if (conferenceError) {
@@ -153,9 +131,6 @@ export async function setupEmailRoute(
   }
 }
 
-/**
- * Common email template rendering
- */
 export interface EmailTemplateOptions {
   conference: Conference
   subject: string
@@ -192,9 +167,6 @@ export async function renderEmailTemplate({
   )
 }
 
-/**
- * Convert PortableText to HTML with error handling
- */
 export async function convertPortableTextToHTML(
   messagePortableText: PortableTextBlock[],
 ): Promise<{
@@ -215,9 +187,6 @@ export async function convertPortableTextToHTML(
   }
 }
 
-/**
- * Standard success response for email operations
- */
 export function createEmailSuccessResponse(data: Record<string, unknown>) {
   return Response.json({
     success: true,
@@ -225,9 +194,6 @@ export function createEmailSuccessResponse(data: Record<string, unknown>) {
   })
 }
 
-/**
- * Standard error response for email operations
- */
 export function createEmailErrorResponse(
   message: string,
   status: number = 500,

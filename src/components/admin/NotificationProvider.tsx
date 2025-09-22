@@ -42,7 +42,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
 
     setNotifications((prev) => [...prev, newNotification])
 
-    // Auto-remove after duration (default 5 seconds)
     const duration = notification.duration ?? 5000
     setTimeout(() => {
       removeNotification(id)
@@ -111,7 +110,6 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     >
       {children}
 
-      {/* Notification Container */}
       <div className="pointer-events-none fixed inset-0 z-50 flex flex-col items-end justify-end space-y-6 p-6 pr-8 pb-8">
         {notifications.map((notification) => {
           const Icon = getIcon(notification.type)

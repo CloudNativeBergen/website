@@ -16,7 +16,6 @@ import { Speaker } from '@/lib/speaker/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
-// Import to register event handlers
 import '@/lib/events/registry'
 
 export const dynamic = 'force-dynamic'
@@ -72,7 +71,6 @@ export const POST = auth(
       })
     }
 
-    // Check if the action is valid for the current status
     const { status, isValidAction } = actionStateMachine(
       proposal.status,
       action,
@@ -106,7 +104,6 @@ export const POST = auth(
       )
     }
 
-    // Update the proposal status in the database
     const { proposal: updatedProposal, err: updateErr } =
       await updateProposalStatus(id, status)
     if (updateErr) {
@@ -118,7 +115,6 @@ export const POST = auth(
       })
     }
 
-    // Publish proposal status change event - all integrations run in parallel
     const statusChangeEvent: ProposalStatusChangeEvent = {
       eventType: 'proposal.status.changed',
       timestamp: new Date(),
@@ -139,7 +135,6 @@ export const POST = auth(
       },
     }
 
-    // Fire and forget - don't block the response
     eventBus.publish(statusChangeEvent).catch((error) => {
       console.error('Failed to publish status change event:', error)
     })

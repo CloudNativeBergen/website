@@ -37,10 +37,10 @@ function getFormatDisplayName(format: Format): string {
 }
 
 interface ProposalCoSpeakerProps {
-  selectedSpeakers: Speaker[] // This should be just the co-speakers (not including current user)
+  selectedSpeakers: Speaker[]
   onSpeakersChange: (speakers: Speaker[]) => void
   format: Format
-  proposalId?: string // Optional for new proposals
+  proposalId?: string
   pendingInvitations?: CoSpeakerInvitationMinimal[]
   onInvitationSent?: (invitation: CoSpeakerInvitationMinimal) => void
   onInvitationCanceled?: (invitationId: string) => void
@@ -59,7 +59,6 @@ export function ProposalCoSpeaker({
   const formatName = getFormatDisplayName(format)
   const isLightningTalk = !allowsCoSpeakers(format)
 
-  // Custom hooks for managing invite fields and invitations
   const {
     inviteFields,
     handleFieldChange,
@@ -78,10 +77,8 @@ export function ProposalCoSpeaker({
     cancelInvite,
   } = useInvitations(onInvitationSent, onInvitationCanceled)
 
-  // selectedSpeakers already contains only co-speakers (current user is excluded by ProposalForm)
   const coSpeakers = selectedSpeakers
 
-  // Calculate total co-speakers including pending invitations
   const totalCoSpeakers =
     coSpeakers.length +
     pendingInvitations.filter((inv) => inv.status === 'pending').length
@@ -105,7 +102,6 @@ export function ProposalCoSpeaker({
 
     const sentInvitations = await sendInvites(proposalId, validFields)
 
-    // Clear the fields that were successfully sent
     if (sentInvitations.length > 0) {
       const sentEmails = validFields.map((field) => field.email)
       setInviteFields((prev) =>
@@ -172,7 +168,6 @@ export function ProposalCoSpeaker({
         </p>
       </div>
 
-      {/* Warning for lightning talks */}
       {isLightningTalk && (
         <div className="rounded-md border border-orange-200 bg-orange-50 p-4 dark:border-orange-800/50 dark:bg-orange-900/20">
           <div className="flex">
@@ -208,10 +203,8 @@ export function ProposalCoSpeaker({
         </div>
       )}
 
-      {/* Show co-speakers section only if not a lightning talk */}
       {!isLightningTalk && (
         <>
-          {/* Success message */}
           {inviteSuccess && (
             <div className="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20">
               <div className="flex">
@@ -230,7 +223,6 @@ export function ProposalCoSpeaker({
             </div>
           )}
 
-          {/* Pending invitations */}
           {pendingInvitations.length > 0 && (
             <div>
               <h4 className="text-cloud-blue-dark mb-2 text-sm font-medium dark:text-blue-400">
@@ -274,9 +266,7 @@ export function ProposalCoSpeaker({
             </div>
           )}
 
-          {/* Co-speakers display */}
           <div className="space-y-3">
-            {/* Co-speakers (can be removed) */}
             {coSpeakers.length > 0 && (
               <div>
                 <div className="mt-1 space-y-2">
@@ -318,7 +308,6 @@ export function ProposalCoSpeaker({
             )}
           </div>
 
-          {/* Email invitation section - only show if under the limit */}
           {totalCoSpeakers < maxCoSpeakers && (
             <div className="space-y-4">
               <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800">
@@ -333,7 +322,6 @@ export function ProposalCoSpeaker({
                   </p>
                 </div>
 
-                {/* Dynamic invite fields */}
                 <div className="space-y-4">
                   {inviteFields
                     .slice(0, maxCoSpeakers - totalCoSpeakers)
@@ -454,7 +442,6 @@ export function ProposalCoSpeaker({
             </div>
           )}
 
-          {/* Show limit reached message */}
           {totalCoSpeakers >= maxCoSpeakers && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20">
               <div className="flex">

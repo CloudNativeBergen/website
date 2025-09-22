@@ -85,7 +85,6 @@ export default async function TravelExpensePage() {
         </div>
       </div>
 
-      {/* Main content */}
       <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
         <div className="mt-12">
           <TravelSupportPage />

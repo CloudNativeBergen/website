@@ -21,14 +21,12 @@ import { ErrorBoundary } from './ErrorBoundary'
 
 export function TravelSupportPage() {
   const {
-    // Data
     travelSupport,
     isLoading,
     error,
     isEligible,
     canEdit,
 
-    // State
     showBankingForm,
     showExpenseForm,
     editingExpense,
@@ -36,7 +34,6 @@ export function TravelSupportPage() {
     setShowExpenseForm,
     setEditingExpense,
 
-    // Operations
     createTravelSupport,
     updateBankingDetails,
     addExpense,
@@ -45,21 +42,18 @@ export function TravelSupportPage() {
     deleteReceipt,
     submitTravelSupport,
 
-    // Loading states
     isCreating,
     isUpdatingBanking,
     isAddingExpense,
     isUpdatingExpense,
     isSubmitting,
 
-    // Errors
     createError,
     bankingError,
     expenseError,
     submitError,
   } = useTravelSupport()
 
-  // Handlers for inline editing
   const handleInlineExpenseEdit = async (
     expenseId: string,
     expenseData: TravelExpenseInput,
@@ -114,12 +108,10 @@ export function TravelSupportPage() {
     }
   }
 
-  // Loading state
   if (isLoading) {
     return <LoadingState message="Loading travel support..." />
   }
 
-  // Error state
   if (error) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
@@ -128,7 +120,6 @@ export function TravelSupportPage() {
     )
   }
 
-  // Not eligible
   if (!isEligible) {
     return (
       <div className="py-8">
@@ -157,7 +148,6 @@ export function TravelSupportPage() {
     )
   }
 
-  // No travel support created yet
   if (!travelSupport) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
@@ -196,7 +186,6 @@ export function TravelSupportPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-      {/* Status Banner */}
       {isSubmitted && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/50 dark:bg-blue-900/20">
           <div className="flex items-center gap-3">
@@ -217,7 +206,6 @@ export function TravelSupportPage() {
         </div>
       )}
 
-      {/* Page Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Travel Support
@@ -227,7 +215,6 @@ export function TravelSupportPage() {
         </p>
       </div>
 
-      {/* Banking Details Section */}
       <ErrorBoundary>
         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
           <div className="px-6 py-4">
@@ -281,7 +268,6 @@ export function TravelSupportPage() {
         </div>
       </ErrorBoundary>
 
-      {/* Expenses Section */}
       <ErrorBoundary>
         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
           <div className="px-6 py-4">
@@ -342,7 +328,6 @@ export function TravelSupportPage() {
         </div>
       </ErrorBoundary>
 
-      {/* Expense Summary */}
       {travelSupport.expenses && travelSupport.expenses.length > 0 && (
         <ErrorBoundary>
           <ExpenseSummary
@@ -354,7 +339,6 @@ export function TravelSupportPage() {
         </ErrorBoundary>
       )}
 
-      {/* Submit Section */}
       {canEdit && TravelSupportService.canSubmit(travelSupport) && (
         <div className="rounded-lg border border-green-200 bg-green-50 p-6 dark:border-green-800 dark:bg-green-900/20">
           <h3 className="text-lg font-medium text-green-800 dark:text-green-200">

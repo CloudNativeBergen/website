@@ -1,7 +1,3 @@
-/**
- * Discount usage calculation and analysis utilities
- */
-
 import type { DiscountUsageStats } from './types'
 import type { EventTicket } from '@/lib/tickets/types'
 

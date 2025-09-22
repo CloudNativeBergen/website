@@ -73,7 +73,7 @@ export function useProposalSearch() {
             navigateToProposal(searchResults[selectedIndex]._id)
             return true
           }
-          // If no item is selected but there are results, select the first one
+
           if (searchResults.length > 0) {
             navigateToProposal(searchResults[0]._id)
             return true

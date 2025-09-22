@@ -1,8 +1,3 @@
-/**
- * tRPC Router for Sponsor Management
- * Complete CRUD operations for sponsors, tiers, and conference assignments
- */
-
 import { TRPCError } from '@trpc/server'
 import { router, adminProcedure } from '../trpc'
 import {
@@ -134,7 +129,6 @@ export const sponsorRouter = router({
     .input(SponsorInputSchema)
     .mutation(async ({ input }) => {
       try {
-        // Validate using existing validation logic
         const validationErrors = validateSponsor(input)
         if (validationErrors.length > 0) {
           throw new TRPCError({
@@ -153,13 +147,12 @@ export const sponsorRouter = router({
           })
         }
 
-        // Update sponsor audience automatically when new sponsor is created
         try {
           const { conference } = await getConferenceForCurrentDomain()
           if (conference && sponsor) {
             const audienceResult = await updateSponsorAudience(
               conference,
-              null, // No old sponsor data for creation
+              null,
               sponsor,
             )
 
@@ -171,7 +164,6 @@ export const sponsorRouter = router({
             }
           }
         } catch (audienceError) {
-          // Don't fail the sponsor creation if audience sync fails
           console.warn(
             'Failed to sync sponsor audience, but sponsor was created:',
             audienceError,
@@ -195,9 +187,7 @@ export const sponsorRouter = router({
     .input(IdParamSchema.extend({ data: SponsorUpdateSchema }))
     .mutation(async ({ input }) => {
       try {
-        // Only validate if we have data (partial update validation)
         if (Object.keys(input.data).length > 0) {
-          // For partial updates, we need to merge with existing data for validation
           const { sponsor: existingSponsor } = await getSponsor(input.id, true)
           if (!existingSponsor) {
             throw new TRPCError({
@@ -206,8 +196,10 @@ export const sponsorRouter = router({
             })
           }
 
-          // Merge with existing data for validation
-          const mergedData = { ...existingSponsor, ...input.data }
+          const mergedData = {
+            ...existingSponsor,
+            ...input.data,
+          }
           const validationErrors = validateSponsor(mergedData)
           if (validationErrors.length > 0) {
             throw new TRPCError({
@@ -217,7 +209,6 @@ export const sponsorRouter = router({
             })
           }
 
-          // Remove tierId from mergedData before sending to updateSponsor
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { tierId, ...sponsorData } = mergedData
           const { sponsor, error } = await updateSponsor(input.id, sponsorData)
@@ -237,7 +228,6 @@ export const sponsorRouter = router({
             })
           }
 
-          // Update sponsor audience when contact information changes
           try {
             const { conference } = await getConferenceForCurrentDomain()
             if (conference && existingSponsor && sponsor) {
@@ -255,7 +245,6 @@ export const sponsorRouter = router({
               }
             }
           } catch (audienceError) {
-            // Don't fail the sponsor update if audience sync fails
             console.warn(
               'Failed to sync sponsor audience, but sponsor was updated:',
               audienceError,
@@ -264,7 +253,6 @@ export const sponsorRouter = router({
 
           return sponsor
         } else {
-          // If no data provided, just return the existing sponsor
           const { sponsor } = await getSponsor(input.id)
           if (!sponsor) {
             throw new TRPCError({
@@ -339,7 +327,6 @@ export const sponsorRouter = router({
     create: adminProcedure
       .input(SponsorTierInputSchema)
       .mutation(async ({ input }) => {
-        // Get current conference
         const { conference, error: confError } =
           await getConferenceForCurrentDomain()
         if (confError || !conference) {
@@ -350,7 +337,6 @@ export const sponsorRouter = router({
           })
         }
 
-        // Validate using existing validation logic
         const dataWithConference = { ...input, conference: conference._id }
         const validationErrors = validateSponsorTier(dataWithConference)
         if (validationErrors.length > 0) {
@@ -377,7 +363,6 @@ export const sponsorRouter = router({
     update: adminProcedure
       .input(IdParamSchema.extend({ data: SponsorTierUpdateSchema }))
       .mutation(async ({ input }) => {
-        // For partial updates, merge with existing data for validation
         if (Object.keys(input.data).length > 0) {
           const { sponsorTier: existingTier } = await getSponsorTier(input.id)
           if (!existingTier) {
@@ -387,7 +372,6 @@ export const sponsorRouter = router({
             })
           }
 
-          // Merge with existing data for validation
           const mergedData = { ...existingTier, ...input.data }
           const validationErrors = validateSponsorTier(mergedData)
           if (validationErrors.length > 0) {
@@ -420,7 +404,6 @@ export const sponsorRouter = router({
 
           return sponsorTier
         } else {
-          // If no data provided, just return the existing tier
           const { sponsorTier } = await getSponsorTier(input.id)
           if (!sponsorTier) {
             throw new TRPCError({
@@ -450,7 +433,6 @@ export const sponsorRouter = router({
   addToConference: adminProcedure
     .input(ConferenceSponsorInputSchema)
     .mutation(async ({ input }) => {
-      // Get current conference
       const { conference, error: confError } =
         await getConferenceForCurrentDomain()
       if (confError || !conference) {
@@ -481,7 +463,6 @@ export const sponsorRouter = router({
   updateTierAssignment: adminProcedure
     .input(SponsorTierAssignmentSchema)
     .mutation(async ({ input }) => {
-      // Get current conference
       const { conference, error: confError } =
         await getConferenceForCurrentDomain()
       if (confError || !conference) {
@@ -512,7 +493,6 @@ export const sponsorRouter = router({
   removeFromConference: adminProcedure
     .input(IdParamSchema)
     .mutation(async ({ input }) => {
-      // Get current conference
       const { conference, error: confError } =
         await getConferenceForCurrentDomain()
       if (confError || !conference) {

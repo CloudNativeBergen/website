@@ -1,8 +1,3 @@
-/**
- * Sanity service functions for featured content management
- * Handles CRUD operations for featured speakers and talks
- */
-
 import { clientWrite } from '@/lib/sanity/client'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
@@ -22,9 +17,6 @@ export interface FeaturedContentSummary {
   availableTalksCount: number
 }
 
-/**
- * Get current featured speakers for a conference
- */
 export async function getFeaturedSpeakers(
   conferenceId: string,
 ): Promise<{ speakers: FeaturedSpeaker[]; error: Error | null }> {
@@ -61,9 +53,6 @@ export async function getFeaturedSpeakers(
   }
 }
 
-/**
- * Get current featured talks for a conference
- */
 export async function getFeaturedTalks(
   conferenceId: string,
 ): Promise<{ talks: FeaturedTalk[]; error: Error | null }> {
@@ -99,9 +88,6 @@ export async function getFeaturedTalks(
   }
 }
 
-/**
- * Add a speaker to featured speakers
- */
 export async function addFeaturedSpeaker(
   conferenceId: string,
   speakerId: string,
@@ -119,19 +105,14 @@ export async function addFeaturedSpeaker(
   }
 }
 
-/**
- * Remove a speaker from featured speakers
- */
 export async function removeFeaturedSpeaker(
   conferenceId: string,
   speakerId: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
-    // Get current featured speakers
     const { speakers: currentSpeakers } =
       await getFeaturedSpeakers(conferenceId)
 
-    // Filter out the speaker to remove
     const updatedSpeakers = currentSpeakers
       .filter((speaker) => speaker._id !== speakerId)
       .map((speaker) => ({ _type: 'reference', _ref: speaker._id }))
@@ -147,9 +128,6 @@ export async function removeFeaturedSpeaker(
   }
 }
 
-/**
- * Add a talk to featured talks
- */
 export async function addFeaturedTalk(
   conferenceId: string,
   talkId: string,
@@ -167,18 +145,13 @@ export async function addFeaturedTalk(
   }
 }
 
-/**
- * Remove a talk from featured talks
- */
 export async function removeFeaturedTalk(
   conferenceId: string,
   talkId: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
-    // Get current featured talks
     const { talks: currentTalks } = await getFeaturedTalks(conferenceId)
 
-    // Filter out the talk to remove
     const updatedTalks = currentTalks
       .filter((talk) => talk._id !== talkId)
       .map((talk) => ({ _type: 'reference', _ref: talk._id }))
@@ -194,9 +167,6 @@ export async function removeFeaturedTalk(
   }
 }
 
-/**
- * Get summary statistics for featured content
- */
 export async function getFeaturedContentSummary(
   conferenceId: string,
 ): Promise<{ summary: FeaturedContentSummary; error: Error | null }> {

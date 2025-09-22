@@ -1,7 +1,3 @@
-/**
- * Configuration constants for the tickets page
- */
-
 export const SPONSOR_TIER_TICKET_ALLOCATION: Record<string, number> = {
   Pod: 2,
   Service: 3,

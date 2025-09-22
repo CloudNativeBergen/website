@@ -78,7 +78,7 @@ const colorSchemes: Record<DashboardMode, ColorScheme> = {
       text: 'text-gray-400 dark:text-gray-500',
     },
     avatar: {
-      background: '4f46e5', // indigo
+      background: '4f46e5',
     },
   },
   speaker: {
@@ -94,7 +94,7 @@ const colorSchemes: Record<DashboardMode, ColorScheme> = {
       text: 'text-blue-100 dark:text-gray-400',
     },
     avatar: {
-      background: '1d4ed8', // brand-cloud-blue
+      background: '1d4ed8',
     },
   },
 }
@@ -113,7 +113,6 @@ export function DashboardLayout({
   const { theme } = useTheme()
   const colors = colorSchemes[mode]
 
-  // Handle keyboard shortcuts for search (admin mode only)
   useEffect(() => {
     if (mode === 'admin' && onSearch) {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -135,7 +134,6 @@ export function DashboardLayout({
   const getAvatarUrl = () => {
     const userPicture = session?.user?.picture
 
-    // Early return if user already has a picture
     if (userPicture) {
       return userPicture
     }
@@ -143,7 +141,6 @@ export function DashboardLayout({
     const userName = getUserName()
     const avatarBackground = colors.avatar.background
 
-    // Safely generate initials with fallback
     let initials = 'U'
     try {
       const processedInitials = userName
@@ -151,9 +148,8 @@ export function DashboardLayout({
         .map((n) => n[0])
         .join('')
         .toUpperCase()
-        .slice(0, 2) // Limit to 2 characters max
+        .slice(0, 2)
 
-      // Only use alphanumeric characters
       const safeInitials = processedInitials.replace(/[^A-Z0-9]/g, '')
 
       if (safeInitials.length > 0) {
@@ -175,7 +171,6 @@ export function DashboardLayout({
   return (
     <>
       <div>
-        {/* Mobile sidebar */}
         <Dialog
           open={sidebarOpen}
           onClose={setSidebarOpen}
@@ -251,7 +246,6 @@ export function DashboardLayout({
           </div>
         </Dialog>
 
-        {/* Desktop sidebar - narrow with icons only */}
         <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-20 lg:flex-col">
           <div
             className={clsx(
@@ -295,7 +289,6 @@ export function DashboardLayout({
           </div>
         </div>
 
-        {/* Mobile top bar */}
         <div
           className={clsx(
             'sticky top-0 z-40 flex items-center gap-x-6 px-4 py-4 shadow-sm sm:px-6 lg:hidden',
@@ -311,7 +304,6 @@ export function DashboardLayout({
             <Bars3Icon aria-hidden="true" className="size-6" />
           </button>
 
-          {/* Mobile center content */}
           <div className="flex flex-1 items-center justify-center">
             {mode === 'admin' && onSearch ? (
               <button
@@ -351,7 +343,6 @@ export function DashboardLayout({
           </div>
         </div>
 
-        {/* Desktop top menu bar */}
         <div className="sticky top-0 z-40 hidden h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:flex lg:px-8 lg:pl-28 dark:border-gray-800 dark:bg-gray-950">
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
             <div className="flex flex-1 items-center">
@@ -392,13 +383,11 @@ export function DashboardLayout({
                 </button>
               )}
 
-              {/* Separator */}
               <div
                 aria-hidden="true"
                 className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-200 dark:bg-gray-700"
               />
 
-              {/* Profile dropdown */}
               <Menu as="div" className="relative">
                 <MenuButton
                   className="-m-1.5 flex items-center p-1.5"
@@ -448,7 +437,6 @@ export function DashboardLayout({
         </main>
       </div>
 
-      {/* Render search component if provided (admin mode) */}
       {searchComponent}
     </>
   )

@@ -15,7 +15,6 @@ interface ViewModeSelectorProps {
   currentViewConfig: ViewModeConfig
 }
 
-// Constants for better performance
 const VIEW_MODE_ICONS = {
   calendar: CalendarDaysIcon,
   grid: Squares2X2Icon,
@@ -52,7 +51,6 @@ export const ViewModeSelector = React.memo(function ViewModeSelector({
   viewModes,
   onViewModeChange,
 }: ViewModeSelectorProps) {
-  // Memoized view mode data to prevent recalculations
   const viewModeData = useMemo(
     () =>
       viewModes.map((mode) => ({
@@ -64,7 +62,6 @@ export const ViewModeSelector = React.memo(function ViewModeSelector({
     [viewModes, viewMode],
   )
 
-  // Memoized click handlers to prevent recreation
   const handleModeChange = useCallback(
     (modeId: ProgramViewMode) => {
       onViewModeChange(modeId)
@@ -85,7 +82,6 @@ export const ViewModeSelector = React.memo(function ViewModeSelector({
           )}
         >
           <mode.Icon className="h-4 w-4" />
-          {/* Show short labels on medium screens, full labels on large screens */}
           <span className="hidden sm:inline lg:hidden">{mode.shortLabel}</span>
           <span className="hidden lg:inline">{mode.label}</span>
         </button>

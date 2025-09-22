@@ -4,11 +4,8 @@ import { SpeakerWithTalks } from '@/lib/speaker/types'
 import { useMemo } from 'react'
 import { CallToAction } from './CallToAction'
 
-// Generate a session-stable seed that changes between page loads/deployments
-// but remains consistent during the current session
 const getSessionSeed = () => {
   if (typeof window !== 'undefined') {
-    // Browser: use session storage to maintain consistency within session
     let seed = sessionStorage.getItem('speaker-selection-seed')
     if (!seed) {
       seed = Math.floor(Math.random() * 1000000).toString()
@@ -16,7 +13,6 @@ const getSessionSeed = () => {
     }
     return parseInt(seed, 10)
   } else {
-    // Server: use date-based seed that changes daily
     const today = new Date()
     return (
       today.getFullYear() * 10000 +
@@ -35,13 +31,11 @@ export function FeaturedSpeakers({
   speakers,
   isOrganizers = false,
 }: FeaturedSpeakersProps) {
-  // Memoize speaker selection to prevent re-renders causing different speakers
   const { featuredSpeaker, remainingSpeakers } = useMemo(() => {
     if (speakers.length === 0) {
       return { featuredSpeaker: null, remainingSpeakers: [] }
     }
 
-    // Use a session-stable seed combined with speaker data for deterministic randomness
     const sessionSeed = getSessionSeed()
     const speakerHash = speakers.map((s) => s._id).join('').length
     const combinedSeed = sessionSeed + speakerHash
@@ -53,7 +47,6 @@ export function FeaturedSpeakers({
     }
   }, [speakers])
 
-  // Memoize content strings to prevent unnecessary re-renders
   const content = useMemo(
     () => ({
       title: isOrganizers ? 'Conference Controllers' : 'Masters of the Kube',
@@ -64,7 +57,6 @@ export function FeaturedSpeakers({
     [isOrganizers],
   )
 
-  // Early return for empty speakers array
   if (speakers.length === 0) {
     return (
       <section
@@ -111,7 +103,6 @@ export function FeaturedSpeakers({
             </p>
           </div>
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {/* Featured Speaker - Show randomly selected speaker prominently */}
             {featuredSpeaker && (
               <div className="mt-20 mb-16">
                 <SpeakerPromotionCard
@@ -122,7 +113,6 @@ export function FeaturedSpeakers({
               </div>
             )}
 
-            {/* Grid of remaining speakers */}
             {remainingSpeakers.length > 0 && (
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {remainingSpeakers.map((speaker) => (
@@ -135,7 +125,6 @@ export function FeaturedSpeakers({
               </div>
             )}
 
-            {/* Call to Action */}
             <div className="mt-15">
               <CallToAction isOrganizers={isOrganizers} />
             </div>

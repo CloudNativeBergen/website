@@ -36,9 +36,6 @@ export interface SpeakerAudienceManager {
   ) => Promise<{ success: boolean; audienceId: string; error?: Error }>
 }
 
-/**
- * Get or create a persistent audience for a conference by type
- */
 export async function getOrCreateConferenceAudienceByType(
   conference: Conference,
   audienceType: AudienceType,
@@ -67,7 +64,6 @@ export async function getOrCreateConferenceAudienceByType(
       return { audienceId: existingAudience.id }
     }
 
-    // Create new audience if not found with rate limiting
     await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
     const audienceResponse = await retryWithBackoff(() =>
       resend.audiences.create({
@@ -83,7 +79,6 @@ export async function getOrCreateConferenceAudienceByType(
 
     return { audienceId: audienceResponse.data!.id }
   } catch (error) {
-    // Don't spam logs for rate limit errors that have already been handled by retry logic
     if (isRateLimitError(error)) {
       console.warn(
         `Conference ${audienceType} audience could not be created/accessed due to persistent rate limiting`,
@@ -98,18 +93,12 @@ export async function getOrCreateConferenceAudienceByType(
   }
 }
 
-/**
- * Get or create a persistent audience for a conference (backwards compatibility)
- */
 export async function getOrCreateConferenceAudience(
   conference: Conference,
 ): Promise<{ audienceId: string; error?: Error }> {
   return getOrCreateConferenceAudienceByType(conference, 'speakers')
 }
 
-/**
- * Add a contact to an audience
- */
 export async function addContactToAudience(
   audienceId: string,
   contact: Contact,
@@ -131,7 +120,6 @@ export async function addContactToAudience(
     )
 
     if (contactResponse.error) {
-      // If contact already exists, that's okay
       if (contactResponse.error.message?.includes('already exists')) {
         return { success: true }
       }
@@ -140,7 +128,6 @@ export async function addContactToAudience(
 
     return { success: true }
   } catch (error) {
-    // Don't spam logs for rate limit errors that have already been handled by retry logic
     if (isRateLimitError(error)) {
       console.warn(
         `Contact ${contact.email} could not be added to audience due to persistent rate limiting`,
@@ -152,15 +139,11 @@ export async function addContactToAudience(
   }
 }
 
-/**
- * Remove a contact from an audience
- */
 export async function removeContactFromAudience(
   audienceId: string,
   email: string,
 ): Promise<{ success: boolean; error?: Error }> {
   try {
-    // First, find the contact by email with retry
     const contactsResponse = await retryWithBackoff(
       async () => await resend.contacts.list({ audienceId }),
     )
@@ -174,11 +157,9 @@ export async function removeContactFromAudience(
     const contact = contactsResponse.data?.data.find((c) => c.email === email)
 
     if (!contact) {
-      // Contact not found, consider it already removed
       return { success: true }
     }
 
-    // Remove the contact with retry
     const removeResponse = await retryWithBackoff(
       async () =>
         await resend.contacts.remove({
@@ -195,7 +176,6 @@ export async function removeContactFromAudience(
 
     return { success: true }
   } catch (error) {
-    // Don't spam logs for rate limit errors that have already been handled by retry logic
     if (isRateLimitError(error)) {
       console.warn(
         `Contact with email ${email} could not be removed from audience due to persistent rate limiting`,
@@ -206,9 +186,7 @@ export async function removeContactFromAudience(
     return { success: false, error: error as Error }
   }
 }
-/**
- * Add a speaker to the conference audience
- */
+
 export async function addSpeakerToAudience(
   audienceId: string,
   speaker: Speaker,
@@ -221,9 +199,6 @@ export async function addSpeakerToAudience(
   return addContactToAudience(audienceId, contact)
 }
 
-/**
- * Remove a speaker from the conference audience
- */
 export async function removeSpeakerFromAudience(
   audienceId: string,
   speakerEmail: string,
@@ -231,9 +206,6 @@ export async function removeSpeakerFromAudience(
   return removeContactFromAudience(audienceId, speakerEmail)
 }
 
-/**
- * Sync an audience with a list of contacts
- */
 export async function syncAudienceWithContacts(
   conference: Conference,
   audienceType: AudienceType,
@@ -247,7 +219,6 @@ export async function syncAudienceWithContacts(
   error?: Error
 }> {
   try {
-    // Get or create audience
     const { audienceId, error: audienceError } =
       await getOrCreateConferenceAudienceByType(conference, audienceType)
 
@@ -255,7 +226,6 @@ export async function syncAudienceWithContacts(
       throw audienceError || new Error('Failed to get audience ID')
     }
 
-    // Get current contacts in the audience with retry
     const contactsResponse = await retryWithBackoff(
       async () => await resend.contacts.list({ audienceId }),
     )
@@ -272,7 +242,6 @@ export async function syncAudienceWithContacts(
       contacts.filter((c) => c.email).map((c) => c.email),
     )
 
-    // Add new contacts with rate limiting
     let addedCount = 0
     for (const contact of contacts) {
       if (contact.email && !existingEmails.has(contact.email)) {
@@ -280,12 +249,11 @@ export async function syncAudienceWithContacts(
         if (success) {
           addedCount++
         }
-        // Add delay to respect rate limits
+
         await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       }
     }
 
-    // Remove contacts who are no longer eligible with rate limiting
     let removedCount = 0
     for (const existingContact of existingContacts) {
       if (!currentContactEmails.has(existingContact.email)) {
@@ -296,7 +264,7 @@ export async function syncAudienceWithContacts(
         if (success) {
           removedCount++
         }
-        // Add delay to respect rate limits
+
         await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
       }
     }
@@ -324,9 +292,7 @@ export async function syncAudienceWithContacts(
     }
   }
 }
-/**
- * Sync the conference audience with current confirmed/accepted speakers
- */
+
 export async function syncConferenceAudience(
   conference: Conference,
   eligibleSpeakers: (Speaker & { proposals: ProposalExisting[] })[],
@@ -336,7 +302,6 @@ export async function syncConferenceAudience(
   syncedCount: number
   error?: Error
 }> {
-  // Convert speakers to contacts
   const contacts: Contact[] = eligibleSpeakers
     .filter((s) => s.email)
     .map((speaker) => ({
@@ -351,7 +316,6 @@ export async function syncConferenceAudience(
     contacts,
   )
 
-  // Return format compatible with existing code
   return {
     success: result.success,
     audienceId: result.audienceId,
@@ -360,9 +324,6 @@ export async function syncConferenceAudience(
   }
 }
 
-/**
- * Sync the sponsor audience with current sponsor contacts
- */
 export async function syncSponsorAudience(
   conference: Conference,
   sponsorContacts: Contact[],
@@ -377,9 +338,6 @@ export async function syncSponsorAudience(
   return syncAudienceWithContacts(conference, 'sponsors', sponsorContacts)
 }
 
-/**
- * Handle speaker status change (confirm/withdraw)
- */
 export async function handleSpeakerStatusChange(
   conference: Conference,
   speaker: Speaker,
@@ -387,7 +345,7 @@ export async function handleSpeakerStatusChange(
 ): Promise<{ success: boolean; error?: Error }> {
   try {
     if (!speaker.email) {
-      return { success: true } // Nothing to do if no email
+      return { success: true }
     }
 
     const { audienceId, error: audienceError } =
@@ -398,10 +356,8 @@ export async function handleSpeakerStatusChange(
     }
 
     if (hasConfirmedTalks) {
-      // Add to audience
       return await addSpeakerToAudience(audienceId, speaker)
     } else {
-      // Remove from audience
       return await removeSpeakerFromAudience(audienceId, speaker.email)
     }
   } catch (error) {

@@ -27,10 +27,6 @@ interface ProposalCardProps {
   isSelected?: boolean
 }
 
-/**
- * Individual proposal card component for admin interface
- * Displays proposal information with speaker image, metadata, and status
- */
 export function ProposalCard({
   proposal,
   href,
@@ -51,7 +47,6 @@ export function ProposalCard({
   const reviewCount = proposal.reviews?.length || 0
   const speakerNames = getProposalSpeakerNames(proposal)
 
-  // Get current conference ID for speaker indicators
   const currentConferenceId =
     typeof proposal.conference === 'object' &&
     proposal.conference &&
@@ -81,7 +76,6 @@ export function ProposalCard({
 
       <div className="min-w-0 flex-1">
         <div className="focus:outline-none">
-          {/* Header row with title and status */}
           <div className="mb-2 flex items-start justify-between gap-2">
             <h3 className="line-clamp-2 flex-1 text-sm font-medium text-gray-900 dark:text-white">
               {proposal.title}
@@ -93,13 +87,11 @@ export function ProposalCard({
             />
           </div>
 
-          {/* Speaker name with indicators */}
           <div className="mb-2 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
             <div className="flex min-w-0 flex-1 items-center">
               <span className="truncate font-medium">{speakerNames}</span>
             </div>
 
-            {/* Speaker Indicators */}
             {speakers.length > 0 && (
               <div className="ml-2">
                 <SpeakerIndicators
@@ -112,7 +104,6 @@ export function ProposalCard({
             )}
           </div>
 
-          {/* Metadata in compact rows */}
           <div className="space-y-1">
             <MetadataRow icon={ClockIcon}>
               {formats.get(proposal.format) ||
@@ -120,7 +111,6 @@ export function ProposalCard({
                 'Not specified'}
             </MetadataRow>
 
-            {/* Rating display */}
             <RatingDisplay
               rating={averageRating}
               reviewCount={reviewCount}
@@ -161,13 +151,11 @@ export function ProposalCard({
   } ${onSelect ? 'cursor-pointer' : ''}`
 
   const handleClick = (e: React.MouseEvent) => {
-    // On large screens (lg+), if onSelect is provided, use preview mode
-    const isLargeScreen = window.innerWidth >= 1024 // lg breakpoint
+    const isLargeScreen = window.innerWidth >= 1024
     if (onSelect && isLargeScreen) {
       e.preventDefault()
       onSelect()
     }
-    // On smaller screens, let the Link handle navigation naturally
   }
 
   return (

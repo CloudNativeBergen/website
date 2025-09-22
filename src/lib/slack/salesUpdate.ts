@@ -32,8 +32,6 @@ interface SalesUpdateData {
 
 async function sendSlackMessage(message: SlackMessage, forceSlack = false) {
   const webhookUrl = process.env.CFP_BOT
-
-  // In development, just print the message to console unless forced to send to Slack
   if (process.env.NODE_ENV === 'development' && !forceSlack) {
     console.log('Slack sales update notification (development mode):')
     console.log(JSON.stringify(message, null, 2))
@@ -76,21 +74,16 @@ function createCategoryBreakdown(
   ticketsByCategory: Record<string, number>,
 ): SlackBlock[] {
   const categoryBlocks: SlackBlock[] = []
-
-  // Create pairs of categories for side-by-side display
   const categoryEntries = Object.entries(ticketsByCategory)
 
   for (let i = 0; i < categoryEntries.length; i += 2) {
     const fields = []
 
-    // First category
     const [category1, count1] = categoryEntries[i]
     fields.push({
       type: 'mrkdwn',
       text: `*${category1}:*\n${count1} tickets`,
     })
-
-    // Second category (if exists)
     if (i + 1 < categoryEntries.length) {
       const [category2, count2] = categoryEntries[i + 1]
       fields.push({
@@ -188,7 +181,6 @@ export async function sendSalesUpdateToSlack(
     },
   ]
 
-  // Add target analysis if available
   if (targetAnalysis && targetAnalysis.performance) {
     const { performance } = targetAnalysis
     const statusEmoji = performance.isOnTrack ? '✅' : '⚠️'
@@ -233,7 +225,6 @@ export async function sendSalesUpdateToSlack(
       },
     )
 
-    // Add next milestone information if available
     if (performance.nextMilestone) {
       blocks.push({
         type: 'section',
@@ -244,8 +235,6 @@ export async function sendSalesUpdateToSlack(
       })
     }
   }
-
-  // Add category breakdown if there are multiple categories of paid tickets
   if (Object.keys(ticketsByCategory).length > 1) {
     blocks.push({
       type: 'section',
@@ -257,8 +246,6 @@ export async function sendSalesUpdateToSlack(
 
     blocks.push(...createCategoryBreakdown(ticketsByCategory))
   }
-
-  // Add a divider and footer
   blocks.push(
     {
       type: 'divider',

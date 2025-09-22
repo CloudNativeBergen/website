@@ -11,7 +11,6 @@ import type {
   EventTicketWithoutDate,
 } from './types'
 
-// Re-export types for convenience
 export type {
   EventTicket,
   CheckinPayOrder,
@@ -33,19 +32,16 @@ export async function fetchEventTickets(
   }
 
   try {
-    // Fetch both datasets in parallel
     const [tickets, orderUsers] = await Promise.all([
       _fetchEventTickets(customerId, eventId),
       _fetchAllEventOrders(customerId, eventId),
     ])
 
-    // Create a map of order IDs to purchase dates
     const orderDateMap = new Map<number, string>()
     orderUsers.forEach((orderUser) => {
       orderDateMap.set(orderUser.orderId, orderUser.createdAt)
     })
 
-    // Enrich tickets with order dates
     return tickets.map(
       (ticket): EventTicket => ({
         ...ticket,
@@ -242,7 +238,6 @@ async function _fetchEventOrders(
 
   const { offset = 0, length = 1000, reportFilters = [] } = options
 
-  // Add event ID filter if provided
   const filters = eventId
     ? [
         {
@@ -346,7 +341,6 @@ async function _fetchAllEventOrders(
         allTickets.push(...batch)
         offset += batchSize
 
-        // If we got fewer results than requested, we've reached the end
         if (batch.length < batchSize) {
           hasMore = false
         }

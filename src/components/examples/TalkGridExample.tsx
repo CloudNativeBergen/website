@@ -9,14 +9,9 @@ interface TalkGridExampleProps {
   }>
 }
 
-/**
- * Example component showing how to use TalkPromotionCard in a grid layout
- * with proper footer alignment
- */
 export function TalkGridExample({ talks }: TalkGridExampleProps) {
   return (
     <div className="space-y-8">
-      {/* Featured Talk */}
       {talks.length > 0 && (
         <div className="mb-12">
           <h2 className="font-space-grotesk mb-6 text-2xl font-bold text-brand-slate-gray">
@@ -36,7 +31,6 @@ export function TalkGridExample({ talks }: TalkGridExampleProps) {
         </div>
       )}
 
-      {/* Regular Sessions Grid */}
       {talks.length > 1 && (
         <div>
           <div className="mb-6 flex items-center justify-between">
@@ -51,7 +45,6 @@ export function TalkGridExample({ talks }: TalkGridExampleProps) {
             </a>
           </div>
 
-          {/* Grid with equal height rows - this ensures footer alignment */}
           <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {talks.slice(1).map((slot) => (
               <TalkPromotionCard
@@ -69,7 +62,6 @@ export function TalkGridExample({ talks }: TalkGridExampleProps) {
         </div>
       )}
 
-      {/* Compact Variant Example */}
       <div>
         <h3 className="font-space-grotesk mb-6 text-xl font-bold text-brand-slate-gray">
           Quick Sessions Overview

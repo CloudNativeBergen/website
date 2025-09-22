@@ -2,9 +2,6 @@ import { groq } from 'next-sanity'
 import { clientReadUncached as clientRead } from '@/lib/sanity/client'
 import { CoSpeakerInvitationFull, InvitationStatus } from './types'
 
-/**
- * Get pending invitations for a proposal
- */
 export async function getPendingInvitationsForProposal(
   proposalId: string,
 ): Promise<CoSpeakerInvitationFull[]> {
@@ -31,9 +28,6 @@ export async function getPendingInvitationsForProposal(
   }
 }
 
-/**
- * Get all invitations for a proposal (for display in proposal cards)
- */
 export async function getInvitationsForProposal(
   proposalId: string,
 ): Promise<CoSpeakerInvitationFull[]> {
@@ -68,9 +62,6 @@ export async function getInvitationsForProposal(
   }
 }
 
-/**
- * Get invitations for multiple proposals (batch fetch for performance)
- */
 export async function getInvitationsForProposals(
   proposalIds: string[],
 ): Promise<Record<string, CoSpeakerInvitationFull[]>> {
@@ -97,7 +88,6 @@ export async function getInvitationsForProposals(
       { cache: 'no-store' },
     )
 
-    // Group invitations by proposal ID
     const invitationsByProposal: Record<string, CoSpeakerInvitationFull[]> = {}
 
     for (const invitation of invitations || []) {
@@ -115,9 +105,6 @@ export async function getInvitationsForProposals(
   }
 }
 
-/**
- * Get invitation by token for verification
- */
 export async function getInvitationByToken(
   token: string,
 ): Promise<CoSpeakerInvitationFull | null> {
@@ -151,9 +138,6 @@ export async function getInvitationByToken(
   }
 }
 
-/**
- * Check if an invitation is expired
- */
 export function isInvitationExpired(
   invitation: CoSpeakerInvitationFull,
 ): boolean {
@@ -161,9 +145,6 @@ export function isInvitationExpired(
   return new Date(invitation.expiresAt) < new Date()
 }
 
-/**
- * Get display status for an invitation considering expiry
- */
 export function getInvitationDisplayStatus(
   invitation: CoSpeakerInvitationFull,
 ): InvitationStatus | 'expired' {

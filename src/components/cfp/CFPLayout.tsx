@@ -22,21 +22,16 @@ interface CFPLayoutProps {
 export function CFPLayout({ children }: CFPLayoutProps) {
   const { data: session } = useSession()
 
-  // Check if current speaker is eligible for travel funding
-  // In test mode, always eligible if speaker exists
-  // In production, must have requiresTravelFunding flag
   const isEligibleForTravelSupport =
     session?.speaker?.flags?.includes(Flags.requiresTravelFunding) ||
     (AppEnvironment.isTestMode && session?.speaker)
 
-  // Base navigation items
   const baseNavigation: NavigationItem[] = [
     { name: 'Profile', href: '/cfp/profile', icon: UserIcon },
     { name: 'Submit Talk', href: '/cfp/submit', icon: PlusIcon },
     { name: 'My Proposals', href: '/cfp/list', icon: ListBulletIcon },
   ]
 
-  // Conditionally add travel support
   const navigationWithTravelSupport: NavigationItem[] =
     isEligibleForTravelSupport
       ? [
@@ -49,7 +44,6 @@ export function CFPLayout({ children }: CFPLayoutProps) {
         ]
       : baseNavigation
 
-  // Add email settings at the end
   const navigation: NavigationItem[] = [
     ...navigationWithTravelSupport,
     { name: 'Email Settings', href: '/cfp/admin', icon: EnvelopeIcon },

@@ -43,7 +43,6 @@ export function BankingDetailsForm({
     Record<string, string>
   >({})
 
-  // Financial data processing consent
   const [financialDataConsent, setFinancialDataConsent] = useState(false)
 
   const validateForm = (): boolean => {
@@ -75,7 +74,6 @@ export function BankingDetailsForm({
       errors.accountNumber = 'Either IBAN or Account Number is required'
     }
 
-    // Add consent validation
     if (!financialDataConsent) {
       errors.consent =
         'You must consent to financial data processing to save banking details'
@@ -98,7 +96,7 @@ export function BankingDetailsForm({
       [field]:
         field === 'preferredCurrency' ? (value as SupportedCurrency) : value,
     }))
-    // Clear validation error for this field
+
     if (validationErrors[field]) {
       setValidationErrors((prev) => {
         const newErrors = { ...prev }
@@ -246,7 +244,6 @@ export function BankingDetailsForm({
           </div>
         </div>
 
-        {/* Financial Data Processing Consent */}
         <div className="border-t border-gray-200 pt-6 dark:border-gray-700">
           <fieldset>
             <legend className="sr-only">

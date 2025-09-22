@@ -31,15 +31,8 @@ export function getStatusBadgeStyle(status: Status): string {
   }
 }
 
-/**
- * Re-export clsx as our standard class name utility
- * This provides a consistent API while leveraging the battle-tested clsx library
- */
 export { default as classNames } from 'clsx'
 
-/**
- * Common error display props interface
- */
 export interface ErrorDisplayProps {
   title: string
   message: string

@@ -22,17 +22,8 @@ interface RespondRequest {
   action: 'accept' | 'decline'
 }
 
-/**
- * Handle co-speaker invitation responses
- *
- * Key improvements:
- * - Removed email restriction: Users can accept invitations regardless of their logged-in email
- * - Optimized database calls: Single call to getInvitationByToken instead of multiple queries
- * - Better type safety: Proper handling of invitation object properties
- */
 export async function POST(request: NextRequest) {
   try {
-    // Check for test mode
     const isTestMode = AppEnvironment.isTestModeFromUrl(request.url)
 
     const session = await auth()
@@ -53,7 +44,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get invitation by token (optimized single database call)
     const invitation = await getInvitationByToken(token)
 
     if (!invitation) {
@@ -63,7 +53,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify token signature for non-test modes
     if (!isTestMode) {
       const payload = verifyInvitationToken(token)
       if (!payload) {
@@ -73,7 +62,6 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Verify token matches invitation data
       if (
         payload.invitationId !== invitation._id ||
         payload.invitedEmail !== invitation.invitedEmail
@@ -95,7 +83,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if invitation is expired
     const isExpired = new Date(invitation.expiresAt) < new Date()
     if (isExpired) {
       return NextResponse.json(
@@ -104,7 +91,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get proposal details
     const proposalId =
       typeof invitation.proposal === 'object' && '_id' in invitation.proposal
         ? invitation.proposal._id
@@ -144,7 +130,6 @@ export async function POST(request: NextRequest) {
     let acceptedSpeakerId: string | null = null
 
     if (action === 'accept') {
-      // Check speaker limits before accepting
       const maxSpeakers = getTotalSpeakerLimit(proposal.format)
       const currentSpeakerCount = proposal.speakers?.length || 0
 
@@ -156,16 +141,14 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         )
       }
-      // Get or create speaker profile
+
       if (isTestMode) {
-        // In test mode, we need to use findSpeakerByEmail or create a new speaker
         const testEmail = invitation.invitedEmail
         const { speaker: existingSpeaker } = await findSpeakerByEmail(testEmail)
 
         if (existingSpeaker?._id) {
           acceptedSpeakerId = existingSpeaker._id
         } else {
-          // Create a minimal speaker for testing
           const newSpeaker = await clientWrite.create({
             _type: 'speaker',
             _id: randomUUID(),
@@ -184,7 +167,6 @@ export async function POST(request: NextRequest) {
           acceptedSpeakerId = newSpeaker._id
         }
       } else {
-        // In production, use the authenticated account
         const account = session?.account
         if (!account) {
           return NextResponse.json(
@@ -211,19 +193,16 @@ export async function POST(request: NextRequest) {
         acceptedSpeakerId = result.speaker._id
       }
 
-      // Add speaker to the speakers array of the proposal
       const currentSpeakers = proposal.speakers || []
       const speakerRefs = currentSpeakers.map((s: { _id: string }) =>
         createReferenceWithKey(s._id, 'speaker'),
       )
 
-      // Check if the speaker is already in the list
       const alreadyAdded = speakerRefs.some(
         (ref: { _ref: string }) => ref._ref === acceptedSpeakerId,
       )
 
       if (!alreadyAdded) {
-        // Add new speaker reference using the helper function
         speakerRefs.push(createReferenceWithKey(acceptedSpeakerId!, 'speaker'))
 
         updatedProposal = await clientWrite
@@ -231,19 +210,16 @@ export async function POST(request: NextRequest) {
           .set({ speakers: speakerRefs })
           .commit()
       } else {
-        // Speaker is already in the list, just fetch the proposal again
         updatedProposal = proposal
       }
     }
 
-    // Update invitation status
     const updatedInvitation = await updateInvitationStatus(
       invitation._id,
       action === 'accept' ? 'accepted' : 'declined',
       acceptedSpeakerId || undefined,
     )
 
-    // Send notification email to inviter (only if we have their email)
     const inviterEmail =
       typeof invitation.invitedBy === 'object' &&
       'email' in invitation.invitedBy
@@ -260,14 +236,12 @@ export async function POST(request: NextRequest) {
 
     if (inviterEmail) {
       try {
-        // Fetch conference data for the current domain
         const { conference, error: conferenceError } =
           await getConferenceForCurrentDomain()
         if (conferenceError || !conference) {
           console.error('Error fetching conference data:', conferenceError)
         }
 
-        // Use conference data for event details
         const eventName = conference?.title || 'Cloud Native Bergen'
         const eventLocation = conference?.city
           ? `${conference.city}, ${conference.country || 'Norway'}`
@@ -309,7 +283,6 @@ export async function POST(request: NextRequest) {
         }
       } catch (emailError) {
         console.error('Error sending notification email:', emailError)
-        // Continue processing even if email fails
       }
     }
 

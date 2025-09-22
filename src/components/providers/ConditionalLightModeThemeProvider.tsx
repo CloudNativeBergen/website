@@ -13,12 +13,11 @@ function ConditionalLightModeForcer() {
   const pathname = usePathname()
 
   useEffect(() => {
-    // Force light mode for main pages, but allow theme switching for CFP dashboard pages (/cfp/)
     if (!pathname.startsWith('/cfp/') || !pathname.startsWith('/branding')) {
       setTheme('light')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]) // Only depend on pathname, not setTheme to avoid loops
+  }, [pathname])
 
   return null
 }

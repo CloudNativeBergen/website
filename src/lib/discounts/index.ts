@@ -1,8 +1,3 @@
-/**
- * Public API for discount code management
- */
-
-// Types
 export type {
   EventDiscount,
   TicketType,
@@ -15,7 +10,6 @@ export type {
   ValidateDiscountCodeResponse,
 } from './types'
 
-// API functions
 export {
   getEventDiscounts,
   createEventDiscount,
@@ -23,5 +17,4 @@ export {
   validateDiscountCode,
 } from './api'
 
-// Usage calculations
 export { calculateDiscountUsage } from './usage'

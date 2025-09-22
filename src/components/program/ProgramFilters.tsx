@@ -40,14 +40,13 @@ interface ProgramFiltersProps {
   hasActiveFilters: boolean
   totalTalks: number
   filteredTalks: number
-  // View mode props
+
   viewMode: ProgramViewMode
   viewModes: ViewModeConfig[]
   onViewModeChange: (mode: ProgramViewMode) => void
   currentViewConfig: ViewModeConfig
 }
 
-// Constants for better performance
 const DEFAULT_SELECT_CLASSES =
   'col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600'
 const CHEVRON_DOWN_CLASSES =
@@ -77,7 +76,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
 }: ProgramFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // Memoized handlers for better performance
   const handleToggleExpanded = useCallback(() => {
     setIsExpanded((prev) => !prev)
   }, [])
@@ -131,7 +129,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
     [onFilterChange],
   )
 
-  // Memoized format options for better performance
   const formatOptions = useMemo(
     () =>
       availableFilters.formats.map((format) => {
@@ -170,7 +167,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
 
   return (
     <div className="@container space-y-4 rounded-lg border border-brand-frosted-steel bg-brand-glacier-white p-4 dark:border-gray-700 dark:bg-gray-800">
-      {/* Compact Header with View Mode Selector */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -179,7 +175,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
               Filters
             </h3>
           </div>
-          {/* Hide count on mobile and tablet (@lg:block) to reduce clutter */}
           <div className="hidden rounded-md bg-brand-sky-mist px-2 py-1 @lg:block dark:bg-gray-700">
             <p className="font-inter text-xs text-brand-slate-gray dark:text-gray-300">
               <span className="font-semibold text-brand-cloud-blue dark:text-blue-400">
@@ -191,7 +186,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* View Mode Selector */}
           <ViewModeSelector
             viewMode={viewMode}
             viewModes={viewModes}
@@ -229,7 +223,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
         </div>
       </div>
 
-      {/* Always Visible: Search */}
       <div className="relative">
         <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
         <input
@@ -241,10 +234,8 @@ export const ProgramFilters = React.memo(function ProgramFilters({
         />
       </div>
 
-      {/* Expandable Filters */}
       {isExpanded && (
         <div className="space-y-4 border-t border-brand-frosted-steel pt-4 dark:border-gray-700">
-          {/* Show talk count on mobile and tablet when expanded */}
           <div className="@lg:hidden">
             <p className="font-inter text-center text-xs text-brand-slate-gray dark:text-gray-300">
               Showing{' '}
@@ -255,9 +246,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             </p>
           </div>
 
-          {/* Container-responsive layout: adapts to filter container width */}
           <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2 @lg:grid-cols-4">
-            {/* Day Filter */}
             {availableFilters.days.length > 1 && (
               <div>
                 <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
@@ -285,7 +274,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
               </div>
             )}
 
-            {/* Track Filter */}
             {availableFilters.tracks.length > 1 && (
               <div>
                 <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
@@ -313,7 +301,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
               </div>
             )}
 
-            {/* Format Filter */}
             {availableFilters.formats.length > 0 && (
               <div>
                 <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
@@ -341,7 +328,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
               </div>
             )}
 
-            {/* Level Filter */}
             {availableFilters.levels.length > 0 && (
               <div>
                 <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
@@ -369,7 +355,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
               </div>
             )}
 
-            {/* Audience Filter */}
             {availableFilters.audiences.length > 0 && (
               <div>
                 <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">
@@ -397,7 +382,6 @@ export const ProgramFilters = React.memo(function ProgramFilters({
               </div>
             )}
 
-            {/* Topic Filter */}
             {availableFilters.topics.length > 0 && (
               <div className="@sm:col-span-2 @lg:col-span-2">
                 <label className="mb-1 flex items-center gap-1 text-xs font-medium text-brand-slate-gray dark:text-gray-300">

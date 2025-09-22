@@ -15,17 +15,12 @@ import { Review } from '@/lib/review/types'
 import { FilterState, ReviewStatus } from './ProposalsFilter'
 import { calculateAverageRating } from '@/lib/proposal'
 
-/**
- * Custom hook for filtering and sorting proposals
- * Separates business logic from UI components
- */
 export function useProposalFiltering(
   proposals: ProposalExisting[],
   filters: FilterState,
   currentUserId?: string,
 ) {
   return useMemo(() => {
-    // First, identify speakers who already have accepted or confirmed talks
     const speakersWithAcceptedTalks = new Set<string>()
 
     if (filters.hideMultipleTalks) {
@@ -48,7 +43,6 @@ export function useProposalFiltering(
     }
 
     const filtered = proposals.filter((proposal) => {
-      // Filter out proposals from speakers with accepted/confirmed talks (unless this proposal is already accepted/confirmed)
       if (filters.hideMultipleTalks && proposal.status === Status.submitted) {
         if (proposal.speakers && Array.isArray(proposal.speakers)) {
           const hasSpeakerWithAcceptedTalk = proposal.speakers.some(
@@ -69,7 +63,6 @@ export function useProposalFiltering(
         }
       }
 
-      // Filter by status
       if (
         filters.status.length > 0 &&
         !filters.status.includes(proposal.status)
@@ -77,7 +70,6 @@ export function useProposalFiltering(
         return false
       }
 
-      // Filter by format
       if (
         filters.format.length > 0 &&
         !filters.format.includes(proposal.format)
@@ -85,12 +77,10 @@ export function useProposalFiltering(
         return false
       }
 
-      // Filter by level
       if (filters.level.length > 0 && !filters.level.includes(proposal.level)) {
         return false
       }
 
-      // Filter by language
       if (
         filters.language.length > 0 &&
         !filters.language.includes(proposal.language)
@@ -98,7 +88,6 @@ export function useProposalFiltering(
         return false
       }
 
-      // Filter by audience
       if (filters.audience.length > 0) {
         const hasMatchingAudience = proposal.audiences?.some((aud) =>
           filters.audience.includes(aud),
@@ -108,7 +97,6 @@ export function useProposalFiltering(
         }
       }
 
-      // Filter by speaker flags
       if (filters.speakerFlags.length > 0) {
         const hasMatchingSpeakerFlag = proposal.speakers?.some((speaker) => {
           if (typeof speaker === 'object' && 'flags' in speaker) {
@@ -124,7 +112,6 @@ export function useProposalFiltering(
         }
       }
 
-      // Filter by review status (only if currentUserId is provided)
       if (currentUserId && filters.reviewStatus !== ReviewStatus.all) {
         const hasUserReview = proposal.reviews?.some((review) => {
           const reviewObj =
@@ -155,7 +142,6 @@ export function useProposalFiltering(
       return true
     })
 
-    // Sort proposals
     filtered.sort((a, b) => {
       let aValue: string | number
       let bValue: string | number
@@ -211,10 +197,6 @@ export function useProposalFiltering(
   }, [proposals, filters, currentUserId])
 }
 
-/**
- * Custom hook for managing filter state
- * Provides actions for updating filters
- */
 export function useFilterState(initialFilters: FilterState) {
   const [filters, setFilters] = useState<FilterState>(initialFilters)
 
@@ -274,7 +256,7 @@ export function useFilterState(initialFilters: FilterState) {
       sortBy: 'created',
       sortOrder: 'desc',
     })
-  } // Count active filters, excluding default status filters
+  }
   const defaultStatusFilters = [
     Status.submitted,
     Status.accepted,
@@ -316,27 +298,21 @@ export function useFilterState(initialFilters: FilterState) {
   }
 }
 
-/**
- * URL-aware custom hook for managing filter state
- * Synchronizes filter state with URL query parameters for hot-linking
- */
 export function useFilterStateWithURL(initialFilters: FilterState) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   const [filters, setFilters] = useState<FilterState>(() => {
-    // Initialize from URL params if available, otherwise use defaults
     const urlFilters = parseFiltersFromURL(searchParams)
     return {
       ...initialFilters,
       ...urlFilters,
-      // Ensure speakerFlags is always defined
+
       speakerFlags: urlFilters.speakerFlags || [],
     }
   })
 
-  // Update URL when filters change
   const updateURL = useCallback(
     (newFilters: FilterState) => {
       const params = serializeFiltersToURL(newFilters, initialFilters)
@@ -348,7 +324,6 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     [router, pathname, initialFilters],
   )
 
-  // Update filters and URL
   const updateFilters = useCallback(
     (newFilters: FilterState) => {
       setFilters(newFilters)
@@ -419,7 +394,6 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
     updateFilters(initialFilters)
   }, [initialFilters, updateFilters])
 
-  // Count active filters, excluding default status filters
   const defaultStatusFilters = [
     Status.submitted,
     Status.accepted,
@@ -461,13 +435,6 @@ export function useFilterStateWithURL(initialFilters: FilterState) {
   }
 }
 
-/**
- * Utility functions for URL parameter management
- */
-
-/**
- * Parse array values from URL search params
- */
 function parseArrayParam<T extends string>(
   param: string | null,
   validValues: T[],
@@ -478,52 +445,40 @@ function parseArrayParam<T extends string>(
     .filter((value): value is T => validValues.includes(value as T))
 }
 
-/**
- * Serialize array values for URL search params
- */
 function serializeArrayParam<T extends string>(values: T[]): string | null {
   return values.length > 0 ? values.join(',') : null
 }
 
-/**
- * Parse FilterState from URL search parameters
- */
 function parseFiltersFromURL(
   searchParams: URLSearchParams,
 ): Partial<FilterState> {
   const filters: Partial<FilterState> = {}
 
-  // Parse status filter
   const statusParam = searchParams.get('status')
   if (statusParam) {
     filters.status = parseArrayParam(statusParam, Object.values(Status))
   }
 
-  // Parse format filter
   const formatParam = searchParams.get('format')
   if (formatParam) {
     filters.format = parseArrayParam(formatParam, Object.values(Format))
   }
 
-  // Parse level filter
   const levelParam = searchParams.get('level')
   if (levelParam) {
     filters.level = parseArrayParam(levelParam, Object.values(Level))
   }
 
-  // Parse language filter
   const languageParam = searchParams.get('language')
   if (languageParam) {
     filters.language = parseArrayParam(languageParam, Object.values(Language))
   }
 
-  // Parse audience filter
   const audienceParam = searchParams.get('audience')
   if (audienceParam) {
     filters.audience = parseArrayParam(audienceParam, Object.values(Audience))
   }
 
-  // Parse speaker flags filter
   const speakerFlagsParam = searchParams.get('speakerFlags')
   if (speakerFlagsParam) {
     filters.speakerFlags = parseArrayParam(
@@ -532,7 +487,6 @@ function parseFiltersFromURL(
     )
   }
 
-  // Parse review status
   const reviewStatusParam = searchParams.get('reviewStatus')
   if (
     reviewStatusParam &&
@@ -541,13 +495,11 @@ function parseFiltersFromURL(
     filters.reviewStatus = reviewStatusParam as ReviewStatus
   }
 
-  // Parse hideMultipleTalks
   const hideMultipleTalksParam = searchParams.get('hideMultipleTalks')
   if (hideMultipleTalksParam === 'true') {
     filters.hideMultipleTalks = true
   }
 
-  // Parse sort options
   const sortByParam = searchParams.get('sortBy')
   if (
     sortByParam &&
@@ -564,16 +516,12 @@ function parseFiltersFromURL(
   return filters
 }
 
-/**
- * Serialize FilterState to URL search parameters
- */
 function serializeFiltersToURL(
   filters: FilterState,
   defaultFilters: FilterState,
 ): URLSearchParams {
   const params = new URLSearchParams()
 
-  // Only add parameters that differ from defaults
   const defaultStatusFilters = [
     Status.submitted,
     Status.accepted,

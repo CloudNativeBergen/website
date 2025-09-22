@@ -1,8 +1,3 @@
-/**
- * Centralized data layer exports
- */
-
-// Client-side API functions
 export {
   getProposal as getProposalClient,
   postProposal,
@@ -12,7 +7,6 @@ export {
   type NextUnreviewedProposalResponse,
 } from './client'
 
-// Server-side response utilities
 export {
   proposalResponseError,
   proposalResponse,
@@ -20,7 +14,6 @@ export {
   proposalListResponse,
 } from './server'
 
-// Sanity CMS operations
 export {
   getProposal as getProposalSanity,
   getProposals,

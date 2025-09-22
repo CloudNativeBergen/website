@@ -44,7 +44,6 @@ export default function InvitationResponseClient({
   const [error, setError] = useState('')
   const [isExpired, setIsExpired] = useState(false)
 
-  // Check if invitation is expired and update state periodically
   useEffect(() => {
     const checkExpiry = () => {
       const now = new Date()
@@ -52,17 +51,14 @@ export default function InvitationResponseClient({
       setIsExpired(now >= expiryDate)
     }
 
-    // Check immediately
     checkExpiry()
 
-    // Check every minute
     const interval = setInterval(checkExpiry, 60000)
 
     return () => clearInterval(interval)
   }, [invitation.expiresAt])
 
   const handleResponse = async (action: 'accept' | 'decline') => {
-    // Double-check expiry before processing
     if (isExpired) {
       setError(
         'This invitation has expired and can no longer be accepted or declined.',
@@ -77,7 +73,6 @@ export default function InvitationResponseClient({
       const result = await respondToInvitation(token, action)
 
       if (result.success) {
-        // Redirect to success page with action and title
         const successUrl = new URL(
           '/invitation/respond/success',
           window.location.origin,
@@ -113,7 +108,6 @@ export default function InvitationResponseClient({
     <div className="bg-sky-mist flex min-h-screen items-center justify-center px-4 py-12">
       <div className="w-full max-w-2xl">
         <div className="overflow-hidden rounded-lg bg-white shadow-lg">
-          {/* Header */}
           <div className="from-cloud-blue to-cloud-blue-dark bg-gradient-to-r px-6 py-8 text-white">
             <h1 className="mb-2 text-2xl font-bold">Co-Speaker Invitation</h1>
             <p className="text-sky-mist">
@@ -121,9 +115,7 @@ export default function InvitationResponseClient({
             </p>
           </div>
 
-          {/* Content */}
           <div className="space-y-6 p-6">
-            {/* Greeting */}
             <div>
               <p className="text-lg text-gray-700">Hi {displayName},</p>
               <p className="mt-2 text-gray-600">
@@ -132,7 +124,6 @@ export default function InvitationResponseClient({
               </p>
             </div>
 
-            {/* Proposal Details */}
             <div className="bg-sky-mist/20 space-y-3 rounded-lg p-4">
               <div>
                 <h3 className="text-cloud-blue-dark text-sm font-medium">
@@ -152,7 +143,6 @@ export default function InvitationResponseClient({
               </div>
             </div>
 
-            {/* Expiry Warning/Status */}
             {isExpired ? (
               <div className="flex items-start space-x-3 rounded-lg border border-red-200 bg-red-50 p-4">
                 <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 text-red-600" />
@@ -180,14 +170,12 @@ export default function InvitationResponseClient({
               </div>
             )}
 
-            {/* Error Message */}
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-4">
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
 
-            {/* Action Buttons */}
             {!isExpired && (
               <div className="flex flex-col gap-4 sm:flex-row">
                 <button
@@ -256,7 +244,6 @@ export default function InvitationResponseClient({
               </div>
             )}
 
-            {/* Expired State Actions */}
             {isExpired && (
               <div className="text-center">
                 <p className="mb-4 text-gray-600">
@@ -273,7 +260,6 @@ export default function InvitationResponseClient({
               </div>
             )}
 
-            {/* Additional Info */}
             {!isExpired && (
               <div className="space-y-2 text-sm text-gray-500">
                 <p>By accepting this invitation:</p>

@@ -1,8 +1,3 @@
-/**
- * Featured Talks Management Component
- * Provides UI for managing featured talks with search and add/remove functionality
- */
-
 'use client'
 
 import { useState } from 'react'
@@ -32,7 +27,6 @@ export function FeaturedTalksManager({
 
   const utils = api.useUtils()
 
-  // Queries
   const {
     data: featuredTalks = [],
     isLoading: featuredLoading,
@@ -48,7 +42,6 @@ export function FeaturedTalksManager({
       { enabled: showSearch && searchQuery.length > 0 },
     )
 
-  // Mutations
   const addTalkMutation = api.featured.addTalk.useMutation({
     onSuccess: () => {
       refetchFeatured()
@@ -76,17 +69,13 @@ export function FeaturedTalksManager({
   const handleAddTalk = async (talkId: string) => {
     try {
       await addTalkMutation.mutateAsync({ talkId })
-    } catch {
-      // Error handled in onError callback
-    }
+    } catch {}
   }
 
   const handleRemoveTalk = async (talkId: string) => {
     try {
       await removeTalkMutation.mutateAsync({ talkId })
-    } catch {
-      // Error handled in onError callback
-    }
+    } catch {}
   }
 
   const formatTalkFormat = (format: string) => {

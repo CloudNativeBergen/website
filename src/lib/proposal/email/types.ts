@@ -1,8 +1,3 @@
-/**
- * Shared types for email templates and notifications
- * This ensures type consistency across the email system
- */
-
 import { Action } from '../types'
 
 export interface BaseEmailTemplateProps {
@@ -46,9 +41,6 @@ export interface NotificationParams {
   comment: string
 }
 
-/**
- * Template props factory - ensures consistent prop mapping
- */
 export function createTemplateProps(
   params: NotificationParams,
   confirmUrl?: string,

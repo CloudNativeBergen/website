@@ -3,7 +3,6 @@
 import React, { useMemo, useRef } from 'react'
 import Image from 'next/image'
 
-// Import all cloud native SVG icons
 import KubernetesIcon from '@/images/icons/kubernetes-icon-white.svg'
 import HelmIcon from '@/images/icons/helm-icon-white.svg'
 import PrometheusIcon from '@/images/icons/prometheus-icon-white.svg'
@@ -37,7 +36,6 @@ import VitessIcon from '@/images/icons/vitess-icon-white.svg'
 import WasmEdgeRuntimeIcon from '@/images/icons/wasm-edge-runtime-icon-white.svg'
 import WasmCloudIcon from '@/images/icons/wasmcloud.icon_inversed.svg'
 
-// Types
 type IconCategory = 'popular' | 'moderate' | 'specialized'
 type Variant = 'dark' | 'light' | 'brand'
 
@@ -62,7 +60,6 @@ interface DepthLayer {
   brightness: number
 }
 
-// Constants and Configuration
 const POPULAR_ICONS: BaseIcon[] = [
   { icon: KubernetesIcon, name: 'Kubernetes', weight: 30 },
   { icon: HelmIcon, name: 'Helm', weight: 25 },
@@ -145,7 +142,6 @@ const CATEGORY_MULTIPLIERS = {
   specialized: 0.8,
 } as const
 
-// Utility Functions
 const createWeightedIconPool = (): IconData[] => {
   const pool: IconData[] = []
 
@@ -167,7 +163,6 @@ const createWeightedIconPool = (): IconData[] => {
   return pool
 }
 
-// Seeded random number generator for consistent but varied patterns
 class SeededRandom {
   private seed: number
 
@@ -221,66 +216,18 @@ const createDepthLayers = (
 ]
 
 interface CloudNativePatternProps {
-  /**
-   * Additional CSS classes to apply to the container element
-   * @default ''
-   */
   className?: string
 
-  /**
-   * Overall opacity of the icon pattern
-   * Controls the transparency of all icons in the pattern
-   * @default 0.15
-   * @range 0.0 to 1.0
-   */
   opacity?: number
 
-  /**
-   * Whether icons should have floating animations
-   * When enabled, icons will gently float with different speeds and delays
-   * @default true
-   */
   animated?: boolean
 
-  /**
-   * Visual variant that controls color scheme and styling
-   * - 'dark': Blue/cyan/purple tones for dark backgrounds
-   * - 'light': Dark grays/blacks with inverted styling for light backgrounds
-   * - 'brand': Brand colors (blue/cyan/purple) suitable for most contexts
-   * @default 'brand'
-   */
   variant?: Variant
 
-  /**
-   * Base size for icons in the midground layer (in pixels)
-   * - Background icons will be 50%-70% of this size
-   * - Midground icons will be 80%-120% of this size
-   * - Foreground icons will be 130%-160% of this size
-   * @default 45
-   * @range Recommended: 20-100 pixels
-   */
   baseSize?: number
 
-  /**
-   * Total number of icons to display in the pattern
-   * Icons are distributed across three depth layers (background, midground, foreground)
-   * @default 50
-   * @range Recommended: 10-200 icons for optimal performance
-   */
   iconCount?: number
 
-  /**
-   * Seed value for the random number generator
-   * Allows for consistent but customizable patterns - use different seeds to find suitable arrangements
-   * @default undefined (uses computed seed based on props)
-   * @range Any positive integer
-   * @example
-   * // Try different seeds to find visually appealing patterns:
-   * seed={42}    // Balanced distribution
-   * seed={123}   // More clustered icons
-   * seed={999}   // Sparse arrangement
-   * seed={1337}  // Dense pattern
-   */
   seed?: number
 }
 
@@ -295,22 +242,18 @@ export function CloudNativePattern({
 }: CloudNativePatternProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Memoized icon pool to avoid recreation on every render
   const iconPool = useMemo(() => createWeightedIconPool(), [])
 
-  // Memoized depth layers configuration
   const depthLayers = useMemo(
     () => createDepthLayers(baseSize, variant),
     [baseSize, variant],
   )
 
-  // Generate icon elements with optimized rendering and better distribution
   const iconElements = useMemo(() => {
     const elements: React.JSX.Element[] = []
     const colors = COLOR_SCHEMES[variant]
     let currentIconIndex = 0
 
-    // Create seeded random generator for consistent patterns
     const computedSeed =
       seed ??
       iconCount +
@@ -318,19 +261,15 @@ export function CloudNativePattern({
         (variant === 'light' ? 1000 : variant === 'dark' ? 2000 : 3000)
     const seededRandom = new SeededRandom(computedSeed)
 
-    // Create a grid-based distribution system to prevent clustering
     const createDistributedPositions = (count: number) => {
       const positions: { x: number; y: number }[] = []
 
-      // Calculate grid dimensions - aim for roughly square cells
-      const gridCols = Math.ceil(Math.sqrt(count * 1.2)) // 1.2 factor for better spacing
+      const gridCols = Math.ceil(Math.sqrt(count * 1.2))
       const gridRows = Math.ceil(count / gridCols)
 
-      // Calculate cell dimensions (in percentage)
       const cellWidth = 100 / gridCols
       const cellHeight = 100 / gridRows
 
-      // Generate shuffled grid positions to avoid predictable patterns
       const gridCells: { col: number; row: number }[] = []
       for (let row = 0; row < gridRows; row++) {
         for (let col = 0; col < gridCols; col++) {
@@ -338,26 +277,21 @@ export function CloudNativePattern({
         }
       }
 
-      // Shuffle the grid cells using seeded random for consistency
       for (let i = gridCells.length - 1; i > 0; i--) {
         const j = Math.floor(seededRandom.next() * (i + 1))
         ;[gridCells[i], gridCells[j]] = [gridCells[j], gridCells[i]]
       }
 
-      // Assign positions with jitter within each cell
       for (let i = 0; i < count && i < gridCells.length; i++) {
         const { col, row } = gridCells[i]
 
-        // Calculate base position (center of cell)
         const baseCellX = col * cellWidth + cellWidth / 2
         const baseCellY = row * cellHeight + cellHeight / 2
 
-        // Add jitter within the cell (up to 40% of cell size from center)
         const jitterRange = 0.4
         const jitterX = (seededRandom.next() - 0.5) * cellWidth * jitterRange
         const jitterY = (seededRandom.next() - 0.5) * cellHeight * jitterRange
 
-        // Final position with bounds checking
         const x = Math.max(5, Math.min(95, baseCellX + jitterX))
         const y = Math.max(5, Math.min(95, baseCellY + jitterY))
 
@@ -367,7 +301,6 @@ export function CloudNativePattern({
       return positions
     }
 
-    // Pre-generate all positions for better distribution
     const allPositions = createDistributedPositions(iconCount)
     let positionIndex = 0
 
@@ -377,14 +310,12 @@ export function CloudNativePattern({
       for (let i = 0; i < layerIconCount && currentIconIndex < iconCount; i++) {
         currentIconIndex++
 
-        // Select icon from weighted pool using seeded random
         const selectedIcon =
           iconPool[Math.floor(seededRandom.next() * iconPool.length)]
         const size =
           seededRandom.next() * (layer.sizeRange[1] - layer.sizeRange[0]) +
           layer.sizeRange[0]
 
-        // Use pre-calculated distributed position
         const position = allPositions[positionIndex % allPositions.length]
         const x = position.x
         const y = position.y
@@ -396,19 +327,16 @@ export function CloudNativePattern({
           baseAnimationDuration * layer.animationSpeedMultiplier
         const color = colors[Math.floor(seededRandom.next() * colors.length)]
 
-        // Calculate opacity with category-based multipliers
         const categoryMultiplier = CATEGORY_MULTIPLIERS[selectedIcon.category]
         const finalOpacity =
           opacity * layer.opacityMultiplier * categoryMultiplier
 
-        // Apply perspective scaling for depth effect
         const perspectiveScale =
           layer.name === 'background'
             ? 1 - (Math.abs(x - 50) + Math.abs(y - 50)) * 0.001
             : 1
         const finalSize = size * perspectiveScale
 
-        // Create filter styles based on variant
         const filterStyle =
           variant === 'light'
             ? `invert(1) brightness(${layer.brightness * 0.3}) contrast(1.2) saturate(1.1)`
@@ -462,7 +390,6 @@ export function CloudNativePattern({
     baseSize,
   ])
 
-  // Memoized background gradients
   const backgroundGradients = useMemo(() => {
     if (variant === 'light') {
       return {
@@ -493,18 +420,14 @@ export function CloudNativePattern({
       ref={containerRef}
       className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
     >
-      {/* Deep background gradient for atmospheric depth */}
       <div className={`absolute inset-0 ${backgroundGradients.deep}`} />
 
-      {/* Mid-depth atmospheric layer */}
       <div className={`absolute inset-0 ${backgroundGradients.mid}`} />
 
-      {/* Cloud Native Icons with proper depth layering */}
       <div className="absolute inset-0" style={{ perspective: '1000px' }}>
         {iconElements}
       </div>
 
-      {/* Foreground atmospheric enhancement */}
       <div
         className={`pointer-events-none absolute inset-0 ${backgroundGradients.foreground}`}
       />

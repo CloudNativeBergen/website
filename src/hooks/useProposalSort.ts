@@ -4,7 +4,6 @@ import { ProposalExisting } from '@/lib/proposal/types'
 import { useMemo, useState } from 'react'
 import { getAverageScore } from '@/utils/reviewUtils'
 
-// Define the sort fields and their types
 export type SortField =
   | 'title'
   | 'speakers'
@@ -22,7 +21,6 @@ export type SortConfig = {
 export function useProposalSort(initialProposals: ProposalExisting[]) {
   const [sortConfig, setSortConfig] = useState<SortConfig>(null)
 
-  // Sort handler function
   const handleSort = (field: SortField) => {
     let direction: SortDirection = 'asc'
     if (sortConfig?.field === field && sortConfig.direction === 'asc') {
@@ -31,12 +29,10 @@ export function useProposalSort(initialProposals: ProposalExisting[]) {
     setSortConfig({ field, direction })
   }
 
-  // Calculate and return sorted proposals
   const sortedProposals = useMemo(() => {
     if (!sortConfig) return initialProposals
 
     return [...initialProposals].sort((a, b) => {
-      // Special case for speakers field which needs to extract the names
       if (sortConfig.field === 'speakers') {
         const speakersA =
           a.speakers && Array.isArray(a.speakers)
@@ -63,7 +59,6 @@ export function useProposalSort(initialProposals: ProposalExisting[]) {
           : speakersB.localeCompare(speakersA)
       }
 
-      // Special case for score field which needs numerical comparison
       if (sortConfig.field === 'score') {
         const scoreA = getAverageScore(a.reviews || [])
         const scoreB = getAverageScore(b.reviews || [])
@@ -72,7 +67,6 @@ export function useProposalSort(initialProposals: ProposalExisting[]) {
           : scoreB - scoreA
       }
 
-      // For all other string fields, use localeCompare directly
       const valueA = a[sortConfig.field] as string
       const valueB = b[sortConfig.field] as string
 

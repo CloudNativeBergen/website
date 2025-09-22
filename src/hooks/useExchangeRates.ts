@@ -20,9 +20,6 @@ interface UseExchangeRatesReturn {
   refreshRates: () => Promise<void>
 }
 
-/**
- * React hook for managing exchange rates with caching
- */
 export function useExchangeRates(): UseExchangeRatesReturn {
   const [exchangeRates, setExchangeRates] = useState<Record<
     SupportedCurrency,
@@ -49,26 +46,22 @@ export function useExchangeRates(): UseExchangeRatesReturn {
   }
 
   const refreshRates = async () => {
-    // Clear cache and reload
     if (typeof window !== 'undefined') {
       localStorage.removeItem('exchange_rates_cache')
     }
     await loadExchangeRates()
   }
 
-  // Load exchange rates on mount
   useEffect(() => {
     loadExchangeRates()
   }, [])
 
-  // Currency conversion function
   const convertCurrencyWithRates = (
     amount: number,
     from: SupportedCurrency,
     to: SupportedCurrency,
   ): number => {
     if (!exchangeRates) {
-      // Fallback conversion if rates aren't loaded yet
       if (from === to) return amount
       console.warn('Exchange rates not loaded, using 1:1 conversion')
       return amount

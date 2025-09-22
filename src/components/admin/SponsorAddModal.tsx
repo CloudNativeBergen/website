@@ -85,24 +85,20 @@ export default function SponsorAddModal({
   const [sponsorId, setSponsorId] = useState<string>('')
   const [isCreatingNew, setIsCreatingNew] = useState(false)
 
-  // tRPC mutations and queries
   const sponsorsQuery = api.sponsor.list.useQuery({})
   const createMutation = api.sponsor.create.useMutation()
   const updateMutation = api.sponsor.update.useMutation()
   const addToConferenceMutation = api.sponsor.addToConference.useMutation()
 
-  // Load sponsors when modal opens
   useEffect(() => {
     if (isOpen && sponsorsQuery.data) {
       setAvailableSponsors(sponsorsQuery.data)
     }
   }, [isOpen, sponsorsQuery.data])
 
-  // Reset form when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       if (editingSponsor) {
-        // Editing mode: populate form with existing data
         const tierMatch = sponsorTiers.find(
           (tier) => tier.title === editingSponsor.tier?.title,
         )
@@ -122,7 +118,6 @@ export default function SponsorAddModal({
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
       } else {
-        // Create mode: reset form
         setFormData({
           name: '',
           website: '',
@@ -143,7 +138,6 @@ export default function SponsorAddModal({
     }
   }, [isOpen, editingSponsor, preselectedTierId, sponsorTiers])
 
-  // Update tierId when preselectedTierId changes
   useEffect(() => {
     if (preselectedTierId && isOpen && !editingSponsor) {
       setFormData((prev) => ({ ...prev, tierId: preselectedTierId }))
@@ -187,7 +181,6 @@ export default function SponsorAddModal({
       }
 
       if (editingSponsor) {
-        // Update existing sponsor
         const existingSponsors = sponsorsQuery.data || []
         const existingSponsor = existingSponsors.find(
           (s) => s.name === editingSponsor.sponsor.name,
@@ -197,7 +190,6 @@ export default function SponsorAddModal({
           throw new Error('Could not find existing sponsor to update')
         }
 
-        // Check if tier has changed and include tierId in sponsor data if needed
         const currentTierMatch = sponsorTiers.find(
           (tier) => tier.title === editingSponsor.tier?.title,
         )
@@ -207,7 +199,7 @@ export default function SponsorAddModal({
 
         const sponsorUpdateData = {
           ...sponsorData,
-          // Include tierId if tier has changed
+
           ...(currentTierMatch?._id !== newTierMatch?._id && {
             tierId: formData.tierId,
           }),
@@ -218,12 +210,10 @@ export default function SponsorAddModal({
           data: sponsorUpdateData,
         })
 
-        // Find the tier for the updated sponsor
         const selectedTier = sponsorTiers.find(
           (tier) => tier._id === formData.tierId,
         )
 
-        // Create the ConferenceSponsorWithContact object to pass back
         const updatedConferenceSponsor: ConferenceSponsorWithContact = {
           sponsor: {
             _id: updatedSponsor._id,
@@ -246,7 +236,6 @@ export default function SponsorAddModal({
       } else {
         let finalSponsorId = sponsorId
 
-        // Create new sponsor if needed
         if (isCreatingNew || !sponsorId) {
           const sponsor = await createMutation.mutateAsync(sponsorData)
           if (sponsor) {
@@ -255,23 +244,19 @@ export default function SponsorAddModal({
           }
         }
 
-        // Use selectedExistingSponsor ID if available
         if (!finalSponsorId && selectedExistingSponsor) {
           finalSponsorId = selectedExistingSponsor._id
         }
 
-        // Add sponsor to conference
         await addToConferenceMutation.mutateAsync({
           sponsorId: finalSponsorId,
           tierId: formData.tierId,
         })
 
-        // Find the tier for the added sponsor
         const selectedTier = sponsorTiers.find(
           (tier) => tier._id === formData.tierId,
         )
 
-        // Create the ConferenceSponsorWithContact object to pass back
         const addedSponsor: ConferenceSponsorWithContact = {
           sponsor: {
             _id: finalSponsorId,
@@ -301,7 +286,6 @@ export default function SponsorAddModal({
 
   const handleSponsorSelection = (sponsor: SponsorWithContactInfo | null) => {
     if (sponsor === null) {
-      // This means "Create new sponsor" was selected
       createNewSponsor()
       return
     }
@@ -331,17 +315,15 @@ export default function SponsorAddModal({
     setIsCreatingNew(true)
     setFormData((prev) => ({
       ...prev,
-      name: query, // Use the current search query as the sponsor name
+      name: query,
       website: '',
       logo: '',
       org_number: '',
       contact_persons: [],
       billing: { email: '', reference: '', comments: '' },
-      // Keep the selected tier
     }))
     setSponsorId('')
 
-    // Focus the company name input after a short delay to ensure DOM is updated
     setTimeout(() => {
       companyNameInputRef.current?.focus()
     }, 100)
@@ -353,19 +335,15 @@ export default function SponsorAddModal({
       )
     : availableSponsors
 
-  // Check if form is valid for submission
   const isFormValid = () => {
     if (!formData.tierId) return false
 
-    // For creating new sponsors, all required fields must be filled
     if (isCreatingNew) {
       return (
         formData.name.trim() && formData.website.trim() && formData.logo.trim()
       )
     }
 
-    // For editing existing sponsors or selecting existing sponsors, we're more lenient
-    // but still require basic fields
     if (editingSponsor || selectedExistingSponsor) {
       return (
         formData.name.trim() && formData.website.trim() && formData.logo.trim()
@@ -418,7 +396,6 @@ export default function SponsorAddModal({
                 </div>
 
                 <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-                  {/* Tier Selection */}
                   <div>
                     <label
                       htmlFor="tier"
@@ -442,7 +419,6 @@ export default function SponsorAddModal({
                         <option value="">Select a tier...</option>
                         {sponsorTiers
                           .sort((a, b) => {
-                            // Sort by highest price first
                             const getMaxPrice = (tier: SponsorTierExisting) => {
                               if (!tier.price || tier.price.length === 0)
                                 return 0
@@ -465,7 +441,6 @@ export default function SponsorAddModal({
                     </div>
                   </div>
 
-                  {/* Sponsor Selection (only in create mode) */}
                   {!editingSponsor && (
                     <div>
                       <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
@@ -563,12 +538,10 @@ export default function SponsorAddModal({
                     </div>
                   )}
 
-                  {/* Show form fields only if creating new or editing */}
                   {(isCreatingNew ||
                     editingSponsor ||
                     selectedExistingSponsor) && (
                     <>
-                      {/* Sponsor Information */}
                       <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">
                         <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
                           Sponsor Information
@@ -653,7 +626,6 @@ export default function SponsorAddModal({
                             </div>
                           </div>
 
-                          {/* Logo Upload */}
                           <div className="sm:col-span-2">
                             <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                               Logo (SVG) *
@@ -699,7 +671,6 @@ export default function SponsorAddModal({
                         </div>
                       </div>
 
-                      {/* Contact Persons */}
                       <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">
                         <div className="flex items-center justify-between">
                           <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
@@ -876,7 +847,6 @@ export default function SponsorAddModal({
                         </div>
                       </div>
 
-                      {/* Billing Information */}
                       <div>
                         <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
                           Billing Information
@@ -965,7 +935,6 @@ export default function SponsorAddModal({
                     </>
                   )}
 
-                  {/* Submit buttons */}
                   <div className="flex justify-end gap-3 pt-6">
                     <button
                       type="button"

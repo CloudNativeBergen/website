@@ -6,10 +6,6 @@ import {
 } from '../types'
 import { NextResponse } from 'next/server'
 
-/**
- * Server-side response utilities for proposal operations
- */
-
 export function proposalResponseError({
   error,
   message,

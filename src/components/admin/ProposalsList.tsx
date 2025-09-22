@@ -17,10 +17,6 @@ interface ProposalsListProps {
   allowedFormats?: Format[]
 }
 
-/**
- * Main proposals list component with filtering and sorting
- * Combines all admin proposal management functionality
- */
 export function ProposalsList({
   proposals,
   onProposalSelect,
@@ -61,7 +57,6 @@ export function ProposalsList({
 
   return (
     <div className="mx-auto max-w-7xl">
-      {/* Header */}
       <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
         <div className="flex items-center gap-3">
           <DocumentTextIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
@@ -77,7 +72,6 @@ export function ProposalsList({
         </div>
       </div>
 
-      {/* Filter and Sort Bar */}
       <div className="mt-6">
         <ProposalsFilter
           filters={filters}
@@ -93,12 +87,10 @@ export function ProposalsList({
         />
       </div>
 
-      {/* Statistics Overview */}
       <div className="mt-6">
         <ProposalStatistics proposals={filteredProposals} />
       </div>
 
-      {/* Proposals Grid */}
       <div className="mt-8">
         {filteredProposals.length === 0 ? (
           <EmptyState
@@ -124,7 +116,6 @@ export function ProposalsList({
         )}
       </div>
 
-      {/* Footer Actions */}
       {filteredProposals.length > 0 && (
         <div className="mt-8 text-center">
           <Link
@@ -144,9 +135,6 @@ interface EmptyStateProps {
   onClearFilters: () => void
 }
 
-/**
- * Empty state component for when no proposals match filters
- */
 function EmptyState({ hasProposals, onClearFilters }: EmptyStateProps) {
   return (
     <div className="py-12 text-center">

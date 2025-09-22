@@ -1,17 +1,11 @@
 import { Format } from '@/lib/proposal/types'
 
-/**
- * API endpoint constants for co-speaker functionality
- */
 export const COSPEAKER_API_ENDPOINTS = {
   INVITATION_CREATE: (proposalId: string) => `/api/invitation/${proposalId}`,
   INVITATION_RESPOND: '/api/invitation/respond',
   INVITATION_DELETE: (proposalId: string) => `/api/invitation/${proposalId}`,
 } as const
 
-/**
- * API query parameter constants
- */
 export const COSPEAKER_API_PARAMS = {
   TEST_MODE: 'test',
 } as const
@@ -22,13 +16,13 @@ export const COSPEAKER_API_PARAMS = {
  * Note: This is in addition to the primary speaker
  */
 export const CO_SPEAKER_LIMITS = {
-  [Format.lightning_10]: 0, // Lightning talks are single-speaker only
-  [Format.presentation_20]: 1, // Short presentations allow 1 co-speaker
-  [Format.presentation_25]: 1, // Short presentations allow 1 co-speaker
-  [Format.presentation_40]: 2, // Longer presentations allow 2 co-speakers
-  [Format.presentation_45]: 2, // Longer presentations allow 2 co-speakers
-  [Format.workshop_120]: 3, // Workshops allow 3 co-speakers
-  [Format.workshop_240]: 3, // Long workshops allow 3 co-speakers
+  [Format.lightning_10]: 0,
+  [Format.presentation_20]: 1,
+  [Format.presentation_25]: 1,
+  [Format.presentation_40]: 2,
+  [Format.presentation_45]: 2,
+  [Format.workshop_120]: 3,
+  [Format.workshop_240]: 3,
 } as const
 
 /**
@@ -37,7 +31,7 @@ export const CO_SPEAKER_LIMITS = {
  * @returns The maximum number of co-speakers (excluding the primary speaker)
  */
 export function getCoSpeakerLimit(format: Format): number {
-  return CO_SPEAKER_LIMITS[format] ?? 1 // Default to 1 if format not found
+  return CO_SPEAKER_LIMITS[format] ?? 1
 }
 
 /**
@@ -46,7 +40,7 @@ export function getCoSpeakerLimit(format: Format): number {
  * @returns The total maximum number of speakers
  */
 export function getTotalSpeakerLimit(format: Format): number {
-  return getCoSpeakerLimit(format) + 1 // +1 for the primary speaker
+  return getCoSpeakerLimit(format) + 1
 }
 
 /**

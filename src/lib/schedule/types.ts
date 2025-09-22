@@ -32,17 +32,13 @@ export interface ScheduleState {
   unassignedProposals: ProposalExisting[]
 }
 
-// Performance optimization constants
 export const MINUTES_TO_PIXELS = 2.4
-export const DRAG_PERFORMANCE_THRESHOLD = 16 // 60fps = 16.67ms per frame
-export const BATCH_UPDATE_DELAY = 100 // ms delay for batching updates
+export const DRAG_PERFORMANCE_THRESHOLD = 16
+export const BATCH_UPDATE_DELAY = 100
 
-// Memoization cache for expensive operations
 const memoCache = new Map<string, number>()
 
-// Helper to get proposal duration in minutes with caching
 export function getProposalDurationMinutes(proposal: ProposalExisting): number {
-  // Use caching for better performance
   const cacheKey = `duration-${proposal._id}-${proposal.format}`
   const cached = memoCache.get(cacheKey)
   if (cached !== undefined) {
@@ -50,7 +46,7 @@ export function getProposalDurationMinutes(proposal: ProposalExisting): number {
   }
 
   const split = proposal.format.split('_')
-  let duration = 25 // Default duration
+  let duration = 25
 
   if (split.length >= 2) {
     const parsed = parseInt(split[1], 10)
@@ -59,12 +55,10 @@ export function getProposalDurationMinutes(proposal: ProposalExisting): number {
     }
   }
 
-  // Cache the result
   memoCache.set(cacheKey, duration)
   return duration
 }
 
-// Helper to generate time slots for a day
 export function generateTimeSlots(
   startTime: string = '08:00',
   endTime: string = '21:00',
@@ -86,7 +80,6 @@ export function generateTimeSlots(
   return slots
 }
 
-// Helper to calculate end time based on start time and duration
 export function calculateEndTime(
   startTime: string,
   durationMinutes: number,
@@ -96,7 +89,6 @@ export function calculateEndTime(
   return start.toTimeString().slice(0, 5)
 }
 
-// Helper to check if two time ranges overlap
 export function timesOverlap(
   start1: string,
   end1: string,
@@ -111,7 +103,6 @@ export function timesOverlap(
   return s1 < e2 && s2 < e1
 }
 
-// Helper to find available time slot in a track
 export function findAvailableTimeSlot(
   track: ScheduleTrack,
   proposal: ProposalExisting,
@@ -122,11 +113,9 @@ export function findAvailableTimeSlot(
   const startTime = preferredStartTime || '08:00'
   const proposalEndTime = calculateEndTime(startTime, durationMinutes)
 
-  // Check if proposed time conflicts with existing talks
   const hasConflict = track.talks.some((talk) => {
     if (!talk.talk) return false
 
-    // Exclude the talk being moved to prevent self-conflict
     if (
       excludeTalk &&
       talk.talk._id === excludeTalk.talkId &&
@@ -146,7 +135,6 @@ export function findAvailableTimeSlot(
   return hasConflict ? null : startTime
 }
 
-// Helper to check if a swap operation would be valid (no collisions)
 export function canSwapTalks(
   track: ScheduleTrack,
   draggedProposal: ProposalExisting,
@@ -158,11 +146,9 @@ export function canSwapTalks(
   const draggedDuration = getProposalDurationMinutes(draggedProposal)
   const draggedEndTime = calculateEndTime(targetStartTime, draggedDuration)
 
-  // Check if the dragged proposal (placed at target position) conflicts with other talks
   const draggedHasConflict = track.talks.some((talk) => {
     if (!talk.talk) return false
 
-    // Exclude the target talk being swapped
     if (
       talk.talk._id === targetTalk.talk!._id &&
       talk.startTime === targetTalk.startTime

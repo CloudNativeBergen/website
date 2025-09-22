@@ -27,7 +27,6 @@ export function ExpandableOrdersTable({
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
 
-  // Use tRPC query for payment details - only enabled when we have a selected order
   const {
     data: paymentDetailsData,
     isLoading: paymentDetailsLoading,
@@ -62,12 +61,9 @@ export function ExpandableOrdersTable({
     setSelectedOrderId(null)
   }
 
-  // Function to format category labels
   const formatCategoryLabel = (category: string): string => {
-    // Handle specific known patterns first
     const lowerCategory = category.toLowerCase()
 
-    // Handle workshop + conference pattern
     if (
       lowerCategory.includes('workshop') &&
       lowerCategory.includes('conference')
@@ -77,28 +73,24 @@ export function ExpandableOrdersTable({
       return `Workshop + Conference (${days} Days)`
     }
 
-    // Handle early bird pattern
     if (lowerCategory.includes('early') && lowerCategory.includes('bird')) {
       const dayMatch = category.match(/(\d+)\s*day/i)
       const days = dayMatch ? dayMatch[1] : '1'
       return `Early Bird (${days} Day)`
     }
 
-    // Handle other patterns - convert to proper title case
     return category
       .split(/[\s_-]+/)
       .map((word) => {
-        // Handle numbers and parentheses
         if (/^\d/.test(word) || word.includes('(') || word.includes(')')) {
           return word
         }
-        // Capitalize first letter
+
         return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
       })
       .join(' ')
   }
 
-  // Function to get category display style based on length
   const getCategoryStyle = (category: string) => {
     const formatted = formatCategoryLabel(category)
     const isLong = formatted.length > 15
@@ -108,11 +100,10 @@ export function ExpandableOrdersTable({
       className: isLong
         ? 'inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800 max-w-32 truncate dark:bg-blue-900 dark:text-blue-300'
         : 'inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-      title: isLong ? formatted : undefined, // Add tooltip for truncated items
+      title: isLong ? formatted : undefined,
     }
   }
 
-  // Function to generate Checkin.no order URL
   const getCheckinOrderUrl = (orderId: number): string | null => {
     if (!customerId || !eventId) return null
     return `https://app.checkin.no/customer/${customerId}/event/${eventId}/order/${orderId}`
@@ -147,7 +138,7 @@ export function ExpandableOrdersTable({
           <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
             {orders.map((order) => {
               const isExpanded = expandedOrders.has(order.order_id)
-              const primaryTicket = order.tickets[0] // Use first ticket for primary customer info
+              const primaryTicket = order.tickets[0]
               const hasMultipleTickets = order.tickets.length > 1
               const checkinOrderUrl = getCheckinOrderUrl(order.order_id)
 

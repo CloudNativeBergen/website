@@ -44,7 +44,6 @@ export function ProgramClient({ schedules }: ProgramClientProps) {
 
   return (
     <div className="space-y-6">
-      {/* Filters with integrated view mode selector */}
       <ProgramFilters
         filters={filters}
         availableFilters={filteredData.availableFilters}
@@ -75,7 +74,6 @@ export function ProgramClient({ schedules }: ProgramClientProps) {
         currentViewConfig={currentViewConfig}
       />
 
-      {/* Program Content */}
       <div className="min-h-[400px]">{renderProgramView()}</div>
     </div>
   )

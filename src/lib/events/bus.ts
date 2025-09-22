@@ -2,10 +2,6 @@ import { ProposalStatusChangeEvent } from './types'
 
 type EventHandlerFunction = (event: ProposalStatusChangeEvent) => Promise<void>
 
-/**
- * In-memory event bus implementation
- * For production, consider using Redis Pub/Sub, AWS EventBridge, or similar
- */
 class InMemoryEventBus {
   private handlers: Map<string, Set<EventHandlerFunction>> = new Map()
 
@@ -35,20 +31,16 @@ class InMemoryEventBus {
       return
     }
 
-    // Execute all handlers in parallel
     const handlerPromises = Array.from(eventHandlers).map(async (handler) => {
       try {
         await handler(event)
       } catch (error) {
-        // Log error but don't fail other handlers
         console.error(`Event handler failed for ${event.eventType}:`, error)
       }
     })
 
-    // Wait for all handlers to complete
     await Promise.allSettled(handlerPromises)
   }
 }
 
-// Singleton instance
 export const eventBus = new InMemoryEventBus()

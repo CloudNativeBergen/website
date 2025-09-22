@@ -25,7 +25,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     const file = files[0]
 
-    // Validate file type
     const allowedTypes = [
       'application/pdf',
       'image/jpeg',
@@ -42,7 +41,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // Validate file size (10MB limit)
     if (file.size > 1024 * 1024 * 10) {
       return NextResponse.json(
         { error: 'File size is too large. Maximum file size is 10MB.' },

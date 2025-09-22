@@ -6,7 +6,6 @@ export default auth((req) => {
   const { pathname } = req.nextUrl
   const hasTestParam = req.nextUrl.searchParams.get('test') === 'true'
 
-  // Block access to development routes in production
   if (process.env.NODE_ENV === 'production') {
     if (
       pathname.startsWith('/api/dev/') ||
@@ -18,7 +17,6 @@ export default auth((req) => {
     }
   }
 
-  // In test mode, bypass authentication entirely (only in development)
   const isTestModeActive =
     AppEnvironment.isDevelopment && (AppEnvironment.isTestMode || hasTestParam)
 

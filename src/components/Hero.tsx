@@ -13,7 +13,6 @@ import { Conference } from '@/lib/conference/types'
 import { PortableText } from '@portabletext/react'
 import { TypedObject } from 'sanity'
 
-// Define proper types for PortableText content
 interface PortableTextChild {
   _type: string
   text?: string
@@ -24,13 +23,11 @@ interface PortableTextBlock extends TypedObject {
   children?: PortableTextChild[]
 }
 
-// Utility function to check if PortableText content is empty
 function isPortableTextEmpty(content?: TypedObject[]): boolean {
   if (!content || !Array.isArray(content) || content.length === 0) {
     return true
   }
 
-  // Check if all blocks are empty
   return content.every((block) => {
     if (block._type === 'block') {
       const typedBlock = block as PortableTextBlock
@@ -116,17 +113,13 @@ function ActionButtons({ conference }: { conference: Conference }) {
     })
   }
 
-  // Reverse the order of buttons to show the most important ones first
-  // Show up to 3 buttons for better mobile experience, prioritizing tickets and program
   const reversedButtons = buttons.reverse()
 
-  // Prioritize tickets and program when both are available
   const hasTickets = reversedButtons.find((b) => b.href === '/tickets')
   const hasProgram = reversedButtons.find((b) => b.href === '/program')
 
   let displayButtons = reversedButtons
   if (hasTickets && hasProgram) {
-    // When both are available, show tickets, program, and one other
     displayButtons = [
       hasTickets,
       hasProgram,
@@ -135,7 +128,6 @@ function ActionButtons({ conference }: { conference: Conference }) {
       ),
     ].slice(0, 3)
   } else {
-    // Otherwise show first 2-3 buttons
     displayButtons = reversedButtons.slice(0, 3)
   }
 

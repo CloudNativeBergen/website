@@ -27,7 +27,7 @@ export function useProfile(): UseProfileReturn {
       }
 
       const data = await response.json()
-      // Extract speaker from the response object
+
       setProfile(data.speaker || data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -54,7 +54,7 @@ export function useProfile(): UseProfileReturn {
       }
 
       const updatedData = await response.json()
-      // Extract speaker from the response object
+
       setProfile(updatedData.speaker || updatedData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
@@ -82,7 +82,6 @@ export function useProfile(): UseProfileReturn {
 
         const { imageUrl } = await response.json()
 
-        // Update the profile with new image URL
         if (profile) {
           setProfile({ ...profile, image: imageUrl })
         }
@@ -109,7 +108,6 @@ export function useProfile(): UseProfileReturn {
         throw new Error(errorData.error || 'Failed to remove image')
       }
 
-      // Update the profile to remove image
       if (profile) {
         setProfile({ ...profile, image: undefined })
       }
@@ -119,7 +117,6 @@ export function useProfile(): UseProfileReturn {
     }
   }, [profile])
 
-  // Initial fetch
   useEffect(() => {
     fetchProfile()
   }, [fetchProfile])

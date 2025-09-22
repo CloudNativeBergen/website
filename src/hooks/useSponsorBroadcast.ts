@@ -26,7 +26,7 @@ export function useSponsorBroadcast() {
       setIsBroadcastModalOpen(false)
     } catch (error) {
       console.error('Failed to send broadcast email:', error)
-      throw error // Let the modal handle the error display
+      throw error
     }
   }
 

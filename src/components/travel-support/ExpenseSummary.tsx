@@ -43,7 +43,6 @@ export function ExpenseSummary({
     const rejectedTotal = calculateTotal(rejected)
     const grandTotal = approvedTotal + pendingTotal
 
-    // Currency breakdown
     const currencyBreakdown = expenses.reduce(
       (breakdown, expense) => {
         const currency = expense.currency
@@ -82,7 +81,6 @@ export function ExpenseSummary({
     }).format(amount)
   }
 
-  // Show loading state while exchange rates are loading
   if (ratesLoading) {
     return (
       <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -98,7 +96,6 @@ export function ExpenseSummary({
     )
   }
 
-  // Show error state if exchange rates failed to load
   if (ratesError) {
     return (
       <div className="rounded-lg border border-red-200 bg-white p-6 shadow-sm dark:border-red-700 dark:bg-gray-800">
@@ -133,7 +130,6 @@ export function ExpenseSummary({
         Expense Summary
       </h3>
 
-      {/* Status Totals */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="text-center">
           <div className="text-2xl font-bold text-green-600 dark:text-green-400">
@@ -163,7 +159,6 @@ export function ExpenseSummary({
         </div>
       </div>
 
-      {/* Grand Total */}
       <div className="border-t border-gray-200 pt-4 dark:border-gray-600">
         <div className="flex items-center justify-between">
           <span className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -176,7 +171,6 @@ export function ExpenseSummary({
         {preferredCurrency !== 'OTHER' && (
           <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {(() => {
-              // Get unique currencies used in expenses (excluding the preferred currency)
               const usedCurrencies = Array.from(
                 new Set(
                   expenses
@@ -213,7 +207,6 @@ export function ExpenseSummary({
         )}
       </div>
 
-      {/* Currency Breakdown */}
       {Object.keys(summary.currencyBreakdown).length > 1 && (
         <div className="mt-6 border-t border-gray-200 pt-4 dark:border-gray-600">
           <h4 className="mb-3 text-sm font-medium text-gray-900 dark:text-white">

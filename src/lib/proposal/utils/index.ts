@@ -1,7 +1,3 @@
-/**
- * Centralized utils exports
- */
-
 export {
   convertJsonToProposal,
   convertStringToPortableTextBlocks,

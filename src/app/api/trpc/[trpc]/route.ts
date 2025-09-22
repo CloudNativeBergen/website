@@ -1,8 +1,3 @@
-/**
- * tRPC API Route Handler for Next.js App Router
- * This handles all tRPC requests under /api/trpc/[trpc]
- */
-
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch'
 import { appRouter } from '@/server/_app'
 import { createTRPCContext } from '@/server/trpc'

@@ -39,7 +39,7 @@ export function SpeakerActions({
       }
     } catch (error: unknown) {
       console.error('Broadcast error:', error)
-      throw error // Re-throw to be handled by the modal
+      throw error
     }
   }
 

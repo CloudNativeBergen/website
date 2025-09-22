@@ -1,13 +1,7 @@
-/**
- * tRPC Server Setup
- * Base configuration for tRPC server including context creation and middleware
- */
-
 import { initTRPC, TRPCError } from '@trpc/server'
 import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 
-// Context creation - runs for every tRPC request
 export async function createTRPCContext(opts: { req: NextRequest }) {
   const session = await getAuthSession()
 
@@ -21,7 +15,6 @@ export async function createTRPCContext(opts: { req: NextRequest }) {
 
 export type Context = Awaited<ReturnType<typeof createTRPCContext>>
 
-// Initialize tRPC
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {
     return {
@@ -34,7 +27,6 @@ const t = initTRPC.context<Context>().create({
   },
 })
 
-// Middleware for authentication
 const requireAuth = t.middleware(({ ctx, next }) => {
   if (!ctx.session?.speaker?._id) {
     throw new TRPCError({
@@ -52,7 +44,6 @@ const requireAuth = t.middleware(({ ctx, next }) => {
   })
 })
 
-// Middleware for admin/organizer access
 const requireAdmin = t.middleware(({ ctx, next }) => {
   if (!ctx.session?.speaker?.is_organizer) {
     throw new TRPCError({
@@ -70,7 +61,6 @@ const requireAdmin = t.middleware(({ ctx, next }) => {
   })
 })
 
-// Procedure builders
 export const publicProcedure = t.procedure
 export const protectedProcedure = t.procedure.use(requireAuth)
 export const adminProcedure = t.procedure.use(requireAuth).use(requireAdmin)

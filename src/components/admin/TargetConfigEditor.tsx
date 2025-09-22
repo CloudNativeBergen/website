@@ -28,7 +28,7 @@ export function TargetConfigEditor({
   const updateSettings = api.tickets.updateSettings.useMutation({
     onSuccess: () => {
       setIsEditing(false)
-      // Refresh the page to update the chart with new configuration
+
       router.refresh()
     },
     onError: (error) => {

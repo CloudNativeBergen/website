@@ -6,7 +6,6 @@ export interface ScheduleResponse {
   error?: { message: string }
 }
 
-// Save schedule
 export async function saveSchedule(
   schedule: ConferenceSchedule,
 ): Promise<ScheduleResponse> {

@@ -85,10 +85,8 @@ export function ProposalReviewForm({
       }
 
       if (nextProposal) {
-        // Navigate to the next unreviewed proposal
         router.push(`/admin/proposals/${nextProposal._id}`)
       } else {
-        // Show notification that there are no more unreviewed proposals
         showNotification({
           type: 'info',
           title: 'All proposals reviewed',

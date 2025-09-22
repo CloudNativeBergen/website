@@ -48,5 +48,4 @@ export function BackLink({
   )
 }
 
-// Keep BackButton as an alias for backward compatibility
 export const BackButton = BackLink

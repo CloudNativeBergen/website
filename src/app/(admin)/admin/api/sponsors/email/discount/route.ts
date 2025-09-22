@@ -14,12 +14,11 @@ interface SponsorDiscountEmailRequest {
   sponsorId: string
   discountCode: string
   subject: string
-  message: string // JSON string of PortableText blocks
+  message: string
   ticketUrl: string
 }
 
 export const POST = auth(async (req: NextAuthRequest) => {
-  // Check organizer access
   const accessError = validateOrganizerAccess(req)
   if (accessError) {
     return accessError
@@ -34,7 +33,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       ticketUrl,
     }: SponsorDiscountEmailRequest = await req.json()
 
-    // Validate required fields
     const validationError = validateRequiredFields(
       { sponsorId, discountCode, subject, message, ticketUrl },
       ['sponsorId', 'discountCode', 'subject', 'message', 'ticketUrl'],
@@ -43,21 +41,18 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return validationError
     }
 
-    // Parse PortableText message
     const { messagePortableText, error: parseError } =
       parsePortableTextMessage(message)
     if (parseError) {
       return parseError
     }
 
-    // Get conference
     const { conference, error: conferenceError } =
       await getEmailRouteConference()
     if (conferenceError) {
       return conferenceError
     }
 
-    // Fetch sponsor data
     const sponsor = await clientReadUncached.fetch<{
       _id: string
       name: string
@@ -89,7 +84,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: 'Sponsor not found' }, { status: 404 })
     }
 
-    // Collect contact person emails only (exclude billing email)
     const ccEmails: string[] = []
 
     if (sponsor.contact_persons) {
@@ -108,8 +102,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // Do not include billing email for discount codes - they should only go to contact persons
-
     if (ccEmails.length === 0) {
       return Response.json(
         {
@@ -119,7 +111,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // Create discount code information section
     const discountInfo = `
       <div style="background-color: #E0F2FE; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #CBD5E1;">
         <h3 style="color: #1D4ED8; margin-top: 0; margin-bottom: 16px; font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 18px; font-weight: 600;">
@@ -133,12 +124,10 @@ export const POST = auth(async (req: NextAuthRequest) => {
       </div>
     `
 
-    // Use the first contact email as primary recipient
     const primaryEmail = ccEmails[0]
-    // Use remaining emails as CC
+
     const ccList = ccEmails.slice(1)
 
-    // Send individual email with CC support
     const emailResponse = await sendIndividualEmail({
       conference: conference!,
       subject,
@@ -148,7 +137,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       additionalContent: discountInfo,
     })
 
-    // If successful, add sponsor-specific data to response
     if (emailResponse.ok) {
       const responseData = await emailResponse.json()
       return Response.json({

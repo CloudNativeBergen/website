@@ -10,10 +10,8 @@ interface ProgramListViewProps {
 export const ProgramListView = React.memo(function ProgramListView({
   data,
 }: ProgramListViewProps) {
-  // Merge identical placeholder talks across tracks (like lunch breaks)
   const mergedTalks = data.allTalks.reduce(
     (acc, talk) => {
-      // For placeholder talks, merge identical ones by time and placeholder text
       if (!talk.talk && talk.placeholder) {
         const existing = acc.find(
           (t) =>
@@ -25,7 +23,6 @@ export const ProgramListView = React.memo(function ProgramListView({
         )
 
         if (!existing) {
-          // Create a merged placeholder talk with multiple tracks
           acc.push({
             ...talk,
             trackTitle:
@@ -35,7 +32,6 @@ export const ProgramListView = React.memo(function ProgramListView({
           })
         }
       } else {
-        // Regular talks are not merged
         acc.push(talk)
       }
       return acc
@@ -57,7 +53,6 @@ export const ProgramListView = React.memo(function ProgramListView({
     )
   }
 
-  // Group talks by day and sort them
   const talksByDay = mergedTalks.reduce(
     (acc, talk) => {
       if (!acc[talk.scheduleDate]) {
@@ -69,7 +64,6 @@ export const ProgramListView = React.memo(function ProgramListView({
     {} as Record<string, typeof mergedTalks>,
   )
 
-  // Sort talks within each day by start time
   Object.keys(talksByDay).forEach((date) => {
     talksByDay[date].sort((a, b) => a.startTime.localeCompare(b.startTime))
   })
@@ -90,7 +84,6 @@ export const ProgramListView = React.memo(function ProgramListView({
     <div className="space-y-8">
       {sortedDays.map((date) => (
         <div key={date} className="space-y-4">
-          {/* Day Header - only show if multiple days */}
           {sortedDays.length > 1 && (
             <div className="border-b border-brand-frosted-steel pb-4 dark:border-gray-700">
               <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
@@ -102,13 +95,12 @@ export const ProgramListView = React.memo(function ProgramListView({
             </div>
           )}
 
-          {/* Talks List */}
           <div className="space-y-4">
             {talksByDay[date].map((talk, index) => (
               <TalkCard
                 key={`${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}-${index}`}
                 talk={talk}
-                showDate={false} // Date is shown in header
+                showDate={false}
                 showTrack={data.availableFilters.tracks.length > 1}
                 compact={true}
               />
@@ -117,7 +109,6 @@ export const ProgramListView = React.memo(function ProgramListView({
         </div>
       ))}
 
-      {/* Summary */}
       <div className="border-t border-brand-frosted-steel py-8 text-center dark:border-gray-700">
         <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
           Showing {mergedTalks.length} items from {data.schedules.length} day

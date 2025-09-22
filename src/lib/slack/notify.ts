@@ -40,7 +40,6 @@ type SlackMessage = {
 async function sendSlackMessage(message: SlackMessage) {
   const webhookUrl = process.env.CFP_BOT
 
-  // In development, just print the message to console
   if (process.env.NODE_ENV === 'development') {
     console.log('Slack notification (development mode):')
     console.log(JSON.stringify(message, null, 2))
@@ -212,7 +211,6 @@ export async function notifyNewProposal(
     },
   ]
 
-  // Only add the admin button if we have a valid domain
   if (domain) {
     blocks.push(
       createAdminButton(proposal, domain, 'Review in Admin', 'review_proposal'),
@@ -265,7 +263,6 @@ export async function notifyProposalStatusChange(
     ...createProposalInfoBlocks(proposal, speakerNames),
   ]
 
-  // Only add the admin button if we have a valid domain
   if (domain) {
     blocks.push(
       createAdminButton(proposal, domain, 'View in Admin', 'view_proposal'),

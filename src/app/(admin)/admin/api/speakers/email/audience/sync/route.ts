@@ -12,14 +12,12 @@ import { ProposalExisting } from '@/lib/proposal/types'
 export const dynamic = 'force-dynamic'
 
 export const POST = auth(async (req: NextAuthRequest) => {
-  // Check organizer access
   const accessError = checkOrganizerAccess(req)
   if (accessError) {
     return accessError
   }
 
   try {
-    // Get conference
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({ revalidate: 0 })
 
@@ -27,7 +25,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json({ error: conferenceError.message }, { status: 500 })
     }
 
-    // Get only confirmed speakers (this is now the default for getSpeakers)
     const { speakers, err } = await getSpeakers(conference._id)
 
     if (err) {
@@ -46,7 +43,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
         ),
     )
 
-    // Sync the audience
     const { syncedCount, error } = await syncConferenceAudience(
       conference,
       eligibleSpeakers,
@@ -60,7 +56,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    // Get the audience ID for response
     const { audienceId } = await getOrCreateConferenceAudience(conference)
 
     return Response.json({
