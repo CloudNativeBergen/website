@@ -56,14 +56,14 @@ export function InteractivePatternPreview() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-6 rounded-xl bg-brand-sky-mist p-6">
-        <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
+      <div className="flex-1 space-y-6 rounded-xl bg-brand-sky-mist p-6 dark:border dark:border-gray-600 dark:bg-gray-700">
+        <h4 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
           Pattern Controls
         </h4>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
+            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
               Variant
             </label>
             <select
@@ -71,7 +71,7 @@ export function InteractivePatternPreview() {
               onChange={(e) =>
                 setVariant(e.target.value as 'dark' | 'light' | 'brand')
               }
-              className="w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-brand-cloud-blue"
+              className="w-full rounded-lg border border-brand-frosted-steel bg-white px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:focus:ring-blue-400"
             >
               <option value="brand">Brand</option>
               <option value="dark">Dark</option>
@@ -80,7 +80,7 @@ export function InteractivePatternPreview() {
           </div>
 
           <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
+            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
               Animation
             </label>
             <label className="flex cursor-pointer items-center">
@@ -101,7 +101,7 @@ export function InteractivePatternPreview() {
                   }`}
                 ></div>
               </div>
-              <span className="font-inter ml-3 text-sm text-brand-slate-gray">
+              <span className="font-inter ml-3 text-sm text-brand-slate-gray dark:text-gray-200">
                 {animated ? 'Enabled' : 'Disabled'}
               </span>
             </label>
@@ -110,7 +110,7 @@ export function InteractivePatternPreview() {
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
+            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
               Opacity: {opacity.toFixed(2)}
             </label>
             <input
@@ -120,16 +120,16 @@ export function InteractivePatternPreview() {
               step="0.01"
               value={opacity}
               onChange={(e) => setOpacity(parseFloat(e.target.value))}
-              className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel"
+              className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel dark:bg-gray-600"
             />
-            <div className="mt-1 flex justify-between text-xs text-brand-slate-gray">
+            <div className="mt-1 flex justify-between text-xs text-brand-slate-gray dark:text-gray-300">
               <span>0.05</span>
               <span>0.30</span>
             </div>
           </div>
 
           <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
+            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
               Base Size: {baseSize}px
             </label>
             <input
@@ -139,19 +139,19 @@ export function InteractivePatternPreview() {
               step="1"
               value={baseSize}
               onChange={(e) => setBaseSize(parseInt(e.target.value))}
-              className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel"
+              className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel dark:bg-gray-600"
             />
-            <div className="mt-1 flex justify-between text-xs text-brand-slate-gray">
+            <div className="mt-1 flex justify-between text-xs text-brand-slate-gray dark:text-gray-300">
               <span>20px</span>
               <span>100px</span>
             </div>
-            <div className="mt-1 text-center text-xs text-brand-slate-gray/70">
+            <div className="mt-1 text-center text-xs text-brand-slate-gray/70 dark:text-gray-400">
               Range: {minDisplaySize}-{maxDisplaySize}px
             </div>
           </div>
 
           <div>
-            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray">
+            <label className="font-space-grotesk mb-2 block text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
               Icon Count: {iconCount}
             </label>
             <input
@@ -161,9 +161,9 @@ export function InteractivePatternPreview() {
               step="1"
               value={iconCount}
               onChange={(e) => setIconCount(parseInt(e.target.value))}
-              className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel"
+              className="slider h-2 w-full cursor-pointer appearance-none rounded-lg bg-brand-frosted-steel dark:bg-gray-600"
             />
-            <div className="mt-1 flex justify-between text-xs text-brand-slate-gray">
+            <div className="mt-1 flex justify-between text-xs text-brand-slate-gray dark:text-gray-300">
               <span>10</span>
               <span>200</span>
             </div>
@@ -171,11 +171,11 @@ export function InteractivePatternPreview() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="rounded-lg bg-white p-4">
-            <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+          <div className="rounded-lg bg-white p-4 dark:border dark:border-gray-600 dark:bg-gray-800">
+            <h5 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
               Current Configuration
             </h5>
-            <div className="space-y-1 font-mono text-xs text-brand-slate-gray">
+            <div className="space-y-1 font-mono text-xs text-brand-slate-gray dark:text-gray-300">
               <div>opacity={opacity}</div>
               <div>variant=&quot;{variant}&quot;</div>
               <div>animated={animated.toString()}</div>
@@ -185,7 +185,7 @@ export function InteractivePatternPreview() {
           </div>
 
           <div>
-            <h5 className="font-space-grotesk mb-3 text-sm font-semibold text-brand-slate-gray">
+            <h5 className="font-space-grotesk mb-3 text-sm font-semibold text-brand-slate-gray dark:text-gray-200">
               Quick Presets
             </h5>
             <div className="flex flex-wrap gap-2">
@@ -197,7 +197,7 @@ export function InteractivePatternPreview() {
                   setIconCount(18)
                   setAnimated(true)
                 }}
-                className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white"
+                className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
               >
                 Content Background
               </button>
@@ -209,7 +209,7 @@ export function InteractivePatternPreview() {
                   setIconCount(38)
                   setAnimated(true)
                 }}
-                className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white"
+                className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
               >
                 Hero Section
               </button>
@@ -221,7 +221,7 @@ export function InteractivePatternPreview() {
                   setIconCount(55)
                   setAnimated(true)
                 }}
-                className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white"
+                className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
               >
                 Dramatic Background
               </button>
@@ -233,7 +233,7 @@ export function InteractivePatternPreview() {
                   setIconCount(22)
                   setAnimated(false)
                 }}
-                className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white"
+                className="font-inter rounded-md border border-brand-frosted-steel bg-white px-3 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-glacier-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
               >
                 Subtle Static
               </button>
