@@ -1,3 +1,4 @@
+import React from 'react'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/server'
@@ -5,11 +6,95 @@ import { Status } from '@/lib/proposal/types'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { DownloadSpeakerImage } from '@/components/branding/DownloadSpeakerImage'
 import { AdminPageHeader } from '@/components/admin'
+import { CloudNativePattern } from '@/components/CloudNativePattern'
 import {
   DocumentArrowDownIcon,
   UserGroupIcon,
   PresentationChartBarIcon,
+  CalendarDaysIcon,
+  MapPinIcon,
+  UsersIcon,
+  MicrophoneIcon,
+  TrophyIcon,
 } from '@heroicons/react/24/outline'
+
+const qrCodeCache = new Map<string, string>()
+const FALLBACK_QR_CODE =
+  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IndoaXRlIi8+PHRleHQgeD0iNTAiIHk9IjUwIiBmb250LXNpemU9IjEwIiBmaWxsPSIjNjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0iY2VudHJhbCI+UVIgQ29kZTwvdGV4dD48L3N2Zz4='
+
+async function generateQRCode(
+  url: string,
+  domain: string,
+  size: number = 256,
+): Promise<string> {
+  const fullUrl = url.startsWith('http') ? url : `https://${domain}${url}`
+
+  const cacheKey = `${fullUrl}_${size}`
+  if (qrCodeCache.has(cacheKey)) {
+    return qrCodeCache.get(cacheKey)!
+  }
+
+  try {
+    const QRCode = (await import('qrcode')).default
+    const qrCodeDataUrl = await QRCode.toDataURL(fullUrl, {
+      width: size,
+      margin: 0,
+      color: {
+        dark: '#1a1a1a',
+        light: '#ffffff',
+      },
+      errorCorrectionLevel: 'M',
+    })
+
+    qrCodeCache.set(cacheKey, qrCodeDataUrl)
+    return qrCodeDataUrl
+  } catch (error) {
+    console.error('Failed to generate QR code:', error)
+    qrCodeCache.set(fullUrl, FALLBACK_QR_CODE)
+    return FALLBACK_QR_CODE
+  }
+}
+
+interface QRCodeDisplayProps {
+  qrCodeUrl?: string
+  size: number
+  className?: string
+}
+
+const QRCodeDisplay = ({
+  qrCodeUrl,
+  size,
+  className = '',
+}: QRCodeDisplayProps) => {
+  if (!qrCodeUrl) return null
+
+  return (
+    <div
+      className={`rounded-lg bg-white shadow-lg ${className}`}
+      style={{
+        padding: '8px',
+        width: `${size}px`,
+        height: `${size}px`,
+      }}
+    >
+      <img
+        src={qrCodeUrl}
+        alt="QR Code - Scan to view conference program"
+        className="h-full w-full object-cover"
+        style={{
+          imageRendering: 'crisp-edges',
+        }}
+      />
+    </div>
+  )
+}
+
+function getFirstParagraph(text?: string): string {
+  if (!text) return ''
+
+  const paragraphs = text.split(/\n\s*\n/).filter((p) => p.trim().length > 0)
+  return paragraphs[0]?.trim() || ''
+}
 
 function ErrorDisplay({ message }: { message: string }) {
   return (
@@ -89,6 +174,41 @@ export default async function MarketingPage() {
 
   const speakersWithTalks = Array.from(speakerTalksMap.values())
 
+  const totalSpeakers = speakersWithTalks.length
+  const totalTalks = confirmedProposals.length
+  const uniqueSpeakersCount = new Set(
+    confirmedProposals.flatMap((proposal) =>
+      (proposal.speakers || [])
+        .map((speaker) =>
+          typeof speaker === 'object' && speaker && '_id' in speaker
+            ? speaker._id
+            : null,
+        )
+        .filter(Boolean),
+    ),
+  ).size
+
+  const talksByFormat = confirmedProposals.reduce(
+    (acc, proposal) => {
+      const format = proposal.format || 'unknown'
+      acc[format] = (acc[format] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
+  )
+
+  const workshopCount = talksByFormat['workshop_120'] || 0
+
+  const programUrl = '/program'
+  const conferenceDomain = conference.domains[0]
+  const qrCodeUrl = await generateQRCode(programUrl, conferenceDomain, 80)
+
+  const conferenceDescription = getFirstParagraph(conference.description)
+  const fallbackDescription =
+    totalSpeakers > 0
+      ? `Join ${totalSpeakers} confirmed speakers and the Nordic cloud native community for a day of cutting-edge talks, hands-on workshops, and meaningful connections.`
+      : 'Join the Nordic cloud native community for a day of cutting-edge talks, hands-on workshops, and meaningful connections.'
+
   return (
     <div className="mx-auto max-w-7xl">
       <AdminPageHeader
@@ -142,6 +262,116 @@ export default async function MarketingPage() {
           },
         ]}
       />
+
+      <div className="mb-12">
+        <div className="mb-4 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+          <div className="flex items-start">
+            <DocumentArrowDownIcon className="mt-1 mr-3 h-5 w-5 text-brand-fresh-green dark:text-green-300" />
+            <div>
+              <h3 className="font-space-grotesk mb-1 text-sm font-semibold text-brand-fresh-green dark:text-green-300">
+                Conference Promotional Image
+              </h3>
+              <p className="font-inter text-xs text-green-700 dark:text-green-300">
+                Click &quot;Download as PNG&quot; to save a high-quality
+                conference promotional image perfect for social media and
+                marketing.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <DownloadSpeakerImage
+          filename={`${conference.title?.replace(/\s+/g, '-').toLowerCase() || 'cloud-native-bergen'}-conference-promo`}
+        >
+          <div
+            className="relative overflow-hidden rounded-xl bg-brand-gradient p-6 text-center md:p-8"
+            style={{ width: '800px', height: '400px' }}
+          >
+            <CloudNativePattern
+              className="z-0"
+              opacity={0.15}
+              animated={true}
+              variant="brand"
+              baseSize={45}
+              iconCount={80}
+            />
+            <div className="absolute inset-0 z-10 rounded-xl bg-black/30"></div>
+            <div className="relative z-20">
+              <h1 className="font-space-grotesk mb-4 text-3xl font-bold text-white md:text-4xl">
+                {conference.title}
+              </h1>
+              <div className="mb-6 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-8">
+                <div className="flex items-center gap-2 text-white/90">
+                  <CalendarDaysIcon className="h-5 w-5" />
+                  <span className="font-inter text-lg">
+                    {conference.start_date
+                      ? new Date(conference.start_date).toLocaleDateString(
+                          'en-GB',
+                          {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                          },
+                        )
+                      : 'June 15, 2025'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-white/90">
+                  <MapPinIcon className="h-5 w-5" />
+                  <span className="font-inter text-lg">
+                    {conference.city && conference.country
+                      ? `${conference.city}, ${conference.country}`
+                      : 'Bergen, Norway'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mb-6 grid grid-cols-2 gap-6 md:grid-cols-4">
+                <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
+                  <div className="mb-2 flex items-center justify-center gap-2">
+                    <UsersIcon className="h-5 w-5 text-brand-sunbeam-yellow" />
+                    <span className="font-space-grotesk text-2xl font-bold text-white">
+                      {uniqueSpeakersCount}
+                    </span>
+                  </div>
+                  <p className="font-inter text-sm text-white/80">Speakers</p>
+                </div>
+
+                <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
+                  <div className="mb-2 flex items-center justify-center gap-2">
+                    <MicrophoneIcon className="h-5 w-5 text-brand-fresh-green" />
+                    <span className="font-space-grotesk text-2xl font-bold text-white">
+                      {totalTalks}
+                    </span>
+                  </div>
+                  <p className="font-inter text-sm text-white/80">Talks</p>
+                </div>
+
+                <div className="rounded-lg bg-white/10 p-4 backdrop-blur-sm">
+                  <div className="mb-2 flex items-center justify-center gap-2">
+                    <TrophyIcon className="h-5 w-5 text-brand-sunbeam-yellow" />
+                    <span className="font-space-grotesk text-2xl font-bold text-white">
+                      {workshopCount}
+                    </span>
+                  </div>
+                  <p className="font-inter text-sm text-white/80">Workshops</p>
+                </div>
+
+                <div className="flex flex-col items-center justify-center">
+                  <QRCodeDisplay qrCodeUrl={qrCodeUrl} size={80} />
+                  <p className="font-inter mt-2 text-center text-xs text-white/80">
+                    Scan for Program
+                  </p>
+                </div>
+              </div>
+
+              <p className="font-inter mx-auto mb-4 max-w-2xl text-lg text-white/95">
+                {conferenceDescription || fallbackDescription}
+              </p>
+            </div>
+          </div>
+        </DownloadSpeakerImage>
+      </div>
 
       {speakersWithTalks.length === 0 ? (
         <div className="py-12 text-center">
