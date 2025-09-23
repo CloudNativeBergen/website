@@ -150,6 +150,7 @@ export async function createSponsor(
       name: data.name,
       website: data.website,
       logo: data.logo,
+      logo_bright: data.logo_bright,
       org_number: data.org_number,
       contact_persons: data.contact_persons
         ? prepareArrayWithKeys(data.contact_persons, 'contact')
@@ -186,6 +187,7 @@ export async function updateSponsor(
         name: data.name,
         website: data.website,
         logo: data.logo,
+        logo_bright: data.logo_bright,
         org_number: data.org_number,
         contact_persons: data.contact_persons
           ? prepareArrayWithKeys(data.contact_persons, 'contact')
@@ -236,6 +238,7 @@ export async function getSponsor(
         name,
         website,
         logo,
+        logo_bright,
         org_number,
         contact_persons[]{
           _key,
@@ -254,7 +257,8 @@ export async function getSponsor(
         _updatedAt,
         name,
         website,
-        logo`
+        logo,
+        logo_bright`
 
     const sponsor = await clientWrite.fetch(
       `*[_type == "sponsor" && _id == $id][0]{
@@ -288,6 +292,7 @@ export async function searchSponsors(
         name,
         website,
         logo,
+        logo_bright,
         org_number,
         contact_persons[]{
           _key,
@@ -306,7 +311,8 @@ export async function searchSponsors(
         _updatedAt,
         name,
         website,
-        logo`
+        logo,
+        logo_bright`
 
     const sponsors = await clientWrite.fetch(
       `*[_type == "sponsor" && name match $searchQuery]{
@@ -335,6 +341,7 @@ export async function getAllSponsors(
         name,
         website,
         logo,
+        logo_bright,
         org_number,
         contact_persons[]{
           _key,
@@ -353,7 +360,8 @@ export async function getAllSponsors(
         _updatedAt,
         name,
         website,
-        logo`
+        logo,
+        logo_bright`
 
     const sponsors = await clientWrite.fetch(
       `*[_type == "sponsor"] | order(name asc){
@@ -382,6 +390,7 @@ export async function getSponsorsForConference(
         name,
         website,
         logo,
+        logo_bright,
         org_number,
         contact_persons[]{
           _key,
@@ -400,7 +409,8 @@ export async function getSponsorsForConference(
         _updatedAt,
         name,
         website,
-        logo`
+        logo,
+        logo_bright`
 
     const sponsors = await clientWrite.fetch(
       `*[_type == "conference" && _id == $conferenceId][0].sponsors[]{

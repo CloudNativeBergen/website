@@ -4,47 +4,52 @@ import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { sanityImage } from '@/lib/sanity/client'
 
-const UserIcon = ({ size = 120 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
-    <path
-      fillRule="evenodd"
-      d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z"
-      clipRule="evenodd"
-    />
-  </svg>
-)
+const USER_ICON_SVG =
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    `<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd"/></svg>`,
+  ).toString('base64')
 
-const MicrophoneIcon = ({ size = 26 }: { size?: number }) => (
-  <svg
+const MICROPHONE_ICON_SVG =
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
+  ).toString('base64')
+
+const LIGHTBULB_ICON_SVG =
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M15 14c.5-1 .875-2.5.875-4a3.875 3.875 0 0 0-7.75 0c0 1.5.375 3 .875 4"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`,
+  ).toString('base64')
+
+const UserIcon = ({ size }: { size: number }) => (
+  <img
+    src={USER_ICON_SVG}
+    alt=""
     width={size}
     height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-  >
-    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-    <line x1="12" y1="19" x2="12" y2="23" />
-    <line x1="8" y1="23" x2="16" y2="23" />
-  </svg>
+    style={{ color: 'white' }}
+  />
 )
 
-const LightBulbIcon = ({ size = 26 }: { size?: number }) => (
-  <svg
+const MicrophoneIcon = ({ size }: { size: number }) => (
+  <img
+    src={MICROPHONE_ICON_SVG}
+    alt=""
     width={size}
     height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M15 14c.5-1 .875-2.5.875-4a3.875 3.875 0 0 0-7.75 0c0 1.5.375 3 .875 4" />
-    <path d="M9 18h6" />
-    <path d="M10 22h4" />
-  </svg>
+    style={{ color: 'white' }}
+  />
+)
+
+const LightBulbIcon = ({ size }: { size: number }) => (
+  <img
+    src={LIGHTBULB_ICON_SVG}
+    alt=""
+    width={size}
+    height={size}
+    style={{ color: 'white' }}
+  />
 )
 
 const STYLES = {
@@ -78,7 +83,8 @@ const STYLES = {
 } as const
 
 const createSponsorLogo = (
-  logoSvg: string | null | undefined,
+  logoSvg: string | null,
+  logoBrightSvg: string | null,
   sponsorName: string,
   isLarge: boolean,
 ) => {
@@ -94,48 +100,99 @@ const createSponsorLogo = (
     fontFamily: STYLES.fontFamily,
   }
 
-  if (!logoSvg?.trim()) {
+  // Prefer bright logo for dark backgrounds, fallback to regular logo
+  const selectedLogo = logoBrightSvg || logoSvg
+
+  if (!selectedLogo) {
     return <div style={commonStyle}>{sponsorName}</div>
   }
 
   try {
-    const dataUrl = createSvgDataUrl(logoSvg)
+    const dataUrl = createSvgDataUrl(selectedLogo)
     if (dataUrl) {
       return (
         <img
           src={dataUrl}
           alt={sponsorName}
           style={{
-            width: isLarge ? '120px' : '120px',
-            height: isLarge ? '60px' : '40px',
+            width: isLarge ? '120px' : '105px',
+            height: isLarge ? '60px' : '35px',
             objectFit: 'contain',
-            filter: 'brightness(0) invert(1)',
           }}
         />
       )
     }
     return <div style={commonStyle}>{sponsorName}</div>
-  } catch {
+  } catch (error) {
+    console.error(`Logo rendering failed for ${sponsorName}:`, error)
     return <div style={commonStyle}>{sponsorName}</div>
   }
 }
 
 function createSvgDataUrl(svgString: string): string | null {
-  if (!svgString?.trim()?.startsWith('<svg')) return null
+  if (!svgString?.trim()) return null
+
+  const trimmed = svgString.trim()
+  if (!trimmed.includes('<svg')) return null
 
   try {
-    const base64 = Buffer.from(svgString.trim()).toString('base64')
-    return `data:image/svg+xml;base64,${base64}`
-  } catch {
+    let cleanSvg = trimmed
+
+    cleanSvg = cleanSvg.replace(/^<\?xml[^>]*\?>\s*/, '')
+    cleanSvg = cleanSvg.replace(/<!DOCTYPE[^>]*>\s*/i, '')
+    if (!cleanSvg.includes('xmlns=')) {
+      cleanSvg = cleanSvg.replace(
+        '<svg',
+        '<svg xmlns="http://www.w3.org/2000/svg"',
+      )
+    }
+
+    if (cleanSvg.includes('<image')) {
+      cleanSvg = cleanSvg.replace(
+        /<image[^>]*xlink:href="data:[^"]*"[^>]*>/gi,
+        '',
+      )
+      cleanSvg = cleanSvg.replace(/<image[^>]*>/gi, '')
+    }
+
+    cleanSvg = cleanSvg.replace(/<mask[^>]*>[\s\S]*?<\/mask>/gi, '')
+    cleanSvg = cleanSvg.replace(/<clipPath[^>]*>[\s\S]*?<\/clipPath>/gi, '')
+    cleanSvg = cleanSvg.replace(/mask="[^"]*"/gi, '')
+    cleanSvg = cleanSvg.replace(/clip-path="[^"]*"/gi, '')
+
+    cleanSvg = cleanSvg.replace(/<filter[^>]*>[\s\S]*?<\/filter>/gi, '')
+    cleanSvg = cleanSvg.replace(/filter="[^"]*"/gi, '')
+
+    cleanSvg = cleanSvg.replace(/<defs[^>]*>[\s\S]*?<\/defs>/gi, '')
+
+    cleanSvg = cleanSvg.replace(/style="mix-blend-mode:[^"]*"/gi, '')
+
+    const base64 = Buffer.from(cleanSvg).toString('base64')
+    const dataUrl = `data:image/svg+xml;base64,${base64}`
+
+    if (base64.length < 10) {
+      console.error('SVG processing failed: empty or invalid content')
+      return null
+    }
+
+    return dataUrl
+  } catch (error) {
+    console.error(
+      'SVG processing error:',
+      error,
+      'SVG:',
+      svgString?.slice(0, 100),
+    )
     return null
   }
 }
 
 const renderSponsorLogo = (
-  logoSvg: string | null | undefined,
+  logoSvg: string | null,
+  logoBrightSvg: string | null,
   sponsorName: string,
   size: 'small' | 'large' = 'small',
-) => createSponsorLogo(logoSvg, sponsorName, size === 'large')
+) => createSponsorLogo(logoSvg, logoBrightSvg, sponsorName, size === 'large')
 
 export const runtime = 'edge'
 export const alt = 'Cloud Native Bergen Speaker Profile'
@@ -144,7 +201,6 @@ export const contentType = 'image/png'
 
 const BackgroundPatterns = () => (
   <>
-    {/* Decorative circles */}
     <div
       style={{
         position: 'absolute',
@@ -153,7 +209,7 @@ const BackgroundPatterns = () => (
         width: '400px',
         height: '400px',
         borderRadius: '50%',
-        background: STYLES.colors.whiteVeryLight,
+        background: 'rgba(255, 255, 255, 0.1)',
         display: 'flex',
       }}
     />
@@ -169,7 +225,6 @@ const BackgroundPatterns = () => (
         display: 'flex',
       }}
     />
-    {/* Grid pattern */}
     <div
       style={{
         position: 'absolute',
@@ -207,8 +262,8 @@ const SpeakerImage = ({
           left: '10px',
           width: '280px',
           height: '280px',
-          borderRadius: STYLES.borderRadius.large,
-          background: STYLES.colors.whiteVeryLight,
+          borderRadius: '28px',
+          background: 'rgba(255, 255, 255, 0.1)',
           filter: 'blur(20px)',
           display: 'flex',
         }}
@@ -219,9 +274,9 @@ const SpeakerImage = ({
         width={280}
         height={280}
         style={{
-          borderRadius: STYLES.borderRadius.large,
+          borderRadius: '28px',
           objectFit: 'cover',
-          border: `3px solid ${STYLES.colors.whiteLight}`,
+          border: `3px solid rgba(255, 255, 255, 0.2)`,
           position: 'relative',
           zIndex: 1,
         }}
@@ -232,15 +287,15 @@ const SpeakerImage = ({
       style={{
         width: '280px',
         height: '280px',
-        borderRadius: STYLES.borderRadius.large,
-        background: `linear-gradient(145deg, ${STYLES.colors.whiteLight}, ${STYLES.colors.whiteVeryLight})`,
+        borderRadius: '28px',
+        background: `linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1))`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: '28px',
-        color: STYLES.colors.white,
-        border: `3px solid ${STYLES.colors.whiteLight}`,
-        boxShadow: STYLES.shadow.box,
+        color: 'white',
+        border: `3px solid rgba(255, 255, 255, 0.2)`,
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
       }}
     >
       <UserIcon size={120} />
@@ -252,11 +307,11 @@ const TalkCard = ({ title }: { title: string }) => (
     style={{
       display: 'flex',
       flexDirection: 'column',
-      background: `linear-gradient(145deg, ${STYLES.colors.whiteLight}, ${STYLES.colors.whiteVeryLight})`,
-      borderRadius: STYLES.borderRadius.medium,
-      padding: STYLES.spacing.medium,
+      background: `linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1))`,
+      borderRadius: '24px',
+      padding: '32px',
       border: `2px solid rgba(255, 255, 255, 0.15)`,
-      boxShadow: STYLES.shadow.box,
+      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
       backdropFilter: 'blur(10px)',
       position: 'relative',
     }}
@@ -282,7 +337,7 @@ const TalkCard = ({ title }: { title: string }) => (
         fontWeight: '600',
         marginBottom: '12px',
         opacity: 0.9,
-        fontFamily: STYLES.fontFamily,
+        fontFamily: 'system-ui, -apple-system, sans-serif',
       }}
     >
       <div style={{ display: 'flex', marginRight: '8px' }}>
@@ -297,8 +352,8 @@ const TalkCard = ({ title }: { title: string }) => (
         margin: 0,
         lineHeight: 1.1,
         maxWidth: '100%',
-        fontFamily: STYLES.fontFamily,
-        textShadow: STYLES.shadow.textSmall,
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
         display: 'flex',
       }}
     >
@@ -313,7 +368,7 @@ export default async function Image({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  // URL-decode the slug to handle Norwegian characters (æ, ø, å)
+  // URL-decode to handle Norwegian characters (æ, ø, å)
   const decodedSlug = decodeURIComponent(slug)
   const { conference, domain } = await getConferenceForCurrentDomain({
     sponsors: true,
@@ -333,11 +388,11 @@ export default async function Image({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: STYLES.gradient,
-            color: STYLES.colors.white,
+            background: 'linear-gradient(135deg, #1e40af, #10b981)',
+            color: 'white',
             fontSize: 48,
             fontWeight: 'bold',
-            fontFamily: STYLES.fontFamily,
+            fontFamily: 'system-ui, -apple-system, sans-serif',
           }}
         >
           Speaker not found
@@ -347,15 +402,32 @@ export default async function Image({
     )
   }
 
+  const conferenceData = {
+    title: conference?.title || 'Cloud Native Bergen',
+    startDate: conference?.start_date,
+    endDate: conference?.end_date,
+    city: conference?.city,
+    country: conference?.country,
+    sponsors: conference?.sponsors || [],
+  }
+
+  const speakerData = {
+    name: speaker.name || 'Speaker',
+    title: speaker.title || null,
+    image: speaker.image,
+  }
+
   const primaryTalk = talks[0]
-  const speakerImageUrl = speaker.image
-    ? sanityImage(speaker.image).width(500).height(500).fit('crop').url()
+  const speakerImageUrl = speakerData.image
+    ? sanityImage(speakerData.image).width(500).height(500).fit('crop').url()
     : null
 
-  const ingressSponsors =
-    conference?.sponsors?.filter((s) => s.tier?.title === 'Ingress') || []
-  const otherSponsors =
-    conference?.sponsors?.filter((s) => s.tier?.title !== 'Ingress') || []
+  const ingressSponsors = conferenceData.sponsors.filter(
+    (s) => s.tier?.title === 'Ingress',
+  )
+  const otherSponsors = conferenceData.sponsors.filter(
+    (s) => s.tier?.title !== 'Ingress',
+  )
   const hasOtherSponsors = otherSponsors.length > 0
 
   const mainContentHeight = hasOtherSponsors ? '480px' : '520px'
@@ -368,22 +440,21 @@ export default async function Image({
           height: '100%',
           display: 'flex',
           flexDirection: 'row',
-          background: STYLES.gradient,
-          color: STYLES.colors.white,
+          background: 'linear-gradient(135deg, #1e40af, #10b981)',
+          color: 'white',
           padding: '40px 40px 80px 40px',
-          fontFamily: STYLES.fontFamily,
+          fontFamily: 'system-ui, -apple-system, sans-serif',
           position: 'relative',
           overflow: 'hidden',
         }}
       >
         <BackgroundPatterns />
 
-        {/* Conference Info - Top Header */}
         <div
           style={{
             position: 'absolute',
             top: '20px',
-            left: STYLES.spacing.large,
+            left: '40px',
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
@@ -392,22 +463,22 @@ export default async function Image({
             maxWidth: '800px',
           }}
         >
-          {(conference?.start_date || conference?.end_date) && (
+          {(conferenceData.startDate || conferenceData.endDate) && (
             <div
               style={{
                 fontSize: '18px',
                 fontWeight: '700',
-                color: STYLES.colors.white,
-                fontFamily: STYLES.fontFamily,
-                textShadow: STYLES.shadow.text,
+                color: 'white',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
                 display: 'flex',
                 whiteSpace: 'nowrap',
               }}
             >
               {(() => {
-                if (conference?.start_date && conference?.end_date) {
-                  const startDate = new Date(conference.start_date)
-                  const endDate = new Date(conference.end_date)
+                if (conferenceData.startDate && conferenceData.endDate) {
+                  const startDate = new Date(conferenceData.startDate)
+                  const endDate = new Date(conferenceData.endDate)
 
                   if (startDate.toDateString() === endDate.toDateString()) {
                     return startDate.toLocaleDateString('en-US', {
@@ -428,7 +499,7 @@ export default async function Image({
                 }
 
                 const singleDate =
-                  conference?.start_date || conference?.end_date
+                  conferenceData.startDate || conferenceData.endDate
                 return new Date(singleDate).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
@@ -437,19 +508,19 @@ export default async function Image({
               })()}
             </div>
           )}
-          {(conference?.city || conference?.country) && (
+          {(conferenceData.city || conferenceData.country) && (
             <div
               style={{
                 fontSize: '18px',
                 fontWeight: '700',
-                color: STYLES.colors.white,
-                fontFamily: STYLES.fontFamily,
-                textShadow: STYLES.shadow.text,
+                color: 'white',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
                 display: 'flex',
                 whiteSpace: 'nowrap',
               }}
             >
-              {[conference?.city, conference?.country]
+              {[conferenceData.city, conferenceData.country]
                 .filter(Boolean)
                 .join(', ')}
             </div>
@@ -458,9 +529,9 @@ export default async function Image({
             style={{
               fontSize: '18px',
               fontWeight: '700',
-              color: STYLES.colors.white,
-              fontFamily: STYLES.fontFamily,
-              textShadow: STYLES.shadow.text,
+              color: 'white',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
               display: 'flex',
               whiteSpace: 'nowrap',
             }}
@@ -469,13 +540,12 @@ export default async function Image({
           </div>
         </div>
 
-        {/* Ingress Sponsors - Top Right (Horizontal) */}
         {ingressSponsors.length > 0 && (
           <div
             style={{
               position: 'absolute',
               top: '20px',
-              right: STYLES.spacing.large,
+              right: '40px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'flex-end',
@@ -494,25 +564,31 @@ export default async function Image({
                 justifyContent: 'flex-end',
               }}
             >
-              {ingressSponsors.slice(0, 3).map((sponsor, index) => (
-                <div
-                  key={index}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '8px 12px',
-                    minWidth: '80px',
-                    minHeight: '40px',
-                  }}
-                >
-                  {renderSponsorLogo(
-                    sponsor?.sponsor?.logo,
-                    sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
-                    'small',
-                  )}
-                </div>
-              ))}
+              {ingressSponsors
+                .sort((a, b) =>
+                  (a.sponsor?.name || '').localeCompare(b.sponsor?.name || ''),
+                )
+                .slice(0, 3)
+                .map((sponsor, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '8px 12px',
+                      minWidth: '80px',
+                      minHeight: '40px',
+                    }}
+                  >
+                    {renderSponsorLogo(
+                      sponsor?.sponsor?.logo || null,
+                      sponsor?.sponsor?.logo_bright || null,
+                      sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
+                      'small',
+                    )}
+                  </div>
+                ))}
             </div>
             <div
               style={{
@@ -533,7 +609,6 @@ export default async function Image({
           </div>
         )}
 
-        {/* Main Content */}
         <div
           style={{
             display: 'flex',
@@ -545,7 +620,6 @@ export default async function Image({
             zIndex: 1,
           }}
         >
-          {/* Speaker Section */}
           <div
             style={{
               display: 'flex',
@@ -558,10 +632,7 @@ export default async function Image({
               zIndex: 1,
             }}
           >
-            <SpeakerImage
-              imageUrl={speakerImageUrl}
-              name={speaker.name || 'Speaker'}
-            />
+            <SpeakerImage imageUrl={speakerImageUrl} name={speakerData.name} />
 
             <h2
               style={{
@@ -576,10 +647,10 @@ export default async function Image({
                 display: 'flex',
               }}
             >
-              {speaker.name}
+              {speakerData.name}
             </h2>
 
-            {speaker.title && (
+            {speakerData.title && (
               <p
                 style={{
                   fontSize: '26px',
@@ -594,12 +665,11 @@ export default async function Image({
                   display: 'flex',
                 }}
               >
-                {speaker.title}
+                {speakerData.title}
               </p>
             )}
           </div>
 
-          {/* Event and Talk Section */}
           <div
             style={{
               display: 'flex',
@@ -622,7 +692,7 @@ export default async function Image({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  marginBottom: STYLES.spacing.small,
+                  marginBottom: '16px',
                   fontSize: '26px',
                   fontWeight: '600',
                   opacity: 0.95,
@@ -651,7 +721,7 @@ export default async function Image({
                   display: 'flex',
                 }}
               >
-                {conference?.title || 'Cloud Native Bergen'}
+                {conferenceData.title}
               </h1>
             </div>
 
@@ -659,14 +729,13 @@ export default async function Image({
           </div>
         </div>
 
-        {/* Other Sponsors Footer */}
         {hasOtherSponsors && (
           <div
             style={{
               position: 'absolute',
               bottom: '20px',
-              left: STYLES.spacing.large,
-              right: STYLES.spacing.large,
+              left: '40px',
+              right: '40px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -702,6 +771,9 @@ export default async function Image({
             >
               {otherSponsors
                 .filter((sponsor) => sponsor.tier?.title === 'Service')
+                .sort((a, b) =>
+                  (a.sponsor?.name || '').localeCompare(b.sponsor?.name || ''),
+                )
                 .map((sponsor, index) => (
                   <div
                     key={index}
@@ -713,7 +785,8 @@ export default async function Image({
                     }}
                   >
                     {renderSponsorLogo(
-                      sponsor?.sponsor?.logo,
+                      sponsor?.sponsor?.logo || null,
+                      sponsor?.sponsor?.logo_bright || null,
                       sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
                       'small',
                     )}

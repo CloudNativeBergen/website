@@ -55,6 +55,7 @@ export interface ConferenceSponsor {
     name: string
     website: string
     logo: string
+    logo_bright?: string
   }
   tier: {
     title: string
@@ -74,6 +75,7 @@ export interface ConferenceSponsorWithContact {
     name: string
     website: string
     logo: string
+    logo_bright?: string
     org_number?: string
     contact_persons?: ContactPerson[]
     billing?: BillingInfo
@@ -114,6 +116,7 @@ export interface SponsorInput {
   name: string
   website: string
   logo: string
+  logo_bright?: string
   org_number?: string
   contact_persons?: ContactPerson[]
   billing?: BillingInfo
@@ -127,6 +130,7 @@ export interface SponsorExisting {
   name: string
   website: string
   logo: string
+  logo_bright?: string
 }
 
 export interface SponsorWithContactInfo extends SponsorExisting {

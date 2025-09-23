@@ -48,6 +48,12 @@ export default async function AdminSponsors() {
     {} as Record<string, typeof sponsors>,
   )
 
+  Object.keys(sponsorsByTier).forEach((tierTitle) => {
+    sponsorsByTier[tierTitle].sort((a, b) =>
+      a.sponsor.name.localeCompare(b.sponsor.name),
+    )
+  })
+
   const sortedTierNames = Object.keys(sponsorsByTier).sort((a, b) => {
     if (a === 'No Tier') return 1
     if (b === 'No Tier') return -1

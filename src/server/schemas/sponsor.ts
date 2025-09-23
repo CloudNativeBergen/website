@@ -1,37 +1,45 @@
 import { z } from 'zod'
 
+const nullToUndefined = <T>(val: T | null): T | undefined =>
+  val === null ? undefined : val
+
 export const ContactPersonSchema = z.object({
   _key: z.string(),
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Valid email is required'),
-  phone: z.string().optional(),
-  role: z.string().optional(),
+  phone: z.string().nullable().optional().transform(nullToUndefined),
+  role: z.string().nullable().optional().transform(nullToUndefined),
 })
 
 export const BillingInfoSchema = z.object({
   email: z.string().email('Valid billing email is required'),
-  reference: z.string().optional(),
-  comments: z.string().optional(),
+  reference: z.string().nullable().optional().transform(nullToUndefined),
+  comments: z.string().nullable().optional().transform(nullToUndefined),
 })
 
 export const SponsorInputSchema = z.object({
   name: z.string().min(1, 'Sponsor name is required'),
   website: z.string().url('Valid website URL is required'),
   logo: z.string().min(1, 'Logo is required'),
-  org_number: z.string().optional(),
+  logo_bright: z.string().nullable().optional().transform(nullToUndefined),
+  org_number: z.string().nullable().optional().transform(nullToUndefined),
   contact_persons: z.array(ContactPersonSchema).optional(),
   billing: BillingInfoSchema.optional(),
-  tierId: z.string().optional(),
+  tierId: z.string().nullable().optional().transform(nullToUndefined),
 })
 
 export const SponsorTierPriceSchema = z.object({
-  _key: z.string().optional(),
+  _key: z.string().nullable().optional().transform(nullToUndefined),
   amount: z.number().min(0, 'Amount must be positive'),
   currency: z.string().min(1, 'Currency is required'),
 })
 
 export const SponsorTierPerkSchema = z.object({
-  _key: z.string().optional(),
+  _key: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((val) => (val === null ? undefined : val)),
   label: z.string().min(1, 'Perk label is required'),
   description: z.string().min(1, 'Perk description is required'),
 })

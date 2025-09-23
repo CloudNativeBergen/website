@@ -184,7 +184,8 @@ export async function getConferenceForDomain(
         _id,
         name,
         website,
-        logo,${
+        logo,
+        logo_bright,${
           sponsorContact
             ? `
         org_number,

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { SponsorLogo } from '@/components/SponsorLogo'
 import {
   BuildingOffice2Icon,
   GlobeAltIcon,
@@ -21,6 +22,8 @@ import { useNotification } from './NotificationProvider'
 import { ConfirmationModal } from './ConfirmationModal'
 import SponsorAddModal from './SponsorAddModal'
 import { api } from '@/lib/trpc/client'
+
+const ADMIN_LOGO_SIZE = { maxWidth: '48px', maxHeight: '48px' }
 
 interface SponsorManagementProps {
   sponsors: ConferenceSponsorWithContact[]
@@ -83,14 +86,21 @@ export default function SponsorTierManagement({
   }
 
   const addSponsorToState = (newSponsor: ConferenceSponsorWithContact) => {
-    setSponsors((prev) => [...prev, newSponsor])
+    setSponsors((prev) =>
+      [...prev, newSponsor].sort((a, b) =>
+        a.sponsor.name.localeCompare(b.sponsor.name),
+      ),
+    )
 
     setSponsorsByTier((prev) => {
       const tierName = newSponsor.tier.title
       const currentTierSponsors = prev[tierName] || []
+      const updatedTierSponsors = [...currentTierSponsors, newSponsor].sort(
+        (a, b) => a.sponsor.name.localeCompare(b.sponsor.name),
+      )
       return {
         ...prev,
-        [tierName]: [...currentTierSponsors, newSponsor],
+        [tierName]: updatedTierSponsors,
       }
     })
 
@@ -137,11 +147,13 @@ export default function SponsorTierManagement({
     updatedSponsor: ConferenceSponsorWithContact,
   ) => {
     setSponsors((prev) =>
-      prev.map((sponsor) =>
-        sponsor.sponsor.name === updatedSponsor.sponsor.name
-          ? updatedSponsor
-          : sponsor,
-      ),
+      prev
+        .map((sponsor) =>
+          sponsor.sponsor.name === updatedSponsor.sponsor.name
+            ? updatedSponsor
+            : sponsor,
+        )
+        .sort((a, b) => a.sponsor.name.localeCompare(b.sponsor.name)),
     )
 
     setSponsorsByTier((prev) => {
@@ -158,6 +170,13 @@ export default function SponsorTierManagement({
         newSponsorsByTier[tierName] = []
       }
       newSponsorsByTier[tierName].push(updatedSponsor)
+
+      // Sort sponsors alphabetically within each tier
+      Object.keys(newSponsorsByTier).forEach((tierTitle) => {
+        newSponsorsByTier[tierTitle].sort((a, b) =>
+          a.sponsor.name.localeCompare(b.sponsor.name),
+        )
+      })
 
       return newSponsorsByTier
     })
@@ -187,16 +206,16 @@ export default function SponsorTierManagement({
     try {
       await removeSponsorMutation.mutateAsync({ id: sponsorId })
 
-      const updatedSponsors = sponsors.filter(
-        (s) => s.sponsor.name !== sponsorName,
-      )
+      const updatedSponsors = sponsors
+        .filter((s) => s.sponsor.name !== sponsorName)
+        .sort((a, b) => a.sponsor.name.localeCompare(b.sponsor.name))
       setSponsors(updatedSponsors)
 
       const newSponsorsByTier = { ...sponsorsByTier }
       Object.keys(newSponsorsByTier).forEach((tierName) => {
-        newSponsorsByTier[tierName] = newSponsorsByTier[tierName].filter(
-          (s) => s.sponsor.name !== sponsorName,
-        )
+        newSponsorsByTier[tierName] = newSponsorsByTier[tierName]
+          .filter((s) => s.sponsor.name !== sponsorName)
+          .sort((a, b) => a.sponsor.name.localeCompare(b.sponsor.name))
       })
       setSponsorsByTier(newSponsorsByTier)
 
@@ -350,15 +369,12 @@ export default function SponsorTierManagement({
                         <div className="flex items-start space-x-4">
                           <div className="flex-shrink-0">
                             {sponsor.logo ? (
-                              <div
+                              <SponsorLogo
+                                logo={sponsor.logo}
+                                logoBright={sponsor.logo_bright}
+                                name={sponsor.name}
+                                style={ADMIN_LOGO_SIZE}
                                 className="flex h-12 w-12 items-center justify-center"
-                                dangerouslySetInnerHTML={{
-                                  __html: sponsor.logo,
-                                }}
-                                style={{
-                                  maxWidth: '48px',
-                                  maxHeight: '48px',
-                                }}
                               />
                             ) : (
                               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">

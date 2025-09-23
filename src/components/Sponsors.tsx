@@ -1,8 +1,8 @@
 'use client'
 
 import { Container } from '@/components/Container'
+import { SponsorLogo } from '@/components/SponsorLogo'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
-import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
 import Link from 'next/link'
 
 function deterministicShuffle<T>(array: T[], seed: number): T[] {
@@ -122,7 +122,7 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                     {tierSponsors.map((sponsor, i) => (
                       <div
                         key={`${sponsor.sponsor.name}-${i}`}
-                        className="-mr-px -mb-px flex min-h-[100px] items-center justify-center border-2 border-dashed border-gray-400 bg-white p-6 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-100 dark:hover:bg-gray-200"
+                        className="-mr-px -mb-px flex min-h-[100px] items-center justify-center border-2 border-dashed border-gray-400 bg-white p-6 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-transparent dark:hover:bg-gray-800/30"
                       >
                         <a
                           href={sponsor.sponsor.website}
@@ -131,9 +131,11 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                           rel="noopener noreferrer"
                           aria-label={`Visit ${sponsor.sponsor.name} website`}
                         >
-                          <InlineSvgPreviewComponent
+                          <SponsorLogo
+                            logo={sponsor.sponsor.logo}
+                            logoBright={sponsor.sponsor.logo_bright}
+                            name={sponsor.sponsor.name}
                             className="h-8 w-auto max-w-full object-contain sm:h-10 lg:h-8"
-                            value={sponsor.sponsor.logo}
                           />
                         </a>
                       </div>

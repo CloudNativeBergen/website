@@ -22,6 +22,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { ChevronDownIcon as ChevronDownIconSmall } from '@heroicons/react/16/solid'
 import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
+import { SponsorLogo } from '@/components/SponsorLogo'
 import {
   ConferenceSponsorWithContact,
   SponsorTierExisting,
@@ -30,6 +31,8 @@ import {
 } from '@/lib/sponsor/types'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 import { api } from '@/lib/trpc/client'
+
+const LOGO_PREVIEW_SIZE = { width: '100px', height: '100px' }
 
 interface SponsorAddModalProps {
   isOpen: boolean
@@ -61,11 +64,13 @@ export default function SponsorAddModal({
 }: SponsorAddModalProps) {
   const { theme } = useTheme()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const brightFileInputRef = useRef<HTMLInputElement>(null)
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
     website: '',
     logo: '',
+    logo_bright: '',
     tierId: preselectedTierId || '',
     org_number: '',
     contact_persons: [],
@@ -86,13 +91,28 @@ export default function SponsorAddModal({
   const [isCreatingNew, setIsCreatingNew] = useState(false)
 
   const sponsorsQuery = api.sponsor.list.useQuery({})
-  const createMutation = api.sponsor.create.useMutation()
-  const updateMutation = api.sponsor.update.useMutation()
-  const addToConferenceMutation = api.sponsor.addToConference.useMutation()
+  const createMutation = api.sponsor.create.useMutation({
+    onSuccess: () => {
+      utils.sponsor.list.invalidate()
+    },
+  })
+  const updateMutation = api.sponsor.update.useMutation({
+    onSuccess: () => {
+      utils.sponsor.list.invalidate()
+    },
+  })
+  const addToConferenceMutation = api.sponsor.addToConference.useMutation({
+    onSuccess: () => {
+      utils.sponsor.list.invalidate()
+    },
+  })
+  const utils = api.useUtils()
 
   useEffect(() => {
-    if (isOpen && sponsorsQuery.data) {
-      setAvailableSponsors(sponsorsQuery.data)
+    if (sponsorsQuery.data && (isOpen || sponsorsQuery.data)) {
+      setAvailableSponsors(
+        sponsorsQuery.data.sort((a, b) => a.name.localeCompare(b.name)),
+      )
     }
   }, [isOpen, sponsorsQuery.data])
 
@@ -106,9 +126,15 @@ export default function SponsorAddModal({
           name: editingSponsor.sponsor.name,
           website: editingSponsor.sponsor.website || '',
           logo: editingSponsor.sponsor.logo || '',
+          logo_bright: editingSponsor.sponsor.logo_bright || '',
           tierId: tierMatch?._id || '',
           org_number: editingSponsor.sponsor.org_number || '',
-          contact_persons: editingSponsor.sponsor.contact_persons || [],
+          contact_persons:
+            editingSponsor.sponsor.contact_persons?.map((contact) => ({
+              ...contact,
+              phone: contact.phone || '',
+              role: contact.role || '',
+            })) || [],
           billing: {
             email: editingSponsor.sponsor.billing?.email || '',
             reference: editingSponsor.sponsor.billing?.reference || '',
@@ -122,6 +148,7 @@ export default function SponsorAddModal({
           name: '',
           website: '',
           logo: '',
+          logo_bright: '',
           tierId: preselectedTierId || '',
           org_number: '',
           contact_persons: [],
@@ -158,6 +185,22 @@ export default function SponsorAddModal({
     }
   }
 
+  const handleBrightFileUpload = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0]
+    if (file && file.type === 'image/svg+xml') {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const svgContent = e.target?.result as string
+        setFormData((prev) => ({ ...prev, logo_bright: svgContent }))
+      }
+      reader.readAsText(file)
+    } else {
+      alert('Please select an SVG file.')
+    }
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
 
@@ -166,8 +209,8 @@ export default function SponsorAddModal({
         formData.billing.email || formData.billing.reference
           ? {
               email: formData.billing.email,
-              reference: formData.billing.reference,
-              comments: formData.billing.comments,
+              reference: formData.billing.reference || undefined,
+              comments: formData.billing.comments || undefined,
             }
           : undefined
 
@@ -175,8 +218,13 @@ export default function SponsorAddModal({
         name: formData.name,
         website: formData.website,
         logo: formData.logo,
-        org_number: formData.org_number,
-        contact_persons: formData.contact_persons,
+        logo_bright: formData.logo_bright || undefined,
+        org_number: formData.org_number || undefined,
+        contact_persons: formData.contact_persons?.map((contact) => ({
+          ...contact,
+          phone: contact.phone || undefined,
+          role: contact.role || undefined,
+        })),
         billing: billingData,
       }
 
@@ -205,10 +253,10 @@ export default function SponsorAddModal({
           }),
         }
 
-        const updatedSponsor = await updateMutation.mutateAsync({
+        const updatedSponsor = (await updateMutation.mutateAsync({
           id: existingSponsor._id,
           data: sponsorUpdateData,
-        })
+        })) as SponsorWithContactInfo
 
         const selectedTier = sponsorTiers.find(
           (tier) => tier._id === formData.tierId,
@@ -220,10 +268,10 @@ export default function SponsorAddModal({
             name: updatedSponsor.name,
             website: updatedSponsor.website,
             logo: updatedSponsor.logo,
-            org_number: (updatedSponsor as SponsorWithContactInfo).org_number,
-            contact_persons: (updatedSponsor as SponsorWithContactInfo)
-              .contact_persons,
-            billing: (updatedSponsor as SponsorWithContactInfo).billing,
+            logo_bright: updatedSponsor.logo_bright,
+            org_number: updatedSponsor.org_number,
+            contact_persons: updatedSponsor.contact_persons,
+            billing: updatedSponsor.billing,
           },
           tier: {
             title: selectedTier?.title || '',
@@ -233,6 +281,25 @@ export default function SponsorAddModal({
         }
 
         onSponsorUpdated?.(updatedConferenceSponsor)
+
+        setAvailableSponsors((prev) =>
+          prev
+            .map((sponsor) =>
+              sponsor._id === existingSponsor._id
+                ? {
+                    ...sponsor,
+                    name: updatedSponsor.name,
+                    logo: updatedSponsor.logo,
+                    logo_bright: updatedSponsor.logo_bright,
+                    website: updatedSponsor.website,
+                    org_number: updatedSponsor.org_number,
+                    contact_persons: updatedSponsor.contact_persons,
+                    billing: updatedSponsor.billing,
+                  }
+                : sponsor,
+            )
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        )
       } else {
         let finalSponsorId = sponsorId
 
@@ -263,6 +330,7 @@ export default function SponsorAddModal({
             name: formData.name,
             website: formData.website,
             logo: formData.logo,
+            logo_bright: formData.logo_bright || undefined,
             org_number: formData.org_number,
             contact_persons: formData.contact_persons,
             billing: billingData,
@@ -275,6 +343,24 @@ export default function SponsorAddModal({
         }
 
         onSponsorAdded?.(addedSponsor)
+
+        if (isCreatingNew && finalSponsorId) {
+          const newSponsor: SponsorWithContactInfo = {
+            _id: finalSponsorId,
+            _createdAt: new Date().toISOString(),
+            _updatedAt: new Date().toISOString(),
+            name: formData.name,
+            website: formData.website,
+            logo: formData.logo,
+            logo_bright: formData.logo_bright,
+            org_number: formData.org_number,
+            contact_persons: formData.contact_persons,
+            billing: billingData,
+          }
+          setAvailableSponsors((prev) =>
+            [...prev, newSponsor].sort((a, b) => a.name.localeCompare(b.name)),
+          )
+        }
       }
 
       onClose()
@@ -296,6 +382,7 @@ export default function SponsorAddModal({
         name: sponsor.name,
         website: sponsor.website || '',
         logo: sponsor.logo || '',
+        logo_bright: sponsor.logo_bright || '',
         tierId: formData.tierId,
         org_number: sponsor.org_number || '',
         contact_persons: sponsor.contact_persons || [],
@@ -318,6 +405,7 @@ export default function SponsorAddModal({
       name: query,
       website: '',
       logo: '',
+      logo_bright: '',
       org_number: '',
       contact_persons: [],
       billing: { email: '', reference: '', comments: '' },
@@ -626,10 +714,14 @@ export default function SponsorAddModal({
                             </div>
                           </div>
 
-                          <div className="sm:col-span-2">
+                          <div>
                             <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                               Logo (SVG) *
                             </label>
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                              Primary logo for light backgrounds and general
+                              display
+                            </p>
                             <div className="mt-2">
                               <input
                                 type="file"
@@ -646,10 +738,7 @@ export default function SponsorAddModal({
                                   <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
                                     <InlineSvgPreviewComponent
                                       value={formData.logo}
-                                      style={{
-                                        width: '100px',
-                                        height: '100px',
-                                      }}
+                                      style={LOGO_PREVIEW_SIZE}
                                     />
                                   </div>
                                   <button
@@ -668,7 +757,95 @@ export default function SponsorAddModal({
                               )}
                             </div>
                           </div>
+
+                          <div>
+                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
+                              Logo (Bright/White) - Optional
+                            </label>
+                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                              Bright/white version for dark backgrounds
+                            </p>
+                            <div className="mt-2">
+                              <input
+                                type="file"
+                                ref={brightFileInputRef}
+                                onChange={handleBrightFileUpload}
+                                accept=".svg"
+                                className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:text-gray-400 dark:file:bg-indigo-500/10 dark:file:text-indigo-400 dark:hover:file:bg-indigo-500/20"
+                              />
+                              {formData.logo_bright && (
+                                <div className="mt-3">
+                                  <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
+                                    Bright Logo Preview:
+                                  </p>
+                                  <div className="inline-block rounded-lg border border-gray-200 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
+                                    <InlineSvgPreviewComponent
+                                      value={formData.logo_bright}
+                                      style={LOGO_PREVIEW_SIZE}
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        logo_bright: '',
+                                      }))
+                                    }
+                                    className="ml-3 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
+
+                        {formData.logo && formData.logo_bright && (
+                          <div className="mt-4 sm:col-span-2">
+                            <h5 className="mb-3 block text-sm/6 font-medium text-gray-900 dark:text-white">
+                              Logo Preview (How they appear in different modes)
+                            </h5>
+                            <div className="flex flex-col gap-4 sm:flex-row">
+                              <div className="flex-1">
+                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+                                  Light Mode
+                                </p>
+                                <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
+                                  <InlineSvgPreviewComponent
+                                    value={formData.logo}
+                                    style={LOGO_PREVIEW_SIZE}
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+                                  Dark Mode
+                                </p>
+                                <div className="inline-block rounded-lg border border-gray-600 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
+                                  <InlineSvgPreviewComponent
+                                    value={formData.logo_bright}
+                                    style={LOGO_PREVIEW_SIZE}
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex-1">
+                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
+                                  Responsive
+                                </p>
+                                <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-gray-900">
+                                  <SponsorLogo
+                                    logo={formData.logo}
+                                    logoBright={formData.logo_bright}
+                                    name={formData.name || 'Logo Preview'}
+                                    style={LOGO_PREVIEW_SIZE}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">

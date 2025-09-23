@@ -25,6 +25,13 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'logo_bright',
+      title: 'Logo (Bright)',
+      type: 'inlineSvg',
+      description:
+        'Optional bright/white version of the logo for use on dark backgrounds',
+    }),
+    defineField({
       name: 'org_number',
       title: 'Organization Number',
       type: 'string',
