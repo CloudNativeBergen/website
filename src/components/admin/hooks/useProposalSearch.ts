@@ -3,7 +3,21 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminSearchProposals } from '@/lib/proposal'
-import { ProposalExisting } from '@/lib/proposal/types'
+import { ProposalExisting, Status } from '@/lib/proposal/types'
+
+// Status priority for search results ordering
+const STATUS_PRIORITY: Record<Status, number> = {
+  [Status.accepted]: 0,
+  [Status.confirmed]: 1,
+  [Status.submitted]: 2,
+  [Status.draft]: 3,
+  [Status.rejected]: 4,
+  [Status.withdrawn]: 5,
+  [Status.deleted]: 6,
+} as const
+
+// Default priority for unknown status values (lowest priority)
+const DEFAULT_STATUS_PRIORITY = 7
 
 export function useProposalSearch() {
   const [isSearching, setIsSearching] = useState(false)
@@ -31,7 +45,20 @@ export function useProposalSearch() {
         setSearchError(response.error.message)
         setSearchResults([])
       } else {
-        setSearchResults(response.proposals || [])
+        // Sort results to prioritize accepted talks at the top
+        const sortedResults = (response.proposals || []).sort((a, b) => {
+          const priorityA = STATUS_PRIORITY[a.status] ?? DEFAULT_STATUS_PRIORITY
+          const priorityB = STATUS_PRIORITY[b.status] ?? DEFAULT_STATUS_PRIORITY
+
+          if (priorityA !== priorityB) {
+            return priorityA - priorityB
+          }
+
+          // If same priority, sort alphabetically by title
+          return a.title.localeCompare(b.title)
+        })
+
+        setSearchResults(sortedResults)
       }
     } catch (error) {
       console.error('Search error:', error)
