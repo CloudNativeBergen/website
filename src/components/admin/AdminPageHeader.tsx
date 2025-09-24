@@ -70,14 +70,13 @@ export function AdminPageHeader({
   children,
 }: AdminPageHeaderProps) {
   const getGridCols = (statCount: number) => {
-    if (statCount <= 1) return 'grid-cols-2'
-    if (statCount <= 2) return 'grid-cols-2 sm:grid-cols-3'
-    if (statCount <= 3) return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
-    if (statCount <= 4) return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
-    if (statCount <= 6)
-      return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6'
+    if (statCount <= 1) return 'grid-cols-1'
+    if (statCount <= 2) return 'grid-cols-2'
+    if (statCount <= 3) return 'grid-cols-2 sm:grid-cols-3'
+    if (statCount <= 4) return 'grid-cols-2 md:grid-cols-4'
+    if (statCount <= 6) return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-6'
 
-    return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+    return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6'
   }
 
   return (
