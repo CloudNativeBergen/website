@@ -282,7 +282,7 @@ export function DiscountCodeManager({
   }
 
   const { copyToClipboard } = useCopyToClipboard({
-    onSuccess: (text) => {
+    onSuccess: () => {
       showNotification({
         type: 'success',
         title: 'Copied to clipboard',
