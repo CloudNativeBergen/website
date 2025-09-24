@@ -15,39 +15,36 @@ import { useState, useEffect } from 'react'
 import { ContactRoleSelect } from '@/components/common/ContactRoleSelect'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 
 interface SponsorContactTableProps {
   sponsors: SponsorWithContactInfo[]
 }
 
 const CopyEmailButton = ({ email }: { email: string }) => {
-  const [copied, setCopied] = useState(false)
   const { showNotification } = useNotification()
 
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(email)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+  const { copied, copyToClipboard } = useCopyToClipboard({
+    onSuccess: () => {
       showNotification({
         type: 'success',
         title: 'Email copied',
         message: `${email} copied to clipboard`,
         duration: 2000,
       })
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (err) {
+    },
+    onError: () => {
       showNotification({
         type: 'error',
         title: 'Copy failed',
         message: 'Failed to copy email to clipboard',
       })
-    }
-  }
+    },
+  })
 
   return (
     <button
-      onClick={copyToClipboard}
+      onClick={() => copyToClipboard(email)}
       className="ml-2 p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : 'Copy email'}
     >

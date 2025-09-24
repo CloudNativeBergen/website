@@ -13,6 +13,7 @@ import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { FilterDropdown, FilterOption } from './FilterDropdown'
 import { SponsorDiscountEmailModal } from './SponsorDiscountEmailModal'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
 
 interface SponsorWithTierInfo {
@@ -280,23 +281,22 @@ export function DiscountCodeManager({
     })
   }
 
-  const copyToClipboard = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
+  const { copyToClipboard } = useCopyToClipboard({
+    onSuccess: (text) => {
       showNotification({
         type: 'success',
         title: 'Copied to clipboard',
-        message: `${label} copied to clipboard`,
+        message: 'Discount code copied to clipboard',
       })
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error)
+    },
+    onError: () => {
       showNotification({
         type: 'error',
         title: 'Copy failed',
         message: 'Failed to copy to clipboard',
       })
-    }
-  }
+    },
+  })
 
   const createDiscountMutation = api.tickets.createDiscountCode.useMutation({
     onSuccess: (data) => {
@@ -459,10 +459,7 @@ export function DiscountCodeManager({
                       {discount.triggerValue && (
                         <button
                           onClick={() =>
-                            copyToClipboard(
-                              discount.triggerValue || '',
-                              'Discount code',
-                            )
+                            copyToClipboard(discount.triggerValue || '')
                           }
                           className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
                           title="Copy discount code"
@@ -696,10 +693,7 @@ export function DiscountCodeManager({
                             </span>
                             <button
                               onClick={() =>
-                                copyToClipboard(
-                                  discount.triggerValue || '',
-                                  'Discount code',
-                                )
+                                copyToClipboard(discount.triggerValue || '')
                               }
                               className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
                               title="Copy discount code"
