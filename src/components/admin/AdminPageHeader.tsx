@@ -19,7 +19,7 @@ export interface AdminPageHeaderProps {
 
   contextHighlight?: string
 
-  stats: StatCardProps[]
+  stats?: StatCardProps[]
 
   actions?: React.ReactNode
 
@@ -120,7 +120,7 @@ export function AdminPageHeader({
         )}
       </div>
 
-      {stats.length > 0 && (
+      {stats && stats.length > 0 && (
         <div
           className={`font-inter mt-4 grid sm:mt-6 ${getGridCols(stats.length)} gap-3`}
         >
