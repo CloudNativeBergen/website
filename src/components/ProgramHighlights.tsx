@@ -622,7 +622,7 @@ export function ProgramHighlights({
                 Meet Our Expert Speakers
               </h3>
               <Link
-                href="/speakers"
+                href="/speaker"
                 className="font-inter text-sm font-semibold text-brand-cloud-blue hover:text-brand-cloud-blue/80"
               >
                 View all speakers →
@@ -663,7 +663,7 @@ export function ProgramHighlights({
             <span>Explore Full Program</span>
           </Button>
           <Button
-            href="/speakers"
+            href="/speaker"
             variant="outline"
             className="inline-flex items-center space-x-2 px-8 py-4 font-semibold"
           >

@@ -114,7 +114,7 @@ export const featuredRouter = router({
         }
 
         revalidatePath('/')
-        revalidatePath('/speakers')
+        revalidatePath('/speaker')
         revalidatePath('/program')
 
         return { success: true }
@@ -156,7 +156,7 @@ export const featuredRouter = router({
         }
 
         revalidatePath('/')
-        revalidatePath('/speakers')
+        revalidatePath('/speaker')
         revalidatePath('/program')
 
         return { success: true }
@@ -198,7 +198,7 @@ export const featuredRouter = router({
         }
 
         revalidatePath('/')
-        revalidatePath('/speakers')
+        revalidatePath('/speaker')
         revalidatePath('/program')
 
         return { success: true }
@@ -240,7 +240,7 @@ export const featuredRouter = router({
         }
 
         revalidatePath('/')
-        revalidatePath('/speakers')
+        revalidatePath('/speaker')
         revalidatePath('/program')
 
         return { success: true }

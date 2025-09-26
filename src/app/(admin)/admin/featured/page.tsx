@@ -94,7 +94,7 @@ export default function AdminFeaturedPage() {
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link
-            href="/speakers"
+            href="/speaker"
             className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">

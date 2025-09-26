@@ -77,7 +77,7 @@ export default async function Tickets() {
                   </Button>
 
                   <Button
-                    href="/speakers"
+                    href="/speaker"
                     variant="outline"
                     className="inline-flex items-center px-6 py-3"
                   >
