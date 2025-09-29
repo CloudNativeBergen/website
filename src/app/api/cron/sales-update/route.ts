@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
       conference.checkin_event_id,
     )
 
+
     let analysis: TicketAnalysisResult | null = null
 
     const targetConfig = conference.ticket_targets
@@ -98,11 +99,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const statistics = analysis?.statistics || {
+    let statistics = analysis?.statistics || {
       totalPaidTickets: tickets.length,
       totalRevenue: tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
       totalOrders: new Set(tickets.map((t) => t.order_id)).size,
-      averageTicketPrice: 0,
+      averageTicketPrice: tickets.length
+        ? tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
+          tickets.length
+        : 0,
       categoryBreakdown: {},
       sponsorTickets: 0,
       speakerTickets: 0,

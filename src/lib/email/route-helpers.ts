@@ -2,7 +2,6 @@ import { NextAuthRequest } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
-import { render } from '@react-email/render'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import { isValidPortableText } from '@/lib/portabletext/validation'
 import React from 'react'
@@ -139,32 +138,30 @@ export interface EmailTemplateOptions {
   additionalTemplateProps?: Record<string, unknown>
 }
 
-export async function renderEmailTemplate({
+export function renderEmailTemplate({
   conference,
   subject,
   htmlContent,
   unsubscribeUrl = '{{{RESEND_UNSUBSCRIBE_URL}}}',
   additionalTemplateProps = {},
-}: EmailTemplateOptions): Promise<string> {
-  return await render(
-    React.createElement(BroadcastTemplate, {
-      subject,
-      eventName: conference.title,
-      eventLocation: `${conference.city}, ${conference.country}`,
-      eventDate: new Date(conference.start_date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }),
-      eventUrl: `https://${conference.domains[0]}`,
-      socialLinks: conference.social_links || [],
-      unsubscribeUrl,
-      content: React.createElement('div', {
-        dangerouslySetInnerHTML: { __html: htmlContent },
-      }),
-      ...additionalTemplateProps,
+}: EmailTemplateOptions): React.ReactElement {
+  return React.createElement(BroadcastTemplate, {
+    subject,
+    eventName: conference.title,
+    eventLocation: `${conference.city}, ${conference.country}`,
+    eventDate: new Date(conference.start_date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     }),
-  )
+    eventUrl: `https://${conference.domains[0]}`,
+    socialLinks: conference.social_links || [],
+    unsubscribeUrl,
+    content: React.createElement('div', {
+      dangerouslySetInnerHTML: { __html: htmlContent },
+    }),
+    ...additionalTemplateProps,
+  })
 }
 
 export async function convertPortableTextToHTML(

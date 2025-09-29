@@ -44,6 +44,23 @@ const requireAuth = t.middleware(({ ctx, next }) => {
   })
 })
 
+const requireUser = t.middleware(({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required',
+    })
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      speaker: ctx.session.speaker,
+      user: ctx.session.user,
+    },
+  })
+})
+
 const requireAdmin = t.middleware(({ ctx, next }) => {
   if (!ctx.session?.speaker?.is_organizer) {
     throw new TRPCError({
@@ -63,6 +80,7 @@ const requireAdmin = t.middleware(({ ctx, next }) => {
 
 export const publicProcedure = t.procedure
 export const protectedProcedure = t.procedure.use(requireAuth)
+export const userProcedure = t.procedure.use(requireUser)
 export const adminProcedure = t.procedure.use(requireAuth).use(requireAdmin)
 export const router = t.router
 export const middleware = t.middleware

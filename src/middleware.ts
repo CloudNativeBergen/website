@@ -1,8 +1,18 @@
 import { auth } from '@/lib/auth'
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
+import { authkitMiddleware } from '@workos-inc/authkit-nextjs'
 
-export default auth((req) => {
+const workOSMiddleware = authkitMiddleware({
+  middlewareAuth: {
+    enabled: true,
+    unauthenticatedPaths: [],
+  },
+  signInPath: '/workshop',
+  debug: process.env.NODE_ENV === 'development',
+})
+
+const nextAuthMiddleware = auth((req) => {
   const { pathname } = req.nextUrl
   const hasTestParam = req.nextUrl.searchParams.get('test') === 'true'
 
@@ -34,6 +44,28 @@ export default auth((req) => {
   return NextResponse.next()
 })
 
+export default function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
+
+  // Handle workshop routes with WorkOS middleware
+  if (pathname.startsWith('/workshop')) {
+    return workOSMiddleware(req)
+  }
+
+  // Handle other protected routes with NextAuth
+  if (pathname.startsWith('/cfp') || pathname.startsWith('/admin')) {
+    // @ts-expect-error NextAuth middleware type
+    return nextAuthMiddleware(req)
+  }
+
+  return NextResponse.next()
+}
+
 export const config = {
-  matcher: ['/(cfp|admin)/((?!opengraph-image.png).*)'],
+  matcher: [
+    '/cfp/:path*',
+    '/admin/:path*',
+    '/workshop',
+    '/workshop/:path*',
+  ],
 }

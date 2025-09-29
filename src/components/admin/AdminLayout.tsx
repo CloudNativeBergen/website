@@ -12,6 +12,7 @@ import {
   StarIcon,
   PresentationChartBarIcon,
   CreditCardIcon,
+  AcademicCapIcon,
 } from '@heroicons/react/24/outline'
 import {
   DashboardLayout,
@@ -26,6 +27,7 @@ const navigation: NavigationItem[] = [
   { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
   { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
   { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
+  { name: 'Workshops', href: '/admin/workshops', icon: AcademicCapIcon },
   {
     name: 'Travel Support',
     href: '/admin/travel-support',
