@@ -86,7 +86,7 @@ export async function sendBroadcastEmail({
       )
     }
 
-    const emailHtml = await renderEmailTemplate({
+    const emailReact = renderEmailTemplate({
       conference,
       subject,
       htmlContent: finalHtmlContent,
@@ -98,7 +98,7 @@ export async function sendBroadcastEmail({
         audienceId,
         from: resolvedFromEmail,
         subject,
-        html: emailHtml,
+        react: emailReact,
       })
     })
 
@@ -168,7 +168,7 @@ export async function sendIndividualEmail({
       )
     }
 
-    const emailHtml = await renderEmailTemplate({
+    const emailReact = renderEmailTemplate({
       conference,
       subject,
       htmlContent: finalHtmlContent,
@@ -181,7 +181,7 @@ export async function sendIndividualEmail({
         to: [primaryRecipient],
         ...(ccRecipients.length > 0 && { cc: ccRecipients }),
         subject,
-        html: emailHtml,
+        react: emailReact,
       })
     })
 

@@ -1,10 +1,12 @@
 import { getAuthSession } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/server'
 import { ProposalList } from '@/components/cfp/ProposalList'
+import { WorkshopStatistics } from '@/components/cfp/WorkshopStatistics'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { Status } from '@/lib/proposal/types'
 import { LightBulbIcon } from '@heroicons/react/24/outline'
 import { getSpeakerSlug } from '@/lib/speaker/utils'
@@ -66,6 +68,18 @@ export default async function SpeakerDashboard() {
     return proposalConferenceId === conference._id
   })
 
+  // Fetch workshop statistics for the speaker
+  let workshopStats = []
+  try {
+    workshopStats = await getWorkshopSignupStatisticsBySpeaker(
+      session.speaker._id,
+      conference._id
+    )
+    console.log('Workshop statistics:', workshopStats)
+  } catch (error) {
+    console.error('Error fetching workshop statistics:', error)
+  }
+
   return (
     <>
       <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
@@ -88,6 +102,12 @@ export default async function SpeakerDashboard() {
               cfpIsOpen={cfpIsOpen}
               currentConferenceId={conference._id}
             />
+
+            {workshopStats.length > 0 && (
+              <div className="mt-12">
+                <WorkshopStatistics statistics={workshopStats} />
+              </div>
+            )}
           </div>
 
           {confirmedProposals.length > 0 && (
