@@ -43,7 +43,7 @@ export async function getAvailableWorkshops(
   const workshops = await clientWrite.fetch(query, { conferenceId })
 
   return workshops.map((workshop: WorkshopWithCapacity & { signupCount: number; waitlistCount: number; allSchedules?: any[] }) => {
-    let date, startTime, endTime;
+    let date, startTime, endTime, room;
 
     if (workshop.allSchedules && workshop.allSchedules.length > 0) {
       for (const schedule of workshop.allSchedules) {
@@ -60,6 +60,7 @@ export async function getAvailableWorkshops(
                 date = schedule.date;
                 startTime = workshopTalk.startTime;
                 endTime = workshopTalk.endTime;
+                room = track.trackTitle;
                 found = true;
                 break;
               }
@@ -73,7 +74,8 @@ export async function getAvailableWorkshops(
 
     const scheduleInfo = date && startTime && endTime ? {
       date,
-      timeSlot: { startTime, endTime }
+      timeSlot: { startTime, endTime },
+      room
     } : undefined;
 
     return {
@@ -86,6 +88,7 @@ export async function getAvailableWorkshops(
       date,
       startTime,
       endTime,
+      room,
       scheduleInfo,
       allSchedules: undefined
     }
