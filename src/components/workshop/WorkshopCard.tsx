@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { PortableText } from '@portabletext/react'
 import { Button } from '@/components/Button'
 import type { WorkshopWithCapacity, WorkshopSignupExisting, ExperienceLevel, OperatingSystem } from '@/lib/workshop/types'
-import { ClockIcon, UserGroupIcon, CheckCircleIcon, AcademicCapIcon, UserIcon, CalendarIcon, ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { ClockIcon, UserGroupIcon, CheckCircleIcon, AcademicCapIcon, UserIcon, MapPinIcon, ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid'
 
 interface WorkshopCardProps {
@@ -52,11 +52,6 @@ export default function WorkshopCard({
   const duration = workshop.duration ? `${Math.floor(workshop.duration / 60)} hours` : '2 hours'
   const actuallyFull = isFull || workshop.available <= 0
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-  }
-
   const formatTime = (timeString: string) => {
     const [hours, minutes] = timeString.split(':')
     const hour = parseInt(hours)
@@ -65,7 +60,7 @@ export default function WorkshopCard({
     return `${displayHour}:${minutes} ${ampm}`
   }
 
-  const workshopDate = workshop.date || workshop.scheduleInfo?.date
+  const workshopRoom = workshop.room || workshop.scheduleInfo?.room
   const startTime = workshop.startTime || workshop.scheduleInfo?.timeSlot?.startTime
   const endTime = workshop.endTime || workshop.scheduleInfo?.timeSlot?.endTime
 
@@ -319,18 +314,18 @@ export default function WorkshopCard({
 
           <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <div className="flex flex-col gap-2">
-              {workshopDate ? (
+              {workshopRoom ? (
                 <div className="flex items-center gap-2 text-sm">
-                  <CalendarIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                  <MapPinIcon className="h-4 w-4 text-gray-500 dark:text-gray-400" />
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {formatDate(workshopDate)}
+                    {workshopRoom}
                   </span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 text-sm">
-                  <CalendarIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                  <MapPinIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
                   <span className="text-gray-500 dark:text-gray-400 italic">
-                    Date to be announced
+                    Room to be announced
                   </span>
                 </div>
               )}

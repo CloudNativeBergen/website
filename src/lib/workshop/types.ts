@@ -110,6 +110,7 @@ export interface WorkshopScheduleInfo {
     startTime?: string
     endTime?: string
   }
+  room?: string
 }
 
 export interface WorkshopWithCapacity extends ProposalExisting {
@@ -127,6 +128,7 @@ export interface WorkshopWithCapacity extends ProposalExisting {
   date?: string
   startTime?: string
   endTime?: string
+  room?: string
   scheduleInfo?: WorkshopScheduleInfo
 }
 
