@@ -9,6 +9,7 @@ import { DownloadSpeakerImage } from '@/components/branding/DownloadSpeakerImage
 import { AdminPageHeader } from '@/components/admin'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
+import { getSpeakerFilename } from '@/lib/speaker/utils'
 import {
   UserGroupIcon,
   CalendarDaysIcon,
@@ -381,7 +382,7 @@ export default async function MarketingPage() {
               {speakersWithTalks.map(({ speaker, talks }) => (
                 <div key={speaker._id} className="flex flex-col items-center">
                   <DownloadSpeakerImage
-                    filename={`${speaker.slug || speaker.name?.replace(/\s+/g, '-').toLowerCase()}-speaker-spotlight`}
+                    filename={`${getSpeakerFilename(speaker)}-speaker-spotlight`}
                   >
                     <div
                       className="h-64 w-64"

@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { Status } from '@/lib/proposal/types'
 import { LightBulbIcon } from '@heroicons/react/24/outline'
+import { getSpeakerSlug } from '@/lib/speaker/utils'
 
 function ErrorDisplay({ message }: { message: string }) {
   return (
@@ -28,7 +29,7 @@ export default async function SpeakerDashboard() {
     error: conferenceError,
   } = await getConferenceForCurrentDomain()
 
-  if (conferenceError || !conference) {
+  if (conferenceError || !conference || !domain) {
     console.error('Error loading conference:', conferenceError)
     return <ErrorDisplay message="Error loading conference" />
   }
@@ -47,6 +48,24 @@ export default async function SpeakerDashboard() {
     return <ErrorDisplay message="Error fetching proposals" />
   }
 
+  const speaker = session.speaker
+  const eventName = conference.title || 'Cloud Native Bergen'
+  const speakerSlug = getSpeakerSlug(speaker)
+  const speakerUrl = `https://${domain}/speaker/${speakerSlug}`
+
+  const confirmedProposals = initialProposals.filter((p) => {
+    if (p.status !== Status.confirmed) return false
+
+    const proposalConferenceId =
+      typeof p.conference === 'object' &&
+      p.conference !== null &&
+      '_id' in p.conference
+        ? p.conference._id
+        : p.conference._ref
+
+    return proposalConferenceId === conference._id
+  })
+
   return (
     <>
       <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
@@ -63,7 +82,6 @@ export default async function SpeakerDashboard() {
 
       <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
         <div className="mt-12 grid grid-cols-1 gap-12 lg:grid-cols-3">
-          {/* Main content */}
           <div className="lg:col-span-2">
             <ProposalList
               initialProposals={initialProposals}
@@ -72,78 +90,64 @@ export default async function SpeakerDashboard() {
             />
           </div>
 
-          <div className="lg:col-span-1">
-            {(() => {
-              const confirmedProposals = initialProposals.filter(
-                (p) => p.status === Status.confirmed,
-              )
-
-              return confirmedProposals.length > 0 ? (
-                <div className="sticky top-8">
-                  <div className="mt-6 mb-4">
-                    <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-                      Share Your Talks
-                    </h2>
-                  </div>
-
-                  <div className="space-y-6">
-                    {confirmedProposals.map((proposal) => {
-                      const currentSpeaker = session.speaker
-
-                      return currentSpeaker ? (
-                        <div
-                          key={proposal._id}
-                          className="flex flex-col items-center"
-                        >
-                          <SpeakerSharingActions
-                            filename={`${currentSpeaker.slug || currentSpeaker.name?.replace(/\s+/g, '-').toLowerCase()}-speaker-card`}
-                            speakerUrl={`https://${domain}/speaker/${currentSpeaker.slug}`}
-                            talkTitle={proposal.title}
-                            eventName={
-                              conference?.title || 'Cloud Native Bergen'
-                            }
-                          >
-                            <div
-                              className="h-80 w-80"
-                              style={{ width: '320px', height: '320px' }}
-                            >
-                              <SpeakerShare
-                                speaker={{
-                                  ...currentSpeaker,
-                                  talks: [proposal],
-                                }}
-                                variant="speaker-share"
-                                isFeatured={true}
-                                ctaUrl={`https://${domain}/speaker/${currentSpeaker.slug}`}
-                                eventName={
-                                  conference?.title || 'Cloud Native Bergen'
-                                }
-                                className="h-full w-full"
-                                showCloudNativePattern={true}
-                              />
-                            </div>
-                          </SpeakerSharingActions>
-                        </div>
-                      ) : null
-                    })}
-                  </div>
-
-                  <div className="mt-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-800">
-                    <p className="flex items-center justify-center space-x-1 text-center text-xs text-gray-600 dark:text-gray-300">
-                      <LightBulbIcon className="h-4 w-4 text-brand-cloud-blue dark:text-blue-400" />
-                      <strong className="text-brand-cloud-blue dark:text-blue-400">
-                        Pro tip:
-                      </strong>
-                      <span>
-                        Use the download button to save high-quality PNG images
-                        perfect for social media sharing!
-                      </span>
-                    </p>
-                  </div>
+          {confirmedProposals.length > 0 && (
+            <div className="lg:col-span-1">
+              <div className="sticky top-8">
+                <div className="mt-6 mb-4">
+                  <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+                    Share Your Talks
+                  </h2>
                 </div>
-              ) : null
-            })()}
-          </div>
+
+                <div className="space-y-6">
+                  {confirmedProposals.map((proposal) => (
+                    <div
+                      key={proposal._id}
+                      className="flex flex-col items-center"
+                    >
+                      <SpeakerSharingActions
+                        filename={`${speakerSlug}-speaker-card`}
+                        speakerUrl={speakerUrl}
+                        talkTitle={proposal.title}
+                        eventName={eventName}
+                      >
+                        <div
+                          className="h-80 w-80"
+                          style={{ width: '320px', height: '320px' }}
+                        >
+                          <SpeakerShare
+                            speaker={{
+                              ...speaker,
+                              talks: [proposal],
+                            }}
+                            variant="speaker-share"
+                            isFeatured={true}
+                            ctaUrl={speakerUrl}
+                            eventName={eventName}
+                            className="h-full w-full"
+                            showCloudNativePattern={true}
+                          />
+                        </div>
+                      </SpeakerSharingActions>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-800">
+                  <p className="flex items-center justify-center space-x-1 text-center text-xs text-gray-600 dark:text-gray-300">
+                    <LightBulbIcon className="h-4 w-4 text-brand-cloud-blue dark:text-blue-400" />
+                    <strong className="text-brand-cloud-blue dark:text-blue-400">
+                      Pro tip:
+                    </strong>
+                    <span>
+                      Use the download button to save high-quality PNG images
+                      perfect for social media sharing!
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
