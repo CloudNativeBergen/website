@@ -13,6 +13,7 @@ const config: Config = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     'next-auth': '<rootDir>/__tests__/mocks/next-auth.ts',
+    'next-sanity': '<rootDir>/__tests__/mocks/sanity-client.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
   },
 }

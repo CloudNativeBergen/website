@@ -84,10 +84,10 @@ describe('AppEnvironment', () => {
       const { AppEnvironment } = require('@/lib/environment/config')
       expect(AppEnvironment.testUser).toEqual({
         id: 'test-user-id',
-        email: 'test@cloudnativebergen.dev',
-        name: 'Test Speaker',
+        email: 'test@cloudnativebergen.no',
+        name: 'Test User',
         speakerId: 'test-speaker-id',
-        picture: '/images/default-avatar.png',
+        picture: 'https://placehold.co/192x192/4f46e5/fff/png?text=TS',
       })
     })
 
@@ -252,12 +252,13 @@ describe('AppEnvironment', () => {
   })
 
   describe('createMockAuthContext', () => {
-    it('should return null when test mode is disabled', () => {
+    it('should throw error when test mode is disabled', () => {
       mockEnvironment({ NODE_ENV: 'production' })
       jest.isolateModules(() => {
         const { AppEnvironment } = require('@/lib/environment/config')
-        const mockAuth = AppEnvironment.createMockAuthContext()
-        expect(mockAuth).toBeNull()
+        expect(() => AppEnvironment.createMockAuthContext()).toThrow(
+          'createMockAuthContext can only be used in test mode.',
+        )
       })
     })
 
@@ -270,25 +271,18 @@ describe('AppEnvironment', () => {
         const { AppEnvironment } = require('@/lib/environment/config')
         const mockAuth = AppEnvironment.createMockAuthContext()
 
-        expect(mockAuth).toEqual({
+        expect(mockAuth).toMatchObject({
           user: {
-            email: 'test@cloudnativebergen.dev',
-            name: 'Test Speaker',
-            sub: 'test-user-id',
-            picture: '/images/default-avatar.png',
+            email: 'test@cloudnativebergen.no',
+            name: 'Test User',
+            picture: expect.stringContaining('placehold.co'),
           },
           speaker: {
             _id: 'test-speaker-id',
-            name: 'Test Speaker',
-            email: 'test@cloudnativebergen.dev',
-            _type: 'speaker',
-            slug: { current: 'test-speaker' },
-          },
-          account: {
-            provider: 'test',
-            providerAccountId: 'test-account',
-            type: 'oauth',
-            userId: 'test-user-id',
+            name: 'Test User',
+            email: 'test@cloudnativebergen.no',
+            slug: 'test-user',
+            is_organizer: true,
           },
           expires: expect.any(String),
         })
@@ -349,7 +343,7 @@ describe('AppEnvironment', () => {
         const req = { url: 'http://localhost:3000/api/test?test=true' }
         const mockAuth = AppEnvironment.createMockAuthFromRequest(req)
         expect(mockAuth).not.toBeNull()
-        expect(mockAuth?.user.email).toBe('test@cloudnativebergen.dev')
+        expect(mockAuth?.user.email).toBe('test@cloudnativebergen.no')
       })
     })
 

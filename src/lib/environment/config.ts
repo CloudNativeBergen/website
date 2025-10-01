@@ -10,8 +10,8 @@ export class AppEnvironment {
 
   static readonly testUser = {
     id: 'test-user-id',
-    email: 'test@cloudnativebergen.dev',
-    name: 'Test Speaker',
+    email: 'test@cloudnativebergen.no',
+    name: 'Test User',
     speakerId: 'test-speaker-id',
     picture: 'https://placehold.co/192x192/4f46e5/fff/png?text=TS',
   } as const
