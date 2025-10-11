@@ -141,6 +141,18 @@ export default defineType({
       },
     }),
     defineField({
+      name: 'workshop_registration_start',
+      title: 'Workshop Registration Start',
+      type: 'datetime',
+      description: 'When workshop registration opens',
+    }),
+    defineField({
+      name: 'workshop_registration_end',
+      title: 'Workshop Registration End',
+      type: 'datetime',
+      description: 'When workshop registration closes',
+    }),
+    defineField({
       name: 'contact_email',
       title: 'Contact Email',
       type: 'string',

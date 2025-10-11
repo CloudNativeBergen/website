@@ -1,8 +1,7 @@
 import type { SanityDocument } from 'sanity'
-import type { ProposalExisting } from '@/lib/proposal/types'
+import type { ProposalExisting, Level } from '@/lib/proposal/types'
 import type { Conference } from '@/lib/conference/types'
 
-// Enums and Constants
 export enum WorkshopSignupStatus {
   CONFIRMED = 'confirmed',
   WAITLIST = 'waitlist',
@@ -13,14 +12,7 @@ export const workshopSignupStatuses = new Map<WorkshopSignupStatus, string>([
   [WorkshopSignupStatus.WAITLIST, 'Waitlist'],
 ])
 
-// Core Interfaces
-export interface WorkshopSignupUser {
-  email: string
-  name: string
-  workOSId: string
-}
-
-export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
+export type ExperienceLevel = Level
 export type OperatingSystem = 'windows' | 'macos' | 'linux'
 
 export interface WorkshopSignup {
@@ -56,7 +48,6 @@ export interface WorkshopSignup {
   notes?: string
 }
 
-// Re-export WorkshopSignupInput from Zod schemas
 export type { WorkshopSignupInput } from '@/server/schemas/workshop'
 
 export interface WorkshopSignupExisting extends WorkshopSignup, SanityDocument {
@@ -67,7 +58,6 @@ export interface WorkshopSignupExisting extends WorkshopSignup, SanityDocument {
   _updatedAt: string
 }
 
-// Response Interfaces
 export interface WorkshopSignupResponse {
   success: boolean
   signup?: WorkshopSignupExisting
@@ -89,7 +79,6 @@ export interface WorkshopSignupActionResponse {
   error?: string
 }
 
-// Validation Types
 export interface WorkshopSignupFormError {
   userEmail?: string
   userName?: string
@@ -103,33 +92,60 @@ export interface WorkshopSignupValidationError {
   message: string
 }
 
-// Helper Types
-export interface WorkshopScheduleInfo {
-  date?: string
-  timeSlot?: {
-    startTime?: string
-    endTime?: string
-  }
-  room?: string
+export interface WorkshopSignupFilters {
+  conferenceId?: string
+  workshopId?: string
+  status?: WorkshopSignupStatus
+  userEmail?: string
+  startDate?: string
+  endDate?: string
 }
 
-export interface WorkshopWithCapacity extends ProposalExisting {
+export interface CancelWorkshopSignupRequest {
+  signupId: string
+  reason?: string
+}
+
+export interface ConfirmWorkshopSignupRequest {
+  signupId: string
+  sendEmail?: boolean
+}
+
+export interface ResendConfirmationRequest {
+  signupId: string
+}
+
+export interface WorkshopSignupFormData {
+  userEmail: string
+  userName: string
+  userWorkOSId: string
+  experienceLevel: ExperienceLevel
+  operatingSystem: OperatingSystem
+  workshopId: string
+  conferenceId: string
+  notes?: string
+}
+
+export interface ProposalWithWorkshopData extends Omit<ProposalExisting, 'speakers' | 'topics' | 'conference'> {
   capacity: number
-  currentSignups?: number
-  availableSlots?: number
-  isFull?: boolean
-  signupCount?: number
-  available: number
+  speakers: import('@/lib/speaker/types').Speaker[]
+  topics?: import('@/lib/topic/types').Topic[]
+  conference: import('@/lib/conference/types').Conference
   signups: number
+  available: number
   waitlistCount?: number
-  duration?: number
-  instructor?: string | { name: string }
-  requirements?: string[]
   date?: string
   startTime?: string
   endTime?: string
   room?: string
-  scheduleInfo?: WorkshopScheduleInfo
+  scheduleInfo?: {
+    date?: string
+    timeSlot?: {
+      startTime?: string
+      endTime?: string
+    }
+    room?: string
+  }
 }
 
 export interface WorkshopAvailability {
@@ -142,7 +158,6 @@ export interface WorkshopAvailability {
   waitlistCount?: number
 }
 
-// Extended Workshop Types
 export interface WorkshopSignupWithReferences extends WorkshopSignupExisting {
   workshopDetails?: ProposalExisting
   conferenceDetails?: Conference
@@ -159,40 +174,4 @@ export interface WorkshopSignupSummary {
     signupCount: number
     capacity: number
   }[]
-}
-
-// Form Types
-export interface WorkshopSignupFormData {
-  userEmail: string
-  userName: string
-  userWorkOSId: string
-  experienceLevel: ExperienceLevel
-  operatingSystem: OperatingSystem
-  workshopId: string
-  conferenceId: string
-  notes?: string
-}
-
-export interface WorkshopSignupFilters {
-  conferenceId?: string
-  workshopId?: string
-  status?: WorkshopSignupStatus
-  userEmail?: string
-  startDate?: string
-  endDate?: string
-}
-
-// Action Types
-export interface CancelWorkshopSignupRequest {
-  signupId: string
-  reason?: string
-}
-
-export interface ConfirmWorkshopSignupRequest {
-  signupId: string
-  sendEmail?: boolean
-}
-
-export interface ResendConfirmationRequest {
-  signupId: string
 }

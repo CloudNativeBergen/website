@@ -56,6 +56,8 @@ export interface Conference {
   program_date: string
   registration_link?: string
   registration_enabled: boolean
+  workshop_registration_start?: string
+  workshop_registration_end?: string
   contact_email: string
   checkin_customer_id?: number
   checkin_event_id?: number

@@ -9,7 +9,8 @@ import {
 import { AcademicCapIcon, UserGroupIcon, CheckCircleIcon, XCircleIcon, ClockIcon, XMarkIcon, PlusCircleIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { Dialog, Transition } from '@headlessui/react'
 import { api } from '@/lib/trpc/client'
-import type { WorkshopSignupStatus } from '@/lib/workshop/types'
+import type { WorkshopSignupStatus, ProposalWithWorkshopData } from '@/lib/workshop/types'
+import { useQueryClient } from '@tanstack/react-query'
 
 interface SignupModalState {
   isOpen: boolean
@@ -33,6 +34,7 @@ interface EditCapacityModalState {
 }
 
 export default function WorkshopAdminPage() {
+  const queryClient = useQueryClient()
   const [conferenceId, setConferenceId] = useState<string>('')
   const [signupModal, setSignupModal] = useState<SignupModalState>({
     isOpen: false,
@@ -143,6 +145,11 @@ export default function WorkshopAdminPage() {
   // Update capacity mutation
   const updateCapacityMutation = api.workshop.updateWorkshopCapacity.useMutation({
     onSuccess: () => {
+      // Invalidate all workshop queries across the app
+      queryClient.invalidateQueries({
+        queryKey: [['workshop', 'listWorkshops']]
+      })
+
       // Refetch all data to show updated capacity
       refetchWorkshops()
       refetchSignups()
@@ -165,7 +172,7 @@ export default function WorkshopAdminPage() {
       enabled: !!conferenceId
     })
 
-  const workshops = workshopsData?.data || []
+  const workshops = (workshopsData?.data || []) as ProposalWithWorkshopData[]
   const signups = signupsData?.data || []
 
   // Group signups by workshop
@@ -173,7 +180,7 @@ export default function WorkshopAdminPage() {
     const grouped = new Map<string, typeof signups>()
 
     signups.forEach((signup) => {
-      const workshopId = signup.workshop._ref || signup.workshop._id
+      const workshopId = (signup.workshop as any)._ref || (signup.workshop as any)._id
       if (!grouped.has(workshopId)) {
         grouped.set(workshopId, [])
       }
@@ -224,7 +231,7 @@ export default function WorkshopAdminPage() {
   }
 
   if (workshopsError) {
-    return <ErrorDisplay error={workshopsError} />
+    return <ErrorDisplay title="Error Loading Workshops" message={workshopsError.message} />
   }
 
   return (
@@ -280,14 +287,15 @@ export default function WorkshopAdminPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => {
+                        const capacity = workshop.capacity || 30
                         setEditCapacityModal({
                           isOpen: true,
                           workshopId: workshop._id,
                           workshopTitle: workshop.title,
-                          currentCapacity: workshop.capacity,
+                          currentCapacity: capacity,
                           currentSignups: confirmedCount
                         })
-                        setNewCapacity(workshop.capacity)
+                        setNewCapacity(capacity)
                       }}
                       className="flex items-center gap-1 px-2 py-1 text-sm bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                       title="Edit capacity"
@@ -361,7 +369,9 @@ export default function WorkshopAdminPage() {
                       setNewParticipant({
                         userName: '',
                         userEmail: '',
-                        userWorkOSId: ''
+                        userWorkOSId: '',
+                        experienceLevel: 'intermediate',
+                        operatingSystem: 'macos'
                       })
                     }}
                     className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
@@ -459,7 +469,11 @@ export default function WorkshopAdminPage() {
                                         </div>
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                        {new Date(signup.signupDate || signup._createdAt).toLocaleDateString()}
+                                        {(() => {
+                                          const dateStr = signup.signupDate || signup._createdAt
+                                          if (!dateStr || typeof dateStr !== 'string') return 'N/A'
+                                          return new Date(dateStr).toLocaleDateString()
+                                        })()}
                                       </td>
                                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         <div className="flex items-center gap-2">
@@ -731,7 +745,7 @@ export default function WorkshopAdminPage() {
                         <input
                           type="number"
                           min={editCapacityModal.currentSignups}
-                          value={newCapacity}
+                          value={newCapacity || 0}
                           onChange={(e) => setNewCapacity(parseInt(e.target.value) || 0)}
                           className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         />

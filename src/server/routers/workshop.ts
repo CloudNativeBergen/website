@@ -16,7 +16,6 @@ import {
   batchCancelSignupsSchema,
 } from '@/server/schemas/workshop';
 import {
-  getAvailableWorkshops,
   checkWorkshopCapacity,
   verifyWorkshopBelongsToConference,
   getWorkshopSignups,
@@ -28,6 +27,8 @@ import {
   getAllWorkshopSignups,
   getWorkshopStatistics,
 } from '@/lib/workshop/sanity';
+import { getWorkshops } from '@/lib/proposal/data/sanity';
+import { Status } from '@/lib/proposal/types';
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop';
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity';
 import type {
@@ -39,10 +40,15 @@ export const workshopRouter = router({
     .input(workshopListInputSchema)
     .query(async ({ input }) => {
       try {
-        const workshops = await getAvailableWorkshops(
-          input.conferenceId,
-          input.includeCapacity
-        );
+        const { workshops, workshopsError } = await getWorkshops({
+          conferenceId: input.conferenceId,
+          statuses: [Status.confirmed],
+          includeScheduleInfo: true, // Always include schedule info for workshops
+        });
+
+        if (workshopsError) {
+          throw workshopsError;
+        }
 
         return {
           success: true,
@@ -103,7 +109,7 @@ export const workshopRouter = router({
       try {
         // Prefer input.userWorkOSId over session, as the input is what's used for signups
         const userWorkOSId = input.userWorkOSId ||
-                            ctx.session?.user?.id ||
+                            (ctx.session?.user as any)?.id ||
                             ctx.session?.user?.sub;
 
         if (!userWorkOSId) {
@@ -155,6 +161,32 @@ export const workshopRouter = router({
           });
         }
 
+        // Get conference to check workshop registration availability
+        const { conference } = await getConferenceForCurrentDomain({});
+
+        if (!conference) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Conference not found',
+          });
+        }
+
+        // Check if workshop registration is open
+        const now = new Date();
+        if (conference.workshop_registration_start && new Date(conference.workshop_registration_start) > now) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: `Workshop registration opens on ${new Date(conference.workshop_registration_start).toLocaleDateString()}`,
+          });
+        }
+
+        if (conference.workshop_registration_end && new Date(conference.workshop_registration_end) < now) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Workshop registration has closed',
+          });
+        }
+
         const belongs = await verifyWorkshopBelongsToConference(
           input.workshop._ref,
           input.conference._ref
@@ -186,12 +218,10 @@ export const workshopRouter = router({
         const capacity = await checkWorkshopCapacity(input.workshop._ref);
         const isWaitlist = !capacity || capacity.available <= 0;
 
-        const signupWithStatus = {
+        const signup = await createWorkshopSignup({
           ...input,
-          status: isWaitlist ? ('waitlist' as const) : ('confirmed' as const)
-        };
-
-        const signup = await createWorkshopSignup(signupWithStatus);
+          status: (isWaitlist ? 'waitlist' : 'confirmed') as any,
+        });
 
         try {
           const { conference } = await getConferenceForCurrentDomain({});

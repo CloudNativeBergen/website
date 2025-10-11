@@ -1,7 +1,7 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 import { formats, Format } from '@/lib/proposal/types'
-import { ErrorDisplay } from '@/components/admin'
+import { ErrorDisplay, WorkshopRegistrationSettings } from '@/components/admin'
 import {
   CalendarIcon,
   GlobeAltIcon,
@@ -86,6 +86,7 @@ function FieldRow({
   type?:
     | 'text'
     | 'date'
+    | 'datetime'
     | 'boolean'
     | 'array'
     | 'links'
@@ -97,6 +98,14 @@ function FieldRow({
   let displayValue: React.ReactNode = value as React.ReactNode
 
   switch (type) {
+    case 'datetime':
+      displayValue = value
+        ? new Date(value as string).toLocaleString('en-US', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          })
+        : 'Not set'
+      break
     case 'date':
       displayValue = value ? formatDate(value as string) : 'Not set'
       break
@@ -351,6 +360,12 @@ export default async function AdminSettings() {
               type="email"
             />
           </InfoCard>
+
+          <WorkshopRegistrationSettings
+            conferenceId={conference._id}
+            workshopRegistrationStart={conference.workshop_registration_start}
+            workshopRegistrationEnd={conference.workshop_registration_end}
+          />
 
           <InfoCard title="Domain Configuration" icon={GlobeAltIcon}>
             <FieldRow label="Domains" value={conference.domains} type="array" />

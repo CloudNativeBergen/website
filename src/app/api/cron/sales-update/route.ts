@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    let statistics = analysis?.statistics || {
+    const statistics = analysis?.statistics || {
       totalPaidTickets: tickets.length,
       totalRevenue: tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
       totalOrders: new Set(tickets.map((t) => t.order_id)).size,

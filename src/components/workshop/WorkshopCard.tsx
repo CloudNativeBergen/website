@@ -5,12 +5,13 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { PortableText } from '@portabletext/react'
 import { Button } from '@/components/Button'
-import type { WorkshopWithCapacity, WorkshopSignupExisting, ExperienceLevel, OperatingSystem } from '@/lib/workshop/types'
+import type { ProposalWithWorkshopData, WorkshopSignupExisting, ExperienceLevel, OperatingSystem } from '@/lib/workshop/types'
+import type { Format } from '@/lib/proposal/types'
 import { ClockIcon, UserGroupIcon, CheckCircleIcon, AcademicCapIcon, UserIcon, MapPinIcon, ExclamationTriangleIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { CheckCircleIcon as CheckCircleIconSolid } from '@heroicons/react/24/solid'
 
 interface WorkshopCardProps {
-  workshop: WorkshopWithCapacity
+  workshop: ProposalWithWorkshopData
   userSignups: WorkshopSignupExisting[]
   onSignup: (workshopId: string, experienceLevel: ExperienceLevel, operatingSystem: OperatingSystem) => Promise<{ success: boolean; error?: string }>
   onCancel?: () => Promise<{ success: boolean; error?: string }>
@@ -35,7 +36,7 @@ export default function WorkshopCard({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showSignupModal, setShowSignupModal] = useState(false)
-  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('intermediate')
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel>('intermediate' as ExperienceLevel)
   const [operatingSystem, setOperatingSystem] = useState<OperatingSystem>('macos')
   const [mounted, setMounted] = useState(false)
 
@@ -49,7 +50,14 @@ export default function WorkshopCard({
   )
   const actuallySignedUp = isSignedUp || !!userSignup
   const isOnWaitlist = userSignup?.status === 'waitlist'
-  const duration = workshop.duration ? `${Math.floor(workshop.duration / 60)} hours` : '2 hours'
+
+  // Calculate duration from format
+  const getDuration = (format: Format): string => {
+    if (format === 'workshop_120') return '2 hours'
+    if (format === 'workshop_240') return '4 hours'
+    return '2 hours'
+  }
+  const duration = getDuration(workshop.format)
   const actuallyFull = isFull || workshop.available <= 0
 
   const formatTime = (timeString: string) => {
@@ -252,9 +260,9 @@ export default function WorkshopCard({
                     >
                       {workshop.speakers[0].name}
                     </Link>
-                    {workshop.speakers[0].company && (
+                    {(workshop.speakers[0] as any).company && (
                       <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {workshop.speakers[0].company}
+                        {(workshop.speakers[0] as any).company}
                       </p>
                     )}
                   </div>

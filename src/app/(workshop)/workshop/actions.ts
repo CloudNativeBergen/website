@@ -12,8 +12,8 @@ import {
   updateWorkshopSignupEmailStatus
 } from '@/lib/workshop/sanity'
 import { workshopSignupInputSchema } from '@/server/schemas/workshop'
-import { sendWorkshopConfirmationEmail } from '@/lib/email/workshop'
-import type { WorkshopWithCapacity } from '@/lib/workshop/types'
+import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
+import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
 
 export async function signupForWorkshop(workshopId: string) {
   try {
@@ -78,33 +78,19 @@ export async function signupForWorkshop(workshopId: string) {
       const workshop = await getWorkshopById(workshopId)
 
       if (workshop) {
-        const workshopWithCapacity: WorkshopWithCapacity = {
-          ...workshop,
-          signupCount: workshop.signupCount || 0,
-        }
+        await sendBasicWorkshopConfirmation({
+          userEmail: signup.userEmail,
+          userName: signup.userName,
+          status: signup.status,
+          conference: conference || undefined,
+          workshopTitle: workshop.title || 'Workshop',
+          workshopDate: (workshop as any).date,
+          workshopTime: (workshop as any).startTime,
+        })
 
-        // Prepare signup data with workshop_ids for the email
-        const signupForEmail = {
-          ...signup,
-          workshop_ids: [workshopId],
-          name: signup.userName,
-          email: signup.userEmail
-        } as Parameters<typeof sendWorkshopConfirmationEmail>[0]
-
-        const emailResult = await sendWorkshopConfirmationEmail(
-          signupForEmail,
-          [workshopWithCapacity],
-          conference
-        )
-
-        if (!emailResult.error) {
-          // Update signup to mark email as sent
-          await updateWorkshopSignupEmailStatus(signup._id, true)
-          emailSent = true
-        } else {
-          emailError = emailResult.error.error
-          console.error('Failed to send workshop confirmation email:', emailError)
-        }
+        // Update signup to mark email as sent
+        await updateWorkshopSignupEmailStatus(signup._id, true)
+        emailSent = true
       }
     } catch (error) {
       // Log error but don't fail the signup

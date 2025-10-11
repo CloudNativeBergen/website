@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import WorkshopCard from './WorkshopCard'
-import type { WorkshopWithCapacity, WorkshopSignupExisting, ExperienceLevel, OperatingSystem } from '@/lib/workshop/types'
+import type { ProposalWithWorkshopData, WorkshopSignupExisting, ExperienceLevel, OperatingSystem } from '@/lib/workshop/types'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 
@@ -11,6 +11,8 @@ interface WorkshopListProps {
   userWorkOSId?: string
   userEmail?: string
   userName?: string
+  workshopRegistrationStart?: string
+  workshopRegistrationEnd?: string
 }
 
 export default function WorkshopList({
@@ -18,6 +20,8 @@ export default function WorkshopList({
   userWorkOSId,
   userEmail,
   userName,
+  workshopRegistrationStart,
+  workshopRegistrationEnd,
 }: WorkshopListProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -168,8 +172,14 @@ export default function WorkshopList({
     )
   }
 
-  const workshops = workshopsData?.data || []
+  const workshops = (workshopsData?.data || []) as ProposalWithWorkshopData[]
   const userSignups = signupsData?.data || []
+
+  // Check if registration is open
+  const now = new Date()
+  const registrationNotYetOpen = workshopRegistrationStart && new Date(workshopRegistrationStart) > now
+  const registrationClosed = workshopRegistrationEnd && new Date(workshopRegistrationEnd) < now
+  const registrationOpen = !registrationNotYetOpen && !registrationClosed
 
   // Get all workshop IDs that the user has signed up for (confirmed or waitlist)
   const userWorkshopIds = userSignups
@@ -198,7 +208,7 @@ export default function WorkshopList({
     w.available === 0 && !userWorkshopIds.includes(w._id)
   )
 
-  const checkTimeConflict = (workshop: WorkshopWithCapacity) => {
+  const checkTimeConflict = (workshop: ProposalWithWorkshopData) => {
     const workshopDate = workshop.date || workshop.scheduleInfo?.date
     const workshopStart = workshop.startTime || workshop.scheduleInfo?.timeSlot?.startTime
     const workshopEnd = workshop.endTime || workshop.scheduleInfo?.timeSlot?.endTime
@@ -313,7 +323,7 @@ export default function WorkshopList({
         </div>
       )}
 
-      {availableWorkshops.length > 0 && (
+      {registrationOpen && availableWorkshops.length > 0 && (
         <div>
           <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Available Workshops
@@ -339,7 +349,7 @@ export default function WorkshopList({
         </div>
       )}
 
-      {fullWorkshops.length > 0 && (
+      {registrationOpen && fullWorkshops.length > 0 && (
         <div>
           <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-2">
             <ExclamationTriangleIcon className="h-6 w-6" />
