@@ -1,9 +1,15 @@
 import { formatDate } from '@/lib/time'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import clsx from 'clsx'
+import { BackgroundImage } from '@/components/BackgroundImage'
+import { Container } from '@/components/Container'
+import { InfoContent } from '@/components/info/InfoContent'
 
 export default async function Info() {
   const { conference } = await getConferenceForCurrentDomain()
+
+  if (!conference) {
+    return null
+  }
 
   const faqs = [
     {
@@ -117,73 +123,29 @@ export default async function Info() {
 
   return (
     <>
-      <div className="bg-white">
-        <div className="py-12">
-          <div className="mx-auto max-w-4xl px-4 lg:px-6">
-            <div className="text-left">
-              <h1 className="text-3xl leading-9 font-bold tracking-tight text-gray-900 sm:text-4xl">
-                Practical Information
-              </h1>
-              <p className="mt-4 text-lg leading-7 text-gray-600">
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
+        <BackgroundImage className="-top-36 -bottom-14" />
+        <Container className="relative">
+          <div className="mx-auto max-w-xl lg:max-w-4xl lg:px-12">
+            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
+              Practical Information
+            </h1>
+            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-300">
+              <p>
                 Here, you&apos;ll find all the essential details you need to
                 make the most of your conference experience. From venue
                 information to schedules and accessibility, we&apos;ve got you
-                covered. If you have any further questions, feel free to reach
+                covered.
+              </p>
+              <p>
+                If you have any further questions, feel free to reach
                 out to us. We&apos;re here to help!
               </p>
-              <div className="mt-8">
-                <ul className="mt-4 flex space-x-4">
-                  {faqs.map((section) => (
-                    <li key={section.anchor}>
-                      <a
-                        href={`#${section.anchor}`}
-                        className="text-lg leading-7 text-blue-600 hover:underline"
-                      >
-                        {section.heading}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
           </div>
-        </div>
-        {faqs.map((section) => (
-          <div key={section.anchor} id={section.anchor}>
-            <div className="mx-auto max-w-7xl px-6 py-24 sm:pt-32 lg:px-8 lg:py-40">
-              <div className="lg:grid lg:grid-cols-12 lg:gap-8">
-                <div className="lg:col-span-5">
-                  <h2 className="text-2xl leading-10 font-bold tracking-tight text-gray-900">
-                    {section.heading}
-                  </h2>
-                  <p className="mt-4 text-base leading-7 text-gray-600">
-                    {section.description}
-                  </p>
-                </div>
-                <div className="mt-10 lg:col-span-7 lg:mt-0">
-                  <dl className="space-y-10">
-                    {section.questions.map((faq) => (
-                      <div key={faq.question}>
-                        <dt className="text-base leading-7 font-semibold text-gray-900">
-                          {faq.question}
-                        </dt>
-                        <dd className="mt-2 text-base leading-7 text-gray-600">
-                          {faq.answer.split('\n').map((item, key) => (
-                            <p
-                              key={key}
-                              className={clsx(key > 0 ? 'mt-2' : '')}
-                              dangerouslySetInnerHTML={{ __html: item }}
-                            ></p>
-                          ))}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
+        </Container>
+
+        <InfoContent faqs={faqs} />
       </div>
     </>
   )
