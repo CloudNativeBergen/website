@@ -12,17 +12,37 @@ const WORKSHOP_ELIGIBLE_CATEGORIES = [
 interface CheckinWebhookPayload {
   payloadId: string
   event: string
+  dataType: string
   data: {
     id: number
-    order_id?: number
-    category?: string
-    crm?: {
-      first_name: string
-      last_name: string
-      email: string
+    eventId: number
+    users: Array<{
+      id: number
+      crm: {
+        id: number
+        firstName: string
+        lastName: string
+        email: {
+          email: string
+        }
+      }
+      ticket: {
+        id: number
+        name: string
+        type: string
+      }
+      isPaid: boolean
+    }>
+    orderContact: {
+      crm: {
+        id: number
+        firstName: string
+        lastName: string
+        email: {
+          email: string
+        }
+      }
     }
-    event_id?: number
-    customer_id?: number
   }
 }
 
@@ -32,7 +52,6 @@ function verifyCheckinSignature(
   secret: string
 ): boolean {
   if (!signature) {
-    console.error('No signature header found')
     return false
   }
 
@@ -43,137 +62,129 @@ function verifyCheckinSignature(
       .update(dataString)
       .digest('hex')
 
-    const isValid = crypto.timingSafeEqual(
+    return crypto.timingSafeEqual(
       Buffer.from(signature),
       Buffer.from(expectedSignature)
     )
-
-    console.log('Signature verification:', {
-      provided: signature.substring(0, 10) + '...',
-      expected: expectedSignature.substring(0, 10) + '...',
-      isValid,
-    })
-
-    return isValid
   } catch (error) {
-    console.error('Signature verification error:', error)
+    console.error('Checkin webhook signature verification failed:', error)
     return false
   }
 }
 
 export async function POST(request: NextRequest) {
+  let rawBody: string
   try {
-    const payload: CheckinWebhookPayload = await request.json()
+    rawBody = await request.text()
+  } catch (e) {
+    console.error('Checkin webhook: Failed to read request body:', e)
+    return NextResponse.json(
+      { success: false, error: 'Invalid request body' },
+      { status: 400 }
+    )
+  }
 
-    console.log('=== CHECKIN WEBHOOK RECEIVED ===')
-    console.log('Timestamp:', new Date().toISOString())
-    console.log('Payload ID:', payload.payloadId)
-    console.log('Event:', payload.event)
-    console.log('Raw Payload:', JSON.stringify(payload, null, 2))
-    console.log('Headers:', JSON.stringify(Object.fromEntries(request.headers.entries()), null, 2))
-    console.log('================================')
+  let payload: CheckinWebhookPayload
+  try {
+    payload = JSON.parse(rawBody)
+  } catch (e) {
+    console.error('Checkin webhook: Failed to parse JSON:', e)
+    return NextResponse.json(
+      { success: false, error: 'Invalid JSON' },
+      { status: 400 }
+    )
+  }
 
+  try {
     const webhookSecret = process.env.CHECKIN_WEBHOOK_SECRET
     if (!webhookSecret) {
-      console.error('CHECKIN_WEBHOOK_SECRET not configured')
+      console.error('Checkin webhook: CHECKIN_WEBHOOK_SECRET not configured')
       return NextResponse.json(
         { success: false, error: 'Webhook secret not configured' },
         { status: 500 }
       )
     }
 
-    const signature = request.headers.get('x-checkin-signature') || request.headers.get('signature')
-
+    const signature = request.headers.get('checkin-signature')
     const isValid = verifyCheckinSignature(payload.data, signature, webhookSecret)
 
     if (!isValid) {
-      console.error('Invalid webhook signature')
+      console.error('Checkin webhook: Invalid signature')
       return NextResponse.json(
         { success: false, error: 'Invalid signature' },
         { status: 401 }
       )
     }
 
-    console.log('✓ Signature verified')
-
-    if (payload.event !== 'EventTicket.Created' && payload.event !== 'EventTicket.Updated') {
-      console.log('Event type not EventTicket, ignoring:', payload.event)
+    if (payload.event !== 'event-order-created') {
       return NextResponse.json(
         { success: true, message: 'Event ignored' },
         { status: 200 }
       )
     }
 
-    const ticketData = payload.data
+    const orderData = payload.data
 
-    if (!ticketData.category || !ticketData.crm || !ticketData.event_id) {
-      console.log('Missing required ticket data')
+    if (!orderData.users || orderData.users.length === 0) {
       return NextResponse.json(
-        { success: true, message: 'Incomplete ticket data' },
+        { success: true, message: 'No tickets in order' },
         { status: 200 }
       )
     }
 
-    console.log('Processing ticket:', {
-      category: ticketData.category,
-      email: ticketData.crm.email,
-      event_id: ticketData.event_id,
-    })
-
-    if (!WORKSHOP_ELIGIBLE_CATEGORIES.includes(ticketData.category)) {
-      console.log('Non-workshop ticket category:', ticketData.category)
-      return NextResponse.json(
-        { success: true, message: 'Non-workshop ticket, no email sent' },
-        { status: 200 }
-      )
-    }
-
-    const { conference, error } = await getConferenceByCheckinEventId(ticketData.event_id)
+    const { conference, error } = await getConferenceByCheckinEventId(orderData.eventId)
 
     if (error || !conference) {
-      console.error('Conference not found for event_id:', ticketData.event_id, 'Error:', error)
+      console.error('Checkin webhook: Conference not found for eventId:', orderData.eventId)
       return NextResponse.json(
         { success: false, error: 'Conference not found' },
         { status: 404 }
       )
     }
 
-    console.log('Found conference:', conference.title)
+    const emailResults: Array<{ email: string; success: boolean; emailId?: string }> = []
 
-    const userName = `${ticketData.crm.first_name} ${ticketData.crm.last_name}`.trim() || ticketData.crm.email
+    for (const user of orderData.users) {
+      if (!WORKSHOP_ELIGIBLE_CATEGORIES.includes(user.ticket.name)) {
+        continue
+      }
 
-    console.log('Sending workshop signup email to:', ticketData.crm.email)
+      const userName = `${user.crm.firstName} ${user.crm.lastName}`.trim()
 
-    const emailResult = await sendWorkshopSignupInstructions({
-      userEmail: ticketData.crm.email,
-      userName,
-      conference,
-      ticketCategory: ticketData.category,
-    })
+      const emailResult = await sendWorkshopSignupInstructions({
+        userEmail: user.crm.email.email,
+        userName,
+        conference,
+        ticketCategory: user.ticket.name,
+      })
 
-    if (emailResult.error) {
-      console.error('Failed to send workshop signup email:', emailResult.error)
-      return NextResponse.json(
-        { success: false, error: 'Failed to send email' },
-        { status: 500 }
-      )
+      if (emailResult.error) {
+        console.error('Checkin webhook: Failed to send email to', user.crm.email.email, emailResult.error)
+        emailResults.push({
+          email: user.crm.email.email,
+          success: false,
+        })
+      } else {
+        emailResults.push({
+          email: user.crm.email.email,
+          success: true,
+          emailId: emailResult.data?.emailId,
+        })
+      }
     }
 
-    console.log('Email sent successfully. Email ID:', emailResult.data?.emailId)
+    const successCount = emailResults.filter((r) => r.success).length
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Workshop signup instructions sent',
-        emailId: emailResult.data?.emailId,
+        message: `Processed ${orderData.users.length} ticket(s), sent ${successCount} email(s)`,
+        results: emailResults,
       },
       { status: 200 }
     )
   } catch (error) {
-    console.error('=== WEBHOOK ERROR ===')
-    console.error('Error:', error)
-    console.error('Stack:', error instanceof Error ? error.stack : 'No stack trace')
-    console.error('====================')
+    console.error('Checkin webhook error:', error)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure, userProcedure, adminProcedure } from '@/server/trpc';
+import { router, publicProcedure, adminProcedure } from '@/server/trpc';
 import { TRPCError } from '@trpc/server';
 import { revalidatePath } from 'next/cache';
 import {
@@ -31,9 +31,7 @@ import { getWorkshops } from '@/lib/proposal/data/sanity';
 import { Status } from '@/lib/proposal/types';
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop';
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity';
-import type {
-  WorkshopSignupStatus,
-} from '@/lib/workshop/types';
+import type { WorkshopSignupStatus } from '@/lib/workshop/types';
 
 export const workshopRouter = router({
   listWorkshops: publicProcedure
@@ -43,7 +41,7 @@ export const workshopRouter = router({
         const { workshops, workshopsError } = await getWorkshops({
           conferenceId: input.conferenceId,
           statuses: [Status.confirmed],
-          includeScheduleInfo: true, // Always include schedule info for workshops
+          includeScheduleInfo: true,
         });
 
         if (workshopsError) {
@@ -107,20 +105,11 @@ export const workshopRouter = router({
     .input(workshopSignupsByUserSchema)
     .query(async ({ input, ctx }) => {
       try {
-        // Prefer input.userWorkOSId over session, as the input is what's used for signups
         const userWorkOSId = input.userWorkOSId ||
                             (ctx.session?.user as any)?.id ||
                             ctx.session?.user?.sub;
 
-        if (!userWorkOSId) {
-          return {
-            success: true,
-            data: [],
-            count: 0,
-          };
-        }
-
-        if (!input.conferenceId) {
+        if (!userWorkOSId || !input.conferenceId) {
           return {
             success: true,
             data: [],
@@ -152,7 +141,7 @@ export const workshopRouter = router({
 
   signupForWorkshop: publicProcedure
     .input(workshopSignupInputSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       try {
         if (!input.userWorkOSId || !input.userEmail || !input.userName) {
           throw new TRPCError({
@@ -161,7 +150,6 @@ export const workshopRouter = router({
           });
         }
 
-        // Get conference to check workshop registration availability
         const { conference } = await getConferenceForCurrentDomain({});
 
         if (!conference) {
@@ -171,7 +159,6 @@ export const workshopRouter = router({
           });
         }
 
-        // Check if workshop registration is open
         const now = new Date();
         if (conference.workshop_registration_start && new Date(conference.workshop_registration_start) > now) {
           throw new TRPCError({
@@ -191,12 +178,14 @@ export const workshopRouter = router({
           input.workshop._ref,
           input.conference._ref
         );
+
         if (!belongs) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: 'Workshop does not belong to the specified conference',
           });
         }
+
         const existingSignups = await getWorkshopSignups(
           input.userWorkOSId,
           input.conference._ref,
@@ -223,20 +212,15 @@ export const workshopRouter = router({
           status: (isWaitlist ? 'waitlist' : 'confirmed') as any,
         });
 
-        try {
-          const { conference } = await getConferenceForCurrentDomain({});
-          await sendBasicWorkshopConfirmation({
-            userEmail: signup.userEmail,
-            userName: signup.userName,
-            status: signup.status,
-            conference: conference || undefined,
-            workshopTitle: signup.workshop?.title ?? input.workshop._ref,
-            workshopDate: (signup.workshop as { date?: string })?.date,
-            workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-          })
-        } catch (e) {
-          console.error('Failed to send workshop confirmation email', e)
-        }
+        await sendBasicWorkshopConfirmation({
+          userEmail: signup.userEmail,
+          userName: signup.userName,
+          status: signup.status,
+          conference: conference || undefined,
+          workshopTitle: signup.workshop?.title ?? input.workshop._ref,
+          workshopDate: (signup.workshop as { date?: string })?.date,
+          workshopTime: (signup.workshop as { startTime?: string })?.startTime,
+        }).catch(() => {});
 
         revalidatePath('/workshop');
         revalidatePath('/admin/workshops');
@@ -261,7 +245,7 @@ export const workshopRouter = router({
 
   cancelSignup: publicProcedure
     .input(cancelWorkshopSignupSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       try {
         const signups = await getAllWorkshopSignups({
           signupIds: [input.signupId],
@@ -273,8 +257,6 @@ export const workshopRouter = router({
             message: 'Signup not found',
           });
         }
-
-        const signup = signups[0];
 
         await cancelWorkshopSignup(input.signupId, input.reason || 'User cancelled');
 
@@ -338,8 +320,7 @@ export const workshopRouter = router({
       try {
         const signups = await getWorkshopSignupsByWorkshop(
           input.workshopId,
-          input.status as WorkshopSignupStatus | undefined,
-          input.includeUserDetails
+          input.status as WorkshopSignupStatus | undefined
         );
 
         return {
@@ -360,16 +341,49 @@ export const workshopRouter = router({
     .input(confirmWorkshopSignupSchema)
     .mutation(async ({ input }) => {
       try {
-        const updatedSignup = await confirmWorkshopSignup(input.signupId);
+        const signups = await getAllWorkshopSignups({
+          signupIds: [input.signupId],
+        });
+
+        if (signups.length === 0) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Signup not found',
+          });
+        }
+
+        const signup = signups[0];
+        const wasWaitlisted = signup.status === 'waitlist';
+
+        await confirmWorkshopSignup(input.signupId);
+
+        if (input.sendEmail && wasWaitlisted) {
+          const { conference } = await getConferenceForCurrentDomain({});
+          if (conference) {
+            await sendBasicWorkshopConfirmation({
+              userEmail: signup.userEmail,
+              userName: signup.userName,
+              status: 'confirmed',
+              conference,
+              workshopTitle: signup.workshop?.title ?? 'Workshop',
+              workshopDate: (signup.workshop as { date?: string })?.date,
+              workshopTime: (signup.workshop as { startTime?: string })?.startTime,
+            }).catch(() => {});
+          }
+        }
 
         revalidatePath('/admin/workshops');
         revalidatePath('/workshop');
 
         return {
           success: true,
-          message: 'Workshop signup confirmed successfully',
+          message: wasWaitlisted
+            ? 'Participant confirmed and notification email sent'
+            : 'Workshop signup confirmed successfully',
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to confirm workshop signup',
@@ -392,10 +406,53 @@ export const workshopRouter = router({
           });
         }
 
+        const oldCapacity = current.capacity;
         const updatedWorkshop = await updateWorkshopCapacity(
           input.workshopId,
           input.capacity
         );
+
+        const capacityIncrease = input.capacity - oldCapacity;
+        let promotedCount = 0;
+
+        if (capacityIncrease > 0) {
+          const waitlistSignups = await getWorkshopSignupsByWorkshop(
+            input.workshopId,
+            'waitlist'
+          );
+
+          const signupsToPromote = waitlistSignups
+            .sort((a, b) => {
+              const dateA = new Date(a.signupDate || a._createdAt).getTime();
+              const dateB = new Date(b.signupDate || b._createdAt).getTime();
+              return dateA - dateB;
+            })
+            .slice(0, capacityIncrease);
+
+          const { conference } = await getConferenceForCurrentDomain({});
+
+          const promotionResults = await Promise.allSettled(
+            signupsToPromote.map(async (signup) => {
+              await confirmWorkshopSignup(signup._id);
+
+              if (conference) {
+                await sendBasicWorkshopConfirmation({
+                  userEmail: signup.userEmail,
+                  userName: signup.userName,
+                  status: 'confirmed',
+                  conference,
+                  workshopTitle: signup.workshop?.title ?? 'Workshop',
+                  workshopDate: (signup.workshop as { date?: string })?.date,
+                  workshopTime: (signup.workshop as { startTime?: string })?.startTime,
+                });
+              }
+
+              return signup;
+            })
+          );
+
+          promotedCount = promotionResults.filter(r => r.status === 'fulfilled').length;
+        }
 
         revalidatePath('/workshop');
         revalidatePath('/admin/workshops');
@@ -403,7 +460,10 @@ export const workshopRouter = router({
         return {
           success: true,
           data: updatedWorkshop,
-          message: 'Workshop capacity updated successfully',
+          message: promotedCount > 0
+            ? `Workshop capacity updated successfully. ${promotedCount} participant${promotedCount === 1 ? '' : 's'} promoted from waitlist.`
+            : 'Workshop capacity updated successfully',
+          promotedCount,
         };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
@@ -420,9 +480,28 @@ export const workshopRouter = router({
     .input(batchConfirmSignupsSchema)
     .mutation(async ({ input }) => {
       try {
+        const signups = await getAllWorkshopSignups({
+          signupIds: input.signupIds,
+        });
+
+        const { conference } = await getConferenceForCurrentDomain({});
+
         const results = await Promise.allSettled(
-          input.signupIds.map(async (id) => {
-            const signup = await confirmWorkshopSignup(id);
+          signups.map(async (signup) => {
+            const wasWaitlisted = signup.status === 'waitlist';
+            await confirmWorkshopSignup(signup._id);
+
+            if (input.sendEmails && wasWaitlisted && conference) {
+              await sendBasicWorkshopConfirmation({
+                userEmail: signup.userEmail,
+                userName: signup.userName,
+                status: 'confirmed',
+                conference,
+                workshopTitle: signup.workshop?.title ?? 'Workshop',
+                workshopDate: (signup.workshop as { date?: string })?.date,
+                workshopTime: (signup.workshop as { startTime?: string })?.startTime,
+              }).catch(() => {});
+            }
 
             return signup;
           })
@@ -436,7 +515,7 @@ export const workshopRouter = router({
 
         return {
           success: true,
-          message: `Confirmed ${succeeded} signups${failed > 0 ? `, ${failed} failed` : ''}`,
+          message: `Confirmed ${succeeded} signup${succeeded === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}`,
           results: {
             succeeded,
             failed,
@@ -532,11 +611,11 @@ export const workshopRouter = router({
     .input(workshopSignupInputSchema)
     .mutation(async ({ input }) => {
       try {
-        // Verify workshop belongs to the conference
         const belongs = await verifyWorkshopBelongsToConference(
           input.workshop._ref,
           input.conference._ref
         );
+
         if (!belongs) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
@@ -551,6 +630,7 @@ export const workshopRouter = router({
             message: 'Workshop is full',
           });
         }
+
         const existingSignups = await getWorkshopSignups(
           input.userWorkOSId,
           input.conference._ref,
@@ -570,18 +650,13 @@ export const workshopRouter = router({
 
         const signup = await createWorkshopSignup(input);
 
-        // Send confirmation email (best-effort, don't block on failure)
-        try {
-          await sendBasicWorkshopConfirmation({
-            userEmail: signup.userEmail,
-            userName: signup.userName,
-            workshopTitle: signup.workshop?.title ?? input.workshop._ref,
-            workshopDate: (signup.workshop as { date?: string })?.date,
-            workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-          })
-        } catch (e) {
-          console.error('Failed to send workshop confirmation email', e)
-        }
+        await sendBasicWorkshopConfirmation({
+          userEmail: signup.userEmail,
+          userName: signup.userName,
+          workshopTitle: signup.workshop?.title ?? input.workshop._ref,
+          workshopDate: (signup.workshop as { date?: string })?.date,
+          workshopTime: (signup.workshop as { startTime?: string })?.startTime,
+        }).catch(() => {});
 
         revalidatePath('/workshop');
         revalidatePath('/admin/workshops');

@@ -144,7 +144,7 @@ export default function WorkshopAdminPage() {
 
   // Update capacity mutation
   const updateCapacityMutation = api.workshop.updateWorkshopCapacity.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Invalidate all workshop queries across the app
       queryClient.invalidateQueries({
         queryKey: [['workshop', 'listWorkshops']]
@@ -154,6 +154,11 @@ export default function WorkshopAdminPage() {
       refetchWorkshops()
       refetchSignups()
       refetchStats()
+
+      if (data.promotedCount && data.promotedCount > 0) {
+        alert(`✅ ${data.message}`)
+      }
+
       setEditCapacityModal({
         isOpen: false,
         workshopId: '',
@@ -480,8 +485,15 @@ export default function WorkshopAdminPage() {
                                           {signup.status === 'waitlist' && (
                                             <button
                                               onClick={() => {
-                                                confirmMutation.mutate({ signupIds: [signup._id], sendEmails: true })
-                                                setTimeout(() => refetchSignups(), 500)
+                                                confirmMutation.mutate(
+                                                  { signupIds: [signup._id], sendEmails: true },
+                                                  {
+                                                    onSuccess: (data) => {
+                                                      alert(`✅ ${signup.userName} confirmed! Confirmation email sent.`)
+                                                      setTimeout(() => refetchSignups(), 500)
+                                                    }
+                                                  }
+                                                )
                                               }}
                                               className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
                                             >
