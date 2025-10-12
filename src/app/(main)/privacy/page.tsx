@@ -48,7 +48,7 @@ export default async function PrivacyPolicyPage() {
     )
   }
 
-  const lastUpdated = 'September 2, 2025'
+  const lastUpdated = 'October 12, 2025'
   const contactEmail = conference.contact_email || 'hello@cloudnativebergen.no'
   const organizationName = 'Cloud Native Bergen'
 
@@ -218,6 +218,41 @@ export default async function PrivacyPolicyPage() {
                       </div>
                     </div>
 
+                    {/* Workshop Registration */}
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-amber-800 dark:text-amber-200">
+                        <BookOpenIcon className="mr-3 h-5 w-5" />
+                        Workshop Registration{' '}
+                        <span className="ml-2 text-sm font-normal">
+                          (For Workshop Participants)
+                        </span>
+                      </h3>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-amber-800 dark:text-amber-200">
+                            Registration Details
+                          </h4>
+                          <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                            <li>• Full name and email address</li>
+                            <li>• Workshop preferences and selections</li>
+                            <li>• Experience level (beginner, intermediate, advanced)</li>
+                            <li>• Operating system preference (Windows, macOS, Linux)</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-amber-800 dark:text-amber-200">
+                            Workshop Management
+                          </h4>
+                          <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                            <li>• Workshop signup status (confirmed, waitlist)</li>
+                            <li>• Signup date and confirmation details</li>
+                            <li>• Workshop attendance tracking</li>
+                            <li>• Capacity and waitlist management</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Communication Data */}
                     <div className="rounded-lg border border-purple-200 bg-purple-50 p-6 dark:border-purple-800 dark:bg-purple-900/20">
                       <h3 className="mb-4 flex items-center text-lg font-semibold text-purple-800 dark:text-purple-200">
@@ -232,6 +267,10 @@ export default async function PrivacyPolicyPage() {
                         <li>
                           • <strong>Conference Updates:</strong> Information
                           about conference logistics and updates
+                        </li>
+                        <li>
+                          • <strong>Workshop Notifications:</strong> Signup confirmations,
+                          waitlist updates, and workshop-related announcements
                         </li>
                       </ul>
                     </div>
@@ -376,6 +415,9 @@ export default async function PrivacyPolicyPage() {
                         <li>• Conference logistics and communication</li>
                         <li>
                           • Attendee registration and venue access control
+                        </li>
+                        <li>
+                          • Workshop registration, capacity management, and waitlist coordination
                         </li>
                         <li>
                           • Sharing participant lists with venue partners for
@@ -918,6 +960,24 @@ export default async function PrivacyPolicyPage() {
                               </span>{' '}
                               Event management, security, future event planning,
                               and attendee experience improvement
+                            </td>
+                          </tr>
+                          <tr className="bg-amber-50 dark:bg-amber-900/20">
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Workshop Registration Data
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (Signups, experience levels, system preferences)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              2 years after conference completion
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              Workshop planning and speaker preparation for future events,
+                              capacity planning, and participant experience improvement
                             </td>
                           </tr>
                           <tr>

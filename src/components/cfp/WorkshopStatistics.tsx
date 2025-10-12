@@ -51,7 +51,7 @@ export function WorkshopStatistics({ statistics }: WorkshopStatisticsProps) {
           </h3>
 
           {/* Signup Overview */}
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="rounded-lg bg-green-50 dark:bg-green-900/20 p-4">
               <div className="flex items-center gap-2">
                 <UserGroupIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
@@ -79,21 +79,6 @@ export function WorkshopStatistics({ statistics }: WorkshopStatisticsProps) {
               </p>
               <p className="text-xs text-yellow-700 dark:text-yellow-300">
                 participants
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4">
-              <div className="flex items-center gap-2">
-                <UserGroupIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
-                  Total
-                </span>
-              </div>
-              <p className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {workshop.totalSignups}
-              </p>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                signups
               </p>
             </div>
           </div>

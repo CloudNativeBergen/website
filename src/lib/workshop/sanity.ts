@@ -122,6 +122,8 @@ export async function createWorkshopSignup(signupData: WorkshopSignupInput): Pro
         status: signupStatus,
         signupDate: new Date().toISOString(),
         confirmationEmailSent: false,
+        experienceLevel: signupData.experienceLevel,
+        operatingSystem: signupData.operatingSystem,
       }
 
       tx.create(document)
