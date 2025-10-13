@@ -1,6 +1,7 @@
 import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
 import type { ProposalWithWorkshopData, WorkshopSignupInput, WorkshopSignupExisting } from './types'
+import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
 
@@ -101,8 +102,8 @@ export async function createWorkshopSignup(signupData: WorkshopSignupInput): Pro
       }
 
       let signupStatus: 'confirmed' | 'waitlist' = 'confirmed'
-      if ((signupData as any).status) {
-        signupStatus = (signupData as any).status
+      if ('status' in signupData && typeof signupData.status === 'string' && (signupData.status === 'confirmed' || signupData.status === 'waitlist')) {
+        signupStatus = signupData.status
       } else {
         const capacityInfo = await checkWorkshopCapacity(workshopId)
         if (capacityInfo.available <= 0) {
@@ -215,7 +216,7 @@ export async function getWorkshopById(workshopId: string): Promise<ProposalWithW
     }
   `
 
-  return clientWrite.fetch(query, { workshopId })
+  return clientWrite.fetch<ProposalWithWorkshopData | null>(query, { workshopId })
 }
 
 export async function updateWorkshopSignupEmailStatus(
@@ -267,7 +268,7 @@ export async function confirmWorkshopSignup(signupId: string): Promise<WorkshopS
 
   return {
     ...signup,
-    status: 'confirmed' as any
+    status: 'confirmed' as WorkshopSignupStatus
   }
 }
 
@@ -343,29 +344,42 @@ export async function getWorkshopSignupStatisticsBySpeaker(
 
   const workshops = await clientWrite.fetch(query, { speakerId, conferenceId })
 
-  return workshops.map((workshop: any) => {
+  interface WorkshopSignupData {
+    status: string
+    experienceLevel?: string
+    operatingSystem?: string
+  }
+
+  interface WorkshopData {
+    _id: string
+    title: string
+    capacity: number
+    signups: WorkshopSignupData[]
+  }
+
+  return workshops.map((workshop: WorkshopData) => {
     const confirmedSignups = workshop.signups.filter(
-      (s: any) => s.status === 'confirmed'
+      (s) => s.status === 'confirmed'
     )
     const waitlistSignups = workshop.signups.filter(
-      (s: any) => s.status === 'waitlist'
+      (s) => s.status === 'waitlist'
     )
 
     const experienceLevels = {
-      beginner: confirmedSignups.filter((s: any) => s.experienceLevel === 'beginner')
+      beginner: confirmedSignups.filter((s) => s.experienceLevel === 'beginner')
         .length,
       intermediate: confirmedSignups.filter(
-        (s: any) => s.experienceLevel === 'intermediate'
+        (s) => s.experienceLevel === 'intermediate'
       ).length,
-      advanced: confirmedSignups.filter((s: any) => s.experienceLevel === 'advanced')
+      advanced: confirmedSignups.filter((s) => s.experienceLevel === 'advanced')
         .length,
     }
 
     const operatingSystems = {
-      windows: confirmedSignups.filter((s: any) => s.operatingSystem === 'windows')
+      windows: confirmedSignups.filter((s) => s.operatingSystem === 'windows')
         .length,
-      macos: confirmedSignups.filter((s: any) => s.operatingSystem === 'macos').length,
-      linux: confirmedSignups.filter((s: any) => s.operatingSystem === 'linux').length,
+      macos: confirmedSignups.filter((s) => s.operatingSystem === 'macos').length,
+      linux: confirmedSignups.filter((s) => s.operatingSystem === 'linux').length,
     }
 
     return {
@@ -461,7 +475,8 @@ export async function getWorkshopStatistics(conferenceId: string) {
   })
   const allSignups = await getAllWorkshopSignups({ conferenceId })
 
-  const workshopStats = workshops.map((workshop: ProposalWithWorkshopData) => {
+  const workshopsWithData = workshops as ProposalWithWorkshopData[]
+  const workshopStats = workshopsWithData.map((workshop) => {
     const workshopSignups = allSignups.filter(s => s.workshop._id === workshop._id)
 
     const statusCounts = workshopSignups.reduce((acc, signup) => {
@@ -485,15 +500,15 @@ export async function getWorkshopStatistics(conferenceId: string) {
   })
 
   const totals = {
-    totalWorkshops: workshops.length,
-    totalCapacity: workshops.reduce((sum: number, w: ProposalWithWorkshopData) => sum + w.capacity, 0),
+    totalWorkshops: workshopsWithData.length,
+    totalCapacity: workshopsWithData.reduce((sum: number, w) => sum + w.capacity, 0),
     totalSignups: allSignups.filter(s => s.status === 'confirmed' || s.status === 'waitlist').length,
     totalConfirmed: workshopStats.reduce((sum: number, s) => sum + s.confirmedSignups, 0),
     totalPending: workshopStats.reduce((sum: number, s) => sum + s.pendingSignups, 0),
     totalWaitlist: workshopStats.reduce((sum: number, s) => sum + s.waitlistSignups, 0),
     totalCancelled: workshopStats.reduce((sum: number, s) => sum + s.cancelledSignups, 0),
     averageUtilization: workshopStats.length > 0
-      ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) / workshops.length
+      ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) / workshopsWithData.length
       : 0,
   }
 

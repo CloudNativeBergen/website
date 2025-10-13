@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import WorkshopCard from './WorkshopCard'
-import type { ProposalWithWorkshopData, WorkshopSignupExisting, ExperienceLevel, OperatingSystem } from '@/lib/workshop/types'
+import type { ProposalWithWorkshopData, ExperienceLevel, OperatingSystem } from '@/lib/workshop/types'
+import { checkWorkshopTimeConflict, getWorkshopIdFromSignup } from '@/lib/workshop/utils'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 
@@ -32,7 +33,7 @@ export default function WorkshopList({
       includeCapacity: true,
     })
 
-  const { data: signupsData, isLoading: signupsLoading, refetch: refetchSignups } =
+  const { data: signupsData, refetch: refetchSignups } =
     api.workshop.getUserSignups.useQuery(
       {
         userWorkOSId: userWorkOSId || '',
@@ -91,41 +92,9 @@ export default function WorkshopList({
     setErrorMessage(null)
 
     const workshopToSignUp = workshops.find(w => w._id === workshopId)
-    const workshopDate = workshopToSignUp?.date || workshopToSignUp?.scheduleInfo?.date
-    const workshopStart = workshopToSignUp?.startTime || workshopToSignUp?.scheduleInfo?.timeSlot?.startTime
-    const workshopEnd = workshopToSignUp?.endTime || workshopToSignUp?.scheduleInfo?.timeSlot?.endTime
-
-    if (workshopDate && workshopStart && workshopEnd) {
-
-      const conflictingWorkshop = userWorkshops.find(userWorkshop => {
-        const existingDate = userWorkshop.date || userWorkshop.scheduleInfo?.date
-        const existingStart = userWorkshop.startTime || userWorkshop.scheduleInfo?.timeSlot?.startTime
-        const existingEnd = userWorkshop.endTime || userWorkshop.scheduleInfo?.timeSlot?.endTime
-
-        if (!existingDate || !existingStart || !existingEnd) {
-          return false
-        }
-
-        const isSameDay = existingDate === workshopDate
-        if (!isSameDay) return false
-
-        if (!workshopStart || !workshopEnd || !existingStart || !existingEnd) {
-          return false
-        }
-
-        const newStartTime = workshopStart.replace(':', '')
-        const newEndTime = workshopEnd.replace(':', '')
-        const existingStartTime = existingStart.replace(':', '')
-        const existingEndTime = existingEnd.replace(':', '')
-
-        return (
-          (newStartTime >= existingStartTime && newStartTime < existingEndTime) ||
-          (newEndTime > existingStartTime && newEndTime <= existingEndTime) ||
-          (newStartTime <= existingStartTime && newEndTime >= existingEndTime)
-        )
-      })
-
-      if (conflictingWorkshop) {
+    if (workshopToSignUp) {
+      const { hasConflict, conflictingWorkshop } = checkWorkshopTimeConflict(workshopToSignUp, userWorkshops)
+      if (hasConflict && conflictingWorkshop) {
         const errorMsg = `You are already registered for "${conflictingWorkshop.title}" which overlaps with this workshop's time slot`
         setErrorMessage(errorMsg)
         setTimeout(() => setErrorMessage(null), 7000)
@@ -175,82 +144,30 @@ export default function WorkshopList({
   const workshops = (workshopsData?.data || []) as ProposalWithWorkshopData[]
   const userSignups = signupsData?.data || []
 
-  // Check if registration is open
   const now = new Date()
   const registrationNotYetOpen = workshopRegistrationStart && new Date(workshopRegistrationStart) > now
   const registrationClosed = workshopRegistrationEnd && new Date(workshopRegistrationEnd) < now
   const registrationOpen = !registrationNotYetOpen && !registrationClosed
 
-  // Get all workshop IDs that the user has signed up for (confirmed or waitlist)
   const userWorkshopIds = userSignups
     .filter(s => s.status === 'confirmed' || s.status === 'waitlist')
-    .map(s => {
-      // Try multiple ways to get the workshop ID
-      return (s as any).workshopId ||
-             s.workshop?._ref ||
-             s.workshop?._id ||
-             (s.workshop as any)?._id
-    })
+    .map(s => getWorkshopIdFromSignup(s))
     .filter(Boolean)
 
-  // Workshops the user is signed up for
   const userWorkshops = workshops.filter((w) =>
     userWorkshopIds.includes(w._id)
   )
 
-  // Available workshops (not signed up)
   const availableWorkshops = workshops.filter((w) =>
     w.available > 0 && !userWorkshopIds.includes(w._id)
   )
 
-  // Full workshops (not signed up)
   const fullWorkshops = workshops.filter((w) =>
     w.available === 0 && !userWorkshopIds.includes(w._id)
   )
 
   const checkTimeConflict = (workshop: ProposalWithWorkshopData) => {
-    const workshopDate = workshop.date || workshop.scheduleInfo?.date
-    const workshopStart = workshop.startTime || workshop.scheduleInfo?.timeSlot?.startTime
-    const workshopEnd = workshop.endTime || workshop.scheduleInfo?.timeSlot?.endTime
-
-    if (!workshopDate || !workshopStart || !workshopEnd) {
-      return { hasConflict: false, conflictingWorkshop: null }
-    }
-
-    const conflictingWorkshop = userWorkshops.find(userWorkshop => {
-      if (userWorkshop._id === workshop._id) return false
-
-      const existingDate = userWorkshop.date || userWorkshop.scheduleInfo?.date
-      const existingStart = userWorkshop.startTime || userWorkshop.scheduleInfo?.timeSlot?.startTime
-      const existingEnd = userWorkshop.endTime || userWorkshop.scheduleInfo?.timeSlot?.endTime
-
-      if (!existingDate || !existingStart || !existingEnd) {
-        return false
-      }
-
-      const isSameDay = existingDate === workshopDate
-      if (!isSameDay) return false
-
-      if (!workshopStart || !workshopEnd || !existingStart || !existingEnd) {
-        return false
-      }
-
-      const newStartTime = workshopStart.replace(':', '')
-      const newEndTime = workshopEnd.replace(':', '')
-      const existingStartTime = existingStart.replace(':', '')
-      const existingEndTime = existingEnd.replace(':', '')
-
-      return (
-        (newStartTime >= existingStartTime && newStartTime < existingEndTime) ||
-        (newEndTime > existingStartTime && newEndTime <= existingEndTime) ||
-        (newStartTime <= existingStartTime && newEndTime >= existingEndTime)
-      )
-    })
-
-    return {
-      hasConflict: !!conflictingWorkshop,
-      conflictingWorkshop
-    }
+    return checkWorkshopTimeConflict(workshop, userWorkshops)
   }
 
   if (workshops.length === 0) {
@@ -283,30 +200,30 @@ export default function WorkshopList({
           <div className="mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4 border border-blue-200 dark:border-blue-800">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               You are registered for {userWorkshops.filter(w => {
-                const signup = userSignups.find(s => (s.workshop?._ref || s.workshop?._id) === w._id)
+                const signup = userSignups.find(s => getWorkshopIdFromSignup(s) === w._id)
                 return signup?.status === 'confirmed'
               }).length} workshop{userWorkshops.filter(w => {
-                const signup = userSignups.find(s => (s.workshop?._ref || s.workshop?._id) === w._id)
+                const signup = userSignups.find(s => getWorkshopIdFromSignup(s) === w._id)
                 return signup?.status === 'confirmed'
               }).length !== 1 ? 's' : ''}
               {userWorkshops.filter(w => {
-                const signup = userSignups.find(s => (s.workshop?._ref || s.workshop?._id) === w._id)
+                const signup = userSignups.find(s => getWorkshopIdFromSignup(s) === w._id)
                 return signup?.status === 'waitlist'
               }).length > 0 && (
-                <> and on the waitlist for {userWorkshops.filter(w => {
-                  const signup = userSignups.find(s => (s.workshop?._ref || s.workshop?._id) === w._id)
-                  return signup?.status === 'waitlist'
-                }).length} workshop{userWorkshops.filter(w => {
-                  const signup = userSignups.find(s => (s.workshop?._ref || s.workshop?._id) === w._id)
-                  return signup?.status === 'waitlist'
-                }).length !== 1 ? 's' : ''}</>
-              )}.
+                  <> and on the waitlist for {userWorkshops.filter(w => {
+                    const signup = userSignups.find(s => getWorkshopIdFromSignup(s) === w._id)
+                    return signup?.status === 'waitlist'
+                  }).length} workshop{userWorkshops.filter(w => {
+                    const signup = userSignups.find(s => getWorkshopIdFromSignup(s) === w._id)
+                    return signup?.status === 'waitlist'
+                  }).length !== 1 ? 's' : ''}</>
+                )}.
             </p>
           </div>
           <div className="space-y-6">
             {userWorkshops.map((workshop) => {
               const userSignup = userSignups.find(s =>
-                (s.workshop?._ref || s.workshop?._id || s.workshopId) === workshop._id
+                getWorkshopIdFromSignup(s) === workshop._id
               )
               return (
                 <WorkshopCard
@@ -358,7 +275,7 @@ export default function WorkshopList({
           <div className="space-y-6 opacity-75">
             {fullWorkshops.map((workshop) => {
               const userSignup = userSignups.find(s =>
-                (s.workshop?._ref || s.workshop?._id) === workshop._id
+                getWorkshopIdFromSignup(s) === workshop._id
               )
               return (
                 <WorkshopCard

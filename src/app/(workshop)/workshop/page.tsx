@@ -28,8 +28,8 @@ export default async function WorkshopPage() {
   }
 
   if (!user) {
-    const signInUrl = await getSignInUrl({ returnPathname: '/workshop' })
-    const signUpUrl = await getSignUpUrl({ returnPathname: '/workshop' })
+    const signInUrl = await getSignInUrl({ redirectUri: '/workshop' })
+    const signUpUrl = await getSignUpUrl({ redirectUri: '/workshop' })
 
     return (
       <div className="relative py-20 sm:pb-24 sm:pt-36">
@@ -67,7 +67,6 @@ export default async function WorkshopPage() {
     )
   }
 
-  // Check workshop eligibility via ticket validation
   if (conference.checkin_customer_id && conference.checkin_event_id) {
     const eligibility = await checkWorkshopEligibility({
       userEmail: user.email,
@@ -131,7 +130,6 @@ export default async function WorkshopPage() {
     }
   }
 
-  // Check workshop registration status
   const now = new Date()
   const registrationNotYetOpen = conference.workshop_registration_start && new Date(conference.workshop_registration_start) > now
   const registrationClosed = conference.workshop_registration_end && new Date(conference.workshop_registration_end) < now

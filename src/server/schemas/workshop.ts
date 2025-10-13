@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { WorkshopSignupStatus } from '@/lib/workshop/types'
 
-// Input Validation Schemas
 export const workshopSignupInputSchema = z.object({
   userEmail: z.string().email('Invalid email address'),
   userName: z
@@ -42,7 +41,6 @@ export const workshopAvailabilitySchema = z.object({
   conferenceId: z.string().min(1, 'Conference ID is required'),
 })
 
-// Query Schemas
 export const workshopSignupByIdSchema = z.object({
   signupId: z.string().min(1, 'Signup ID is required'),
 })
@@ -63,7 +61,6 @@ export const workshopSignupsByWorkshopSchema = z.object({
   includeUserDetails: z.boolean().optional().default(false),
 })
 
-// Action Schemas
 export const cancelWorkshopSignupSchema = z.object({
   signupId: z.string().min(1, 'Signup ID is required'),
   reason: z.string().max(500, 'Reason too long').optional(),
@@ -78,7 +75,6 @@ export const resendConfirmationSchema = z.object({
   signupId: z.string().min(1, 'Signup ID is required'),
 })
 
-// Batch Operation Schemas
 export const batchConfirmSignupsSchema = z.object({
   signupIds: z.array(z.string()).min(1, 'At least one signup ID is required'),
   sendEmails: z.boolean().optional().default(true),
@@ -89,7 +85,6 @@ export const batchCancelSignupsSchema = z.object({
   reason: z.string().max(500, 'Reason too long').optional(),
 })
 
-// Filter Schemas
 export const workshopSignupFiltersSchema = z.object({
   conferenceId: z.string().optional(),
   workshopId: z.string().optional(),
@@ -106,7 +101,6 @@ export const workshopSignupFiltersSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
 })
 
-// Workshop Management Schemas
 export const createWorkshopSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title too long'),
   description: z.string().min(1, 'Description is required'),
@@ -129,7 +123,6 @@ export const updateWorkshopCapacitySchema = z.object({
     .max(500, 'Capacity too large'),
 })
 
-// Email Schemas
 export const sendWorkshopReminderSchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
   subject: z
@@ -143,7 +136,6 @@ export const sendWorkshopReminderSchema = z.object({
   onlyConfirmed: z.boolean().optional().default(true),
 })
 
-// Export Schemas
 export const exportWorkshopSignupsSchema = z
   .object({
     workshopId: z.string().optional(),
@@ -155,7 +147,6 @@ export const exportWorkshopSignupsSchema = z
     message: 'Either workshopId or conferenceId is required',
   })
 
-// Validation Helpers
 export type WorkshopSignupInput = z.infer<typeof workshopSignupInputSchema>
 export type WorkshopSignupUpdate = z.infer<typeof workshopSignupUpdateSchema>
 export type WorkshopSignupFilters = z.infer<typeof workshopSignupFiltersSchema>

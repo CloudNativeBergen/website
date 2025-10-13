@@ -13,8 +13,6 @@ import {
 } from '@/lib/workshop/sanity'
 import { workshopSignupInputSchema } from '@/server/schemas/workshop'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
-import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
-
 export async function signupForWorkshop(workshopId: string) {
   try {
     const { user } = await withAuth({ ensureSignedIn: true })
@@ -34,7 +32,6 @@ export async function signupForWorkshop(workshopId: string) {
       }
     }
 
-    // Verify workshop belongs to current conference
     const workshopValid = await verifyWorkshopBelongsToConference(workshopId, conference._id)
     if (!workshopValid) {
       return {
@@ -69,12 +66,10 @@ export async function signupForWorkshop(workshopId: string) {
 
     const signup = await createWorkshopSignup(signupData)
 
-    // Send confirmation email
     let emailSent = false
     let emailError: string | undefined
 
     try {
-      // Fetch workshop details for the confirmation email
       const workshop = await getWorkshopById(workshopId)
 
       if (workshop) {
@@ -84,11 +79,10 @@ export async function signupForWorkshop(workshopId: string) {
           status: signup.status,
           conference: conference || undefined,
           workshopTitle: workshop.title || 'Workshop',
-          workshopDate: (workshop as any).date,
-          workshopTime: (workshop as any).startTime,
+          workshopDate: workshop.date,
+          workshopTime: workshop.startTime,
         })
 
-        // Update signup to mark email as sent
         await updateWorkshopSignupEmailStatus(signup._id, true)
         emailSent = true
       }

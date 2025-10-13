@@ -6,10 +6,11 @@ import {
   AdminPageHeader,
   SkeletonCard,
 } from '@/components/admin'
-import { AcademicCapIcon, UserGroupIcon, CheckCircleIcon, XCircleIcon, ClockIcon, XMarkIcon, PlusCircleIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { AcademicCapIcon, UserGroupIcon, XMarkIcon, PlusCircleIcon, TrashIcon } from '@heroicons/react/24/outline'
 import { Dialog, Transition } from '@headlessui/react'
 import { api } from '@/lib/trpc/client'
 import type { WorkshopSignupStatus, ProposalWithWorkshopData } from '@/lib/workshop/types'
+import { getWorkshopDuration } from '@/lib/workshop/utils'
 import { useQueryClient } from '@tanstack/react-query'
 
 interface SignupModalState {
@@ -72,19 +73,15 @@ export default function WorkshopAdminPage() {
   })
   const [newCapacity, setNewCapacity] = useState<number>(0)
 
-  // Get conference ID from the domain
   useEffect(() => {
-    // Get the conference ID from localStorage or from the API based on domain
     const storedConferenceId = localStorage.getItem('conferenceId')
     if (storedConferenceId) {
       setConferenceId(storedConferenceId)
     } else {
-      // For now, use the default conference ID
       setConferenceId('d02570e5-7fb6-46e0-a0a1-d27bbbb0a3b5')
     }
   }, [])
 
-  // Fetch all workshops
   const { data: workshopsData, isLoading: workshopsLoading, error: workshopsError, refetch: refetchWorkshops } =
     api.workshop.listWorkshops.useQuery({
       conferenceId,
@@ -93,7 +90,6 @@ export default function WorkshopAdminPage() {
       enabled: !!conferenceId
     })
 
-  // Fetch signups for all workshops
   const { data: signupsData, isLoading: signupsLoading, refetch: refetchSignups } =
     api.workshop.getAllSignups.useQuery({
       conferenceId,
@@ -102,28 +98,18 @@ export default function WorkshopAdminPage() {
       enabled: !!conferenceId
     })
 
-  // Batch confirm mutation
   const confirmMutation = api.workshop.batchConfirmSignups.useMutation({
     onSuccess: () => {
       refetchSignups()
     },
   })
 
-  // Batch cancel mutation
-  const cancelMutation = api.workshop.batchCancelSignups.useMutation({
-    onSuccess: () => {
-      refetchSignups()
-    },
-  })
-
-  // Delete mutation
   const deleteMutation = api.workshop.deleteSignup.useMutation({
     onSuccess: () => {
       refetchSignups()
     },
   })
 
-  // Manual signup mutation
   const manualSignupMutation = api.workshop.manualSignupForWorkshop.useMutation({
     onSuccess: () => {
       refetchSignups()
@@ -142,21 +128,18 @@ export default function WorkshopAdminPage() {
     },
   })
 
-  // Update capacity mutation
   const updateCapacityMutation = api.workshop.updateWorkshopCapacity.useMutation({
-    onSuccess: (data) => {
-      // Invalidate all workshop queries across the app
+    onSuccess: (result) => {
       queryClient.invalidateQueries({
         queryKey: [['workshop', 'listWorkshops']]
       })
 
-      // Refetch all data to show updated capacity
       refetchWorkshops()
       refetchSignups()
       refetchStats()
 
-      if (data.promotedCount && data.promotedCount > 0) {
-        alert(`✅ ${data.message}`)
+      if (result.promotedCount && result.promotedCount > 0) {
+        alert(`✅ ${result.message}`)
       }
 
       setEditCapacityModal({
@@ -169,7 +152,6 @@ export default function WorkshopAdminPage() {
     },
   })
 
-  // Get workshop statistics
   const { data: statsData, isLoading: statsLoading, refetch: refetchStats } =
     api.workshop.getWorkshopSummary.useQuery({
       conferenceId,
@@ -178,14 +160,13 @@ export default function WorkshopAdminPage() {
     })
 
   const workshops = (workshopsData?.data || []) as ProposalWithWorkshopData[]
-  const signups = signupsData?.data || []
+  const signups = useMemo(() => signupsData?.data || [], [signupsData?.data])
 
-  // Group signups by workshop
   const signupsByWorkshop = useMemo(() => {
     const grouped = new Map<string, typeof signups>()
 
     signups.forEach((signup) => {
-      const workshopId = (signup.workshop as any)._ref || (signup.workshop as any)._id
+      const workshopId = signup.workshop._ref || signup.workshop._id || ''
       if (!grouped.has(workshopId)) {
         grouped.set(workshopId, [])
       }
@@ -194,28 +175,6 @@ export default function WorkshopAdminPage() {
 
     return grouped
   }, [signups])
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-      case 'waitlist':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return <CheckCircleIcon className="h-4 w-4 text-green-600" />
-      case 'waitlist':
-        return <ClockIcon className="h-4 w-4 text-blue-600" />
-      default:
-        return null
-    }
-  }
 
   if (!conferenceId || workshopsLoading || signupsLoading || statsLoading) {
     return (
@@ -286,7 +245,7 @@ export default function WorkshopAdminPage() {
                       {workshop.title}
                     </h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {workshop.format === 'workshop_120' ? '2 hours' : '4 hours'}
+                      {getWorkshopDuration(workshop.format)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -324,11 +283,10 @@ export default function WorkshopAdminPage() {
                   </div>
                   <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                     <div
-                      className={`h-full transition-all ${
-                        capacityPercentage >= 90 ? 'bg-red-500' :
+                      className={`h-full transition-all ${capacityPercentage >= 90 ? 'bg-red-500' :
                         capacityPercentage >= 70 ? 'bg-yellow-500' :
-                        'bg-green-500'
-                      }`}
+                          'bg-green-500'
+                        }`}
                       style={{ width: `${Math.min(capacityPercentage, 100)}%` }}
                     />
                   </div>
@@ -488,7 +446,7 @@ export default function WorkshopAdminPage() {
                                                 confirmMutation.mutate(
                                                   { signupIds: [signup._id], sendEmails: true },
                                                   {
-                                                    onSuccess: (data) => {
+                                                    onSuccess: () => {
                                                       alert(`✅ ${signup.userName} confirmed! Confirmation email sent.`)
                                                       setTimeout(() => refetchSignups(), 500)
                                                     }
@@ -522,10 +480,10 @@ export default function WorkshopAdminPage() {
                               (s.workshop._ref || s.workshop._id) === signupModal.workshopId &&
                               s.status === signupModal.status
                             ).length === 0 && (
-                              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                                No {signupModal.status} signups for this workshop
-                              </div>
-                            )}
+                                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                                  No {signupModal.status} signups for this workshop
+                                </div>
+                              )}
                           </div>
                         </div>
                       )}

@@ -5,7 +5,6 @@ import {
   type EmailResult,
 } from './config'
 import type { Conference } from '@/lib/conference/types'
-import type { WorkshopSignupExisting } from '@/lib/workshop/types'
 
 export interface WorkshopConfirmationEmailRequest {
   userEmail: string

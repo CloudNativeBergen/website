@@ -31,7 +31,7 @@ import { getWorkshops } from '@/lib/proposal/data/sanity';
 import { Status } from '@/lib/proposal/types';
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop';
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity';
-import type { WorkshopSignupStatus } from '@/lib/workshop/types';
+import { WorkshopSignupStatus } from '@/lib/workshop/types';
 
 export const workshopRouter = router({
   listWorkshops: publicProcedure
@@ -105,9 +105,10 @@ export const workshopRouter = router({
     .input(workshopSignupsByUserSchema)
     .query(async ({ input, ctx }) => {
       try {
+        const sessionUser = ctx.session?.user as { id?: string; sub?: string } | undefined
         const userWorkOSId = input.userWorkOSId ||
-                            (ctx.session?.user as any)?.id ||
-                            ctx.session?.user?.sub;
+          sessionUser?.id ||
+          sessionUser?.sub;
 
         if (!userWorkOSId || !input.conferenceId) {
           return {
@@ -120,7 +121,7 @@ export const workshopRouter = router({
         const signups = await getWorkshopSignups(
           userWorkOSId,
           input.conferenceId,
-          (input as any).status
+          'status' in input && typeof input.status === 'string' ? input.status : undefined
         );
 
         return {
@@ -194,7 +195,7 @@ export const workshopRouter = router({
 
         const alreadySignedUp = existingSignups.some(
           signup => signup.workshop._ref === input.workshop._ref &&
-          (signup.status === 'confirmed' || signup.status === 'waitlist')
+            (signup.status === 'confirmed' || signup.status === 'waitlist')
         );
 
         if (alreadySignedUp) {
@@ -209,7 +210,7 @@ export const workshopRouter = router({
 
         const signup = await createWorkshopSignup({
           ...input,
-          status: (isWaitlist ? 'waitlist' : 'confirmed') as any,
+          status: isWaitlist ? WorkshopSignupStatus.WAITLIST : WorkshopSignupStatus.CONFIRMED,
         });
 
         await sendBasicWorkshopConfirmation({
@@ -220,7 +221,7 @@ export const workshopRouter = router({
           workshopTitle: signup.workshop?.title ?? input.workshop._ref,
           workshopDate: (signup.workshop as { date?: string })?.date,
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-        }).catch(() => {});
+        }).catch(() => { });
 
         revalidatePath('/workshop');
         revalidatePath('/admin/workshops');
@@ -368,7 +369,7 @@ export const workshopRouter = router({
               workshopTitle: signup.workshop?.title ?? 'Workshop',
               workshopDate: (signup.workshop as { date?: string })?.date,
               workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-            }).catch(() => {});
+            }).catch(() => { });
           }
         }
 
@@ -500,7 +501,7 @@ export const workshopRouter = router({
                 workshopTitle: signup.workshop?.title ?? 'Workshop',
                 workshopDate: (signup.workshop as { date?: string })?.date,
                 workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-              }).catch(() => {});
+              }).catch(() => { });
             }
 
             return signup;
@@ -656,7 +657,7 @@ export const workshopRouter = router({
           workshopTitle: signup.workshop?.title ?? input.workshop._ref,
           workshopDate: (signup.workshop as { date?: string })?.date,
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-        }).catch(() => {});
+        }).catch(() => { });
 
         revalidatePath('/workshop');
         revalidatePath('/admin/workshops');

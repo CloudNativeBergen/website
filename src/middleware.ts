@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs'
 
@@ -8,7 +8,7 @@ const workOSMiddleware = authkitMiddleware({
     enabled: true,
     unauthenticatedPaths: [],
   },
-  signInPath: '/workshop',
+  //signInPath: '/workshop',
   debug: process.env.NODE_ENV === 'development',
 })
 
@@ -44,18 +44,15 @@ const nextAuthMiddleware = auth((req) => {
   return NextResponse.next()
 })
 
-export default function middleware(req: NextRequest) {
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const { pathname } = req.nextUrl
 
-  // Handle workshop routes with WorkOS middleware
   if (pathname.startsWith('/workshop')) {
-    return workOSMiddleware(req)
+    return workOSMiddleware(req, event)
   }
 
-  // Handle other protected routes with NextAuth
   if (pathname.startsWith('/cfp') || pathname.startsWith('/admin')) {
-    // @ts-expect-error NextAuth middleware type
-    return nextAuthMiddleware(req)
+    return nextAuthMiddleware(req, { params: Promise.resolve({}) })
   }
 
   return NextResponse.next()

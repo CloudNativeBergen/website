@@ -5,7 +5,6 @@ export default defineType({
   title: 'Workshop Signup',
   type: 'document',
   fields: [
-    // User Information Fields
     defineField({
       name: 'userEmail',
       title: 'User Email',
@@ -58,7 +57,6 @@ export default defineType({
         Rule.required().error('Operating system is required'),
     }),
 
-    // Workshop Reference
     defineField({
       name: 'workshop',
       title: 'Workshop',
@@ -82,7 +80,6 @@ export default defineType({
       ],
     }),
 
-    // Conference Reference
     defineField({
       name: 'conference',
       title: 'Conference',
@@ -92,7 +89,6 @@ export default defineType({
         Rule.required().error('Conference reference is required'),
     }),
 
-    // Status and Timestamps
     defineField({
       name: 'status',
       title: 'Status',
@@ -131,7 +127,6 @@ export default defineType({
         }),
     }),
 
-    // Additional Fields
     defineField({
       name: 'confirmationEmailSent',
       title: 'Confirmation Email Sent',
