@@ -1,5 +1,5 @@
-import { formats } from '@/lib/proposal/types'
-import { defineField, defineType, ValidationContext } from 'sanity'
+import { formats } from '../../src/lib/proposal/types'
+import { defineField, defineType } from 'sanity'
 
 export default defineType({
   name: 'conference',
