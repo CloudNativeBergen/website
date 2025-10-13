@@ -1,0 +1,1 @@
+export const PRIVACY_POLICY_VERSION = '2025-09-02'

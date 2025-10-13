@@ -32,6 +32,7 @@ import {
   CheckIcon,
   ChatBubbleOvalLeftIcon,
   FlagIcon,
+  HandRaisedIcon,
 } from '@heroicons/react/24/outline'
 
 export default async function PrivacyPolicyPage() {
@@ -292,6 +293,57 @@ export default async function PrivacyPolicyPage() {
                       </ul>
                     </div>
                   </div>
+
+                  {/* Volunteer Information */}
+                  <div className="space-y-6">
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-amber-800 dark:text-amber-200">
+                        <HandRaisedIcon className="mr-3 h-5 w-5" />
+                        Volunteer Information
+                      </h3>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-amber-800 dark:text-amber-200">
+                            Contact &amp; Logistics
+                          </h4>
+                          <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
+                            <li>
+                              • Name, email address, and phone number
+                            </li>
+                            <li>
+                              • Occupation status (student, working, unemployed,
+                              other)
+                            </li>
+                            <li>
+                              • Availability and preferred volunteer tasks
+                            </li>
+                          </ul>
+                        </div>
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-amber-800 dark:text-amber-200">
+                            Event Coordination
+                          </h4>
+                          <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
+                            <li>• T-shirt size for volunteer shirts</li>
+                            <li>
+                              • Dietary restrictions (may include health data;
+                              collected with explicit consent and used only for
+                              event catering)
+                            </li>
+                            <li>• Other relevant information</li>
+                            <li>• Conference assignment</li>
+                          </ul>
+                        </div>
+                      </div>
+                      <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
+                        <strong>Purpose:</strong> Volunteer coordination and event logistics.{' '}
+                        <strong>Legal basis:</strong> Legitimate interests for coordination and operations; explicit consent for special category data (dietary restrictions).
+                      </p>
+                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                        See your GDPR rights in section 8 (<a href="#gdpr-rights" className="underline">Your Rights Under GDPR</a>).
+                      </p>
+                    </div>
+                  </div>
                 </section>
 
                 {/* Section 3: Legal Basis */}
@@ -320,6 +372,7 @@ export default async function PrivacyPolicyPage() {
                       <ul className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
                         <li>• Organizing and managing the conference</li>
                         <li>• Speaker selection and coordination</li>
+                        <li>• Volunteer coordination and event operations</li>
                         <li>• Conference logistics and communication</li>
                         <li>
                           • Attendee registration and venue access control
@@ -879,6 +932,26 @@ export default async function PrivacyPolicyPage() {
                                 Consent:
                               </span>{' '}
                               Active consent management and preference tracking
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              Volunteer Applications &amp; Information
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (Contact details, availability, preferences,
+                                assignments)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              12 months after event completion, or earlier if consent is withdrawn for consent-based fields
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              Volunteer coordination, event operations, and
+                              safety management. Consent for special category
+                              data (dietary restrictions)
                             </td>
                           </tr>
                         </tbody>

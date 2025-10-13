@@ -161,6 +161,7 @@ export function Dropdown({
   options,
   value,
   setValue,
+  placeholder = 'Select an option',
 }: {
   name: string
   label: string
@@ -168,6 +169,7 @@ export function Dropdown({
   value?: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setValue: (val: any) => void
+  placeholder?: string
 }) {
   return (
     <>
@@ -186,6 +188,11 @@ export function Dropdown({
           onChange={(e) => setValue(e.target.value)}
           className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
         >
+          {!value && (
+            <option value="" disabled>
+              {placeholder}
+            </option>
+          )}
           {Array.from(options).map(([key, value]) => (
             <option key={key} value={key}>
               {value}

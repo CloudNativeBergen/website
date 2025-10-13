@@ -11,6 +11,7 @@ import review from './schemaTypes/review'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import travelSupport from './schemaTypes/travelSupport'
 import travelExpense from './schemaTypes/travelExpense'
+import volunteer from './schemaTypes/volunteer'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
@@ -25,5 +26,6 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     coSpeakerInvitation,
     travelSupport,
     travelExpense,
+    volunteer,
   ],
 }

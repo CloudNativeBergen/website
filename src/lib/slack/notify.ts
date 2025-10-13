@@ -9,6 +9,7 @@ import { PortableTextBlock } from 'sanity'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { Action } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
+import { Volunteer } from '@/lib/volunteer/types'
 
 type SlackBlock = {
   type: string
@@ -114,13 +115,13 @@ function getDomainFromConference(conference: Conference): string | null {
     : null
 }
 
-function createAdminButton(
-  proposal: ProposalExisting,
+function createAdminLinkButton(
   domain: string,
-  buttonText: string,
+  path: string,
+  text: string,
   actionId: string,
 ): SlackBlock {
-  const adminUrl = `https://${domain}/admin/proposals/${proposal._id}`
+  const adminUrl = `https://${domain}${path}`
   return {
     type: 'actions',
     elements: [
@@ -128,7 +129,7 @@ function createAdminButton(
         type: 'button',
         text: {
           type: 'plain_text',
-          text: buttonText,
+          text: text,
           emoji: true,
         },
         url: adminUrl,
@@ -136,6 +137,20 @@ function createAdminButton(
       },
     ],
   }
+}
+
+function createAdminButton(
+  proposal: ProposalExisting,
+  domain: string,
+  buttonText: string,
+  actionId: string,
+): SlackBlock {
+  return createAdminLinkButton(
+    domain,
+    `/admin/proposals/${proposal._id}`,
+    buttonText,
+    actionId,
+  )
 }
 
 function createProposalInfoBlocks(
@@ -266,6 +281,121 @@ export async function notifyProposalStatusChange(
   if (domain) {
     blocks.push(
       createAdminButton(proposal, domain, 'View in Admin', 'view_proposal'),
+    )
+  }
+
+  const message = { blocks }
+  await sendSlackMessage(message)
+}
+
+export async function notifyNewVolunteer(
+  volunteer: Volunteer,
+  conference: Conference,
+) {
+  const domain = getDomainFromConference(conference)
+
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '🙋 New Volunteer Application',
+        emoji: true,
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Conference:* ${conference.title}`,
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Name:*\n${volunteer.name}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Email:*\n${volunteer.email}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Phone:*\n${volunteer.phone}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Occupation:*\n${volunteer.occupation.charAt(0).toUpperCase() + volunteer.occupation.slice(1)}`,
+        },
+      ],
+    },
+  ]
+
+  // Add volunteer details section if any optional fields are provided
+  const detailFields: Array<{ type: string; text: string }> = []
+
+  if (volunteer.availability) {
+    detailFields.push({
+      type: 'mrkdwn',
+      text: `*Availability:*\n${volunteer.availability}`,
+    })
+  }
+
+  if (volunteer.preferredTasks && volunteer.preferredTasks.length > 0) {
+    detailFields.push({
+      type: 'mrkdwn',
+      text: `*Preferred Tasks:*\n${volunteer.preferredTasks.join(', ')}`,
+    })
+  }
+
+  if (volunteer.tshirtSize) {
+    detailFields.push({
+      type: 'mrkdwn',
+      text: `*T-Shirt Size:*\n${volunteer.tshirtSize}`,
+    })
+  }
+
+  if (volunteer.dietaryRestrictions) {
+    detailFields.push({
+      type: 'mrkdwn',
+      text: `*Dietary Restrictions:*\n${volunteer.dietaryRestrictions}`,
+    })
+  }
+
+  if (detailFields.length > 0) {
+    blocks.push({
+      type: 'section',
+      fields: detailFields,
+    })
+  }
+
+  // Add other info section if it exists
+  if (volunteer.otherInfo) {
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Other Information:*\n${volunteer.otherInfo}`,
+      },
+    })
+  }
+
+  // Add admin button if domain exists
+  if (domain) {
+    blocks.push(
+      createAdminLinkButton(
+        domain,
+        '/admin/volunteers',
+        'Review in Admin',
+        'review_volunteer',
+      ),
     )
   }
 

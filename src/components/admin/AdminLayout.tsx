@@ -6,6 +6,7 @@ import {
   DocumentTextIcon,
   HomeIcon,
   UsersIcon,
+  UserGroupIcon,
   CalendarDaysIcon,
   BuildingOfficeIcon,
   TicketIcon,
@@ -31,6 +32,7 @@ const navigation: NavigationItem[] = [
     href: '/admin/travel-support',
     icon: CreditCardIcon,
   },
+  { name: 'Volunteers', href: '/admin/volunteers', icon: UserGroupIcon },
   { name: 'Sponsors', href: '/admin/sponsors', icon: BuildingOfficeIcon },
   {
     name: 'Marketing',

@@ -2,6 +2,27 @@ import { clientWrite } from '../sanity/client'
 import { Conference } from './types'
 import { headers } from 'next/headers'
 
+export async function getConferenceById(
+  id: string,
+): Promise<{ conference: Conference | null; error: Error | null }> {
+  try {
+    const query = `*[_type == "conference" && _id == $id][0]`
+
+    const conference = await clientWrite.fetch<Conference>(
+      query,
+      { id },
+      {
+        cache: 'no-store'
+      }
+    )
+
+    return { conference, error: null }
+  } catch (err) {
+    const error = err as Error
+    return { conference: null, error }
+  }
+}
+
 export async function getConferenceForCurrentDomain({
   organizers = false,
   schedule = false,
