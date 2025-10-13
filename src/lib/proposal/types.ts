@@ -77,6 +77,7 @@ interface Proposal {
   topics?: Topic[] | Reference[]
   tos: boolean
   video?: string
+  capacity?: number // Workshop capacity - only applies to workshop formats
 }
 
 export interface ProposalInput extends Proposal {

@@ -1,5 +1,5 @@
-import { formats } from '@/lib/proposal/types'
-import { defineField, defineType, ValidationContext } from 'sanity'
+import { formats } from '../../src/lib/proposal/types'
+import { defineField, defineType } from 'sanity'
 
 export default defineType({
   name: 'conference',
@@ -139,6 +139,18 @@ export default defineType({
       options: {
         layout: 'checkbox',
       },
+    }),
+    defineField({
+      name: 'workshop_registration_start',
+      title: 'Workshop Registration Start',
+      type: 'datetime',
+      description: 'When workshop registration opens',
+    }),
+    defineField({
+      name: 'workshop_registration_end',
+      title: 'Workshop Registration End',
+      type: 'datetime',
+      description: 'When workshop registration closes',
     }),
     defineField({
       name: 'contact_email',

@@ -45,9 +45,8 @@ export async function getProposal({
       speakers[]-> {
         ...,
         "image": image.asset->url,
-        ${
-          isOrganizer && includeSubmittedTalks
-            ? `"submittedTalks": *[
+        ${isOrganizer && includeSubmittedTalks
+        ? `"submittedTalks": *[
             _type == "talk"
             && ^._id in speakers[]._ref
             && conference._ref == ^.^.conference._ref
@@ -57,11 +56,10 @@ export async function getProposal({
             _id, title, status, _createdAt,
             topics[]-> { _id, title, color }
           },`
-            : ''
-        }
-        ${
-          isOrganizer && includePreviousAcceptedTalks
-            ? `"previousAcceptedTalks": *[
+        : ''
+      }
+        ${isOrganizer && includePreviousAcceptedTalks
+        ? `"previousAcceptedTalks": *[
             _type == "talk"
             && ^._id in speakers[]._ref
             && conference._ref != ^.^.conference._ref
@@ -71,8 +69,8 @@ export async function getProposal({
             conference-> { _id, title, start_date },
             topics[]-> { _id, title, color }
           }`
-            : ''
-        }
+        : ''
+      }
       },
       conference-> {
         _id, title, start_date, end_date
@@ -91,15 +89,14 @@ export async function getProposal({
         respondedAt,
         declineReason
       },
-      ${
-        includeReviews && isOrganizer
-          ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+      ${includeReviews && isOrganizer
+        ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
         ...,
         reviewer-> {
           _id, name, email, image
         }
       }`
-          : ''
+        : ''
       }
     }[0]`
 
@@ -129,12 +126,18 @@ export async function getProposals({
   returnAll = false,
   includeReviews = false,
   includePreviousAcceptedTalks = false,
+  formats,
+  statuses,
+  includeCapacity = false,
 }: {
   speakerId?: string
   conferenceId?: string
   returnAll?: boolean
   includeReviews?: boolean
   includePreviousAcceptedTalks?: boolean
+  formats?: string[]
+  statuses?: Status[]
+  includeCapacity?: boolean
 }): Promise<{ proposals: ProposalExisting[]; proposalsError: Error | null }> {
   let proposalsError = null
   let proposals: ProposalExisting[] = []
@@ -147,6 +150,12 @@ export async function getProposals({
         ? `"${speakerId}" in speakers[]._ref`
         : null,
     conferenceId ? `conference._ref == $conferenceId` : null,
+    formats && formats.length > 0
+      ? `format in [${formats.map((f) => `"${f}"`).join(', ')}]`
+      : null,
+    statuses && statuses.length > 0
+      ? `status in [${statuses.map((s) => `"${s}"`).join(', ')}]`
+      : null,
   ]
     .filter(Boolean)
     .join(' && ')
@@ -155,9 +164,8 @@ export async function getProposals({
     ...,
     speakers[]-> {
       _id, name, email, providers, "image": image.asset->url, flags, "slug": slug.current,
-      ${
-        includePreviousAcceptedTalks
-          ? `"previousAcceptedTalks": *[
+      ${includePreviousAcceptedTalks
+      ? `"previousAcceptedTalks": *[
           _type == "talk"
           && ^._id in speakers[]._ref
           && conference._ref != ^.^.conference._ref
@@ -167,8 +175,8 @@ export async function getProposals({
           conference-> { _id, title, start_date },
           topics[]-> { _id, title, color }
         }`
-          : ''
-      }
+      : ''
+    }
     },
     conference-> {
       _id, title, start_date, end_date
@@ -186,16 +194,19 @@ export async function getProposals({
       createdAt,
       respondedAt,
       declineReason
-    },
-    ${
-      includeReviews
-        ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+    }${includeReviews
+      ? `,"reviews": *[_type == "review" && proposal._ref == ^._id]{
       ...,
       reviewer-> {
         _id, name, email, image
       }
     }`
-        : ''
+      : ''
+    }${includeCapacity
+      ? `,"signups": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"]),
+    "waitlistCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "waitlist"]),
+    "available": coalesce(capacity, 30) - count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
+      : ''
     }
   } | order(conference->start_date desc, _updatedAt desc)`
 
@@ -300,9 +311,9 @@ export async function createProposal(
 
   const speakers = proposal.speakers
     ? prepareReferenceArray(
-        proposal.speakers as Array<Reference | { _id: string }>,
-        'speaker',
-      )
+      proposal.speakers as Array<Reference | { _id: string }>,
+      'speaker',
+    )
     : [createReferenceWithKey(speakerId, 'speaker')]
 
   const conference = createReference(conferenceId)
@@ -415,7 +426,7 @@ export async function searchProposals({
 
   const searchQuery = groq`
     *[${filters} &&
-     
+
       (pt::text(description) match $searchTerm
       || title match $searchTerm
       || outline match $searchTerm
@@ -440,9 +451,8 @@ export async function searchProposals({
         "image": image.asset->url,
         flags,
         "slug": slug.current
-        ${
-          includePreviousAcceptedTalks
-            ? `,
+        ${includePreviousAcceptedTalks
+      ? `,
         "previousAcceptedTalks": *[
           _type == "talk"
           && ^._id in speakers[]._ref
@@ -453,8 +463,8 @@ export async function searchProposals({
           conference-> { _id, title, start_date },
           topics[]-> { _id, title, color }
         }`
-            : ''
-        }
+      : ''
+    }
       },
       conference-> {
         _id, title, start_date, end_date
@@ -473,17 +483,16 @@ export async function searchProposals({
         respondedAt,
         declineReason
       }
-      ${
-        includeReviews
-          ? `,
+      ${includeReviews
+      ? `,
       "reviews": *[_type == "review" && proposal._ref == ^._id]{
         ...,
         reviewer-> {
           _id, name, email, image
         }
       }`
-          : ''
-      }
+      : ''
+    }
     } | order(_updatedAt desc)
   `
 
@@ -518,4 +527,103 @@ export async function fixProposalSpeakerKeys(): Promise<{
   fixed?: number
 }> {
   return await fixArrayKeys('talk', [{ field: 'speakers', prefix: 'speaker' }])
+}
+
+/**
+ * Get workshops (proposals with workshop formats) with capacity and signup data
+ * This is a convenience wrapper around getProposals specifically for workshops
+ */
+export async function getWorkshops({
+  conferenceId,
+  statuses = [Status.confirmed],
+  includeScheduleInfo = false,
+}: {
+  conferenceId: string
+  statuses?: Status[]
+  includeScheduleInfo?: boolean
+}): Promise<{
+  workshops: ProposalExisting[] // ProposalWithWorkshopData types will be added at runtime
+  workshopsError: Error | null
+}> {
+  const { proposals, proposalsError } = await getProposals({
+    conferenceId,
+    formats: ['workshop_120', 'workshop_240'],
+    statuses,
+    includeCapacity: true,
+    returnAll: true,
+  })
+
+  let workshops = proposals
+
+  // If schedule info is requested, fetch and attach schedule data
+  if (includeScheduleInfo && !proposalsError) {
+    // Fetch all schedules (not filtered by conference) since schedule documents
+    // may not have a conference reference, and we match by talk IDs instead
+    const scheduleQuery = groq`*[_type == "schedule"]{
+      date,
+      tracks[]{
+        trackTitle,
+        talks[]{
+          startTime,
+          endTime,
+          "talkRef": talk._ref
+        }
+      }
+    }`
+
+    try {
+      const schedules = await clientRead.fetch(
+        scheduleQuery,
+        {},
+        { cache: 'no-store' },
+      )
+
+      workshops = proposals.map((workshop) => {
+        let date, startTime, endTime, room
+
+        for (const schedule of schedules || []) {
+          let found = false
+          if (schedule.tracks) {
+            for (const track of schedule.tracks) {
+              if (track.talks) {
+                const workshopTalk = track.talks.find(
+                  (talk: { talkRef: string }) => talk.talkRef === workshop._id,
+                )
+                if (workshopTalk) {
+                  date = schedule.date
+                  startTime = workshopTalk.startTime
+                  endTime = workshopTalk.endTime
+                  room = track.trackTitle
+                  found = true
+                  break
+                }
+              }
+            }
+          }
+          if (found) break
+        }
+
+        return {
+          ...workshop,
+          date,
+          startTime,
+          endTime,
+          room,
+          ...(date &&
+            startTime &&
+            endTime && {
+            scheduleInfo: {
+              date,
+              timeSlot: { startTime, endTime },
+              room,
+            },
+          }),
+        }
+      })
+    } catch (error) {
+      console.error('Error fetching schedule info for workshops:', error)
+    }
+  }
+
+  return { workshops, workshopsError: proposalsError }
 }

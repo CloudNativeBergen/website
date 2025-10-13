@@ -44,6 +44,7 @@ export { OrdersTableWithSearch } from './OrdersTableWithSearch'
 
 export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'
 export { FeaturedTalksManager } from './FeaturedTalksManager'
+export { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 
 export { ErrorDisplay } from './ErrorDisplay'
 export * from './LoadingSkeleton'

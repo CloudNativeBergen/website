@@ -290,3 +290,30 @@ export async function getConferenceForDomain(
 
   return { conference, domain, error }
 }
+
+export async function getConferenceByCheckinEventId(
+  eventId: number
+): Promise<{
+  conference: Conference | null
+  error: Error | null
+}> {
+  try {
+    const query = `*[_type == "conference" && checkin_event_id == $eventId][0]`
+
+    const conference = await clientWrite.fetch<Conference>(query, { eventId })
+
+    if (!conference) {
+      return {
+        conference: null,
+        error: new Error(`No conference found for checkin event ID: ${eventId}`),
+      }
+    }
+
+    return { conference, error: null }
+  } catch (err) {
+    return {
+      conference: null,
+      error: err as Error,
+    }
+  }
+}

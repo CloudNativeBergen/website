@@ -1,10 +1,12 @@
 import { getAuthSession } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/server'
 import { ProposalList } from '@/components/cfp/ProposalList'
+import { WorkshopStatistics } from '@/components/cfp/WorkshopStatistics'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { Status } from '@/lib/proposal/types'
 import { LightBulbIcon } from '@heroicons/react/24/outline'
 import { getSpeakerSlug } from '@/lib/speaker/utils'
@@ -58,13 +60,23 @@ export default async function SpeakerDashboard() {
 
     const proposalConferenceId =
       typeof p.conference === 'object' &&
-      p.conference !== null &&
-      '_id' in p.conference
+        p.conference !== null &&
+        '_id' in p.conference
         ? p.conference._id
         : p.conference._ref
 
     return proposalConferenceId === conference._id
   })
+
+  let workshopStats = []
+  try {
+    workshopStats = await getWorkshopSignupStatisticsBySpeaker(
+      session.speaker._id,
+      conference._id
+    )
+  } catch (error) {
+    console.error('Error fetching workshop statistics:', error)
+  }
 
   return (
     <>
@@ -88,6 +100,12 @@ export default async function SpeakerDashboard() {
               cfpIsOpen={cfpIsOpen}
               currentConferenceId={conference._id}
             />
+
+            {workshopStats.length > 0 && (
+              <div className="mt-12">
+                <WorkshopStatistics statistics={workshopStats} />
+              </div>
+            )}
           </div>
 
           {confirmedProposals.length > 0 && (

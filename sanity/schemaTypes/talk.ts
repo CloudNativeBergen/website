@@ -5,7 +5,7 @@ import {
   levels,
   formats,
   audiences,
-} from '@/lib/proposal/types'
+} from '../../src/lib/proposal/types'
 import { defineField, defineType } from 'sanity'
 
 export default defineType({
@@ -173,6 +173,46 @@ export default defineType({
           scheme: ['http', 'https'],
           allowRelative: false,
         }),
+    }),
+    defineField({
+      name: 'capacity',
+      title: 'Workshop Capacity',
+      type: 'number',
+      description:
+        'Maximum number of participants for workshop sessions (default: 30)',
+      initialValue: 30,
+      hidden: ({ document }) => {
+        const format = document?.format as string | undefined
+        const capacity = document?.capacity as number | undefined
+        const isWorkshop =
+          format === 'workshop_120' || format === 'workshop_240'
+        return !(isWorkshop || (capacity !== undefined && capacity !== null))
+      },
+      validation: (Rule) =>
+        Rule.integer()
+          .min(1)
+          .max(200)
+          .custom((capacity, context) => {
+            const format = context.document?.format as string | undefined
+            const isWorkshop =
+              format === 'workshop_120' || format === 'workshop_240'
+            const hasValue = capacity !== undefined && capacity !== null
+
+            if (hasValue && !isWorkshop) {
+              return 'Capacity can only be set for workshop formats'
+            }
+
+            if (isWorkshop && hasValue) {
+              if (typeof capacity !== 'number')
+                return 'Capacity must be a number'
+              if (!Number.isInteger(capacity))
+                return 'Capacity must be a whole number'
+              if (capacity < 1) return 'Capacity must be at least 1'
+              if (capacity > 200)
+                return 'Capacity cannot exceed 200 participants'
+            }
+            return true
+          }),
     }),
   ],
 
