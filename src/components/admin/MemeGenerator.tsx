@@ -122,6 +122,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
   const [textLines, setTextLines] = useState<TextLine[]>(DEFAULT_TEXT_LINES);
   const [logoSize, setLogoSize] = useState(120);
   const [logoVerticalPosition, setLogoVerticalPosition] = useState(20);
+  const [logoHorizontalPosition, setLogoHorizontalPosition] = useState(40);
   const [logoVariant, setLogoVariant] = useState<'gradient' | 'monochrome'>('gradient');
   const [expandedSections, setExpandedSections] = useState<boolean[]>([true, false, false]);
 
@@ -229,14 +230,24 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
     draw();
   }, [draw]);
 
+  useEffect(() => {
+    const maxPosition = CANVAS_SIZE - logoSize;
+    if (logoVerticalPosition > maxPosition) {
+      setLogoVerticalPosition(maxPosition);
+    }
+    if (logoHorizontalPosition > maxPosition) {
+      setLogoHorizontalPosition(maxPosition);
+    }
+  }, [logoSize, logoVerticalPosition, logoHorizontalPosition]);
+
   const logoStyle = logoVariant === 'monochrome' ? { color: getMonochromeColor() } : undefined;
 
   const renderLogo = (scale: number = 1) => (
     <div
-      className={scale === 1 ? "absolute" : "absolute right-2"}
+      className="absolute"
       style={{
         bottom: `${logoVerticalPosition * scale}px`,
-        right: scale === 1 ? '40px' : undefined,
+        right: `${logoHorizontalPosition * scale}px`,
         width: `${logoSize * scale}px`,
         height: `${logoSize * scale}px`
       }}
@@ -265,7 +276,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
 
   return (
     <div className="grid gap-8 lg:grid-cols-2">
-      <div className="space-y-4">
+      <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
         <h3 className="text-lg font-semibold font-space-grotesk text-brand-slate-gray dark:text-gray-200">
           Preview
         </h3>
@@ -358,14 +369,22 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
               label="Logo Distance from Bottom"
               value={logoVerticalPosition}
               onChange={setLogoVerticalPosition}
-              min={-100}
-              max={500}
+              min={0}
+              max={CANVAS_SIZE - logoSize}
               icon={AdjustmentsHorizontalIcon}
               suffix="px"
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-              Negative values move logo below the bottom edge
-            </p>
+
+            <Slider
+              id="logoHorizontalPosition"
+              label="Logo Distance from Right"
+              value={logoHorizontalPosition}
+              onChange={setLogoHorizontalPosition}
+              min={0}
+              max={CANVAS_SIZE - logoSize}
+              icon={AdjustmentsHorizontalIcon}
+              suffix="px"
+            />
 
             <div>
               <label className={styles.label}>Logo Style</label>
