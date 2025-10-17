@@ -11,103 +11,105 @@ import {
   ArrowsPointingOutIcon,
 } from '@heroicons/react/24/outline';
 import { Logo } from '../Logo';
-
-interface TextLine {
-  text: string;
-  verticalPosition: number;
-  fontSize: number;
-  fontFamily: string;
-  isBold: boolean;
-}
+import {
+  CANVAS_SIZE,
+  DEFAULT_BG_COLOR,
+  BRAND_COLORS,
+  TEXT_COLOR_PRESETS,
+  FONT_FAMILIES,
+  DEFAULT_TEXT_LINES,
+  styles,
+  type TextLine
+} from './meme-generator-config';
 
 interface MemeGeneratorProps {
   wrapPreview?: (node: React.ReactNode) => React.ReactNode;
 }
 
-const CANVAS_SIZE = 1080;
-const DEFAULT_BG_COLOR = '#1D4ED8';
+interface ColorButtonProps {
+  color: { name: string; value: string };
+  onClick: () => void;
+  isActive?: boolean;
+  size?: 'small' | 'large';
+}
 
-const FONT_FAMILIES = [
-  { value: 'Inter', label: 'Inter' },
-  { value: 'JetBrains Mono', label: 'JetBrains Mono' },
-  { value: 'Space Grotesk', label: 'Space Grotesk' },
-  { value: 'Bricolage Grotesque', label: 'Bricolage Grotesque' },
-  { value: 'IBM Plex Sans', label: 'IBM Plex Sans' },
-  { value: 'IBM Plex Mono', label: 'IBM Plex Mono' },
-  { value: 'Atkinson Hyperlegible', label: 'Atkinson Hyperlegible' },
-];
-
-const DEFAULT_TEXT_LINES: TextLine[] = [
-  { text: '', verticalPosition: 25, fontSize: 48, fontFamily: 'Inter', isBold: false },
-  { text: '', verticalPosition: 50, fontSize: 48, fontFamily: 'Inter', isBold: false },
-  { text: '', verticalPosition: 75, fontSize: 48, fontFamily: 'Inter', isBold: false },
-];
-
-const inputClasses = "w-full px-3 py-2 border border-brand-frosted-steel dark:border-gray-600 rounded-md bg-brand-glacier-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-cloud-blue dark:focus:ring-blue-500";
-const labelClasses = "block text-sm font-medium text-brand-slate-gray dark:text-gray-300 mb-2";
-const panelClasses = "bg-white dark:bg-gray-800 p-6 rounded-lg border border-brand-frosted-steel dark:border-gray-700";
-const buttonActiveClasses = 'border-brand-cloud-blue bg-brand-cloud-blue/10 text-brand-cloud-blue dark:border-blue-500 dark:bg-blue-500/20 dark:text-blue-400';
-const buttonInactiveClasses = 'border-brand-frosted-steel dark:border-gray-600 text-brand-slate-gray dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700';
-
-function RangeSlider({
-  id,
-  label,
-  value,
-  onChange,
-  min,
-  max,
-  icon: Icon,
-  suffix = ''
-}: {
+interface SliderProps {
   id: string;
   label: string;
   value: number;
   onChange: (value: number) => void;
   min: number;
   max: number;
-  icon?: React.ElementType;
   suffix?: string;
-}) {
-  return (
-    <div>
-      <label htmlFor={id} className={labelClasses}>
-        {Icon && <Icon className="inline w-4 h-4 mr-1" />}
-        {label}: {Math.round(value)}{suffix}
-      </label>
-      <input
-        type="range"
-        id={id}
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full slider"
-      />
-    </div>
-  );
+  icon?: React.ElementType;
 }
 
-function ToggleButton({
-  active,
-  onClick,
-  children
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+const ColorButton = ({ color, onClick, isActive, size = 'large' }: ColorButtonProps) => {
+  if (size === 'small') {
+    return (
+      <button
+        onClick={onClick}
+        className="w-8 h-8 rounded-md border-2 border-gray-300 dark:border-gray-600 hover:border-brand-cloud-blue dark:hover:border-blue-400 transition-colors shadow-sm"
+        style={{ backgroundColor: color.value }}
+        title={color.name}
+        aria-label={`Set color to ${color.name}`}
+      />
+    );
+  }
+
   return (
     <button
       onClick={onClick}
-      className={`flex-1 px-3 py-2 rounded-lg border transition-colors ${
-        active ? buttonActiveClasses : buttonInactiveClasses
+      className={`relative group flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-all ${
+        isActive
+          ? 'border-brand-cloud-blue dark:border-blue-400 shadow-md'
+          : 'border-brand-frosted-steel dark:border-gray-600 hover:border-brand-cloud-blue/50 dark:hover:border-blue-500/50'
       }`}
-      aria-pressed={active}
+      title={color.name}
     >
-      {children}
+      <div
+        className="w-12 h-12 rounded-md shadow-sm border border-gray-300 dark:border-gray-600"
+        style={{ backgroundColor: color.value }}
+      />
+      <span className="text-xs text-brand-slate-gray dark:text-gray-300 font-medium">
+        {color.name}
+      </span>
+      {isActive && (
+        <div className="absolute -top-1 -right-1 w-3 h-3 bg-brand-cloud-blue dark:bg-blue-400 rounded-full" />
+      )}
     </button>
   );
-}
+};
+
+const Slider = ({ id, label, value, onChange, min, max, suffix = '', icon: Icon }: SliderProps) => (
+  <div>
+    <label htmlFor={id} className={styles.label}>
+      {Icon && <Icon className="inline w-4 h-4 mr-1" />}
+      {label}: {Math.round(value)}{suffix}
+    </label>
+    <input
+      type="range"
+      id={id}
+      min={min}
+      max={max}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="w-full slider"
+    />
+  </div>
+);
+
+const ToggleButton = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+  <button
+    onClick={onClick}
+    className={`flex-1 px-3 py-2 rounded-lg border transition-colors ${
+      active ? styles.buttonActive : styles.buttonInactive
+    }`}
+    aria-pressed={active}
+  >
+    {children}
+  </button>
+);
 
 export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -151,12 +153,6 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
     }
   };
 
-  const clearBackgroundImage = () => {
-    setBackgroundImage(null);
-    setBackgroundImageUrl(null);
-    imageRef.current = null;
-  };
-
   const updateTextLine = (index: number, property: keyof TextLine, value: string | number | boolean) => {
     setTextLines(prev => {
       const updated = [...prev];
@@ -171,11 +167,6 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
       updated[index] = !updated[index];
       return updated;
     });
-  };
-
-  const getFontString = (fontFamily: string, fontSize: number, isBold: boolean) => {
-    const weight = isBold ? 'bold' : 'normal';
-    return `${weight} ${fontSize}px "${fontFamily}", sans-serif`;
   };
 
   const drawCanvas = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -204,8 +195,9 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
     textLines.forEach((line) => {
       if (!line.text) return;
 
-      ctx.font = getFontString(line.fontFamily, line.fontSize, line.isBold);
-      ctx.fillStyle = 'white';
+      const weight = line.isBold ? 'bold' : 'normal';
+      ctx.font = `${weight} ${line.fontSize}px "${line.fontFamily}", sans-serif`;
+      ctx.fillStyle = line.color;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
@@ -282,7 +274,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
       </div>
 
       <div className="space-y-6">
-        <div className={panelClasses}>
+        <div className={styles.panel}>
           <div className="flex items-center gap-2 mb-4">
             <PhotoIcon className="w-5 h-5 text-brand-slate-gray dark:text-gray-300" />
             <h3 className="text-lg font-semibold font-space-grotesk text-brand-slate-gray dark:text-gray-200">
@@ -292,9 +284,21 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="backgroundColor" className={labelClasses}>
-                Background Color
-              </label>
+              <label className={styles.label}>Color Presets</label>
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                {BRAND_COLORS.map((color) => (
+                  <ColorButton
+                    key={color.value}
+                    color={color}
+                    isActive={backgroundColor === color.value}
+                    onClick={() => setBackgroundColor(color.value)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="backgroundColor" className={styles.label}>Custom Color</label>
               <input
                 type="color"
                 id="backgroundColor"
@@ -305,7 +309,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
             </div>
 
             <div>
-              <label htmlFor="backgroundImage" className={labelClasses}>
+              <label htmlFor="backgroundImage" className={styles.label}>
                 <ArrowUpTrayIcon className="inline w-4 h-4 mr-1" />
                 Upload Background Image
               </label>
@@ -324,7 +328,11 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
                   Current: {backgroundImage.name}
                 </p>
                 <button
-                  onClick={clearBackgroundImage}
+                  onClick={() => {
+                    setBackgroundImage(null);
+                    setBackgroundImageUrl(null);
+                    imageRef.current = null;
+                  }}
                   className="flex items-center gap-2 px-3 py-2 text-sm bg-red-500 text-white rounded hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
                   aria-label="Clear background image"
                 >
@@ -334,7 +342,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
               </div>
             )}
 
-            <RangeSlider
+            <Slider
               id="logoSize"
               label="Logo Size"
               value={logoSize}
@@ -345,7 +353,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
               suffix="px"
             />
 
-            <RangeSlider
+            <Slider
               id="logoVerticalPosition"
               label="Logo Distance from Bottom"
               value={logoVerticalPosition}
@@ -360,7 +368,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
             </p>
 
             <div>
-              <label className={labelClasses}>Logo Style</label>
+              <label className={styles.label}>Logo Style</label>
               <div className="flex gap-3">
                 <ToggleButton
                   active={logoVariant === 'gradient'}
@@ -383,7 +391,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
         </div>
 
         {textLines.map((line, index) => (
-          <div key={index} className={panelClasses}>
+          <div key={index} className={styles.panel}>
             <button
               onClick={() => toggleSection(index)}
               className="w-full flex items-center justify-between mb-4"
@@ -402,20 +410,18 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
             {expandedSections[index] && (
               <div className="space-y-4">
                 <div>
-                  <label htmlFor={`text-${index}`} className={labelClasses}>
-                    Text Content
-                  </label>
+                  <label htmlFor={`text-${index}`} className={styles.label}>Text Content</label>
                   <input
                     type="text"
                     id={`text-${index}`}
                     value={line.text}
                     onChange={(e) => updateTextLine(index, 'text', e.target.value)}
-                    className={inputClasses}
+                    className={styles.input}
                     placeholder="Enter your text..."
                   />
                 </div>
 
-                <RangeSlider
+                <Slider
                   id={`position-${index}`}
                   label="Vertical Position"
                   value={line.verticalPosition}
@@ -426,7 +432,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
                   suffix="%"
                 />
 
-                <RangeSlider
+                <Slider
                   id={`fontSize-${index}`}
                   label="Font Size"
                   value={line.fontSize}
@@ -438,14 +444,12 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
                 />
 
                 <div>
-                  <label htmlFor={`fontFamily-${index}`} className={labelClasses}>
-                    Font Family
-                  </label>
+                  <label htmlFor={`fontFamily-${index}`} className={styles.label}>Font Family</label>
                   <select
                     id={`fontFamily-${index}`}
                     value={line.fontFamily}
                     onChange={(e) => updateTextLine(index, 'fontFamily', e.target.value)}
-                    className={inputClasses}
+                    className={styles.input}
                   >
                     {FONT_FAMILIES.map((font) => (
                       <option key={font.value} value={font.value}>
@@ -455,17 +459,42 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
                   </select>
                 </div>
 
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id={`bold-${index}`}
-                    checked={line.isBold}
-                    onChange={(e) => updateTextLine(index, 'isBold', e.target.checked)}
-                    className="w-4 h-4 text-brand-cloud-blue dark:text-blue-400 bg-brand-glacier-white dark:bg-gray-700 border-brand-frosted-steel dark:border-gray-600 rounded focus:ring-brand-cloud-blue dark:focus:ring-blue-500"
-                  />
-                  <label htmlFor={`bold-${index}`} className="ml-2 text-sm font-medium text-brand-slate-gray dark:text-gray-300">
-                    Bold
-                  </label>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label htmlFor={`color-${index}`} className={styles.label}>Text Color</label>
+                    <div className="flex gap-2 mb-2">
+                      {TEXT_COLOR_PRESETS.map((preset) => (
+                        <ColorButton
+                          key={preset.value}
+                          color={preset}
+                          size="small"
+                          onClick={() => updateTextLine(index, 'color', preset.value)}
+                        />
+                      ))}
+                    </div>
+                    <input
+                      type="color"
+                      id={`color-${index}`}
+                      value={line.color}
+                      onChange={(e) => updateTextLine(index, 'color', e.target.value)}
+                      className="w-full h-10 rounded border border-brand-frosted-steel dark:border-gray-600 cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="flex items-end pb-2">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={`bold-${index}`}
+                        checked={line.isBold}
+                        onChange={(e) => updateTextLine(index, 'isBold', e.target.checked)}
+                        className="w-4 h-4 text-brand-cloud-blue dark:text-blue-400 bg-brand-glacier-white dark:bg-gray-700 border-brand-frosted-steel dark:border-gray-600 rounded focus:ring-brand-cloud-blue dark:focus:ring-blue-500"
+                      />
+                      <label htmlFor={`bold-${index}`} className="ml-2 text-sm font-medium text-brand-slate-gray dark:text-gray-300">
+                        Bold
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
