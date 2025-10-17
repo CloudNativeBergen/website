@@ -5,9 +5,10 @@ import {
   PresentationChartBarIcon,
   UserGroupIcon,
   TrophyIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 
-type IconType = 'presentation' | 'users' | 'trophy'
+type IconType = 'presentation' | 'users' | 'trophy' | 'sparkles'
 
 interface Tab {
   id: string
@@ -27,6 +28,7 @@ const iconMap = {
   presentation: PresentationChartBarIcon,
   users: UserGroupIcon,
   trophy: TrophyIcon,
+  sparkles: SparklesIcon,
 } as const
 
 export function MarketingTabs({
@@ -36,6 +38,23 @@ export function MarketingTabs({
 }: MarketingTabsProps) {
   const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.id || '')
   const activeTabIndex = tabs.findIndex((tab) => tab.id === activeTab)
+
+  // Guard against tabs/children length mismatches
+  if (tabs.length !== children.length) {
+    console.error(
+      `MarketingTabs: tabs.length (${tabs.length}) does not match children.length (${children.length})`
+    )
+    return (
+      <div className="rounded-lg bg-red-50 p-6 text-center dark:bg-red-900/20">
+        <p className="text-sm font-medium text-red-800 dark:text-red-300">
+          Configuration Error: Number of tabs does not match number of content panels.
+        </p>
+        <p className="mt-2 text-xs text-red-700 dark:text-red-400">
+          Expected {tabs.length} content panels, but got {children.length}.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="w-full">

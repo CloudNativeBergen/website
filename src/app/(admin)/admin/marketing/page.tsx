@@ -8,6 +8,7 @@ import { SponsorThankYou } from '@/components/SponsorThankYou'
 import { DownloadSpeakerImage } from '@/components/branding/DownloadSpeakerImage'
 import { AdminPageHeader } from '@/components/admin'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
+import { MemeGeneratorWithDownload } from '@/components/admin/MemeGeneratorWithDownload'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { getSpeakerFilename } from '@/lib/speaker/utils'
 import {
@@ -276,6 +277,14 @@ export default async function MarketingPage() {
             description:
               'Thank you cards for sponsors with their branding and QR codes linking to their websites.',
           },
+          {
+            id: 'meme-generator',
+            name: 'Meme Generator',
+            icon: 'sparkles',
+            count: 1,
+            description:
+              'Create custom memes with your own text and images, perfect for social media engagement and community building.',
+          },
         ]}
         defaultTab="conference"
       >
@@ -462,6 +471,11 @@ export default async function MarketingPage() {
               })}
             </div>
           )}
+        </div>
+
+        {/* Meme Generator Tab */}
+        <div>
+          <MemeGeneratorWithDownload conferenceTitle={conference.title} />
         </div>
       </MarketingTabs>
     </div>
