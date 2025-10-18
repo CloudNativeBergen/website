@@ -600,11 +600,17 @@ export function DiscountCodeManager({
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="space-y-1">
                       <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          sponsor.tier.tier_type === 'special'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
-                        }`}
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${(() => {
+                            const { used, total } = getSponsorUsageStats(sponsor)
+                            if (used === 0) {
+                              return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
+                            } else if (used > total) {
+                              return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                            } else {
+                              return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                            }
+                          })()
+                          }`}
                       >
                         {sponsor.tier.title}
                       </span>
@@ -630,7 +636,7 @@ export function DiscountCodeManager({
                   </td>
                   <td className="px-6 py-4">
                     {sponsor.ticketEntitlement > 0 &&
-                    getSponsorDiscounts(sponsor).length === 0 ? (
+                      getSponsorDiscounts(sponsor).length === 0 ? (
                       <FilterDropdown
                         label={
                           discountsLoading
@@ -742,13 +748,13 @@ export function DiscountCodeManager({
                           disabled={
                             getSponsorDiscounts(sponsor).length > 0 &&
                             loading ===
-                              getSponsorDiscounts(sponsor)[0]?.triggerValue
+                            getSponsorDiscounts(sponsor)[0]?.triggerValue
                           }
                           className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
                           title="Delete Code"
                         >
                           {getSponsorDiscounts(sponsor).length > 0 &&
-                          loading ===
+                            loading ===
                             getSponsorDiscounts(sponsor)[0]?.triggerValue ? (
                             <ArrowPathIcon className="h-4 w-4 animate-spin" />
                           ) : (
