@@ -1,5 +1,7 @@
 import { Conference } from '@/lib/conference/types'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
+import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
+import { formatCurrency } from '@/lib/format'
 
 type SlackBlock = {
   type: string
@@ -61,15 +63,6 @@ async function sendSlackMessage(message: SlackMessage, forceSlack = false) {
     console.error('Error sending Slack sales update notification:', error)
     throw error
   }
-}
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('no-NO', {
-    style: 'currency',
-    currency: 'NOK',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
 }
 
 function createCategoryBreakdown(
@@ -225,7 +218,7 @@ export async function sendSalesUpdateToSlack(
         },
         {
           type: 'mrkdwn',
-          text: `*Claim Rate:*\n${sponsorTickets + speakerTickets + organizerTickets > 0 ? ((freeTicketsClaimed / (sponsorTickets + speakerTickets + organizerTickets)) * 100).toFixed(1) : 0}%`,
+          text: `*Claim Rate:*\n${calculateFreeTicketClaimRate(freeTicketsClaimed, sponsorTickets + speakerTickets + organizerTickets).toFixed(1)}%`,
         },
       ],
     },

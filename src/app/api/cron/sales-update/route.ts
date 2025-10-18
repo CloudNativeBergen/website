@@ -8,6 +8,7 @@ import type {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getOrganizerCount } from '@/lib/speaker/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
+import { calculateTicketStatistics } from '@/lib/tickets/utils'
 
 export async function GET(request: NextRequest) {
   try {
@@ -104,14 +105,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    const basicStats = calculateTicketStatistics(paidTickets)
     const statistics = analysis?.statistics || {
-      totalPaidTickets: paidTickets.length,
-      totalRevenue: paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
-      totalOrders: new Set(paidTickets.map((t) => t.order_id)).size,
-      averageTicketPrice: paidTickets.length
-        ? paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
-          paidTickets.length
-        : 0,
+      ...basicStats,
       categoryBreakdown: {},
       sponsorTickets: 0,
       speakerTickets: 0,
@@ -144,14 +140,14 @@ export async function GET(request: NextRequest) {
         categories: statistics.categoryBreakdown,
         targetAnalysis: analysis
           ? {
-              enabled: true,
-              capacity: analysis.capacity,
-              currentTargetPercentage: analysis.performance.targetPercentage,
-              actualPercentage: analysis.performance.currentPercentage,
-              variance: analysis.performance.variance,
-              isOnTrack: analysis.performance.isOnTrack,
-              nextMilestone: analysis.performance.nextMilestone,
-            }
+            enabled: true,
+            capacity: analysis.capacity,
+            currentTargetPercentage: analysis.performance.targetPercentage,
+            actualPercentage: analysis.performance.currentPercentage,
+            variance: analysis.performance.variance,
+            isOnTrack: analysis.performance.isOnTrack,
+            nextMilestone: analysis.performance.nextMilestone,
+          }
           : null,
         lastUpdated: new Date().toISOString(),
       },

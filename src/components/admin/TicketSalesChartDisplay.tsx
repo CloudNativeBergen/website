@@ -12,6 +12,10 @@ import {
   createConfigAnnotations,
   convertAnnotationsToApexFormat,
 } from '@/lib/tickets/chart-adapter'
+import {
+  calculateFreeTicketClaimRate,
+  calculateCapacityPercentage,
+} from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
 import {
   ChartBarIcon,
@@ -136,9 +140,9 @@ export function TicketSalesChartDisplay({
 
   const StatusIcon = getStatusIcon(performance.variance)
   const statusColorClasses = getStatusColors(performance.variance)
-  const capacityPercentage = (
-    (statistics.totalPaidTickets / analysis.capacity) *
-    100
+  const capacityPercentage = calculateCapacityPercentage(
+    statistics.totalPaidTickets,
+    analysis.capacity,
   ).toFixed(1)
   const avgTicketPrice = formatCurrency(statistics.averageTicketPrice)
 
@@ -267,13 +271,10 @@ export function TicketSalesChartDisplay({
               {freeTicketAllocation.totalAllocated}
             </dd>
             <dd className="text-xs text-gray-600 dark:text-gray-400">
-              {freeTicketAllocation.totalAllocated > 0
-                ? (
-                  (freeTicketAllocation.totalClaimed /
-                    freeTicketAllocation.totalAllocated) *
-                  100
-                ).toFixed(1)
-                : 0}
+              {calculateFreeTicketClaimRate(
+                freeTicketAllocation.totalClaimed,
+                freeTicketAllocation.totalAllocated,
+              ).toFixed(1)}
               % claimed
             </dd>
           </div>

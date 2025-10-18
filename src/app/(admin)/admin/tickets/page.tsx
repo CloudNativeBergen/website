@@ -26,6 +26,8 @@ import {
   calculateCategoryStats,
   calculateSponsorTickets,
   calculateFreeTicketAllocation,
+  calculateTicketStatistics,
+  calculateFreeTicketClaimRate,
 } from '@/lib/tickets/utils'
 import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -134,11 +136,9 @@ export default async function AdminTickets() {
   const paidOnlyAnalysis = await processTicketAnalysis(paidTickets, conference)
   const allTicketsAnalysis = await processTicketAnalysis(allTickets, conference)
 
+  const basicStats = calculateTicketStatistics(paidTickets)
   const statistics = paidOnlyAnalysis?.statistics || {
-    totalPaidTickets: paidTickets.length,
-    totalRevenue: paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
-    totalOrders: new Set(paidTickets.map((t) => t.order_id)).size,
-    averageTicketPrice: 0,
+    ...basicStats,
     categoryBreakdown: {},
     sponsorTickets: 0,
     speakerTickets: 0,
@@ -298,13 +298,10 @@ export default async function AdminTickets() {
                   <td className="px-6 py-4 text-sm whitespace-nowrap">
                     <span className="text-gray-900 dark:text-white">
                       {freeTicketAllocation.totalClaimed} claimed (
-                      {freeTicketAllocation.totalAllocated > 0
-                        ? (
-                            (freeTicketAllocation.totalClaimed /
-                              freeTicketAllocation.totalAllocated) *
-                            100
-                          ).toFixed(1)
-                        : 0}
+                      {calculateFreeTicketClaimRate(
+                        freeTicketAllocation.totalClaimed,
+                        freeTicketAllocation.totalAllocated,
+                      ).toFixed(1)}
                       %)
                     </span>
                   </td>

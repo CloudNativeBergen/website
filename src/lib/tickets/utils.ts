@@ -1,6 +1,11 @@
 import type { EventTicket } from './types'
 import type { Conference } from '@/lib/conference/types'
 
+const parseAmount = (sum: string): number => {
+  const parsed = parseFloat(sum)
+  return isNaN(parsed) ? 0 : parsed
+}
+
 export interface CategoryStat {
   category: string
   count: number
@@ -22,6 +27,14 @@ export interface FreeTicketAllocation {
   organizerTickets: number
 }
 
+/**
+ * Analyzes ticket sales by category, providing breakdown statistics.
+ * Used in the admin tickets page to display category-specific metrics.
+ *
+ * @param tickets - Array of paid tickets to analyze
+ * @param totalPaidTickets - Total count of paid tickets for percentage calculations
+ * @returns Array of category statistics sorted by ticket count (descending)
+ */
 export function calculateCategoryStats(
   tickets: EventTicket[],
   totalPaidTickets: number,
@@ -40,9 +53,9 @@ export function calculateCategoryStats(
       const revenue = categoryTickets.reduce(
         (sum, ticket) =>
           sum +
-          parseFloat(ticket.sum) /
-            categoryTickets.filter((t) => t.order_id === ticket.order_id)
-              .length,
+          parseAmount(ticket.sum) /
+          categoryTickets.filter((t) => t.order_id === ticket.order_id)
+            .length,
         0,
       )
 
@@ -106,10 +119,76 @@ export function calculateFreeTicketAllocation(
   }
 }
 
+/**
+ * Calculates core ticket sales statistics from any ticket array.
+ * Automatically filters to only count paid tickets (sum > 0) and handles invalid amounts safely.
+ * Used as the foundation for statistics across admin UI, Slack notifications, and API responses.
+ *
+ * @param tickets - Array of tickets (can include free tickets, will be filtered internally)
+ * @returns Core statistics: counts, revenue, orders, and average price
+ */
+export function calculateTicketStatistics(tickets: EventTicket[]): {
+  totalPaidTickets: number
+  totalRevenue: number
+  totalOrders: number
+  averageTicketPrice: number
+} {
+  const paidTickets = tickets.filter((t) => parseAmount(t.sum) > 0)
+  const totalPaidTickets = paidTickets.length
+  const totalRevenue = paidTickets.reduce(
+    (sum, t) => sum + parseAmount(t.sum),
+    0,
+  )
+  const totalOrders = new Set(paidTickets.map((t) => t.order_id)).size
+  const averageTicketPrice =
+    totalPaidTickets > 0 ? totalRevenue / totalPaidTickets : 0
+
+  return {
+    totalPaidTickets,
+    totalRevenue,
+    totalOrders,
+    averageTicketPrice,
+  }
+}
+
+/**
+ * Calculates the percentage of allocated free tickets that have been claimed.
+ * Used in admin UI cards and Slack notifications to track free ticket utilization.
+ *
+ * @param totalClaimed - Number of free tickets claimed/registered
+ * @param totalAllocated - Total number of free tickets allocated (sponsors + speakers + organizers)
+ * @returns Claim rate as percentage (0-100), returns 0 if no tickets allocated
+ */
+export function calculateFreeTicketClaimRate(
+  totalClaimed: number,
+  totalAllocated: number,
+): number {
+  return totalAllocated > 0
+    ? (totalClaimed / totalAllocated) * 100
+    : 0
+}
+
+/**
+ * Calculates what percentage of venue capacity has been filled.
+ * Used in admin dashboard to show capacity utilization.
+ *
+ * @param ticketsSold - Number of tickets sold
+ * @param capacity - Total venue capacity
+ * @returns Percentage of capacity used (0-100+), returns 0 if capacity is 0
+ */
+export function calculateCapacityPercentage(
+  ticketsSold: number,
+  capacity: number,
+): number {
+  return capacity > 0 ? (ticketsSold / capacity) * 100 : 0
+}
+
 export function createDefaultAnalysis(
   tickets: EventTicket[],
   capacity: number,
 ) {
+  const basicStats = calculateTicketStatistics(tickets)
+
   return {
     progression: [],
     performance: {
@@ -121,14 +200,7 @@ export function createDefaultAnalysis(
     },
     capacity,
     statistics: {
-      totalPaidTickets: tickets.length,
-      totalRevenue: tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
-      totalOrders: new Set(tickets.map((t) => t.order_id)).size,
-      averageTicketPrice:
-        tickets.length > 0
-          ? tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
-            tickets.length
-          : 0,
+      ...basicStats,
       categoryBreakdown: {},
       sponsorTickets: 0,
       speakerTickets: 0,
