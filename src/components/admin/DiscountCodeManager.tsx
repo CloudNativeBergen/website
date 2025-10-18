@@ -601,15 +601,15 @@ export function DiscountCodeManager({
                     <div className="space-y-1">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${(() => {
-                            const { used, total } = getSponsorUsageStats(sponsor)
-                            if (used === 0) {
-                              return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
-                            } else if (used > total) {
-                              return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                            } else {
-                              return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                            }
-                          })()
+                          const { used, total } = getSponsorUsageStats(sponsor)
+                          if (used === 0) {
+                            return 'bg-orange-100 text-orange-800 dark:bg-gray-700 dark:text-gray-300'
+                          } else if (used > total) {
+                            return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                          } else {
+                            return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+                          }
+                        })()
                           }`}
                       >
                         {sponsor.tier.title}
