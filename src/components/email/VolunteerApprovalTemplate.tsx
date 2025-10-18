@@ -17,7 +17,9 @@ interface VolunteerApprovalTemplateProps {
   socialLinks: string[]
 }
 
-export const VolunteerApprovalTemplate: React.FC<VolunteerApprovalTemplateProps> = ({
+export const VolunteerApprovalTemplate: React.FC<
+  VolunteerApprovalTemplateProps
+> = ({
   volunteerName,
   eventName,
   eventLocation,
@@ -42,7 +44,11 @@ export const VolunteerApprovalTemplate: React.FC<VolunteerApprovalTemplateProps>
       </EmailText>
 
       {message && (
-        <EmailSection backgroundColor="#E0F2FE" borderColor="#CBD5E1" borderLeftColor="#1D4ED8">
+        <EmailSection
+          backgroundColor="#E0F2FE"
+          borderColor="#CBD5E1"
+          borderLeftColor="#1D4ED8"
+        >
           <EmailText>{message}</EmailText>
         </EmailSection>
       )}
@@ -54,17 +60,14 @@ export const VolunteerApprovalTemplate: React.FC<VolunteerApprovalTemplateProps>
       <EmailText>
         • Contact the organizers if you have any questions or concerns
       </EmailText>
-      <EmailText>
-        • Please arrive on time on the event day
-      </EmailText>
+      <EmailText>• Please arrive on time on the event day</EmailText>
 
       <EmailText>
-        Thank you for volunteering to help make {eventName} a success! We look forward to working with you.
+        Thank you for volunteering to help make {eventName} a success! We look
+        forward to working with you.
       </EmailText>
 
-      <EmailButton href={eventUrl}>
-        Visit Event Website
-      </EmailButton>
+      <EmailButton href={eventUrl}>Visit Event Website</EmailButton>
     </BaseEmailTemplate>
   )
 }

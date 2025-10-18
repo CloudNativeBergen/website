@@ -1,6 +1,10 @@
 import { groq } from 'next-sanity'
 import { clientWrite } from '@/lib/sanity/client'
-import type { ProposalWithWorkshopData, WorkshopSignupInput, WorkshopSignupExisting } from './types'
+import type {
+  ProposalWithWorkshopData,
+  WorkshopSignupInput,
+  WorkshopSignupExisting,
+} from './types'
 import { WorkshopSignupStatus } from './types'
 import { getWorkshops } from '@/lib/proposal/data/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -10,7 +14,7 @@ const workshopSignupLocks = new Map<string, Promise<WorkshopSignupExisting>>()
 export async function getWorkshopSignups(
   userWorkOSId: string,
   conferenceId: string,
-  status?: string
+  status?: string,
 ): Promise<WorkshopSignupExisting[]> {
   const statusFilter = status
     ? ` && status == "${status}"`
@@ -65,7 +69,7 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
       availableSpots: 0,
       capacity: 0,
       signups: 0,
-      available: 0
+      available: 0,
     }
   }
 
@@ -77,11 +81,13 @@ export async function checkWorkshopCapacity(workshopId: string): Promise<{
     availableSpots: available,
     capacity: result.capacity,
     signups: result.signupCount,
-    available: available
+    available: available,
   }
 }
 
-export async function createWorkshopSignup(signupData: WorkshopSignupInput): Promise<WorkshopSignupExisting> {
+export async function createWorkshopSignup(
+  signupData: WorkshopSignupInput,
+): Promise<WorkshopSignupExisting> {
   const workshopId = signupData.workshop._ref
 
   const existingLock = workshopSignupLocks.get(workshopId)
@@ -94,7 +100,7 @@ export async function createWorkshopSignup(signupData: WorkshopSignupInput): Pro
     try {
       const existingSignup = await clientWrite.fetch(
         groq`*[_type == "workshopSignup" && userWorkOSId == $userWorkOSId && workshop._ref == $workshopId && (status == "confirmed" || status == "waitlist")][0]`,
-        { userWorkOSId: signupData.userWorkOSId, workshopId }
+        { userWorkOSId: signupData.userWorkOSId, workshopId },
       )
 
       if (existingSignup) {
@@ -102,7 +108,11 @@ export async function createWorkshopSignup(signupData: WorkshopSignupInput): Pro
       }
 
       let signupStatus: 'confirmed' | 'waitlist' = 'confirmed'
-      if ('status' in signupData && typeof signupData.status === 'string' && (signupData.status === 'confirmed' || signupData.status === 'waitlist')) {
+      if (
+        'status' in signupData &&
+        typeof signupData.status === 'string' &&
+        (signupData.status === 'confirmed' || signupData.status === 'waitlist')
+      ) {
         signupStatus = signupData.status
       } else {
         const capacityInfo = await checkWorkshopCapacity(workshopId)
@@ -146,7 +156,7 @@ export async function createWorkshopSignup(signupData: WorkshopSignupInput): Pro
           _createdAt,
           _updatedAt
         }`,
-        { id: createdId }
+        { id: createdId },
       )
 
       return fullSignup
@@ -164,7 +174,7 @@ export async function createWorkshopSignup(signupData: WorkshopSignupInput): Pro
 
 export async function verifyWorkshopBelongsToConference(
   workshopId: string,
-  conferenceId: string
+  conferenceId: string,
 ): Promise<boolean> {
   const query = groq`
     *[_type == "talk" && _id == $workshopId && conference._ref == $conferenceId][0]
@@ -176,14 +186,14 @@ export async function verifyWorkshopBelongsToConference(
 
 export async function cancelWorkshopSignup(
   signupId: string,
-  reason: string
+  reason: string,
 ): Promise<WorkshopSignupExisting> {
   return clientWrite
     .patch(signupId)
     .set({
       status: 'cancelled',
       cancelledAt: new Date().toISOString(),
-      cancellationReason: reason
+      cancellationReason: reason,
     })
     .commit()
 }
@@ -192,7 +202,9 @@ export async function deleteWorkshopSignup(signupId: string): Promise<void> {
   await clientWrite.delete(signupId)
 }
 
-export async function getWorkshopById(workshopId: string): Promise<ProposalWithWorkshopData | null> {
+export async function getWorkshopById(
+  workshopId: string,
+): Promise<ProposalWithWorkshopData | null> {
   const query = groq`
     *[_type == "talk" && _id == $workshopId][0] {
       _id,
@@ -216,17 +228,24 @@ export async function getWorkshopById(workshopId: string): Promise<ProposalWithW
     }
   `
 
-  return clientWrite.fetch<ProposalWithWorkshopData | null>(query, { workshopId })
+  return clientWrite.fetch<ProposalWithWorkshopData | null>(query, {
+    workshopId,
+  })
 }
 
 export async function updateWorkshopSignupEmailStatus(
   signupId: string,
-  emailSent: boolean
+  emailSent: boolean,
 ): Promise<WorkshopSignupExisting> {
-  return clientWrite.patch(signupId).set({ confirmationEmailSent: emailSent }).commit()
+  return clientWrite
+    .patch(signupId)
+    .set({ confirmationEmailSent: emailSent })
+    .commit()
 }
 
-export async function confirmWorkshopSignup(signupId: string): Promise<WorkshopSignupExisting> {
+export async function confirmWorkshopSignup(
+  signupId: string,
+): Promise<WorkshopSignupExisting> {
   const signup = await clientWrite.fetch<WorkshopSignupExisting>(
     groq`*[_type == "workshopSignup" && _id == $signupId][0]{
       _id,
@@ -251,7 +270,7 @@ export async function confirmWorkshopSignup(signupId: string): Promise<WorkshopS
       _createdAt,
       _updatedAt
     }`,
-    { signupId }
+    { signupId },
   )
 
   if (!signup) {
@@ -262,24 +281,21 @@ export async function confirmWorkshopSignup(signupId: string): Promise<WorkshopS
     .patch(signupId)
     .set({
       status: 'confirmed',
-      confirmedAt: new Date().toISOString()
+      confirmedAt: new Date().toISOString(),
     })
     .commit()
 
   return {
     ...signup,
-    status: 'confirmed' as WorkshopSignupStatus
+    status: 'confirmed' as WorkshopSignupStatus,
   }
 }
 
 export async function updateWorkshopCapacity(
   workshopId: string,
-  capacity: number
+  capacity: number,
 ): Promise<ProposalWithWorkshopData> {
-  await clientWrite
-    .patch(workshopId)
-    .set({ capacity: capacity })
-    .commit()
+  await clientWrite.patch(workshopId).set({ capacity: capacity }).commit()
 
   const updatedWorkshop = await getWorkshopById(workshopId)
   if (!updatedWorkshop) {
@@ -291,7 +307,7 @@ export async function updateWorkshopCapacity(
 
 export async function getWorkshopSignupsByWorkshop(
   workshopId: string,
-  status?: string
+  status?: string,
 ): Promise<WorkshopSignupExisting[]> {
   const statusFilter = status ? `&& status == "${status}"` : ''
 
@@ -327,7 +343,7 @@ export async function getWorkshopSignupsByWorkshop(
 
 export async function getWorkshopSignupStatisticsBySpeaker(
   speakerId: string,
-  conferenceId: string
+  conferenceId: string,
 ) {
   const query = groq`*[_type == "talk" && $speakerId in speakers[]._ref && conference._ref == $conferenceId && format in ["workshop_120", "workshop_240"]] {
     _id,
@@ -359,17 +375,17 @@ export async function getWorkshopSignupStatisticsBySpeaker(
 
   return workshops.map((workshop: WorkshopData) => {
     const confirmedSignups = workshop.signups.filter(
-      (s) => s.status === 'confirmed'
+      (s) => s.status === 'confirmed',
     )
     const waitlistSignups = workshop.signups.filter(
-      (s) => s.status === 'waitlist'
+      (s) => s.status === 'waitlist',
     )
 
     const experienceLevels = {
       beginner: confirmedSignups.filter((s) => s.experienceLevel === 'beginner')
         .length,
       intermediate: confirmedSignups.filter(
-        (s) => s.experienceLevel === 'intermediate'
+        (s) => s.experienceLevel === 'intermediate',
       ).length,
       advanced: confirmedSignups.filter((s) => s.experienceLevel === 'advanced')
         .length,
@@ -378,8 +394,10 @@ export async function getWorkshopSignupStatisticsBySpeaker(
     const operatingSystems = {
       windows: confirmedSignups.filter((s) => s.operatingSystem === 'windows')
         .length,
-      macos: confirmedSignups.filter((s) => s.operatingSystem === 'macos').length,
-      linux: confirmedSignups.filter((s) => s.operatingSystem === 'linux').length,
+      macos: confirmedSignups.filter((s) => s.operatingSystem === 'macos')
+        .length,
+      linux: confirmedSignups.filter((s) => s.operatingSystem === 'linux')
+        .length,
     }
 
     return {
@@ -418,7 +436,7 @@ export async function getAllWorkshopSignups(filters: {
   }
 
   if (filters.signupIds && filters.signupIds.length > 0) {
-    const ids = filters.signupIds.map(id => `"${id}"`).join(', ')
+    const ids = filters.signupIds.map((id) => `"${id}"`).join(', ')
     conditions.push(`_id in [${ids}]`)
   }
 
@@ -458,7 +476,9 @@ export async function getAllWorkshopSignups(filters: {
   return await clientWrite.fetch(query)
 }
 
-export async function getWorkshopsByConference(conferenceId: string): Promise<ProposalWithWorkshopData[]> {
+export async function getWorkshopsByConference(
+  conferenceId: string,
+): Promise<ProposalWithWorkshopData[]> {
   const { workshops } = await getWorkshops({
     conferenceId,
     statuses: [Status.confirmed],
@@ -477,12 +497,17 @@ export async function getWorkshopStatistics(conferenceId: string) {
 
   const workshopsWithData = workshops as ProposalWithWorkshopData[]
   const workshopStats = workshopsWithData.map((workshop) => {
-    const workshopSignups = allSignups.filter(s => s.workshop._id === workshop._id)
+    const workshopSignups = allSignups.filter(
+      (s) => s.workshop._id === workshop._id,
+    )
 
-    const statusCounts = workshopSignups.reduce((acc, signup) => {
-      acc[signup.status] = (acc[signup.status] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
+    const statusCounts = workshopSignups.reduce(
+      (acc, signup) => {
+        acc[signup.status] = (acc[signup.status] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>,
+    )
 
     return {
       workshopId: workshop._id,
@@ -493,23 +518,43 @@ export async function getWorkshopStatistics(conferenceId: string) {
       pendingSignups: statusCounts.pending || 0,
       waitlistSignups: statusCounts.waitlist || 0,
       cancelledSignups: statusCounts.cancelled || 0,
-      utilization: workshop.capacity > 0
-        ? ((statusCounts.confirmed || 0) / workshop.capacity) * 100
-        : 0,
+      utilization:
+        workshop.capacity > 0
+          ? ((statusCounts.confirmed || 0) / workshop.capacity) * 100
+          : 0,
     }
   })
 
   const totals = {
     totalWorkshops: workshopsWithData.length,
-    totalCapacity: workshopsWithData.reduce((sum: number, w) => sum + w.capacity, 0),
-    totalSignups: allSignups.filter(s => s.status === 'confirmed' || s.status === 'waitlist').length,
-    totalConfirmed: workshopStats.reduce((sum: number, s) => sum + s.confirmedSignups, 0),
-    totalPending: workshopStats.reduce((sum: number, s) => sum + s.pendingSignups, 0),
-    totalWaitlist: workshopStats.reduce((sum: number, s) => sum + s.waitlistSignups, 0),
-    totalCancelled: workshopStats.reduce((sum: number, s) => sum + s.cancelledSignups, 0),
-    averageUtilization: workshopStats.length > 0
-      ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) / workshopsWithData.length
-      : 0,
+    totalCapacity: workshopsWithData.reduce(
+      (sum: number, w) => sum + w.capacity,
+      0,
+    ),
+    totalSignups: allSignups.filter(
+      (s) => s.status === 'confirmed' || s.status === 'waitlist',
+    ).length,
+    totalConfirmed: workshopStats.reduce(
+      (sum: number, s) => sum + s.confirmedSignups,
+      0,
+    ),
+    totalPending: workshopStats.reduce(
+      (sum: number, s) => sum + s.pendingSignups,
+      0,
+    ),
+    totalWaitlist: workshopStats.reduce(
+      (sum: number, s) => sum + s.waitlistSignups,
+      0,
+    ),
+    totalCancelled: workshopStats.reduce(
+      (sum: number, s) => sum + s.cancelledSignups,
+      0,
+    ),
+    averageUtilization:
+      workshopStats.length > 0
+        ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) /
+          workshopsWithData.length
+        : 0,
   }
 
   return {

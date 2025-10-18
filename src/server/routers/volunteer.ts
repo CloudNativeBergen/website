@@ -22,7 +22,8 @@ export const volunteerRouter = router({
     .input(GetVolunteersByConferenceSchema)
     .query(async ({ input }) => {
       try {
-        const { conference, error: confError } = await getConferenceForCurrentDomain()
+        const { conference, error: confError } =
+          await getConferenceForCurrentDomain()
         if (confError || !conference?._id) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -31,7 +32,8 @@ export const volunteerRouter = router({
           })
         }
         const conferenceId = input.conferenceId || conference._id
-        const { volunteers, error } = await getVolunteersByConference(conferenceId)
+        const { volunteers, error } =
+          await getVolunteersByConference(conferenceId)
 
         if (error) {
           throw new TRPCError({
@@ -88,7 +90,9 @@ export const volunteerRouter = router({
     .input(UpdateVolunteerStatusSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        const { volunteer, error: fetchError } = await getVolunteerById(input.volunteerId)
+        const { volunteer, error: fetchError } = await getVolunteerById(
+          input.volunteerId,
+        )
 
         if (fetchError) {
           throw new TRPCError({
@@ -110,7 +114,7 @@ export const volunteerRouter = router({
           input.volunteerId,
           input.status,
           reviewerId,
-          input.reviewNotes
+          input.reviewNotes,
         )
 
         if (error || !success) {
@@ -136,7 +140,9 @@ export const volunteerRouter = router({
     .input(SendVolunteerEmailSchema)
     .mutation(async ({ input }) => {
       try {
-        const { volunteer, error: fetchError } = await getVolunteerById(input.volunteerId)
+        const { volunteer, error: fetchError } = await getVolunteerById(
+          input.volunteerId,
+        )
 
         if (fetchError) {
           throw new TRPCError({
@@ -160,9 +166,11 @@ export const volunteerRouter = router({
           })
         }
 
-        let conferenceForEmail: typeof volunteer.conference = volunteer.conference
+        let conferenceForEmail: typeof volunteer.conference =
+          volunteer.conference
         if (!conferenceForEmail || !conferenceForEmail.contact_email) {
-          const { conference: currentConf, error: confError} = await getConferenceForCurrentDomain()
+          const { conference: currentConf, error: confError } =
+            await getConferenceForCurrentDomain()
           if (confError || !currentConf) {
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
@@ -180,9 +188,15 @@ export const volunteerRouter = router({
             start_date: currentConf.start_date,
             domains: currentConf.domains,
             organizer: currentConf.organizer,
-            social_links: Array.isArray(currentConf.social_links) && currentConf.social_links.length > 0 && typeof currentConf.social_links[0] === 'object'
-              ? (currentConf.social_links as unknown as Array<{ platform: string; url: string }>)
-              : []
+            social_links:
+              Array.isArray(currentConf.social_links) &&
+              currentConf.social_links.length > 0 &&
+              typeof currentConf.social_links[0] === 'object'
+                ? (currentConf.social_links as unknown as Array<{
+                    platform: string
+                    url: string
+                  }>)
+                : [],
           }
         }
 
@@ -190,7 +204,7 @@ export const volunteerRouter = router({
           volunteer,
           conferenceForEmail,
           input.subject,
-          input.message
+          input.message,
         )
 
         if (result.error) {
@@ -202,7 +216,7 @@ export const volunteerRouter = router({
 
         return {
           success: true,
-          emailId: result.data?.emailId
+          emailId: result.data?.emailId,
         }
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -218,7 +232,9 @@ export const volunteerRouter = router({
     .input(DeleteVolunteerSchema)
     .mutation(async ({ input }) => {
       try {
-        const { volunteer, error: fetchError } = await getVolunteerById(input.volunteerId)
+        const { volunteer, error: fetchError } = await getVolunteerById(
+          input.volunteerId,
+        )
 
         if (fetchError) {
           throw new TRPCError({

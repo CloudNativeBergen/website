@@ -41,8 +41,8 @@ export function calculateCategoryStats(
         (sum, ticket) =>
           sum +
           parseFloat(ticket.sum) /
-          categoryTickets.filter((t) => t.order_id === ticket.order_id)
-            .length,
+            categoryTickets.filter((t) => t.order_id === ticket.order_id)
+              .length,
         0,
       )
 
@@ -88,10 +88,11 @@ export function calculateFreeTicketAllocation(
   organizerCount: number,
   freeTickets: EventTicket[],
 ): FreeTicketAllocation {
-  const sponsorTickets = conference.sponsors?.reduce((total, sponsorData) => {
-    const tierTitle = sponsorData.tier?.title || ''
-    return total + (tierAllocation[tierTitle] || 0)
-  }, 0) || 0
+  const sponsorTickets =
+    conference.sponsors?.reduce((total, sponsorData) => {
+      const tierTitle = sponsorData.tier?.title || ''
+      return total + (tierAllocation[tierTitle] || 0)
+    }, 0) || 0
 
   const totalAllocated = sponsorTickets + speakerCount + organizerCount
   const totalClaimed = freeTickets.length
@@ -126,7 +127,7 @@ export function createDefaultAnalysis(
       averageTicketPrice:
         tickets.length > 0
           ? tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
-          tickets.length
+            tickets.length
           : 0,
       categoryBreakdown: {},
       sponsorTickets: 0,

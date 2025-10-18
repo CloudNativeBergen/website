@@ -60,8 +60,8 @@ export default async function SpeakerDashboard() {
 
     const proposalConferenceId =
       typeof p.conference === 'object' &&
-        p.conference !== null &&
-        '_id' in p.conference
+      p.conference !== null &&
+      '_id' in p.conference
         ? p.conference._id
         : p.conference._ref
 
@@ -72,7 +72,7 @@ export default async function SpeakerDashboard() {
   try {
     workshopStats = await getWorkshopSignupStatisticsBySpeaker(
       session.speaker._id,
-      conference._id
+      conference._id,
     )
   } catch (error) {
     console.error('Error fetching workshop statistics:', error)

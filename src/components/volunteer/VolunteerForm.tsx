@@ -1,9 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Input, Textarea, Dropdown, Checkbox, HelpText } from '@/components/Form'
+import {
+  Input,
+  Textarea,
+  Dropdown,
+  Checkbox,
+  HelpText,
+} from '@/components/Form'
 import { Occupation, TShirtSize } from '@/lib/volunteer/types'
-import { CheckCircleIcon, XCircleIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import {
+  CheckCircleIcon,
+  XCircleIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 
 interface VolunteerFormProps {
@@ -81,14 +91,21 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
     e.preventDefault()
     setSubmitError(null)
 
-    if (!formData.name || !formData.email || !formData.phone || !formData.occupation) {
+    if (
+      !formData.name ||
+      !formData.email ||
+      !formData.phone ||
+      !formData.occupation
+    ) {
       setSubmitError({ message: 'Please fill in all required fields' })
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
 
     if (!dataProcessingConsent) {
-      setSubmitError({ message: 'You must agree to the privacy policy to continue' })
+      setSubmitError({
+        message: 'You must agree to the privacy policy to continue',
+      })
       window.scrollTo({ top: 0, behavior: 'smooth' })
       return
     }
@@ -146,7 +163,10 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
       setSubmitError({
-        message: error instanceof Error ? error.message : 'An unexpected error occurred',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'An unexpected error occurred',
       })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } finally {
@@ -167,19 +187,22 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
         <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
           <div className="flex">
             <div className="flex-shrink-0">
-              <CheckCircleIcon className="h-5 w-5 text-green-400" aria-hidden="true" />
+              <CheckCircleIcon
+                className="h-5 w-5 text-green-400"
+                aria-hidden="true"
+              />
             </div>
             <div className="ml-3 flex-1">
               <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                Thank you for volunteering! We&apos;ll review your application and contact
-                you soon.
+                Thank you for volunteering! We&apos;ll review your application
+                and contact you soon.
               </p>
             </div>
             <div className="ml-auto pl-3">
               <button
                 type="button"
                 onClick={() => setShowSuccess(false)}
-                className="inline-flex rounded-md bg-green-50 p-1.5 text-green-500 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 focus:ring-offset-green-50 dark:bg-green-900/20 dark:hover:bg-green-900/30"
+                className="inline-flex rounded-md bg-green-50 p-1.5 text-green-500 hover:bg-green-100 focus:ring-2 focus:ring-green-600 focus:ring-offset-2 focus:ring-offset-green-50 focus:outline-none dark:bg-green-900/20 dark:hover:bg-green-900/30"
               >
                 <XMarkIcon className="h-5 w-5" aria-hidden="true" />
               </button>
@@ -192,7 +215,10 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
         <div className="rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
           <div className="flex">
             <div className="flex-shrink-0">
-              <XCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
+              <XCircleIcon
+                className="h-5 w-5 text-red-400"
+                aria-hidden="true"
+              />
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-red-800 dark:text-red-200">
@@ -205,17 +231,19 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
                   ))}
                 </ul>
               )}
-              {submitError.fieldErrors && Object.keys(submitError.fieldErrors).length > 0 && (
-                <ul className="mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                  {Object.entries(submitError.fieldErrors).map(([field, errors]) =>
-                    errors.map((error, index) => (
-                      <li key={`${field}-${index}`}>
-                        {field}: {error}
-                      </li>
-                    ))
-                  )}
-                </ul>
-              )}
+              {submitError.fieldErrors &&
+                Object.keys(submitError.fieldErrors).length > 0 && (
+                  <ul className="mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
+                    {Object.entries(submitError.fieldErrors).map(
+                      ([field, errors]) =>
+                        errors.map((error, index) => (
+                          <li key={`${field}-${index}`}>
+                            {field}: {error}
+                          </li>
+                        )),
+                    )}
+                  </ul>
+                )}
             </div>
           </div>
         </div>
@@ -278,7 +306,8 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
               rows={3}
             />
             <HelpText>
-              Let us know when you&apos;re available to volunteer during the conference (e.g., All days, Morning only, Afternoon only)
+              Let us know when you&apos;re available to volunteer during the
+              conference (e.g., All days, Morning only, Afternoon only)
             </HelpText>
           </div>
           <div>
@@ -290,7 +319,9 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
               rows={3}
             />
             <HelpText>
-              Enter your preferred volunteer tasks (comma-separated). Choose from: Registration desk, Tech support, Speaker liaison, General assistance, Setup/teardown, or suggest your own
+              Enter your preferred volunteer tasks (comma-separated). Choose
+              from: Registration desk, Tech support, Speaker liaison, General
+              assistance, Setup/teardown, or suggest your own
             </HelpText>
           </div>
           <div>
@@ -312,7 +343,8 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
               rows={2}
             />
             <HelpText>
-              Let us know about any dietary restrictions or allergies (e.g., Vegetarian, Vegan, Gluten-free)
+              Let us know about any dietary restrictions or allergies (e.g.,
+              Vegetarian, Vegan, Gluten-free)
             </HelpText>
           </div>
           <div>
@@ -324,7 +356,8 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
               rows={3}
             />
             <HelpText>
-              Previous volunteer experience, special skills, or anything else you&apos;d like us to know
+              Previous volunteer experience, special skills, or anything else
+              you&apos;d like us to know
             </HelpText>
           </div>
         </div>
@@ -350,7 +383,8 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
             >
               Privacy Policy
             </a>
-            . Privacy Policy Version: {PRIVACY_POLICY_VERSION}. Your data will be processed in accordance with GDPR regulations.
+            . Privacy Policy Version: {PRIVACY_POLICY_VERSION}. Your data will
+            be processed in accordance with GDPR regulations.
           </p>
         </Checkbox>
       </div>
@@ -360,14 +394,14 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
           type="button"
           onClick={resetForm}
           disabled={isSubmitting}
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
         >
           Reset Form
         </button>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white hover:bg-brand-slate-gray focus:outline-none focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 disabled:opacity-50 dark:bg-brand-sky-mist dark:text-gray-900 dark:hover:bg-brand-cloud-blue"
+          className="rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white hover:bg-brand-slate-gray focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:bg-brand-sky-mist dark:text-gray-900 dark:hover:bg-brand-cloud-blue"
         >
           {isSubmitting ? 'Submitting...' : 'Submit Application'}
         </button>

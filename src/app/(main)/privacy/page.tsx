@@ -235,8 +235,14 @@ export default async function PrivacyPolicyPage() {
                           <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
                             <li>• Full name and email address</li>
                             <li>• Workshop preferences and selections</li>
-                            <li>• Experience level (beginner, intermediate, advanced)</li>
-                            <li>• Operating system preference (Windows, macOS, Linux)</li>
+                            <li>
+                              • Experience level (beginner, intermediate,
+                              advanced)
+                            </li>
+                            <li>
+                              • Operating system preference (Windows, macOS,
+                              Linux)
+                            </li>
                           </ul>
                         </div>
                         <div>
@@ -244,7 +250,9 @@ export default async function PrivacyPolicyPage() {
                             Workshop Management
                           </h4>
                           <ul className="space-y-1 text-sm text-amber-700 dark:text-amber-300">
-                            <li>• Workshop signup status (confirmed, waitlist)</li>
+                            <li>
+                              • Workshop signup status (confirmed, waitlist)
+                            </li>
                             <li>• Signup date and confirmation details</li>
                             <li>• Workshop attendance tracking</li>
                             <li>• Capacity and waitlist management</li>
@@ -269,8 +277,9 @@ export default async function PrivacyPolicyPage() {
                           about conference logistics and updates
                         </li>
                         <li>
-                          • <strong>Workshop Notifications:</strong> Signup confirmations,
-                          waitlist updates, and workshop-related announcements
+                          • <strong>Workshop Notifications:</strong> Signup
+                          confirmations, waitlist updates, and workshop-related
+                          announcements
                         </li>
                       </ul>
                     </div>
@@ -332,7 +341,6 @@ export default async function PrivacyPolicyPage() {
                       </ul>
                     </div>
                   </div>
-
                   {/* Volunteer Information */}
                   <div className="space-y-6">
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
@@ -346,9 +354,7 @@ export default async function PrivacyPolicyPage() {
                             Contact &amp; Logistics
                           </h4>
                           <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
-                            <li>
-                              • Name, email address, and phone number
-                            </li>
+                            <li>• Name, email address, and phone number</li>
                             <li>
                               • Occupation status (student, working, unemployed,
                               other)
@@ -375,11 +381,18 @@ export default async function PrivacyPolicyPage() {
                         </div>
                       </div>
                       <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
-                        <strong>Purpose:</strong> Volunteer coordination and event logistics.{' '}
-                        <strong>Legal basis:</strong> Legitimate interests for coordination and operations; explicit consent for special category data (dietary restrictions).
+                        <strong>Purpose:</strong> Volunteer coordination and
+                        event logistics. <strong>Legal basis:</strong>{' '}
+                        Legitimate interests for coordination and operations;
+                        explicit consent for special category data (dietary
+                        restrictions).
                       </p>
                       <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                        See your GDPR rights in section 8 (<a href="#gdpr-rights" className="underline">Your Rights Under GDPR</a>).
+                        See your GDPR rights in section 8 (
+                        <a href="#gdpr-rights" className="underline">
+                          Your Rights Under GDPR
+                        </a>
+                        ).
                       </p>
                     </div>
                   </div>
@@ -417,7 +430,8 @@ export default async function PrivacyPolicyPage() {
                           • Attendee registration and venue access control
                         </li>
                         <li>
-                          • Workshop registration, capacity management, and waitlist coordination
+                          • Workshop registration, capacity management, and
+                          waitlist coordination
                         </li>
                         <li>
                           • Sharing participant lists with venue partners for
@@ -976,8 +990,9 @@ export default async function PrivacyPolicyPage() {
                               <span className="font-medium text-blue-600 dark:text-blue-400">
                                 Legitimate Interest:
                               </span>{' '}
-                              Workshop planning and speaker preparation for future events,
-                              capacity planning, and participant experience improvement
+                              Workshop planning and speaker preparation for
+                              future events, capacity planning, and participant
+                              experience improvement
                             </td>
                           </tr>
                           <tr>
@@ -1003,7 +1018,8 @@ export default async function PrivacyPolicyPage() {
                               </div>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
-                              12 months after event completion, or earlier if consent is withdrawn for consent-based fields
+                              12 months after event completion, or earlier if
+                              consent is withdrawn for consent-based fields
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                               <span className="font-medium text-blue-600 dark:text-blue-400">

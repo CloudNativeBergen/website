@@ -152,14 +152,25 @@ export default defineType({
       operatingSystem: 'operatingSystem',
     },
     prepare(selection) {
-      const { userName, userEmail, workshopTitle, status, signedUpAt, experienceLevel, operatingSystem } =
-        selection
+      const {
+        userName,
+        userEmail,
+        workshopTitle,
+        status,
+        signedUpAt,
+        experienceLevel,
+        operatingSystem,
+      } = selection
       const date = signedUpAt ? new Date(signedUpAt).toLocaleDateString() : ''
       const statusLabel = status
         ? status.charAt(0).toUpperCase() + status.slice(1)
         : 'Pending'
-      const expLabel = experienceLevel ? ` • ${experienceLevel.charAt(0).toUpperCase() + experienceLevel.slice(1)}` : ''
-      const osLabel = operatingSystem ? ` • ${operatingSystem === 'macos' ? 'macOS' : operatingSystem.charAt(0).toUpperCase() + operatingSystem.slice(1)}` : ''
+      const expLabel = experienceLevel
+        ? ` • ${experienceLevel.charAt(0).toUpperCase() + experienceLevel.slice(1)}`
+        : ''
+      const osLabel = operatingSystem
+        ? ` • ${operatingSystem === 'macos' ? 'macOS' : operatingSystem.charAt(0).toUpperCase() + operatingSystem.slice(1)}`
+        : ''
 
       return {
         title: userName || userEmail,

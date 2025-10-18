@@ -18,9 +18,7 @@ export default async function WorkshopLayout({
   return (
     <Layout conference={conference}>
       <AuthKitProvider>
-        <TRPCProvider>
-          {children}
-        </TRPCProvider>
+        <TRPCProvider>{children}</TRPCProvider>
       </AuthKitProvider>
     </Layout>
   )

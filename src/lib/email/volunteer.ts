@@ -1,4 +1,9 @@
-import { resend, retryWithBackoff, EmailResult, createEmailError } from './config'
+import {
+  resend,
+  retryWithBackoff,
+  EmailResult,
+  createEmailError,
+} from './config'
 import { VolunteerWithConference } from '@/lib/volunteer/types'
 import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
 
@@ -21,7 +26,7 @@ export async function sendVolunteerApprovalEmail(
   volunteer: VolunteerWithConference,
   conference: ConferenceForEmail,
   subject: string,
-  message: string
+  message: string,
 ): Promise<EmailResult<{ emailId: string }>> {
   try {
     if (!volunteer.email) {
@@ -33,7 +38,10 @@ export async function sendVolunteerApprovalEmail(
     const fromEmail = conference.contact_email || conference.cfp_email
     if (!fromEmail) {
       return {
-        error: createEmailError('Conference contact email is not configured', 400),
+        error: createEmailError(
+          'Conference contact email is not configured',
+          400,
+        ),
       }
     }
 
@@ -47,7 +55,7 @@ export async function sendVolunteerApprovalEmail(
         })
       : 'TBD'
     const eventUrl = `https://${conference.domains?.[0] || 'cloudnativebergen.no'}`
-    const socialLinks = conference.social_links?.map(link => link.url) || []
+    const socialLinks = conference.social_links?.map((link) => link.url) || []
 
     const result = await retryWithBackoff(async () => {
       const response = await resend.emails.send({
@@ -79,7 +87,7 @@ export async function sendVolunteerApprovalEmail(
     return {
       error: createEmailError(
         error instanceof Error ? error.message : 'Failed to send email',
-        500
+        500,
       ),
     }
   }

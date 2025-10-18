@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
       totalOrders: new Set(paidTickets.map((t) => t.order_id)).size,
       averageTicketPrice: paidTickets.length
         ? paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
-        paidTickets.length
+          paidTickets.length
         : 0,
       categoryBreakdown: {},
       sponsorTickets: 0,
@@ -144,14 +144,14 @@ export async function GET(request: NextRequest) {
         categories: statistics.categoryBreakdown,
         targetAnalysis: analysis
           ? {
-            enabled: true,
-            capacity: analysis.capacity,
-            currentTargetPercentage: analysis.performance.targetPercentage,
-            actualPercentage: analysis.performance.currentPercentage,
-            variance: analysis.performance.variance,
-            isOnTrack: analysis.performance.isOnTrack,
-            nextMilestone: analysis.performance.nextMilestone,
-          }
+              enabled: true,
+              capacity: analysis.capacity,
+              currentTargetPercentage: analysis.performance.targetPercentage,
+              actualPercentage: analysis.performance.currentPercentage,
+              variance: analysis.performance.variance,
+              isOnTrack: analysis.performance.isOnTrack,
+              nextMilestone: analysis.performance.nextMilestone,
+            }
           : null,
         lastUpdated: new Date().toISOString(),
       },

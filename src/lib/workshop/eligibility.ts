@@ -23,11 +23,12 @@ export async function checkWorkshopEligibility(params: {
     const tickets = await fetchEventTickets(params.customerId, params.eventId)
 
     const userTickets = tickets.filter(
-      (ticket) => ticket.crm.email.toLowerCase() === params.userEmail.toLowerCase()
+      (ticket) =>
+        ticket.crm.email.toLowerCase() === params.userEmail.toLowerCase(),
     )
 
     const eligibleTickets = userTickets.filter((ticket) =>
-      WORKSHOP_ELIGIBLE_CATEGORIES.includes(ticket.category)
+      WORKSHOP_ELIGIBLE_CATEGORIES.includes(ticket.category),
     )
 
     if (eligibleTickets.length === 0 && userTickets.length > 0) {

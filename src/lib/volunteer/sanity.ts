@@ -1,4 +1,7 @@
-import { clientReadUncached as clientRead, clientWrite } from '@/lib/sanity/client'
+import {
+  clientReadUncached as clientRead,
+  clientWrite,
+} from '@/lib/sanity/client'
 import {
   Volunteer,
   VolunteerInput,
@@ -7,7 +10,7 @@ import {
 } from './types'
 
 export async function getVolunteersByConference(
-  conferenceId: string
+  conferenceId: string,
 ): Promise<{ volunteers: VolunteerWithConference[]; error: Error | null }> {
   try {
     const query = `*[_type == "volunteer" && conference._ref == $conferenceId] | order(_createdAt desc) {
@@ -47,9 +50,12 @@ export async function getVolunteersByConference(
       reviewNotes
     }`
 
-    const volunteers = await clientRead.fetch<VolunteerWithConference[]>(query, {
-      conferenceId,
-    })
+    const volunteers = await clientRead.fetch<VolunteerWithConference[]>(
+      query,
+      {
+        conferenceId,
+      },
+    )
     return { volunteers: volunteers || [], error: null }
   } catch (error) {
     return {
@@ -60,7 +66,7 @@ export async function getVolunteersByConference(
 }
 
 export async function getVolunteerById(
-  id: string
+  id: string,
 ): Promise<{ volunteer: VolunteerWithConference | null; error: Error | null }> {
   try {
     const query = `*[_type == "volunteer" && _id == $id][0] {
@@ -102,7 +108,7 @@ export async function getVolunteerById(
 
     const volunteer = await clientRead.fetch<VolunteerWithConference | null>(
       query,
-      { id }
+      { id },
     )
     return { volunteer, error: null }
   } catch (error) {
@@ -114,7 +120,7 @@ export async function getVolunteerById(
 }
 
 export async function createVolunteer(
-  data: VolunteerInput
+  data: VolunteerInput,
 ): Promise<{ volunteer: Volunteer | null; error: Error | null }> {
   try {
     const document = {
@@ -124,7 +130,7 @@ export async function createVolunteer(
       submittedAt: new Date().toISOString(),
     }
 
-    const volunteer = await clientWrite.create(document) as Volunteer
+    const volunteer = (await clientWrite.create(document)) as Volunteer
     return { volunteer, error: null }
   } catch (error) {
     return {
@@ -138,7 +144,7 @@ export async function updateVolunteerStatus(
   volunteerId: string,
   status: VolunteerStatus,
   reviewedBy: string,
-  reviewNotes?: string
+  reviewNotes?: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
     const updates: Record<string, unknown> = {
@@ -206,7 +212,7 @@ export async function getAllVolunteers(): Promise<{
 }
 
 export async function deleteVolunteer(
-  volunteerId: string
+  volunteerId: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
     await clientWrite.delete(volunteerId)

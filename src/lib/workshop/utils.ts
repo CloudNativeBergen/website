@@ -28,7 +28,7 @@ export function checkTimeOverlap(
   start1: string,
   end1: string,
   start2: string,
-  end2: string
+  end2: string,
 ): boolean {
   const startTime1 = start1.replace(':', '')
   const endTime1 = end1.replace(':', '')
@@ -49,18 +49,26 @@ export interface TimeConflictResult {
 
 export function checkWorkshopTimeConflict(
   workshop: ProposalWithWorkshopData,
-  userWorkshops: ProposalWithWorkshopData[]
+  userWorkshops: ProposalWithWorkshopData[],
 ): TimeConflictResult {
-  const { date: workshopDate, startTime: workshopStart, endTime: workshopEnd } = getWorkshopDateTime(workshop)
+  const {
+    date: workshopDate,
+    startTime: workshopStart,
+    endTime: workshopEnd,
+  } = getWorkshopDateTime(workshop)
 
   if (!workshopDate || !workshopStart || !workshopEnd) {
     return { hasConflict: false, conflictingWorkshop: null }
   }
 
-  const conflictingWorkshop = userWorkshops.find(userWorkshop => {
+  const conflictingWorkshop = userWorkshops.find((userWorkshop) => {
     if (userWorkshop._id === workshop._id) return false
 
-    const { date: existingDate, startTime: existingStart, endTime: existingEnd } = getWorkshopDateTime(userWorkshop)
+    const {
+      date: existingDate,
+      startTime: existingStart,
+      endTime: existingEnd,
+    } = getWorkshopDateTime(userWorkshop)
 
     if (!existingDate || !existingStart || !existingEnd) {
       return false
@@ -69,15 +77,22 @@ export function checkWorkshopTimeConflict(
     const isSameDay = existingDate === workshopDate
     if (!isSameDay) return false
 
-    return checkTimeOverlap(workshopStart, workshopEnd, existingStart, existingEnd)
+    return checkTimeOverlap(
+      workshopStart,
+      workshopEnd,
+      existingStart,
+      existingEnd,
+    )
   })
 
   return {
     hasConflict: !!conflictingWorkshop,
-    conflictingWorkshop: conflictingWorkshop || null
+    conflictingWorkshop: conflictingWorkshop || null,
   }
 }
 
-export function getWorkshopIdFromSignup(signup: { workshop?: { _ref?: string; _id?: string } }): string {
+export function getWorkshopIdFromSignup(signup: {
+  workshop?: { _ref?: string; _id?: string }
+}): string {
   return signup.workshop?._ref || signup.workshop?._id || ''
 }

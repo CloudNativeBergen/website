@@ -263,16 +263,18 @@ export function TicketSalesChartDisplay({
               Free Tickets Claimed
             </dt>
             <dd className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">
-              {freeTicketAllocation.totalClaimed} / {freeTicketAllocation.totalAllocated}
+              {freeTicketAllocation.totalClaimed} /{' '}
+              {freeTicketAllocation.totalAllocated}
             </dd>
             <dd className="text-xs text-gray-600 dark:text-gray-400">
               {freeTicketAllocation.totalAllocated > 0
                 ? (
-                  (freeTicketAllocation.totalClaimed /
-                    freeTicketAllocation.totalAllocated) *
-                  100
-                ).toFixed(1)
-                : 0}% claimed
+                    (freeTicketAllocation.totalClaimed /
+                      freeTicketAllocation.totalAllocated) *
+                    100
+                  ).toFixed(1)
+                : 0}
+              % claimed
             </dd>
           </div>
         )}

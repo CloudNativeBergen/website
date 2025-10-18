@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
           error: 'Validation failed',
           details: validationResult.error.flatten(),
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -59,7 +59,9 @@ export async function POST(req: NextRequest) {
     const result = await createVolunteer(volunteerInput)
 
     if (result.error || !result.volunteer) {
-      throw new Error(result.error?.message || 'Failed to create volunteer record')
+      throw new Error(
+        result.error?.message || 'Failed to create volunteer record',
+      )
     }
 
     try {
@@ -67,23 +69,25 @@ export async function POST(req: NextRequest) {
       if (conference) {
         void notifyNewVolunteer(result.volunteer, conference)
       }
-    } catch {
-    }
+    } catch {}
 
     return NextResponse.json(
       {
         success: true,
-        volunteerId: result.volunteer._id
+        volunteerId: result.volunteer._id,
       },
-      { status: 201 }
+      { status: 201 },
     )
   } catch (error) {
     return NextResponse.json(
       {
         error: 'Failed to create volunteer application',
-        message: error instanceof Error ? error.message : 'An unexpected error occurred'
+        message:
+          error instanceof Error
+            ? error.message
+            : 'An unexpected error occurred',
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

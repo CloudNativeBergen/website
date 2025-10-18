@@ -9,7 +9,7 @@ import {
   checkWorkshopCapacity,
   verifyWorkshopBelongsToConference,
   getWorkshopById,
-  updateWorkshopSignupEmailStatus
+  updateWorkshopSignupEmailStatus,
 } from '@/lib/workshop/sanity'
 import { workshopSignupInputSchema } from '@/server/schemas/workshop'
 import { sendBasicWorkshopConfirmation } from '@/lib/email/workshop'
@@ -24,7 +24,8 @@ export async function signupForWorkshop(workshopId: string) {
       }
     }
 
-    const { conference, error: confError } = await getConferenceForCurrentDomain()
+    const { conference, error: confError } =
+      await getConferenceForCurrentDomain()
     if (confError || !conference?._id) {
       return {
         success: false,
@@ -32,7 +33,10 @@ export async function signupForWorkshop(workshopId: string) {
       }
     }
 
-    const workshopValid = await verifyWorkshopBelongsToConference(workshopId, conference._id)
+    const workshopValid = await verifyWorkshopBelongsToConference(
+      workshopId,
+      conference._id,
+    )
     if (!workshopValid) {
       return {
         success: false,
@@ -51,9 +55,10 @@ export async function signupForWorkshop(workshopId: string) {
     const signupData = workshopSignupInputSchema.parse({
       userWorkOSId: user.id,
       userEmail: user.email,
-      userName: user.firstName && user.lastName
-        ? `${user.firstName} ${user.lastName}`
-        : user.email,
+      userName:
+        user.firstName && user.lastName
+          ? `${user.firstName} ${user.lastName}`
+          : user.email,
       workshop: {
         _type: 'reference' as const,
         _ref: workshopId,

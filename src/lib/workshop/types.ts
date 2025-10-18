@@ -126,7 +126,8 @@ export interface WorkshopSignupFormData {
   notes?: string
 }
 
-export interface ProposalWithWorkshopData extends Omit<ProposalExisting, 'speakers' | 'topics' | 'conference'> {
+export interface ProposalWithWorkshopData
+  extends Omit<ProposalExisting, 'speakers' | 'topics' | 'conference'> {
   capacity: number
   speakers: import('@/lib/speaker/types').Speaker[]
   topics?: import('@/lib/topic/types').Topic[]

@@ -1,5 +1,9 @@
 import { auth } from '@/lib/auth'
-import { NextResponse, type NextRequest, type NextFetchEvent } from 'next/server'
+import {
+  NextResponse,
+  type NextRequest,
+  type NextFetchEvent,
+} from 'next/server'
 import { AppEnvironment } from '@/lib/environment/config'
 import { authkitMiddleware } from '@workos-inc/authkit-nextjs'
 
@@ -59,10 +63,5 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
 }
 
 export const config = {
-  matcher: [
-    '/cfp/:path*',
-    '/admin/:path*',
-    '/workshop',
-    '/workshop/:path*',
-  ],
+  matcher: ['/cfp/:path*', '/admin/:path*', '/workshop', '/workshop/:path*'],
 }

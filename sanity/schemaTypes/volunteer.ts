@@ -72,7 +72,8 @@ export default defineType({
       name: 'dietaryRestrictions',
       title: 'Dietary Restrictions',
       type: 'text',
-      description: 'Any dietary restrictions or allergies we should know about?',
+      description:
+        'Any dietary restrictions or allergies we should know about?',
     }),
     defineField({
       name: 'otherInfo',

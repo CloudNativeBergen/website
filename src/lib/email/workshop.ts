@@ -64,7 +64,9 @@ export async function sendBasicWorkshopConfirmation({
                     <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">Hi ${userName},</p>
                     <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 24px; color: #334155;">Your registration for <strong>${workshopTitle}</strong> has been confirmed!</p>
 
-                    ${workshopDate && workshopTime ? `
+                    ${
+                      workshopDate && workshopTime
+                        ? `
                     <div style="background-color: #E0F2FE; border-left: 4px solid #1D4ED8; padding: 16px; margin: 0 0 24px 0;">
                       <p style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #334155;">Workshop Details:</p>
                       <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;">
@@ -72,7 +74,9 @@ export async function sendBasicWorkshopConfirmation({
                         <strong>Time:</strong> ${workshopTime}
                       </p>
                     </div>
-                    ` : ''}
+                    `
+                        : ''
+                    }
 
                     <div style="background-color: ${status === 'confirmed' ? '#ECFDF5' : '#FEF3C7'}; border-left: 4px solid ${statusColor}; padding: 16px; margin: 0 0 24px 0;">
                       <p style="margin: 0; font-size: 16px; line-height: 24px; color: #334155;">
@@ -134,7 +138,9 @@ export async function sendWorkshopSignupInstructions({
   userName,
   conference,
   ticketCategory,
-}: WorkshopSignupInstructionsRequest): Promise<EmailResult<{ emailId: string }>> {
+}: WorkshopSignupInstructionsRequest): Promise<
+  EmailResult<{ emailId: string }>
+> {
   try {
     const fromEmail = conference.contact_email
       ? `${conference.organizer} <${conference.contact_email}>`
@@ -231,7 +237,10 @@ export async function sendWorkshopSignupInstructions({
   } catch (error) {
     console.error('Error sending workshop signup instructions email:', error)
     return {
-      error: createEmailError('Failed to send workshop signup instructions', 500),
+      error: createEmailError(
+        'Failed to send workshop signup instructions',
+        500,
+      ),
     }
   }
 }

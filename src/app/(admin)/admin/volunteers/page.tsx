@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic'
 
 const VolunteerAdminPage = dynamic(
   () => import('@/components/volunteer/VolunteerAdminPage'),
-  { ssr: false }
+  { ssr: false },
 )
 
 export default function Page() {

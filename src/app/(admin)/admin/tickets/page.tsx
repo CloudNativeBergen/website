@@ -300,10 +300,10 @@ export default async function AdminTickets() {
                       {freeTicketAllocation.totalClaimed} claimed (
                       {freeTicketAllocation.totalAllocated > 0
                         ? (
-                          (freeTicketAllocation.totalClaimed /
-                            freeTicketAllocation.totalAllocated) *
-                          100
-                        ).toFixed(1)
+                            (freeTicketAllocation.totalClaimed /
+                              freeTicketAllocation.totalAllocated) *
+                            100
+                          ).toFixed(1)
                         : 0}
                       %)
                     </span>

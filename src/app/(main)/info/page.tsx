@@ -138,8 +138,8 @@ export default async function Info() {
                 covered.
               </p>
               <p>
-                If you have any further questions, feel free to reach
-                out to us. We&apos;re here to help!
+                If you have any further questions, feel free to reach out to us.
+                We&apos;re here to help!
               </p>
             </div>
           </div>

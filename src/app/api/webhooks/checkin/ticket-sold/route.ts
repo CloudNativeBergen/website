@@ -49,7 +49,7 @@ interface CheckinWebhookPayload {
 function verifyCheckinSignature(
   dataField: unknown,
   signature: string | null,
-  secret: string
+  secret: string,
 ): boolean {
   if (!signature) {
     return false
@@ -64,7 +64,7 @@ function verifyCheckinSignature(
 
     return crypto.timingSafeEqual(
       Buffer.from(signature),
-      Buffer.from(expectedSignature)
+      Buffer.from(expectedSignature),
     )
   } catch (error) {
     console.error('Checkin webhook signature verification failed:', error)
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     console.error('Checkin webhook: Failed to read request body:', e)
     return NextResponse.json(
       { success: false, error: 'Invalid request body' },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     console.error('Checkin webhook: Failed to parse JSON:', e)
     return NextResponse.json(
       { success: false, error: 'Invalid JSON' },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -101,25 +101,29 @@ export async function POST(request: NextRequest) {
       console.error('Checkin webhook: CHECKIN_WEBHOOK_SECRET not configured')
       return NextResponse.json(
         { success: false, error: 'Webhook secret not configured' },
-        { status: 500 }
+        { status: 500 },
       )
     }
 
     const signature = request.headers.get('checkin-signature')
-    const isValid = verifyCheckinSignature(payload.data, signature, webhookSecret)
+    const isValid = verifyCheckinSignature(
+      payload.data,
+      signature,
+      webhookSecret,
+    )
 
     if (!isValid) {
       console.error('Checkin webhook: Invalid signature')
       return NextResponse.json(
         { success: false, error: 'Invalid signature' },
-        { status: 401 }
+        { status: 401 },
       )
     }
 
     if (payload.event !== 'event-order-created') {
       return NextResponse.json(
         { success: true, message: 'Event ignored' },
-        { status: 200 }
+        { status: 200 },
       )
     }
 
@@ -128,21 +132,30 @@ export async function POST(request: NextRequest) {
     if (!orderData.users || orderData.users.length === 0) {
       return NextResponse.json(
         { success: true, message: 'No tickets in order' },
-        { status: 200 }
+        { status: 200 },
       )
     }
 
-    const { conference, error } = await getConferenceByCheckinEventId(orderData.eventId)
+    const { conference, error } = await getConferenceByCheckinEventId(
+      orderData.eventId,
+    )
 
     if (error || !conference) {
-      console.error('Checkin webhook: Conference not found for eventId:', orderData.eventId)
+      console.error(
+        'Checkin webhook: Conference not found for eventId:',
+        orderData.eventId,
+      )
       return NextResponse.json(
         { success: false, error: 'Conference not found' },
-        { status: 404 }
+        { status: 404 },
       )
     }
 
-    const emailResults: Array<{ email: string; success: boolean; emailId?: string }> = []
+    const emailResults: Array<{
+      email: string
+      success: boolean
+      emailId?: string
+    }> = []
 
     for (const user of orderData.users) {
       if (!WORKSHOP_ELIGIBLE_CATEGORIES.includes(user.ticket.name)) {
@@ -159,7 +172,11 @@ export async function POST(request: NextRequest) {
       })
 
       if (emailResult.error) {
-        console.error('Checkin webhook: Failed to send email to', user.crm.email.email, emailResult.error)
+        console.error(
+          'Checkin webhook: Failed to send email to',
+          user.crm.email.email,
+          emailResult.error,
+        )
         emailResults.push({
           email: user.crm.email.email,
           success: false,
@@ -181,13 +198,13 @@ export async function POST(request: NextRequest) {
         message: `Processed ${orderData.users.length} ticket(s), sent ${successCount} email(s)`,
         results: emailResults,
       },
-      { status: 200 }
+      { status: 200 },
     )
   } catch (error) {
     console.error('Checkin webhook error:', error)
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

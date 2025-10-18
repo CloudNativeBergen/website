@@ -2,11 +2,9 @@ import { z } from 'zod'
 import { Occupation, TShirtSize } from './types'
 
 export const ConsentInputSchema = z.object({
-  dataProcessing: z
-    .boolean()
-    .refine((val) => val === true, {
-      message: 'You must agree to the data processing terms',
-    }),
+  dataProcessing: z.boolean().refine((val) => val === true, {
+    message: 'You must agree to the data processing terms',
+  }),
 })
 
 export const VolunteerFormInputSchema = z.object({
@@ -25,14 +23,17 @@ export const VolunteerFormInputSchema = z.object({
     .min(1, 'Phone number is required')
     .max(50, 'Phone number must be less than 50 characters'),
 
-  occupation: z.enum([
-    Occupation.STUDENT,
-    Occupation.WORKING,
-    Occupation.UNEMPLOYED,
-    Occupation.OTHER,
-  ] as const, {
-    message: 'Please select an occupation',
-  }),
+  occupation: z.enum(
+    [
+      Occupation.STUDENT,
+      Occupation.WORKING,
+      Occupation.UNEMPLOYED,
+      Occupation.OTHER,
+    ] as const,
+    {
+      message: 'Please select an occupation',
+    },
+  ),
 
   availability: z
     .string()

@@ -15,7 +15,9 @@ export default async function VolunteerPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-red-600">Conference Not Found</h1>
+          <h1 className="text-3xl font-bold text-red-600">
+            Conference Not Found
+          </h1>
           <p className="mt-2 text-gray-600 dark:text-gray-400">
             Unable to load conference information. Please try again later.
           </p>
@@ -30,12 +32,12 @@ export default async function VolunteerPage() {
     <div className="min-h-screen bg-white dark:bg-gray-900">
       <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:max-w-4xl lg:px-8">
         <div className="mb-10 text-center">
-          <h1 className="font-jetbrains text-4xl font-bold text-brand-cloud-blue dark:text-brand-sky-mist sm:text-5xl">
+          <h1 className="font-jetbrains text-4xl font-bold text-brand-cloud-blue sm:text-5xl dark:text-brand-sky-mist">
             Volunteer at {conference.title}
           </h1>
           <p className="font-inter mt-4 text-lg text-brand-slate-gray dark:text-gray-300">
-            Be part of the team that makes this amazing event happen! Join our volunteer
-            crew and contribute to the Cloud Native community.
+            Be part of the team that makes this amazing event happen! Join our
+            volunteer crew and contribute to the Cloud Native community.
           </p>
         </div>
 
@@ -48,31 +50,31 @@ export default async function VolunteerPage() {
           </div>
           <ul className="font-inter mt-4 space-y-2 text-gray-700 dark:text-gray-300">
             <li className="flex items-start">
-              <span className="mr-2 mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+              <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
               <span>
-                <strong>Registration Desk:</strong> Welcome attendees, check them in, and
-                distribute conference materials
+                <strong>Registration Desk:</strong> Welcome attendees, check
+                them in, and distribute conference materials
               </span>
             </li>
             <li className="flex items-start">
-              <span className="mr-2 mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+              <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
               <span>
-                <strong>Tech Support:</strong> Assist speakers with AV equipment and help
-                ensure smooth technical operations
+                <strong>Tech Support:</strong> Assist speakers with AV equipment
+                and help ensure smooth technical operations
               </span>
             </li>
             <li className="flex items-start">
-              <span className="mr-2 mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+              <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
               <span>
-                <strong>Speaker Liaison:</strong> Support speakers throughout the event,
-                ensuring they have everything they need
+                <strong>Speaker Liaison:</strong> Support speakers throughout
+                the event, ensuring they have everything they need
               </span>
             </li>
             <li className="flex items-start">
-              <span className="mr-2 mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+              <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
               <span>
-                <strong>General Assistance:</strong> Help with setup, teardown, and various
-                tasks throughout the conference
+                <strong>General Assistance:</strong> Help with setup, teardown,
+                and various tasks throughout the conference
               </span>
             </li>
           </ul>
@@ -87,20 +89,24 @@ export default async function VolunteerPage() {
           </div>
           <ul className="font-inter mt-4 space-y-2 text-gray-700 dark:text-gray-300">
             <li className="flex items-start">
-              <span className="mr-2 mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+              <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
               <span>Free access to the entire conference and all sessions</span>
             </li>
             <li className="flex items-start">
-              <span className="mr-2 mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+              <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
               <span>Networking opportunities with speakers and attendees</span>
             </li>
             <li className="flex items-start">
-              <span className="mr-2 mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-              <span>Behind-the-scenes experience in conference organization</span>
+              <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+              <span>
+                Behind-the-scenes experience in conference organization
+              </span>
             </li>
             <li className="flex items-start">
-              <span className="mr-2 mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
-              <span>Exclusive volunteer t-shirt to commemorate your contribution</span>
+              <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+              <span>
+                Exclusive volunteer t-shirt to commemorate your contribution
+              </span>
             </li>
           </ul>
         </div>
@@ -118,8 +124,8 @@ export default async function VolunteerPage() {
             >
               Privacy Policy
             </a>
-            . We respect your privacy and are committed to protecting your personal
-            information.
+            . We respect your privacy and are committed to protecting your
+            personal information.
           </p>
         </div>
       </div>

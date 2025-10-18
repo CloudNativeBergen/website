@@ -1,6 +1,3 @@
 {
-    "traycer.additionalAgents": [
-        "Codex",
-        "Cline"
-    ]
+  "traycer.additionalAgents": ["Codex", "Cline"]
 }
