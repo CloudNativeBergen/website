@@ -55,11 +55,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const tickets = await fetchEventTickets(
+    const allTickets = await fetchEventTickets(
       conference.checkin_customer_id,
       conference.checkin_event_id,
     )
 
+    const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)
 
     let analysis: TicketAnalysisResult | null = null
 
@@ -70,11 +71,11 @@ export async function GET(request: NextRequest) {
       conference.ticket_capacity &&
       targetConfig.sales_start_date &&
       targetConfig.target_curve &&
-      tickets.length > 0
+      paidTickets.length > 0
     ) {
       try {
         const input: ProcessTicketSalesInput = {
-          tickets: tickets.map((t) => ({
+          tickets: paidTickets.map((t) => ({
             order_id: t.order_id,
             order_date: t.order_date,
             category: t.category,
@@ -100,17 +101,17 @@ export async function GET(request: NextRequest) {
     }
 
     const statistics = analysis?.statistics || {
-      totalPaidTickets: tickets.length,
-      totalRevenue: tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
-      totalOrders: new Set(tickets.map((t) => t.order_id)).size,
-      averageTicketPrice: tickets.length
-        ? tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
-          tickets.length
+      totalPaidTickets: paidTickets.length,
+      totalRevenue: paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0),
+      totalOrders: new Set(paidTickets.map((t) => t.order_id)).size,
+      averageTicketPrice: paidTickets.length
+        ? paidTickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
+        paidTickets.length
         : 0,
       categoryBreakdown: {},
       sponsorTickets: 0,
       speakerTickets: 0,
-      totalCapacityUsed: tickets.length,
+      totalCapacityUsed: paidTickets.length,
     }
 
     await sendSalesUpdateToSlack({
@@ -137,14 +138,14 @@ export async function GET(request: NextRequest) {
         categories: statistics.categoryBreakdown,
         targetAnalysis: analysis
           ? {
-              enabled: true,
-              capacity: analysis.capacity,
-              currentTargetPercentage: analysis.performance.targetPercentage,
-              actualPercentage: analysis.performance.currentPercentage,
-              variance: analysis.performance.variance,
-              isOnTrack: analysis.performance.isOnTrack,
-              nextMilestone: analysis.performance.nextMilestone,
-            }
+            enabled: true,
+            capacity: analysis.capacity,
+            currentTargetPercentage: analysis.performance.targetPercentage,
+            actualPercentage: analysis.performance.currentPercentage,
+            variance: analysis.performance.variance,
+            isOnTrack: analysis.performance.isOnTrack,
+            nextMilestone: analysis.performance.nextMilestone,
+          }
           : null,
         lastUpdated: new Date().toISOString(),
       },
