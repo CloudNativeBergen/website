@@ -269,7 +269,7 @@ export async function sendSalesUpdateToSlack(
           },
           {
             type: 'mrkdwn',
-            text: `*Capacity:*\n${totalTickets}/${targetAnalysis.capacity} tickets`,
+            text: `*Capacity:*\n${paidTickets}/${targetAnalysis.capacity} tickets`,
           },
         ],
       },

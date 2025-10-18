@@ -137,7 +137,7 @@ export function TicketSalesChartDisplay({
   const StatusIcon = getStatusIcon(performance.variance)
   const statusColorClasses = getStatusColors(performance.variance)
   const capacityPercentage = (
-    (statistics.totalCapacityUsed / analysis.capacity) *
+    (statistics.totalPaidTickets / analysis.capacity) *
     100
   ).toFixed(1)
   const avgTicketPrice = formatCurrency(statistics.averageTicketPrice)
@@ -269,10 +269,10 @@ export function TicketSalesChartDisplay({
             <dd className="text-xs text-gray-600 dark:text-gray-400">
               {freeTicketAllocation.totalAllocated > 0
                 ? (
-                    (freeTicketAllocation.totalClaimed /
-                      freeTicketAllocation.totalAllocated) *
-                    100
-                  ).toFixed(1)
+                  (freeTicketAllocation.totalClaimed /
+                    freeTicketAllocation.totalAllocated) *
+                  100
+                ).toFixed(1)
                 : 0}
               % claimed
             </dd>
