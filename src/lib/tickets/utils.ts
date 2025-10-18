@@ -1,4 +1,5 @@
 import type { EventTicket } from './types'
+import type { Conference } from '@/lib/conference/types'
 
 export interface CategoryStat {
   category: string
@@ -11,6 +12,14 @@ export interface CategoryStat {
 export interface SponsorTicketData {
   sponsors: number
   tickets: number
+}
+
+export interface FreeTicketAllocation {
+  totalAllocated: number
+  totalClaimed: number
+  sponsorTickets: number
+  speakerTickets: number
+  organizerTickets: number
 }
 
 export function calculateCategoryStats(
@@ -32,8 +41,8 @@ export function calculateCategoryStats(
         (sum, ticket) =>
           sum +
           parseFloat(ticket.sum) /
-            categoryTickets.filter((t) => t.order_id === ticket.order_id)
-              .length,
+          categoryTickets.filter((t) => t.order_id === ticket.order_id)
+            .length,
         0,
       )
 
@@ -72,6 +81,30 @@ export function calculateSponsorTickets(
   return sponsorTicketsByTier
 }
 
+export function calculateFreeTicketAllocation(
+  conference: Conference,
+  tierAllocation: Record<string, number>,
+  speakerCount: number,
+  organizerCount: number,
+  freeTickets: EventTicket[],
+): FreeTicketAllocation {
+  const sponsorTickets = conference.sponsors?.reduce((total, sponsorData) => {
+    const tierTitle = sponsorData.tier?.title || ''
+    return total + (tierAllocation[tierTitle] || 0)
+  }, 0) || 0
+
+  const totalAllocated = sponsorTickets + speakerCount + organizerCount
+  const totalClaimed = freeTickets.length
+
+  return {
+    totalAllocated,
+    totalClaimed,
+    sponsorTickets,
+    speakerTickets: speakerCount,
+    organizerTickets: organizerCount,
+  }
+}
+
 export function createDefaultAnalysis(
   tickets: EventTicket[],
   capacity: number,
@@ -93,7 +126,7 @@ export function createDefaultAnalysis(
       averageTicketPrice:
         tickets.length > 0
           ? tickets.reduce((sum, t) => sum + parseFloat(t.sum), 0) /
-            tickets.length
+          tickets.length
           : 0,
       categoryBreakdown: {},
       sponsorTickets: 0,

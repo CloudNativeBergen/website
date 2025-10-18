@@ -319,3 +319,20 @@ export async function getSpeakersWithAcceptedTalks(
     includeProposalsFromOtherConferences,
   )
 }
+
+export async function getOrganizerCount(): Promise<{
+  count: number
+  err: Error | null
+}> {
+  let count = 0
+  let err = null
+
+  try {
+    const query = groq`count(*[_type == "speaker" && is_organizer == true])`
+    count = await clientRead.fetch(query, {}, { cache: 'no-store' })
+  } catch (error) {
+    err = error as Error
+  }
+
+  return { count, err }
+}

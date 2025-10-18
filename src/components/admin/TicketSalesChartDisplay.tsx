@@ -5,6 +5,7 @@ import type {
   TicketAnalysisResult,
   SalesTargetConfig,
 } from '@/lib/tickets/types'
+import type { FreeTicketAllocation } from '@/lib/tickets/utils'
 import {
   adaptForChart,
   createTooltipContent,
@@ -60,6 +61,7 @@ interface ChartProps {
   onToggleChange?: (include: boolean) => void
   paidCount?: number
   freeCount?: number
+  freeTicketAllocation?: FreeTicketAllocation
 }
 
 const formatDate = (dateStr: string): string => {
@@ -124,6 +126,7 @@ export function TicketSalesChartDisplay({
   onToggleChange,
   paidCount = 0,
   freeCount = 0,
+  freeTicketAllocation,
 }: ChartProps) {
   const configAnnotations = salesConfig
     ? createConfigAnnotations(salesConfig)
@@ -253,7 +256,27 @@ export function TicketSalesChartDisplay({
 
   return (
     <div className={className}>
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {freeTicketAllocation && (
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+            <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              Free Tickets Claimed
+            </dt>
+            <dd className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">
+              {freeTicketAllocation.totalClaimed} / {freeTicketAllocation.totalAllocated}
+            </dd>
+            <dd className="text-xs text-gray-600 dark:text-gray-400">
+              {freeTicketAllocation.totalAllocated > 0
+                ? (
+                  (freeTicketAllocation.totalClaimed /
+                    freeTicketAllocation.totalAllocated) *
+                  100
+                ).toFixed(1)
+                : 0}% claimed
+            </dd>
+          </div>
+        )}
+
         <PerformanceCard
           title="Current Sales"
           value={`${statistics.totalPaidTickets} / ${analysis.capacity}`}

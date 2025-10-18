@@ -24,6 +24,8 @@ interface SalesUpdateData {
   paidTickets: number
   sponsorTickets: number
   speakerTickets: number
+  organizerTickets: number
+  freeTicketsClaimed: number
   totalTickets: number
   totalRevenue: number
   targetAnalysis?: TicketAnalysisResult | null
@@ -111,6 +113,8 @@ export async function sendSalesUpdateToSlack(
     paidTickets,
     sponsorTickets,
     speakerTickets,
+    organizerTickets,
+    freeTicketsClaimed,
     totalTickets,
     totalRevenue,
     targetAnalysis,
@@ -175,7 +179,53 @@ export async function sendSalesUpdateToSlack(
         },
         {
           type: 'mrkdwn',
-          text: `*Total Complimentary:*\n${sponsorTickets + speakerTickets}`,
+          text: `*Total Complimentary:*\n${sponsorTickets + speakerTickets + organizerTickets}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*🎁 Free Tickets Allocation*',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Allocated:*\n${sponsorTickets + speakerTickets + organizerTickets}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Claimed:*\n${freeTicketsClaimed}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Sponsors:*\n${sponsorTickets}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Speakers:*\n${speakerTickets}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Organizers:*\n${organizerTickets}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Claim Rate:*\n${sponsorTickets + speakerTickets + organizerTickets > 0 ? ((freeTicketsClaimed / (sponsorTickets + speakerTickets + organizerTickets)) * 100).toFixed(1) : 0}%`,
         },
       ],
     },

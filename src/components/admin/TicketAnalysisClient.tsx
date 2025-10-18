@@ -8,6 +8,7 @@ import type {
   TicketAnalysisResult,
   SalesTargetConfig,
 } from '@/lib/tickets/types'
+import type { FreeTicketAllocation } from '@/lib/tickets/utils'
 import { createDefaultAnalysis } from '@/lib/tickets/utils'
 
 interface TicketData {
@@ -31,6 +32,7 @@ interface TicketAnalysisClientProps {
   ticketData: TicketData
   conference: ConferenceConfig
   analysisData: AnalysisData
+  freeTicketAllocation: FreeTicketAllocation
   defaultTargetConfig: SalesTargetConfig
   defaultCapacity: number
 }
@@ -39,6 +41,7 @@ export function TicketAnalysisClient({
   ticketData,
   conference,
   analysisData,
+  freeTicketAllocation,
   defaultTargetConfig,
   defaultCapacity,
 }: TicketAnalysisClientProps) {
@@ -76,6 +79,7 @@ export function TicketAnalysisClient({
           onToggleChange={setIncludeFreeTickets}
           paidCount={paidTickets.length}
           freeCount={freeTickets.length}
+          freeTicketAllocation={freeTicketAllocation}
         />
       </div>
 

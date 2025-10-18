@@ -25,7 +25,10 @@ import {
 import {
   calculateCategoryStats,
   calculateSponsorTickets,
+  calculateFreeTicketAllocation,
 } from '@/lib/tickets/utils'
+import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
+import { Status } from '@/lib/proposal/types'
 import Link from 'next/link'
 
 async function getTicketData(conference: Conference) {
@@ -151,6 +154,21 @@ export default async function AdminTickets() {
     SPONSOR_TIER_TICKET_ALLOCATION,
   )
 
+  const { speakers: confirmedSpeakers } = await getSpeakers(
+    conference._id,
+    [Status.confirmed],
+    false,
+  )
+  const { count: organizerCount } = await getOrganizerCount()
+
+  const freeTicketAllocation = calculateFreeTicketAllocation(
+    conference,
+    SPONSOR_TIER_TICKET_ALLOCATION,
+    confirmedSpeakers.length,
+    organizerCount,
+    freeTickets,
+  )
+
   return (
     <div className="mx-auto max-w-7xl">
       <AdminPageHeader
@@ -194,9 +212,117 @@ export default async function AdminTickets() {
           paidAnalysis: paidOnlyAnalysis,
           allTicketsAnalysis,
         }}
+        freeTicketAllocation={freeTicketAllocation}
         defaultTargetConfig={DEFAULT_TARGET_CONFIG}
         defaultCapacity={DEFAULT_CAPACITY}
       />
+
+      <div className="mt-8">
+        <CollapsibleSection
+          title="Free Ticket Allocation & Usage"
+          defaultOpen={true}
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                  >
+                    Category
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                  >
+                    Allocated
+                  </th>
+                  <th
+                    scope="col"
+                    className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400"
+                  >
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
+                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
+                    Sponsors
+                  </td>
+                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                    <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                      {freeTicketAllocation.sponsorTickets}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
+                    Based on sponsor tier agreements
+                  </td>
+                </tr>
+                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
+                    Confirmed Speakers
+                  </td>
+                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                      {freeTicketAllocation.speakerTickets}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
+                    One ticket per confirmed speaker
+                  </td>
+                </tr>
+                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 dark:text-white">
+                    Organizers
+                  </td>
+                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-300">
+                      {freeTicketAllocation.organizerTickets}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
+                    Conference organizers
+                  </td>
+                </tr>
+                <tr className="bg-gray-50 font-semibold dark:bg-gray-800">
+                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                    Total
+                  </td>
+                  <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
+                    <span className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300">
+                      {freeTicketAllocation.totalAllocated}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm whitespace-nowrap">
+                    <span className="text-gray-900 dark:text-white">
+                      {freeTicketAllocation.totalClaimed} claimed (
+                      {freeTicketAllocation.totalAllocated > 0
+                        ? (
+                          (freeTicketAllocation.totalClaimed /
+                            freeTicketAllocation.totalAllocated) *
+                          100
+                        ).toFixed(1)
+                        : 0}
+                      %)
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+            <p>
+              <strong>Note:</strong> Free tickets are allocated to sponsors
+              based on their tier (Pod: 2, Service: 3, Ingress: 5), one per
+              confirmed speaker, and one per organizer. The &quot;claimed&quot;
+              count shows how many free tickets have been registered in the
+              system.
+            </p>
+          </div>
+        </CollapsibleSection>
+      </div>
 
       {categoryStats.length > 0 && (
         <div className="mt-8">

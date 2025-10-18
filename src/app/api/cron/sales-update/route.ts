@@ -6,6 +6,7 @@ import type {
   TicketAnalysisResult,
 } from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getOrganizerCount } from '@/lib/speaker/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 
 export async function GET(request: NextRequest) {
@@ -61,6 +62,9 @@ export async function GET(request: NextRequest) {
     )
 
     const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)
+    const freeTickets = allTickets.filter((t) => parseFloat(t.sum) === 0)
+
+    const { count: organizerCount } = await getOrganizerCount()
 
     let analysis: TicketAnalysisResult | null = null
 
@@ -120,6 +124,8 @@ export async function GET(request: NextRequest) {
       paidTickets: statistics.totalPaidTickets,
       sponsorTickets: statistics.sponsorTickets,
       speakerTickets: statistics.speakerTickets,
+      organizerTickets: organizerCount,
+      freeTicketsClaimed: freeTickets.length,
       totalTickets: statistics.totalCapacityUsed,
       totalRevenue: statistics.totalRevenue,
       targetAnalysis: analysis,

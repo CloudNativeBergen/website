@@ -19,8 +19,8 @@ export function TicketPageLoadingSkeleton() {
       </div>
 
       <div className="mt-8">
-        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          {[...Array(5)].map((_, i) => (
             <div
               key={i}
               className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900"
