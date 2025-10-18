@@ -243,11 +243,20 @@ export function createTooltipContent(
     )
     .join('')
 
+  const formatNOK = (amount: number): string => {
+    return new Intl.NumberFormat('no-NO', {
+      style: 'currency',
+      currency: 'NOK',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
   const avgPriceHTML =
     actualTicketCount > 0
       ? `<div class="flex justify-between items-center">
         <span class="text-sm text-gray-600 dark:text-gray-400">Avg. Price:</span>
-        <span class="text-sm text-gray-700 dark:text-gray-300">$${(revenue / actualTicketCount).toFixed(0)}</span>
+        <span class="text-sm text-gray-700 dark:text-gray-300">${formatNOK(revenue / actualTicketCount)}</span>
       </div>`
       : ''
 
@@ -269,7 +278,7 @@ export function createTooltipContent(
         </div>
         <div class="flex justify-between items-center">
           <span class="text-sm text-gray-600 dark:text-gray-400">Revenue:</span>
-          <span class="font-medium text-green-600 dark:text-green-400">$${revenue.toLocaleString()}</span>
+          <span class="font-medium text-green-600 dark:text-green-400">${formatNOK(revenue)}</span>
         </div>
         ${avgPriceHTML}
       </div>
