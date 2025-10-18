@@ -8,6 +8,7 @@ import {
   ShoppingBagIcon,
   HomeIcon,
   CreditCardIcon,
+  BuildingOfficeIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
@@ -142,6 +143,25 @@ export default async function OrdersAdminPage() {
           Quick Actions
         </h2>
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/admin/tickets/companies"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <BuildingOfficeIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Company Breakdown
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  View companies attending
+                </p>
+              </div>
+            </div>
+          </Link>
+
           <Link
             href="/admin/tickets"
             className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
