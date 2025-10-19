@@ -7,7 +7,7 @@ import {
   ClockIcon,
 } from '@heroicons/react/24/outline'
 
-interface WorkshopStats {
+export interface WorkshopStats {
   workshopId: string
   workshopTitle: string
   capacity: number

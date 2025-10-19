@@ -6,12 +6,17 @@ import { useProfile } from '@/hooks/useProfile'
 import { useEmails } from '@/hooks/useEmails'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline'
+import SpeakerProfilePreviewButton from '@/components/cfp/SpeakerProfilePreviewButton'
 
 interface CFPProfilePageProps {
   initialSpeaker: Speaker
+  conferenceId?: string
 }
 
-export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
+export function CFPProfilePage({
+  initialSpeaker,
+  conferenceId,
+}: CFPProfilePageProps) {
   const { profile, error, refreshProfile, updateProfile } = useProfile()
   const { emails } = useEmails()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -92,7 +97,7 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
   return (
     <>
       <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
               Your Speaker Profile
@@ -102,6 +107,14 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
                 Manage your speaker information and how you appear to attendees
               </p>
             </div>
+          </div>
+          <div className="mt-4 sm:mt-0">
+            <SpeakerProfilePreviewButton
+              speaker={speakerData}
+              fetchTalks={true}
+              conferenceId={conferenceId}
+              buttonClassName="w-full sm:w-auto"
+            />
           </div>
         </div>
       </div>
@@ -167,7 +180,6 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
             showImageUpload={true}
             showLinks={true}
             className="space-y-6"
-            onImageUpload={refreshProfile}
           />
 
           <div className="flex justify-end border-t border-brand-frosted-steel pt-6 dark:border-gray-600">

@@ -1,10 +1,5 @@
-import {
-  ErrorDisplay,
-  SpeakerTable,
-  SpeakerActions,
-  AdminPageHeader,
-} from '@/components/admin'
-import { UserGroupIcon } from '@heroicons/react/24/outline'
+import { ErrorDisplay } from '@/components/admin'
+import SpeakersPageClient from '@/components/admin/SpeakersPageClient'
 import { Speaker, Flags } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -113,96 +108,23 @@ export default async function AdminSpeakers() {
     const stats = calculateSpeakerStats(speakers, conference._id)
 
     return (
-      <div className="mx-auto max-w-7xl">
-        <AdminPageHeader
-          icon={<UserGroupIcon />}
-          title="Speaker Management"
-          description={
-            <>
-              Manage speakers with accepted or confirmed talks for{' '}
-              <span className="font-medium text-brand-cloud-blue dark:text-blue-300">
-                {conference.title}
-              </span>
-              . Emails are sent only to speakers with confirmed talks.
-            </>
-          }
-          stats={[
-            {
-              value: stats.totalSpeakers,
-              label: 'Total speakers',
-              color: 'slate',
-            },
-            {
-              value: `${stats.confirmedSpeakers} (${
-                stats.totalSpeakers > 0
-                  ? Math.round(
-                      (stats.confirmedSpeakers / stats.totalSpeakers) * 100,
-                    )
-                  : 0
-              }%)`,
-              label: 'Confirmed',
-              color: 'green',
-            },
-            {
-              value: `${stats.acceptedSpeakers} (${
-                stats.totalSpeakers > 0
-                  ? Math.round(
-                      (stats.acceptedSpeakers / stats.totalSpeakers) * 100,
-                    )
-                  : 0
-              }%)`,
-              label: 'Accepted',
-              color: 'blue',
-            },
-            {
-              value: `${stats.newSpeakers} (${
-                stats.totalSpeakers > 0
-                  ? Math.round((stats.newSpeakers / stats.totalSpeakers) * 100)
-                  : 0
-              }%)`,
-              label: 'New speakers',
-              color: 'blue',
-            },
-            {
-              value: `${stats.underrepresentedSpeakers} (${
-                stats.totalSpeakers > 0
-                  ? Math.round(
-                      (stats.underrepresentedSpeakers / stats.totalSpeakers) *
-                        100,
-                    )
-                  : 0
-              }%)`,
-              label: 'Underrepresented',
-              color: 'purple',
-            },
-            {
-              value: `${stats.localSpeakers} (${
-                stats.totalSpeakers > 0
-                  ? Math.round(
-                      (stats.localSpeakers / stats.totalSpeakers) * 100,
-                    )
-                  : 0
-              }%)`,
-              label: 'Local speakers',
-              color: 'green',
-            },
-          ]}
-          actions={
-            <SpeakerActions
-              eligibleSpeakersCount={confirmedSpeakers.length}
-              fromEmail={`Cloud Native Bergen <${conference.contact_email}>`}
-              conference={conference}
-            />
-          }
-        />
-
-        <div className="mt-8">
-          <SpeakerTable
-            speakers={speakers}
-            currentConferenceId={conference._id}
-          />
-        </div>
-      </div>
+      <SpeakersPageClient
+        speakers={speakers}
+        currentConferenceId={conference._id}
+        conference={conference}
+        stats={{
+          totalSpeakers: stats.totalSpeakers,
+          confirmedSpeakers: stats.confirmedSpeakers,
+          localSpeakers: stats.localSpeakers,
+          newSpeakers: stats.newSpeakers,
+          diverseSpeakers: stats.underrepresentedSpeakers,
+          speakersNeedingTravel: speakers.filter((speaker) =>
+            speaker.flags?.includes(Flags.requiresTravelFunding),
+          ).length,
+        }}
+        confirmedSpeakersCount={confirmedSpeakers.length}
+        conferenceEmail={`Cloud Native Bergen <${conference.contact_email}>`}
+      />
     )
   } catch (error) {
     console.error('Speakers page error:', error)

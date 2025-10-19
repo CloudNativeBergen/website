@@ -16,11 +16,12 @@ import {
   languages,
   audiences,
 } from '@/lib/proposal/types'
-import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
+import { Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { sanityImage } from '@/lib/sanity/client'
-import { getStatusBadgeStyle } from './utils'
+import { getStatusBadgeConfig } from '@/lib/proposal/ui'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -36,15 +37,7 @@ function isTopicObject(topic: unknown): topic is Topic {
 }
 
 export function ProposalDetail({ proposal }: ProposalDetailProps) {
-  const speakers =
-    proposal.speakers && Array.isArray(proposal.speakers)
-      ? proposal.speakers
-          .filter(
-            (speaker) =>
-              typeof speaker === 'object' && speaker && 'name' in speaker,
-          )
-          .map((speaker) => speaker as SpeakerWithReviewInfo)
-      : []
+  const speakers = extractSpeakersFromProposal(proposal)
   const topics = proposal.topics as Topic[]
   const requiresTravelFunding =
     speakers.some((speaker) =>
@@ -61,7 +54,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
             </h1>
             <div className="mt-2 flex items-center space-x-4">
               <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
+                  const config = getStatusBadgeConfig(proposal.status)
+                  return `${config.bgColor} ${config.textColor} ${config.ringColor}`
+                })()}`}
               >
                 {statuses.get(proposal.status) || proposal.status}
               </span>
@@ -143,7 +139,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                             </p>
                             <div className="mt-1 flex items-center space-x-2">
                               <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(talk.status)}`}
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
+                                  const config = getStatusBadgeConfig(talk.status)
+                                  return `${config.bgColor} ${config.textColor} ${config.ringColor}`
+                                })()}`}
                               >
                                 {statuses.get(talk.status) || talk.status}
                               </span>
@@ -199,7 +198,10 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                             </p>
                             <div className="mt-1 flex items-center space-x-2">
                               <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(talk.status)}`}
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
+                                  const config = getStatusBadgeConfig(talk.status)
+                                  return `${config.bgColor} ${config.textColor} ${config.ringColor}`
+                                })()}`}
                               >
                                 {statuses.get(talk.status) || talk.status}
                               </span>

@@ -72,6 +72,7 @@ export default async function ProposalDetailPage({
                 proposal={proposal}
                 domain={domain}
                 fromEmail={conference.cfp_email}
+                conference={conference}
               />
             </div>
 

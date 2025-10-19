@@ -15,8 +15,20 @@ export function providerAccount(
   return `${provider}:${providerAccountId}`
 }
 
-function generateSlug(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, '-').slice(0, 96)
+export function generateSlug(name: string, suffix?: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  if (suffix) {
+    const maxBaseLength = 96 - 1 - suffix.length
+    const truncatedBase = base.slice(0, maxBaseLength)
+    return `${truncatedBase}-${suffix}`
+  }
+
+  return base.slice(0, 96)
 }
 
 async function findSpeakerByProvider(
