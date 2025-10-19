@@ -14,6 +14,8 @@ import {
   ClipboardIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
+  PencilIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { SpeakerIndicators } from '@/lib/proposal'
@@ -46,6 +48,8 @@ interface SpeakerWithProposals extends Speaker {
 interface SpeakerTableProps {
   speakers: SpeakerWithProposals[]
   currentConferenceId?: string
+  onEditSpeaker: (speaker: SpeakerWithProposals) => void
+  onPreviewSpeaker: (speaker: SpeakerWithProposals) => void
 }
 
 interface ColumnVisibility {
@@ -157,6 +161,8 @@ const CopyBlueskyUsernameButton = ({
 export function SpeakerTable({
   speakers,
   currentConferenceId,
+  onEditSpeaker,
+  onPreviewSpeaker,
 }: SpeakerTableProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState<FilterOptions>({
@@ -480,6 +486,12 @@ export function SpeakerTable({
                 >
                   Talks
                 </th>
+                <th
+                  scope="col"
+                  className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+                >
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-900">
@@ -614,7 +626,7 @@ export function SpeakerTable({
                           })
                           .map((proposal) => (
                             <div
-                              key={proposal._id}
+                              key={`${speaker._id}-${proposal._id}`}
                               className="flex items-center gap-2 text-xs"
                             >
                               <StatusBadge status={proposal.status} />
@@ -633,6 +645,28 @@ export function SpeakerTable({
                               </span>
                             </div>
                           ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onEditSpeaker(speaker)}
+                          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                          aria-label={`Edit ${speaker.name}`}
+                          title="Edit speaker"
+                        >
+                          <PencilIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onPreviewSpeaker(speaker)}
+                          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                          aria-label={`Preview ${speaker.name} profile`}
+                          title="Preview public profile"
+                        >
+                          <EyeIcon className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

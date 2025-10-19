@@ -80,11 +80,9 @@ export function ProposalCard({
             <h3 className="line-clamp-2 flex-1 text-sm font-medium text-gray-900 dark:text-white">
               {proposal.title}
             </h3>
-            <StatusBadge
-              status={proposal.status}
-              variant="compact"
-              className="flex-shrink-0"
-            />
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <StatusBadge status={proposal.status} variant="compact" />
+            </div>
           </div>
 
           <div className="mb-2 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
@@ -159,19 +157,21 @@ export function ProposalCard({
   }
 
   return (
-    <Link href={href || '#'} className={cardClasses} onClick={handleClick}>
-      <CardContent />
-      {onSelect && (
-        <div className="absolute top-3 left-3 hidden lg:block">
-          <div
-            className={`h-2 w-2 rounded-full ${
-              isSelected
-                ? 'bg-indigo-500 dark:bg-indigo-400'
-                : 'bg-gray-300 dark:bg-gray-600'
-            }`}
-          />
-        </div>
-      )}
-    </Link>
+    <div className={`${cardClasses} relative`}>
+      <Link href={href || '#'} className="block" onClick={handleClick}>
+        <CardContent />
+        {onSelect && (
+          <div className="absolute top-3 left-3 hidden lg:block">
+            <div
+              className={`h-2 w-2 rounded-full ${
+                isSelected
+                  ? 'bg-indigo-500 dark:bg-indigo-400'
+                  : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            />
+          </div>
+        )}
+      </Link>
+    </div>
   )
 }

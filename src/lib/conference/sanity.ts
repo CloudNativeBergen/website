@@ -12,8 +12,8 @@ export async function getConferenceById(
       query,
       { id },
       {
-        cache: 'no-store'
-      }
+        cache: 'no-store',
+      },
     )
 
     return { conference, error: null }
@@ -291,9 +291,7 @@ export async function getConferenceForDomain(
   return { conference, domain, error }
 }
 
-export async function getConferenceByCheckinEventId(
-  eventId: number
-): Promise<{
+export async function getConferenceByCheckinEventId(eventId: number): Promise<{
   conference: Conference | null
   error: Error | null
 }> {
@@ -305,7 +303,9 @@ export async function getConferenceByCheckinEventId(
     if (!conference) {
       return {
         conference: null,
-        error: new Error(`No conference found for checkin event ID: ${eventId}`),
+        error: new Error(
+          `No conference found for checkin event ID: ${eventId}`,
+        ),
       }
     }
 

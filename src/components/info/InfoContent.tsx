@@ -23,7 +23,7 @@ export function InfoContent({ faqs }: InfoContentProps) {
   return (
     <Container>
       <div className="mt-16 sm:mt-20">
-        <div className="flex flex-wrap gap-4 mb-12">
+        <div className="mb-12 flex flex-wrap gap-4">
           {faqs.map((section) => (
             <a
               key={section.anchor}
@@ -60,7 +60,7 @@ export function InfoContent({ faqs }: InfoContentProps) {
                   <dl className="space-y-8">
                     {section.questions.map((faq) => (
                       <div key={faq.question}>
-                        <dt className="text-base font-semibold leading-7 text-gray-900 dark:text-white">
+                        <dt className="text-base leading-7 font-semibold text-gray-900 dark:text-white">
                           {faq.question}
                         </dt>
                         <dd className="mt-2 text-base leading-7 text-gray-600 dark:text-gray-400 [&_a]:text-blue-600 [&_a]:hover:text-blue-700 dark:[&_a]:text-blue-400 dark:[&_a]:hover:text-blue-300">

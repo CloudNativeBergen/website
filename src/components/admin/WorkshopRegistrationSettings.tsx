@@ -1,7 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarIcon, PencilIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import {
+  CalendarIcon,
+  PencilIcon,
+  CheckIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline'
 import { updateWorkshopRegistrationTimes } from '@/app/(admin)/admin/settings/actions'
 
 interface WorkshopRegistrationSettingsProps {
@@ -21,12 +26,12 @@ export function WorkshopRegistrationSettings({
   const [startDate, setStartDate] = useState(
     workshopRegistrationStart
       ? new Date(workshopRegistrationStart).toISOString().slice(0, 16)
-      : ''
+      : '',
   )
   const [endDate, setEndDate] = useState(
     workshopRegistrationEnd
       ? new Date(workshopRegistrationEnd).toISOString().slice(0, 16)
-      : ''
+      : '',
   )
 
   const handleSave = async () => {
@@ -36,7 +41,7 @@ export function WorkshopRegistrationSettings({
     const result = await updateWorkshopRegistrationTimes(
       conferenceId,
       startDate || null,
-      endDate || null
+      endDate || null,
     )
 
     setIsSaving(false)
@@ -54,12 +59,12 @@ export function WorkshopRegistrationSettings({
     setStartDate(
       workshopRegistrationStart
         ? new Date(workshopRegistrationStart).toISOString().slice(0, 16)
-        : ''
+        : '',
     )
     setEndDate(
       workshopRegistrationEnd
         ? new Date(workshopRegistrationEnd).toISOString().slice(0, 16)
-        : ''
+        : '',
     )
     setIsEditing(false)
     setError(null)
@@ -83,12 +88,18 @@ export function WorkshopRegistrationSettings({
     const end = new Date(workshopRegistrationEnd)
 
     if (now < start) {
-      return { text: 'Not yet open', color: 'text-yellow-600 dark:text-yellow-400' }
+      return {
+        text: 'Not yet open',
+        color: 'text-yellow-600 dark:text-yellow-400',
+      }
     }
     if (now > end) {
       return { text: 'Closed', color: 'text-red-600 dark:text-red-400' }
     }
-    return { text: 'Currently open', color: 'text-green-600 dark:text-green-400' }
+    return {
+      text: 'Currently open',
+      color: 'text-green-600 dark:text-green-400',
+    }
   }
 
   const status = getRegistrationStatus()
@@ -122,7 +133,7 @@ export function WorkshopRegistrationSettings({
       {isEditing ? (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Registration Opens
             </label>
             <input
@@ -134,7 +145,7 @@ export function WorkshopRegistrationSettings({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
               Registration Closes
             </label>
             <input
@@ -175,7 +186,7 @@ export function WorkshopRegistrationSettings({
             </span>
           </div>
 
-          <div className="flex justify-between py-2 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex justify-between border-t border-gray-200 py-2 dark:border-gray-700">
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Registration Closes
             </span>
@@ -184,7 +195,7 @@ export function WorkshopRegistrationSettings({
             </span>
           </div>
 
-          <div className="flex justify-between py-2 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex justify-between border-t border-gray-200 py-2 dark:border-gray-700">
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
               Status
             </span>

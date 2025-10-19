@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { Button } from '@/components/Button'
 import { GeneralBroadcastModal } from '@/components/admin'
 import { useNotification } from './NotificationProvider'
@@ -12,14 +11,17 @@ interface SpeakerActionsProps {
   eligibleSpeakersCount: number
   fromEmail: string
   conference: Conference
+  isModalOpen: boolean
+  setIsModalOpen: (open: boolean) => void
 }
 
 export function SpeakerActions({
   eligibleSpeakersCount,
   fromEmail,
   conference,
+  isModalOpen,
+  setIsModalOpen,
 }: SpeakerActionsProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false)
   const { showNotification } = useNotification()
 
   const handleSendBroadcast = async (subject: string, message: string) => {
@@ -77,18 +79,16 @@ export function SpeakerActions({
 
   return (
     <>
-      <div className="flex gap-3">
-        <Button
-          onClick={() => setIsModalOpen(true)}
-          variant="primary"
-          size="md"
-          className="font-space-grotesk flex items-center gap-2 rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={eligibleSpeakersCount === 0}
-        >
-          <EnvelopeIcon className="h-4 w-4" />
-          Email Speakers
-        </Button>
-      </div>
+      <Button
+        onClick={() => setIsModalOpen(true)}
+        variant="primary"
+        size="md"
+        className="font-space-grotesk flex items-center gap-2 rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={eligibleSpeakersCount === 0}
+      >
+        <EnvelopeIcon className="h-4 w-4" />
+        Email Speakers
+      </Button>
 
       <GeneralBroadcastModal
         isOpen={isModalOpen}

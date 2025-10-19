@@ -42,12 +42,13 @@ export function MarketingTabs({
   // Guard against tabs/children length mismatches
   if (tabs.length !== children.length) {
     console.error(
-      `MarketingTabs: tabs.length (${tabs.length}) does not match children.length (${children.length})`
+      `MarketingTabs: tabs.length (${tabs.length}) does not match children.length (${children.length})`,
     )
     return (
       <div className="rounded-lg bg-red-50 p-6 text-center dark:bg-red-900/20">
         <p className="text-sm font-medium text-red-800 dark:text-red-300">
-          Configuration Error: Number of tabs does not match number of content panels.
+          Configuration Error: Number of tabs does not match number of content
+          panels.
         </p>
         <p className="mt-2 text-xs text-red-700 dark:text-red-400">
           Expected {tabs.length} content panels, but got {children.length}.

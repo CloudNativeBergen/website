@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache'
 export async function updateWorkshopRegistrationTimes(
   conferenceId: string,
   startDate: string | null,
-  endDate: string | null
+  endDate: string | null,
 ) {
   try {
     // Validate dates
@@ -20,8 +20,12 @@ export async function updateWorkshopRegistrationTimes(
     await clientWrite
       .patch(conferenceId)
       .set({
-        workshop_registration_start: startDate ? new Date(startDate).toISOString() : null,
-        workshop_registration_end: endDate ? new Date(endDate).toISOString() : null,
+        workshop_registration_start: startDate
+          ? new Date(startDate).toISOString()
+          : null,
+        workshop_registration_end: endDate
+          ? new Date(endDate).toISOString()
+          : null,
       })
       .commit()
 

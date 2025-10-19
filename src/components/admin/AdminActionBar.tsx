@@ -11,23 +11,37 @@ import {
   ExclamationTriangleIcon,
   HeartIcon,
   EnvelopeIcon,
+  PencilIcon,
+  EyeIcon,
 } from '@heroicons/react/20/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
-import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
+import { getSpeakerIndicators } from '@/lib/speaker/utils'
+import { Speaker } from '@/lib/speaker/types'
 import { SpeakerEmailModal } from './SpeakerEmailModal'
+import { ProposalManagementModal } from './ProposalManagementModal'
+import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
+import { useRouter } from 'next/navigation'
+
+import { Conference } from '@/lib/conference/types'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
   domain?: string
   fromEmail: string
+  conference: Conference
 }
 
 export function AdminActionBar({
   proposal,
   domain,
   fromEmail,
+  conference,
 }: AdminActionBarProps) {
+  const router = useRouter()
   const [showEmailModal, setShowEmailModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [speakersWithEmail, setSpeakersWithEmail] = useState<
     {
       id: string
@@ -35,6 +49,7 @@ export function AdminActionBar({
       email: string
     }[]
   >([])
+  const [previewSpeaker, setPreviewSpeaker] = useState<Speaker | null>(null)
 
   const handleAction = (action: Action) => {
     const event = new CustomEvent('proposalAction', {
@@ -58,41 +73,37 @@ export function AdminActionBar({
     }
   }
 
+  const handleEditProposal = () => {
+    setShowEditModal(true)
+  }
+
+  const handlePreviewSpeaker = () => {
+    if (speakers.length > 0) {
+      const speakerForPreview = speakers[0] as Speaker
+      setPreviewSpeaker(speakerForPreview)
+      setShowPreviewModal(true)
+    }
+  }
+
+  const handleProposalUpdated = () => {
+    router.refresh()
+    setShowEditModal(false)
+  }
+
   const canApprove = proposal.status === 'submitted'
   const canRemind = proposal.status === 'accepted'
   const canReject =
     proposal.status === 'submitted' || proposal.status === 'accepted'
 
-  const speakers =
-    proposal.speakers && Array.isArray(proposal.speakers)
-      ? proposal.speakers
-          .filter(
-            (speaker) =>
-              typeof speaker === 'object' && speaker && 'name' in speaker,
-          )
-          .map((speaker) => speaker as SpeakerWithReviewInfo)
-      : []
-  const isSeasonedSpeaker = speakers.some(
-    (speaker) =>
-      speaker?.previousAcceptedTalks &&
-      speaker.previousAcceptedTalks.length > 0,
-  )
-  const isNewSpeaker =
-    speakers.length === 0 ||
-    speakers.every(
-      (speaker) =>
-        !speaker?.previousAcceptedTalks ||
-        speaker.previousAcceptedTalks.length === 0,
-    )
-  const isLocalSpeaker = speakers.some((speaker) =>
-    speaker?.flags?.includes(Flags.localSpeaker),
-  )
-  const isUnderrepresentedSpeaker = speakers.some((speaker) =>
-    speaker?.flags?.includes(Flags.diverseSpeaker),
-  )
-  const requiresTravelSupport = speakers.some((speaker) =>
-    speaker?.flags?.includes(Flags.requiresTravelFunding),
-  )
+  const speakers = extractSpeakersFromProposal(proposal)
+  const indicators = getSpeakerIndicators(speakers)
+  const {
+    isSeasonedSpeaker,
+    isNewSpeaker,
+    isLocalSpeaker,
+    isUnderrepresentedSpeaker,
+    requiresTravelSupport,
+  } = indicators
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
@@ -194,6 +205,26 @@ export function AdminActionBar({
         </div>
 
         <div className="flex flex-shrink-0 items-center gap-2">
+          <button
+            onClick={handleEditProposal}
+            className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+            title="Edit proposal"
+          >
+            <PencilIcon className="h-3 w-3" />
+            Edit
+          </button>
+
+          {speakers.length > 0 && (
+            <button
+              onClick={handlePreviewSpeaker}
+              className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
+              title="Preview speaker profile"
+            >
+              <EyeIcon className="h-3 w-3" />
+              Preview
+            </button>
+          )}
+
           {speakers.length > 0 && speakers.some((speaker) => speaker.email) && (
             <button
               onClick={handleEmailSpeakers}
@@ -246,6 +277,28 @@ export function AdminActionBar({
           speakers={speakersWithEmail}
           domain={domain}
           fromEmail={fromEmail}
+        />
+      )}
+
+      {showEditModal && (
+        <ProposalManagementModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          editingProposal={proposal}
+          conference={conference}
+          onProposalUpdated={handleProposalUpdated}
+        />
+      )}
+
+      {showPreviewModal && previewSpeaker && (
+        <SpeakerProfilePreview
+          isOpen={showPreviewModal}
+          onClose={() => {
+            setShowPreviewModal(false)
+            setPreviewSpeaker(null)
+          }}
+          speaker={previewSpeaker}
+          talks={[proposal]}
         />
       )}
     </div>
