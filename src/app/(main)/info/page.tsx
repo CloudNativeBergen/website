@@ -23,13 +23,11 @@ export default async function Info() {
         },
         {
           question: 'Where is the conference located?',
-          answer:
-            'The conference will take place at the Academic Quarter (Kvarteret) in Bergen, Norway. The address is Olav Kyrres gate 49. You can find more information about Kvarteret on their website at <u><a href="https://kvarteret.no">kvarteret.no</a></u>.',
+          answer: `The conference will take place at ${conference.venue_name || 'the venue'} in ${conference.city}, ${conference.country}.${conference.venue_address ? ` The address is ${conference.venue_address}.` : ''}`,
         },
         {
           question: 'How do I get to the venue?',
-          answer:
-            'The venue is located in the city center of Bergen, close to Byparken (City Park) where Bybanen and bus routes to the city center terminates. It takes about an hour from Bergen airport Flesland to the city center. If you are arriving by car, there are parking garages nearby such as Klostergarasjen and Bygarasjen, but we reccomend public transportation.\nYou can find more information about how to get to the venue on their website at <u><a href="https://kvarteret.no">kvarteret.no</a></u>.',
+          answer: `The venue is located in the city center of ${conference.city}, close to Byparken (City Park) where Bybanen and bus routes to the city center terminates. It takes about an hour from ${conference.city} airport Flesland to the city center. If you are arriving by car, there are parking garages nearby such as Klostergarasjen and Bygarasjen, but we reccomend public transportation.`,
         },
         {
           question: 'Is this venue accessible?',
@@ -89,9 +87,8 @@ export default async function Info() {
             'Yes, we recommend you to bring your own laptop. We will provide a projector and a screen for your presentation. If you have any special needs, please let us know in advance.',
         },
         {
-          question: 'What do you reccomend me to do during my stay in Bergen?',
-          answer:
-            'We recommend you to explore the city of Bergen and the surrounding nature. Bergen is known for its beautiful nature, mountains, fjords, and the UNESCO World Heritage Site Bryggen. You can find more information about Bergen on the official tourism website at <u><a href="https://en.visitbergen.com">visitbergen.com</a></u>.',
+          question: `What do you reccomend me to do during my stay in ${conference.city}?`,
+          answer: `We recommend you to explore the city of ${conference.city} and the surrounding nature. ${conference.city} is known for its beautiful nature, mountains, fjords, and the UNESCO World Heritage Site Bryggen. You can find more information about ${conference.city} on the official tourism website at <u><a href="https://en.visitbergen.com">visitbergen.com</a></u>.`,
         },
       ],
     },
@@ -123,11 +120,11 @@ export default async function Info() {
 
   return (
     <>
-      <div className="relative py-20 sm:pt-36 sm:pb-24">
-        <BackgroundImage className="-top-36 -bottom-14" />
+      <div className="relative py-20 sm:pb-24 sm:pt-36">
+        <BackgroundImage className="-bottom-14 -top-36" />
         <Container className="relative">
           <div className="mx-auto max-w-xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
+            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 dark:text-blue-400 sm:text-7xl">
               Practical Information
             </h1>
             <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-300">
@@ -144,9 +141,9 @@ export default async function Info() {
             </div>
           </div>
         </Container>
-
-        <InfoContent faqs={faqs} />
       </div>
+
+      <InfoContent faqs={faqs} />
     </>
   )
 }

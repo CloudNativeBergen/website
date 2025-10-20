@@ -44,7 +44,7 @@ export function InfoContent({ faqs }: InfoContentProps) {
           <div
             key={section.anchor}
             id={section.anchor}
-            className="mb-24 scroll-mt-20 last:mb-0"
+            className="mb-24 scroll-mt-32 last:mb-0"
           >
             <div className="rounded-3xl bg-white p-8 ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
               <div className="lg:grid lg:grid-cols-12 lg:gap-8">
