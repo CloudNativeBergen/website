@@ -1,8 +1,4 @@
-import {
-  withAuth,
-  getSignInUrl,
-  getSignUpUrl,
-} from '@workos-inc/authkit-nextjs'
+import { withAuth } from '@workos-inc/authkit-nextjs'
 import Link from 'next/link'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import WorkshopList from '@/components/workshop/WorkshopList'
@@ -32,8 +28,26 @@ export default async function WorkshopPage() {
   }
 
   if (!user) {
-    const signInUrl = await getSignInUrl({ redirectUri: '/workshop' })
-    const signUpUrl = await getSignUpUrl({ redirectUri: '/workshop' })
+    const clientId = process.env.WORKOS_CLIENT_ID!
+    const baseUrl = 'https://api.workos.com/user_management/authorize'
+    const redirectUri = `${process.env.NEXT_PUBLIC_URL}/api/auth/callback`
+
+    const buildAuthUrl = (screenHint: 'sign-in' | 'sign-up') => {
+      const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        provider: 'authkit',
+        screen_hint: screenHint,
+        state: Buffer.from(
+          JSON.stringify({ returnPathname: '/workshop' }),
+        ).toString('base64'),
+      })
+      return `${baseUrl}?${params.toString()}`
+    }
+
+    const signInUrl = buildAuthUrl('sign-in')
+    const signUpUrl = buildAuthUrl('sign-up')
 
     return (
       <div className="relative py-20 sm:pt-36 sm:pb-24">
@@ -87,9 +101,9 @@ export default async function WorkshopPage() {
                 <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
                   Workshop Access Required
                 </h1>
-                <Button href="/api/auth/signout" variant="outline">
-                  Sign Out
-                </Button>
+                <Link href="/api/auth/signout" prefetch={false}>
+                  <Button variant="outline">Sign Out</Button>
+                </Link>
               </div>
 
               <div className="mt-8 rounded-lg bg-yellow-50 p-6 dark:bg-yellow-900/20">
@@ -161,13 +175,11 @@ export default async function WorkshopPage() {
             <h1 className="font-display text-4xl font-bold tracking-tighter text-blue-600 sm:text-5xl lg:text-7xl dark:text-blue-400">
               Workshop Signup
             </h1>
-            <Button
-              href="/api/auth/signout"
-              variant="outline"
-              className="shrink-0 whitespace-nowrap"
-            >
-              Sign Out
-            </Button>
+            <Link href="/api/auth/signout" prefetch={false}>
+              <Button variant="outline" className="shrink-0 whitespace-nowrap">
+                Sign Out
+              </Button>
+            </Link>
           </div>
 
           <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
