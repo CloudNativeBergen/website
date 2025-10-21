@@ -48,10 +48,7 @@ const nextAuthMiddleware = auth((req) => {
   return NextResponse.next()
 })
 
-export default async function middleware(
-  req: NextRequest,
-  event: NextFetchEvent
-) {
+export default function middleware(req: NextRequest, event: NextFetchEvent) {
   const { pathname } = req.nextUrl
 
   if (pathname.startsWith('/workshop')) {
@@ -59,10 +56,7 @@ export default async function middleware(
   }
 
   if (pathname.startsWith('/cfp') || pathname.startsWith('/admin')) {
-    const response = await nextAuthMiddleware(req, {
-      params: Promise.resolve({}),
-    })
-    return response
+    return nextAuthMiddleware(req, { params: Promise.resolve({}) })
   }
 
   return NextResponse.next()

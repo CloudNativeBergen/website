@@ -14,10 +14,10 @@ import clsx from 'clsx'
 import { headers } from 'next/headers'
 
 import '@/styles/tailwind.css'
+import { SessionProvider } from 'next-auth/react'
 import { auth } from '@/lib/auth'
 import { DevBanner } from '@/components/DevBanner'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
-import { AuthProviderWrapper } from '@/components/providers/AuthProviderWrapper'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -108,17 +108,36 @@ export default async function RootLayout({
     >
       <head>
         <Script
-          src="/scripts/theme-detection.js"
+          id="theme-detection"
           strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('theme');
+                  var systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                  var activeTheme = theme === 'system' || !theme ? systemTheme : theme;
+
+                  if (activeTheme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch (e) {
+                  if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    document.documentElement.classList.add('dark');
+                  }
+                }
+              })();
+            `,
+          }}
         />
       </head>
       <body className="flex min-h-full bg-white dark:bg-gray-950">
         <ThemeProvider>
           <div className="flex w-full flex-col">
             <DevBanner />
-            <AuthProviderWrapper session={session}>
-              {children}
-            </AuthProviderWrapper>
+            <SessionProvider session={session}>{children}</SessionProvider>
           </div>
         </ThemeProvider>
         <Analytics />
