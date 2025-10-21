@@ -1,25 +1,15 @@
 import { initTRPC, TRPCError } from '@trpc/server'
 import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
-import { withAuth } from '@workos-inc/authkit-nextjs'
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
   const session = await getAuthSession()
-  let workosUser = null
-
-  try {
-    const { user } = await withAuth()
-    workosUser = user
-  } catch {
-    // No WorkOS session
-  }
 
   return {
     req: opts.req,
     session,
     speaker: session?.speaker,
     user: session?.user,
-    workosUser,
   }
 }
 
