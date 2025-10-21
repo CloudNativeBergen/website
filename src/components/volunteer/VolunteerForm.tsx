@@ -15,6 +15,7 @@ import {
   XMarkIcon,
 } from '@heroicons/react/24/outline'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
+import { Button } from '@/components/Button'
 
 interface VolunteerFormProps {
   conferenceId: string
@@ -249,8 +250,8 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
         </div>
       )}
 
-      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-        <h2 className="font-jetbrains mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+      <div className="rounded-lg bg-white/50 p-6 backdrop-blur-sm dark:bg-gray-800/50">
+        <h2 className="font-display mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
           Basic Information
         </h2>
         <div className="space-y-4">
@@ -292,8 +293,8 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
         </div>
       </div>
 
-      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-        <h2 className="font-jetbrains mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+      <div className="rounded-lg bg-white/50 p-6 backdrop-blur-sm dark:bg-gray-800/50">
+        <h2 className="font-display mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
           Volunteer Details
         </h2>
         <div className="space-y-4">
@@ -363,8 +364,8 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
         </div>
       </div>
 
-      <div className="rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800">
-        <h2 className="font-jetbrains mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+      <div className="rounded-lg bg-white/50 p-6 backdrop-blur-sm dark:bg-gray-800/50">
+        <h2 className="font-display mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
           Data Privacy Consent
         </h2>
         <Checkbox
@@ -379,7 +380,7 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
               href="/privacy"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-brand-cloud-blue underline hover:text-brand-slate-gray dark:text-brand-sky-mist dark:hover:text-gray-300"
+              className="underline hover:text-blue-600 dark:hover:text-blue-400"
             >
               Privacy Policy
             </a>
@@ -389,22 +390,18 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
         </Checkbox>
       </div>
 
-      <div className="flex justify-end space-x-4">
-        <button
+      <div className="flex justify-end gap-4">
+        <Button
           type="button"
           onClick={resetForm}
           disabled={isSubmitting}
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          variant="outline"
         >
           Reset Form
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white hover:bg-brand-slate-gray focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:bg-brand-sky-mist dark:text-gray-900 dark:hover:bg-brand-cloud-blue"
-        >
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? 'Submitting...' : 'Submit Application'}
-        </button>
+        </Button>
       </div>
     </form>
   )
