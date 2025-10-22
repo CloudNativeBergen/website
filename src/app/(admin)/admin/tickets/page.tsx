@@ -28,6 +28,7 @@ import {
   calculateFreeTicketAllocation,
   calculateTicketStatistics,
   calculateFreeTicketClaimRate,
+  deduplicateTicketsByEmail,
 } from '@/lib/tickets/utils'
 import { getSpeakers, getOrganizerCount } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
@@ -133,6 +134,10 @@ export default async function AdminTickets() {
   const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)
   const freeTickets = allTickets.filter((t) => parseFloat(t.sum) === 0)
 
+  const uniquePaidTickets = deduplicateTicketsByEmail(paidTickets)
+  const uniqueFreeTickets = deduplicateTicketsByEmail(freeTickets)
+  const uniqueAllTickets = deduplicateTicketsByEmail(allTickets)
+
   const paidOnlyAnalysis = await processTicketAnalysis(paidTickets, conference)
   const allTicketsAnalysis = await processTicketAnalysis(allTickets, conference)
 
@@ -202,6 +207,11 @@ export default async function AdminTickets() {
           allTickets,
           paidTickets,
           freeTickets,
+        }}
+        uniqueTicketData={{
+          uniqueAllTickets,
+          uniquePaidTickets,
+          uniqueFreeTickets,
         }}
         conference={{
           _id: conference._id,

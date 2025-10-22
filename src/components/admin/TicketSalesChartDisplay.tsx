@@ -58,6 +58,7 @@ const Chart = dynamic(() => import('react-apexcharts'), {
 
 interface ChartProps {
   analysis: TicketAnalysisResult
+  paidAnalysis: TicketAnalysisResult
   salesConfig?: SalesTargetConfig
   className?: string
 
@@ -65,6 +66,8 @@ interface ChartProps {
   onToggleChange?: (include: boolean) => void
   paidCount?: number
   freeCount?: number
+  uniquePaidCount?: number
+  uniqueFreeCount?: number
   freeTicketAllocation?: FreeTicketAllocation
 }
 
@@ -124,27 +127,31 @@ const PerformanceCard = ({
 
 export function TicketSalesChartDisplay({
   analysis,
+  paidAnalysis,
   salesConfig,
   className = '',
   includeFreeTickets = false,
   onToggleChange,
   paidCount = 0,
   freeCount = 0,
+  uniquePaidCount = 0,
+  uniqueFreeCount = 0,
   freeTicketAllocation,
 }: ChartProps) {
   const configAnnotations = salesConfig
     ? createConfigAnnotations(salesConfig)
     : []
   const chartData = adaptForChart(analysis, configAnnotations)
-  const { statistics, performance } = analysis
+  const { statistics: paidStatistics, performance: paidPerformance } =
+    paidAnalysis
 
-  const StatusIcon = getStatusIcon(performance.variance)
-  const statusColorClasses = getStatusColors(performance.variance)
+  const StatusIcon = getStatusIcon(paidPerformance.variance)
+  const statusColorClasses = getStatusColors(paidPerformance.variance)
   const capacityPercentage = calculateCapacityPercentage(
-    statistics.totalPaidTickets,
-    analysis.capacity,
+    paidStatistics.totalPaidTickets,
+    paidAnalysis.capacity,
   ).toFixed(1)
-  const avgTicketPrice = formatCurrency(statistics.averageTicketPrice)
+  const avgTicketPrice = formatCurrency(paidStatistics.averageTicketPrice)
 
   const chartOptions = {
     chart: {
@@ -258,9 +265,24 @@ export function TicketSalesChartDisplay({
     )
   }
 
+  const uniqueParticipants = uniquePaidCount + uniqueFreeCount
+  const totalTickets = paidCount + freeCount
+  const duplicateCount = totalTickets - uniqueParticipants
+
   return (
     <div className={className}>
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <PerformanceCard
+          title="Unique Participants"
+          value={uniqueParticipants}
+          subtitle={
+            duplicateCount > 0
+              ? `${duplicateCount} ticket upgrade${duplicateCount !== 1 ? 's' : ''}`
+              : 'No duplicates'
+          }
+          className="lg:col-span-1"
+        />
+
         {freeTicketAllocation && (
           <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
             <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -282,40 +304,36 @@ export function TicketSalesChartDisplay({
 
         <PerformanceCard
           title="Current Sales"
-          value={`${statistics.totalPaidTickets} / ${analysis.capacity}`}
+          value={`${paidStatistics.totalPaidTickets} / ${paidAnalysis.capacity}`}
           subtitle={`${capacityPercentage}% of capacity`}
         />
 
         <PerformanceCard
           title="Target Progress"
-          value={`${performance.currentPercentage.toFixed(1)}%`}
+          value={`${paidPerformance.currentPercentage.toFixed(1)}%`}
           subtitle={
             <span className={`flex items-center ${statusColorClasses}`}>
               <StatusIcon className="mr-1 h-3 w-3 flex-shrink-0" />
-              {performance.isOnTrack ? 'On Track' : 'Behind'} (
-              {performance.variance > 0 ? '+' : ''}
-              {performance.variance.toFixed(1)}%)
+              {paidPerformance.isOnTrack ? 'On Track' : 'Behind'} (
+              {paidPerformance.variance > 0 ? '+' : ''}
+              {paidPerformance.variance.toFixed(1)}%)
             </span>
           }
         />
 
         <PerformanceCard
           title="Revenue"
-          value={formatCurrency(statistics.totalRevenue)}
+          value={formatCurrency(paidStatistics.totalRevenue)}
           subtitle={`${avgTicketPrice} per ticket`}
         />
 
-        <PerformanceCard
-          title="Next Milestone"
-          value={
-            performance.nextMilestone
-              ? `${performance.nextMilestone.daysAway} days`
-              : 'None'
-          }
-          subtitle={
-            performance.nextMilestone?.label || 'No upcoming milestones'
-          }
-        />
+        {paidPerformance.nextMilestone && (
+          <PerformanceCard
+            title="Next Milestone"
+            value={`${paidPerformance.nextMilestone.daysAway} days`}
+            subtitle={paidPerformance.nextMilestone.label}
+          />
+        )}
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-6 dark:border-gray-800 dark:bg-gray-900">

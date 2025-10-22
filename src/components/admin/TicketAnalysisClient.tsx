@@ -17,6 +17,12 @@ interface TicketData {
   freeTickets: EventTicket[]
 }
 
+interface UniqueTicketData {
+  uniqueAllTickets: EventTicket[]
+  uniquePaidTickets: EventTicket[]
+  uniqueFreeTickets: EventTicket[]
+}
+
 interface ConferenceConfig {
   _id: string
   ticket_capacity?: number
@@ -30,6 +36,7 @@ interface AnalysisData {
 
 interface TicketAnalysisClientProps {
   ticketData: TicketData
+  uniqueTicketData: UniqueTicketData
   conference: ConferenceConfig
   analysisData: AnalysisData
   freeTicketAllocation: FreeTicketAllocation
@@ -39,6 +46,7 @@ interface TicketAnalysisClientProps {
 
 export function TicketAnalysisClient({
   ticketData,
+  uniqueTicketData,
   conference,
   analysisData,
   freeTicketAllocation,
@@ -48,6 +56,8 @@ export function TicketAnalysisClient({
   const [includeFreeTickets, setIncludeFreeTickets] = useState(false)
 
   const { allTickets, paidTickets, freeTickets } = ticketData
+  const { uniquePaidTickets, uniqueFreeTickets } =
+    uniqueTicketData
   const { paidAnalysis, allTicketsAnalysis } = analysisData
 
   const currentData = useMemo(() => {
@@ -74,11 +84,20 @@ export function TicketAnalysisClient({
       <div className="mt-8">
         <TicketSalesChartDisplay
           analysis={currentData.analysis}
+          paidAnalysis={
+            paidAnalysis ||
+            createDefaultAnalysis(
+              paidTickets,
+              conference.ticket_capacity || defaultCapacity,
+            )
+          }
           salesConfig={conference.ticket_targets || defaultTargetConfig}
           includeFreeTickets={includeFreeTickets}
           onToggleChange={setIncludeFreeTickets}
           paidCount={paidTickets.length}
           freeCount={freeTickets.length}
+          uniquePaidCount={uniquePaidTickets.length}
+          uniqueFreeCount={uniqueFreeTickets.length}
           freeTicketAllocation={freeTicketAllocation}
         />
       </div>

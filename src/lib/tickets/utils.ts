@@ -6,6 +6,49 @@ const parseAmount = (sum: string): number => {
   return isNaN(parsed) ? 0 : parsed
 }
 
+/**
+ * Deduplicates tickets by email address, keeping only the most valuable ticket per attendee.
+ * This handles cases where attendees upgrade tickets (e.g., one-day to two-day).
+ * When duplicates are found, keeps the ticket with the highest value.
+ * If values are equal, keeps the most recent ticket.
+ *
+ * @param tickets - Array of tickets to deduplicate
+ * @returns Array of unique tickets (one per email address)
+ */
+export function deduplicateTicketsByEmail(
+  tickets: EventTicket[],
+): EventTicket[] {
+  const emailMap = new Map<string, EventTicket>()
+
+  tickets.forEach((ticket) => {
+    const email = ticket.crm?.email?.toLowerCase()
+    if (!email) {
+      emailMap.set(`no-email-${ticket.id}`, ticket)
+      return
+    }
+
+    const existing = emailMap.get(email)
+    if (!existing) {
+      emailMap.set(email, ticket)
+      return
+    }
+
+    const existingAmount = parseAmount(existing.sum)
+    const currentAmount = parseAmount(ticket.sum)
+
+    if (currentAmount > existingAmount) {
+      emailMap.set(email, ticket)
+    } else if (
+      currentAmount === existingAmount &&
+      ticket.order_date > existing.order_date
+    ) {
+      emailMap.set(email, ticket)
+    }
+  })
+
+  return Array.from(emailMap.values())
+}
+
 export interface CategoryStat {
   category: string
   count: number
