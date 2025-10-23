@@ -18,7 +18,7 @@ import {
 } from '@/lib/workshop/utils'
 import {
   getUserWorkshopSignup,
-  isUserSignedUp,
+  hasConfirmedSignup,
   isUserOnWaitlist,
   shouldShowAsFull,
   getSignupButtonText,
@@ -77,9 +77,8 @@ export default function WorkshopCard({
     return () => setMounted(false)
   }, [])
 
-  const userSignup = getUserWorkshopSignup(workshop._id, userSignups)
   const actuallySignedUp =
-    isSignedUp || isUserSignedUp(workshop._id, userSignups)
+    isSignedUp || hasConfirmedSignup(workshop._id, userSignups)
   const isOnWaitlist = isUserOnWaitlist(workshop._id, userSignups)
 
   const duration = getWorkshopDuration(workshop.format)
@@ -183,8 +182,8 @@ export default function WorkshopCard({
                 <label
                   key={option.value}
                   className={`flex cursor-pointer items-start rounded-lg border-2 p-3 transition-all ${experienceLevel === option.value
-                      ? 'border-brand-cloud-blue bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                    ? 'border-brand-cloud-blue bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
                     }`}
                 >
                   <input
@@ -223,8 +222,8 @@ export default function WorkshopCard({
                 <label
                   key={option.value}
                   className={`flex cursor-pointer items-center rounded-lg border-2 p-3 transition-all ${operatingSystem === option.value
-                      ? 'border-brand-cloud-blue bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
+                    ? 'border-brand-cloud-blue bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
                     }`}
                 >
                   <input
@@ -429,10 +428,10 @@ export default function WorkshopCard({
               </span>
               <span
                 className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${actuallyFull
-                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                    : workshop.available < 5
-                      ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                      : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                  : workshop.available < 5
+                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                   }`}
               >
                 <UserGroupIcon className="mr-1.5 h-4 w-4" />
@@ -530,8 +529,8 @@ export default function WorkshopCard({
             <div className="space-y-3">
               <div
                 className={`flex items-center justify-center gap-2 text-sm font-medium ${isOnWaitlist
-                    ? 'text-blue-600 dark:text-blue-400'
-                    : 'text-green-600 dark:text-green-400'
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-green-600 dark:text-green-400'
                   }`}
               >
                 {isOnWaitlist ? (

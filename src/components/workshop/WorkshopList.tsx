@@ -11,7 +11,7 @@ import {
   checkWorkshopTimeConflict,
   getWorkshopIdFromSignup,
 } from '@/lib/workshop/utils'
-import { isUserSignedUp } from '@/lib/workshop/status'
+import { hasConfirmedSignup } from '@/lib/workshop/status'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 
@@ -98,8 +98,8 @@ export default function WorkshopList({
       return { success: false, error: 'Not authenticated' }
     }
 
-    // Check if user is already signed up
-    if (isUserSignedUp(workshopId, userSignups)) {
+    // Check if user has a confirmed signup
+    if (hasConfirmedSignup(workshopId, userSignups)) {
       setErrorMessage('You are already signed up for this workshop')
       setTimeout(() => setErrorMessage(null), 5000)
       return { success: false, error: 'Already signed up' }
@@ -301,7 +301,7 @@ export default function WorkshopList({
           </h2>
           <div className="space-y-6">
             {availableWorkshops.map((workshop) => {
-              const workshopIsSignedUp = isUserSignedUp(
+              const workshopIsSignedUp = hasConfirmedSignup(
                 workshop._id,
                 userSignups,
               )

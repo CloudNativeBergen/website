@@ -1,4 +1,5 @@
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
+import { calculateCapacityPercentage } from '@/lib/workshop/capacity'
 
 export interface WorkshopStats {
   confirmedCount: number
@@ -6,13 +7,21 @@ export interface WorkshopStats {
   capacityPercentage: number
 }
 
+/**
+ * Calculate workshop statistics for admin view
+ * Note: This differs from base calculateWorkshopStats as it works with
+ * confirmed/waitlist counts separately for admin filtering
+ */
 export function calculateWorkshopStats(
   workshop: ProposalWithWorkshopData,
   confirmedCount: number,
   waitlistCount: number,
 ): WorkshopStats {
   const capacity = workshop.capacity || 30
-  const capacityPercentage = (confirmedCount / capacity) * 100
+  const capacityPercentage = calculateCapacityPercentage(
+    capacity,
+    confirmedCount,
+  )
 
   return {
     confirmedCount,
@@ -21,16 +30,23 @@ export function calculateWorkshopStats(
   }
 }
 
+/**
+ * Get capacity color class for admin workshop cards
+ * Applies same color thresholds as base capacity logic:
+ * < 30% = red (low attendance)
+ * 30-70% = green (healthy attendance)
+ * >= 70% = orange (filling up)
+ */
 export function getCapacityColorClass(percentage: number): string {
-  if (percentage < 30) return 'bg-red-500'
-  if (percentage >= 70) return 'bg-orange-500'
-  return 'bg-green-500'
-}
+  let color: 'red' | 'green' | 'orange'
 
-export function getCapacityStatusColor(
-  percentage: number,
-): 'green' | 'orange' | 'red' {
-  if (percentage < 30) return 'red'
-  if (percentage >= 70) return 'orange'
-  return 'green'
+  if (percentage < 30) {
+    color = 'red'
+  } else if (percentage < 70) {
+    color = 'green'
+  } else {
+    color = 'orange'
+  }
+
+  return `bg-${color}-500`
 }

@@ -100,7 +100,7 @@ export async function getOrCreateConferenceAudienceByType(
         {
           conferenceName: conference.title,
           audienceName,
-        }
+        },
       )
     } else {
       console.error(
@@ -110,7 +110,7 @@ export async function getOrCreateConferenceAudienceByType(
           stack: error instanceof Error ? error.stack : undefined,
           audienceName,
           audienceType,
-        }
+        },
       )
     }
     return { audienceId: '', error: error as Error }
@@ -167,7 +167,7 @@ export async function addContactToAudience(
         {
           audienceId,
           organization: contact.organization,
-        }
+        },
       )
     } else {
       console.error('[Audience] Failed to add contact to audience:', {
@@ -296,8 +296,12 @@ export async function syncAudienceWithContacts(
       contacts.filter((c) => c.email).map((c) => c.email),
     )
 
-    const contactsToAdd = contacts.filter(c => c.email && !existingEmails.has(c.email));
-    const contactsToRemove = existingContacts.filter(c => !currentContactEmails.has(c.email));
+    const contactsToAdd = contacts.filter(
+      (c) => c.email && !existingEmails.has(c.email),
+    )
+    const contactsToRemove = existingContacts.filter(
+      (c) => !currentContactEmails.has(c.email),
+    )
 
     let addedCount = 0
     for (const contact of contactsToAdd) {
