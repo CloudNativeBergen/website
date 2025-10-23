@@ -2,13 +2,17 @@ import React from 'react'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { TalkCard } from './TalkCard'
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
+import { getTalkStatusKey } from '@/lib/program/time-utils'
+import type { TalkStatus } from '@/lib/program/time-utils'
 
 interface ProgramListViewProps {
   data: FilteredProgramData
+  talkStatusMap?: Map<string, TalkStatus>
 }
 
 export const ProgramListView = React.memo(function ProgramListView({
   data,
+  talkStatusMap,
 }: ProgramListViewProps) {
   const mergedTalks = data.allTalks.reduce(
     (acc, talk) => {
@@ -96,15 +100,26 @@ export const ProgramListView = React.memo(function ProgramListView({
           )}
 
           <div className="space-y-4">
-            {talksByDay[date].map((talk, index) => (
-              <TalkCard
-                key={`${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}-${index}`}
-                talk={talk}
-                showDate={false}
-                showTrack={data.availableFilters.tracks.length > 1}
-                compact={true}
-              />
-            ))}
+            {talksByDay[date].map((talk, index) => {
+              const status = talkStatusMap?.get(
+                getTalkStatusKey(
+                  talk.scheduleDate,
+                  talk.startTime,
+                  talk.trackIndex,
+                  talk.talk?._id,
+                ),
+              )
+              return (
+                <TalkCard
+                  key={`${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}-${index}`}
+                  talk={talk}
+                  status={status}
+                  showDate={false}
+                  showTrack={data.availableFilters.tracks.length > 1}
+                  compact={true}
+                />
+              )
+            })}
           </div>
         </div>
       ))}

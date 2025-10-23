@@ -4,10 +4,15 @@ import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
 import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
 import { TalkCard } from './TalkCard'
+import { getTalkStatusKey } from '@/lib/program/time-utils'
+import type { TalkStatus, CurrentPosition } from '@/lib/program/time-utils'
 import clsx from 'clsx'
 
 interface ProgramScheduleViewProps {
   data: FilteredProgramData
+  talkStatusMap?: Map<string, TalkStatus>
+  currentPosition?: CurrentPosition | null
+  isLive?: boolean
 }
 
 const SCROLL_THRESHOLD = 5
@@ -41,9 +46,17 @@ const formatScheduleDate = (dateString: string): string => {
 const ScheduleTabbed = React.memo(function ScheduleTabbed({
   tracks,
   date,
+  talkStatusMap,
+  currentPosition,
+  scheduleIndex,
+  scrollTargetRef,
 }: {
   tracks: ScheduleTrack[]
   date: string
+  talkStatusMap?: Map<string, TalkStatus>
+  currentPosition?: CurrentPosition | null
+  scheduleIndex: number
+  scrollTargetRef: React.RefObject<HTMLDivElement | null>
 }) {
   const [tabOrientation, setTabOrientation] = useState('horizontal')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -210,19 +223,40 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
             className="ui-not-focus-visible:outline-none"
           >
             <div className="space-y-3">
-              {track.talks.map((talk, talkIndex) => (
-                <TalkCard
-                  key={`mobile-talk-${trackIndex}-${talkIndex}-${talk.startTime}-${talk.talk?._id || talk.placeholder || 'empty'}`}
-                  talk={{
-                    ...talk,
-                    scheduleDate: date,
-                    trackTitle: track.trackTitle,
+              {track.talks.map((talk, talkIndex) => {
+                const talkData = {
+                  ...talk,
+                  scheduleDate: date,
+                  trackTitle: track.trackTitle,
+                  trackIndex,
+                }
+                const status = talkStatusMap?.get(
+                  getTalkStatusKey(
+                    date,
+                    talk.startTime,
                     trackIndex,
-                  }}
-                  compact={true}
-                  fixedHeight={true}
-                />
-              ))}
+                    talk.talk?._id,
+                  ),
+                )
+                const isScrollTarget =
+                  currentPosition &&
+                  currentPosition.scheduleIndex === scheduleIndex &&
+                  currentPosition.trackIndex === trackIndex &&
+                  currentPosition.talkIndex === talkIndex
+                return (
+                  <div
+                    key={`mobile-talk-${trackIndex}-${talkIndex}-${talk.startTime}-${talk.talk?._id || talk.placeholder || 'empty'}`}
+                    ref={isScrollTarget ? scrollTargetRef : undefined}
+                  >
+                    <TalkCard
+                      talk={talkData}
+                      status={status}
+                      compact={true}
+                      fixedHeight={true}
+                    />
+                  </div>
+                )
+              })}
             </div>
           </TabPanel>
         ))}
@@ -234,9 +268,17 @@ const ScheduleTabbed = React.memo(function ScheduleTabbed({
 const ScheduleStatic = React.memo(function ScheduleStatic({
   tracks,
   date,
+  talkStatusMap,
+  currentPosition,
+  scheduleIndex,
+  scrollTargetRef,
 }: {
   tracks: ScheduleTrack[]
   date: string
+  talkStatusMap?: Map<string, TalkStatus>
+  currentPosition?: CurrentPosition | null
+  scheduleIndex: number
+  scrollTargetRef: React.RefObject<HTMLDivElement | null>
 }) {
   const timeSlots = getAllTimeSlots(tracks)
 
@@ -286,11 +328,22 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
 
               {tracks.map((track, trackIndex) => {
                 const talk = getTalkAtTime(track, timeSlot)
+                const talkIndex = talk
+                  ? track.talks.findIndex((t) => t.startTime === talk.startTime)
+                  : -1
+                const isScrollTarget =
+                  talk &&
+                  talkIndex !== -1 &&
+                  currentPosition &&
+                  currentPosition.scheduleIndex === scheduleIndex &&
+                  currentPosition.trackIndex === trackIndex &&
+                  currentPosition.talkIndex === talkIndex
 
                 return (
                   <div
                     key={`${timeSlot}-track-${trackIndex}-${track.trackTitle}`}
                     className="min-h-[60px]"
+                    ref={isScrollTarget ? scrollTargetRef : undefined}
                   >
                     {talk ? (
                       <TalkCard
@@ -301,6 +354,14 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
                           trackTitle: track.trackTitle,
                           trackIndex,
                         }}
+                        status={talkStatusMap?.get(
+                          getTalkStatusKey(
+                            date,
+                            talk.startTime,
+                            trackIndex,
+                            talk.talk?._id,
+                          ),
+                        )}
                         compact={true}
                         fixedHeight={true}
                       />
@@ -320,8 +381,16 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
 
 const DaySchedule = React.memo(function DaySchedule({
   schedule,
+  talkStatusMap,
+  currentPosition,
+  scheduleIndex,
+  scrollTargetRef,
 }: {
   schedule: ConferenceSchedule
+  talkStatusMap?: Map<string, TalkStatus>
+  currentPosition?: CurrentPosition | null
+  scheduleIndex: number
+  scrollTargetRef: React.RefObject<HTMLDivElement | null>
 }) {
   if (schedule.tracks.length === 0) {
     return (
@@ -347,8 +416,22 @@ const DaySchedule = React.memo(function DaySchedule({
       </div>
 
       <div className="space-y-6">
-        <ScheduleTabbed tracks={schedule.tracks} date={schedule.date} />
-        <ScheduleStatic tracks={schedule.tracks} date={schedule.date} />
+        <ScheduleTabbed
+          tracks={schedule.tracks}
+          date={schedule.date}
+          talkStatusMap={talkStatusMap}
+          currentPosition={currentPosition}
+          scheduleIndex={scheduleIndex}
+          scrollTargetRef={scrollTargetRef}
+        />
+        <ScheduleStatic
+          tracks={schedule.tracks}
+          date={schedule.date}
+          talkStatusMap={talkStatusMap}
+          currentPosition={currentPosition}
+          scheduleIndex={scheduleIndex}
+          scrollTargetRef={scrollTargetRef}
+        />
       </div>
     </div>
   )
@@ -356,7 +439,31 @@ const DaySchedule = React.memo(function DaySchedule({
 
 export const ProgramScheduleView = React.memo(function ProgramScheduleView({
   data,
+  talkStatusMap,
+  currentPosition,
+  isLive,
 }: ProgramScheduleViewProps) {
+  const scrollTargetRef = useRef<HTMLDivElement>(null)
+  const scrolledToPositionRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!isLive || !currentPosition || !scrollTargetRef.current) {
+      return
+    }
+
+    const positionKey = `${currentPosition.scheduleIndex}-${currentPosition.trackIndex}-${currentPosition.talkIndex}`
+
+    if (scrolledToPositionRef.current !== positionKey) {
+      scrolledToPositionRef.current = positionKey
+      setTimeout(() => {
+        scrollTargetRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+      }, 100)
+    }
+  }, [isLive, currentPosition])
+
   if (data.schedules.length === 0) {
     return (
       <div className="py-16 text-center">
@@ -373,10 +480,16 @@ export const ProgramScheduleView = React.memo(function ProgramScheduleView({
 
   return (
     <div className="space-y-8">
-      {data.schedules.map((schedule, index) => (
-        <div key={schedule._id || `schedule-${index}`}>
-          <DaySchedule schedule={schedule} />
-          {index < data.schedules.length - 1 && (
+      {data.schedules.map((schedule, scheduleIndex) => (
+        <div key={schedule._id || `schedule-${scheduleIndex}`}>
+          <DaySchedule
+            schedule={schedule}
+            talkStatusMap={talkStatusMap}
+            currentPosition={currentPosition}
+            scheduleIndex={scheduleIndex}
+            scrollTargetRef={scrollTargetRef}
+          />
+          {scheduleIndex < data.schedules.length - 1 && (
             <div className="mt-8 border-t border-brand-frosted-steel dark:border-gray-700" />
           )}
         </div>

@@ -21,11 +21,35 @@ import {
   AudienceBadge,
   LevelIndicator,
 } from '@/lib/proposal/ui/badges'
+import { TalkStatus } from '@/lib/program/time-utils'
 import clsx from 'clsx'
 
 interface PortableTextChild {
   _type: string
   text?: string
+}
+
+function StatusIndicator({ status }: { status?: TalkStatus }) {
+  if (status !== 'happening-now' && status !== 'happening-soon') return null
+
+  return (
+    <div className="absolute top-2 right-2">
+      <span className="relative flex h-3 w-3">
+        <span
+          className={clsx(
+            'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
+            status === 'happening-now' ? 'bg-green-400' : 'bg-yellow-400',
+          )}
+        />
+        <span
+          className={clsx(
+            'relative inline-flex h-3 w-3 rounded-full',
+            status === 'happening-now' ? 'bg-green-500' : 'bg-yellow-500',
+          )}
+        />
+      </span>
+    </div>
+  )
 }
 
 interface TalkCardProps {
@@ -38,6 +62,7 @@ interface TalkCardProps {
   showTrack?: boolean
   compact?: boolean
   fixedHeight?: boolean
+  status?: TalkStatus
 }
 
 const formatDate = (dateString: string): string => {
@@ -68,71 +93,69 @@ export function TalkCard({
   showTrack = false,
   compact = false,
   fixedHeight = false,
+  status,
 }: TalkCardProps) {
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
   const { isBookmarked, isLoaded } = useBookmarks()
   const durationMinutes = calculateDurationMinutes(talk.startTime, talk.endTime)
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const getSmartHeight = (duration: number): string => {
-    if (!fixedHeight) return 'auto'
-
-    if (!talk.talk) {
-      return compact ? '4rem' : '8rem'
-    }
-
-    return compact ? '8rem' : '16rem'
-  }
+  const isPast = status === 'past'
+  const isHappeningNow = status === 'happening-now'
+  const isHappeningSoon = status === 'happening-soon'
 
   if (!talk.talk) {
-    const minHeight = getSmartHeight(durationMinutes)
-
     return (
-      <div
-        className={clsx(
-          'rounded-lg border border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-600 dark:bg-gray-700',
-          compact ? 'p-2' : 'p-4',
-        )}
-        style={fixedHeight ? { minHeight } : {}}
-      >
-        <div className="flex h-full items-center justify-between">
-          <div className="flex-1">
-            <h3
-              className={clsx(
-                'font-space-grotesk font-medium text-brand-slate-gray dark:text-gray-200',
-                compact ? 'text-sm' : 'text-base',
-              )}
-            >
-              {talk.placeholder || 'Service Session'}
-            </h3>
-            <div
-              className={clsx(
-                'flex flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
-                compact ? 'mt-1 text-xs' : 'mt-2 text-sm',
-              )}
-            >
-              <div className="flex items-center gap-1">
-                <ClockIcon className="h-3 w-3" />
-                <span className="font-mono">
-                  {formatTime(talk.startTime)} - {formatTime(talk.endTime)}
+      <div className="relative">
+        <StatusIndicator status={status} />
+        <div
+          className={clsx(
+            'rounded-lg border transition-all duration-200',
+            isPast && 'opacity-60',
+            isHappeningNow && 'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
+            isHappeningSoon && 'border-2 border-yellow-500',
+            !isHappeningNow && !isHappeningSoon && 'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-600 dark:bg-gray-700',
+            compact ? 'p-2' : 'p-4',
+          )}
+        >
+          <div className="flex h-full items-center justify-between">
+            <div className="flex-1">
+              <h3
+                className={clsx(
+                  'font-space-grotesk font-medium text-brand-slate-gray dark:text-gray-200',
+                  compact ? 'text-sm' : 'text-base',
+                )}
+              >
+                {talk.placeholder || 'Service Session'}
+              </h3>
+              <div
+                className={clsx(
+                  'flex flex-wrap items-center gap-2 text-gray-600 dark:text-gray-400',
+                  compact ? 'mt-1 text-xs' : 'mt-2 text-sm',
+                )}
+              >
+                <div className="flex items-center gap-1">
+                  <ClockIcon className="h-3 w-3" />
+                  <span className="font-mono">
+                    {formatTime(talk.startTime)} - {formatTime(talk.endTime)}
+                  </span>
+                </div>
+                {showDate && (
+                  <div className="flex items-center gap-1">
+                    <CalendarIcon className="h-4 w-4" />
+                    <span>{formatDate(talk.scheduleDate)}</span>
+                  </div>
+                )}
+                {showTrack && (
+                  <div className="flex items-center gap-1">
+                    <MapIcon className="h-4 w-4" />
+                    <span>{talk.trackTitle}</span>
+                  </div>
+                )}
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300">
+                  <span className="hidden sm:inline">{durationMinutes} min</span>
+                  <span className="sm:hidden">{durationMinutes}m</span>
                 </span>
               </div>
-              {showDate && (
-                <div className="flex items-center gap-1">
-                  <CalendarIcon className="h-4 w-4" />
-                  <span>{formatDate(talk.scheduleDate)}</span>
-                </div>
-              )}
-              {showTrack && (
-                <div className="flex items-center gap-1">
-                  <MapIcon className="h-4 w-4" />
-                  <span>{talk.trackTitle}</span>
-                </div>
-              )}
-              <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300">
-                <span className="hidden sm:inline">{durationMinutes} min</span>
-                <span className="sm:hidden">{durationMinutes}m</span>
-              </span>
             </div>
           </div>
         </div>
@@ -142,8 +165,6 @@ export function TalkCard({
 
   const { talk: talkData } = talk
   const primarySpeaker = talkData.speakers?.[0]
-  const minHeight = getSmartHeight(durationMinutes)
-
   const isConfirmed = talkData.status === Status.confirmed
 
   const isWithdrawnOrRejected =
@@ -167,12 +188,12 @@ export function TalkCard({
     trackTitle: talk.trackTitle,
     speakers: isConfirmed
       ? talkData.speakers
-          ?.map((speaker) =>
-            typeof speaker === 'object' && 'name' in speaker
-              ? speaker.name
-              : '',
-          )
-          .filter(Boolean)
+        ?.map((speaker) =>
+          typeof speaker === 'object' && 'name' in speaker
+            ? speaker.name
+            : '',
+        )
+        .filter(Boolean)
       : [],
   }
 
@@ -181,20 +202,23 @@ export function TalkCard({
   return (
     <div
       className={clsx(
-        'rounded-lg border transition-all duration-200 hover:shadow-md',
+        'relative rounded-lg border transition-all duration-200 hover:shadow-md',
         !isConfirmed && !isWithdrawnOrRejected && 'opacity-75',
         isWithdrawnOrRejected && 'opacity-60',
-        isBookmarkedTalk
+        isPast && !isWithdrawnOrRejected && 'opacity-60',
+        isHappeningNow && 'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
+        isHappeningSoon && 'border-2 border-yellow-500',
+        isBookmarkedTalk && !isHappeningNow && !isHappeningSoon
           ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80 dark:border-brand-cloud-blue dark:bg-blue-900/30'
-          : isConfirmed
+          : isConfirmed && !isHappeningNow && !isHappeningSoon
             ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:hover:border-brand-cloud-blue'
             : isWithdrawnOrRejected
               ? 'border-red-300 bg-red-50 hover:border-red-400 dark:border-red-600 dark:bg-red-900/30 dark:hover:border-red-500'
-              : 'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500',
+              : !isHappeningNow && !isHappeningSoon && 'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500',
         compact ? 'p-3' : 'p-6',
       )}
-      style={fixedHeight ? { minHeight } : {}}
     >
+      <StatusIndicator status={status} />
       <div
         className={clsx(
           'flex h-full flex-col',
@@ -209,8 +233,8 @@ export function TalkCard({
                   'font-space-grotesk font-semibold',
                   isWithdrawnOrRejected && 'text-red-500 dark:text-red-400',
                   !isConfirmed &&
-                    !isWithdrawnOrRejected &&
-                    'text-gray-500 dark:text-gray-400',
+                  !isWithdrawnOrRejected &&
+                  'text-gray-500 dark:text-gray-400',
                   isConfirmed && 'text-brand-slate-gray dark:text-white',
                   compact ? 'text-sm leading-tight' : 'text-base',
                   fixedHeight && compact && 'line-clamp-2',
@@ -218,11 +242,11 @@ export function TalkCard({
               >
                 {isConfirmed ? (
                   primarySpeaker &&
-                  typeof primarySpeaker === 'object' &&
-                  'slug' in primarySpeaker ? (
+                    typeof primarySpeaker === 'object' &&
+                    'slug' in primarySpeaker ? (
                     <Link
                       href={`/speaker/${primarySpeaker.slug}`}
-                      className="transition-colors hover:text-brand-cloud-blue"
+                      className="transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"
                     >
                       {talkData.title}
                     </Link>
@@ -278,7 +302,7 @@ export function TalkCard({
                           speakers={talkData.speakers}
                           showFirstNameOnly={talkData.speakers.length > 1}
                           maxVisible={compact ? 2 : undefined}
-                          linkClassName="hover:text-brand-cloud-blue/80 transition-colors"
+                          linkClassName="hover:text-brand-cloud-blue/80 dark:hover:text-blue-400 transition-colors"
                         />
                       </div>
                     </div>
@@ -344,7 +368,7 @@ export function TalkCard({
                 </div>
               )}
 
-              {isConfirmed && (
+              {isConfirmed && !isHappeningNow && (
                 <BookmarkButton
                   talk={bookmarkData}
                   size={compact ? 'sm' : 'md'}
@@ -391,7 +415,7 @@ export function TalkCard({
                   onClick={() =>
                     setIsDescriptionExpanded(!isDescriptionExpanded)
                   }
-                  className="mt-2 flex items-center gap-1 text-xs font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80"
+                  className="mt-2 flex items-center gap-1 text-xs font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   {isDescriptionExpanded ? (
                     <>

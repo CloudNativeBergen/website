@@ -5,6 +5,7 @@ import { ConferenceSchedule } from '@/lib/conference/types'
 import { Topic } from '@/lib/topic/types'
 import { useProgramFilter } from '@/hooks/useProgramFilter'
 import { useProgramViewMode } from '@/hooks/useProgramViewMode'
+import { useLiveProgram } from '@/hooks/useLiveProgram'
 import { ProgramFilters } from '@/components/program/ProgramFilters'
 import { ProgramScheduleView } from '@/components/program/ProgramScheduleView'
 import { ProgramGridView } from '@/components/program/ProgramGridView'
@@ -14,9 +15,15 @@ import { ProgramAgendaView } from '@/components/program/ProgramAgendaView'
 interface ProgramClientProps {
   schedules: ConferenceSchedule[]
   conferenceTopics: Topic[]
+  conferenceStartDate: string
+  conferenceEndDate: string
 }
 
-export function ProgramClient({ schedules }: ProgramClientProps) {
+export function ProgramClient({
+  schedules,
+  conferenceStartDate,
+  conferenceEndDate,
+}: ProgramClientProps) {
   const {
     filters,
     filteredData,
@@ -28,17 +35,45 @@ export function ProgramClient({ schedules }: ProgramClientProps) {
   const { viewMode, setViewMode, viewModes, currentViewConfig } =
     useProgramViewMode()
 
+  const { isLive, currentPosition, talkStatusMap } = useLiveProgram(
+    schedules,
+    conferenceStartDate,
+    conferenceEndDate,
+  )
+
   const renderProgramView = () => {
     switch (viewMode) {
       case 'grid':
-        return <ProgramGridView data={filteredData} />
+        return (
+          <ProgramGridView
+            data={filteredData}
+            talkStatusMap={talkStatusMap}
+          />
+        )
       case 'list':
-        return <ProgramListView data={filteredData} />
+        return (
+          <ProgramListView
+            data={filteredData}
+            talkStatusMap={talkStatusMap}
+          />
+        )
       case 'agenda':
-        return <ProgramAgendaView data={filteredData} />
+        return (
+          <ProgramAgendaView
+            data={filteredData}
+            talkStatusMap={talkStatusMap}
+          />
+        )
       case 'schedule':
       default:
-        return <ProgramScheduleView data={filteredData} />
+        return (
+          <ProgramScheduleView
+            data={filteredData}
+            talkStatusMap={talkStatusMap}
+            currentPosition={currentPosition}
+            isLive={isLive}
+          />
+        )
     }
   }
 

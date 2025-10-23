@@ -6,13 +6,17 @@ import {
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
 import { useBookmarks } from '@/contexts/BookmarksContext'
 import { TalkCard } from './TalkCard'
+import { getTalkStatusKey } from '@/lib/program/time-utils'
+import type { TalkStatus } from '@/lib/program/time-utils'
 
 interface ProgramAgendaViewProps {
   data: FilteredProgramData
+  talkStatusMap?: Map<string, TalkStatus>
 }
 
 export const ProgramAgendaView = React.memo(function ProgramAgendaView({
   data,
+  talkStatusMap,
 }: ProgramAgendaViewProps) {
   const { bookmarks, isBookmarked, isLoaded } = useBookmarks()
 
@@ -22,11 +26,11 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
 
   const filteredTalks = isLoaded
     ? talksOnly.filter((talk) => {
-        const talkId =
-          talk.talk!._id ||
-          `${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}`
-        return isBookmarked(talkId)
-      })
+      const talkId =
+        talk.talk!._id ||
+        `${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}`
+      return isBookmarked(talkId)
+    })
     : []
 
   const talksByDay = filteredTalks.reduce(
@@ -101,15 +105,26 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
           )}
 
           <div className="space-y-4">
-            {talksByDay[date].map((talk, index) => (
-              <TalkCard
-                key={`${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}-${index}`}
-                talk={talk}
-                showDate={false}
-                showTrack={data.availableFilters.tracks.length > 1}
-                compact={true}
-              />
-            ))}
+            {talksByDay[date].map((talk, index) => {
+              const status = talkStatusMap?.get(
+                getTalkStatusKey(
+                  talk.scheduleDate,
+                  talk.startTime,
+                  talk.trackIndex,
+                  talk.talk?._id,
+                ),
+              )
+              return (
+                <TalkCard
+                  key={`${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}-${index}`}
+                  talk={talk}
+                  status={status}
+                  showDate={false}
+                  showTrack={data.availableFilters.tracks.length > 1}
+                  compact={true}
+                />
+              )
+            })}
           </div>
         </div>
       ))}

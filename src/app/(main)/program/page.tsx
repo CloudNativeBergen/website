@@ -3,6 +3,8 @@ import { Container } from '@/components/Container'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProgramClient } from './ProgramClient'
 import { Sponsors } from '@/components/Sponsors'
+import { DevTimeProvider } from '@/components/program/DevTimeProvider'
+import { DevTimeControl } from '@/components/program/DevTimeControl'
 
 export const revalidate = 300
 
@@ -52,6 +54,8 @@ export default async function Program() {
 
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
+      <DevTimeProvider />
+      <DevTimeControl schedules={conference.schedules} />
       <BackgroundImage className="-top-40 -bottom-32" />
       <Container className="relative">
         <div className="mx-auto mb-16 max-w-2xl lg:mx-0 lg:max-w-4xl lg:pr-24">
@@ -68,6 +72,8 @@ export default async function Program() {
         <ProgramClient
           schedules={conference.schedules}
           conferenceTopics={conference.topics || []}
+          conferenceStartDate={conference.start_date}
+          conferenceEndDate={conference.end_date}
         />
 
         <Sponsors sponsors={conference.sponsors || []} />
