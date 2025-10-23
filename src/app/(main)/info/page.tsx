@@ -3,13 +3,86 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { InfoContent } from '@/components/info/InfoContent'
+import type { ConferenceSchedule } from '@/lib/conference/types'
+
+function getScheduleDayInfo(schedules: ConferenceSchedule[] | undefined) {
+  if (!schedules || schedules.length === 0) {
+    return {
+      hasMultipleDays: false,
+      workshopDay: null,
+      conferenceDay: null,
+      days: [],
+    }
+  }
+
+  const sortedSchedules = [...schedules].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  )
+
+  const hasMultipleDays = sortedSchedules.length > 1
+
+  const days = sortedSchedules.map((schedule) => {
+    const allTalks = schedule.tracks.flatMap((track) => track.talks)
+
+    // First item is registration
+    const registrationTalk = allTalks.length > 0 ? allTalks[0] : null
+    const registrationTime = registrationTalk?.startTime || '08:00'
+
+    // The first talk/workshop starts when registration ends (one hour after it starts)
+    // This is the END time of the registration item
+    const firstProgramTime = registrationTalk?.endTime || '09:00'
+
+    const endTimes = allTalks.map((talk) => talk.endTime).filter(Boolean)
+    const latestEnd = endTimes.length > 0 ? endTimes.sort().reverse()[0] : '17:00'
+
+    const isWorkshopDay = schedule.tracks.some((track) =>
+      track.trackTitle?.toLowerCase().includes('workshop'),
+    )
+
+    return {
+      date: schedule.date,
+      registrationTime,
+      startTime: firstProgramTime,
+      endTime: latestEnd,
+      isWorkshopDay,
+      schedule,
+    }
+  })
+
+  return {
+    hasMultipleDays,
+    workshopDay: days[0], // First day is always workshop day
+    conferenceDay: days[1] || days[0], // Second day is conference day, or first if only one day
+    days,
+  }
+}
 
 export default async function Info() {
-  const { conference } = await getConferenceForCurrentDomain()
+  const { conference } = await getConferenceForCurrentDomain({ schedule: true })
 
   if (!conference) {
     return null
   }
+
+  const scheduleInfo = getScheduleDayInfo(conference.schedules)
+
+  const dateAnswer = (() => {
+    if (
+      scheduleInfo.hasMultipleDays &&
+      scheduleInfo.workshopDay &&
+      scheduleInfo.conferenceDay
+    ) {
+      return `This is a multi-day event running from ${formatDate(conference.start_date)} to ${formatDate(conference.end_date)}.
+
+Day 1 (${formatDate(scheduleInfo.workshopDay.date)}) - Workshop Day: Registration opens at ${scheduleInfo.workshopDay.registrationTime}. Workshops run from ${scheduleInfo.workshopDay.startTime} to ${scheduleInfo.workshopDay.endTime}.
+
+Day 2 (${formatDate(scheduleInfo.conferenceDay.date)}) - Main Conference: Registration opens at ${scheduleInfo.conferenceDay.registrationTime}. Talks are scheduled from ${scheduleInfo.conferenceDay.startTime} to ${scheduleInfo.conferenceDay.endTime}.
+
+Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Conference&quot;) grant access to both days, while conference-only tickets grant access to the main conference day only.`
+    }
+
+    return `The conference will be held on ${formatDate(conference.start_date)}. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. The talks are scheduled to start at ${scheduleInfo.conferenceDay?.startTime || '09:00'} and to end at ${scheduleInfo.conferenceDay?.endTime || '17:00'}.`
+  })()
 
   const faqs = [
     {
@@ -19,7 +92,7 @@ export default async function Info() {
       questions: [
         {
           question: 'What is the date of the conference?',
-          answer: `The conference will be held on ${formatDate(conference.start_date)}. The talks are scheduled to start at 09:00 and to end at 17:00. The doors will be open from 08:00`,
+          answer: dateAnswer,
         },
         {
           question: 'Where is the conference located?',
@@ -40,14 +113,22 @@ export default async function Info() {
             'We will serve food and drinks during the conference. If you have any allergies or dietary restrictions, please let us know in advance as a part of the ticket registration, and we will do our best to accommodate you.',
         },
         {
+          question: 'What ticket types are available?',
+          answer: scheduleInfo.hasMultipleDays
+            ? 'There are two main ticket types: Workshop + Conference (2 days) tickets provide access to both the workshop day and the main conference day, while Conference Only tickets grant access to the main conference day only. Please verify your ticket type before attending to ensure you have access to the correct days.'
+            : 'Please check your ticket confirmation for details about what your ticket includes, such as access to talks, workshops, food, and the afterparty.',
+        },
+        {
           question: 'When and where can I pick up my badge?',
-          answer:
-            'You can pick up your badge at the registration desk at the venue. The registration desk will be open the day before the event and an hour before the first talk starts.',
+          answer: scheduleInfo.hasMultipleDays && scheduleInfo.workshopDay && scheduleInfo.conferenceDay
+            ? `You can pick up your badge at the registration desk at the venue. Registration opens at ${scheduleInfo.workshopDay.registrationTime} on ${formatDate(scheduleInfo.workshopDay.date)} (workshop day) and at ${scheduleInfo.conferenceDay.registrationTime} on ${formatDate(scheduleInfo.conferenceDay.date)} (conference day). If you&apos;re attending both days, we recommend picking up your badge on the first day.`
+            : `You can pick up your badge at the registration desk at the venue. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. We recommend arriving early to get your badge and find a good seat.`,
         },
         {
           question: 'When will the doors open?',
-          answer:
-            'The doors will open for registration and coffee an hour before the first talk starts. We suggest you arrive early to get your badge and find a good seat.',
+          answer: scheduleInfo.hasMultipleDays
+            ? `Doors open for registration at ${scheduleInfo.workshopDay?.registrationTime || '08:00'} on the workshop day and at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'} on the conference day. The first workshop starts at ${scheduleInfo.workshopDay?.startTime || '09:00'} and the first talk starts at ${scheduleInfo.conferenceDay?.startTime || '09:00'}. We suggest arriving at registration time to pick up your badge, enjoy coffee, and find a good seat.`
+            : `Doors open for registration at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. The first talk starts at ${scheduleInfo.conferenceDay?.startTime || '09:00'}. We suggest arriving early to pick up your badge and find a good seat.`,
         },
         {
           question: 'What is the code of conduct?',
@@ -120,11 +201,11 @@ export default async function Info() {
 
   return (
     <>
-      <div className="relative py-20 sm:pb-24 sm:pt-36">
-        <BackgroundImage className="-bottom-14 -top-36" />
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
+        <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 dark:text-blue-400 sm:text-7xl">
+            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
               Practical Information
             </h1>
             <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-300">
