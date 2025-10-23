@@ -525,6 +525,12 @@ export async function getWorkshopStatistics(conferenceId: string) {
     }
   })
 
+  const uniqueParticipants = new Set(
+    allSignups
+      .filter((s) => s.status === 'confirmed' || s.status === 'waitlist')
+      .map((s) => s.userWorkOSId),
+  ).size
+
   const totals = {
     totalWorkshops: workshopsWithData.length,
     totalCapacity: workshopsWithData.reduce(
@@ -534,6 +540,7 @@ export async function getWorkshopStatistics(conferenceId: string) {
     totalSignups: allSignups.filter(
       (s) => s.status === 'confirmed' || s.status === 'waitlist',
     ).length,
+    uniqueParticipants,
     totalConfirmed: workshopStats.reduce(
       (sum: number, s) => sum + s.confirmedSignups,
       0,
@@ -553,7 +560,7 @@ export async function getWorkshopStatistics(conferenceId: string) {
     averageUtilization:
       workshopStats.length > 0
         ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) /
-          workshopsWithData.length
+        workshopsWithData.length
         : 0,
   }
 

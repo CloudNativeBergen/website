@@ -222,32 +222,37 @@ export function WorkshopsClientPage({
         stats={
           statsData
             ? [
-                {
-                  value: statsData.data.totals.totalWorkshops,
-                  label: 'Total Workshops',
-                  color: 'blue' as const,
-                },
-                {
-                  value: statsData.data.totals.totalSignups,
-                  label: 'Total Signups',
-                  color: 'slate' as const,
-                },
-                {
-                  value: statsData.data.totals.totalConfirmed,
-                  label: 'Confirmed',
-                  color: 'green' as const,
-                },
-                {
-                  value: statsData.data.totals.totalWaitlist,
-                  label: 'Waitlist',
-                  color: 'blue' as const,
-                },
-              ]
+              {
+                value: statsData.data.totals.totalWorkshops,
+                label: 'Total Workshops',
+                color: 'blue' as const,
+              },
+              {
+                value: statsData.data.totals.uniqueParticipants,
+                label: 'Unique Participants',
+                color: 'purple' as const,
+              },
+              {
+                value: statsData.data.totals.totalSignups,
+                label: 'Total Signups',
+                color: 'slate' as const,
+              },
+              {
+                value: statsData.data.totals.totalConfirmed,
+                label: 'Confirmed',
+                color: 'green' as const,
+              },
+              {
+                value: statsData.data.totals.totalWaitlist,
+                label: 'Waitlist',
+                color: 'blue' as const,
+              },
+            ]
             : []
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {initialWorkshops.map((workshop) => {
           const workshopSignups = signupsByWorkshop.get(workshop._id) || []
           const confirmedCount = workshopSignups.filter(
