@@ -17,7 +17,6 @@ import {
   getWorkshopDateTime,
 } from '@/lib/workshop/utils'
 import {
-  getUserWorkshopSignup,
   hasConfirmedSignup,
   isUserOnWaitlist,
   shouldShowAsFull,
