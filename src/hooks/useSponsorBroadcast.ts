@@ -20,12 +20,26 @@ export function useSponsorBroadcast() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to send broadcast email')
+        console.error('[SponsorBroadcast] Broadcast request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error,
+          details: data.details,
+        })
+
+        const errorMessage = data.details
+          ? `${data.error}: ${data.details}`
+          : data.error || 'Failed to send broadcast email'
+
+        throw new Error(errorMessage)
       }
 
       setIsBroadcastModalOpen(false)
     } catch (error) {
-      console.error('Failed to send broadcast email:', error)
+      console.error('[SponsorBroadcast] Broadcast error:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
       throw error
     }
   }
@@ -42,7 +56,19 @@ export function useSponsorBroadcast() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to sync sponsor contacts')
+        console.error('[SponsorBroadcast] Sync request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error,
+          details: data.details,
+          context: data.context,
+        })
+
+        const errorMessage = data.details
+          ? `${data.error}: ${data.details}`
+          : data.error || 'Failed to sync sponsor contacts'
+
+        throw new Error(errorMessage)
       }
 
       showNotification({
@@ -51,11 +77,19 @@ export function useSponsorBroadcast() {
         message: data.message,
       })
     } catch (error) {
-      console.error('Failed to sync sponsor contacts:', error)
+      console.error('[SponsorBroadcast] Sync error:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'Failed to sync sponsor contacts with email audience'
+
       showNotification({
         type: 'error',
         title: 'Sync Failed',
-        message: 'Failed to sync sponsor contacts with email audience',
+        message: errorMessage,
       })
     }
   }

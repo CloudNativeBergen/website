@@ -46,11 +46,18 @@ export async function getOrCreateConferenceAudienceByType(
       : `${conference.title} Sponsors`
 
   try {
+    const listStart = Date.now()
     const existingAudiences = await retryWithBackoff(() =>
       resend.audiences.list(),
     )
+    const listDuration = Date.now() - listStart
 
     if (existingAudiences.error) {
+      console.error('[Audience] Failed to list audiences:', {
+        error: existingAudiences.error.message,
+        audienceType,
+        durationMs: listDuration,
+      })
       throw new Error(
         `Failed to list audiences: ${existingAudiences.error.message}`,
       )
@@ -65,13 +72,21 @@ export async function getOrCreateConferenceAudienceByType(
     }
 
     await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+    const createStart = Date.now()
     const audienceResponse = await retryWithBackoff(() =>
       resend.audiences.create({
         name: audienceName,
       }),
     )
+    const createDuration = Date.now() - createStart
 
     if (audienceResponse.error) {
+      console.error('[Audience] Failed to create audience:', {
+        error: audienceResponse.error.message,
+        audienceName,
+        audienceType,
+        durationMs: createDuration,
+      })
       throw new Error(
         `Failed to create audience: ${audienceResponse.error.message}`,
       )
@@ -81,12 +96,21 @@ export async function getOrCreateConferenceAudienceByType(
   } catch (error) {
     if (isRateLimitError(error)) {
       console.warn(
-        `Conference ${audienceType} audience could not be created/accessed due to persistent rate limiting`,
+        `[Audience] Conference ${audienceType} audience could not be created/accessed due to persistent rate limiting`,
+        {
+          conferenceName: conference.title,
+          audienceName,
+        }
       )
     } else {
       console.error(
-        `Failed to get or create conference ${audienceType} audience:`,
-        error,
+        `[Audience] Failed to get or create conference ${audienceType} audience:`,
+        {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          audienceName,
+          audienceType,
+        }
       )
     }
     return { audienceId: '', error: error as Error }
@@ -105,6 +129,10 @@ export async function addContactToAudience(
 ): Promise<{ success: boolean; error?: Error }> {
   try {
     if (!contact.email) {
+      console.warn('[Audience] Attempted to add contact without email:', {
+        audienceId,
+        email: contact.email,
+      })
       throw new Error('Contact email is required')
     }
 
@@ -123,6 +151,11 @@ export async function addContactToAudience(
       if (contactResponse.error.message?.includes('already exists')) {
         return { success: true }
       }
+      console.error('[Audience] Failed to add contact:', {
+        error: contactResponse.error.message,
+        email: contact.email,
+        audienceId,
+      })
       throw new Error(`Failed to add contact: ${contactResponse.error.message}`)
     }
 
@@ -130,10 +163,18 @@ export async function addContactToAudience(
   } catch (error) {
     if (isRateLimitError(error)) {
       console.warn(
-        `Contact ${contact.email} could not be added to audience due to persistent rate limiting`,
+        `[Audience] Contact ${contact.email} could not be added to audience due to persistent rate limiting`,
+        {
+          audienceId,
+          organization: contact.organization,
+        }
       )
     } else {
-      console.error('Failed to add contact to audience:', error)
+      console.error('[Audience] Failed to add contact to audience:', {
+        error: error instanceof Error ? error.message : String(error),
+        email: contact.email,
+        audienceId,
+      })
     }
     return { success: false, error: error as Error }
   }
@@ -218,19 +259,32 @@ export async function syncAudienceWithContacts(
   removedCount: number
   error?: Error
 }> {
+  const syncStart = Date.now()
+
   try {
     const { audienceId, error: audienceError } =
       await getOrCreateConferenceAudienceByType(conference, audienceType)
 
     if (audienceError || !audienceId) {
+      console.error('[Audience] Failed to get/create audience:', {
+        error: audienceError?.message,
+        audienceType,
+      })
       throw audienceError || new Error('Failed to get audience ID')
     }
 
+    const listStart = Date.now()
     const contactsResponse = await retryWithBackoff(
       async () => await resend.contacts.list({ audienceId }),
     )
+    const listDuration = Date.now() - listStart
 
     if (contactsResponse.error) {
+      console.error('[Audience] Failed to list existing contacts:', {
+        error: contactsResponse.error.message,
+        audienceId,
+        durationMs: listDuration,
+      })
       throw new Error(
         `Failed to list existing contacts: ${contactsResponse.error.message}`,
       )
@@ -242,36 +296,30 @@ export async function syncAudienceWithContacts(
       contacts.filter((c) => c.email).map((c) => c.email),
     )
 
-    let addedCount = 0
-    for (const contact of contacts) {
-      if (contact.email && !existingEmails.has(contact.email)) {
-        const { success } = await addContactToAudience(audienceId, contact)
-        if (success) {
-          addedCount++
-        }
+    const contactsToAdd = contacts.filter(c => c.email && !existingEmails.has(c.email));
+    const contactsToRemove = existingContacts.filter(c => !currentContactEmails.has(c.email));
 
-        await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+    let addedCount = 0
+    for (const contact of contactsToAdd) {
+      const { success } = await addContactToAudience(audienceId, contact)
+      if (success) {
+        addedCount++
       }
+      await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
     }
 
     let removedCount = 0
-    for (const existingContact of existingContacts) {
-      if (!currentContactEmails.has(existingContact.email)) {
-        const { success } = await removeContactFromAudience(
-          audienceId,
-          existingContact.email,
-        )
-        if (success) {
-          removedCount++
-        }
-
-        await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+    for (const existingContact of contactsToRemove) {
+      const { success } = await removeContactFromAudience(
+        audienceId,
+        existingContact.email,
+      )
+      if (success) {
+        removedCount++
       }
-    }
 
-    console.log(
-      `${audienceType} audience sync completed: ${addedCount} added, ${removedCount} removed`,
-    )
+      await delay(EMAIL_CONFIG.RATE_LIMIT_DELAY)
+    }
 
     return {
       success: true,
@@ -281,7 +329,14 @@ export async function syncAudienceWithContacts(
       removedCount,
     }
   } catch (error) {
-    console.error(`Failed to sync ${audienceType} audience:`, error)
+    const totalDuration = Date.now() - syncStart
+    console.error(`[Audience] Failed to sync ${audienceType} audience:`, {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      conferenceName: conference.title,
+      contactCount: contacts.length,
+      durationMs: totalDuration,
+    })
     return {
       success: false,
       audienceId: '',
