@@ -111,9 +111,12 @@ export function TalkCard({
           className={clsx(
             'rounded-lg border transition-all duration-200',
             isPast && 'opacity-60',
-            isHappeningNow && 'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
+            isHappeningNow &&
+              'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
             isHappeningSoon && 'border-2 border-yellow-500',
-            !isHappeningNow && !isHappeningSoon && 'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-600 dark:bg-gray-700',
+            !isHappeningNow &&
+              !isHappeningSoon &&
+              'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-600 dark:bg-gray-700',
             compact ? 'p-2' : 'p-4',
           )}
         >
@@ -152,7 +155,9 @@ export function TalkCard({
                   </div>
                 )}
                 <span className="rounded-full bg-white px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-600 dark:text-gray-300">
-                  <span className="hidden sm:inline">{durationMinutes} min</span>
+                  <span className="hidden sm:inline">
+                    {durationMinutes} min
+                  </span>
                   <span className="sm:hidden">{durationMinutes}m</span>
                 </span>
               </div>
@@ -188,12 +193,12 @@ export function TalkCard({
     trackTitle: talk.trackTitle,
     speakers: isConfirmed
       ? talkData.speakers
-        ?.map((speaker) =>
-          typeof speaker === 'object' && 'name' in speaker
-            ? speaker.name
-            : '',
-        )
-        .filter(Boolean)
+          ?.map((speaker) =>
+            typeof speaker === 'object' && 'name' in speaker
+              ? speaker.name
+              : '',
+          )
+          .filter(Boolean)
       : [],
   }
 
@@ -206,7 +211,8 @@ export function TalkCard({
         !isConfirmed && !isWithdrawnOrRejected && 'opacity-75',
         isWithdrawnOrRejected && 'opacity-60',
         isPast && !isWithdrawnOrRejected && 'opacity-60',
-        isHappeningNow && 'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
+        isHappeningNow &&
+          'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
         isHappeningSoon && 'border-2 border-yellow-500',
         isBookmarkedTalk && !isHappeningNow && !isHappeningSoon
           ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80 dark:border-brand-cloud-blue dark:bg-blue-900/30'
@@ -214,7 +220,9 @@ export function TalkCard({
             ? 'border-brand-frosted-steel bg-white hover:border-brand-cloud-blue dark:border-gray-600 dark:bg-gray-800 dark:hover:border-brand-cloud-blue'
             : isWithdrawnOrRejected
               ? 'border-red-300 bg-red-50 hover:border-red-400 dark:border-red-600 dark:bg-red-900/30 dark:hover:border-red-500'
-              : !isHappeningNow && !isHappeningSoon && 'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500',
+              : !isHappeningNow &&
+                !isHappeningSoon &&
+                'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500',
         compact ? 'p-3' : 'p-6',
       )}
     >
@@ -233,8 +241,8 @@ export function TalkCard({
                   'font-space-grotesk font-semibold',
                   isWithdrawnOrRejected && 'text-red-500 dark:text-red-400',
                   !isConfirmed &&
-                  !isWithdrawnOrRejected &&
-                  'text-gray-500 dark:text-gray-400',
+                    !isWithdrawnOrRejected &&
+                    'text-gray-500 dark:text-gray-400',
                   isConfirmed && 'text-brand-slate-gray dark:text-white',
                   compact ? 'text-sm leading-tight' : 'text-base',
                   fixedHeight && compact && 'line-clamp-2',
@@ -242,8 +250,8 @@ export function TalkCard({
               >
                 {isConfirmed ? (
                   primarySpeaker &&
-                    typeof primarySpeaker === 'object' &&
-                    'slug' in primarySpeaker ? (
+                  typeof primarySpeaker === 'object' &&
+                  'slug' in primarySpeaker ? (
                     <Link
                       href={`/speaker/${primarySpeaker.slug}`}
                       className="transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"

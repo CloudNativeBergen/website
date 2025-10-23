@@ -3,7 +3,10 @@
 import { Fragment } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { XMarkIcon, TrashIcon } from '@heroicons/react/24/outline'
-import type { WorkshopSignupExisting, WorkshopSignupStatus } from '@/lib/workshop/types'
+import type {
+  WorkshopSignupExisting,
+  WorkshopSignupStatus,
+} from '@/lib/workshop/types'
 
 interface SignupDetailsModalProps {
   isOpen: boolean
@@ -28,7 +31,9 @@ export function SignupDetailsModal({
   isConfirming = false,
   isDeleting = false,
 }: SignupDetailsModalProps) {
-  const statusLabel = status ? status.charAt(0).toUpperCase() + status.slice(1) : ''
+  const statusLabel = status
+    ? status.charAt(0).toUpperCase() + status.slice(1)
+    : ''
 
   return (
     <Transition.Root show={isOpen} as={Fragment}>
@@ -120,9 +125,16 @@ export function SignupDetailsModal({
                                   </td>
                                   <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
                                     {(() => {
-                                      const dateStr = signup.signupDate || signup._createdAt
-                                      if (!dateStr || typeof dateStr !== 'string') return 'N/A'
-                                      return new Date(dateStr).toLocaleDateString()
+                                      const dateStr =
+                                        signup.signupDate || signup._createdAt
+                                      if (
+                                        !dateStr ||
+                                        typeof dateStr !== 'string'
+                                      )
+                                        return 'N/A'
+                                      return new Date(
+                                        dateStr,
+                                      ).toLocaleDateString()
                                     })()}
                                   </td>
                                   <td className="px-6 py-4 text-sm whitespace-nowrap">
@@ -130,7 +142,10 @@ export function SignupDetailsModal({
                                       {signup.status === 'waitlist' && (
                                         <button
                                           onClick={() =>
-                                            onConfirmSignup(signup._id, signup.userName)
+                                            onConfirmSignup(
+                                              signup._id,
+                                              signup.userName,
+                                            )
                                           }
                                           disabled={isConfirming || isDeleting}
                                           className="text-green-600 hover:text-green-900 disabled:cursor-not-allowed disabled:opacity-50 dark:text-green-400 dark:hover:text-green-300"
@@ -140,7 +155,10 @@ export function SignupDetailsModal({
                                       )}
                                       <button
                                         onClick={() =>
-                                          onDeleteSignup(signup._id, signup.userName)
+                                          onDeleteSignup(
+                                            signup._id,
+                                            signup.userName,
+                                          )
                                         }
                                         disabled={isConfirming || isDeleting}
                                         className="text-gray-600 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:text-red-400"

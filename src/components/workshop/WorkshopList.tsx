@@ -11,6 +11,7 @@ import {
   checkWorkshopTimeConflict,
   getWorkshopIdFromSignup,
 } from '@/lib/workshop/utils'
+import { isUserSignedUp } from '@/lib/workshop/status'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 
@@ -98,7 +99,7 @@ export default function WorkshopList({
     }
 
     // Check if user is already signed up
-    if (userWorkshopIds.includes(workshopId)) {
+    if (isUserSignedUp(workshopId, userSignups)) {
       setErrorMessage('You are already signed up for this workshop')
       setTimeout(() => setErrorMessage(null), 5000)
       return { success: false, error: 'Already signed up' }
@@ -246,28 +247,28 @@ export default function WorkshopList({
                 )
                 return signup?.status === 'waitlist'
               }).length > 0 && (
-                <>
-                  {' '}
-                  and on the waitlist for{' '}
-                  {
-                    userWorkshops.filter((w) => {
+                  <>
+                    {' '}
+                    and on the waitlist for{' '}
+                    {
+                      userWorkshops.filter((w) => {
+                        const signup = userSignups.find(
+                          (s) => getWorkshopIdFromSignup(s) === w._id,
+                        )
+                        return signup?.status === 'waitlist'
+                      }).length
+                    }{' '}
+                    workshop
+                    {userWorkshops.filter((w) => {
                       const signup = userSignups.find(
                         (s) => getWorkshopIdFromSignup(s) === w._id,
                       )
                       return signup?.status === 'waitlist'
-                    }).length
-                  }{' '}
-                  workshop
-                  {userWorkshops.filter((w) => {
-                    const signup = userSignups.find(
-                      (s) => getWorkshopIdFromSignup(s) === w._id,
-                    )
-                    return signup?.status === 'waitlist'
-                  }).length !== 1
-                    ? 's'
-                    : ''}
-                </>
-              )}
+                    }).length !== 1
+                      ? 's'
+                      : ''}
+                  </>
+                )}
               .
             </p>
           </div>
@@ -300,7 +301,10 @@ export default function WorkshopList({
           </h2>
           <div className="space-y-6">
             {availableWorkshops.map((workshop) => {
-              const isSignedUp = userWorkshopIds.includes(workshop._id)
+              const workshopIsSignedUp = isUserSignedUp(
+                workshop._id,
+                userSignups,
+              )
               const { hasConflict, conflictingWorkshop } =
                 checkTimeConflict(workshop)
               return (
@@ -309,7 +313,7 @@ export default function WorkshopList({
                   workshop={workshop}
                   userSignups={userSignups}
                   onSignup={handleSignup}
-                  isSignedUp={isSignedUp}
+                  isSignedUp={workshopIsSignedUp}
                   isLoading={signupMutation.isPending}
                   hasTimeConflict={hasConflict}
                   conflictingWorkshopTitle={conflictingWorkshop?.title}

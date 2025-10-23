@@ -19,7 +19,7 @@ export default async function NotFound() {
           <p className="font-display text-2xl tracking-tight text-blue-900 dark:text-blue-100">
             404
           </p>
-          <h1 className="font-display mt-4 text-4xl font-medium tracking-tighter text-blue-600 dark:text-blue-300 sm:text-5xl">
+          <h1 className="font-display mt-4 text-4xl font-medium tracking-tighter text-blue-600 sm:text-5xl dark:text-blue-300">
             Page not found
           </h1>
           <p className="mt-4 text-lg tracking-tight text-blue-900 dark:text-blue-100">

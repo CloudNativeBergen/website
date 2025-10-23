@@ -45,17 +45,11 @@ export function ProgramClient({
     switch (viewMode) {
       case 'grid':
         return (
-          <ProgramGridView
-            data={filteredData}
-            talkStatusMap={talkStatusMap}
-          />
+          <ProgramGridView data={filteredData} talkStatusMap={talkStatusMap} />
         )
       case 'list':
         return (
-          <ProgramListView
-            data={filteredData}
-            talkStatusMap={talkStatusMap}
-          />
+          <ProgramListView data={filteredData} talkStatusMap={talkStatusMap} />
         )
       case 'agenda':
         return (

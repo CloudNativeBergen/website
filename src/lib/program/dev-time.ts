@@ -4,12 +4,13 @@ const listeners = new Set<() => void>()
 export function setSimulatedTime(time: Date | string | null): void {
   if (process.env.NODE_ENV !== 'development') return
 
-  simulatedTime = time === null ? null : (typeof time === 'string' ? new Date(time) : time)
+  simulatedTime =
+    time === null ? null : typeof time === 'string' ? new Date(time) : time
   listeners.forEach((listener) => listener())
 }
 
 export function onSimulatedTimeChange(listener: () => void): () => void {
-  if (process.env.NODE_ENV !== 'development') return () => { }
+  if (process.env.NODE_ENV !== 'development') return () => {}
   listeners.add(listener)
   return () => listeners.delete(listener)
 }
@@ -35,7 +36,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     isActive: typeof isSimulatedTimeActive
   }
 
-  (window as unknown as { devTime: DevTimeAPI }).devTime = {
+  ;(window as unknown as { devTime: DevTimeAPI }).devTime = {
     set: setSimulatedTime,
     clear: clearSimulatedTime,
     get: getSimulatedTime,

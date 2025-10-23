@@ -82,9 +82,10 @@ export function useSponsorBroadcast() {
         stack: error instanceof Error ? error.stack : undefined,
       })
 
-      const errorMessage = error instanceof Error
-        ? error.message
-        : 'Failed to sync sponsor contacts with email audience'
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Failed to sync sponsor contacts with email audience'
 
       showNotification({
         type: 'error',

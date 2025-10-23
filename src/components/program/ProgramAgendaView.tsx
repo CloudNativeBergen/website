@@ -26,11 +26,11 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
 
   const filteredTalks = isLoaded
     ? talksOnly.filter((talk) => {
-      const talkId =
-        talk.talk!._id ||
-        `${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}`
-      return isBookmarked(talkId)
-    })
+        const talkId =
+          talk.talk!._id ||
+          `${talk.scheduleDate}-${talk.trackTitle}-${talk.startTime}`
+        return isBookmarked(talkId)
+      })
     : []
 
   const talksByDay = filteredTalks.reduce(

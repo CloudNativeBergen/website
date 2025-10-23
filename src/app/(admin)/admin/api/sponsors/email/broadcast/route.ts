@@ -49,7 +49,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
         error: 'Internal server error during broadcast',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 })

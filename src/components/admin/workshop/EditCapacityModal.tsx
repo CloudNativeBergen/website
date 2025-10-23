@@ -103,12 +103,15 @@ export function EditCapacityModal({
                         type="number"
                         min={currentSignups}
                         value={capacity || 0}
-                        onChange={(e) => setCapacity(parseInt(e.target.value) || 0)}
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        onChange={(e) =>
+                          setCapacity(parseInt(e.target.value) || 0)
+                        }
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                       />
                       {isInvalid && (
                         <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                          Capacity cannot be less than current signups ({currentSignups})
+                          Capacity cannot be less than current signups (
+                          {currentSignups})
                         </p>
                       )}
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -120,7 +123,7 @@ export function EditCapacityModal({
                   <div className="mt-6 flex justify-end gap-3">
                     <button
                       type="button"
-                      className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                      className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                       onClick={onClose}
                       disabled={isSubmitting}
                     >
@@ -128,7 +131,7 @@ export function EditCapacityModal({
                     </button>
                     <button
                       type="button"
-                      className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={handleSubmit}
                       disabled={isSubmitting || isInvalid}
                     >

@@ -29,9 +29,9 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return Response.json(
         {
           error: 'Failed to load conference data',
-          details: conferenceError.message
+          details: conferenceError.message,
         },
-        { status: 500 }
+        { status: 500 },
       )
     }
 
@@ -39,7 +39,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       console.error('[SponsorSync] Conference data is null/undefined')
       return Response.json(
         { error: 'Conference data not found' },
-        { status: 500 }
+        { status: 500 },
       )
     }
 
@@ -54,13 +54,15 @@ export const POST = auth(async (req: NextAuthRequest) => {
     )
 
     if (eligibleSponsors.length === 0) {
-      console.warn('[SponsorSync] No sponsors with valid contact information found')
+      console.warn(
+        '[SponsorSync] No sponsors with valid contact information found',
+      )
       return Response.json(
         {
           error: 'No sponsors with contact information found',
           details: 'Add contact information to sponsors before syncing',
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -99,7 +101,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
           context: {
             attemptedContactCount: sponsorContacts.length,
             audienceId: audienceId || 'not created',
-          }
+          },
         },
         { status: 500 },
       )
@@ -126,7 +128,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
         error: 'Internal server error during sponsor sync',
         details: error instanceof Error ? error.message : 'Unknown error',
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 })

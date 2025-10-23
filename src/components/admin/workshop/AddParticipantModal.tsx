@@ -36,7 +36,8 @@ export function AddParticipantModal({
   onSubmit,
   isSubmitting = false,
 }: AddParticipantModalProps) {
-  const [formData, setFormData] = useState<ParticipantFormData>(DEFAULT_PARTICIPANT)
+  const [formData, setFormData] =
+    useState<ParticipantFormData>(DEFAULT_PARTICIPANT)
 
   const handleClose = () => {
     setFormData(DEFAULT_PARTICIPANT)
@@ -108,7 +109,7 @@ export function AddParticipantModal({
                         onChange={(e) =>
                           setFormData({ ...formData, userName: e.target.value })
                         }
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500"
                         placeholder="John Doe"
                       />
                     </div>
@@ -121,9 +122,12 @@ export function AddParticipantModal({
                         type="email"
                         value={formData.userEmail}
                         onChange={(e) =>
-                          setFormData({ ...formData, userEmail: e.target.value })
+                          setFormData({
+                            ...formData,
+                            userEmail: e.target.value,
+                          })
                         }
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500"
                         placeholder="john@example.com"
                       />
                     </div>
@@ -136,9 +140,12 @@ export function AddParticipantModal({
                         type="text"
                         value={formData.userWorkOSId}
                         onChange={(e) =>
-                          setFormData({ ...formData, userWorkOSId: e.target.value })
+                          setFormData({
+                            ...formData,
+                            userWorkOSId: e.target.value,
+                          })
                         }
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500"
                         placeholder="user_abc123"
                       />
                     </div>
@@ -155,7 +162,7 @@ export function AddParticipantModal({
                             experienceLevel: e.target.value as ExperienceLevel,
                           })
                         }
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                       >
                         <option value="beginner">Beginner</option>
                         <option value="intermediate">Intermediate</option>
@@ -175,7 +182,7 @@ export function AddParticipantModal({
                             operatingSystem: e.target.value as OperatingSystem,
                           })
                         }
-                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                       >
                         <option value="windows">Windows</option>
                         <option value="macos">macOS</option>
@@ -187,7 +194,7 @@ export function AddParticipantModal({
                   <div className="mt-6 flex justify-end gap-3">
                     <button
                       type="button"
-                      className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                      className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                       onClick={handleClose}
                       disabled={isSubmitting}
                     >
@@ -195,7 +202,7 @@ export function AddParticipantModal({
                     </button>
                     <button
                       type="button"
-                      className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={handleSubmit}
                       disabled={isSubmitting}
                     >

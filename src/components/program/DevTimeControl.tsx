@@ -132,10 +132,15 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
 
     const scheduleDate = firstSchedule.date
 
-    const createDateTime = (time: string, offsetMinutes: number = 0): string => {
+    const createDateTime = (
+      time: string,
+      offsetMinutes: number = 0,
+    ): string => {
       const date = new Date(`${scheduleDate}T${time}:00+01:00`)
       date.setMinutes(date.getMinutes() + offsetMinutes)
-      return date.toISOString().replace('Z', '+01:00').substring(0, 19) + '+01:00'
+      return (
+        date.toISOString().replace('Z', '+01:00').substring(0, 19) + '+01:00'
+      )
     }
 
     return [
@@ -172,10 +177,11 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg px-4 py-2 font-mono text-sm shadow-lg transition-all ${isSimulated
-          ? 'bg-green-500 text-white hover:bg-green-600'
-          : 'bg-gray-800 text-white hover:bg-gray-700'
-          }`}
+        className={`fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-lg px-4 py-2 font-mono text-sm shadow-lg transition-all ${
+          isSimulated
+            ? 'bg-green-500 text-white hover:bg-green-600'
+            : 'bg-gray-800 text-white hover:bg-gray-700'
+        }`}
         title="Dev Time Control"
       >
         <ClockIcon className="h-5 w-5" />
@@ -188,14 +194,14 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
           })}
         </span>
         {isSimulated && (
-          <span className="hidden sm:inline text-xs bg-white/20 px-2 py-0.5 rounded">
+          <span className="hidden rounded bg-white/20 px-2 py-0.5 text-xs sm:inline">
             SIM
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="fixed bottom-20 right-4 z-50 w-96 rounded-lg border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+        <div className="fixed right-4 bottom-20 z-50 w-96 rounded-lg border border-gray-200 bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-800">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ClockIcon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
@@ -234,12 +240,13 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
                 <select
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                 >
                   <option value="">Select a day...</option>
                   {schedules.length > 0 && (
                     <option value={addDays(schedules[0].date, -1)}>
-                      {formatDateOption(addDays(schedules[0].date, -1))} (Before)
+                      {formatDateOption(addDays(schedules[0].date, -1))}{' '}
+                      (Before)
                     </option>
                   )}
                   {schedules.map((schedule) => (
@@ -248,8 +255,13 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
                     </option>
                   ))}
                   {schedules.length > 0 && (
-                    <option value={addDays(schedules[schedules.length - 1].date, 1)}>
-                      {formatDateOption(addDays(schedules[schedules.length - 1].date, 1))} (After)
+                    <option
+                      value={addDays(schedules[schedules.length - 1].date, 1)}
+                    >
+                      {formatDateOption(
+                        addDays(schedules[schedules.length - 1].date, 1),
+                      )}{' '}
+                      (After)
                     </option>
                   )}
                 </select>
@@ -258,12 +270,12 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
                     type="time"
                     value={selectedTime}
                     onChange={(e) => setSelectedTime(e.target.value)}
-                    className="flex-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    className="flex-1 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   />
                   <button
                     onClick={handleSetTime}
                     disabled={!selectedDate || !selectedTime}
-                    className="rounded bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <PlayIcon className="h-4 w-4" />
                   </button>

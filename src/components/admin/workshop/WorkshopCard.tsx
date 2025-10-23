@@ -1,6 +1,10 @@
 'use client'
 
-import { UserGroupIcon, PlusCircleIcon, PencilIcon } from '@heroicons/react/24/outline'
+import {
+  UserGroupIcon,
+  PlusCircleIcon,
+  PencilIcon,
+} from '@heroicons/react/24/outline'
 import { getWorkshopDuration } from '@/lib/workshop/utils'
 import { calculateWorkshopStats, getCapacityColorClass } from './utils'
 import type { ProposalWithWorkshopData } from '@/lib/workshop/types'
@@ -34,7 +38,7 @@ export function WorkshopCard({
     <div className="flex h-full flex-col rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-3 min-h-[3rem]">
-          <h3 className="line-clamp-2 text-base font-semibold leading-tight text-gray-900 dark:text-white">
+          <h3 className="line-clamp-2 text-base leading-tight font-semibold text-gray-900 dark:text-white">
             {workshop.title}
           </h3>
         </div>

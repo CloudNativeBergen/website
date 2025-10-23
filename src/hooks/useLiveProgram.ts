@@ -20,7 +20,7 @@ interface UseLiveProgramResult {
 export function useLiveProgram(
   schedules: ConferenceSchedule[],
   conferenceStartDate: string,
-  conferenceEndDate: string
+  conferenceEndDate: string,
 ): UseLiveProgramResult {
   const [triggerUpdate, setTriggerUpdate] = useState(0)
 
@@ -34,22 +34,22 @@ export function useLiveProgram(
   const currentTime = useMemo(
     () => getCurrentConferenceTime(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [triggerUpdate]
+    [triggerUpdate],
   )
 
   const isLive = useMemo(
     () => isConferenceDay(conferenceStartDate, conferenceEndDate, currentTime),
-    [conferenceStartDate, conferenceEndDate, currentTime]
+    [conferenceStartDate, conferenceEndDate, currentTime],
   )
 
   const currentPosition = useMemo(
     () => (isLive ? findCurrentTalkPosition(schedules, currentTime) : null),
-    [isLive, schedules, currentTime]
+    [isLive, schedules, currentTime],
   )
 
   const talkStatusMap = useMemo(
     () => (isLive ? getTalkStatusMap(schedules, currentTime) : new Map()),
-    [isLive, schedules, currentTime]
+    [isLive, schedules, currentTime],
   )
 
   return {
