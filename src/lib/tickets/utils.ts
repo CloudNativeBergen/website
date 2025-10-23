@@ -97,8 +97,8 @@ export function calculateCategoryStats(
         (sum, ticket) =>
           sum +
           parseAmount(ticket.sum) /
-          categoryTickets.filter((t) => t.order_id === ticket.order_id)
-            .length,
+            categoryTickets.filter((t) => t.order_id === ticket.order_id)
+              .length,
         0,
       )
 
@@ -206,9 +206,7 @@ export function calculateFreeTicketClaimRate(
   totalClaimed: number,
   totalAllocated: number,
 ): number {
-  return totalAllocated > 0
-    ? (totalClaimed / totalAllocated) * 100
-    : 0
+  return totalAllocated > 0 ? (totalClaimed / totalAllocated) * 100 : 0
 }
 
 /**

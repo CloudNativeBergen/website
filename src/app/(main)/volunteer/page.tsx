@@ -39,8 +39,8 @@ export default async function VolunteerPage() {
           </h1>
           <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-100">
             <p>
-              Be part of the team that makes this amazing event happen! Join
-              our volunteer crew and contribute to the Cloud Native community.
+              Be part of the team that makes this amazing event happen! Join our
+              volunteer crew and contribute to the Cloud Native community.
             </p>
           </div>
 
@@ -93,11 +93,15 @@ export default async function VolunteerPage() {
             <ul className="mt-4 space-y-2 text-base text-gray-700 dark:text-gray-300">
               <li className="flex items-start">
                 <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
-                <span>Free access to the entire conference and all sessions</span>
+                <span>
+                  Free access to the entire conference and all sessions
+                </span>
               </li>
               <li className="flex items-start">
                 <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
-                <span>Networking opportunities with speakers and attendees</span>
+                <span>
+                  Networking opportunities with speakers and attendees
+                </span>
               </li>
               <li className="flex items-start">
                 <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>

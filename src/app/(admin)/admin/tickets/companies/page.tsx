@@ -17,7 +17,9 @@ async function getTicketData(
   try {
     return await fetchEventTickets(customerId, eventId)
   } catch (error) {
-    throw new Error(`Failed to fetch event tickets from Checkin.no API: ${(error as Error).message}`)
+    throw new Error(
+      `Failed to fetch event tickets from Checkin.no API: ${(error as Error).message}`,
+    )
   }
 }
 
@@ -56,107 +58,107 @@ function normalizeCompanyName(company: string): string {
 
   // Specific company normalizations
   const companyMappings: Record<string, string> = {
-    'tietoevry': 'tietoevry',
+    tietoevry: 'tietoevry',
     'tieto evry': 'tietoevry',
-    'trice': 'tietoevry',
-    'evry': 'tietoevry',
-    'dnb': 'dnb',
+    trice: 'tietoevry',
+    evry: 'tietoevry',
+    dnb: 'dnb',
     'dnb carnegie': 'dnb',
-    'sparebanken': 'sparebanken',
+    sparebanken: 'sparebanken',
     'sparebank 1 utvikling': 'sparebank 1',
-    'tryg': 'tryg',
+    tryg: 'tryg',
     'helse vest ikt': 'helse vest ikt',
     'universitetet i': 'universitetet i bergen',
     'university of': 'universitetet i bergen',
-    'uib': 'universitetet i bergen',
-    'telenor': 'telenor',
+    uib: 'universitetet i bergen',
+    telenor: 'telenor',
     'tv 2': 'tv 2',
-    'tv2': 'tv 2',
-    'sonat': 'sonat',
-    'framo': 'framo',
-    'proact': 'proact',
-    'conoa': 'proact',
-    'vivicta': 'vivicta',
-    'frende': 'frende',
-    'stacc': 'stacc',
-    'sikri': 'sikri',
+    tv2: 'tv 2',
+    sonat: 'sonat',
+    framo: 'framo',
+    proact: 'proact',
+    conoa: 'proact',
+    vivicta: 'vivicta',
+    frende: 'frende',
+    stacc: 'stacc',
+    sikri: 'sikri',
     'ks digital': 'ks digital',
-    'sidero': 'sidero labs',
-    'siderolabs': 'sidero labs',
-    'blinq': 'blinq',
+    sidero: 'sidero labs',
+    siderolabs: 'sidero labs',
+    blinq: 'blinq',
     'redpill linpro': 'redpill linpro',
-    'kraftlauget': 'kraftlauget',
-    'enabler': 'enabler',
-    'aws': 'amazon web services',
-    'amazon': 'amazon web services',
-    'nav': 'nav',
+    kraftlauget: 'kraftlauget',
+    enabler: 'enabler',
+    aws: 'amazon web services',
+    amazon: 'amazon web services',
+    nav: 'nav',
     'nav it': 'nav',
     'nav teknolog': 'nav',
     'fjord line': 'fjord line',
     'tussa ikt': 'tussa ikt',
-    'islandgarden': 'islandgarden',
-    'kystverket': 'kystverket',
-    'help': 'help',
+    islandgarden: 'islandgarden',
+    kystverket: 'kystverket',
+    help: 'help',
     'vipps mobilepay': 'vipps mobilepay',
-    'ulriken': 'ulriken',
-    'ambita': 'ambita',
-    'boligmappa': 'boligmappa',
-    'webstep': 'webstep',
-    'coresoft': 'coresoft',
-    'equinor': 'equinor',
-    'bouvet': 'bouvet',
-    'xait': 'xait',
-    'lettfrem': 'lettfrem',
-    'godver': 'godver',
-    'fourenergy': 'fourenergy',
-    'vimond': 'vimond',
-    'scaleaq': 'scaleaq',
+    ulriken: 'ulriken',
+    ambita: 'ambita',
+    boligmappa: 'boligmappa',
+    webstep: 'webstep',
+    coresoft: 'coresoft',
+    equinor: 'equinor',
+    bouvet: 'bouvet',
+    xait: 'xait',
+    lettfrem: 'lettfrem',
+    godver: 'godver',
+    fourenergy: 'fourenergy',
+    vimond: 'vimond',
+    scaleaq: 'scaleaq',
     'scale aq': 'scaleaq',
-    'aiven': 'aiven',
+    aiven: 'aiven',
     '42bits': '42bits',
-    'signicat': 'signicat',
+    signicat: 'signicat',
     'statsforvalterens fellestjenester': 'statsforvalterens',
     'google cloud': 'google cloud',
-    'netsecurity': 'netsecurity',
-    'omegapoint': 'omegapoint',
-    'oda': 'oda',
-    'elkjøp': 'elkjøp',
-    'schibsted': 'schibsted',
-    'iverdi': 'iverdi',
-    'metria': 'metria',
-    'politiet': 'politiet',
-    'sikt': 'sikt',
-    'itslearning': 'itslearning',
-    'spir': 'spir',
-    'sysdig': 'sysdig',
-    'bekk': 'bekk',
-    'instech': 'instech',
-    'miles': 'miles',
+    netsecurity: 'netsecurity',
+    omegapoint: 'omegapoint',
+    oda: 'oda',
+    elkjøp: 'elkjøp',
+    schibsted: 'schibsted',
+    iverdi: 'iverdi',
+    metria: 'metria',
+    politiet: 'politiet',
+    sikt: 'sikt',
+    itslearning: 'itslearning',
+    spir: 'spir',
+    sysdig: 'sysdig',
+    bekk: 'bekk',
+    instech: 'instech',
+    miles: 'miles',
     'sopra steria': 'sopra steria',
-    'dynatrace': 'dynatrace',
-    'nscale': 'nscale',
-    'rawkode': 'rawkode academy',
+    dynatrace: 'dynatrace',
+    nscale: 'nscale',
+    rawkode: 'rawkode academy',
     'giant swarm': 'giant swarm',
-    'dash0': 'dash0',
-    'netbird': 'netbird',
+    dash0: 'dash0',
+    netbird: 'netbird',
     'nortech ai': 'nortech ai',
-    'authzed': 'authzed',
-    'edb': 'edb',
-    'grafana': 'grafana labs',
-    'victoriametrics': 'victoriametrics',
-    'fiskeridirektoratet': 'fiskeridirektoratet',
-    'forsvaret': 'forsvaret',
-    'cessda': 'cessda',
-    'embriq': 'embriq',
-    'folkehelseinstituttet': 'folkehelseinstituttet',
+    authzed: 'authzed',
+    edb: 'edb',
+    grafana: 'grafana labs',
+    victoriametrics: 'victoriametrics',
+    fiskeridirektoratet: 'fiskeridirektoratet',
+    forsvaret: 'forsvaret',
+    cessda: 'cessda',
+    embriq: 'embriq',
+    folkehelseinstituttet: 'folkehelseinstituttet',
     'o s hansen': 'o s hansen',
-    'narhval': 'narhval',
-    'experis': 'experis',
-    'reflektion': 'reflektion',
-    'apparat': 'apparat',
-    'aidn': 'aidn',
-    'edgeworks': 'edgeworks',
-    'skatteetaten': 'skatteetaten',
+    narhval: 'narhval',
+    experis: 'experis',
+    reflektion: 'reflektion',
+    apparat: 'apparat',
+    aidn: 'aidn',
+    edgeworks: 'edgeworks',
+    skatteetaten: 'skatteetaten',
   }
 
   // Try to match against known companies
@@ -291,7 +293,9 @@ export default async function CompaniesAdminPage() {
             label: 'Avg Per Company',
             value:
               companyBreakdown.length > 0
-                ? Math.round(totalAttendees / companyBreakdown.length).toString()
+                ? Math.round(
+                    totalAttendees / companyBreakdown.length,
+                  ).toString()
                 : '0',
           },
         ]}
@@ -334,7 +338,7 @@ export default async function CompaniesAdminPage() {
                       key={company.normalizedName}
                       className="hover:bg-gray-50 dark:hover:bg-gray-800"
                     >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
                         #{index + 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -343,10 +347,10 @@ export default async function CompaniesAdminPage() {
                         </div>
                         {company.normalizedName !==
                           company.originalName.toLowerCase() && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              Normalized: {company.normalizedName}
-                            </div>
-                          )}
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Normalized: {company.normalizedName}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -356,7 +360,7 @@ export default async function CompaniesAdminPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                      <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900 dark:text-white">
                         {company.orderCount}
                       </td>
                     </tr>

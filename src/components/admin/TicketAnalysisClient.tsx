@@ -56,8 +56,7 @@ export function TicketAnalysisClient({
   const [includeFreeTickets, setIncludeFreeTickets] = useState(false)
 
   const { allTickets, paidTickets, freeTickets } = ticketData
-  const { uniquePaidTickets, uniqueFreeTickets } =
-    uniqueTicketData
+  const { uniquePaidTickets, uniqueFreeTickets } = uniqueTicketData
   const { paidAnalysis, allTicketsAnalysis } = analysisData
 
   const currentData = useMemo(() => {

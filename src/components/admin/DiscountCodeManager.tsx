@@ -592,7 +592,6 @@ export function DiscountCodeManager({
                         : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                     }
                   >
-
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="ml-4">
@@ -609,7 +608,8 @@ export function DiscountCodeManager({
                       <div className="space-y-1">
                         <span
                           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${(() => {
-                            const { used, total } = getSponsorUsageStats(sponsor)
+                            const { used, total } =
+                              getSponsorUsageStats(sponsor)
                             if (used === 0) {
                               return 'bg-orange-100 text-orange-800 dark:bg-gray-700 dark:text-gray-300'
                             } else if (used > total) {
@@ -617,14 +617,14 @@ export function DiscountCodeManager({
                             } else {
                               return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
                             }
-                          })()
-                            }`}
+                          })()}`}
                         >
                           {sponsor.tier.title}
                         </span>
                         <div className="text-sm text-gray-900 dark:text-white">
                           {(() => {
-                            const { used, total } = getSponsorUsageStats(sponsor)
+                            const { used, total } =
+                              getSponsorUsageStats(sponsor)
                             return (
                               <span>
                                 <span className="font-medium">{used}</span>
@@ -644,7 +644,7 @@ export function DiscountCodeManager({
                     </td>
                     <td className="px-6 py-4">
                       {sponsor.ticketEntitlement > 0 &&
-                        getSponsorDiscounts(sponsor).length === 0 ? (
+                      getSponsorDiscounts(sponsor).length === 0 ? (
                         <FilterDropdown
                           label={
                             discountsLoading
@@ -697,25 +697,27 @@ export function DiscountCodeManager({
                     <td className="px-6 py-4">
                       {getSponsorDiscounts(sponsor).length > 0 ? (
                         <div className="space-y-1">
-                          {getSponsorDiscounts(sponsor).map((discount, index) => (
-                            <div
-                              key={index}
-                              className="flex items-center space-x-2"
-                            >
-                              <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
-                                {discount.triggerValue || 'N/A'}
-                              </span>
-                              <button
-                                onClick={() =>
-                                  copyToClipboard(discount.triggerValue || '')
-                                }
-                                className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-                                title="Copy discount code"
+                          {getSponsorDiscounts(sponsor).map(
+                            (discount, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center space-x-2"
                               >
-                                <ClipboardIcon className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ))}
+                                <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+                                  {discount.triggerValue || 'N/A'}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    copyToClipboard(discount.triggerValue || '')
+                                  }
+                                  className="inline-flex items-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                                  title="Copy discount code"
+                                >
+                                  <ClipboardIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ),
+                          )}
                         </div>
                       ) : (
                         <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -756,13 +758,13 @@ export function DiscountCodeManager({
                             disabled={
                               getSponsorDiscounts(sponsor).length > 0 &&
                               loading ===
-                              getSponsorDiscounts(sponsor)[0]?.triggerValue
+                                getSponsorDiscounts(sponsor)[0]?.triggerValue
                             }
                             className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
                             title="Delete Code"
                           >
                             {getSponsorDiscounts(sponsor).length > 0 &&
-                              loading ===
+                            loading ===
                               getSponsorDiscounts(sponsor)[0]?.triggerValue ? (
                               <ArrowPathIcon className="h-4 w-4 animate-spin" />
                             ) : (

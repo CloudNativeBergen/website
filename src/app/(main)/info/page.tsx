@@ -33,7 +33,8 @@ function getScheduleDayInfo(schedules: ConferenceSchedule[] | undefined) {
     const firstProgramTime = registrationTalk?.endTime || '09:00'
 
     const endTimes = allTalks.map((talk) => talk.endTime).filter(Boolean)
-    const latestEnd = endTimes.length > 0 ? endTimes.sort().reverse()[0] : '17:00'
+    const latestEnd =
+      endTimes.length > 0 ? endTimes.sort().reverse()[0] : '17:00'
 
     const isWorkshopDay = schedule.tracks.some((track) =>
       track.trackTitle?.toLowerCase().includes('workshop'),
@@ -120,9 +121,12 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         },
         {
           question: 'When and where can I pick up my badge?',
-          answer: scheduleInfo.hasMultipleDays && scheduleInfo.workshopDay && scheduleInfo.conferenceDay
-            ? `You can pick up your badge at the registration desk at the venue. Registration opens at ${scheduleInfo.workshopDay.registrationTime} on ${formatDate(scheduleInfo.workshopDay.date)} (workshop day) and at ${scheduleInfo.conferenceDay.registrationTime} on ${formatDate(scheduleInfo.conferenceDay.date)} (conference day). If you&apos;re attending both days, we recommend picking up your badge on the first day.`
-            : `You can pick up your badge at the registration desk at the venue. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. We recommend arriving early to get your badge and find a good seat.`,
+          answer:
+            scheduleInfo.hasMultipleDays &&
+            scheduleInfo.workshopDay &&
+            scheduleInfo.conferenceDay
+              ? `You can pick up your badge at the registration desk at the venue. Registration opens at ${scheduleInfo.workshopDay.registrationTime} on ${formatDate(scheduleInfo.workshopDay.date)} (workshop day) and at ${scheduleInfo.conferenceDay.registrationTime} on ${formatDate(scheduleInfo.conferenceDay.date)} (conference day). If you&apos;re attending both days, we recommend picking up your badge on the first day.`
+              : `You can pick up your badge at the registration desk at the venue. Registration opens at ${scheduleInfo.conferenceDay?.registrationTime || '08:00'}. We recommend arriving early to get your badge and find a good seat.`,
         },
         {
           question: 'When will the doors open?',
