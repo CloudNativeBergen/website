@@ -493,34 +493,41 @@ export async function getWorkshopStatistics(conferenceId: string) {
     statuses: [Status.confirmed],
     includeScheduleInfo: true,
   })
-  const allSignups = await getAllWorkshopSignups({ conferenceId })
 
   const workshopsWithData = workshops as ProposalWithWorkshopData[]
-  const workshopStats = workshopsWithData.map((workshop) => {
-    const workshopSignups = allSignups.filter(
-      (s) => s.workshop._id === workshop._id,
-    )
 
-    const statusCounts = workshopSignups.reduce(
-      (acc, signup) => {
-        acc[signup.status] = (acc[signup.status] || 0) + 1
-        return acc
-      },
-      {} as Record<string, number>,
-    )
+  // Fetch all signups across multiple pages to get unique participants count
+  let allSignups: WorkshopSignupExisting[] = []
+  let currentPage = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const pageSignups = await getAllWorkshopSignups({
+      conferenceId,
+      page: currentPage,
+      pageSize: 100,
+    })
+    allSignups = [...allSignups, ...pageSignups]
+    hasMore = pageSignups.length === 100
+    currentPage++
+  }
+
+  const workshopStats = workshopsWithData.map((workshop) => {
+    const confirmedSignups = workshop.signups || 0
+    const waitlistSignups = workshop.waitlistCount || 0
 
     return {
       workshopId: workshop._id,
       workshopTitle: workshop.title,
       capacity: workshop.capacity,
-      totalSignups: workshopSignups.length,
-      confirmedSignups: statusCounts.confirmed || 0,
-      pendingSignups: statusCounts.pending || 0,
-      waitlistSignups: statusCounts.waitlist || 0,
-      cancelledSignups: statusCounts.cancelled || 0,
+      totalSignups: confirmedSignups + waitlistSignups,
+      confirmedSignups,
+      pendingSignups: 0,
+      waitlistSignups,
+      cancelledSignups: 0,
       utilization:
         workshop.capacity > 0
-          ? ((statusCounts.confirmed || 0) / workshop.capacity) * 100
+          ? (confirmedSignups / workshop.capacity) * 100
           : 0,
     }
   })
@@ -537,26 +544,21 @@ export async function getWorkshopStatistics(conferenceId: string) {
       (sum: number, w) => sum + w.capacity,
       0,
     ),
-    totalSignups: allSignups.filter(
-      (s) => s.status === 'confirmed' || s.status === 'waitlist',
-    ).length,
+    totalSignups: workshopStats.reduce(
+      (sum: number, s) => sum + s.confirmedSignups + s.waitlistSignups,
+      0,
+    ),
     uniqueParticipants,
     totalConfirmed: workshopStats.reduce(
       (sum: number, s) => sum + s.confirmedSignups,
       0,
     ),
-    totalPending: workshopStats.reduce(
-      (sum: number, s) => sum + s.pendingSignups,
-      0,
-    ),
+    totalPending: 0,
     totalWaitlist: workshopStats.reduce(
       (sum: number, s) => sum + s.waitlistSignups,
       0,
     ),
-    totalCancelled: workshopStats.reduce(
-      (sum: number, s) => sum + s.cancelledSignups,
-      0,
-    ),
+    totalCancelled: 0,
     averageUtilization:
       workshopStats.length > 0
         ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) /

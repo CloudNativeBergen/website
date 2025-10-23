@@ -80,6 +80,17 @@ export function WorkshopsClientPage({
       },
     )
 
+  const { data: workshopSignupsData, refetch: refetchWorkshopSignups } =
+    api.workshop.getSignupsByWorkshop.useQuery(
+      {
+        workshopId: signupModal.workshopId,
+        status: signupModal.status || undefined,
+      },
+      {
+        enabled: !!signupModal.workshopId && !!signupModal.status,
+      },
+    )
+
   const { data: statsData, refetch: refetchStats } =
     api.workshop.getWorkshopSummary.useQuery(
       {
@@ -93,6 +104,7 @@ export function WorkshopsClientPage({
   const confirmMutation = api.workshop.batchConfirmSignups.useMutation({
     onSuccess: () => {
       refetchSignups()
+      refetchWorkshopSignups()
       refetchStats()
     },
   })
@@ -100,6 +112,7 @@ export function WorkshopsClientPage({
   const deleteMutation = api.workshop.deleteSignup.useMutation({
     onSuccess: () => {
       refetchSignups()
+      refetchWorkshopSignups()
       refetchStats()
     },
   })
@@ -108,6 +121,7 @@ export function WorkshopsClientPage({
     {
       onSuccess: () => {
         refetchSignups()
+        refetchWorkshopSignups()
         refetchStats()
         setAddParticipantModal({
           isOpen: false,
@@ -206,12 +220,16 @@ export function WorkshopsClientPage({
 
   const filteredSignups = useMemo(() => {
     if (!signupModal.status || !signupModal.workshopId) return []
+    // Use workshop-specific data if available, otherwise fallback to filtered general signups
+    if (workshopSignupsData?.data) {
+      return workshopSignupsData.data
+    }
     return signups.filter(
       (s) =>
         (s.workshop._ref || s.workshop._id) === signupModal.workshopId &&
         s.status === signupModal.status,
     )
-  }, [signups, signupModal.workshopId, signupModal.status])
+  }, [signups, signupModal.workshopId, signupModal.status, workshopSignupsData])
 
   return (
     <div className="space-y-6">
@@ -255,10 +273,10 @@ export function WorkshopsClientPage({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {initialWorkshops.map((workshop) => {
           const workshopSignups = signupsByWorkshop.get(workshop._id) || []
-          const confirmedCount = workshopSignups.filter(
+          const confirmedCount = workshop.signups || workshopSignups.filter(
             (s) => s.status === 'confirmed',
           ).length
-          const waitlistCount = workshopSignups.filter(
+          const waitlistCount = workshop.waitlistCount || workshopSignups.filter(
             (s) => s.status === 'waitlist',
           ).length
 
