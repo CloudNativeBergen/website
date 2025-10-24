@@ -29,7 +29,8 @@
     "examples/**",
     "sanity.**",
     "sanity/**",
-    "migrations/**"
+    "migrations/**",
+    "**/middleware.ts"
   ],
   "ignoreDependencies": [
     "eslint-config-next",

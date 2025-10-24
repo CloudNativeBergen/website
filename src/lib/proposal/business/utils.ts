@@ -31,11 +31,11 @@ export function getProposalSpeakerNames(proposal: ProposalExisting): string {
   const speakers =
     proposal.speakers && Array.isArray(proposal.speakers)
       ? proposal.speakers
-        .filter(
-          (speaker) =>
-            typeof speaker === 'object' && speaker && 'name' in speaker,
-        )
-        .map((speaker) => speaker as Speaker)
+          .filter(
+            (speaker) =>
+              typeof speaker === 'object' && speaker && 'name' in speaker,
+          )
+          .map((speaker) => speaker as Speaker)
       : []
 
   return speakers.length > 0
