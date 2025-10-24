@@ -7,13 +7,6 @@ export type TalkStatus =
   | 'happening-soon'
   | 'upcoming'
 
-export interface TalkWithStatus extends TrackTalk {
-  scheduleDate: string
-  trackTitle: string
-  trackIndex: number
-  status: TalkStatus
-}
-
 export interface CurrentPosition {
   scheduleIndex: number
   trackIndex: number

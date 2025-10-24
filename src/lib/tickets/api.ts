@@ -353,18 +353,3 @@ async function _fetchAllEventOrders(
 
   return allTickets
 }
-
-export function groupEventOrderUsersByOrder(
-  eventOrderUsers: EventOrder[],
-): Map<number, EventOrder[]> {
-  const orderMap = new Map<number, EventOrder[]>()
-
-  eventOrderUsers.forEach((user) => {
-    if (!orderMap.has(user.orderId)) {
-      orderMap.set(user.orderId, [])
-    }
-    orderMap.get(user.orderId)!.push(user)
-  })
-
-  return orderMap
-}

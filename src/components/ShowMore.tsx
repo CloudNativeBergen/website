@@ -3,10 +3,6 @@
 import clsx from 'clsx'
 import { useEffect, useRef, useState } from 'react'
 
-export interface AboutSectionProps
-  extends React.ComponentPropsWithoutRef<'section'> {
-  text: string
-}
 export function ShowMore({
   children,
   ...props

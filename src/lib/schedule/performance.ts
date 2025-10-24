@@ -1,5 +1,3 @@
-import React from 'react'
-
 interface PerformanceMetrics {
   renderTime: number
   updateTime: number
@@ -84,23 +82,5 @@ export function usePerformanceTimer(
     start: () => performanceMonitor.startTimer(timerKey),
     end: () =>
       performanceMonitor.endTimer(timerKey, operationType, componentName),
-  }
-}
-
-export function withPerformanceMonitoring<T extends object>(
-  Component: React.ComponentType<T>,
-  componentName: string,
-) {
-  return function PerformanceMonitoredComponent(props: T) {
-    const timer = usePerformanceTimer(componentName)
-
-    React.useEffect(() => {
-      timer.start()
-      return () => {
-        timer.end()
-      }
-    })
-
-    return React.createElement(Component, props)
   }
 }

@@ -142,5 +142,4 @@ describe('Workshop Capacity Utils', () => {
       ) // 70%
     })
   })
-
 })

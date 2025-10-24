@@ -6,8 +6,6 @@ export const CONTACT_ROLE_OPTIONS = [
   'Executive Sponsor',
 ] as const
 
-export type ContactRole = (typeof CONTACT_ROLE_OPTIONS)[number]
-
 export interface SponsorTier {
   _id: string
   _createdAt: string
@@ -106,12 +104,6 @@ export interface BillingInfo {
   comments?: string
 }
 
-export interface BillingFormData {
-  email?: string
-  reference?: string
-  comments?: string
-}
-
 export interface SponsorInput {
   name: string
   website: string
@@ -137,18 +129,4 @@ export interface SponsorWithContactInfo extends SponsorExisting {
   org_number?: string
   contact_persons?: ContactPerson[]
   billing?: BillingInfo
-}
-
-export interface ConferenceSponsorInput {
-  sponsorId: string
-  tierId: string
-}
-
-export interface ConferenceSponsorResponse {
-  success?: boolean
-  error?: {
-    message: string
-    type?: string
-    status?: number
-  }
 }

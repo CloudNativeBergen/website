@@ -57,8 +57,6 @@ export function getCapacityStatusColor(
   return 'orange'
 }
 
-
-
 /**
  * Get a human-readable capacity status message
  */

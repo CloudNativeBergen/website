@@ -15,7 +15,7 @@ interface SponsorBannerProps {
 export function SponsorBanner({
   sponsors,
   className,
-  speed = 30
+  speed = 30,
 }: SponsorBannerProps) {
   const [scrollWidth, setScrollWidth] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -35,16 +35,21 @@ export function SponsorBanner({
   }
 
   // Duplicate sponsors multiple times to ensure smooth scrolling
-  const duplicatedSponsors = [...sponsors, ...sponsors, ...sponsors, ...sponsors]
+  const duplicatedSponsors = [
+    ...sponsors,
+    ...sponsors,
+    ...sponsors,
+    ...sponsors,
+  ]
 
   return (
     <div
       ref={containerRef}
       className={clsx(
-        'overflow-hidden bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm',
-        'border-2 border-brand-cloud-blue/20 rounded-lg shadow-xl',
+        'overflow-hidden bg-white/95 backdrop-blur-sm dark:bg-gray-900/95',
+        'rounded-lg border-2 border-brand-cloud-blue/20 shadow-xl',
         'py-12',
-        className
+        className,
       )}
       aria-label="Sponsor banner"
       role="marquee"
@@ -52,13 +57,15 @@ export function SponsorBanner({
     >
       <div
         ref={contentRef}
-        className="flex items-center animate-marquee-dynamic"
-        style={{
-          '--marquee-speed': `${speed}s`,
-          '--scroll-width': `${scrollWidth}px`,
-          willChange: 'transform',
-          contain: 'layout'
-        } as CSSProperties}
+        className="animate-marquee-dynamic flex items-center"
+        style={
+          {
+            '--marquee-speed': `${speed}s`,
+            '--scroll-width': `${scrollWidth}px`,
+            willChange: 'transform',
+            contain: 'layout',
+          } as CSSProperties
+        }
       >
         {duplicatedSponsors.map((sponsor, index) => (
           <div
@@ -69,14 +76,14 @@ export function SponsorBanner({
               href={sponsor.sponsor.website}
               target="_blank"
               rel="noopener noreferrer"
-              className="block transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+              className="block transition-opacity hover:opacity-80 focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:focus:ring-offset-gray-900"
               aria-label={`Visit ${sponsor.sponsor.name} website`}
             >
               <SponsorLogo
                 logo={sponsor.sponsor.logo}
                 logoBright={sponsor.sponsor.logo_bright}
                 name={sponsor.sponsor.name}
-                className="h-20 sm:h-24 lg:h-28 w-auto max-w-[400px] object-contain"
+                className="h-20 w-auto max-w-[400px] object-contain sm:h-24 lg:h-28"
               />
             </a>
           </div>

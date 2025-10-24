@@ -12,7 +12,6 @@ import {
   prepareReferenceArray,
   createReference,
   createReferenceWithKey,
-  fixArrayKeys,
 } from '@/lib/sanity/helpers'
 
 export async function getProposal({
@@ -245,8 +244,6 @@ export async function getProposals({
 export async function updateProposal(
   proposalId: string,
   proposal: ProposalInput,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  speakerId: string,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
@@ -528,13 +525,6 @@ export async function searchProposals({
   })
 
   return { proposals, proposalsError }
-}
-
-export async function fixProposalSpeakerKeys(): Promise<{
-  error?: Error
-  fixed?: number
-}> {
-  return await fixArrayKeys('talk', [{ field: 'speakers', prefix: 'speaker' }])
 }
 
 /**

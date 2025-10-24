@@ -150,29 +150,3 @@ export const GetTravelSupportSchema = z.object({
 export const GetTravelSupportByIdSchema = z.object({
   id: z.string(),
 })
-
-export const UploadReceiptSchema = z.object({
-  file: z.instanceof(File),
-  filename: z.string(),
-})
-
-export type BankingDetailsInput = z.infer<typeof BankingDetailsSchema>
-export type TravelExpenseInputType = z.infer<typeof TravelExpenseInputSchema>
-export type TravelSupportInputType = z.infer<typeof TravelSupportInputSchema>
-export type UpdateBankingDetailsInput = z.infer<
-  typeof UpdateBankingDetailsSchema
->
-export type AddExpenseInput = z.infer<typeof AddExpenseSchema>
-export type UpdateExpenseInput = z.infer<typeof UpdateExpenseSchema>
-export type DeleteExpenseInput = z.infer<typeof DeleteExpenseSchema>
-export type DeleteReceiptInput = z.infer<typeof DeleteReceiptSchema>
-export type UpdateExpenseStatusInput = z.infer<typeof UpdateExpenseStatusSchema>
-export type UpdateTravelSupportStatusInput = z.infer<
-  typeof UpdateTravelSupportStatusSchema
->
-export type SubmitTravelSupportInput = z.infer<typeof SubmitTravelSupportSchema>
-export type GetTravelSupportInput = z.infer<typeof GetTravelSupportSchema>
-export type GetTravelSupportByIdInput = z.infer<
-  typeof GetTravelSupportByIdSchema
->
-export type UploadReceiptInput = z.infer<typeof UploadReceiptSchema>

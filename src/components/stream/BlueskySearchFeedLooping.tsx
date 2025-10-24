@@ -87,9 +87,8 @@ export default function BlueskySearchFeedLooping({
   compact = true,
   title = 'Social Feed',
   speed = 30,
-  maxHeight = '600px'
+  maxHeight = '600px',
 }: BlueskySearchFeedLoopingProps) {
-
   const postItems = useMemo(() => {
     // Duplicate posts for seamless loop
     const duplicatedPosts = [...posts, ...posts]
@@ -101,7 +100,11 @@ export default function BlueskySearchFeedLooping({
       return (
         <article
           key={`${post.uri}-${index}`}
-          className={index > 0 ? 'pt-6 border-t-2 border-gray-100 dark:border-gray-700' : ''}
+          className={
+            index > 0
+              ? 'border-t-2 border-gray-100 pt-6 dark:border-gray-700'
+              : ''
+          }
           aria-label={`Post by ${post.author.displayName || post.author.handle}`}
         >
           <div className="space-y-4">
@@ -111,21 +114,26 @@ export default function BlueskySearchFeedLooping({
                 <img
                   src={post.author.avatar}
                   alt=""
-                  className={compact ? 'h-10 w-10 rounded-full' : 'h-12 w-12 rounded-full'}
+                  className={
+                    compact
+                      ? 'h-10 w-10 rounded-full'
+                      : 'h-12 w-12 rounded-full'
+                  }
                   loading="lazy"
                 />
               ) : (
                 <div
                   className={`${
                     compact ? 'h-10 w-10 text-xl' : 'h-12 w-12 text-2xl'
-                  } rounded-full bg-brand-cloud-blue dark:bg-brand-cloud-blue text-white flex items-center justify-center font-semibold`}
+                  } flex items-center justify-center rounded-full bg-brand-cloud-blue font-semibold text-white dark:bg-brand-cloud-blue`}
                   aria-hidden="true"
                 >
-                  {(post.author.displayName || post.author.handle)[0].toUpperCase()}
+                  {(post.author.displayName ||
+                    post.author.handle)[0].toUpperCase()}
                 </div>
               )}
-              <div className="flex-1 min-w-0">
-                <p className="text-xl font-medium text-brand-slate-gray dark:text-white truncate">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xl font-medium text-brand-slate-gray dark:text-white">
                   {post.author.displayName || post.author.handle}
                   {!compact && (
                     <span className="ml-2 text-lg text-gray-500 dark:text-gray-400">
@@ -137,19 +145,21 @@ export default function BlueskySearchFeedLooping({
             </div>
 
             {/* Post content */}
-            <p className="text-xl leading-relaxed text-brand-slate-gray dark:text-gray-300 whitespace-pre-wrap">
+            <p className="text-xl leading-relaxed whitespace-pre-wrap text-brand-slate-gray dark:text-gray-300">
               {post.record.text}
             </p>
 
             {/* Images if present */}
             {post.embed?.images && post.embed.images.length > 0 && (
-              <div className={`grid gap-2 ${post.embed.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+              <div
+                className={`grid gap-2 ${post.embed.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}
+              >
                 {post.embed.images.map((image, imgIndex) => (
                   <img
                     key={imgIndex}
                     src={image.thumb}
                     alt={image.alt || ''}
-                    className="rounded-lg w-full h-auto object-cover max-h-96"
+                    className="h-auto max-h-96 w-full rounded-lg object-cover"
                     loading="lazy"
                   />
                 ))}
@@ -165,7 +175,7 @@ export default function BlueskySearchFeedLooping({
                 href={postUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-brand-cloud-blue hover:text-brand-cloud-blue-hover dark:text-blue-400 dark:hover:text-blue-300 focus:ring-2 focus:ring-brand-cloud-blue focus:outline-none"
+                className="text-brand-cloud-blue hover:text-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:outline-none dark:text-blue-400 dark:hover:text-blue-300"
               >
                 View on Bluesky
               </a>
@@ -180,18 +190,18 @@ export default function BlueskySearchFeedLooping({
   if (posts.length === 0) {
     return (
       <section
-        className={`rounded-lg bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-xl border-2 border-brand-cloud-blue/20 p-8 ${className}`}
+        className={`rounded-lg border-2 border-brand-cloud-blue/20 bg-white/95 p-8 shadow-xl backdrop-blur-sm dark:bg-gray-900/95 ${className}`}
         aria-label="Bluesky social feed"
       >
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <BlueskyIcon className="h-10 w-10 text-brand-cloud-blue dark:text-blue-400" />
-            <h3 className="font-space-grotesk font-semibold text-2xl text-brand-slate-gray dark:text-white">
+            <h3 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
               {title}
             </h3>
           </div>
         </div>
-        <p className="text-xl text-gray-500 dark:text-gray-400 text-center py-8">
+        <p className="py-8 text-center text-xl text-gray-500 dark:text-gray-400">
           No recent posts available. Check back soon!
         </p>
       </section>
@@ -201,14 +211,14 @@ export default function BlueskySearchFeedLooping({
   // Main render with scrolling animation
   return (
     <section
-      className={`rounded-lg bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-xl border-2 border-brand-cloud-blue/20 p-8 overflow-hidden ${className}`}
+      className={`overflow-hidden rounded-lg border-2 border-brand-cloud-blue/20 bg-white/95 p-8 shadow-xl backdrop-blur-sm dark:bg-gray-900/95 ${className}`}
       aria-label="Bluesky social feed"
       style={{ maxHeight }}
     >
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <BlueskyIcon className="h-10 w-10 text-brand-cloud-blue dark:text-blue-400" />
-          <h3 className="font-space-grotesk font-semibold text-2xl text-brand-slate-gray dark:text-white">
+          <h3 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
             {title}
             {posts.length > 1 && (
               <span className="ml-2 text-xl text-gray-500 dark:text-gray-400">
@@ -219,12 +229,17 @@ export default function BlueskySearchFeedLooping({
         </div>
       </div>
 
-      <div className="overflow-hidden" style={{ height: `calc(${maxHeight} - 120px)` }}>
+      <div
+        className="overflow-hidden"
+        style={{ height: `calc(${maxHeight} - 120px)` }}
+      >
         <div
           className="animate-vertical-scroll space-y-6"
-          style={{
-            '--scroll-speed': `${speed}s`,
-          } as CSSProperties}
+          style={
+            {
+              '--scroll-speed': `${speed}s`,
+            } as CSSProperties
+          }
         >
           {postItems}
         </div>

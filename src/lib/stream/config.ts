@@ -24,4 +24,4 @@ export const STREAM_CONFIG = {
     containerPadding: 'py-12',
     contentSpacing: 'space-y-8',
   },
-} as const;
+} as const

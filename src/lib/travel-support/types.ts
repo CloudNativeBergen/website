@@ -123,11 +123,3 @@ export interface TravelSupportWithSpeaker
     name: string
   }
 }
-
-export interface TravelSupportSummary {
-  totalRequests: number
-  pendingReview: number
-  approved: number
-  paid: number
-  totalApprovedAmount: number
-}

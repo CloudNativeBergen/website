@@ -1,7 +1,6 @@
 export { AdminLayout } from './AdminLayout'
 export { AdminActionBar } from './AdminActionBar'
 export { AdminPageHeader } from './AdminPageHeader'
-export { SearchResults } from './SearchResults'
 export { SearchModal } from './SearchModal'
 
 export { NotificationProvider, useNotification } from './NotificationProvider'
@@ -50,11 +49,7 @@ export { ErrorDisplay } from './ErrorDisplay'
 export * from './LoadingSkeleton'
 export * from './PageLoadingSkeleton'
 
-export {
-  useFilterState,
-  useFilterStateWithURL,
-  useProposalFiltering,
-} from './hooks'
+export { useFilterStateWithURL, useProposalFiltering } from './hooks'
 export { useProposalSearch } from './hooks/useProposalSearch'
 
 export type { FilterState } from './ProposalsFilter'

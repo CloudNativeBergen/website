@@ -119,7 +119,6 @@ export const PUT = auth(
     const { proposal: updatedProposal, err: updateErr } = await updateProposal(
       id as string,
       proposal,
-      req.auth.speaker._id,
     )
     if (updateErr) {
       return proposalResponseError({

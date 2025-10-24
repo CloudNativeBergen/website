@@ -100,22 +100,3 @@ export const formatConfig: Record<Format, FormatConfig> = {
 export function getFormatConfig(format: Format): FormatConfig {
   return formatConfig[format]
 }
-
-export function getFormatDisplay(format: Format) {
-  const config = formatConfig[format]
-  return {
-    label: config.label,
-    duration: config.duration,
-    icon: config.icon,
-  }
-}
-
-export function getFormatStyling(format: Format) {
-  const config = formatConfig[format]
-  return {
-    color: config.color,
-    bgColor: config.bgColor,
-    gradient: config.gradient,
-    accentColor: config.accentColor,
-  }
-}

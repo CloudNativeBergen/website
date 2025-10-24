@@ -24,13 +24,6 @@ export async function putEmail(email: string): Promise<ProfileEmailResponse> {
   return (await res.json()) as ProfileEmailResponse
 }
 
-export async function getProfile(): Promise<SpeakerResponse> {
-  const url = `/api/profile`
-
-  const res = await fetch(url, { cache: 'no-store', next: { revalidate: 0 } })
-  return (await res.json()) as SpeakerResponse
-}
-
 export async function putProfile(
   speaker: SpeakerInput,
 ): Promise<SpeakerResponse> {

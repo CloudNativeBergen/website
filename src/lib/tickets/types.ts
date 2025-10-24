@@ -220,16 +220,3 @@ export interface EventOrderUserPage {
 export interface AllEventOrderUsersResponse {
   allEventOrderUsers: EventOrderUserPage
 }
-
-export interface EventOrderUserReportFilter {
-  property: string
-  operator: string
-  value: string
-}
-
-export interface FetchAllEventOrderUsersOptions {
-  customerId?: number
-  offset?: number
-  length?: number
-  reportFilters?: EventOrderUserReportFilter[]
-}

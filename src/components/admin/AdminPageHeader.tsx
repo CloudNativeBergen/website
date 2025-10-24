@@ -141,5 +141,3 @@ export function AdminPageHeader({
     </div>
   )
 }
-
-export default AdminPageHeader

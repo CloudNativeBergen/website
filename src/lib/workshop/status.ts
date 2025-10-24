@@ -10,10 +10,7 @@
  * - WorkshopList (public): hasConfirmedSignup
  */
 
-import type {
-  ProposalWithWorkshopData,
-  WorkshopSignupExisting,
-} from './types'
+import type { ProposalWithWorkshopData, WorkshopSignupExisting } from './types'
 import { WorkshopSignupStatus as SignupStatus } from './types'
 
 /**
@@ -96,5 +93,3 @@ export function getSignupButtonText(
 
   return 'Sign Up'
 }
-
-

@@ -7,7 +7,6 @@ export {
   createProposal,
   fetchNextUnreviewedProposal,
   searchProposals,
-  fixProposalSpeakerKeys,
 } from './data/sanity'
 
 export {

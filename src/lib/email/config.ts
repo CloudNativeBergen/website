@@ -90,15 +90,3 @@ export function createEmailError(
 ): EmailError {
   return { error: message, status }
 }
-
-export function createEmailResponse(
-  message: string,
-  emailId?: string,
-  additionalData?: Record<string, unknown>,
-): EmailResponse {
-  return {
-    message,
-    emailId,
-    ...additionalData,
-  }
-}

@@ -2,7 +2,6 @@ import { NextConfig } from 'next'
 
 const config: NextConfig = {
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
-  publicRuntimeConfig: {},
   experimental: {
     // Add these experimental flags to resolve JSDOM conflicts with Turbopack
     optimizePackageImports: ['isomorphic-dompurify'],

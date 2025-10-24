@@ -7,8 +7,7 @@
 
 import { api } from '@/lib/trpc/client'
 import { useState } from 'react'
-import type { SponsorCreateInput } from '@/lib/trpc/types'
-import type { SponsorTierExisting } from '@/lib/sponsor/types'
+import type { SponsorTierExisting, SponsorInput } from '@/lib/sponsor/types'
 
 export function SponsorManagement() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -49,7 +48,7 @@ export function SponsorManagement() {
     },
   })
 
-  const handleCreateSponsor = (data: SponsorCreateInput) => {
+  const handleCreateSponsor = (data: SponsorInput) => {
     createSponsorMutation.mutate(data)
   }
 

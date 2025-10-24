@@ -1,30 +1,30 @@
-import { Container } from '@/components/Container';
-import { BackgroundImage } from '@/components/BackgroundImage';
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity';
-import NextTalkDisplay from '@/components/stream/NextTalkDisplay';
-import { SponsorBanner } from '@/components/stream/SponsorBanner';
-import type { ConferenceSponsor } from '@/lib/sponsor/types';
-import BlueskyAuthorFeedLooping from '@/components/stream/BlueskyAuthorFeedLooping';
-import { AutoRefreshWrapper } from '@/components/stream/AutoRefreshWrapper';
-import { StreamError } from '@/components/stream/StreamError';
-import { STREAM_CONFIG } from '@/lib/stream/config';
-import { findTrackByRoom, getAvailableRooms } from '@/lib/stream/utils';
+import { Container } from '@/components/Container'
+import { BackgroundImage } from '@/components/BackgroundImage'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import NextTalkDisplay from '@/components/stream/NextTalkDisplay'
+import { SponsorBanner } from '@/components/stream/SponsorBanner'
+import type { ConferenceSponsor } from '@/lib/sponsor/types'
+import BlueskyAuthorFeedLooping from '@/components/stream/BlueskyAuthorFeedLooping'
+import { AutoRefreshWrapper } from '@/components/stream/AutoRefreshWrapper'
+import { StreamError } from '@/components/stream/StreamError'
+import { STREAM_CONFIG } from '@/lib/stream/config'
+import { findTrackByRoom, getAvailableRooms } from '@/lib/stream/utils'
 
 type Props = {
-  params: Promise<{ room: string }>;
-};
+  params: Promise<{ room: string }>
+}
 
-export const revalidate = 300;
+export const revalidate = 300
 
 export default async function StreamRoomPage({ params }: Props) {
-  const { room: roomParam } = await params;
-  const room = decodeURIComponent(roomParam).trim();
+  const { room: roomParam } = await params
+  const room = decodeURIComponent(roomParam).trim()
 
   const { conference, error } = await getConferenceForCurrentDomain({
     schedule: true,
     sponsors: true,
     confirmedTalksOnly: false,
-  });
+  })
 
   if (error || !conference) {
     return (
@@ -32,7 +32,7 @@ export default async function StreamRoomPage({ params }: Props) {
         title="Stream Configuration Error"
         message="Unable to load stream configuration. Please try again later."
       />
-    );
+    )
   }
 
   if (!conference.schedules?.length) {
@@ -41,13 +41,13 @@ export default async function StreamRoomPage({ params }: Props) {
         title="Schedule Not Available"
         message="No conference schedule available yet."
       />
-    );
+    )
   }
 
-  const matchedTrack = findTrackByRoom(conference.schedules, room);
+  const matchedTrack = findTrackByRoom(conference.schedules, room)
 
   if (!matchedTrack) {
-    const availableRooms = getAvailableRooms(conference.schedules);
+    const availableRooms = getAvailableRooms(conference.schedules)
 
     return (
       <StreamError
@@ -63,7 +63,7 @@ export default async function StreamRoomPage({ params }: Props) {
               {availableRooms.map((roomName) => (
                 <li
                   key={roomName}
-                  className="font-inter text-brand-cloud-blue dark:text-brand-cloud-blue-light"
+                  className="font-inter dark:text-brand-cloud-blue-light text-brand-cloud-blue"
                 >
                   {roomName}
                 </li>
@@ -72,7 +72,7 @@ export default async function StreamRoomPage({ params }: Props) {
           </div>
         )}
       </StreamError>
-    );
+    )
   }
 
   return (
@@ -109,5 +109,5 @@ export default async function StreamRoomPage({ params }: Props) {
         </Container>
       </div>
     </AutoRefreshWrapper>
-  );
+  )
 }

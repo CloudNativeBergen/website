@@ -1,8 +1,4 @@
-import {
-  ConferenceSchedule,
-  ScheduleTrack,
-  TrackTalk,
-} from '@/lib/conference/types'
+import { ScheduleTrack, TrackTalk } from '@/lib/conference/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 
 export interface DropPosition {
@@ -27,12 +23,6 @@ export interface TimeSlot {
   displayTime: string
 }
 
-export interface ScheduleState {
-  schedule: ConferenceSchedule | null
-  unassignedProposals: ProposalExisting[]
-}
-
-export const MINUTES_TO_PIXELS = 2.4
 export const DRAG_PERFORMANCE_THRESHOLD = 16
 export const BATCH_UPDATE_DELAY = 100
 

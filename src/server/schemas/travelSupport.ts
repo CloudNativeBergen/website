@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import {
   BankingDetailsSchema,
   TravelExpenseInputSchema,
@@ -32,12 +31,3 @@ export {
   GetTravelSupportSchema,
   GetTravelSupportByIdSchema,
 }
-
-export const IdParamSchema = z.object({
-  id: z.string().min(1, 'ID is required'),
-})
-
-export const FileUploadSchema = z.object({
-  expenseId: z.string().min(1, 'Expense ID is required'),
-  file: z.instanceof(File, { message: 'File is required' }),
-})

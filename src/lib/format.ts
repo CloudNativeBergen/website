@@ -33,10 +33,3 @@ export function formatCurrency(
 
   return `${formatNumber(amount)} ${currency}`
 }
-
-export function formatCompactNumber(num: number): string {
-  return num.toLocaleString('en-US', {
-    notation: 'compact',
-    compactDisplay: 'short',
-  })
-}

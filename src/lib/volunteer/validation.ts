@@ -70,6 +70,3 @@ export const VolunteerFormInputSchema = z.object({
 
   consent: ConsentInputSchema,
 })
-
-export type VolunteerFormInput = z.infer<typeof VolunteerFormInputSchema>
-export type ConsentInput = z.infer<typeof ConsentInputSchema>

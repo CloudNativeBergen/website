@@ -18,24 +18,6 @@ export interface Contact {
   organization?: string
 }
 
-export interface SpeakerAudienceManager {
-  getOrCreateAudience: (
-    conference: Conference,
-  ) => Promise<{ audienceId: string; error?: Error }>
-  addSpeakerToAudience: (
-    audienceId: string,
-    speaker: Speaker,
-  ) => Promise<{ success: boolean; error?: Error }>
-  removeSpeakerFromAudience: (
-    audienceId: string,
-    speakerEmail: string,
-  ) => Promise<{ success: boolean; error?: Error }>
-  syncAudienceWithSpeakers: (
-    conference: Conference,
-    speakers: Speaker[],
-  ) => Promise<{ success: boolean; audienceId: string; error?: Error }>
-}
-
 export async function getOrCreateConferenceAudienceByType(
   conference: Conference,
   audienceType: AudienceType,
@@ -395,32 +377,4 @@ export async function syncSponsorAudience(
   error?: Error
 }> {
   return syncAudienceWithContacts(conference, 'sponsors', sponsorContacts)
-}
-
-export async function handleSpeakerStatusChange(
-  conference: Conference,
-  speaker: Speaker,
-  hasConfirmedTalks: boolean,
-): Promise<{ success: boolean; error?: Error }> {
-  try {
-    if (!speaker.email) {
-      return { success: true }
-    }
-
-    const { audienceId, error: audienceError } =
-      await getOrCreateConferenceAudience(conference)
-
-    if (audienceError || !audienceId) {
-      throw audienceError || new Error('Failed to get audience ID')
-    }
-
-    if (hasConfirmedTalks) {
-      return await addSpeakerToAudience(audienceId, speaker)
-    } else {
-      return await removeSpeakerFromAudience(audienceId, speaker.email)
-    }
-  } catch (error) {
-    console.error('Failed to handle speaker status change:', error)
-    return { success: false, error: error as Error }
-  }
 }

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/app/**/page.{ts,tsx}",
+    "src/app/**/layout.{ts,tsx}",
+    "src/app/**/route.{ts,tsx}",
+    "src/app/**/loading.{ts,tsx}",
+    "src/app/**/not-found.{ts,tsx}",
+    "src/app/**/middleware.{ts,tsx}",
+    "src/middleware.{ts,tsx}",
+    "src/server/routers/**/*.ts",
+    "sanity.cli.ts",
+    "sanity.config.ts",
+    "sanity/actions/**/*.js",
+    "scripts/**/*.ts",
+    "migrations/**/index.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,js,jsx}",
+    "sanity/**/*.{ts,tsx,js,jsx}",
+    "!src/**/*.test.{ts,tsx}",
+    "!**/__tests__/**"
+  ],
+  "ignore": [
+    "__tests__/**",
+    "coverage/**",
+    "**/*.test.{ts,tsx}",
+    "src/components/examples/**",
+    "examples/**",
+    "sanity.**",
+    "sanity/**",
+    "migrations/**"
+  ],
+  "ignoreDependencies": [
+    "eslint-config-next",
+    "postcss",
+    "jest-environment-jsdom"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "includeEntryExports": true
+}
