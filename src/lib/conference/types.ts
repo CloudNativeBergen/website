@@ -1,4 +1,4 @@
-import { Reference, TypedObject } from 'sanity'
+import { TypedObject } from 'sanity'
 import { Format, ProposalExisting } from '@/lib/proposal/types'
 import { Speaker, SpeakerWithTalks } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
@@ -8,11 +8,6 @@ import {
   ConferenceSponsorWithContact,
 } from '@/lib/sponsor/types'
 import type { SalesTargetConfig } from '@/lib/tickets/types'
-
-export interface ConferenceProposals {
-  conference: Conference | Reference
-  proposals: ProposalExisting[]
-}
 
 export interface TrackTalk {
   talk?: ProposalExisting

@@ -1,10 +1,6 @@
 import React from 'react'
 import { BellIcon } from '@heroicons/react/24/outline'
 
-export interface LocalhostWarningProps {
-  audience: string
-}
-
 /**
  * Creates a localhost warning component to display when running in development mode.
  * Shows a warning that email notifications will contain invalid localhost URLs.
@@ -44,8 +40,4 @@ export function createLocalhostWarning(
       </div>
     </div>
   )
-}
-
-export function useIsLocalhost(domain?: string): boolean {
-  return Boolean(domain?.includes('localhost'))
 }

@@ -6,16 +6,6 @@ import {
   ProposalResponse,
 } from '../types'
 
-export async function getProposal(id?: string): Promise<ProposalResponse> {
-  let url = `/api/proposal`
-  if (id) {
-    url += `/${id}`
-  }
-
-  const res = await fetch(url, { cache: 'no-store', next: { revalidate: 0 } })
-  return (await res.json()) as ProposalResponse
-}
-
 export async function postProposal(
   proposal: ProposalInput,
   id?: string,

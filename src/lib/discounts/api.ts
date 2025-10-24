@@ -6,7 +6,6 @@ import type {
   CreateEventDiscountInput,
   CreateEventDiscountResponse,
   DeleteEventDiscountResponse,
-  ValidateDiscountCodeResponse,
 } from './types'
 
 export async function getEventDiscounts(
@@ -171,33 +170,4 @@ export async function deleteEventDiscount(
 
   const result = responseData.deleteEventDiscount
   return result.success
-}
-
-export async function validateDiscountCode(
-  eventId: number,
-  discountCode: string,
-): Promise<{
-  valid: boolean
-  message: string
-  usageCount?: number
-  maxUsage?: number
-}> {
-  const query = `
-    query ValidateEventCoupon($eventId: Int!, $coupon: String!) {
-      eventCouponValidate(id: $eventId, coupon: $coupon) {
-        valid
-        message
-        usageCount
-        maxUsage
-      }
-    }
-  `
-
-  const variables = { eventId, coupon: discountCode }
-  const responseData = await checkinQuery<ValidateDiscountCodeResponse>(
-    query,
-    variables,
-  )
-
-  return responseData.eventCouponValidate
 }

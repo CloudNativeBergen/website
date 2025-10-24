@@ -120,7 +120,7 @@ export const providerMap = config.providers.map((provider: any) => {
   }
 })
 
-export const { handlers, auth: _auth, signIn, signOut } = NextAuth(config)
+export const { handlers, auth: _auth, signIn } = NextAuth(config)
 
 export const auth = _auth as typeof _auth &
   (<HandlerResponse extends Response | Promise<Response>>(
@@ -134,12 +134,6 @@ export const auth = _auth as typeof _auth &
     req: NextRequest,
     context: { params: Record<string, string | string[] | undefined> },
   ) => HandlerResponse)
-
-export function isAtuh(req: NextAuthRequest): boolean {
-  return req.auth && req.auth.user && req.auth.speaker && req.auth.speaker._id
-    ? true
-    : false
-}
 
 export async function getAuthSession() {
   if (AppEnvironment.isTestMode) {

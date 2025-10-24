@@ -1,13 +1,5 @@
 // Note: keep this file minimal; avoid unused types to satisfy strict lint rules
 
-export function SkeletonBox({
-  className = 'h-4 w-full rounded bg-gray-200 dark:bg-gray-700',
-}: {
-  className?: string
-}) {
-  return <div className={`animate-pulse ${className}`} />
-}
-
 export function SkeletonCard({
   className = '',
   showHeader = true,
@@ -145,35 +137,6 @@ export function SkeletonModal({
           <div className="h-10 w-20 rounded bg-gray-200 dark:bg-gray-700" />
           <div className="h-10 w-20 rounded bg-gray-200 dark:bg-gray-700" />
         </div>
-      )}
-    </div>
-  )
-}
-
-export function SkeletonInline({
-  message = 'Loading...',
-  showMessage = false,
-  size = 'medium',
-}: {
-  message?: string
-  showMessage?: boolean
-  size?: 'small' | 'medium' | 'large'
-}) {
-  const sizeClasses = {
-    small: 'h-4 w-4',
-    medium: 'h-6 w-6',
-    large: 'h-8 w-8',
-  }
-
-  return (
-    <div className="flex items-center justify-center py-4">
-      <div
-        className={`animate-pulse ${sizeClasses[size]} rounded bg-gray-200 dark:bg-gray-700`}
-      />
-      {showMessage && (
-        <span className="ml-2 text-sm text-gray-600 dark:text-gray-300">
-          {message}
-        </span>
       )}
     </div>
   )

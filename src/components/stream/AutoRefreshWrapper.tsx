@@ -10,7 +10,7 @@ interface AutoRefreshWrapperProps {
 
 export function AutoRefreshWrapper({
   children,
-  intervalMs = 300000 // Default to 5 minutes (300000ms)
+  intervalMs = 300000, // Default to 5 minutes (300000ms)
 }: AutoRefreshWrapperProps) {
   const router = useRouter()
 

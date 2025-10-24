@@ -61,11 +61,5 @@ export const TravelSupportConfig = {
   },
 } as const
 
-export type TimeoutConfig = typeof TravelSupportConfig.timeouts
-
 export const TIMEOUTS = TravelSupportConfig.timeouts
-export const FILE_UPLOAD_CONFIG = TravelSupportConfig.fileUpload
 export const EXCHANGE_RATE_CONFIG = TravelSupportConfig.exchangeRates
-export const VALIDATION_CONFIG = TravelSupportConfig.validation
-export const BUSINESS_RULES = TravelSupportConfig.businessRules
-export const AUDIT_CONFIG = TravelSupportConfig.auditLog

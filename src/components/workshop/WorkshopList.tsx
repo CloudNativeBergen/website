@@ -247,28 +247,28 @@ export default function WorkshopList({
                 )
                 return signup?.status === 'waitlist'
               }).length > 0 && (
-                  <>
-                    {' '}
-                    and on the waitlist for{' '}
-                    {
-                      userWorkshops.filter((w) => {
-                        const signup = userSignups.find(
-                          (s) => getWorkshopIdFromSignup(s) === w._id,
-                        )
-                        return signup?.status === 'waitlist'
-                      }).length
-                    }{' '}
-                    workshop
-                    {userWorkshops.filter((w) => {
+                <>
+                  {' '}
+                  and on the waitlist for{' '}
+                  {
+                    userWorkshops.filter((w) => {
                       const signup = userSignups.find(
                         (s) => getWorkshopIdFromSignup(s) === w._id,
                       )
                       return signup?.status === 'waitlist'
-                    }).length !== 1
-                      ? 's'
-                      : ''}
-                  </>
-                )}
+                    }).length
+                  }{' '}
+                  workshop
+                  {userWorkshops.filter((w) => {
+                    const signup = userSignups.find(
+                      (s) => getWorkshopIdFromSignup(s) === w._id,
+                    )
+                    return signup?.status === 'waitlist'
+                  }).length !== 1
+                    ? 's'
+                    : ''}
+                </>
+              )}
               .
             </p>
           </div>

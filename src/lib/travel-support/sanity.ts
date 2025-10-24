@@ -338,18 +338,6 @@ async function updateTravelSupportTotal(
   await clientWrite.patch(travelSupportId).set({ totalAmount }).commit()
 }
 
-export async function deleteExpense(expenseId: string): Promise<{
-  success: boolean
-  error: Error | null
-}> {
-  try {
-    await clientWrite.delete(expenseId)
-    return { success: true, error: null }
-  } catch (error) {
-    return { success: false, error: error as Error }
-  }
-}
-
 export async function deleteReceipt(
   expenseId: string,
   receiptIndex: number,

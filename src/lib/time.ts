@@ -9,45 +9,6 @@ export function formatDate(dateString: string): string {
   })
 }
 
-export function formatDates(dateString1: string, dateString2: string): string {
-  if (!dateString1 || !dateString2) return 'TBD'
-
-  try {
-    const date1 = new Date(dateString1)
-    const date2 = new Date(dateString2)
-
-    if (isNaN(date1.getTime()) || isNaN(date2.getTime())) {
-      if (!isNaN(date1.getTime())) return formatDate(dateString1)
-      if (!isNaN(date2.getTime())) return formatDate(dateString2)
-      return 'Invalid Date Range'
-    }
-
-    const day1 = date1.toLocaleDateString('en-GB', { day: 'numeric' })
-    const month1 = date1.toLocaleDateString('en-GB', { month: 'long' })
-    const year1 = date1.toLocaleDateString('en-GB', { year: 'numeric' })
-
-    const day2 = date2.toLocaleDateString('en-GB', { day: 'numeric' })
-    const month2 = date2.toLocaleDateString('en-GB', { month: 'long' })
-    const year2 = date2.toLocaleDateString('en-GB', { year: 'numeric' })
-
-    if (year1 !== year2) {
-      return `${day1} ${month1} ${year1} - ${day2} ${month2} ${year2}`
-    }
-    if (month1 !== month2) {
-      return `${day1} ${month1} - ${day2} ${month2} ${year1}`
-    }
-    return `${day1} - ${day2} ${month1} ${year1}`
-  } catch (error) {
-    console.error('Error formatting date range:', error)
-    const formatted1 = formatDate(dateString1)
-    const formatted2 = formatDate(dateString2)
-    if (formatted1 !== 'TBD' && formatted2 !== 'TBD') {
-      return `${formatted1} - ${formatted2}`
-    }
-    return 'TBD'
-  }
-}
-
 export function formatDateSafe(dateString: string): string {
   if (!dateString) return 'TBD'
 

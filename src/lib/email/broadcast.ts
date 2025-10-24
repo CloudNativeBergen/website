@@ -27,13 +27,6 @@ export interface BroadcastEmailRequest {
   additionalContent?: string
 }
 
-export interface BroadcastEmailResponse {
-  success: boolean
-  broadcastId: string
-  audienceId: string
-  sent: boolean
-}
-
 export async function sendBroadcastEmail({
   conference,
   subject,

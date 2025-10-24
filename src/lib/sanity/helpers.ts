@@ -57,65 +57,6 @@ export function prepareReferenceArray<T extends Reference | { _id: string }>(
   })) as Array<Reference & { _key: string }>
 }
 
-export async function fixArrayKeys(
-  documentType: string,
-  arrayFields: Array<{
-    field: string
-    prefix: string
-    keyCheck?: (item: Record<string, unknown>) => boolean
-  }>,
-): Promise<{
-  error?: Error
-  fixed?: number
-}> {
-  try {
-    const documents = await clientRead.fetch(`
-      *[_type == "${documentType}"]{
-        _id,
-        ${arrayFields.map((field) => field.field).join(',\n        ')}
-      }
-    `)
-
-    let fixedCount = 0
-
-    for (const document of documents) {
-      let needsUpdate = false
-      const updates: Record<string, unknown[]> = {}
-
-      for (const { field, prefix, keyCheck } of arrayFields) {
-        if (document[field] && Array.isArray(document[field])) {
-          const arrayWithKeys = (
-            document[field] as Record<string, unknown>[]
-          ).map((item) => {
-            const shouldAddKey = keyCheck ? keyCheck(item) : !item._key
-            if (shouldAddKey) {
-              needsUpdate = true
-              return {
-                ...item,
-                _key: (item._key as string) || generateKey(prefix),
-              }
-            }
-            return item
-          })
-
-          if (needsUpdate) {
-            updates[field] = arrayWithKeys
-          }
-        }
-      }
-
-      if (needsUpdate) {
-        await clientWrite.patch(document._id).set(updates).commit()
-        fixedCount++
-      }
-    }
-
-    return { fixed: fixedCount }
-  } catch (error) {
-    return { error: error as Error }
-  }
-}
-
 export async function addReferenceToArray(
   documentId: string,
   arrayField: string,

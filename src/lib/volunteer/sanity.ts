@@ -170,47 +170,6 @@ export async function updateVolunteerStatus(
   }
 }
 
-export async function getAllVolunteers(): Promise<{
-  volunteers: VolunteerWithConference[]
-  error: Error | null
-}> {
-  try {
-    const query = `*[_type == "volunteer"] | order(_createdAt desc) {
-      _id,
-      _rev,
-      _createdAt,
-      _updatedAt,
-      name,
-      email,
-      phone,
-      occupation,
-      availability,
-      preferredTasks,
-      tshirtSize,
-      dietaryRestrictions,
-      otherInfo,
-      conference->{
-        _id,
-        title
-      },
-      consent,
-      status,
-      submittedAt,
-      reviewedAt,
-      reviewedBy,
-      reviewNotes
-    }`
-
-    const volunteers = await clientRead.fetch<VolunteerWithConference[]>(query)
-    return { volunteers: volunteers || [], error: null }
-  } catch (error) {
-    return {
-      volunteers: [],
-      error: error instanceof Error ? error : new Error('Unknown error'),
-    }
-  }
-}
-
 export async function deleteVolunteer(
   volunteerId: string,
 ): Promise<{ success: boolean; error: Error | null }> {

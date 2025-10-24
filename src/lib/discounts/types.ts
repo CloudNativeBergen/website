@@ -71,12 +71,3 @@ export interface DeleteEventDiscountResponse {
     success: boolean
   }
 }
-
-export interface ValidateDiscountCodeResponse {
-  eventCouponValidate: {
-    valid: boolean
-    message: string
-    usageCount?: number
-    maxUsage?: number
-  }
-}

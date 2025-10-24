@@ -4,7 +4,6 @@ import type {
   CheckinPayOrder,
   GroupedOrder,
   EventTicketsResponse,
-  CheckinPayOrderResponse,
   EventOrderUser as EventOrder,
   EventOrderUserPage,
   AllEventOrderUsersResponse,
@@ -98,82 +97,6 @@ async function _fetchEventTickets(
   )
 
   return responseData.eventTickets || []
-}
-
-export async function fetchOrderPaymentDetails(
-  orderId: number,
-): Promise<CheckinPayOrder> {
-  const query = `
-    query FindCheckinPayOrderByID($id: Int!) {
-      findCheckinPayOrderByID(id: $id, type: EVENT) {
-        id
-        belongsTo
-        orderId
-        orderType
-        documentType
-        kid
-        invoiceReference
-        archivedAt
-        createdAt
-        invoiceDate
-        deliveryDate
-        dueAt
-        contactCrm {
-          firstName
-          lastName
-          email {
-            email
-          }
-        }
-        billingCrm {
-          firstName
-          lastName
-          email {
-            email
-          }
-        }
-        currency
-        country
-        paymentMethod
-        paymentStatus
-        actionRequired
-        debtStatus
-        debtLastUpdatedAt
-        sum
-        sumLeft
-        paid
-        sumVat
-      }
-    }
-  `
-
-  const variables = { id: orderId }
-  const responseData = await checkinQuery<CheckinPayOrderResponse>(
-    query,
-    variables,
-  )
-
-  return responseData.findCheckinPayOrderByID
-}
-
-export function isPaymentOverdue(paymentDetails: CheckinPayOrder): boolean {
-  if (paymentDetails.paid) return false
-
-  const dueDate = new Date(paymentDetails.dueAt)
-  const now = new Date()
-
-  return dueDate < now && parseFloat(paymentDetails.sumLeft) > 0
-}
-
-export function getDaysOverdue(paymentDetails: CheckinPayOrder): number {
-  if (!isPaymentOverdue(paymentDetails)) return 0
-
-  const dueDate = new Date(paymentDetails.dueAt)
-  const now = new Date()
-  const diffTime = now.getTime() - dueDate.getTime()
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-
-  return diffDays
 }
 
 async function _fetchEventOrders(
@@ -321,19 +244,4 @@ async function _fetchAllEventOrders(
   }
 
   return allTickets
-}
-
-export function groupEventOrderUsersByOrder(
-  eventOrderUsers: EventOrder[],
-): Map<number, EventOrder[]> {
-  const orderMap = new Map<number, EventOrder[]>()
-
-  eventOrderUsers.forEach((user) => {
-    if (!orderMap.has(user.orderId)) {
-      orderMap.set(user.orderId, [])
-    }
-    orderMap.get(user.orderId)!.push(user)
-  })
-
-  return orderMap
 }

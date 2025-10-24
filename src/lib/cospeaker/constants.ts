@@ -6,10 +6,6 @@ export const COSPEAKER_API_ENDPOINTS = {
   INVITATION_DELETE: (proposalId: string) => `/api/invitation/${proposalId}`,
 } as const
 
-export const COSPEAKER_API_PARAMS = {
-  TEST_MODE: 'test',
-} as const
-
 /**
  * Co-speaker limits based on talk format
  * These limits define the maximum number of co-speakers allowed for each format

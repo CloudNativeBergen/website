@@ -18,18 +18,3 @@ export function formatSpeakerNames(speakers: Speaker[]): string {
     }
   }
 }
-
-export function formatSpeakerNamesFromUnknown(speakers: unknown): string {
-  if (!Array.isArray(speakers)) return ''
-
-  const populatedSpeakers = speakers.filter(
-    (speaker): speaker is Speaker =>
-      speaker &&
-      typeof speaker === 'object' &&
-      '_id' in speaker &&
-      'name' in speaker &&
-      typeof speaker.name === 'string',
-  )
-
-  return formatSpeakerNames(populatedSpeakers)
-}

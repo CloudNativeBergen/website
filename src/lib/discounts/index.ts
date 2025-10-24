@@ -7,14 +7,12 @@ export type {
   EventDiscountsResponse,
   CreateEventDiscountResponse,
   DeleteEventDiscountResponse,
-  ValidateDiscountCodeResponse,
 } from './types'
 
 export {
   getEventDiscounts,
   createEventDiscount,
   deleteEventDiscount,
-  validateDiscountCode,
 } from './api'
 
 export { calculateDiscountUsage } from './usage'

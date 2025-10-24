@@ -6,7 +6,6 @@ export * from './ui'
 export * from './business'
 
 export {
-  getProposal as getProposalClient,
   postProposal,
   postProposalAction,
   adminFetchNextUnreviewedProposal,

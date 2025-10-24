@@ -25,12 +25,6 @@ export const workshopSignupInputSchema = z.object({
   notes: z.string().optional(),
 })
 
-export const workshopSignupUpdateSchema = z.object({
-  signupId: z.string().min(1, 'Signup ID is required'),
-  status: z.nativeEnum(WorkshopSignupStatus),
-  notes: z.string().optional(),
-})
-
 export const workshopListInputSchema = z.object({
   conferenceId: z.string().min(1, 'Conference ID is required'),
   includeCapacity: z.boolean().optional().default(false),
@@ -39,10 +33,6 @@ export const workshopListInputSchema = z.object({
 export const workshopAvailabilitySchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
   conferenceId: z.string().min(1, 'Conference ID is required'),
-})
-
-export const workshopSignupByIdSchema = z.object({
-  signupId: z.string().min(1, 'Signup ID is required'),
 })
 
 export const workshopSignupsByUserSchema = z
@@ -71,10 +61,6 @@ export const confirmWorkshopSignupSchema = z.object({
   sendEmail: z.boolean().optional().default(true),
 })
 
-export const resendConfirmationSchema = z.object({
-  signupId: z.string().min(1, 'Signup ID is required'),
-})
-
 export const batchConfirmSignupsSchema = z.object({
   signupIds: z.array(z.string()).min(1, 'At least one signup ID is required'),
   sendEmails: z.boolean().optional().default(true),
@@ -101,19 +87,6 @@ export const workshopSignupFiltersSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
 })
 
-export const createWorkshopSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(255, 'Title too long'),
-  description: z.string().min(1, 'Description is required'),
-  format: z.enum(['workshop_120', 'workshop_240']),
-  capacity: z
-    .number()
-    .int()
-    .positive('Capacity must be positive')
-    .max(500, 'Capacity too large'),
-  speakerId: z.string().min(1, 'Speaker ID is required'),
-  conferenceId: z.string().min(1, 'Conference ID is required'),
-})
-
 export const updateWorkshopCapacitySchema = z.object({
   workshopId: z.string().min(1, 'Workshop ID is required'),
   capacity: z
@@ -123,36 +96,4 @@ export const updateWorkshopCapacitySchema = z.object({
     .max(500, 'Capacity too large'),
 })
 
-export const sendWorkshopReminderSchema = z.object({
-  workshopId: z.string().min(1, 'Workshop ID is required'),
-  subject: z
-    .string()
-    .min(1, 'Subject is required')
-    .max(255, 'Subject too long'),
-  message: z
-    .string()
-    .min(1, 'Message is required')
-    .max(5000, 'Message too long'),
-  onlyConfirmed: z.boolean().optional().default(true),
-})
-
-export const exportWorkshopSignupsSchema = z
-  .object({
-    workshopId: z.string().optional(),
-    conferenceId: z.string().optional(),
-    format: z.enum(['csv', 'json']).optional().default('csv'),
-    includePersonalData: z.boolean().optional().default(false),
-  })
-  .refine((data) => data.workshopId || data.conferenceId, {
-    message: 'Either workshopId or conferenceId is required',
-  })
-
 export type WorkshopSignupInput = z.infer<typeof workshopSignupInputSchema>
-export type WorkshopSignupUpdate = z.infer<typeof workshopSignupUpdateSchema>
-export type WorkshopSignupFilters = z.infer<typeof workshopSignupFiltersSchema>
-export type CancelWorkshopSignupInput = z.infer<
-  typeof cancelWorkshopSignupSchema
->
-export type ConfirmWorkshopSignupInput = z.infer<
-  typeof confirmWorkshopSignupSchema
->

@@ -201,5 +201,4 @@ describe('Workshop Status Utils', () => {
       )
     })
   })
-
 })

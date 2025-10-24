@@ -32,8 +32,8 @@ function StatusBadge({ status }: { status: TalkStatus }) {
     return (
       <span className="inline-flex items-center px-3 py-1.5 text-sm font-semibold">
         <span className="relative flex items-center">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full bg-green-500 text-white px-4 py-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full bg-green-500 px-4 py-1.5 text-white">
             LIVE NOW
           </span>
         </span>
@@ -80,7 +80,10 @@ export default function NextTalkDisplay({
     })
 
     // Try to use findCurrentTalkPosition for today's schedule
-    const currentPosition = findCurrentTalkPosition(sortedSchedules, currentTime)
+    const currentPosition = findCurrentTalkPosition(
+      sortedSchedules,
+      currentTime,
+    )
 
     if (currentPosition) {
       const schedule = sortedSchedules[currentPosition.scheduleIndex]
@@ -88,11 +91,15 @@ export default function NextTalkDisplay({
 
       // If the current position is in our room, use it
       if (track.trackTitle === roomTrackTitle) {
-        const status = getTalkStatus(currentPosition.talk, currentPosition.scheduleDate, currentTime)
+        const status = getTalkStatus(
+          currentPosition.talk,
+          currentPosition.scheduleDate,
+          currentTime,
+        )
         return {
           talk: currentPosition.talk,
           scheduleDate: currentPosition.scheduleDate,
-          status
+          status,
         }
       }
     }
@@ -106,7 +113,7 @@ export default function NextTalkDisplay({
       if (!schedule.date || !schedule.tracks) continue
 
       const matchingTrack = schedule.tracks.find(
-        (track) => track.trackTitle === roomTrackTitle
+        (track) => track.trackTitle === roomTrackTitle,
       )
 
       if (!matchingTrack || !matchingTrack.talks) continue
@@ -152,23 +159,23 @@ export default function NextTalkDisplay({
   if (!currentTalk) {
     const hasScheduledTalks = schedules?.some((schedule) =>
       schedule.tracks?.some(
-        (track) => track.trackTitle === roomTrackTitle && track.talks?.length
-      )
+        (track) => track.trackTitle === roomTrackTitle && track.talks?.length,
+      ),
     )
 
     if (!hasScheduledTalks) {
       return (
         <div
           className={clsx(
-            'bg-white/95 dark:bg-gray-800/95 border-2 border-gray-300 rounded-lg shadow-xl p-8',
+            'rounded-lg border-2 border-gray-300 bg-white/95 p-8 shadow-xl dark:bg-gray-800/95',
             'flex flex-col items-center justify-center text-center',
-            className
+            className,
           )}
           role="status"
           aria-live="polite"
         >
-          <CalendarIcon className="w-16 h-16 text-gray-400 mb-4" />
-          <p className="text-gray-600 dark:text-gray-400 text-xl">
+          <CalendarIcon className="mb-4 h-16 w-16 text-gray-400" />
+          <p className="text-xl text-gray-600 dark:text-gray-400">
             No talks scheduled for this room
           </p>
         </div>
@@ -178,15 +185,15 @@ export default function NextTalkDisplay({
     return (
       <div
         className={clsx(
-          'bg-white/95 dark:bg-gray-800/95 border-2 border-gray-300 rounded-lg shadow-xl p-8',
+          'rounded-lg border-2 border-gray-300 bg-white/95 p-8 shadow-xl dark:bg-gray-800/95',
           'flex flex-col items-center justify-center text-center',
-          className
+          className,
         )}
         role="status"
         aria-live="polite"
       >
-        <CalendarIcon className="w-16 h-16 text-brand-cloud-blue mb-4" />
-        <p className="text-brand-slate-gray dark:text-gray-200 text-xl font-medium">
+        <CalendarIcon className="mb-4 h-16 w-16 text-brand-cloud-blue" />
+        <p className="text-xl font-medium text-brand-slate-gray dark:text-gray-200">
           All talks for today have concluded. Thank you for attending!
         </p>
       </div>
@@ -198,8 +205,8 @@ export default function NextTalkDisplay({
     status === 'happening-now'
       ? 'border-green-500'
       : status === 'happening-soon'
-      ? 'border-yellow-500'
-      : 'border-brand-cloud-blue'
+        ? 'border-yellow-500'
+        : 'border-brand-cloud-blue'
 
   const startDate = parseTalkDateTime(scheduleDate, talk.startTime)
   const isToday = startDate.toDateString() === new Date().toDateString()
@@ -207,9 +214,10 @@ export default function NextTalkDisplay({
   const extractDescription = () => {
     if (!talk.talk?.description) return null
     const firstBlock = talk.talk.description.find(
-      (block: { _type?: string }) => block._type === 'block'
+      (block: { _type?: string }) => block._type === 'block',
     )
-    if (!firstBlock?.children || !Array.isArray(firstBlock.children)) return null
+    if (!firstBlock?.children || !Array.isArray(firstBlock.children))
+      return null
     return firstBlock.children
       .filter((child: { _type?: string }) => child._type === 'span')
       .map((child: { text?: string }) => child.text)
@@ -222,21 +230,21 @@ export default function NextTalkDisplay({
     return (
       <div
         className={clsx(
-          'bg-white/95 dark:bg-gray-800/95 border-2 rounded-lg shadow-xl p-8 opacity-75',
+          'rounded-lg border-2 bg-white/95 p-8 opacity-75 shadow-xl dark:bg-gray-800/95',
           borderColor,
-          className
+          className,
         )}
         role="status"
         aria-live="polite"
       >
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-4 flex items-center justify-between">
           <StatusBadge status={status} />
         </div>
-        <h2 className="text-brand-slate-gray dark:text-gray-200 font-space-grotesk text-2xl font-medium mb-4">
+        <h2 className="font-space-grotesk mb-4 text-2xl font-medium text-brand-slate-gray dark:text-gray-200">
           {talk.placeholder || 'Service Session'}
         </h2>
-        <div className="flex items-center text-gray-600 dark:text-gray-400 text-lg">
-          <ClockIcon className="w-5 h-5 mr-2" />
+        <div className="flex items-center text-lg text-gray-600 dark:text-gray-400">
+          <ClockIcon className="mr-2 h-5 w-5" />
           <span className="font-mono">
             {talk.startTime} - {talk.endTime}
           </span>
@@ -248,31 +256,35 @@ export default function NextTalkDisplay({
   return (
     <div
       className={clsx(
-        'bg-white/95 dark:bg-gray-800/95 border-2 rounded-lg shadow-xl p-8',
+        'rounded-lg border-2 bg-white/95 p-8 shadow-xl dark:bg-gray-800/95',
         borderColor,
-        className
+        className,
       )}
       role="status"
       aria-live="polite"
     >
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <StatusBadge status={status} />
         {!isToday && (
           <div className="flex items-center text-gray-600 dark:text-gray-400">
-            <CalendarIcon className="w-5 h-5 mr-2" />
+            <CalendarIcon className="mr-2 h-5 w-5" />
             <span>{startDate.toLocaleDateString()}</span>
           </div>
         )}
       </div>
 
-      <h2 className="font-space-grotesk text-3xl font-bold text-brand-slate-gray dark:text-white mb-6">
+      <h2 className="font-space-grotesk mb-6 text-3xl font-bold text-brand-slate-gray dark:text-white">
         {talk.talk.title}
       </h2>
 
       {talk.talk.speakers && talk.talk.speakers.length > 0 && (
-        <div className="flex items-center gap-4 mb-6">
-          <SpeakerAvatars speakers={talk.talk.speakers} size="lg" maxVisible={3} />
-          <div className="text-brand-cloud-blue text-xl font-medium">
+        <div className="mb-6 flex items-center gap-4">
+          <SpeakerAvatars
+            speakers={talk.talk.speakers}
+            size="lg"
+            maxVisible={3}
+          />
+          <div className="text-xl font-medium text-brand-cloud-blue">
             <ClickableSpeakerNames
               speakers={talk.talk.speakers}
               showFirstNameOnly={false}
@@ -281,15 +293,15 @@ export default function NextTalkDisplay({
         </div>
       )}
 
-      <div className="flex items-center text-gray-600 dark:text-gray-400 text-lg mb-4">
-        <ClockIcon className="w-5 h-5 mr-2" />
+      <div className="mb-4 flex items-center text-lg text-gray-600 dark:text-gray-400">
+        <ClockIcon className="mr-2 h-5 w-5" />
         <span className="font-mono">
           {talk.startTime} - {talk.endTime}
         </span>
       </div>
 
       {description && (
-        <p className="text-gray-600 dark:text-gray-300 text-base line-clamp-3">
+        <p className="line-clamp-3 text-base text-gray-600 dark:text-gray-300">
           {description}
         </p>
       )}

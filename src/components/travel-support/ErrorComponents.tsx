@@ -8,12 +8,6 @@ interface ErrorDisplayProps {
   className?: string
 }
 
-interface FormErrorProps {
-  error?: string
-  touched?: boolean
-  className?: string
-}
-
 interface ErrorBoundaryFallbackProps {
   error: Error
   onRetry?: () => void
@@ -76,20 +70,6 @@ export function ErrorDisplay({
         )}
       </div>
     </div>
-  )
-}
-
-export function FormError({
-  error,
-  touched = false,
-  className = '',
-}: FormErrorProps) {
-  if (!error || !touched) return null
-
-  return (
-    <p className={`mt-1 text-sm text-red-600 dark:text-red-400 ${className}`}>
-      {error}
-    </p>
   )
 }
 

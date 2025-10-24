@@ -14,11 +14,6 @@ export const flags = new Map([
   [Flags.requiresTravelFunding, 'Requires Travel Funding'],
 ])
 
-export interface SpeakerRef {
-  _type: string
-  _ref: string
-}
-
 export interface ConsentRecord {
   granted: boolean
   grantedAt?: string

@@ -3,11 +3,9 @@ import {
   Status,
   Format,
   Level,
-  Language,
   Audience,
   statuses,
   formats,
-  languages,
   audiences,
 } from '../types'
 import { getFormatConfig } from './config'
@@ -197,14 +195,6 @@ export function getLevelBadgeConfig(level: Level): BadgeConfig {
   }
 }
 
-export function getLanguageBadgeConfig(language: Language): BadgeConfig {
-  return {
-    text: languages.get(language) || 'Unknown',
-    bgColor: 'bg-gray-100',
-    textColor: 'text-gray-800',
-  }
-}
-
 export function getFormatBadgeConfig(format: Format): BadgeConfig {
   const config = getFormatConfig(format)
   return {
@@ -268,27 +258,6 @@ export function LevelBadge({
   )
 }
 
-interface LanguageBadgeProps extends BaseBadgeProps {
-  language: Language
-}
-
-export function LanguageBadge({
-  language,
-  variant = 'default',
-  className = '',
-}: LanguageBadgeProps) {
-  const config = getLanguageBadgeConfig(language)
-  const classes = getBadgeClasses(variant)
-
-  return (
-    <span
-      className={`${classes} ${config.bgColor} ${config.textColor} ${className}`}
-    >
-      {config.text}
-    </span>
-  )
-}
-
 interface FormatBadgeProps extends BaseBadgeProps {
   format: Format
 }
@@ -328,26 +297,6 @@ export function AudienceBadge({
     >
       {config.text}
     </span>
-  )
-}
-
-interface AudienceBadgesProps {
-  audiences: Audience[]
-  variant?: 'default' | 'compact'
-  className?: string
-}
-
-export function AudienceBadges({
-  audiences,
-  variant = 'default',
-  className = '',
-}: AudienceBadgesProps) {
-  return (
-    <div className={`flex flex-wrap gap-1 ${className}`}>
-      {audiences.map((audience, index) => (
-        <AudienceBadge key={index} audience={audience} variant={variant} />
-      ))}
-    </div>
   )
 }
 

@@ -47,5 +47,3 @@ export function BackLink({
     </Link>
   )
 }
-
-export const BackButton = BackLink

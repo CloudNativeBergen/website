@@ -8,11 +8,6 @@ interface LoadingStateProps {
   className?: string
 }
 
-interface SkeletonProps {
-  className?: string
-  lines?: number
-}
-
 export function LoadingSpinner({
   size = 'md',
   className = '',
@@ -39,43 +34,6 @@ export function LoadingState({
       <div className="text-center">
         <LoadingSpinner size="lg" className="mx-auto mb-4" />
         <p className="text-sm text-gray-600 dark:text-gray-400">{message}</p>
-      </div>
-    </div>
-  )
-}
-
-export function Skeleton({ className = '', lines = 1 }: SkeletonProps) {
-  return (
-    <div className={`animate-pulse ${className}`}>
-      {Array.from({ length: lines }).map((_, index) => (
-        <div
-          key={index}
-          className={`h-4 rounded bg-gray-200 dark:bg-gray-700 ${
-            index < lines - 1 ? 'mb-2' : ''
-          } ${index === lines - 1 && lines > 1 ? 'w-2/3' : 'w-full'}`}
-        />
-      ))}
-    </div>
-  )
-}
-
-export function CardSkeleton({ className = '' }: { className?: string }) {
-  return (
-    <div
-      className={`rounded-lg border border-gray-200 p-4 dark:border-gray-700 ${className}`}
-    >
-      <div className="animate-pulse">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="mb-2 h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
-            <div className="mb-3 h-3 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
-            <div className="h-5 w-1/4 rounded bg-gray-200 dark:bg-gray-700" />
-          </div>
-          <div className="ml-4 flex gap-2">
-            <div className="h-8 w-16 rounded bg-gray-200 dark:bg-gray-700" />
-            <div className="h-8 w-16 rounded bg-gray-200 dark:bg-gray-700" />
-          </div>
-        </div>
       </div>
     </div>
   )

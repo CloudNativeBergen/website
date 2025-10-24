@@ -112,14 +112,6 @@ export function HelpText({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function DescriptionText({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">
-      {children}
-    </p>
-  )
-}
-
 export function Textarea({
   name,
   label,

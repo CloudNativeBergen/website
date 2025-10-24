@@ -7,7 +7,6 @@ import {
   ProfileImageResponse,
 } from '@/lib/profile/types'
 import { FormValidationError } from '@/lib/proposal/types'
-import { findSpeakerByEmail } from '@/lib/speaker/sanity'
 
 export function defaultEmails(session: Session) {
   return [
@@ -18,18 +17,6 @@ export function defaultEmails(session: Session) {
       visibility: 'private',
     },
   ]
-}
-
-export async function isUserOrganizer(email: string): Promise<boolean> {
-  try {
-    const { speaker, err } = await findSpeakerByEmail(email)
-    if (err || !speaker?._id) {
-      return false
-    }
-    return speaker.is_organizer === true
-  } catch {
-    return false
-  }
 }
 
 export function profileEmailResponseError({

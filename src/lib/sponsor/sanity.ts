@@ -11,7 +11,6 @@ import {
   createReference,
   addReferenceToArray,
   removeReferenceFromArray,
-  fixArrayKeys,
 } from '@/lib/sanity/helpers'
 
 export async function createSponsorTier(
@@ -375,64 +374,6 @@ export async function getAllSponsors(
   }
 }
 
-export async function getSponsorsForConference(
-  conferenceId: string,
-  includeContactInfo: boolean = false,
-): Promise<{
-  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
-  error?: Error
-}> {
-  try {
-    const fields = includeContactInfo
-      ? `_id,
-        _createdAt,
-        _updatedAt,
-        name,
-        website,
-        logo,
-        logo_bright,
-        org_number,
-        contact_persons[]{
-          _key,
-          name,
-          email,
-          phone,
-          role
-        },
-        billing{
-          email,
-          reference,
-          comments
-        }`
-      : `_id,
-        _createdAt,
-        _updatedAt,
-        name,
-        website,
-        logo,
-        logo_bright`
-
-    const sponsors = await clientWrite.fetch(
-      `*[_type == "conference" && _id == $conferenceId][0].sponsors[]{
-        sponsor->{
-          ${fields}
-        },
-        tier->{
-          _id,
-          title,
-          tagline,
-          tier_type
-        }
-      }.sponsor | order(name asc)`,
-      { conferenceId },
-    )
-
-    return { sponsors }
-  } catch (error) {
-    return { error: error as Error }
-  }
-}
-
 export async function addSponsorToConference(
   conferenceId: string,
   sponsorId: string,
@@ -518,20 +459,4 @@ export async function updateSponsorTierAssignment(
   } catch (error) {
     return { error: error as Error }
   }
-}
-
-export async function fixSponsorKeys(): Promise<{ error?: Error }> {
-  return await fixArrayKeys('conference', [
-    { field: 'sponsors', prefix: 'sponsor' },
-  ])
-}
-
-export async function fixSponsorTierArrayKeys(): Promise<{
-  error?: Error
-  fixed?: number
-}> {
-  return await fixArrayKeys('sponsorTier', [
-    { field: 'price', prefix: 'price' },
-    { field: 'perks', prefix: 'perk' },
-  ])
 }
