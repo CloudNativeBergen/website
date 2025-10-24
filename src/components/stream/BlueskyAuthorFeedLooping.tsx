@@ -58,16 +58,19 @@ export interface BlueskyAuthorFeedLoopingProps {
 
 async function fetchBlueskyAuthorPosts(handle: string): Promise<BlueskyPost[]> {
   try {
-    // Fetch posts - use reasonable limit
-    const params = new URLSearchParams({
-      handle,
-      limit: '50', // Reasonable limit to avoid issues
-    })
+    // Call Bluesky API directly from server component
+    const response = await fetch(
+      `https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed?actor=${encodeURIComponent(handle)}&limit=50`,
+      {
+        next: { revalidate: 300 },
+      },
+    )
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/bluesky/feed?${params}`, {
-      next: { revalidate: 300 },
-    })
+    // Handle rate limiting and access errors gracefully
+    if (response.status === 403 || response.status === 429) {
+      console.log(`Bluesky API returned ${response.status}, returning empty feed`)
+      return []
+    }
 
     if (!response.ok) {
       console.error(`Failed to fetch Bluesky posts: ${response.status}`)
