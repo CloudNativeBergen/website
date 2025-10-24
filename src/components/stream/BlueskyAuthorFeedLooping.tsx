@@ -50,7 +50,6 @@ interface BlueskyFeedResponse {
 export interface BlueskyAuthorFeedLoopingProps {
   handle: string
   className?: string
-  postCount?: number
   compact?: boolean
   title?: string
   speed?: number
@@ -58,8 +57,7 @@ export interface BlueskyAuthorFeedLoopingProps {
 }
 
 async function fetchBlueskyAuthorPosts(
-  handle: string,
-  postCount: number
+  handle: string
 ): Promise<BlueskyPost[]> {
   try {
     // Fetch posts - use reasonable limit
@@ -135,13 +133,12 @@ async function fetchBlueskyAuthorPosts(
 export default async function BlueskyAuthorFeedLooping({
   handle,
   className = '',
-  postCount = 5,
   compact = true,
   title = 'Social Feed',
   speed = 30,
   maxHeight = '600px'
 }: BlueskyAuthorFeedLoopingProps) {
-  const posts = await fetchBlueskyAuthorPosts(handle, postCount);
+  const posts = await fetchBlueskyAuthorPosts(handle);
 
   // Don't render anything if no posts
   if (posts.length === 0) {

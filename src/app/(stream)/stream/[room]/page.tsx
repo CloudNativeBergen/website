@@ -3,6 +3,7 @@ import { BackgroundImage } from '@/components/BackgroundImage';
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity';
 import NextTalkDisplay from '@/components/stream/NextTalkDisplay';
 import { SponsorBanner } from '@/components/stream/SponsorBanner';
+import type { ConferenceSponsor } from '@/lib/sponsor/types';
 import BlueskyAuthorFeedLooping from '@/components/stream/BlueskyAuthorFeedLooping';
 import { AutoRefreshWrapper } from '@/components/stream/AutoRefreshWrapper';
 import { StreamError } from '@/components/stream/StreamError';
@@ -13,7 +14,7 @@ type Props = {
   params: Promise<{ room: string }>;
 };
 
-export const revalidate = STREAM_CONFIG.revalidate;
+export const revalidate = 300;
 
 export default async function StreamRoomPage({ params }: Props) {
   const { room: roomParam } = await params;
@@ -82,7 +83,7 @@ export default async function StreamRoomPage({ params }: Props) {
           <div className={STREAM_CONFIG.layout.containerPadding}>
             {conference.sponsors && conference.sponsors.length > 0 && (
               <SponsorBanner
-                sponsors={conference.sponsors as any}
+                sponsors={conference.sponsors as ConferenceSponsor[]}
                 className={STREAM_CONFIG.sponsorBanner.className}
                 speed={STREAM_CONFIG.sponsorBanner.speed}
               />
