@@ -3,25 +3,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { BlueskyIcon } from '@/components/SocialIcons'
 import { extractHandleFromUrl } from '@/lib/bluesky/utils'
+import {
+  BlueskyPostItem,
+  type BlueskyPost as SharedBlueskyPost,
+  type BlueskyAuthor,
+  type BlueskyRecord,
+} from '@/components/BlueskyPostItem'
 
-interface BlueskyAuthor {
-  did: string
-  handle: string
-  displayName?: string
-  avatar?: string
-}
-
-interface BlueskyRecord {
-  $type: string
-  createdAt: string
-  text: string
-}
-
-interface BlueskyPost {
-  uri: string
-  cid: string
-  author: BlueskyAuthor
-  record: BlueskyRecord
+interface BlueskyPost extends SharedBlueskyPost {
   indexedAt: string
 }
 
@@ -45,24 +34,6 @@ interface BlueskyFeedProps {
   postCount?: number
   compact?: boolean
 }
-
-const formatRelativeTime = (date: Date): string => {
-  const now = new Date()
-  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-  if (diffInSeconds < 60) return 'just now'
-  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
-  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
-  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
-  })
-}
-
-const extractPostId = (uri: string): string => uri.split('/').pop() || ''
 
 type FetchError = {
   message: string
@@ -174,86 +145,14 @@ export function BlueskyFeed({
   const postItems = useMemo(() => {
     if (!posts || posts.length === 0) return []
 
-    return posts.map((post, index) => {
-      const postDate = new Date(post.record.createdAt)
-      const relativeTime = formatRelativeTime(postDate)
-      const postId = extractPostId(post.uri)
-      const postUrl = `https://bsky.app/profile/${post.author.handle}/post/${postId}`
-
-      return (
-        <article
-          key={post.uri}
-          className={`${compact ? 'space-y-2' : 'space-y-3'} ${index > 0 ? 'border-t border-gray-100 pt-3 dark:border-gray-700' : ''}`}
-          aria-label={`Post by ${post.author.displayName || post.author.handle}`}
-        >
-          <header
-            className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}
-          >
-            {post.author.avatar ? (
-              <img
-                src={post.author.avatar}
-                alt=""
-                className={`${compact ? 'h-5 w-5' : 'h-6 w-6'} rounded-full object-cover`}
-                loading="lazy"
-              />
-            ) : (
-              <div
-                className={`flex ${compact ? 'h-5 w-5' : 'h-6 w-6'} items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-blue-600`}
-                aria-hidden="true"
-              >
-                <span
-                  className={`${compact ? 'text-[10px]' : 'text-xs'} font-medium text-white`}
-                >
-                  {(post.author.displayName || post.author.handle)
-                    .charAt(0)
-                    .toUpperCase()}
-                </span>
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <h3
-                className={`truncate ${compact ? 'text-xs' : 'text-sm'} font-medium text-gray-900 dark:text-white`}
-              >
-                {post.author.displayName || post.author.handle}
-              </h3>
-              {!compact && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  @{post.author.handle}
-                </p>
-              )}
-            </div>
-          </header>
-
-          <div
-            className={`${compact ? 'text-sm leading-relaxed' : 'text-sm leading-relaxed'} text-gray-700 dark:text-gray-300`}
-          >
-            {compact && post.record.text.length > 140
-              ? `${post.record.text.substring(0, 140)}...`
-              : post.record.text}
-          </div>
-
-          <footer
-            className={`flex items-center justify-between ${compact ? 'text-xs' : 'text-xs'} text-gray-500 dark:text-gray-400`}
-          >
-            <time
-              dateTime={post.record.createdAt}
-              title={postDate.toLocaleString()}
-            >
-              {relativeTime}
-            </time>
-            <a
-              href={postUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`rounded font-medium text-blue-500 hover:text-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:outline-none ${compact ? 'text-xs' : ''} dark:text-blue-400 dark:hover:text-blue-300 dark:focus:ring-offset-gray-800`}
-              aria-label={`View post by ${post.author.displayName || post.author.handle} on Bluesky`}
-            >
-              {compact ? 'View' : 'View on Bluesky'}
-            </a>
-          </footer>
-        </article>
-      )
-    })
+    return posts.map((post, index) => (
+      <BlueskyPostItem
+        key={post.uri}
+        post={post}
+        variant={compact ? 'compact' : 'default'}
+        showBorder={index > 0}
+      />
+    ))
   }, [posts, compact])
 
   if (loading) {
