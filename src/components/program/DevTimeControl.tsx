@@ -51,8 +51,16 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
     const updateInputFields = () => {
       const simulated = getSimulatedTime()
       if (simulated) {
-        setSelectedDate(simulated.toISOString().split('T')[0])
-        setSelectedTime(simulated.toTimeString().slice(0, 5))
+        // Format date as YYYY-MM-DD in local timezone
+        const year = simulated.getFullYear()
+        const month = String(simulated.getMonth() + 1).padStart(2, '0')
+        const day = String(simulated.getDate()).padStart(2, '0')
+        setSelectedDate(`${year}-${month}-${day}`)
+
+        // Format time as HH:MM in local timezone
+        const hours = String(simulated.getHours()).padStart(2, '0')
+        const minutes = String(simulated.getMinutes()).padStart(2, '0')
+        setSelectedTime(`${hours}:${minutes}`)
       } else if (schedules.length > 0 && !selectedDate) {
         setSelectedDate(schedules[0].date)
         setSelectedTime('10:00')
@@ -75,8 +83,11 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
     if (!selectedDate || !selectedTime) return
 
     try {
-      const dateTimeString = `${selectedDate}T${selectedTime}:00+01:00`
-      setSimulatedTime(dateTimeString)
+      // Create date in local timezone
+      const [year, month, day] = selectedDate.split('-').map(Number)
+      const [hours, minutes] = selectedTime.split(':').map(Number)
+      const date = new Date(year, month - 1, day, hours, minutes, 0)
+      setSimulatedTime(date)
     } catch (error) {
       console.error('Invalid time format:', error)
       alert('Invalid date/time selection')
@@ -228,7 +239,15 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
                 )}
               </div>
               <div className="rounded bg-gray-100 p-2 font-mono text-sm text-gray-900 dark:bg-gray-700 dark:text-white">
-                {currentTime?.toISOString()}
+                {currentTime?.toLocaleString('sv-SE', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false,
+                })}
               </div>
             </div>
 

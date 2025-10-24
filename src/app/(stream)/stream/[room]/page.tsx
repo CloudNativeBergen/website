@@ -9,6 +9,8 @@ import { AutoRefreshWrapper } from '@/components/stream/AutoRefreshWrapper'
 import { StreamError } from '@/components/stream/StreamError'
 import { STREAM_CONFIG } from '@/lib/stream/config'
 import { findTrackByRoom, getAvailableRooms } from '@/lib/stream/utils'
+import { DevTimeProvider } from '@/components/program/DevTimeProvider'
+import { DevTimeControl } from '@/components/program/DevTimeControl'
 
 type Props = {
   params: Promise<{ room: string }>
@@ -76,38 +78,42 @@ export default async function StreamRoomPage({ params }: Props) {
   }
 
   return (
-    <AutoRefreshWrapper intervalMs={STREAM_CONFIG.refreshInterval}>
-      <div className="relative min-h-screen">
-        <BackgroundImage className="absolute inset-0" />
-        <Container className="relative">
-          <div className={STREAM_CONFIG.layout.containerPadding}>
-            {conference.sponsors && conference.sponsors.length > 0 && (
-              <SponsorBanner
-                sponsors={conference.sponsors as ConferenceSponsor[]}
-                className={STREAM_CONFIG.sponsorBanner.className}
-                speed={STREAM_CONFIG.sponsorBanner.speed}
-              />
-            )}
+    <>
+      <DevTimeProvider />
+      <DevTimeControl schedules={conference.schedules} />
+      <AutoRefreshWrapper intervalMs={STREAM_CONFIG.refreshInterval}>
+        <div className="relative min-h-screen">
+          <BackgroundImage className="absolute inset-0" />
+          <Container className="relative">
+            <div className={STREAM_CONFIG.layout.containerPadding}>
+              {conference.sponsors && conference.sponsors.length > 0 && (
+                <SponsorBanner
+                  sponsors={conference.sponsors as ConferenceSponsor[]}
+                  className={STREAM_CONFIG.sponsorBanner.className}
+                  speed={STREAM_CONFIG.sponsorBanner.speed}
+                />
+              )}
 
-            <div className={STREAM_CONFIG.layout.contentSpacing}>
-              <NextTalkDisplay
-                schedules={conference.schedules}
-                roomTrackTitle={matchedTrack.trackTitle}
-                className={STREAM_CONFIG.nextTalk.className}
-              />
+              <div className={STREAM_CONFIG.layout.contentSpacing}>
+                <NextTalkDisplay
+                  schedules={conference.schedules}
+                  roomTrackTitle={matchedTrack.trackTitle}
+                  className={STREAM_CONFIG.nextTalk.className}
+                />
 
-              <BlueskyAuthorFeedLooping
-                handle={STREAM_CONFIG.blueskyFeed.handle}
-                compact={STREAM_CONFIG.blueskyFeed.compact}
-                title={STREAM_CONFIG.blueskyFeed.title}
-                speed={STREAM_CONFIG.blueskyFeed.speed}
-                maxHeight={STREAM_CONFIG.blueskyFeed.maxHeight}
-                className={STREAM_CONFIG.blueskyFeed.className}
-              />
+                <BlueskyAuthorFeedLooping
+                  handle={STREAM_CONFIG.blueskyFeed.handle}
+                  compact={STREAM_CONFIG.blueskyFeed.compact}
+                  title={STREAM_CONFIG.blueskyFeed.title}
+                  speed={STREAM_CONFIG.blueskyFeed.speed}
+                  maxHeight={STREAM_CONFIG.blueskyFeed.maxHeight}
+                  className={STREAM_CONFIG.blueskyFeed.className}
+                />
+              </div>
             </div>
-          </div>
-        </Container>
-      </div>
-    </AutoRefreshWrapper>
+          </Container>
+        </div>
+      </AutoRefreshWrapper>
+    </>
   )
 }
