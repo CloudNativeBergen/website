@@ -18,6 +18,7 @@ import {
 } from '@/lib/stream/schedule-utils'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
+import { StreamLoadingSkeleton } from '@/components/stream/StreamLoadingSkeleton'
 
 interface NextTalkDisplayProps {
   schedules: ConferenceSchedule[]
@@ -70,6 +71,7 @@ export default function NextTalkDisplay({
   className,
 }: NextTalkDisplayProps) {
   const [currentTalk, setCurrentTalk] = useState<CurrentTalkData | null>(null)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
   const [currentSimulatedTime, setCurrentSimulatedTime] = useState<Date>(
     getCurrentConferenceTime(),
   )
@@ -182,6 +184,7 @@ export default function NextTalkDisplay({
       setCurrentSimulatedTime(newTime)
       const nextTalk = findNextTalkForRoom()
       setCurrentTalk(nextTalk)
+      setIsLoading(false)
     }
 
     updateCurrentTalk()
@@ -196,6 +199,10 @@ export default function NextTalkDisplay({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedules, roomTrackTitle])
+
+  if (isLoading) {
+    return <StreamLoadingSkeleton className={className} />
+  }
 
   if (!currentTalk) {
     const hasScheduledTalks = schedules?.some((schedule) =>
