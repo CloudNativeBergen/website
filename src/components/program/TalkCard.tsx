@@ -34,7 +34,7 @@ function StatusIndicator({ status }: { status?: TalkStatus }) {
   if (status !== 'happening-now' && status !== 'happening-soon') return null
 
   return (
-    <div className="absolute top-2 right-2">
+    <div className="absolute top-2 right-2" suppressHydrationWarning>
       <span className="relative flex h-3 w-3">
         <span
           className={clsx(
@@ -100,15 +100,16 @@ export function TalkCard({
       <div className="relative">
         <StatusIndicator status={status} />
         <div
+          suppressHydrationWarning
           className={clsx(
             'rounded-lg border transition-all duration-200',
             isPast && 'opacity-60',
             isHappeningNow &&
-              'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
+            'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
             isHappeningSoon && 'border-2 border-yellow-500',
             !isHappeningNow &&
-              !isHappeningSoon &&
-              'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-600 dark:bg-gray-700',
+            !isHappeningSoon &&
+            'border-brand-frosted-steel bg-brand-sky-mist dark:border-gray-600 dark:bg-gray-700',
             compact ? 'p-2' : 'p-4',
           )}
         >
@@ -185,12 +186,12 @@ export function TalkCard({
     trackTitle: talk.trackTitle,
     speakers: isConfirmed
       ? talkData.speakers
-          ?.map((speaker) =>
-            typeof speaker === 'object' && 'name' in speaker
-              ? speaker.name
-              : '',
-          )
-          .filter(Boolean)
+        ?.map((speaker) =>
+          typeof speaker === 'object' && 'name' in speaker
+            ? speaker.name
+            : '',
+        )
+        .filter(Boolean)
       : [],
   }
 
@@ -198,13 +199,14 @@ export function TalkCard({
 
   return (
     <div
+      suppressHydrationWarning
       className={clsx(
         'relative rounded-lg border transition-all duration-200 hover:shadow-md',
         !isConfirmed && !isWithdrawnOrRejected && 'opacity-75',
         isWithdrawnOrRejected && 'opacity-60',
         isPast && !isWithdrawnOrRejected && 'opacity-60',
         isHappeningNow &&
-          'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
+        'border-2 border-green-500 bg-green-50 dark:bg-green-950/30',
         isHappeningSoon && 'border-2 border-yellow-500',
         isBookmarkedTalk && !isHappeningNow && !isHappeningSoon
           ? 'border-brand-cloud-blue bg-blue-50 hover:border-brand-cloud-blue/80 dark:border-brand-cloud-blue dark:bg-blue-900/30'
@@ -213,8 +215,8 @@ export function TalkCard({
             : isWithdrawnOrRejected
               ? 'border-red-300 bg-red-50 hover:border-red-400 dark:border-red-600 dark:bg-red-900/30 dark:hover:border-red-500'
               : !isHappeningNow &&
-                !isHappeningSoon &&
-                'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500',
+              !isHappeningSoon &&
+              'border-gray-300 bg-gray-50 hover:border-gray-400 dark:border-gray-600 dark:bg-gray-700 dark:hover:border-gray-500',
         compact ? 'p-3' : 'p-6',
       )}
     >
@@ -233,8 +235,8 @@ export function TalkCard({
                   'font-space-grotesk font-semibold',
                   isWithdrawnOrRejected && 'text-red-500 dark:text-red-400',
                   !isConfirmed &&
-                    !isWithdrawnOrRejected &&
-                    'text-gray-500 dark:text-gray-400',
+                  !isWithdrawnOrRejected &&
+                  'text-gray-500 dark:text-gray-400',
                   isConfirmed && 'text-brand-slate-gray dark:text-white',
                   compact ? 'text-sm leading-tight' : 'text-base',
                   fixedHeight && compact && 'line-clamp-2',
@@ -242,8 +244,8 @@ export function TalkCard({
               >
                 {isConfirmed ? (
                   primarySpeaker &&
-                  typeof primarySpeaker === 'object' &&
-                  'slug' in primarySpeaker ? (
+                    typeof primarySpeaker === 'object' &&
+                    'slug' in primarySpeaker ? (
                     <Link
                       href={`/speaker/${primarySpeaker.slug}`}
                       className="transition-colors hover:text-brand-cloud-blue dark:hover:text-blue-400"
