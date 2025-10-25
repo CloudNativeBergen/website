@@ -22,6 +22,7 @@ import {
   LevelIndicator,
 } from '@/lib/proposal/ui/badges'
 import { TalkStatus } from '@/lib/program/time-utils'
+import { formatConferenceDateShort } from '@/lib/time'
 import clsx from 'clsx'
 
 interface PortableTextChild {
@@ -63,15 +64,6 @@ interface TalkCardProps {
   compact?: boolean
   fixedHeight?: boolean
   status?: TalkStatus
-}
-
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  })
 }
 
 const formatTime = (time: string): string => {
@@ -145,7 +137,7 @@ export function TalkCard({
                 {showDate && (
                   <div className="flex items-center gap-1">
                     <CalendarIcon className="h-4 w-4" />
-                    <span>{formatDate(talk.scheduleDate)}</span>
+                    <span>{formatConferenceDateShort(talk.scheduleDate)}</span>
                   </div>
                 )}
                 {showTrack && (
@@ -483,7 +475,7 @@ export function TalkCard({
             {showDate && (
               <div className="flex items-center gap-1">
                 <CalendarIcon className="h-3 w-3" />
-                <span>{formatDate(talk.scheduleDate)}</span>
+                <span>{formatConferenceDateShort(talk.scheduleDate)}</span>
               </div>
             )}
             {showTrack && (

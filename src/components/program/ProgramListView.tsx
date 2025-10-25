@@ -4,6 +4,7 @@ import { TalkCard } from './TalkCard'
 import { FilteredProgramData } from '@/hooks/useProgramFilter'
 import { getTalkStatusKey } from '@/lib/program/time-utils'
 import type { TalkStatus } from '@/lib/program/time-utils'
+import { formatConferenceDateLong } from '@/lib/time'
 
 interface ProgramListViewProps {
   data: FilteredProgramData
@@ -74,16 +75,6 @@ export const ProgramListView = React.memo(function ProgramListView({
 
   const sortedDays = Object.keys(talksByDay).sort()
 
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  }
-
   return (
     <div className="space-y-8">
       {sortedDays.map((date) => (
@@ -91,7 +82,7 @@ export const ProgramListView = React.memo(function ProgramListView({
           {sortedDays.length > 1 && (
             <div className="border-b border-brand-frosted-steel pb-4 dark:border-gray-700">
               <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
-                {formatDate(date)}
+                {formatConferenceDateLong(date)}
               </h2>
               <p className="font-inter mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {talksByDay[date].length} items scheduled

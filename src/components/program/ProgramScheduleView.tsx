@@ -6,6 +6,7 @@ import { ConferenceSchedule, ScheduleTrack } from '@/lib/conference/types'
 import { TalkCard } from './TalkCard'
 import { getTalkStatusKey } from '@/lib/program/time-utils'
 import type { TalkStatus, CurrentPosition } from '@/lib/program/time-utils'
+import { formatConferenceDateLong } from '@/lib/time'
 import clsx from 'clsx'
 
 interface ProgramScheduleViewProps {
@@ -31,16 +32,6 @@ const getAllTimeSlots = (tracks: ScheduleTrack[]): string[] => {
 
 const getTalkAtTime = (track: ScheduleTrack, startTime: string) => {
   return track.talks.find((talk) => talk.startTime === startTime)
-}
-
-const formatScheduleDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
 }
 
 const ScheduleTabbed = React.memo(function ScheduleTabbed({
@@ -407,7 +398,7 @@ const DaySchedule = React.memo(function DaySchedule({
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
-          {formatScheduleDate(schedule.date)}
+          {formatConferenceDateLong(schedule.date)}
         </h2>
         <p className="font-inter mt-1 text-sm text-gray-600 dark:text-gray-400">
           {schedule.tracks.length} track

@@ -21,6 +21,7 @@ import {
   getAudienceBadgeConfig,
 } from '@/lib/proposal/ui/badges'
 import { ViewModeSelector } from './ViewModeSelector'
+import { formatConferenceDateShort } from '@/lib/time'
 
 interface ProgramFiltersProps {
   filters: ProgramFilterOptions
@@ -51,15 +52,6 @@ const DEFAULT_SELECT_CLASSES =
   'col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-brand-cloud-blue @sm:text-sm/6 dark:bg-gray-700 dark:text-white dark:outline-gray-600'
 const CHEVRON_DOWN_CLASSES =
   'pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 @sm:size-4 dark:text-gray-400'
-
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  })
-}
 
 export const ProgramFilters = React.memo(function ProgramFilters({
   filters,
@@ -160,7 +152,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
     () =>
       availableFilters.days.map((day) => ({
         value: day,
-        label: formatDate(day),
+        label: formatConferenceDateShort(day),
       })),
     [availableFilters.days],
   )

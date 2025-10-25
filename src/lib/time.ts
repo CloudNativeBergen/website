@@ -132,3 +132,60 @@ export function formatDateTimeSafe(dateString: string): string {
     return 'Invalid Date'
   }
 }
+
+/**
+ * Conference schedule date formatting utilities.
+ *
+ * All dates from Sanity are in YYYY-MM-DD format and represent dates
+ * in the conference timezone (Europe/Oslo). These utilities ensure
+ * dates are displayed consistently regardless of the user's timezone.
+ */
+
+/**
+ * Formats a date string for display, ensuring it's interpreted in Oslo timezone.
+ * @param dateString Date in YYYY-MM-DD format
+ * @param options Intl.DateTimeFormatOptions for formatting
+ * @returns Formatted date string
+ */
+export function formatConferenceDate(
+  dateString: string,
+  options: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  },
+): string {
+  // Parse the date string (YYYY-MM-DD) components directly
+  // to avoid timezone-related parsing issues
+  const [year, month, day] = dateString.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+
+  return date.toLocaleDateString('en-US', {
+    ...options,
+    timeZone: 'Europe/Oslo',
+  })
+}
+
+/**
+ * Formats a date string with short format (e.g., "Mon, Oct 27")
+ */
+export function formatConferenceDateShort(dateString: string): string {
+  return formatConferenceDate(dateString, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+/**
+ * Formats a date string with long format (e.g., "Monday, October 27, 2025")
+ */
+export function formatConferenceDateLong(dateString: string): string {
+  return formatConferenceDate(dateString, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
