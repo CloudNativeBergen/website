@@ -73,37 +73,44 @@ export function ProgramClient({
 
   return (
     <div className="space-y-6">
-      <ProgramFilters
-        filters={filters}
-        availableFilters={filteredData.availableFilters}
-        onFilterChange={updateFilter}
-        onClearFilters={clearFilters}
-        hasActiveFilters={hasActiveFilters}
-        totalTalks={schedules.reduce(
-          (sum, schedule) =>
-            sum +
-            schedule.tracks.reduce(
-              (trackSum, track) =>
-                trackSum +
-                track.talks.filter(
-                  (talk) => talk.talk !== null && talk.talk !== undefined,
-                ).length,
-              0,
-            ),
-          0,
-        )}
-        filteredTalks={
-          filteredData.allTalks.filter(
-            (talk) => talk.talk !== null && talk.talk !== undefined,
-          ).length
-        }
-        viewMode={viewMode}
-        viewModes={viewModes}
-        onViewModeChange={setViewMode}
-        currentViewConfig={currentViewConfig}
-      />
+      <div className="print:hidden">
+        <ProgramFilters
+          filters={filters}
+          availableFilters={filteredData.availableFilters}
+          onFilterChange={updateFilter}
+          onClearFilters={clearFilters}
+          hasActiveFilters={hasActiveFilters}
+          totalTalks={schedules.reduce(
+            (sum, schedule) =>
+              sum +
+              schedule.tracks.reduce(
+                (trackSum, track) =>
+                  trackSum +
+                  track.talks.filter(
+                    (talk) => talk.talk !== null && talk.talk !== undefined,
+                  ).length,
+                0,
+              ),
+            0,
+          )}
+          filteredTalks={
+            filteredData.allTalks.filter(
+              (talk) => talk.talk !== null && talk.talk !== undefined,
+            ).length
+          }
+          viewMode={viewMode}
+          viewModes={viewModes}
+          onViewModeChange={setViewMode}
+          currentViewConfig={currentViewConfig}
+        />
+      </div>
 
-      <div className="min-h-[400px]">{renderProgramView()}</div>
+      <div className="min-h-[400px]">
+        <div className="print:hidden">{renderProgramView()}</div>
+        <div className="hidden print:block">
+          <ProgramListView data={filteredData} talkStatusMap={talkStatusMap} />
+        </div>
+      </div>
     </div>
   )
 }

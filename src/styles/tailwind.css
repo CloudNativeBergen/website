@@ -807,6 +807,154 @@
     background: white !important;
   }
 
+  /* Program page specific print styles */
+
+  /* Hide filters, view mode buttons, and other interactive elements */
+  .print\:hidden,
+  [data-print-hide="true"] {
+    display: none !important;
+  }
+
+  /* Show all description text when printing */
+  .line-clamp-3 {
+    display: block !important;
+    -webkit-line-clamp: unset !important;
+    line-clamp: unset !important;
+    overflow: visible !important;
+  }
+
+  /* Remove hover effects and transitions */
+  .hover\:shadow-md,
+  .transition-all,
+  .transition-colors {
+    transition: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Compact spacing for printed pages */
+  .space-y-4 > * + * {
+    margin-top: 0.25rem !important;
+  }
+
+  .space-y-8 > * + * {
+    margin-top: 0.5rem !important;
+  }
+
+  .space-y-6 > * + * {
+    margin-top: 0.4rem !important;
+  }
+
+  .space-y-2 > * + * {
+    margin-top: 0.15rem !important;
+  }
+
+  .space-y-3 > * + * {
+    margin-top: 0.2rem !important;
+  }
+
+  /* Avoid page breaks inside talk cards */
+  .rounded-lg.border {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Status indicators (live/upcoming) should be hidden in print */
+  .animate-ping,
+  span[class*="animate-"] {
+    display: none !important;
+  }
+
+  /* Simplify borders for print */
+  .border-2 {
+    border-width: 1px !important;
+  }
+
+  /* Keep borders simple */
+  .border-green-500,
+  .border-yellow-500,
+  .border-blue-500 {
+    border-color: #333 !important;
+  }
+
+  /* Make sure speaker avatars are visible */
+  .rounded-full img {
+    display: block !important;
+  }
+
+  /* Very compact padding and margins for print */
+  .py-20,
+  .py-16,
+  .sm\:pt-36,
+  .sm\:pb-24 {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  .p-6,
+  .p-4,
+  .p-3,
+  .p-2 {
+    padding: 0.3rem !important;
+  }
+
+  .px-2,
+  .px-3,
+  .px-4,
+  .px-6 {
+    padding-left: 0.25rem !important;
+    padding-right: 0.25rem !important;
+  }
+
+  .py-1,
+  .py-2,
+  .py-3,
+  .py-4,
+  .py-6,
+  .py-8 {
+    padding-top: 0.15rem !important;
+    padding-bottom: 0.15rem !important;
+  }
+
+  .mb-16,
+  .mb-8,
+  .mb-4,
+  .mb-2 {
+    margin-bottom: 0.25rem !important;
+  }
+
+  .mt-6,
+  .mt-4,
+  .mt-2,
+  .mt-1 {
+    margin-top: 0.15rem !important;
+  }
+
+  /* Compact text sizes */
+  .text-4xl,
+  .text-5xl,
+  .sm\:text-5xl {
+    font-size: 14pt !important;
+  }
+
+  .text-xl,
+  .text-2xl,
+  .text-3xl {
+    font-size: 11pt !important;
+  }
+
+  .text-lg {
+    font-size: 10pt !important;
+  }
+
+  .text-base,
+  .text-sm {
+    font-size: 9pt !important;
+  }
+
+  .text-xs {
+    font-size: 8pt !important;
+  }
+
   /* Borders for print - use simple gray borders */
   .border-blue-200,
   .border-gray-200,
@@ -825,8 +973,8 @@
 
   /* Page layout optimizations */
   body {
-    font-size: 11pt !important;
-    line-height: 1.4 !important;
+    font-size: 9pt !important;
+    line-height: 1.3 !important;
     margin: 0 !important;
     padding: 0 !important;
   }
@@ -840,22 +988,70 @@
     page-break-after: avoid;
   }
 
-  /* Optimize spacing for print - more compact */
-  .space-y-8 > * + * {
-    margin-top: 0.5rem !important;
+  /* Remove the page counter footer */
+  .border-t.py-8 {
+    display: none !important;
   }
 
-  .space-y-6 > * + * {
-    margin-top: 0.4rem !important;
+  /* Compact line heights */
+  .leading-8,
+  .leading-7,
+  .leading-6 {
+    line-height: 1.3 !important;
   }
 
-  .space-y-4 > * + * {
-    margin-top: 0.3rem !important;
+  .leading-tight {
+    line-height: 1.2 !important;
   }
 
-  /* Very compact padding for print */
-  .p-6 {
-    padding: 0.4rem !important;
+  /* Smaller avatars for print */
+  .h-8,
+  .w-8 {
+    height: 1rem !important;
+    width: 1rem !important;
+  }
+
+  .h-6,
+  .w-6 {
+    height: 0.75rem !important;
+    width: 0.75rem !important;
+  }
+
+  .h-10,
+  .w-10 {
+    height: 1.25rem !important;
+    width: 1.25rem !important;
+  }
+
+  /* Reduce icon sizes */
+  .h-4,
+  .w-4 {
+    height: 0.5rem !important;
+    width: 0.5rem !important;
+  }
+
+  .h-3,
+  .w-3 {
+    height: 0.4rem !important;
+    width: 0.4rem !important;
+  }
+
+  /* Compact gaps */
+  .gap-2 {
+    gap: 0.15rem !important;
+  }
+
+  .gap-1 {
+    gap: 0.1rem !important;
+  }
+
+  .gap-4 {
+    gap: 0.2rem !important;
+  }
+
+  /* Reduce negative spacing for avatars */
+  .-space-x-2 > * + * {
+    margin-left: -0.15rem !important;
   }
 
   .p-4 {
@@ -896,12 +1092,7 @@
     page-break-inside: avoid;
   }
 
-  /* Remove rounded corners and shadows for cleaner print */
-  .rounded-lg,
-  .rounded-full {
-    border-radius: 0 !important;
-  }
-
+  /* Remove shadows for cleaner print */
   .shadow,
   .shadow-lg,
   .shadow-md {

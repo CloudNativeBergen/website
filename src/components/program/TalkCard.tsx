@@ -34,7 +34,7 @@ function StatusIndicator({ status }: { status?: TalkStatus }) {
   if (status !== 'happening-now' && status !== 'happening-soon') return null
 
   return (
-    <div className="absolute top-2 right-2" suppressHydrationWarning>
+    <div className="absolute top-2 right-2 print:hidden" suppressHydrationWarning>
       <span className="relative flex h-3 w-3">
         <span
           className={clsx(
@@ -363,7 +363,7 @@ export function TalkCard({
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 print:hidden">
               {isConfirmed && talkData.video && (
                 <div className="rounded-full bg-red-100 p-2 text-red-800 dark:bg-red-900/50 dark:text-red-300">
                   <PlayIcon className="h-4 w-4" />
@@ -389,6 +389,7 @@ export function TalkCard({
                 className={clsx(
                   'text-sm text-gray-600 transition-all duration-200 dark:text-gray-300',
                   !isDescriptionExpanded && 'line-clamp-3',
+                  'print:line-clamp-none',
                 )}
               >
                 {talkData.description.map((block, index) => {
@@ -417,7 +418,7 @@ export function TalkCard({
                   onClick={() =>
                     setIsDescriptionExpanded(!isDescriptionExpanded)
                   }
-                  className="mt-2 flex items-center gap-1 text-xs font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300"
+                  className="mt-2 flex items-center gap-1 text-xs font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300 print:hidden"
                 >
                   {isDescriptionExpanded ? (
                     <>

@@ -78,19 +78,19 @@ export const ProgramListView = React.memo(function ProgramListView({
   return (
     <div className="space-y-8">
       {sortedDays.map((date) => (
-        <div key={date} className="space-y-4">
+        <div key={date} className="space-y-4 print:space-y-1">
           {sortedDays.length > 1 && (
-            <div className="border-b border-brand-frosted-steel pb-4 dark:border-gray-700">
-              <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white">
+            <div className="border-b border-brand-frosted-steel pb-4 dark:border-gray-700 print:border-none print:pb-1">
+              <h2 className="font-space-grotesk text-xl font-semibold text-brand-slate-gray dark:text-white print:text-xs print:font-bold">
                 {formatConferenceDateLong(date)}
               </h2>
-              <p className="font-inter mt-1 text-sm text-gray-600 dark:text-gray-400">
+              <p className="font-inter mt-1 text-sm text-gray-600 dark:text-gray-400 print:hidden">
                 {talksByDay[date].length} items scheduled
               </p>
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-4 print:space-y-1">
             {talksByDay[date].map((talk, index) => {
               const status = talkStatusMap?.get(
                 getTalkStatusKey(
@@ -115,7 +115,7 @@ export const ProgramListView = React.memo(function ProgramListView({
         </div>
       ))}
 
-      <div className="border-t border-brand-frosted-steel py-8 text-center dark:border-gray-700">
+      <div className="border-t border-brand-frosted-steel py-8 text-center dark:border-gray-700 print:hidden">
         <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
           Showing {mergedTalks.length} items from {data.schedules.length} day
           {data.schedules.length !== 1 ? 's' : ''}
