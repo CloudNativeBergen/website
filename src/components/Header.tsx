@@ -20,8 +20,11 @@ export function Header({ c }: { c: Conference }) {
 
   useEffect(() => {
     setIsClient(true)
-    setIsPast(new Date(c.start_date) < new Date())
-  }, [c.start_date])
+    const endDate = new Date(c.end_date)
+    const dayAfterEnd = new Date(endDate)
+    dayAfterEnd.setDate(dayAfterEnd.getDate() + 1)
+    setIsPast(new Date() >= dayAfterEnd)
+  }, [c.end_date])
 
   const currentDomain = c.domains?.[0] ?? 'cloudnativebergen.dev'
   const currentYear = parseInt(currentDomain.split('.')[0])
