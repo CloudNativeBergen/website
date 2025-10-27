@@ -435,24 +435,25 @@ export const ProgramScheduleView = React.memo(function ProgramScheduleView({
   isLive,
 }: ProgramScheduleViewProps) {
   const scrollTargetRef = useRef<HTMLDivElement>(null)
-  const scrolledToPositionRef = useRef<string | null>(null)
+  const hasScrolledRef = useRef(false)
 
   useEffect(() => {
-    if (!isLive || !currentPosition || !scrollTargetRef.current) {
+    if (
+      !isLive ||
+      !currentPosition ||
+      !scrollTargetRef.current ||
+      hasScrolledRef.current
+    ) {
       return
     }
 
-    const positionKey = `${currentPosition.scheduleIndex}-${currentPosition.trackIndex}-${currentPosition.talkIndex}`
-
-    if (scrolledToPositionRef.current !== positionKey) {
-      scrolledToPositionRef.current = positionKey
-      setTimeout(() => {
-        scrollTargetRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-        })
-      }, 100)
-    }
+    hasScrolledRef.current = true
+    setTimeout(() => {
+      scrollTargetRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }, 100)
   }, [isLive, currentPosition])
 
   if (data.schedules.length === 0) {
