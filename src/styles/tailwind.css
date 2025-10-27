@@ -811,7 +811,7 @@
 
   /* Hide filters, view mode buttons, and other interactive elements */
   .print\:hidden,
-  [data-print-hide="true"] {
+  [data-print-hide='true'] {
     display: none !important;
   }
 
@@ -860,7 +860,7 @@
 
   /* Status indicators (live/upcoming) should be hidden in print */
   .animate-ping,
-  span[class*="animate-"] {
+  span[class*='animate-'] {
     display: none !important;
   }
 
