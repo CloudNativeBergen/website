@@ -8,7 +8,7 @@ import BlueskyAuthorFeedLooping from '@/components/stream/BlueskyAuthorFeedLoopi
 import { AutoRefreshWrapper } from '@/components/stream/AutoRefreshWrapper'
 import { StreamError } from '@/components/stream/StreamError'
 import { STREAM_CONFIG } from '@/lib/stream/config'
-import { findTrackByRoom, getAvailableRooms } from '@/lib/stream/utils'
+import { findTrackByRoom, getAvailableRooms } from '@/lib/stream/schedule-utils'
 import { DevTimeProvider } from '@/components/program/DevTimeProvider'
 import { DevTimeControl } from '@/components/program/DevTimeControl'
 
