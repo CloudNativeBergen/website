@@ -4,16 +4,27 @@ export function findTrackByRoom(
   schedules: ConferenceSchedule[],
   roomName: string,
 ): ScheduleTrack | null {
-  const normalizedRoom = roomName.toLowerCase()
+  const normalizedRoom = roomName.toLowerCase().trim()
 
   for (const schedule of schedules) {
     if (!schedule.tracks) continue
 
-    const track = schedule.tracks.find(
+    // First try exact match
+    const exactMatch = schedule.tracks.find(
       (t) => t.trackTitle?.toLowerCase() === normalizedRoom,
     )
+    if (exactMatch) return exactMatch
 
-    if (track) return track
+    // Then try fuzzy match (room name is contained in track title)
+    const fuzzyMatch = schedule.tracks.find((t) => {
+      const trackTitle = t.trackTitle?.toLowerCase()
+      if (!trackTitle) return false
+
+      // Check if the provided room name matches the beginning of the track title
+      // This handles cases like "Hovedsalen" matching "Hovedsalen (2nd Floor)"
+      return trackTitle.startsWith(normalizedRoom)
+    })
+    if (fuzzyMatch) return fuzzyMatch
   }
 
   return null
