@@ -10,6 +10,10 @@ import {
   type BlueskyRecord,
 } from '@/components/BlueskyPostItem'
 
+const MAX_RETRIES = 2
+const AUTO_UPDATE_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+const RETRY_BASE_DELAY_MS = 1000
+
 interface BlueskyPost extends SharedBlueskyPost {
   indexedAt: string
 }
@@ -96,7 +100,7 @@ export function BlueskyFeed({
 
     const abortController = new AbortController()
     let retryCount = 0
-    const maxRetries = 2
+    let intervalId: NodeJS.Timeout | null = null
 
     const fetchWithRetry = async () => {
       try {
@@ -113,7 +117,7 @@ export function BlueskyFeed({
 
         const fetchError = err as FetchError
 
-        if (fetchError.retryable && retryCount < maxRetries) {
+        if (fetchError.retryable && retryCount < MAX_RETRIES) {
           retryCount++
           setTimeout(
             () => {
@@ -121,7 +125,7 @@ export function BlueskyFeed({
                 fetchWithRetry()
               }
             },
-            Math.pow(2, retryCount) * 1000,
+            Math.pow(2, retryCount) * RETRY_BASE_DELAY_MS,
           )
           return
         }
@@ -137,8 +141,18 @@ export function BlueskyFeed({
 
     fetchWithRetry()
 
+    intervalId = setInterval(() => {
+      if (!abortController.signal.aborted) {
+        retryCount = 0
+        fetchWithRetry()
+      }
+    }, AUTO_UPDATE_INTERVAL_MS)
+
     return () => {
       abortController.abort()
+      if (intervalId) {
+        clearInterval(intervalId)
+      }
     }
   }, [handle, postCount, fetchBlueskyPosts])
 
