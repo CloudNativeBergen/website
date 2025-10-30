@@ -33,6 +33,7 @@ export function ImageCarousel({
   const [imageErrorStates, setImageErrorStates] = useState<
     Record<string, boolean>
   >({})
+  const imageRef = React.useRef<HTMLImageElement>(null)
 
   const {
     currentIndex,
@@ -55,25 +56,31 @@ export function ImageCarousel({
 
   React.useEffect(() => {
     const currentImage = images[currentIndex]
-    if (currentImage && imageLoadStates[currentImage._id] === undefined) {
-      setImageLoadStates((prev) => ({
-        ...prev,
-        [currentImage._id]: false,
-      }))
+    if (currentImage && imageRef.current) {
+      if (imageRef.current.complete && imageRef.current.naturalHeight !== 0) {
+        setImageLoadStates((prev) => {
+          if (prev[currentImage._id] !== true) {
+            return {
+              ...prev,
+              [currentImage._id]: true,
+            }
+          }
+          return prev
+        })
+      }
     }
-  }, [currentIndex, images, imageLoadStates])
+  }, [currentIndex, images])
 
   if (!images || images.length === 0) {
     return null
   }
 
   const currentImage = images[currentIndex]
-  const isCurrentImageLoading =
-    currentImage &&
-    imageLoadStates[currentImage._id] === false &&
-    !imageErrorStates[currentImage._id]
   const hasCurrentImageError =
     currentImage && imageErrorStates[currentImage._id] === true
+  const isCurrentImageLoaded =
+    currentImage && imageLoadStates[currentImage._id] === true
+  const isCurrentImageLoading = currentImage && !isCurrentImageLoaded && !hasCurrentImageError
 
   return (
     <div
@@ -107,6 +114,7 @@ export function ImageCarousel({
 
           {currentImage?.imageUrl && !hasCurrentImageError && (
             <img
+              ref={imageRef}
               src={`${currentImage.imageUrl}?w=2400&q=85&auto=format&fit=max`}
               srcSet={`${currentImage.imageUrl}?w=1200&q=85&auto=format&fit=max 1x, ${currentImage.imageUrl}?w=2400&q=85&auto=format&fit=max 2x`}
               alt={
@@ -115,10 +123,7 @@ export function ImageCarousel({
                   ? `Photo by ${currentImage.photographer}`
                   : 'Gallery image')
               }
-              className={cn(
-                'h-full w-full object-cover transition-opacity duration-500',
-                isCurrentImageLoading ? 'opacity-0' : 'opacity-100',
-              )}
+              className="h-full w-full object-cover"
               loading={currentIndex === 0 ? 'eager' : 'lazy'}
               onLoad={() => {
                 setImageLoadStates((prev) => ({
