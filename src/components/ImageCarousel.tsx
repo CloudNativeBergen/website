@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -27,13 +27,9 @@ export function ImageCarousel({
   className,
   onFullscreenClick,
 }: ImageCarouselProps) {
-  const [imageLoadStates, setImageLoadStates] = useState<
-    Record<string, boolean>
-  >({})
-  const [imageErrorStates, setImageErrorStates] = useState<
-    Record<string, boolean>
-  >({})
-  const imageRef = React.useRef<HTMLImageElement>(null)
+  const [loadedImageIds, setLoadedImageIds] = useState<Set<string>>(new Set())
+  const [errorImageIds, setErrorImageIds] = useState<Set<string>>(new Set())
+  const imageRefs = useRef<Map<string, HTMLImageElement>>(new Map())
 
   const {
     currentIndex,
@@ -54,32 +50,39 @@ export function ImageCarousel({
     globalKeyboard: false,
   })
 
-  React.useEffect(() => {
-    const currentImage = images[currentIndex]
-    if (currentImage && imageRef.current) {
-      if (imageRef.current.complete && imageRef.current.naturalHeight !== 0) {
-        setImageLoadStates((prev) => {
-          if (prev[currentImage._id] !== true) {
-            return {
-              ...prev,
-              [currentImage._id]: true,
+  const handleImageLoad = useCallback((imageId: string) => {
+    setLoadedImageIds((prev) => new Set(prev).add(imageId))
+  }, [])
+
+  const handleImageError = useCallback((imageId: string) => {
+    setErrorImageIds((prev) => new Set(prev).add(imageId))
+    setLoadedImageIds((prev) => new Set(prev).add(imageId))
+  }, [])
+
+  const setImageRef = useCallback(
+    (el: HTMLImageElement | null, imageId: string) => {
+      if (el) {
+        imageRefs.current.set(imageId, el)
+        if (el.complete && el.naturalHeight > 0) {
+          setLoadedImageIds((prev) => {
+            if (prev.has(imageId)) {
+              return prev
             }
-          }
-          return prev
-        })
+            return new Set(prev).add(imageId)
+          })
+        }
       }
-    }
-  }, [currentIndex, images])
+    },
+    [],
+  )
 
   if (!images || images.length === 0) {
     return null
   }
 
   const currentImage = images[currentIndex]
-  const hasCurrentImageError =
-    currentImage && imageErrorStates[currentImage._id] === true
-  const isCurrentImageLoaded =
-    currentImage && imageLoadStates[currentImage._id] === true
+  const hasCurrentImageError = currentImage && errorImageIds.has(currentImage._id)
+  const isCurrentImageLoaded = currentImage && loadedImageIds.has(currentImage._id)
   const isCurrentImageLoading = currentImage && !isCurrentImageLoaded && !hasCurrentImageError
 
   return (
@@ -114,7 +117,7 @@ export function ImageCarousel({
 
           {currentImage?.imageUrl && !hasCurrentImageError && (
             <img
-              ref={imageRef}
+              ref={(el) => setImageRef(el, currentImage._id)}
               src={`${currentImage.imageUrl}?w=2400&q=85&auto=format&fit=max`}
               srcSet={`${currentImage.imageUrl}?w=1200&q=85&auto=format&fit=max 1x, ${currentImage.imageUrl}?w=2400&q=85&auto=format&fit=max 2x`}
               alt={
@@ -125,22 +128,8 @@ export function ImageCarousel({
               }
               className="h-full w-full object-cover"
               loading={currentIndex === 0 ? 'eager' : 'lazy'}
-              onLoad={() => {
-                setImageLoadStates((prev) => ({
-                  ...prev,
-                  [currentImage._id]: true,
-                }))
-              }}
-              onError={() => {
-                setImageErrorStates((prev) => ({
-                  ...prev,
-                  [currentImage._id]: true,
-                }))
-                setImageLoadStates((prev) => ({
-                  ...prev,
-                  [currentImage._id]: true,
-                }))
-              }}
+              onLoad={() => handleImageLoad(currentImage._id)}
+              onError={() => handleImageError(currentImage._id)}
             />
           )}
 
@@ -227,6 +216,7 @@ export function ImageCarousel({
                     ? 'ring-2 ring-brand-cloud-blue ring-offset-2'
                     : 'opacity-60',
                 )}
+                aria-label={`Go to image ${index + 1}`}
               >
                 {image.imageUrl && (
                   <img
@@ -234,9 +224,7 @@ export function ImageCarousel({
                     srcSet={`${image.imageUrl}?w=256&h=160&q=85&auto=format&fit=crop 1x, ${image.imageUrl}?w=512&h=320&q=85&auto=format&fit=crop 2x`}
                     alt={
                       image.imageAlt ||
-                      (image.photographer
-                        ? `Photo by ${image.photographer}`
-                        : '')
+                      (image.photographer ? `Photo by ${image.photographer}` : '')
                     }
                     className="h-full w-full object-cover"
                     loading="lazy"
