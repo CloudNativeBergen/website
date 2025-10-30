@@ -4,6 +4,7 @@ import { ProposalList } from '@/components/cfp/ProposalList'
 import { WorkshopStatistics } from '@/components/cfp/WorkshopStatistics'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
+import { SpeakerGallery } from '@/components/cfp/SpeakerGallery'
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
@@ -110,60 +111,70 @@ export default async function SpeakerDashboard() {
 
           {confirmedProposals.length > 0 && (
             <div className="lg:col-span-1">
-              <div className="sticky top-8">
-                <div className="mt-6 mb-4">
-                  <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-                    Share Your Talks
-                  </h2>
-                </div>
+              <div className="sticky top-8 space-y-8">
+                <div>
+                  <div className="mb-4">
+                    <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+                      Share Your Talks
+                    </h2>
+                  </div>
 
-                <div className="space-y-6">
-                  {confirmedProposals.map((proposal) => (
-                    <div
-                      key={proposal._id}
-                      className="flex flex-col items-center"
-                    >
-                      <SpeakerSharingActions
-                        filename={`${speakerSlug}-speaker-card`}
-                        speakerUrl={speakerUrl}
-                        talkTitle={proposal.title}
-                        eventName={eventName}
+                  <div className="space-y-6">
+                    {confirmedProposals.map((proposal) => (
+                      <div
+                        key={proposal._id}
+                        className="flex flex-col items-center"
                       >
-                        <div
-                          className="h-80 w-80"
-                          style={{ width: '320px', height: '320px' }}
+                        <SpeakerSharingActions
+                          filename={`${speakerSlug}-speaker-card`}
+                          speakerUrl={speakerUrl}
+                          talkTitle={proposal.title}
+                          eventName={eventName}
                         >
-                          <SpeakerShare
-                            speaker={{
-                              ...speaker,
-                              talks: [proposal],
-                            }}
-                            variant="speaker-share"
-                            isFeatured={true}
-                            ctaUrl={speakerUrl}
-                            eventName={eventName}
-                            className="h-full w-full"
-                            showCloudNativePattern={true}
-                          />
-                        </div>
-                      </SpeakerSharingActions>
-                    </div>
-                  ))}
+                          <div
+                            className="h-80 w-80"
+                            style={{ width: '320px', height: '320px' }}
+                          >
+                            <SpeakerShare
+                              speaker={{
+                                ...speaker,
+                                talks: [proposal],
+                              }}
+                              variant="speaker-share"
+                              isFeatured={true}
+                              ctaUrl={speakerUrl}
+                              eventName={eventName}
+                              className="h-full w-full"
+                              showCloudNativePattern={true}
+                            />
+                          </div>
+                        </SpeakerSharingActions>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-800">
+                    <p className="flex items-center justify-center space-x-1 text-center text-xs text-gray-600 dark:text-gray-300">
+                      <LightBulbIcon className="h-4 w-4 text-brand-cloud-blue dark:text-blue-400" />
+                      <strong className="text-brand-cloud-blue dark:text-blue-400">
+                        Pro tip:
+                      </strong>
+                      <span>
+                        Use the download button to save high-quality PNG images
+                        perfect for social media sharing!
+                      </span>
+                    </p>
+                  </div>
                 </div>
 
-                <div className="mt-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-800">
-                  <p className="flex items-center justify-center space-x-1 text-center text-xs text-gray-600 dark:text-gray-300">
-                    <LightBulbIcon className="h-4 w-4 text-brand-cloud-blue dark:text-blue-400" />
-                    <strong className="text-brand-cloud-blue dark:text-blue-400">
-                      Pro tip:
-                    </strong>
-                    <span>
-                      Use the download button to save high-quality PNG images
-                      perfect for social media sharing!
-                    </span>
-                  </p>
-                </div>
+                <SpeakerGallery />
               </div>
+            </div>
+          )}
+
+          {confirmedProposals.length === 0 && (
+            <div className="lg:col-span-1">
+              <SpeakerGallery />
             </div>
           )}
         </div>

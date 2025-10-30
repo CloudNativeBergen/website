@@ -9,6 +9,7 @@
     "start": "next start",
     "check": "npm run typecheck && npm run lint && npm run knip && npm run format",
     "knip": "knip",
+    "knip:fix": "knip --fix",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "test": "jest --silent",
@@ -16,7 +17,9 @@
     "test:watch": "jest --watch",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sanity": "sanity",
+    "sanity:deploy": "sanity deploy"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
@@ -58,10 +61,12 @@
     "react": "^19.2.0",
     "react-apexcharts": "^1.8.0",
     "react-dom": "^19.2.0",
+    "react-dropzone": "^14.3.8",
     "resend": "^6.2.0",
     "sanity": "^4.10.3",
     "speakingurl": "^14.0.1",
     "styled-components": "^6.1.19",
+    "tailwind-merge": "^3.3.1",
     "tailwindcss": "^4.1.14",
     "typescript": "^5.9.3",
     "uuid": "^13.0.0",

@@ -336,3 +336,25 @@ export async function getOrganizerCount(): Promise<{
 
   return { count, err }
 }
+
+export async function getOrganizers(): Promise<{
+  speakers: Speaker[]
+  err: Error | null
+}> {
+  let speakers: Speaker[] = []
+  let err = null
+
+  try {
+    const query = groq`*[_type == "speaker" && is_organizer == true] {
+      ...,
+      "slug": slug.current,
+      "image": image.asset->url
+    } | order(name asc)`
+
+    speakers = await clientRead.fetch(query, {}, { cache: 'no-store' })
+  } catch (error) {
+    err = error as Error
+  }
+
+  return { speakers, err }
+}

@@ -14,6 +14,7 @@ import {
   PresentationChartBarIcon,
   CreditCardIcon,
   AcademicCapIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline'
 import {
   DashboardLayout,
@@ -25,9 +26,11 @@ import { NotificationProvider } from './NotificationProvider'
 const navigation: NavigationItem[] = [
   { name: 'Dashboard', href: '/admin', icon: HomeIcon },
   { name: 'Proposals', href: '/admin/proposals', icon: DocumentTextIcon },
+  { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
+  { name: 'Featured', href: '/admin/featured', icon: StarIcon },
+  { name: 'Gallery', href: '/admin/gallery', icon: PhotoIcon },
   { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
   { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
-  { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
   { name: 'Workshops', href: '/admin/workshops', icon: AcademicCapIcon },
   {
     name: 'Travel Support',
@@ -41,7 +44,6 @@ const navigation: NavigationItem[] = [
     href: '/admin/marketing',
     icon: PresentationChartBarIcon,
   },
-  { name: 'Featured', href: '/admin/featured', icon: StarIcon },
   { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
 ]
 

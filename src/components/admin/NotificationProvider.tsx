@@ -18,6 +18,8 @@ interface Notification {
   title: string
   message?: string
   duration?: number
+  count?: number
+  timeoutId?: NodeJS.Timeout
 }
 
 interface NotificationContextType {
@@ -37,19 +39,65 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   const showNotification = (notification: Omit<Notification, 'id'>) => {
-    const id = Math.random().toString(36).substring(2, 15)
-    const newNotification = { ...notification, id }
-
-    setNotifications((prev) => [...prev, newNotification])
-
     const duration = notification.duration ?? 5000
-    setTimeout(() => {
-      removeNotification(id)
-    }, duration)
+
+    // Check if an identical notification already exists
+    setNotifications((prev) => {
+      const existingIndex = prev.findIndex(
+        (n) =>
+          n.type === notification.type &&
+          n.title === notification.title &&
+          n.message === notification.message,
+      )
+
+      if (existingIndex !== -1) {
+        // Found duplicate - increment count and reset timer
+        const existing = prev[existingIndex]
+
+        // Clear old timeout
+        if (existing.timeoutId) {
+          clearTimeout(existing.timeoutId)
+        }
+
+        // Create new timeout
+        const timeoutId = setTimeout(() => {
+          removeNotification(existing.id)
+        }, duration)
+
+        // Update the notification with incremented count
+        const updated = [...prev]
+        updated[existingIndex] = {
+          ...existing,
+          count: (existing.count || 1) + 1,
+          timeoutId,
+        }
+        return updated
+      } else {
+        // New unique notification
+        const id = Math.random().toString(36).substring(2, 15)
+        const timeoutId = setTimeout(() => {
+          removeNotification(id)
+        }, duration)
+
+        const newNotification: Notification = {
+          ...notification,
+          id,
+          count: 1,
+          timeoutId,
+        }
+        return [...prev, newNotification]
+      }
+    })
   }
 
   const removeNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
+    setNotifications((prev) => {
+      const notification = prev.find((n) => n.id === id)
+      if (notification?.timeoutId) {
+        clearTimeout(notification.timeoutId)
+      }
+      return prev.filter((n) => n.id !== id)
+    })
   }
 
   const getIcon = (type: NotificationType) => {
@@ -125,8 +173,24 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
               )}
             >
               <div className="flex items-start gap-4">
-                <div className="flex-shrink-0">
+                <div className="relative flex-shrink-0">
                   <Icon className={clsx('mt-0.5 h-6 w-6', styles.icon)} />
+                  {notification.count && notification.count > 1 && (
+                    <span
+                      className={clsx(
+                        'absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white shadow-lg',
+                        notification.type === 'success' &&
+                          'bg-brand-fresh-green dark:bg-green-500',
+                        notification.type === 'error' && 'bg-red-500',
+                        notification.type === 'warning' &&
+                          'bg-brand-sunbeam-yellow dark:bg-yellow-500',
+                        notification.type === 'info' &&
+                          'bg-brand-cloud-blue dark:bg-blue-500',
+                      )}
+                    >
+                      {notification.count}
+                    </span>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p
