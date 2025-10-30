@@ -83,12 +83,11 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Validate and parse metadata using schema
         const validatedMetadata = galleryImageCreateSchema.parse({
           photographer: metadata.photographer || 'Unknown',
           date: metadata.date || getCurrentDateTime(),
           location: metadata.location || 'Unknown',
-          conference: conference._id, // Inject from current domain
+          conference: conference._id,
           featured: metadata.featured || false,
           speakers: metadata.speakers || [],
           imageAlt: metadata.imageAlt || fileName,
@@ -126,7 +125,6 @@ export async function POST(request: NextRequest) {
         successful,
         failed,
       },
-      // Include successful images for client convenience
       successful: successfulResults
         .map((r) => r.image)
         .filter(Boolean) as GalleryImageWithSpeakers[],

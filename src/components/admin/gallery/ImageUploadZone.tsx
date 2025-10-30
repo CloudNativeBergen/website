@@ -69,7 +69,6 @@ export function ImageUploadZone({
   })
   const uploadAbortController = useRef<AbortController | null>(null)
 
-  // Resize image using canvas if it exceeds max dimensions
   const resizeImage = useCallback(async (file: File): Promise<File> => {
     return new Promise((resolve) => {
       const img = document.createElement('img')
@@ -81,13 +80,11 @@ export function ImageUploadZone({
         const maxWidth = GALLERY_CONSTANTS.UPLOAD.RESIZE_MAX_WIDTH
         const maxHeight = GALLERY_CONSTANTS.UPLOAD.RESIZE_MAX_HEIGHT
 
-        // Check if resizing is needed
         if (width <= maxWidth && height <= maxHeight) {
           resolve(file)
           return
         }
 
-        // Calculate new dimensions maintaining aspect ratio
         if (width > height) {
           if (width > maxWidth) {
             height = (height * maxWidth) / width
@@ -100,12 +97,10 @@ export function ImageUploadZone({
           }
         }
 
-        // Resize on canvas
         canvas.width = width
         canvas.height = height
         ctx?.drawImage(img, 0, 0, width, height)
 
-        // Convert to blob
         canvas.toBlob(
           (blob) => {
             if (blob) {
@@ -128,7 +123,6 @@ export function ImageUploadZone({
     })
   }, [])
 
-  // Extract EXIF metadata from image
   const extractExifMetadata = useCallback(
     async (
       file: File,
@@ -137,30 +131,24 @@ export function ImageUploadZone({
       location?: string
     }> => {
       try {
-        // Use native browser APIs to extract EXIF data
         const arrayBuffer = await file.arrayBuffer()
         const dataView = new DataView(arrayBuffer)
 
-        // Check for JPEG marker (0xFFD8)
         if (dataView.getUint16(0) !== 0xffd8) {
-          // Not a JPEG, use file modification time
           return { date: fileTimestampToISO(file) }
         }
 
         let offset = 2
         const exifData: { date?: string; location?: string } = {}
 
-        // Parse EXIF data
         while (offset < dataView.byteLength) {
           const marker = dataView.getUint16(offset)
           offset += 2
 
-          // APP1 marker (0xFFE1) contains EXIF data
           if (marker === 0xffe1) {
             const length = dataView.getUint16(offset)
             offset += 2
 
-            // Check for "Exif" identifier
             const exifString = String.fromCharCode(
               dataView.getUint8(offset),
               dataView.getUint8(offset + 1),
@@ -169,11 +157,9 @@ export function ImageUploadZone({
             )
 
             if (exifString === 'Exif') {
-              // EXIF data found - extract datetime if available
               const exifBlock = new Uint8Array(arrayBuffer, offset, length - 2)
               const exifString = new TextDecoder().decode(exifBlock)
 
-              // Look for DateTime tag with time (format: YYYY:MM:DD HH:MM:SS)
               const dateTimeMatch = exifString.match(
                 /(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/,
               )
@@ -186,7 +172,6 @@ export function ImageUploadZone({
             break
           }
 
-          // Skip to next marker
           if (marker >= 0xffc0 && marker <= 0xffef) {
             const length = dataView.getUint16(offset)
             offset += length
@@ -195,7 +180,6 @@ export function ImageUploadZone({
           }
         }
 
-        // If no EXIF datetime found, use file modification time
         if (!exifData.date) {
           exifData.date = fileTimestampToISO(file)
         }
@@ -203,7 +187,6 @@ export function ImageUploadZone({
         return exifData
       } catch (error) {
         console.warn('Failed to extract EXIF data:', error)
-        // Fallback to file modification time
         return { date: fileTimestampToISO(file) }
       }
     },
@@ -212,7 +195,6 @@ export function ImageUploadZone({
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      // Resize images and extract EXIF datetime for each file
       const resizedFiles = await Promise.all(
         acceptedFiles.map(async (file) => {
           const resized = await resizeImage(file)
@@ -222,14 +204,11 @@ export function ImageUploadZone({
             preview: URL.createObjectURL(resized),
             progress: 0,
             status: 'pending' as const,
-            extractedDate: exifData.date, // Store the extracted datetime for this file
+            extractedDate: exifData.date,
           }
         }),
       )
       setFiles((prev) => [...prev, ...resizedFiles])
-
-      // Note: The date/time fields remain empty unless manually overridden by the user.
-      // If left empty, each file will use its own extracted datetime during upload.
     },
     [resizeImage, extractExifMetadata],
   )
@@ -261,17 +240,14 @@ export function ImageUploadZone({
       type: 'info',
     })
 
-    // Local counters for tracking success/failure
     let successCount = 0
     let failCount = 0
 
-    // Upload files with configurable concurrency limit
     const uploadFile = (file: UploadFile, index: number): Promise<void> => {
       return new Promise<void>((resolve) => {
         const xhr = new XMLHttpRequest()
         const formData = new FormData()
 
-        // Use per-file extracted datetime if no manual override is set
         const fileMetadata = {
           ...metadata,
           date: metadata.date || file.extractedDate || getCurrentDateTime(),
@@ -313,12 +289,10 @@ export function ImageUploadZone({
                 }
                 return newFiles
               })
-              // Update local counters
               if (isSuccess) {
                 successCount++
               } else {
                 failCount++
-                // Show individual error notification
                 showNotification({
                   title: `Failed: ${file.file.name}`,
                   message: uploadResult.error || 'Upload failed',
@@ -387,7 +361,6 @@ export function ImageUploadZone({
         xhr.open('POST', '/api/admin/gallery/upload')
         xhr.send(formData)
 
-        // Store xhr for potential cancellation
         if (!uploadAbortController.current) {
           uploadAbortController.current = new AbortController()
         }
@@ -397,28 +370,24 @@ export function ImageUploadZone({
       })
     }
 
-    // Process uploads with concurrency limit
     const concurrencyLimit = GALLERY_CONSTANTS.UPLOAD.CONCURRENT_UPLOADS
     const uploadQueue = [...files.map((file, index) => ({ file, index }))]
     const activeUploads: Promise<void>[] = []
 
     try {
       while (uploadQueue.length > 0 || activeUploads.length > 0) {
-        // Start new uploads up to the concurrency limit
         while (
           activeUploads.length < concurrencyLimit &&
           uploadQueue.length > 0
         ) {
           const next = uploadQueue.shift()!
           const uploadPromise = uploadFile(next.file, next.index).then(() => {
-            // Remove from active uploads when done
             const idx = activeUploads.indexOf(uploadPromise)
             if (idx !== -1) activeUploads.splice(idx, 1)
           })
           activeUploads.push(uploadPromise)
         }
 
-        // Wait for at least one upload to complete before continuing
         if (activeUploads.length > 0) {
           await Promise.race(activeUploads)
         }
@@ -430,7 +399,6 @@ export function ImageUploadZone({
           message: 'Processing and indexing images...',
           type: 'info',
         })
-        // Call onUploadComplete to refresh the gallery and wait for images to appear
         await onUploadComplete(successCount)
 
         showNotification({
@@ -438,7 +406,6 @@ export function ImageUploadZone({
           type: 'success',
         })
 
-        // Clear files from UI after a short delay to show completion state
         setTimeout(() => {
           setFiles((prev) => {
             prev.forEach((f) => URL.revokeObjectURL(f.preview))
@@ -450,9 +417,7 @@ export function ImageUploadZone({
           title: `Failed to upload ${failCount} image(s)`,
           type: 'error',
         })
-        // Don't auto-clear files on failure so user can see what failed
       } else {
-        // No files were processed (shouldn't happen)
         setFiles((prev) => {
           prev.forEach((f) => URL.revokeObjectURL(f.preview))
           return []
@@ -585,11 +550,10 @@ export function ImageUploadZone({
 
       <div
         {...getRootProps()}
-        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-          isDragActive
+        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDragActive
             ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/30'
             : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500'
-        }`}
+          }`}
       >
         <input {...getInputProps()} aria-label="Upload images" />
         <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />

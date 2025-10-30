@@ -34,7 +34,6 @@ export async function createGalleryImage(
   data?: Omit<CreateGalleryImageInput, 'file'>,
 ): Promise<GalleryImageResponse> {
   try {
-    // Handle overload signatures
     const input = data
       ? { file: fileOrInput as Uploadable, ...data }
       : (fileOrInput as CreateGalleryImageInput)
@@ -50,7 +49,6 @@ export async function createGalleryImage(
       imageAlt,
     } = input
 
-    // Validate required fields
     if (!photographer || !date || !location || !conference) {
       return {
         error:
@@ -59,7 +57,6 @@ export async function createGalleryImage(
       }
     }
 
-    // Handle both file upload and reference
     const assetRef =
       (file as { _type?: string })?._type === 'reference'
         ? (file as { _type: 'reference'; _ref: string })
@@ -72,7 +69,6 @@ export async function createGalleryImage(
           )._id,
         )
 
-    // Create gallery image document
     const document = {
       _type: 'imageGallery',
       image: {
@@ -95,10 +91,8 @@ export async function createGalleryImage(
 
     const created = await clientWrite.create(document)
 
-    // Fetch the created image with resolved URL
     const image = await getGalleryImage(created._id)
 
-    // Publish event for speaker tagging if there are speakers
     if (image && speakers.length > 0) {
       await publishSpeakerTaggedEvent(image, speakers)
     }
@@ -126,7 +120,6 @@ export async function updateGalleryImage(
   patch: UpdateGalleryImageInput,
 ): Promise<GalleryImageResponse> {
   try {
-    // Fetch original speaker IDs before update if speakers are being updated
     let originalSpeakerIds: string[] = []
     if (patch.speakers !== undefined) {
       const original = await clientReadUncached.fetch<{
@@ -153,7 +146,6 @@ export async function updateGalleryImage(
         }))
     }
 
-    // Handle file upload for replacing the image asset
     if (patch.file) {
       const assetRef =
         (patch.file as { _type?: string })._type === 'reference'
@@ -177,18 +169,14 @@ export async function updateGalleryImage(
         ...(patch.imageAlt !== undefined ? { alt: patch.imageAlt } : {}),
       }
     } else if (patch.imageAlt !== undefined) {
-      // Update nested image.alt field
       updatePatch['image.alt'] = patch.imageAlt
     }
 
     const updated = await clientWrite.patch(id).set(updatePatch).commit()
 
-    // Fetch the updated image with resolved data
     const image = await getGalleryImage(updated._id)
 
-    // Publish event for newly tagged speakers only if notifications are enabled
     if (image && patch.speakers !== undefined && patch.notifySpeakers) {
-      // Find newly added speaker IDs
       const newSpeakerIds = patch.speakers.filter(
         (id) => !originalSpeakerIds.includes(id),
       )
@@ -279,7 +267,6 @@ export async function getGalleryImageCount(
       ])
     `
 
-    // Always provide all params to avoid GROQ parse errors
     const queryParams: Record<string, unknown> = {
       conferenceId: filter?.conferenceId ?? null,
       featured: filter?.featured ?? null,
@@ -352,7 +339,6 @@ export async function getGalleryImages(
       }
     `
 
-    // Always provide all params to avoid GROQ parse errors
     const queryParams: Record<string, unknown> = {
       offset,
       end: offset + limit,
@@ -400,22 +386,15 @@ export async function getFeaturedGalleryImages(
  */
 export async function deleteGalleryImage(id: string): Promise<boolean> {
   try {
-    // First get the asset ID before deletion
     const data = await clientReadUncached.fetch(
       groq`*[_type=="imageGallery" && _id==$id][0]{ "assetId": image.asset->_id }`,
       { id },
     )
 
-    // Use transaction to delete document and conditionally delete asset
     const transaction = clientWrite.transaction()
-
-    // Delete the gallery document
     transaction.delete(id)
-
-    // Commit the deletion first
     await transaction.commit()
 
-    // After deletion is committed, check if asset is still referenced
     if (data?.assetId) {
       const stillUsed = await clientReadUncached.fetch(
         groq`count(*[references($assetId)])`,

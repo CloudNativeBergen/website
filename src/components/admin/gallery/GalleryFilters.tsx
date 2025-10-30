@@ -58,7 +58,6 @@ export function GalleryFilters({
   const debouncedPhotographer = useDebounce(localPhotographer, 500)
   const debouncedLocation = useDebounce(localLocation, 500)
 
-  // Initialize filters from URL on mount
   useEffect(() => {
     const featured = searchParams.get('featured')
     const speakerId = searchParams.get('speakerId')
@@ -77,12 +76,10 @@ export function GalleryFilters({
       locationSearch: location || undefined,
     }
 
-    // Restore speaker filter from URL
     if (speakerId) {
       setSelectedSpeaker({ _id: speakerId, name: 'Selected speaker' })
     }
 
-    // Only update if there are URL params
     if (Object.values(urlFilters).some((v) => v !== undefined)) {
       onFiltersChange(urlFilters)
       setLocalDateFrom(dateFrom || '')
@@ -91,7 +88,8 @@ export function GalleryFilters({
       setLocalLocation(location || '')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only on mount - dependencies intentionally omitted  // Update URL when filters change
+  }, [])
+
   const updateURL = useCallback(
     (newFilters: typeof filters) => {
       const params = new URLSearchParams()
@@ -266,10 +264,9 @@ export function GalleryFilters({
                       key={speaker._id}
                       value={speaker}
                       className={({ active }) =>
-                        `relative cursor-default py-2 pr-4 pl-3 select-none ${
-                          active
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-gray-900 dark:text-gray-100'
+                        `relative cursor-default py-2 pr-4 pl-3 select-none ${active
+                          ? 'bg-indigo-600 text-white'
+                          : 'text-gray-900 dark:text-gray-100'
                         }`
                       }
                     >

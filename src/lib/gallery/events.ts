@@ -38,7 +38,6 @@ export async function publishSpeakerTaggedEvent(
 
     const conference = result.conference
 
-    // Fetch full speaker objects for the event
     const speakerPromises = speakerIds.map((id) => getSpeaker(id))
     const speakerResults = await Promise.allSettled(speakerPromises)
     const fullSpeakers = speakerResults
@@ -59,7 +58,6 @@ export async function publishSpeakerTaggedEvent(
       return
     }
 
-    // Derive domain from result or conference
     const domain =
       result.domain || (conference.domains && conference.domains[0])
     if (!domain) {
@@ -91,7 +89,6 @@ export async function publishSpeakerTaggedEvent(
       imageId: image._id,
     })
   } catch (error) {
-    // Log but don't fail the operation
     logger.warn('Failed to publish gallery speaker tagged event', {
       error: error instanceof Error ? error.message : 'Unknown error',
       imageId: image._id,

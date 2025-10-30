@@ -15,6 +15,5 @@ export const urlForImage = (source: Image, width?: number) => {
     builder = builder.width(width)
   }
 
-  // Quality 85 is a good balance between file size and visual quality
   return builder.quality(85).url()
 }

@@ -153,7 +153,6 @@ export const galleryRouter = router({
       }
     }),
 
-  // Speaker endpoints - accessible to authenticated speakers
   listMine: protectedProcedure.query(async ({ ctx }) => {
     try {
       const images = await getGalleryImages({

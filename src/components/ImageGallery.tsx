@@ -21,7 +21,6 @@ export function ImageGallery({
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalInitialIndex, setModalInitialIndex] = useState(0)
 
-  // Parse URL hash for deep linking (#gallery?img=imageId)
   useEffect(() => {
     const handleHashChange = () => {
       if (typeof window === 'undefined') return
@@ -41,15 +40,11 @@ export function ImageGallery({
       }
     }
 
-    // Check on mount
     handleHashChange()
-
-    // Listen for hash changes
     window.addEventListener('hashchange', handleHashChange)
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [allImages])
 
-  // Use featured images if available, otherwise use first 8 images as fallback
   const featured = featuredImages.length
     ? featuredImages
     : allImages.slice(0, 8)

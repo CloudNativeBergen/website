@@ -95,7 +95,6 @@ function GalleryPageContent() {
       setIsWaitingForUpload(true)
       const startCount = images?.length ?? 0
 
-      // Poll until we see the new images (max 10 attempts, 500ms each)
       let attempts = 0
       const maxAttempts = 10
 
@@ -107,14 +106,12 @@ function GalleryPageContent() {
 
         const newCount = result.data?.length ?? 0
         if (newCount >= startCount + uploadedCount) {
-          // Success! New images are visible
           break
         }
         attempts++
       }
 
       setIsWaitingForUpload(false)
-      // Note: Success notification is shown by ImageUploadZone
     },
     [utils, refetchImages, images],
   )
@@ -124,7 +121,6 @@ function GalleryPageContent() {
     utils.gallery.count.invalidate()
     setIsMetadataModalOpen(false)
     setSelectedImage(null)
-    // Note: Success notification is shown by ImageMetadataModal
   }, [utils])
 
   const handleImageDelete = useCallback(
@@ -291,11 +287,10 @@ function GalleryPageContent() {
                       <button
                         key={pageNum}
                         onClick={() => handlePageChange(pageNum)}
-                        className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                          pageNum === currentPage
+                        className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${pageNum === currentPage
                             ? 'z-10 bg-indigo-600 text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
                             : 'text-gray-900 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 focus:z-20 focus:outline-offset-0 dark:text-gray-300 dark:ring-gray-700 dark:hover:bg-gray-800'
-                        }`}
+                          }`}
                       >
                         {pageNum}
                       </button>

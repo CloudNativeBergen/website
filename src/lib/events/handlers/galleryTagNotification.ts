@@ -32,7 +32,6 @@ export async function handleGalleryTagNotification(
     return true
   })
 
-  // Process in chunks
   for (let i = 0; i < speakersWithEmail.length; i += BATCH_SIZE) {
     const batch = speakersWithEmail.slice(i, i + BATCH_SIZE)
 
@@ -80,10 +79,8 @@ export async function handleGalleryTagNotification(
       }
     })
 
-    // Wait for batch to complete
     const batchResults = await Promise.allSettled(batchPromises)
 
-    // Process batch results
     batchResults.forEach((result) => {
       if (result.status === 'fulfilled') {
         const { success, speaker, error } = result.value
@@ -97,7 +94,6 @@ export async function handleGalleryTagNotification(
           })
         }
       } else {
-        // This shouldn't happen since we catch errors in the map, but just in case
         failureCount++
         errors.push({
           speaker: 'Unknown',
@@ -107,7 +103,6 @@ export async function handleGalleryTagNotification(
     })
   }
 
-  // Log structured summary of results
   const logLevel =
     failureCount > 0 && successCount === 0
       ? 'error'
@@ -127,9 +122,6 @@ export async function handleGalleryTagNotification(
       'Gallery tag notification handling failed for all speakers',
       logData,
     )
-    // Don't throw - just log the error for monitoring
-    // Consider implementing a monitoring hook here if needed
-    // e.g., notifyOps('gallery.notification.complete_failure', logData)
   } else if (logLevel === 'warn') {
     logger.warn(
       'Gallery tag notification handling completed with some failures',

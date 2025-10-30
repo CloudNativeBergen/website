@@ -9,7 +9,6 @@ export const GALLERY_CONSTANTS = {
       'image/webp': ['.webp'],
       'image/gif': ['.gif'],
     },
-    // Client-side resize settings
     RESIZE_MAX_WIDTH: 2560,
     RESIZE_MAX_HEIGHT: 2560,
     RESIZE_QUALITY: 0.92,
