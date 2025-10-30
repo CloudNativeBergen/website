@@ -87,29 +87,3 @@ export interface GalleryImageFilter {
   photographerSearch?: string
   locationSearch?: string
 }
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface GalleryImageStats {
-  totalCount: number
-  featuredCount: number
-  recentCount?: number
-  byMonth: Array<{ month: string; count: number }>
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface UploadProgress {
-  fileIndex: number
-  fileName: string
-  progress: number
-  status: 'pending' | 'uploading' | 'completed' | 'error'
-  error?: string
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-interface BatchUploadResult {
-  successful: GalleryImageWithSpeakers[]
-  failed: Array<{ input: CreateGalleryImageInput; error: string }>
-  totalProcessed: number
-}
-
-export type ProgressCallback = (completed: number, total: number) => void

@@ -8,8 +8,7 @@ import { getConferenceForDomain } from '@/lib/conference/sanity'
 export default async function NotFound() {
   const headersList = await headers()
   const domain = headersList.get('host') || ''
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { conference, error } = await getConferenceForDomain(domain, {})
+  const { conference } = await getConferenceForDomain(domain, {})
 
   return (
     <Layout conference={conference} showFooter={false}>

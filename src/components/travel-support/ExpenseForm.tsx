@@ -2,7 +2,11 @@
 
 import { useState } from 'react'
 import { DocumentIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import { ExpenseCategory, TravelExpenseInput } from '@/lib/travel-support/types'
+import {
+  ExpenseCategory,
+  SupportedCurrency,
+  TravelExpenseInput,
+} from '@/lib/travel-support/types'
 import { TIMEOUTS } from '@/lib/travel-support/config'
 import {
   Input,
@@ -368,7 +372,9 @@ export function ExpenseForm({
                 name="category"
                 label="Category *"
                 value={formData.category || ''}
-                setValue={(value) => updateField('category', value)}
+                setValue={(value) =>
+                  updateField('category', value as ExpenseCategory)
+                }
                 options={categoryOptions}
               />
               {validationErrors.category && (
@@ -396,7 +402,9 @@ export function ExpenseForm({
                 name="currency"
                 label="Currency *"
                 value={formData.currency || 'NOK'}
-                setValue={(value) => updateField('currency', value)}
+                setValue={(value) =>
+                  updateField('currency', value as SupportedCurrency)
+                }
                 options={currencyOptions}
               />
             </div>
@@ -494,11 +502,10 @@ export function ExpenseForm({
               )}
 
               <div
-                className={`mt-2 flex justify-center rounded-lg border border-dashed px-6 py-10 transition-colors ${
-                  isDragOver
+                className={`mt-2 flex justify-center rounded-lg border border-dashed px-6 py-10 transition-colors ${isDragOver
                     ? 'border-indigo-400 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-900/20'
                     : 'border-gray-900/25 dark:border-white/25'
-                } dark:bg-white/5`}
+                  } dark:bg-white/5`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}

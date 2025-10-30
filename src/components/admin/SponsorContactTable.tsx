@@ -288,8 +288,9 @@ export function SponsorContactTable({
         id: row.sponsor._id,
         data: updateData,
       })
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {}
+    } catch {
+      // Silently fail - error will be shown by mutation's onError handler
+    }
   }
 
   const contactRows: ContactRow[] = []

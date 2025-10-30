@@ -50,16 +50,3 @@ export const galleryImageToggleFeaturedSchema = z.object({
   id: z.string().min(1, 'Image ID is required'),
   featured: z.boolean(),
 })
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type GalleryImageCreateInput = z.infer<typeof galleryImageCreateSchema>
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type GalleryImageUpdateInput = z.infer<typeof galleryImageUpdateSchema>
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type GalleryImageFilterInput = z.infer<typeof galleryImageFilterSchema>
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type GalleryImageDeleteInput = z.infer<typeof galleryImageDeleteSchema>
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type GalleryImageToggleFeaturedInput = z.infer<
-  typeof galleryImageToggleFeaturedSchema
->

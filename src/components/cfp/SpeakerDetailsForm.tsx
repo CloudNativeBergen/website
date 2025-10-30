@@ -85,8 +85,7 @@ export function SpeakerDetailsForm({
     )
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  function addSpeakerLink(i: number) {
+  function addSpeakerLink() {
     setSpeakerLinks([...speakerLinks, ''])
   }
 

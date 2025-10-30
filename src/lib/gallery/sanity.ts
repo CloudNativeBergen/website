@@ -14,7 +14,6 @@ import type {
   GalleryImageFilter,
   GalleryImageResponse,
   Uploadable,
-  ProgressCallback,
 } from './types'
 
 /**
@@ -65,13 +64,13 @@ export async function createGalleryImage(
       (file as { _type?: string })?._type === 'reference'
         ? (file as { _type: 'reference'; _ref: string })
         : createReference(
-            (
-              await clientWrite.assets.upload('image', file as Uploadable, {
-                filename: (file as File).name || 'image',
-                contentType: (file as File).type || 'image/jpeg',
-              })
-            )._id,
-          )
+          (
+            await clientWrite.assets.upload('image', file as Uploadable, {
+              filename: (file as File).name || 'image',
+              contentType: (file as File).type || 'image/jpeg',
+            })
+          )._id,
+        )
 
     // Create gallery image document
     const document = {
@@ -160,17 +159,17 @@ export async function updateGalleryImage(
         (patch.file as { _type?: string })._type === 'reference'
           ? (patch.file as { _type: 'reference'; _ref: string })
           : createReference(
-              (
-                await clientWrite.assets.upload(
-                  'image',
-                  patch.file as Uploadable,
-                  {
-                    filename: (patch.file as File).name || 'image',
-                    contentType: (patch.file as File).type || 'image/jpeg',
-                  },
-                )
-              )._id,
-            )
+            (
+              await clientWrite.assets.upload(
+                'image',
+                patch.file as Uploadable,
+                {
+                  filename: (patch.file as File).name || 'image',
+                  contentType: (patch.file as File).type || 'image/jpeg',
+                },
+              )
+            )._id,
+          )
 
       updatePatch.image = {
         _type: 'image',
@@ -394,68 +393,6 @@ export async function getFeaturedGalleryImages(
   conferenceId?: string,
 ): Promise<GalleryImageWithSpeakers[]> {
   return getGalleryImages({ featured: true, limit, conferenceId }, revalidate)
-}
-
-/**
- * Get gallery images by speaker
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function getGalleryImagesBySpeaker(
-  speakerId: string,
-): Promise<GalleryImageWithSpeakers[]> {
-  return getGalleryImages({ speakerId })
-}
-
-/**
- * Create multiple gallery images with progress tracking
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function createGalleryImages(
-  inputs: CreateGalleryImageInput[],
-  onProgress?: ProgressCallback,
-): Promise<{
-  successful: GalleryImageWithSpeakers[]
-  failed: Array<{ input: CreateGalleryImageInput; error: string }>
-}> {
-  const successful: GalleryImageWithSpeakers[] = []
-  const failed: Array<{ input: CreateGalleryImageInput; error: string }> = []
-
-  for (let i = 0; i < inputs.length; i++) {
-    try {
-      const result = await createGalleryImage(inputs[i])
-      if (result.image) {
-        successful.push(result.image)
-      } else {
-        failed.push({
-          input: inputs[i],
-          error: result.error || 'Unknown error',
-        })
-      }
-    } catch (error) {
-      failed.push({
-        input: inputs[i],
-        error:
-          error instanceof Error ? error.message : 'Failed to create image',
-      })
-    }
-
-    if (onProgress) {
-      onProgress(i + 1, inputs.length)
-    }
-  }
-
-  return { successful, failed }
-}
-
-/**
- * Update gallery image metadata (without file upload)
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function updateGalleryImageMetadata(
-  id: string,
-  metadata: Omit<UpdateGalleryImageInput, 'file'>,
-): Promise<GalleryImageResponse> {
-  return updateGalleryImage(id, metadata)
 }
 
 /**

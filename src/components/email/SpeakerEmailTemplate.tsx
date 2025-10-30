@@ -34,8 +34,6 @@ export function SpeakerEmailTemplate({
   eventUrl,
   subject,
   message,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  senderName,
   socialLinks = [],
 }: SpeakerEmailTemplateProps) {
   const proposalSection = (

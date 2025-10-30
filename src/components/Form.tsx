@@ -159,8 +159,7 @@ export function Dropdown({
   label: string
   options: Map<string, string>
   value?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setValue: (val: any) => void
+  setValue: (val: string) => void
   placeholder?: string
 }) {
   return (

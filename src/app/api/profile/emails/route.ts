@@ -25,8 +25,9 @@ export const GET = auth(async (req: NextAuthRequest) => {
 
   switch (req.auth.account?.provider) {
     case 'github':
-      // eslint-disable-next-line prefer-const
-      let { error, emails } = await verifiedEmails(req.auth.account)
+      const result = await verifiedEmails(req.auth.account)
+      const error = result.error
+      let emails = result.emails
 
       if (emails.length === 0) {
         emails = defaultEmails(req.auth)

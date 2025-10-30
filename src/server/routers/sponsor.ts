@@ -210,7 +210,7 @@ export const sponsorRouter = router({
           }
 
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { tierId, ...sponsorData } = mergedData
+          const { tierId: _, ...sponsorData } = mergedData
           const { sponsor, error } = await updateSponsor(input.id, sponsorData)
 
           if (error) {

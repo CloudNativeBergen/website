@@ -70,7 +70,7 @@ export function ImageUploadZone({
   const uploadAbortController = useRef<AbortController | null>(null)
 
   // Resize image using canvas if it exceeds max dimensions
-  const resizeImage = async (file: File): Promise<File> => {
+  const resizeImage = useCallback(async (file: File): Promise<File> => {
     return new Promise((resolve) => {
       const img = document.createElement('img')
       const canvas = document.createElement('canvas')
@@ -126,107 +126,113 @@ export function ImageUploadZone({
       img.onerror = () => resolve(file)
       img.src = URL.createObjectURL(file)
     })
-  }
+  }, [])
 
   // Extract EXIF metadata from image
-  const extractExifMetadata = async (
-    file: File,
-  ): Promise<{
-    date?: string
-    location?: string
-  }> => {
-    try {
-      // Use native browser APIs to extract EXIF data
-      const arrayBuffer = await file.arrayBuffer()
-      const dataView = new DataView(arrayBuffer)
+  const extractExifMetadata = useCallback(
+    async (
+      file: File,
+    ): Promise<{
+      date?: string
+      location?: string
+    }> => {
+      try {
+        // Use native browser APIs to extract EXIF data
+        const arrayBuffer = await file.arrayBuffer()
+        const dataView = new DataView(arrayBuffer)
 
-      // Check for JPEG marker (0xFFD8)
-      if (dataView.getUint16(0) !== 0xffd8) {
-        // Not a JPEG, use file modification time
-        return { date: fileTimestampToISO(file) }
-      }
+        // Check for JPEG marker (0xFFD8)
+        if (dataView.getUint16(0) !== 0xffd8) {
+          // Not a JPEG, use file modification time
+          return { date: fileTimestampToISO(file) }
+        }
 
-      let offset = 2
-      const exifData: { date?: string; location?: string } = {}
+        let offset = 2
+        const exifData: { date?: string; location?: string } = {}
 
-      // Parse EXIF data
-      while (offset < dataView.byteLength) {
-        const marker = dataView.getUint16(offset)
-        offset += 2
-
-        // APP1 marker (0xFFE1) contains EXIF data
-        if (marker === 0xffe1) {
-          const length = dataView.getUint16(offset)
+        // Parse EXIF data
+        while (offset < dataView.byteLength) {
+          const marker = dataView.getUint16(offset)
           offset += 2
 
-          // Check for "Exif" identifier
-          const exifString = String.fromCharCode(
-            dataView.getUint8(offset),
-            dataView.getUint8(offset + 1),
-            dataView.getUint8(offset + 2),
-            dataView.getUint8(offset + 3),
-          )
+          // APP1 marker (0xFFE1) contains EXIF data
+          if (marker === 0xffe1) {
+            const length = dataView.getUint16(offset)
+            offset += 2
 
-          if (exifString === 'Exif') {
-            // EXIF data found - extract datetime if available
-            const exifBlock = new Uint8Array(arrayBuffer, offset, length - 2)
-            const exifString = new TextDecoder().decode(exifBlock)
-
-            // Look for DateTime tag with time (format: YYYY:MM:DD HH:MM:SS)
-            const dateTimeMatch = exifString.match(
-              /(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/,
+            // Check for "Exif" identifier
+            const exifString = String.fromCharCode(
+              dataView.getUint8(offset),
+              dataView.getUint8(offset + 1),
+              dataView.getUint8(offset + 2),
+              dataView.getUint8(offset + 3),
             )
-            if (dateTimeMatch) {
-              const exifDateTimeStr = `${dateTimeMatch[1]}:${dateTimeMatch[2]}:${dateTimeMatch[3]} ${dateTimeMatch[4]}:${dateTimeMatch[5]}:${dateTimeMatch[6]}`
-              exifData.date = exifDateTimeToISO(exifDateTimeStr)
+
+            if (exifString === 'Exif') {
+              // EXIF data found - extract datetime if available
+              const exifBlock = new Uint8Array(arrayBuffer, offset, length - 2)
+              const exifString = new TextDecoder().decode(exifBlock)
+
+              // Look for DateTime tag with time (format: YYYY:MM:DD HH:MM:SS)
+              const dateTimeMatch = exifString.match(
+                /(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/,
+              )
+              if (dateTimeMatch) {
+                const exifDateTimeStr = `${dateTimeMatch[1]}:${dateTimeMatch[2]}:${dateTimeMatch[3]} ${dateTimeMatch[4]}:${dateTimeMatch[5]}:${dateTimeMatch[6]}`
+                exifData.date = exifDateTimeToISO(exifDateTimeStr)
+              }
             }
+
+            break
           }
 
-          break
+          // Skip to next marker
+          if (marker >= 0xffc0 && marker <= 0xffef) {
+            const length = dataView.getUint16(offset)
+            offset += length
+          } else {
+            break
+          }
         }
 
-        // Skip to next marker
-        if (marker >= 0xffc0 && marker <= 0xffef) {
-          const length = dataView.getUint16(offset)
-          offset += length
-        } else {
-          break
+        // If no EXIF datetime found, use file modification time
+        if (!exifData.date) {
+          exifData.date = fileTimestampToISO(file)
         }
+
+        return exifData
+      } catch (error) {
+        console.warn('Failed to extract EXIF data:', error)
+        // Fallback to file modification time
+        return { date: fileTimestampToISO(file) }
       }
+    },
+    [],
+  )
 
-      // If no EXIF datetime found, use file modification time
-      if (!exifData.date) {
-        exifData.date = fileTimestampToISO(file)
-      }
+  const onDrop = useCallback(
+    async (acceptedFiles: File[]) => {
+      // Resize images and extract EXIF datetime for each file
+      const resizedFiles = await Promise.all(
+        acceptedFiles.map(async (file) => {
+          const resized = await resizeImage(file)
+          const exifData = await extractExifMetadata(file)
+          return {
+            file: resized,
+            preview: URL.createObjectURL(resized),
+            progress: 0,
+            status: 'pending' as const,
+            extractedDate: exifData.date, // Store the extracted datetime for this file
+          }
+        }),
+      )
+      setFiles((prev) => [...prev, ...resizedFiles])
 
-      return exifData
-    } catch (error) {
-      console.warn('Failed to extract EXIF data:', error)
-      // Fallback to file modification time
-      return { date: fileTimestampToISO(file) }
-    }
-  }
-
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    // Resize images and extract EXIF datetime for each file
-    const resizedFiles = await Promise.all(
-      acceptedFiles.map(async (file) => {
-        const resized = await resizeImage(file)
-        const exifData = await extractExifMetadata(file)
-        return {
-          file: resized,
-          preview: URL.createObjectURL(resized),
-          progress: 0,
-          status: 'pending' as const,
-          extractedDate: exifData.date, // Store the extracted datetime for this file
-        }
-      }),
-    )
-    setFiles((prev) => [...prev, ...resizedFiles])
-
-    // Note: The date/time fields remain empty unless manually overridden by the user.
-    // If left empty, each file will use its own extracted datetime during upload.
-  }, [])
+      // Note: The date/time fields remain empty unless manually overridden by the user.
+      // If left empty, each file will use its own extracted datetime during upload.
+    },
+    [resizeImage, extractExifMetadata],
+  )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
