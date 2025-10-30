@@ -13,11 +13,11 @@ import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { StatusBadge } from '@/lib/proposal'
+import { ComponentType } from 'react'
 
 interface ProposalButtonAction {
   label: Action
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any
+  icon: ComponentType<{ className?: string }>
   link?: string
   onClick?: () => void
 }

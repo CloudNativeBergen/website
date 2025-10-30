@@ -340,7 +340,7 @@ function ProposalDetailsForm({
             name="language"
             label="Language"
             value={language}
-            setValue={setLanguage}
+            setValue={(val) => setLanguage(val as Language)}
             options={languages}
           />
         </div>
@@ -357,7 +357,7 @@ function ProposalDetailsForm({
             name="format"
             label="Presentation Format"
             value={format}
-            setValue={setFormat}
+            setValue={(val) => setFormat(val as Format)}
             options={
               new Map(
                 Array.from(formats).filter(([key]) =>
@@ -373,7 +373,7 @@ function ProposalDetailsForm({
             name="level"
             label="Skill Level"
             value={level}
-            setValue={setLevel}
+            setValue={(val) => setLevel(val as Level)}
             options={levels}
           />
         </div>

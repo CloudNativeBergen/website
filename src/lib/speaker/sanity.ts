@@ -81,39 +81,37 @@ export async function getOrCreateSpeaker(
     account.provider,
     account.providerAccountId,
   )
-  // eslint-disable-next-line no-var
-  var { speaker, err } = await findSpeakerByProvider(providerAccountId)
-  if (err) {
-    console.error('Error fetching speaker profile by account id', err)
-    return { speaker, err }
+  let result = await findSpeakerByProvider(providerAccountId)
+  if (result.err) {
+    console.error('Error fetching speaker profile by account id', result.err)
+    return { speaker: result.speaker, err: result.err }
   }
 
-  if (speaker?._id) {
-    return { speaker, err }
+  if (result.speaker?._id) {
+    return { speaker: result.speaker, err: result.err }
   }
 
-  // eslint-disable-next-line no-var
-  var { speaker, err } = await findSpeakerByEmail(user.email)
-  if (err) {
-    console.error('Error fetching speaker profile by email', err)
-    return { speaker, err }
+  result = await findSpeakerByEmail(user.email)
+  if (result.err) {
+    console.error('Error fetching speaker profile by email', result.err)
+    return { speaker: result.speaker, err: result.err }
   }
 
-  if (speaker?._id) {
-    speaker.providers = speaker.providers || []
-    speaker.providers.push(providerAccountId)
+  if (result.speaker?._id) {
+    result.speaker.providers = result.speaker.providers || []
+    result.speaker.providers.push(providerAccountId)
     try {
       await clientWrite
-        .patch(speaker._id)
-        .set({ providers: speaker.providers })
+        .patch(result.speaker._id)
+        .set({ providers: result.speaker.providers })
         .commit()
     } catch (error) {
-      err = error as Error
+      result.err = error as Error
     }
-    return { speaker, err }
+    return { speaker: result.speaker, err: result.err }
   }
 
-  speaker = {
+  const speaker = {
     _id: randomUUID(),
     email: user.email,
     name: user.name,
@@ -133,15 +131,16 @@ export async function getOrCreateSpeaker(
       },
     })
 
-    speaker = {
+    const updatedSpeaker = {
       ...createdSpeaker,
       slug: slugValue,
     } as Speaker
-  } catch (error) {
-    err = error as Error
-  }
 
-  return { speaker, err }
+    return { speaker: updatedSpeaker, err: null }
+  } catch (error) {
+    const err = error as Error
+    return { speaker, err }
+  }
 }
 
 export async function getSpeaker(
@@ -231,7 +230,7 @@ export async function updateSpeaker(
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { image, ...speakerWithoutImage } = speaker
+    const { image: _image, ...speakerWithoutImage } = speaker
     await clientWrite.patch(spekaerId).set(speakerWithoutImage).commit()
 
     const { speaker: fetchedSpeaker, err: fetchErr } =
@@ -335,4 +334,26 @@ export async function getOrganizerCount(): Promise<{
   }
 
   return { count, err }
+}
+
+export async function getOrganizers(): Promise<{
+  speakers: Speaker[]
+  err: Error | null
+}> {
+  let speakers: Speaker[] = []
+  let err = null
+
+  try {
+    const query = groq`*[_type == "speaker" && is_organizer == true] {
+      ...,
+      "slug": slug.current,
+      "image": image.asset->url
+    } | order(name asc)`
+
+    speakers = await clientRead.fetch(query, {}, { cache: 'no-store' })
+  } catch (error) {
+    err = error as Error
+  }
+
+  return { speakers, err }
 }

@@ -6,7 +6,6 @@ export default async function MainLayout({
 }: {
   children: React.ReactNode
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { conference, error } = await getConferenceForCurrentDomain()
+  const { conference } = await getConferenceForCurrentDomain()
   return <Layout conference={conference}>{children}</Layout>
 }

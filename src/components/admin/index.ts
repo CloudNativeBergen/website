@@ -45,6 +45,15 @@ export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'
 export { FeaturedTalksManager } from './FeaturedTalksManager'
 export { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 
+// Gallery Management Components
+export {
+  ImageUploadZone,
+  ImageGrid,
+  ImageMetadataModal,
+  GalleryFilters,
+} from './gallery'
+
+// Utility Components
 export { ErrorDisplay } from './ErrorDisplay'
 export * from './LoadingSkeleton'
 export * from './PageLoadingSkeleton'

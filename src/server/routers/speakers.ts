@@ -1,13 +1,15 @@
 import { z } from 'zod'
 import { router, adminProcedure } from '@/server/trpc'
-import { getSpeakers } from '@/lib/speaker/sanity'
+import { getSpeakers, getOrganizers } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { TRPCError } from '@trpc/server'
-import { Status } from '@/lib/proposal/types'
+import { Status, type ProposalExisting } from '@/lib/proposal/types'
+import type { Speaker } from '@/lib/speaker/types'
 
 const speakerSearchSchema = z.object({
   query: z.string().min(1, 'Search query is required'),
+  includeFeatured: z.boolean().optional().default(false),
 })
 
 export const speakersRouter = router({
@@ -35,6 +37,25 @@ export const speakersRouter = router({
         })
       }
 
+      // Also get organizers (who may not have talks)
+      const { speakers: organizers, err: organizersErr } = await getOrganizers()
+      if (organizersErr) {
+        console.warn('Could not get organizers:', organizersErr)
+      }
+
+      // Merge speakers and organizers, removing duplicates
+      const allSpeakersMap = new Map<
+        string,
+        Speaker & { proposals?: ProposalExisting[] }
+      >()
+      speakers.forEach((s) => allSpeakersMap.set(s._id, s))
+      organizers?.forEach((o) => {
+        if (!allSpeakersMap.has(o._id)) {
+          allSpeakersMap.set(o._id, { ...o, proposals: [] })
+        }
+      })
+      const allSpeakers = Array.from(allSpeakersMap.values())
+
       const { speakers: featuredSpeakers, error: featuredError } =
         await getFeaturedSpeakers(conference._id)
       if (featuredError) {
@@ -47,18 +68,56 @@ export const speakersRouter = router({
       const featuredSpeakerIds =
         featuredSpeakers?.map((speaker) => speaker._id) || []
 
-      const filteredSpeakers = speakers.filter((speaker) => {
-        if (featuredSpeakerIds.includes(speaker._id)) {
+      // Filter speakers by name, title (job title/company), or bio containing the search query (case-insensitive)
+      // and optionally exclude already featured speakers
+      const filteredSpeakers = allSpeakers.filter((speaker) => {
+        // Exclude already featured speakers unless includeFeatured is true
+        if (
+          !input.includeFeatured &&
+          featuredSpeakerIds.includes(speaker._id)
+        ) {
           return false
         }
 
         const searchTerm = input.query.toLowerCase()
         const nameMatch = speaker.name?.toLowerCase().includes(searchTerm)
         const titleMatch = speaker.title?.toLowerCase().includes(searchTerm)
-        return nameMatch || titleMatch
+        const bioMatch = speaker.bio?.toLowerCase().includes(searchTerm)
+        return nameMatch || titleMatch || bioMatch
       })
 
-      return filteredSpeakers
+      // Sort speakers: organizers first, then speakers from current conference, then others
+      const sortedSpeakers = filteredSpeakers.sort((a, b) => {
+        // Prioritize organizers
+        if (a.is_organizer && !b.is_organizer) return -1
+        if (!a.is_organizer && b.is_organizer) return 1
+
+        // Then prioritize speakers with talks in the current conference
+        const aHasCurrentConference =
+          a.proposals?.some(
+            (p) =>
+              typeof p.conference === 'object' &&
+              p.conference &&
+              '_id' in p.conference &&
+              p.conference._id === conference._id,
+          ) ?? false
+        const bHasCurrentConference =
+          b.proposals?.some(
+            (p) =>
+              typeof p.conference === 'object' &&
+              p.conference &&
+              '_id' in p.conference &&
+              p.conference._id === conference._id,
+          ) ?? false
+
+        if (aHasCurrentConference && !bHasCurrentConference) return -1
+        if (!aHasCurrentConference && bHasCurrentConference) return 1
+
+        // Finally sort alphabetically by name
+        return a.name.localeCompare(b.name)
+      })
+
+      return sortedSpeakers
     } catch (error) {
       if (error instanceof TRPCError) throw error
 

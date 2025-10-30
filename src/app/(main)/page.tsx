@@ -1,6 +1,7 @@
 import { Hero } from '@/components/Hero'
 import { ProgramHighlights } from '@/components/ProgramHighlights'
 import { Sponsors } from '@/components/Sponsors'
+import { ImageGallery } from '@/components/ImageGallery'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export const revalidate = 300
@@ -12,6 +13,7 @@ export default async function Home() {
     featuredTalks: true,
     schedule: true,
     sponsors: true,
+    gallery: true,
     revalidate,
   })
 
@@ -23,6 +25,12 @@ export default async function Home() {
   return (
     <>
       <Hero conference={conference} />
+      {conference.galleryImages && conference.galleryImages.length > 0 && (
+        <ImageGallery
+          featuredImages={conference.featuredGalleryImages}
+          allImages={conference.galleryImages}
+        />
+      )}
       {conference.schedules && conference.schedules.length > 0 && (
         <ProgramHighlights
           schedules={conference.schedules}

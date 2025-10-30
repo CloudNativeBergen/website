@@ -2,7 +2,11 @@
 
 import { useState } from 'react'
 import { DocumentIcon, XMarkIcon } from '@heroicons/react/24/outline'
-import { ExpenseCategory, TravelExpenseInput } from '@/lib/travel-support/types'
+import {
+  ExpenseCategory,
+  SupportedCurrency,
+  TravelExpenseInput,
+} from '@/lib/travel-support/types'
 import { TIMEOUTS } from '@/lib/travel-support/config'
 import {
   Input,
@@ -368,7 +372,9 @@ export function ExpenseForm({
                 name="category"
                 label="Category *"
                 value={formData.category || ''}
-                setValue={(value) => updateField('category', value)}
+                setValue={(value) =>
+                  updateField('category', value as ExpenseCategory)
+                }
                 options={categoryOptions}
               />
               {validationErrors.category && (
@@ -396,7 +402,9 @@ export function ExpenseForm({
                 name="currency"
                 label="Currency *"
                 value={formData.currency || 'NOK'}
-                setValue={(value) => updateField('currency', value)}
+                setValue={(value) =>
+                  updateField('currency', value as SupportedCurrency)
+                }
                 options={currencyOptions}
               />
             </div>

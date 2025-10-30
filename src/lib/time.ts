@@ -189,3 +189,83 @@ export function formatConferenceDateLong(dateString: string): string {
     day: 'numeric',
   })
 }
+
+/**
+ * Gallery datetime utilities
+ * These functions handle datetime operations for the gallery feature,
+ * ensuring consistent datetime handling across upload, display, and editing.
+ */
+
+/**
+ * Gets the current datetime as an ISO 8601 string.
+ * @returns ISO 8601 datetime string (e.g., "2025-10-30T14:30:00.000Z")
+ */
+export function getCurrentDateTime(): string {
+  return new Date().toISOString()
+}
+
+/**
+ * Converts a file's last modified timestamp to ISO 8601 datetime string.
+ * Used as fallback when EXIF data is not available.
+ * @param file File object
+ * @returns ISO 8601 datetime string
+ */
+export function fileTimestampToISO(file: File): string {
+  return new Date(file.lastModified).toISOString()
+}
+
+/**
+ * Extracts the date portion from an ISO datetime string for date input fields.
+ * @param isoDateTime ISO 8601 datetime string
+ * @returns Date string in YYYY-MM-DD format
+ */
+export function extractDateFromISO(isoDateTime: string): string {
+  return isoDateTime.split('T')[0]
+}
+
+/**
+ * Extracts the time portion from an ISO datetime string for time input fields.
+ * @param isoDateTime ISO 8601 datetime string
+ * @returns Time string in HH:MM format
+ */
+export function extractTimeFromISO(isoDateTime: string): string {
+  return isoDateTime.split('T')[1]?.slice(0, 5) || '00:00'
+}
+
+/**
+ * Updates the date portion of an ISO datetime string while preserving the time.
+ * @param isoDateTime Current ISO datetime string
+ * @param newDate New date in YYYY-MM-DD format
+ * @returns Updated ISO 8601 datetime string
+ */
+export function updateDateInISO(isoDateTime: string, newDate: string): string {
+  const [, time] = isoDateTime.split('T')
+  return `${newDate}T${time || '00:00:00.000Z'}`
+}
+
+/**
+ * Updates the time portion of an ISO datetime string while preserving the date.
+ * @param isoDateTime Current ISO datetime string
+ * @param newTime New time in HH:MM format
+ * @returns Updated ISO 8601 datetime string
+ */
+export function updateTimeInISO(isoDateTime: string, newTime: string): string {
+  const [date] = isoDateTime.split('T')
+  return `${date}T${newTime}:00.000Z`
+}
+
+/**
+ * Converts EXIF datetime format to ISO 8601.
+ * EXIF format: "YYYY:MM:DD HH:MM:SS"
+ * @param exifDateTime EXIF datetime string
+ * @returns ISO 8601 datetime string
+ */
+export function exifDateTimeToISO(exifDateTime: string): string {
+  const match = exifDateTime.match(
+    /(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/,
+  )
+  if (!match) {
+    throw new Error('Invalid EXIF datetime format')
+  }
+  return `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.000Z`
+}
