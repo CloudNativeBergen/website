@@ -86,7 +86,7 @@ export function ImageGrid({
 
   return (
     <>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex min-h-[2rem] items-center justify-between">
         <div className="flex items-center gap-4">
           <button
             onClick={handleSelectAll}
@@ -98,11 +98,10 @@ export function ImageGrid({
             }
           >
             <div
-              className={`h-4 w-4 rounded border ${
-                selectedImages.length === images.length && images.length > 0
-                  ? 'border-indigo-600 bg-indigo-600'
-                  : 'border-gray-300'
-              }`}
+              className={`h-4 w-4 rounded border ${selectedImages.length === images.length && images.length > 0
+                  ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
+                  : 'border-gray-300 dark:border-gray-600'
+                }`}
             >
               {selectedImages.length === images.length && images.length > 0 && (
                 <CheckIcon className="h-3 w-3 text-white" />
@@ -111,7 +110,7 @@ export function ImageGrid({
             Select All
           </button>
           {selectedImages.length > 0 && (
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-600 dark:text-gray-400">
               {selectedImages.length} selected
             </span>
           )}
@@ -129,7 +128,7 @@ export function ImageGrid({
                 }
                 onSelectionChange([])
               }}
-              className="rounded-md bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
+              className="rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
             >
               {images
                 .filter((img) => selectedImages.includes(img._id))
@@ -139,7 +138,7 @@ export function ImageGrid({
             </button>
             <button
               onClick={() => setDeleteConfirmId('bulk')}
-              className="rounded-md bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
             >
               Delete Selected
             </button>
@@ -151,21 +150,29 @@ export function ImageGrid({
         {images.map((image) => (
           <div
             key={image._id}
-            className="group relative overflow-hidden rounded-lg bg-gray-100"
+            className={`group relative overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 ${selectedImages.length > 0 ? 'cursor-pointer' : ''
+              }`}
             onMouseEnter={() => setHoveredImage(image._id)}
             onMouseLeave={() => setHoveredImage(null)}
+            onClick={(e) => {
+              if (selectedImages.length > 0 && e.currentTarget === e.target) {
+                handleSelectImage(image._id)
+              }
+            }}
           >
             <div className="absolute top-2 left-2 z-10">
               <button
-                onClick={() => handleSelectImage(image._id)}
-                className="bg-opacity-80 hover:bg-opacity-100 rounded bg-white p-1 shadow-sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSelectImage(image._id)
+                }}
+                className="bg-opacity-80 hover:bg-opacity-100 rounded bg-white p-1 shadow-sm dark:bg-gray-900"
               >
                 <div
-                  className={`h-4 w-4 rounded border ${
-                    selectedImages.includes(image._id)
-                      ? 'border-indigo-600 bg-indigo-600'
-                      : 'border-gray-400'
-                  }`}
+                  className={`h-4 w-4 rounded border ${selectedImages.includes(image._id)
+                      ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
+                      : 'border-gray-400 dark:border-gray-500'
+                    }`}
                 >
                   {selectedImages.includes(image._id) && (
                     <CheckIcon className="h-3 w-3 text-white" />
@@ -180,7 +187,14 @@ export function ImageGrid({
               </div>
             )}
 
-            <div className="relative aspect-video">
+            <div
+              className="relative aspect-video"
+              onClick={() => {
+                if (selectedImages.length > 0) {
+                  handleSelectImage(image._id)
+                }
+              }}
+            >
               {image.imageUrl ? (
                 <img
                   src={`${image.imageUrl}?w=800&q=85&auto=format&fit=max`}
@@ -189,18 +203,17 @@ export function ImageGrid({
                   loading="lazy"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-gray-400">
+                <div className="flex h-full items-center justify-center text-gray-400 dark:text-gray-500">
                   No image
                 </div>
               )}
             </div>
 
             <div
-              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${
-                hoveredImage === image._id
+              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${hoveredImage === image._id
                   ? 'opacity-100'
                   : 'opacity-0 group-hover:opacity-100'
-              }`}
+                }`}
             >
               <div className="text-sm text-white">
                 <p className="font-medium">{image.photographer}</p>
@@ -215,21 +228,26 @@ export function ImageGrid({
             </div>
 
             <div
-              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
-                hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
+                }`}
             >
               <button
-                onClick={() => onImageUpdate(image)}
-                className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onImageUpdate(image)
+                }}
+                className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                 title="Edit metadata"
               >
                 <PencilIcon className="h-5 w-5" />
               </button>
               <button
-                onClick={() => handleToggleFeatured(image._id, !image.featured)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleToggleFeatured(image._id, !image.featured)
+                }}
                 disabled={loadingStates[image._id]}
-                className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 disabled:opacity-50"
+                className="rounded-full bg-white p-2 text-gray-700 shadow-lg hover:bg-gray-100 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                 title={
                   image.featured ? 'Remove from featured' : 'Add to featured'
                 }
@@ -241,8 +259,11 @@ export function ImageGrid({
                 )}
               </button>
               <button
-                onClick={() => setDeleteConfirmId(image._id)}
-                className="rounded-full bg-white p-2 text-red-600 shadow-lg hover:bg-red-50"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeleteConfirmId(image._id)
+                }}
+                className="rounded-full bg-white p-2 text-red-600 shadow-lg hover:bg-red-50 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-gray-700"
                 title="Delete image"
               >
                 <TrashIcon className="h-5 w-5" />
