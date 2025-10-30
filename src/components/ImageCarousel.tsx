@@ -53,6 +53,16 @@ export function ImageCarousel({
     globalKeyboard: false,
   })
 
+  React.useEffect(() => {
+    const currentImage = images[currentIndex]
+    if (currentImage && imageLoadStates[currentImage._id] === undefined) {
+      setImageLoadStates((prev) => ({
+        ...prev,
+        [currentImage._id]: false,
+      }))
+    }
+  }, [currentIndex, images, imageLoadStates])
+
   if (!images || images.length === 0) {
     return null
   }
@@ -60,10 +70,10 @@ export function ImageCarousel({
   const currentImage = images[currentIndex]
   const isCurrentImageLoading =
     currentImage &&
-    !imageLoadStates[currentImage._id] &&
+    imageLoadStates[currentImage._id] === false &&
     !imageErrorStates[currentImage._id]
   const hasCurrentImageError =
-    currentImage && imageErrorStates[currentImage._id]
+    currentImage && imageErrorStates[currentImage._id] === true
 
   return (
     <div
@@ -118,6 +128,10 @@ export function ImageCarousel({
               }}
               onError={() => {
                 setImageErrorStates((prev) => ({
+                  ...prev,
+                  [currentImage._id]: true,
+                }))
+                setImageLoadStates((prev) => ({
                   ...prev,
                   [currentImage._id]: true,
                 }))
