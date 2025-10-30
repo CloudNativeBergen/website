@@ -61,13 +61,13 @@ export async function createGalleryImage(
       (file as { _type?: string })?._type === 'reference'
         ? (file as { _type: 'reference'; _ref: string })
         : createReference(
-          (
-            await clientWrite.assets.upload('image', file as Uploadable, {
-              filename: (file as File).name || 'image',
-              contentType: (file as File).type || 'image/jpeg',
-            })
-          )._id,
-        )
+            (
+              await clientWrite.assets.upload('image', file as Uploadable, {
+                filename: (file as File).name || 'image',
+                contentType: (file as File).type || 'image/jpeg',
+              })
+            )._id,
+          )
 
     const document = {
       _type: 'imageGallery',
@@ -151,17 +151,17 @@ export async function updateGalleryImage(
         (patch.file as { _type?: string })._type === 'reference'
           ? (patch.file as { _type: 'reference'; _ref: string })
           : createReference(
-            (
-              await clientWrite.assets.upload(
-                'image',
-                patch.file as Uploadable,
-                {
-                  filename: (patch.file as File).name || 'image',
-                  contentType: (patch.file as File).type || 'image/jpeg',
-                },
-              )
-            )._id,
-          )
+              (
+                await clientWrite.assets.upload(
+                  'image',
+                  patch.file as Uploadable,
+                  {
+                    filename: (patch.file as File).name || 'image',
+                    contentType: (patch.file as File).type || 'image/jpeg',
+                  },
+                )
+              )._id,
+            )
 
       updatePatch.image = {
         _type: 'image',
@@ -253,6 +253,7 @@ export async function getGalleryImage(
  */
 export async function getGalleryImageCount(
   filter?: GalleryImageFilter & { conferenceId?: string },
+  useCache = true,
 ): Promise<number> {
   try {
     const query = groq`
@@ -281,7 +282,8 @@ export async function getGalleryImageCount(
         : null,
     }
 
-    return (await clientReadCached.fetch(query, queryParams)) || 0
+    const client = useCache ? clientReadCached : clientReadUncached
+    return (await client.fetch(query, queryParams)) || 0
   } catch (error) {
     logger.error('Error fetching gallery image count', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -296,11 +298,13 @@ export async function getGalleryImageCount(
  */
 export async function getGalleryImages(
   filter?: GalleryImageFilter & { conferenceId?: string },
-  revalidate?: number,
+  options?: { revalidate?: number; useCache?: boolean },
 ): Promise<GalleryImageWithSpeakers[]> {
   try {
     const limit = filter?.limit || 100
     const offset = filter?.offset || 0
+    const useCache = options?.useCache ?? true
+    const revalidate = options?.revalidate
 
     // For backward compatibility: if images don't have conference field, they'll still be fetched
     // Once conference field is added to images, filtering will work properly
@@ -355,13 +359,17 @@ export async function getGalleryImages(
         : null,
     }
 
-    return (
-      (await clientReadCached.fetch(
-        query,
-        queryParams,
-        revalidate ? { next: { revalidate } } : undefined,
-      )) || []
-    )
+    if (useCache) {
+      return (
+        (await clientReadCached.fetch(
+          query,
+          queryParams,
+          revalidate ? { next: { revalidate } } : undefined,
+        )) || []
+      )
+    } else {
+      return (await clientReadUncached.fetch(query, queryParams)) || []
+    }
   } catch (error) {
     logger.error('Error fetching gallery images', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -378,7 +386,10 @@ export async function getFeaturedGalleryImages(
   revalidate?: number,
   conferenceId?: string,
 ): Promise<GalleryImageWithSpeakers[]> {
-  return getGalleryImages({ featured: true, limit, conferenceId }, revalidate)
+  return getGalleryImages(
+    { featured: true, limit, conferenceId },
+    { revalidate },
+  )
 }
 
 /**

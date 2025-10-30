@@ -264,9 +264,10 @@ export function GalleryFilters({
                       key={speaker._id}
                       value={speaker}
                       className={({ active }) =>
-                        `relative cursor-default py-2 pr-4 pl-3 select-none ${active
-                          ? 'bg-indigo-600 text-white'
-                          : 'text-gray-900 dark:text-gray-100'
+                        `relative cursor-default py-2 pr-4 pl-3 select-none ${
+                          active
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-900 dark:text-gray-100'
                         }`
                       }
                     >

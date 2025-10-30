@@ -98,10 +98,11 @@ export function ImageGrid({
             }
           >
             <div
-              className={`h-4 w-4 rounded border ${selectedImages.length === images.length && images.length > 0
+              className={`h-4 w-4 rounded border ${
+                selectedImages.length === images.length && images.length > 0
                   ? 'border-indigo-600 bg-indigo-600'
                   : 'border-gray-300'
-                }`}
+              }`}
             >
               {selectedImages.length === images.length && images.length > 0 && (
                 <CheckIcon className="h-3 w-3 text-white" />
@@ -160,10 +161,11 @@ export function ImageGrid({
                 className="bg-opacity-80 hover:bg-opacity-100 rounded bg-white p-1 shadow-sm"
               >
                 <div
-                  className={`h-4 w-4 rounded border ${selectedImages.includes(image._id)
+                  className={`h-4 w-4 rounded border ${
+                    selectedImages.includes(image._id)
                       ? 'border-indigo-600 bg-indigo-600'
                       : 'border-gray-400'
-                    }`}
+                  }`}
                 >
                   {selectedImages.includes(image._id) && (
                     <CheckIcon className="h-3 w-3 text-white" />
@@ -194,10 +196,11 @@ export function ImageGrid({
             </div>
 
             <div
-              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${hoveredImage === image._id
+              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${
+                hoveredImage === image._id
                   ? 'opacity-100'
                   : 'opacity-0 group-hover:opacity-100'
-                }`}
+              }`}
             >
               <div className="text-sm text-white">
                 <p className="font-medium">{image.photographer}</p>
@@ -212,8 +215,9 @@ export function ImageGrid({
             </div>
 
             <div
-              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
-                }`}
+              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
+                hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
+              }`}
             >
               <button
                 onClick={() => onImageUpdate(image)}

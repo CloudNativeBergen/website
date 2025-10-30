@@ -313,7 +313,7 @@ export async function getConferenceForDomain(
           ),
           getGalleryImages(
             { limit: galleryOptions.limit ?? 50, conferenceId: conference._id },
-            revalidate,
+            { revalidate },
           ),
         ])
 
@@ -337,7 +337,10 @@ export async function getConferenceForDomain(
             galleryOptions.featuredLimit ?? 8,
             revalidate,
           ),
-          getGalleryImages({ limit: galleryOptions.limit ?? 50 }, revalidate),
+          getGalleryImages(
+            { limit: galleryOptions.limit ?? 50 },
+            { revalidate },
+          ),
         ])
 
         conference.featuredGalleryImages = featuredGalleryImages

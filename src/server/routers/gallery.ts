@@ -29,17 +29,20 @@ export const galleryRouter = router({
           })
         }
 
-        const images = await getGalleryImages({
-          conferenceId: conference._id,
-          featured: input.featured,
-          speakerId: input.speakerId,
-          dateFrom: input.dateFrom,
-          dateTo: input.dateTo,
-          photographerSearch: input.photographerSearch,
-          locationSearch: input.locationSearch,
-          limit: input.limit,
-          offset: input.offset,
-        })
+        const images = await getGalleryImages(
+          {
+            conferenceId: conference._id,
+            featured: input.featured,
+            speakerId: input.speakerId,
+            dateFrom: input.dateFrom,
+            dateTo: input.dateTo,
+            photographerSearch: input.photographerSearch,
+            locationSearch: input.locationSearch,
+            limit: input.limit,
+            offset: input.offset,
+          },
+          { useCache: false },
+        )
         return images
       } catch (error) {
         if (error instanceof TRPCError) throw error
@@ -133,15 +136,18 @@ export const galleryRouter = router({
           })
         }
 
-        const count = await getGalleryImageCount({
-          conferenceId: conference._id,
-          featured: input.featured,
-          speakerId: input.speakerId,
-          dateFrom: input.dateFrom,
-          dateTo: input.dateTo,
-          photographerSearch: input.photographerSearch,
-          locationSearch: input.locationSearch,
-        })
+        const count = await getGalleryImageCount(
+          {
+            conferenceId: conference._id,
+            featured: input.featured,
+            speakerId: input.speakerId,
+            dateFrom: input.dateFrom,
+            dateTo: input.dateTo,
+            photographerSearch: input.photographerSearch,
+            locationSearch: input.locationSearch,
+          },
+          false,
+        )
         return count
       } catch (error) {
         if (error instanceof TRPCError) throw error
