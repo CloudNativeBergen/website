@@ -11,15 +11,6 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { ConfirmationModal } from '../ConfirmationModal'
 
-/**
- * ImageGrid Component
- *
- * Displays gallery images in a responsive grid with:
- * - Multi-select capability
- * - Individual and bulk actions (feature/unfeature, delete)
- * - Image metadata overlay on hover
- * - Featured status indicator
- */
 interface ImageGridProps {
   images: GalleryImageWithSpeakers[]
   onImageUpdate: (image: GalleryImageWithSpeakers) => void
@@ -27,6 +18,7 @@ interface ImageGridProps {
   onToggleFeatured: (imageId: string, featured: boolean) => Promise<void>
   selectedImages: string[]
   onSelectionChange: (selected: string[]) => void
+  onBulkTag?: () => void
 }
 
 export function ImageGrid({
@@ -36,6 +28,7 @@ export function ImageGrid({
   onToggleFeatured,
   selectedImages,
   onSelectionChange,
+  onBulkTag,
 }: ImageGridProps) {
   const [hoveredImage, setHoveredImage] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
@@ -86,7 +79,12 @@ export function ImageGrid({
 
   return (
     <>
-      <div className="mb-4 flex min-h-[2rem] items-center justify-between">
+      <div
+        className={`mb-4 flex min-h-[2rem] items-center justify-between transition-all ${selectedImages.length > 0
+            ? 'sticky top-16 z-30 -mx-6 bg-white px-6 py-3 shadow-md dark:bg-gray-900'
+            : ''
+          }`}
+      >
         <div className="flex items-center gap-4">
           <button
             onClick={handleSelectAll}
@@ -98,11 +96,10 @@ export function ImageGrid({
             }
           >
             <div
-              className={`h-4 w-4 rounded border ${
-                selectedImages.length === images.length && images.length > 0
-                  ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
-                  : 'border-gray-300 dark:border-gray-600'
-              }`}
+              className={`h-4 w-4 rounded border ${selectedImages.length === images.length && images.length > 0
+                ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
+                : 'border-gray-300 dark:border-gray-600'
+                }`}
             >
               {selectedImages.length === images.length && images.length > 0 && (
                 <CheckIcon className="h-3 w-3 text-white" />
@@ -118,6 +115,14 @@ export function ImageGrid({
         </div>
         {selectedImages.length > 0 && (
           <div className="flex items-center gap-2">
+            {onBulkTag && (
+              <button
+                onClick={onBulkTag}
+                className="rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+              >
+                Tag Speakers
+              </button>
+            )}
             <button
               onClick={async () => {
                 const toToggle = images.filter((img) =>
@@ -129,7 +134,7 @@ export function ImageGrid({
                 }
                 onSelectionChange([])
               }}
-              className="rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+              className="rounded-md bg-gray-600 px-3 py-1 text-sm font-medium text-white hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600"
             >
               {images
                 .filter((img) => selectedImages.includes(img._id))
@@ -151,9 +156,8 @@ export function ImageGrid({
         {images.map((image) => (
           <div
             key={image._id}
-            className={`group relative overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 ${
-              selectedImages.length > 0 ? 'cursor-pointer' : ''
-            }`}
+            className={`group relative overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 ${selectedImages.length > 0 ? 'cursor-pointer' : ''
+              }`}
             onMouseEnter={() => setHoveredImage(image._id)}
             onMouseLeave={() => setHoveredImage(null)}
             onClick={(e) => {
@@ -171,11 +175,10 @@ export function ImageGrid({
                 className="bg-opacity-80 hover:bg-opacity-100 rounded bg-white p-1 shadow-sm dark:bg-gray-900"
               >
                 <div
-                  className={`h-4 w-4 rounded border ${
-                    selectedImages.includes(image._id)
-                      ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
-                      : 'border-gray-400 dark:border-gray-500'
-                  }`}
+                  className={`h-4 w-4 rounded border ${selectedImages.includes(image._id)
+                    ? 'border-indigo-600 bg-indigo-600 dark:border-indigo-500 dark:bg-indigo-500'
+                    : 'border-gray-400 dark:border-gray-500'
+                    }`}
                 >
                   {selectedImages.includes(image._id) && (
                     <CheckIcon className="h-3 w-3 text-white" />
@@ -213,11 +216,10 @@ export function ImageGrid({
             </div>
 
             <div
-              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${
-                hoveredImage === image._id
-                  ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100'
-              }`}
+              className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 transition-opacity ${hoveredImage === image._id
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100'
+                }`}
             >
               <div className="text-sm text-white">
                 <p className="font-medium">{image.photographer}</p>
@@ -232,9 +234,8 @@ export function ImageGrid({
             </div>
 
             <div
-              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${
-                hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center gap-2 transition-opacity ${hoveredImage === image._id ? 'opacity-100' : 'opacity-0'
+                }`}
             >
               <button
                 onClick={(e) => {

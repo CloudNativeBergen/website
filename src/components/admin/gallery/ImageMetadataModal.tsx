@@ -20,10 +20,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '../NotificationProvider'
-import type {
-  GalleryImageWithSpeakers,
-  GalleryImageWithSpeakers as GalleryImage,
-} from '@/lib/gallery/types'
+import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import {
   extractDateFromISO,
   extractTimeFromISO,
@@ -32,27 +29,33 @@ import {
 } from '@/lib/time'
 
 interface ImageMetadataModalProps {
-  image: GalleryImage
+  image?: GalleryImageWithSpeakers
+  images?: GalleryImageWithSpeakers[]
   isOpen: boolean
   onClose: () => void
-  onUpdate: (image: GalleryImageWithSpeakers) => void
+  onUpdate: (image?: GalleryImageWithSpeakers) => void
 }
 
 export function ImageMetadataModal({
   image,
+  images,
   isOpen,
   onClose,
   onUpdate,
 }: ImageMetadataModalProps) {
+  const isBulkMode = !!images && images.length > 1
+  const singleImage = image || (images && images.length === 1 ? images[0] : null)
   const { showNotification } = useNotification()
   const [formData, setFormData] = useState({
-    photographer: image.photographer,
-    date: image.date,
-    location: image.location,
-    imageAlt: image.imageAlt || '',
-    featured: image.featured,
+    photographer: singleImage?.photographer || '',
+    date: singleImage?.date || '',
+    location: singleImage?.location || '',
+    imageAlt: singleImage?.imageAlt || '',
+    featured: singleImage?.featured || false,
   })
-  const [selectedSpeakers, setSelectedSpeakers] = useState(image.speakers || [])
+  const [selectedSpeakers, setSelectedSpeakers] = useState(
+    singleImage?.speakers || [],
+  )
   const [speakerQuery, setSpeakerQuery] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [notifySpeakers, setNotifySpeakers] = useState(false)
@@ -67,7 +70,10 @@ export function ImageMetadataModal({
 
   const updateMutation = api.gallery.update.useMutation({
     onSuccess: (updatedImage: GalleryImageWithSpeakers) => {
-      showNotification({ title: 'Image updated successfully', type: 'success' })
+      const message = isBulkMode
+        ? `Successfully updated ${images!.length} images`
+        : 'Image updated successfully'
+      showNotification({ title: message, type: 'success' })
       onUpdate(updatedImage)
       setIsSubmitting(false)
     },
@@ -81,16 +87,20 @@ export function ImageMetadataModal({
   })
 
   useEffect(() => {
-    setFormData({
-      photographer: image.photographer,
-      date: image.date,
-      location: image.location,
-      imageAlt: image.imageAlt || '',
-      featured: image.featured,
-    })
-    setSelectedSpeakers(image.speakers || [])
-    setNotifySpeakers(false)
-  }, [image])
+    if (singleImage) {
+      setFormData({
+        photographer: singleImage.photographer,
+        date: singleImage.date,
+        location: singleImage.location,
+        imageAlt: singleImage.imageAlt || '',
+        featured: singleImage.featured,
+      })
+      setSelectedSpeakers(singleImage.speakers || [])
+    } else {
+      setSelectedSpeakers([])
+    }
+    setNotifySpeakers(true)
+  }, [singleImage])
 
   useEffect(() => {
     if (isOpen) {
@@ -121,12 +131,50 @@ export function ImageMetadataModal({
     e.preventDefault()
     setIsSubmitting(true)
 
-    updateMutation.mutate({
-      id: image._id,
-      ...formData,
-      speakers: selectedSpeakers.map((s) => s._id),
-      notifySpeakers,
-    })
+    if (isBulkMode && images) {
+      const results = await Promise.allSettled(
+        images.map((img) => {
+          const existingSpeakerIds = img.speakers.map((s) => s._id)
+          const newSpeakerIds = selectedSpeakers.map((s) => s._id)
+          const mergedSpeakerIds = Array.from(
+            new Set([...existingSpeakerIds, ...newSpeakerIds]),
+          )
+
+          return updateMutation.mutateAsync({
+            id: img._id,
+            speakers: mergedSpeakerIds,
+            notifySpeakers,
+          })
+        }),
+      )
+
+      const successCount = results.filter((r) => r.status === 'fulfilled').length
+      const failCount = results.filter((r) => r.status === 'rejected').length
+
+      setIsSubmitting(false)
+      if (failCount === 0) {
+        showNotification({
+          title: `Successfully tagged ${successCount} image${successCount !== 1 ? 's' : ''}`,
+          type: 'success',
+        })
+        onUpdate()
+      } else {
+        showNotification({
+          title: `Tagged ${successCount} images, ${failCount} failed`,
+          type: failCount === images.length ? 'error' : 'warning',
+        })
+        if (successCount > 0) {
+          onUpdate()
+        }
+      }
+    } else if (singleImage) {
+      updateMutation.mutate({
+        id: singleImage._id,
+        ...formData,
+        speakers: selectedSpeakers.map((s) => s._id),
+        notifySpeakers,
+      })
+    }
   }
 
   const removeSpeaker = (speakerId: string) => {
@@ -186,7 +234,9 @@ export function ImageMetadataModal({
               <DialogPanel className="max-h-screen w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-lg dark:bg-gray-900">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
-                    Edit Image Metadata
+                    {isBulkMode
+                      ? `Tag ${images!.length} Images`
+                      : 'Edit Image Metadata'}
                   </h3>
                   <button
                     type="button"
@@ -198,154 +248,169 @@ export function ImageMetadataModal({
                   </button>
                 </div>
 
+                {isBulkMode && (
+                  <div className="mt-4 rounded-md bg-blue-50 p-3 dark:bg-blue-500/10">
+                    <p className="text-sm text-blue-700 dark:text-blue-400">
+                      Add speakers to{' '}
+                      <span className="font-semibold">
+                        {images!.length} selected image
+                        {images!.length !== 1 ? 's' : ''}
+                      </span>
+                      . Selected speakers will be added to all images.
+                    </p>
+                  </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="mt-4 space-y-4">
                   <div className="space-y-4">
-                    {image.imageUrl && (
+                    {!isBulkMode && singleImage?.imageUrl && (
                       <div className="relative h-64 w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
                         <img
-                          src={`${image.imageUrl}?w=1200&q=85&auto=format&fit=max`}
+                          src={`${singleImage.imageUrl}?w=1200&q=85&auto=format&fit=max`}
                           alt={formData.imageAlt}
                           className="h-full w-full object-contain"
                         />
                       </div>
                     )}
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="photographer"
-                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                        >
-                          Photographer
-                        </label>
-                        <div className="mt-2">
-                          <input
-                            type="text"
-                            id="photographer"
-                            value={formData.photographer}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                photographer: e.target.value,
-                              }))
-                            }
-                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
+                    {!isBulkMode && (
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <div>
                           <label
-                            htmlFor="date"
+                            htmlFor="photographer"
                             className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                           >
-                            Date
+                            Photographer
                           </label>
                           <div className="mt-2">
                             <input
-                              type="date"
-                              id="date"
-                              value={extractDateFromISO(formData.date)}
-                              onChange={(e) => {
-                                const newDate = e.target.value
-                                  ? updateDateInISO(
+                              type="text"
+                              id="photographer"
+                              value={formData.photographer}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  photographer: e.target.value,
+                                }))
+                              }
+                              className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label
+                              htmlFor="date"
+                              className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                            >
+                              Date
+                            </label>
+                            <div className="mt-2">
+                              <input
+                                type="date"
+                                id="date"
+                                value={extractDateFromISO(formData.date)}
+                                onChange={(e) => {
+                                  const newDate = e.target.value
+                                    ? updateDateInISO(
                                       formData.date,
                                       e.target.value,
                                     )
-                                  : formData.date
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  date: newDate,
-                                }))
-                              }}
-                              className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                              required
-                            />
+                                    : formData.date
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    date: newDate,
+                                  }))
+                                }}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="time"
+                              className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                            >
+                              Time
+                            </label>
+                            <div className="mt-2">
+                              <input
+                                type="time"
+                                id="time"
+                                value={extractTimeFromISO(formData.date)}
+                                onChange={(e) => {
+                                  const timeValue = e.target.value || '00:00'
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    date: updateTimeInISO(
+                                      formData.date,
+                                      timeValue,
+                                    ),
+                                  }))
+                                }}
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                                required
+                              />
+                            </div>
                           </div>
                         </div>
+
                         <div>
                           <label
-                            htmlFor="time"
+                            htmlFor="location"
                             className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                           >
-                            Time
+                            Location
                           </label>
                           <div className="mt-2">
                             <input
-                              type="time"
-                              id="time"
-                              value={extractTimeFromISO(formData.date)}
-                              onChange={(e) => {
-                                const timeValue = e.target.value || '00:00'
+                              type="text"
+                              id="location"
+                              value={formData.location}
+                              onChange={(e) =>
                                 setFormData((prev) => ({
                                   ...prev,
-                                  date: updateTimeInISO(
-                                    formData.date,
-                                    timeValue,
-                                  ),
+                                  location: e.target.value,
                                 }))
-                              }}
-                              className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                              }
+                              className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                               required
                             />
                           </div>
                         </div>
-                      </div>
 
-                      <div>
-                        <label
-                          htmlFor="location"
-                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                        >
-                          Location
-                        </label>
-                        <div className="mt-2">
-                          <input
-                            type="text"
-                            id="location"
-                            value={formData.location}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                location: e.target.value,
-                              }))
-                            }
-                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                            required
-                          />
+                        <div>
+                          <label
+                            htmlFor="imageAlt"
+                            className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                          >
+                            Alt Text
+                          </label>
+                          <div className="mt-2">
+                            <input
+                              type="text"
+                              id="imageAlt"
+                              value={formData.imageAlt}
+                              onChange={(e) =>
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  imageAlt: e.target.value,
+                                }))
+                              }
+                              className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                              placeholder="Description for accessibility"
+                            />
+                          </div>
                         </div>
                       </div>
-
-                      <div>
-                        <label
-                          htmlFor="imageAlt"
-                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                        >
-                          Alt Text
-                        </label>
-                        <div className="mt-2">
-                          <input
-                            type="text"
-                            id="imageAlt"
-                            value={formData.imageAlt}
-                            onChange={(e) =>
-                              setFormData((prev) => ({
-                                ...prev,
-                                imageAlt: e.target.value,
-                              }))
-                            }
-                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                            placeholder="Description for accessibility"
-                          />
-                        </div>
-                      </div>
-                    </div>
+                    )}
 
                     <div>
                       <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                        Tag Speakers
+                        {isBulkMode ? 'Add Speakers' : 'Tag Speakers'}
                       </label>
                       <div className="mt-2">
                         <Combobox
@@ -376,10 +441,9 @@ export function ImageMetadataModal({
                                     key={speaker._id}
                                     value={speaker}
                                     className={({ active }) =>
-                                      `relative cursor-default py-2 pr-4 pl-3 select-none ${
-                                        active
-                                          ? 'bg-indigo-600 text-white'
-                                          : 'text-gray-900 dark:text-white'
+                                      `relative cursor-default py-2 pr-4 pl-3 select-none ${active
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'text-gray-900 dark:text-white'
                                       }`
                                     }
                                   >
@@ -491,35 +555,38 @@ export function ImageMetadataModal({
                               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
                             />
                             <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                              Send email notification to newly tagged speakers
+                              Send email notification to {isBulkMode ? 'tagged' : 'newly tagged'} speakers
                             </span>
                           </label>
                           <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
-                            Speakers will receive an email letting them know
-                            they appear in this photo
+                            {isBulkMode
+                              ? 'Speakers will receive an email for each photo they are tagged in'
+                              : 'Speakers will receive an email letting them know they appear in this photo'}
                           </p>
                         </div>
                       )}
                     </div>
 
-                    <div>
-                      <label className="flex cursor-pointer items-center">
-                        <input
-                          type="checkbox"
-                          checked={formData.featured}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              featured: e.target.checked,
-                            }))
-                          }
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
-                        />
-                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                          Featured image
-                        </span>
-                      </label>
-                    </div>
+                    {!isBulkMode && (
+                      <div>
+                        <label className="flex cursor-pointer items-center">
+                          <input
+                            type="checkbox"
+                            checked={formData.featured}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                featured: e.target.checked,
+                              }))
+                            }
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
+                          />
+                          <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            Featured image
+                          </span>
+                        </label>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex justify-end gap-3 pt-6">
@@ -532,10 +599,16 @@ export function ImageMetadataModal({
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || (isBulkMode && selectedSpeakers.length === 0)}
                       className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
                     >
-                      {isSubmitting ? 'Saving...' : 'Save Changes'}
+                      {isSubmitting
+                        ? isBulkMode
+                          ? 'Tagging...'
+                          : 'Saving...'
+                        : isBulkMode
+                          ? 'Tag Images'
+                          : 'Save Changes'}
                     </button>
                   </div>
                 </form>
