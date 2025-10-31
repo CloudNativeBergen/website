@@ -12,6 +12,7 @@ import { ProposalForm } from '@/components/cfp/ProposalForm'
 import { ProposalGuidanceSidebar } from '@/components/cfp/ProposalGuidanceSidebar'
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
@@ -29,7 +30,10 @@ export default async function ProposalPage({
   const queryParams = await searchParams
   const proposalId = routeParams.id?.[0] || queryParams.id
 
-  const session = await getAuthSession()
+  const headersList = await headers()
+  const fullUrl = headersList.get('x-url') || ''
+  const session = await getAuthSession({ url: fullUrl })
+
   if (!session?.speaker) {
     const callbackUrl = proposalId
       ? `/cfp/proposal/${proposalId}`

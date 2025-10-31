@@ -1,11 +1,15 @@
 import { getAuthSession } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { CFPProfilePage } from '@/components/cfp/CFPProfilePage'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export default async function ProfilePage() {
-  const session = await getAuthSession()
+  const headersList = await headers()
+  const fullUrl = headersList.get('x-url') || ''
+  const session = await getAuthSession({ url: fullUrl })
+
   if (!session?.speaker) {
     return redirect('/api/auth/signin?callbackUrl=/cfp/profile')
   }

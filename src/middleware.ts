@@ -12,7 +12,6 @@ const workOSMiddleware = authkitMiddleware({
     enabled: true,
     unauthenticatedPaths: [],
   },
-  //signInPath: '/workshop',
   debug: process.env.NODE_ENV === 'development',
 })
 
@@ -45,7 +44,14 @@ const nextAuthMiddleware = auth((req) => {
     return NextResponse.redirect(signInUrl)
   }
 
-  return NextResponse.next()
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-url', req.url)
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
 })
 
 export default function middleware(req: NextRequest, event: NextFetchEvent) {

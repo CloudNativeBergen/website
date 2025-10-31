@@ -135,9 +135,70 @@ export const auth = _auth as typeof _auth &
     context: { params: Record<string, string | string[] | undefined> },
   ) => HandlerResponse)
 
-export async function getAuthSession() {
+const SANITY_ID_PATTERN = /^[a-zA-Z0-9_-]+$/
+const MAX_IMPERSONATION_ID_LENGTH = 100
+
+export async function getAuthSession(req?: {
+  url?: string
+}): Promise<Session | null> {
   if (AppEnvironment.isTestMode) {
     return AppEnvironment.createMockAuthContext()
   }
-  return await _auth()
+
+  const session = await _auth()
+
+  if (!AppEnvironment.isDevelopment) {
+    return session
+  }
+
+  if (!session?.speaker?.is_organizer) {
+    return session
+  }
+
+  if (!req?.url) {
+    return session
+  }
+
+  try {
+    const url = new URL(req.url, 'http://localhost')
+    const impersonateId = url.searchParams.get('impersonate')
+
+    if (impersonateId) {
+      if (!SANITY_ID_PATTERN.test(impersonateId)) {
+        console.warn(
+          `Invalid impersonation ID format: ${impersonateId.slice(0, 20)}`,
+        )
+        return session
+      }
+
+      if (impersonateId.length > MAX_IMPERSONATION_ID_LENGTH) {
+        console.warn('Impersonation ID too long, rejecting')
+        return session
+      }
+
+      const { getSpeaker } = await import('@/lib/speaker/sanity')
+      const { speaker: impersonatedSpeaker } = await getSpeaker(impersonateId)
+
+      if (impersonatedSpeaker && !impersonatedSpeaker.is_organizer) {
+        console.log(
+          `[AUDIT] Admin ${session.speaker.email} (${session.speaker._id}) impersonating ${impersonatedSpeaker.email} (${impersonatedSpeaker._id})`,
+        )
+
+        return {
+          ...session,
+          speaker: impersonatedSpeaker,
+          isImpersonating: true,
+          realAdmin: session.speaker,
+        }
+      } else if (impersonatedSpeaker?.is_organizer) {
+        console.warn(
+          `Admin ${session.speaker.email} attempted to impersonate another organizer`,
+        )
+      }
+    }
+  } catch (error) {
+    console.error('Error during impersonation:', error)
+  }
+
+  return session
 }

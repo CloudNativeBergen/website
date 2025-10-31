@@ -11,5 +11,7 @@ declare module 'next-auth' {
     }
     speaker?: Speaker
     account?: Account
+    isImpersonating?: boolean
+    realAdmin?: Speaker
   }
 }

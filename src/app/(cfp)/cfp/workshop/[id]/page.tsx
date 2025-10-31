@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { getAuthSession } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { clientReadUncached } from '@/lib/sanity/client'
@@ -32,7 +33,9 @@ export default async function WorkshopDetailsPage({
   params,
 }: WorkshopDetailsPageProps) {
   const { id: workshopId } = await params
-  const session = await getAuthSession()
+  const headersList = await headers()
+  const fullUrl = headersList.get('x-url') || ''
+  const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
     return redirect(`/api/auth/signin?callbackUrl=/cfp/workshop/${workshopId}`)
@@ -113,7 +116,9 @@ export default async function WorkshopDetailsPage({
       typeof s === 'object' && s !== null && s._id === currentSpeaker._id,
   )
 
-  if (!isSpeaker) {
+  const isImpersonatingAsOrganizer = session.isImpersonating && session.realAdmin?.is_organizer
+
+  if (!isSpeaker && !isImpersonatingAsOrganizer) {
     return (
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mb-6">

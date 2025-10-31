@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { getProposalSanity as getProposal } from '@/lib/proposal/server'
 import { getAuthSession } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
@@ -18,16 +19,21 @@ export default async function ProposalViewPage({
   params,
 }: ProposalViewPageProps) {
   const { id } = await params
-  const session = await getAuthSession()
+  const headersList = await headers()
+  const fullUrl = headersList.get('x-url') || ''
+  const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
     return redirect('/api/auth/signin?callbackUrl=/cfp/proposal/' + id)
   }
 
+  const isImpersonatingAsOrganizer =
+    session.isImpersonating && !!session.realAdmin?.is_organizer
+
   const { proposal, proposalError } = await getProposal({
     id,
     speakerId: session.speaker._id,
-    isOrganizer: false,
+    isOrganizer: isImpersonatingAsOrganizer,
   })
 
   if (proposalError) {
@@ -118,11 +124,15 @@ export default async function ProposalViewPage({
         s._id === session.speaker._id,
     ) || currentUserSpeaker
 
+  const backUrl = session.isImpersonating
+    ? `/cfp/list?impersonate=${session.speaker._id}`
+    : '/cfp/list'
+
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
         <Link
-          href="/cfp/list"
+          href={backUrl}
           className="hover:text-brand-electric-purple inline-flex items-center text-brand-cloud-blue transition-colors"
         >
           <ChevronLeftIcon className="mr-2 h-5 w-5" />

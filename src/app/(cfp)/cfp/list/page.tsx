@@ -1,5 +1,6 @@
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { getGalleryImages } from '@/lib/gallery/sanity'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
@@ -13,7 +14,10 @@ import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 
 export default async function SpeakerDashboard() {
-  const session = await getAuthSession()
+  const headersList = await headers()
+  const fullUrl = headersList.get('x-url') || ''
+  const session = await getAuthSession({ url: fullUrl })
+
   if (!session?.speaker) {
     return redirect('/api/auth/signin?callbackUrl=/cfp/list')
   }
