@@ -1,5 +1,4 @@
 import { Conference } from './types'
-import { Topic } from '../topic/types'
 
 /**
  * Validates that conference topics are properly expanded (not Sanity references).
@@ -33,8 +32,8 @@ export function validateExpandedTopics(
     const errorContext = context ? ` in ${context}` : ''
     throw new Error(
       `Conference topics are not expanded${errorContext}. ` +
-        `Please pass \`topics: true\` to getConferenceForCurrentDomain() call. ` +
-        `Found reference object: ${JSON.stringify(firstTopic)}`,
+      `Please pass \`topics: true\` to getConferenceForCurrentDomain() call. ` +
+      `Found reference object: ${JSON.stringify(firstTopic)}`,
     )
   }
 
@@ -47,8 +46,8 @@ export function validateExpandedTopics(
     const errorContext = context ? ` in ${context}` : ''
     throw new Error(
       `Conference topics are missing required fields${errorContext}. ` +
-        `Found ${invalidTopics.length} invalid topic(s). ` +
-        `First invalid: ${JSON.stringify(invalidTopics[0])}`,
+      `Found ${invalidTopics.length} invalid topic(s). ` +
+      `First invalid: ${JSON.stringify(invalidTopics[0])}`,
     )
   }
 }

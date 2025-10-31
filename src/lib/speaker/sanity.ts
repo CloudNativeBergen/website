@@ -190,7 +190,7 @@ export async function getPublicSpeaker(
       `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
         name, title, bio, links, flags, "image": image.asset->url,
         "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
-          _id, title, description, language, level, format, audiences,
+          _id, title, description, language, level, format, audiences, video,
           speakers[]-> {
             _id, name, title, "slug": slug.current, "image": image.asset->url
           },

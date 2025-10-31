@@ -20,6 +20,8 @@ import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
+import { VideoEmbed } from '@/components/VideoEmbed'
+import { getVideoPlatform } from '@/lib/video/utils'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -296,6 +298,14 @@ export default async function Profile({ params }: Props) {
                             </div>
                           </div>
                         </div>
+                        {talk.video && getVideoPlatform(talk.video) && (
+                          <div className="mb-4">
+                            <VideoEmbed
+                              url={talk.video}
+                              title={`${talk.title} - Recording`}
+                            />
+                          </div>
+                        )}
                         {talk.description && (
                           <div className="mb-4">
                             <div className="font-inter text-gray-700 dark:text-gray-300">

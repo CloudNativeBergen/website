@@ -29,6 +29,8 @@ import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
+import { VideoEmbed } from '@/components/VideoEmbed'
+import { getVideoPlatform } from '@/lib/video/utils'
 
 export interface SpeakerProfilePreviewProps {
   isOpen: boolean
@@ -255,6 +257,16 @@ export default function SpeakerProfilePreview({
                                             speakers={talk.speakers}
                                           />
                                         </div>
+                                      </div>
+                                    )}
+
+                                  {talk.video &&
+                                    getVideoPlatform(talk.video) && (
+                                      <div className="mb-4">
+                                        <VideoEmbed
+                                          url={talk.video}
+                                          title={`${talk.title} - Recording`}
+                                        />
                                       </div>
                                     )}
 

@@ -10,6 +10,8 @@ import {
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
+import { VideoEmbed } from '@/components/VideoEmbed'
+import { getVideoPlatform } from '@/lib/video/utils'
 
 interface ProposalPublishedContentProps {
   proposalId: string
@@ -113,6 +115,13 @@ export function ProposalPublishedContent({
         Published Content
       </h3>
       <div className="space-y-4">
+        {/* Video Embed */}
+        {videoUrl && !isEditingVideo && getVideoPlatform(videoUrl) && (
+          <div className="mb-4">
+            <VideoEmbed url={videoUrl} title="Talk Recording" />
+          </div>
+        )}
+
         {/* Video URL Section */}
         <div>
           <dt className="flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">
