@@ -71,8 +71,17 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
 
   if (profileError && !profile) {
     return (
-      <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-        <div className="mt-12 rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+            Speaker Profile
+          </h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Manage your speaker information
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
           <div className="flex">
             <div className="flex-shrink-0">
               <ExclamationCircleIcon
@@ -103,21 +112,17 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
   }
 
   return (
-    <>
-      <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-        <div>
-          <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
-            Your Speaker Profile
-          </h1>
-          <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700 dark:text-gray-300">
-            <p>
-              Manage your speaker information and how you appear to attendees
-            </p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mb-6">
+        <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+          Speaker Profile
+        </h1>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Manage your speaker information and how you appear to attendees
+        </p>
       </div>
 
-      <div className="mx-auto mt-12 max-w-2xl rounded-xl border border-brand-frosted-steel bg-white p-8 shadow-sm lg:max-w-4xl lg:px-12 dark:border-gray-700 dark:bg-gray-800">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <form onSubmit={handleProfileSubmit} className="space-y-8">
           {successMessage && (
             <div className="rounded-lg bg-brand-fresh-green/10 p-4 ring-1 ring-brand-fresh-green/20 dark:bg-green-900/20 dark:ring-green-500/30">
@@ -182,7 +187,7 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
             className="space-y-6"
           />
 
-          <div className="flex justify-end border-t border-brand-frosted-steel pt-6 dark:border-gray-600">
+          <div className="flex justify-end border-t border-gray-200 pt-6 dark:border-gray-600">
             <button
               type="submit"
               disabled={updateProfileMutation.isPending}
@@ -200,6 +205,6 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
           </div>
         </form>
       </div>
-    </>
+    </div>
   )
 }

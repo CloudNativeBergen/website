@@ -236,7 +236,7 @@ export function SpeakerSharingActions({
 
   return (
     <div className="relative">
-      <div ref={componentRef} className="inline-block">
+      <div ref={componentRef} className="w-full">
         {children}
       </div>
 

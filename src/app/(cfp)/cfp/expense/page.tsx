@@ -7,29 +7,27 @@ import { AppEnvironment } from '@/lib/environment/config'
 
 function NotEligibleDisplay() {
   return (
-    <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-800/50 dark:bg-blue-900/20">
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <ExclamationTriangleIcon
-              className="h-6 w-6 text-blue-500 dark:text-blue-400"
-              aria-hidden="true"
-            />
-          </div>
-          <div className="ml-3">
-            <h3 className="text-lg font-medium text-blue-900 dark:text-blue-200">
-              Travel Support Currently Unavailable
-            </h3>
-            <div className="mt-3 text-blue-800 dark:text-blue-300">
-              <p className="mb-3">
-                Travel support is available for speakers who indicated they need
-                funding assistance during proposal submission.
-              </p>
-              <p className="text-sm">
-                Got questions? Feel free to reach out to our friendly organizing
-                team - we&apos;re always happy to help!
-              </p>
-            </div>
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-800/50 dark:bg-blue-900/20">
+      <div className="flex">
+        <div className="flex-shrink-0">
+          <ExclamationTriangleIcon
+            className="h-6 w-6 text-blue-500 dark:text-blue-400"
+            aria-hidden="true"
+          />
+        </div>
+        <div className="ml-3">
+          <h3 className="text-lg font-medium text-blue-900 dark:text-blue-200">
+            Travel Support Currently Unavailable
+          </h3>
+          <div className="mt-3 text-blue-800 dark:text-blue-300">
+            <p className="mb-3">
+              Travel support is available for speakers who indicated they need
+              funding assistance during proposal submission.
+            </p>
+            <p className="text-sm">
+              Got questions? Feel free to reach out to our friendly organizing
+              team - we&apos;re always happy to help!
+            </p>
           </div>
         </div>
       </div>
@@ -49,47 +47,34 @@ export default async function TravelExpensePage() {
 
   if (!isEligibleForTravelSupport) {
     return (
-      <>
-        <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
-          <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             Travel Support
           </h1>
-          <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700 dark:text-gray-300">
-            <p>
-              We&apos;re here to help make your conference journey possible.
-            </p>
-          </div>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            We&apos;re here to help make your conference journey possible
+          </p>
         </div>
 
-        <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
-          <div className="mt-12">
-            <NotEligibleDisplay />
-          </div>
-        </div>
-      </>
+        <NotEligibleDisplay />
+      </div>
     )
   }
 
   return (
-    <>
-      <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
-        <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mb-6">
+        <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
           Travel Support
         </h1>
-        <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700 dark:text-gray-300">
-          <p>We&apos;re here to help make your conference journey possible.</p>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Submit your travel expenses and banking details so we can support
-            your attendance.
-          </p>
-        </div>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+          Submit your travel expenses and banking details so we can support your
+          attendance
+        </p>
       </div>
 
-      <div className="mx-auto max-w-2xl lg:max-w-6xl lg:px-12">
-        <div className="mt-12">
-          <TravelSupportPage />
-        </div>
-      </div>
-    </>
+      <TravelSupportPage />
+    </div>
   )
 }

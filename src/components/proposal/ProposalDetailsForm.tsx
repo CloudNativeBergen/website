@@ -14,6 +14,7 @@ import {
 } from '@/lib/proposal/types'
 import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock } from '@portabletext/editor'
+import { PortableText } from '@portabletext/react'
 import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react'
 import {
@@ -31,11 +32,13 @@ export function ProposalDetailsForm({
   setProposal,
   conference,
   allowedFormats,
+  readOnly = false,
 }: {
   proposal: ProposalInput
   setProposal: (proposal: ProposalInput) => void
   conference: Conference
   allowedFormats: Format[]
+  readOnly?: boolean
 }) {
   const [title, setTitle] = useState(proposal?.title ?? '')
   const [language, setLanguage] = useState(
@@ -117,129 +120,249 @@ export function ProposalDetailsForm({
         Please provide the following details about your presentation.
       </p>
 
-      <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
-        <div className="sm:col-span-4">
-          <Input name="title" label="Title" value={title} setValue={setTitle} />
-        </div>
+      {readOnly ? (
+        <div className="mt-10 space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white">
+              Title
+            </label>
+            <p className="mt-2 text-gray-900 dark:text-white">{title}</p>
+          </div>
 
-        <div className="sm:col-span-2">
-          <Dropdown
-            name="language"
-            label="Language"
-            value={language}
-            setValue={(val) => setLanguage(val as Language)}
-            options={languages}
-          />
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white">
+              Language
+            </label>
+            <p className="mt-2 text-gray-900 dark:text-white">
+              {languages.get(language)}
+            </p>
+          </div>
 
-        <div className="col-span-full">
-          <DescriptionField
-            description={description}
-            setDescription={setDescription}
-          />
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white">
+              Abstract
+            </label>
+            <div className="prose prose-sm dark:prose-invert mt-2 max-w-none text-gray-900 dark:text-white">
+              {description && description.length > 0 ? (
+                <PortableText value={description} />
+              ) : (
+                <p className="text-gray-600 dark:text-gray-400">
+                  No abstract provided
+                </p>
+              )}
+            </div>
+          </div>
 
-        <div className="sm:col-span-3">
-          <Dropdown
-            name="format"
-            label="Presentation Format"
-            value={format}
-            setValue={(val) => setFormat(val as Format)}
-            options={
-              new Map(
-                Array.from(formats).filter(([key]) =>
-                  allowedFormats.includes(key as Format),
-                ),
-              )
-            }
-          />
-        </div>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-900 dark:text-white">
+                Presentation Format
+              </label>
+              <p className="mt-2 text-gray-900 dark:text-white">
+                {formats.get(format)}
+              </p>
+            </div>
 
-        <div className="sm:col-span-3">
-          <Dropdown
-            name="level"
-            label="Skill Level"
-            value={level}
-            setValue={(val) => setLevel(val as Level)}
-            options={levels}
-          />
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-900 dark:text-white">
+                Skill Level
+              </label>
+              <p className="mt-2 text-gray-900 dark:text-white">
+                {levels.get(level)}
+              </p>
+            </div>
+          </div>
 
-        <div className="sm:col-span-full">
-          <Multiselect
-            name="audiences"
-            label="Audience"
-            maxItems={5}
-            placeholder="Select audience"
-            options={Array.from(audiencesMap, ([id, title]) => ({ id, title }))}
-            value={audiences as string[]}
-            setValue={(val: string[]) => setAudiences(val as Audience[])}
-          />
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white">
+              Audience
+            </label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {audiences.length > 0 ? (
+                audiences.map((aud) => (
+                  <span
+                    key={aud}
+                    className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-1 text-sm font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                    {audiencesMap.get(aud)}
+                  </span>
+                ))
+              ) : (
+                <p className="text-gray-600 dark:text-gray-400">
+                  None selected
+                </p>
+              )}
+            </div>
+          </div>
 
-        <div className="sm:col-span-full">
-          <Multiselect
-            name="topics"
-            label="Topics"
-            maxItems={2}
-            placeholder="Select topics"
-            options={(conference.topics ?? [])
-              .filter((topic) => topic._id && topic.title) // Filter out unexpanded references
-              .map((topic) => ({
-                id: topic._id,
-                title: topic.title,
-                color: topic.color,
-              }))}
-            value={topics
-              .filter((topic) => topic && topic._id)
-              .map((topic) => topic._id)}
-            setValue={(val: string[]) => {
-              const selectedTopics = val
-                .map((id) =>
-                  conference.topics?.find((topic) => topic._id === id),
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white">
+              Topics
+            </label>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {topics.length > 0 ? (
+                topics.map((topic) => (
+                  <span
+                    key={topic._id}
+                    className="inline-flex items-center rounded-md px-2.5 py-1 text-sm font-medium"
+                    style={{
+                      backgroundColor: topic.color + '20',
+                      color: topic.color,
+                    }}
+                  >
+                    {topic.title}
+                  </span>
+                ))
+              ) : (
+                <p className="text-gray-600 dark:text-gray-400">
+                  None selected
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-white">
+              Outline (not public)
+            </label>
+            <p className="mt-2 whitespace-pre-wrap text-gray-900 dark:text-white">
+              {outline || 'No outline provided'}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+          <div className="sm:col-span-4">
+            <Input
+              name="title"
+              label="Title"
+              value={title}
+              setValue={setTitle}
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <Dropdown
+              name="language"
+              label="Language"
+              value={language}
+              setValue={(val) => setLanguage(val as Language)}
+              options={languages}
+            />
+          </div>
+
+          <div className="col-span-full">
+            <DescriptionField
+              description={description}
+              setDescription={setDescription}
+            />
+          </div>
+
+          <div className="sm:col-span-3">
+            <Dropdown
+              name="format"
+              label="Presentation Format"
+              value={format}
+              setValue={(val) => setFormat(val as Format)}
+              options={
+                new Map(
+                  Array.from(formats).filter(([key]) =>
+                    allowedFormats.includes(key as Format),
+                  ),
                 )
-                .filter((topic): topic is Topic => !!topic)
-              setTopics(selectedTopics)
-            }}
-          />
-        </div>
+              }
+            />
+          </div>
 
-        <div className="col-span-full">
-          <Textarea
-            name="outline"
-            label="Outline (not public)"
-            rows={3}
-            value={outline}
-            setValue={setOutline}
-          />
-          <HelpText>
-            Provide a detailed outline of the content of your presentation. How
-            do you plan to structure the presentation and what is the expected
-            takeaways for the participants. This will only be visible to the
-            organizers and not displayed on the website.
-          </HelpText>
-        </div>
+          <div className="sm:col-span-3">
+            <Dropdown
+              name="level"
+              label="Skill Level"
+              value={level}
+              setValue={(val) => setLevel(val as Level)}
+              options={levels}
+            />
+          </div>
 
-        <div className="col-span-full">
-          <Checkbox
-            name="tos"
-            label="I agree to the Cloud Native Bergen Code of Conduct"
-            value={tos}
-            setValue={setTos}
-          >
+          <div className="sm:col-span-full">
+            <Multiselect
+              name="audiences"
+              label="Audience"
+              maxItems={5}
+              placeholder="Select audience"
+              options={Array.from(audiencesMap, ([id, title]) => ({
+                id,
+                title,
+              }))}
+              value={audiences as string[]}
+              setValue={(val: string[]) => setAudiences(val as Audience[])}
+            />
+          </div>
+
+          <div className="sm:col-span-full">
+            <Multiselect
+              name="topics"
+              label="Topics"
+              maxItems={2}
+              placeholder="Select topics"
+              options={(conference.topics ?? [])
+                .filter((topic) => topic._id && topic.title)
+                .map((topic) => ({
+                  id: topic._id,
+                  title: topic.title,
+                  color: topic.color,
+                }))}
+              value={topics
+                .filter((topic) => topic && topic._id)
+                .map((topic) => topic._id)}
+              setValue={(val: string[]) => {
+                const selectedTopics = val
+                  .map((id) =>
+                    conference.topics?.find((topic) => topic._id === id),
+                  )
+                  .filter((topic): topic is Topic => !!topic)
+                setTopics(selectedTopics)
+              }}
+            />
+          </div>
+
+          <div className="col-span-full">
+            <Textarea
+              name="outline"
+              label="Outline (not public)"
+              rows={3}
+              value={outline}
+              setValue={setOutline}
+            />
             <HelpText>
-              You must agree to the{' '}
-              <Link
-                href="/conduct"
-                className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover"
-              >
-                Cloud Native Bergen Code of Conduct
-              </Link>{' '}
-              to submit your presentation.
+              Provide a detailed outline of the content of your presentation.
+              How do you plan to structure the presentation and what is the
+              expected takeaways for the participants. This will only be visible
+              to the organizers and not displayed on the website.
             </HelpText>
-          </Checkbox>
+          </div>
+
+          <div className="col-span-full">
+            <Checkbox
+              name="tos"
+              label="I agree to the Cloud Native Bergen Code of Conduct"
+              value={tos}
+              setValue={setTos}
+            >
+              <HelpText>
+                You must agree to the{' '}
+                <Link
+                  href="/conduct"
+                  className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover"
+                >
+                  Cloud Native Bergen Code of Conduct
+                </Link>{' '}
+                to submit your presentation.
+              </HelpText>
+            </Checkbox>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -23,10 +23,9 @@ export function isCfpOpen(conference: Conference): boolean {
     return false
   }
   const now = new Date()
-  return (
-    now >= new Date(conference.cfp_start_date) &&
-    now <= new Date(conference.cfp_end_date)
-  )
+  const startDate = new Date(conference.cfp_start_date + 'T00:00:00Z')
+  const endDate = new Date(conference.cfp_end_date + 'T23:59:59.999Z')
+  return now >= startDate && now <= endDate
 }
 
 /**
@@ -65,10 +64,11 @@ export function isWorkshopRegistrationOpen(conference: Conference): boolean {
     return false
   }
   const now = new Date()
-  return (
-    now >= new Date(conference.workshop_registration_start) &&
-    now <= new Date(conference.workshop_registration_end)
+  const startDate = new Date(
+    conference.workshop_registration_start + 'T00:00:00Z',
   )
+  const endDate = new Date(conference.workshop_registration_end + 'T23:59:59.999Z')
+  return now >= startDate && now <= endDate
 }
 
 /**

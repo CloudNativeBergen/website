@@ -28,7 +28,7 @@ export function CFPLayout({ children }: CFPLayoutProps) {
 
   const baseNavigation: NavigationItem[] = [
     { name: 'Profile', href: '/cfp/profile', icon: UserIcon },
-    { name: 'Submit Talk', href: '/cfp/submit', icon: PlusIcon },
+    { name: 'Submit Talk', href: '/cfp/proposal', icon: PlusIcon },
     { name: 'My Proposals', href: '/cfp/list', icon: ListBulletIcon },
   ]
 

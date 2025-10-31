@@ -48,7 +48,7 @@ const variantConfig: Record<
   },
 }
 
-async function generateQRCode(
+export async function generateQRCode(
   url: string,
   size: number = 256,
 ): Promise<string> {
@@ -235,7 +235,7 @@ export async function SpeakerShare({
     ? 'from-slate-900 via-blue-900 to-slate-900'
     : config.gradient
 
-  return (
+  const shareCard = (
     <div
       className={`group @container relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
     >
@@ -312,4 +312,20 @@ export async function SpeakerShare({
       </div>
     </div>
   )
+
+  return shareCard
+}
+
+// Props for the client wrapper version
+export interface SpeakerShareClientProps {
+  speakerUrl: string
+  talkTitle: string
+  eventName: string
+  speakerName: string
+  qrCodeUrl: string
+  speaker: SpeakerWithTalks
+  variant?: 'speaker-share' | 'speaker-spotlight'
+  className?: string
+  isFeatured?: boolean
+  showCloudNativePattern?: boolean
 }

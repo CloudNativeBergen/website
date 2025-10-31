@@ -206,6 +206,35 @@ export const proposalRouter = router({
           })
         }
 
+        // Check if conference is over (only if not organizer)
+        if (!ctx.speaker.is_organizer && existing.conference) {
+          const conferenceId =
+            typeof existing.conference === 'object' &&
+            '_id' in existing.conference
+              ? existing.conference._id
+              : typeof existing.conference === 'string'
+                ? existing.conference
+                : null
+
+          if (conferenceId) {
+            const { conference } = await getConferenceForCurrentDomain({
+              revalidate: 0,
+            })
+            if (conference && conference._id === conferenceId) {
+              const { isConferenceOver } = await import(
+                '@/lib/conference/state'
+              )
+              if (isConferenceOver(conference)) {
+                throw new TRPCError({
+                  code: 'FORBIDDEN',
+                  message:
+                    'Cannot edit proposal after conference has ended. Contact organizers if you need to make changes.',
+                })
+              }
+            }
+          }
+        }
+
         // Update proposal (only if there's data to update)
         if (Object.keys(input.data).length === 0) {
           return existing

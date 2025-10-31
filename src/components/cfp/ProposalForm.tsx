@@ -35,7 +35,7 @@ export function ProposalForm({
   conference: Conference
   allowedFormats: Format[]
   currentUserSpeaker: Speaker
-  mode?: 'user' | 'admin'
+  mode?: 'user' | 'admin' | 'readOnly'
   externalSpeakerIds?: string[]
 }) {
   const [proposal, setProposal] = useState(initialProposal)
@@ -63,8 +63,10 @@ export function ProposalForm({
 
   const router = useRouter()
 
+  const isReadOnly = mode === 'readOnly'
+
   const { data: emails } = api.speaker.getEmails.useQuery(undefined, {
-    enabled: mode === 'user',
+    enabled: mode === 'user' && !isReadOnly,
   })
 
   const createProposalMutation = api.proposal.create.useMutation({
@@ -104,11 +106,15 @@ export function ProposalForm({
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
+
+    if (isReadOnly) {
+      return
+    }
+
     setProposalSubmitError('')
     setValidationErrors([])
 
     if (mode === 'user') {
-      // Validate speaker consent using shared utility
       const consentErrors = validateSpeakerConsent(speaker)
       if (consentErrors.length > 0) {
         setProposalSubmitError(
@@ -119,7 +125,6 @@ export function ProposalForm({
         return
       }
 
-      // Update speaker profile first
       try {
         await updateSpeakerMutation.mutateAsync(speaker)
       } catch {
@@ -194,8 +199,9 @@ export function ProposalForm({
           setProposal={setProposal}
           conference={conference}
           allowedFormats={allowedFormats}
+          readOnly={isReadOnly}
         />
-        {mode === 'user' && (
+        {mode === 'user' && !isReadOnly && (
           <>
             <div className="border-b border-brand-frosted-steel pb-12">
               <ProposalCoSpeaker
@@ -216,9 +222,52 @@ export function ProposalForm({
             />
           </>
         )}
+        {isReadOnly && (
+          <div className="space-y-6 border-t border-gray-200 pt-6 dark:border-gray-600">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Speakers
+              </h3>
+              <div className="mt-4 space-y-3">
+                {proposal.speakers &&
+                Array.isArray(proposal.speakers) &&
+                proposal.speakers.length > 0 ? (
+                  proposal.speakers.map((speaker, index) => {
+                    if (
+                      typeof speaker === 'object' &&
+                      speaker &&
+                      '_id' in speaker
+                    ) {
+                      return (
+                        <div
+                          key={speaker._id || index}
+                          className="flex items-center gap-3 text-sm"
+                        >
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {speaker.name}
+                          </span>
+                          {speaker.email && (
+                            <span className="text-gray-600 dark:text-gray-400">
+                              ({speaker.email})
+                            </span>
+                          )}
+                        </div>
+                      )
+                    }
+                    return null
+                  })
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    No speakers listed
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {mode === 'user' && (
+      {mode === 'user' && !isReadOnly && (
         <div className="mt-6">
           <p className="text-sm text-gray-600 dark:text-gray-400">
             <span className="font-semibold">Note:</span> Don&apos;t worry. You
@@ -236,26 +285,28 @@ export function ProposalForm({
         </div>
       )}
 
-      <div className="mt-6 flex items-center justify-end gap-x-6">
-        <Link
-          href="/cfp"
-          type="button"
-          className="text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
-        >
-          Cancel
-        </Link>
-        <button
-          type="submit"
-          disabled={
-            proposalMutation.isPending || updateSpeakerMutation.isPending
-          }
-          className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
-        >
-          {proposalMutation.isPending || updateSpeakerMutation.isPending
-            ? buttonPrimaryLoading
-            : buttonPrimary}
-        </button>
-      </div>
+      {!isReadOnly && (
+        <div className="mt-6 flex items-center justify-end gap-x-6">
+          <Link
+            href="/cfp"
+            type="button"
+            className="text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
+          >
+            Cancel
+          </Link>
+          <button
+            type="submit"
+            disabled={
+              proposalMutation.isPending || updateSpeakerMutation.isPending
+            }
+            className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
+          >
+            {proposalMutation.isPending || updateSpeakerMutation.isPending
+              ? buttonPrimaryLoading
+              : buttonPrimary}
+          </button>
+        </div>
+      )}
     </form>
   )
 }
