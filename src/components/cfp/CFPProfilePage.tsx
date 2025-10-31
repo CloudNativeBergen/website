@@ -5,7 +5,6 @@ import { Speaker, SpeakerInput } from '@/lib/speaker/types'
 import { api } from '@/lib/trpc/client'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline'
-import SpeakerProfilePreviewButton from '@/components/cfp/SpeakerProfilePreviewButton'
 import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
 
 interface CFPProfilePageProps {
@@ -109,24 +108,14 @@ export function CFPProfilePage({
   return (
     <>
       <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
-              Your Speaker Profile
-            </h1>
-            <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700 dark:text-gray-300">
-              <p>
-                Manage your speaker information and how you appear to attendees
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 sm:mt-0">
-            <SpeakerProfilePreviewButton
-              speaker={speakerData}
-              fetchTalks={true}
-              conferenceId={conferenceId}
-              buttonClassName="w-full sm:w-auto"
-            />
+        <div>
+          <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
+            Your Speaker Profile
+          </h1>
+          <div className="font-inter mt-6 space-y-4 text-xl tracking-normal text-gray-700 dark:text-gray-300">
+            <p>
+              Manage your speaker information and how you appear to attendees
+            </p>
           </div>
         </div>
       </div>

@@ -5,7 +5,6 @@ import { WorkshopStatistics } from '@/components/cfp/WorkshopStatistics'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
 import type { WorkshopStats } from '@/components/cfp/WorkshopStatistics'
-import SpeakerProfilePreviewButton from '@/components/cfp/SpeakerProfilePreviewButton'
 import { LightBulbIcon } from '@heroicons/react/24/outline'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
@@ -69,16 +68,7 @@ export default function CFPListPageClient({
                 Share Your Talks
               </h2>
 
-              <div className="mt-6">
-                <SpeakerProfilePreviewButton
-                  speaker={speaker}
-                  talks={confirmedProposals}
-                  fetchTalks={false}
-                  buttonClassName="w-full mb-6"
-                />
-              </div>
-
-              <div className="space-y-4">
+              <div className="mt-6 space-y-4">
                 {confirmedProposals.map((proposal) => (
                   <div
                     key={proposal._id}
