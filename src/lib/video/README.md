@@ -25,7 +25,6 @@ React component for embedding videos with automatic privacy enhancements.
 
 ```tsx
 import { VideoEmbed } from '@/components/VideoEmbed'
-
 ;<VideoEmbed
   url="https://www.youtube.com/watch?v=VIDEO_ID"
   title="Talk Recording"
