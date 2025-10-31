@@ -90,40 +90,6 @@ export function createInvitationToken(payload: InvitationTokenPayload): string {
   return `${encodedPayload}.${signature}`
 }
 
-export function verifyInvitationToken(
-  token: string,
-): InvitationTokenPayload | null {
-  try {
-    const [encodedPayload, signature] = token.split('.')
-
-    if (!encodedPayload || !signature) {
-      return null
-    }
-
-    const data = Buffer.from(encodedPayload, 'base64url').toString()
-
-    const expectedSignature = crypto
-      .createHmac('sha256', SECURE_TOKEN_SECRET)
-      .update(data)
-      .digest('base64url')
-
-    if (signature !== expectedSignature) {
-      return null
-    }
-
-    const payload = JSON.parse(data) as InvitationTokenPayload
-
-    if (payload.expiresAt < Date.now()) {
-      return null
-    }
-
-    return payload
-  } catch (error) {
-    console.error('Error verifying invitation token:', error)
-    return null
-  }
-}
-
 interface InvitationUpdateData {
   status: 'accepted' | 'declined'
   respondedAt: string

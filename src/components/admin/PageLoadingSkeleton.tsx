@@ -1,4 +1,9 @@
-import { SkeletonCard, SkeletonTable, SkeletonGrid } from './LoadingSkeleton'
+import {
+  SkeletonCard,
+  SkeletonTable,
+  SkeletonGrid,
+  SkeletonProposalDetail,
+} from './LoadingSkeleton'
 import { TicketPageLoadingSkeleton } from './TicketPageLoadingSkeleton'
 
 export { TicketPageLoadingSkeleton }
@@ -114,26 +119,5 @@ export function AdminFormPageLoading() {
 }
 
 export function AdminDetailPageLoading() {
-  return (
-    <div className="mx-auto max-w-4xl">
-      <div className="mb-6">
-        <div className="animate-pulse">
-          <div className="mb-4 h-6 w-32 rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="h-8 w-3/4 rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="mt-2 h-4 w-1/2 rounded bg-gray-200 dark:bg-gray-700" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <SkeletonCard rows={8} />
-        </div>
-
-        <div className="space-y-6">
-          <SkeletonCard rows={4} />
-          <SkeletonCard rows={3} />
-        </div>
-      </div>
-    </div>
-  )
+  return <SkeletonProposalDetail />
 }

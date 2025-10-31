@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -81,9 +81,12 @@ export function ImageCarousel({
   }
 
   const currentImage = images[currentIndex]
-  const hasCurrentImageError = currentImage && errorImageIds.has(currentImage._id)
-  const isCurrentImageLoaded = currentImage && loadedImageIds.has(currentImage._id)
-  const isCurrentImageLoading = currentImage && !isCurrentImageLoaded && !hasCurrentImageError
+  const hasCurrentImageError =
+    currentImage && errorImageIds.has(currentImage._id)
+  const isCurrentImageLoaded =
+    currentImage && loadedImageIds.has(currentImage._id)
+  const isCurrentImageLoading =
+    currentImage && !isCurrentImageLoaded && !hasCurrentImageError
 
   return (
     <div
@@ -224,7 +227,9 @@ export function ImageCarousel({
                     srcSet={`${image.imageUrl}?w=256&h=160&q=85&auto=format&fit=crop 1x, ${image.imageUrl}?w=512&h=320&q=85&auto=format&fit=crop 2x`}
                     alt={
                       image.imageAlt ||
-                      (image.photographer ? `Photo by ${image.photographer}` : '')
+                      (image.photographer
+                        ? `Photo by ${image.photographer}`
+                        : '')
                     }
                     className="h-full w-full object-cover"
                     loading="lazy"

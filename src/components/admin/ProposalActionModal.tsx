@@ -18,10 +18,10 @@ import {
   BellIcon,
 } from '@heroicons/react/20/solid'
 import { Speaker } from '@/lib/speaker/types'
-import { postProposalAction } from '@/lib/proposal'
 import { TrashIcon } from '@heroicons/react/24/solid'
 import clsx from 'clsx'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
+import { api } from '@/lib/trpc/client'
 
 function capitalizeFirstLetter(string: string) {
   return string.charAt(0).toUpperCase() + string.slice(1)
@@ -105,7 +105,6 @@ export function ProposalActionModal({
   domain?: string
 }) {
   const [error, setError] = useState<string>('')
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [notify, setNotify] = useState<boolean>(true)
   const [comment, setComment] = useState<string>('')
   const { theme } = useTheme()
@@ -113,20 +112,23 @@ export function ProposalActionModal({
   const ActionIcon = iconForAction(action)
   const [iconBgColor, iconTextColor, buttonColor] = colorForAction(action)
 
-  async function submitHandler() {
-    setIsSubmitting(true)
-    const res = await postProposalAction(proposal._id, action, notify, comment)
-
-    if (res.error) {
-      setError(res.error.message)
-    } else if (!res.proposalStatus) {
-      setError('Unknown error occurred. Please try again.')
-    } else {
-      onAction(proposal._id, res.proposalStatus)
+  const actionMutation = api.proposal.action.useMutation({
+    onSuccess: (data) => {
+      onAction(proposal._id, data.proposalStatus)
       close()
-    }
+    },
+    onError: (error) => {
+      setError(error.message || 'Unknown error occurred. Please try again.')
+    },
+  })
 
-    setIsSubmitting(false)
+  async function submitHandler() {
+    actionMutation.mutate({
+      id: proposal._id,
+      action,
+      notify,
+      comment,
+    })
   }
 
   return (
@@ -272,15 +274,17 @@ export function ProposalActionModal({
                 <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
                   <button
                     type="button"
-                    disabled={isSubmitting}
+                    disabled={actionMutation.isPending}
                     className={clsx(
                       buttonColor,
-                      isSubmitting ? 'cursor-not-allowed' : 'cursor-pointer',
+                      actionMutation.isPending
+                        ? 'cursor-not-allowed'
+                        : 'cursor-pointer',
                       'inline-flex w-full justify-center rounded-md px-3 py-2 text-sm/6 font-semibold text-white shadow-sm sm:ml-3 sm:w-auto',
                     )}
                     onClick={() => submitHandler()}
                   >
-                    {isSubmitting
+                    {actionMutation.isPending
                       ? `${capitalizeFirstLetter(action)}...`
                       : capitalizeFirstLetter(action)}
                   </button>

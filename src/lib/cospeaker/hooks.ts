@@ -4,11 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Format } from '@/lib/proposal/types'
 import { getCoSpeakerLimit } from './constants'
 import { CoSpeakerInvitationMinimal, toMinimalInvitation } from './types'
-import {
-  sendInvitations,
-  cancelInvitation as cancelInvitationApi,
-  getValidEmails,
-} from './client'
+import { getValidEmails } from './client'
+import { api } from '@/lib/trpc/client'
 
 export interface InviteField {
   email: string
@@ -115,12 +112,15 @@ export function useInvitations(
   onInvitationSent?: (invitation: CoSpeakerInvitationMinimal) => void,
   onInvitationCanceled?: (invitationId: string) => void,
 ): UseInvitationsReturn {
-  const [isSendingInvite, setIsSendingInvite] = useState(false)
   const [inviteError, setInviteError] = useState<string>('')
   const [inviteSuccess, setInviteSuccess] = useState<string>('')
   const [cancelingInvitationId, setCancelingInvitationId] = useState<
     string | null
   >(null)
+
+  // tRPC mutations
+  const sendInvitationMutation = api.proposal.invitation.send.useMutation()
+  const cancelInvitationMutation = api.proposal.invitation.cancel.useMutation()
 
   const clearMessages = () => {
     setInviteError('')
@@ -141,36 +141,37 @@ export function useInvitations(
       return []
     }
 
-    setIsSendingInvite(true)
     clearMessages()
 
     try {
-      const result = await sendInvitations(proposalId, inviteFields)
+      const sentEmails: string[] = []
+      const invitations: CoSpeakerInvitationMinimal[] = []
 
-      if (!result.success) {
-        throw new Error(result.error)
+      for (const field of inviteFields) {
+        const result = await sendInvitationMutation.mutateAsync({
+          proposalId,
+          invitedEmail: field.email,
+          invitedName: field.name || generateNameFromEmail(field.email),
+        })
+
+        invitations.push(toMinimalInvitation(result))
+        sentEmails.push(field.email)
+
+        if (onInvitationSent) {
+          onInvitationSent(toMinimalInvitation(result))
+        }
       }
 
       setInviteSuccess(
-        `Invitation${result.sentEmails.length > 1 ? 's' : ''} sent to ${result.sentEmails.join(', ')}`,
+        `Invitation${sentEmails.length > 1 ? 's' : ''} sent to ${sentEmails.join(', ')}`,
       )
 
-      const minimalInvitations = result.invitations.map(toMinimalInvitation)
-
-      if (onInvitationSent) {
-        minimalInvitations.forEach((invitation) => {
-          onInvitationSent(invitation)
-        })
-      }
-
-      return minimalInvitations
+      return invitations
     } catch (error) {
       setInviteError(
         error instanceof Error ? error.message : 'Failed to send invitation(s)',
       )
       return []
-    } finally {
-      setIsSendingInvite(false)
     }
   }
 
@@ -184,7 +185,10 @@ export function useInvitations(
     clearMessages()
 
     try {
-      await cancelInvitationApi(proposalId, invitationId)
+      await cancelInvitationMutation.mutateAsync({
+        invitationId,
+      })
+
       setInviteSuccess('Invitation canceled successfully')
 
       if (onInvitationCanceled) {
@@ -200,7 +204,7 @@ export function useInvitations(
   }
 
   return {
-    isSendingInvite,
+    isSendingInvite: sendInvitationMutation.isPending,
     inviteError,
     inviteSuccess,
     cancelingInvitationId,
@@ -208,4 +212,11 @@ export function useInvitations(
     cancelInvite,
     clearMessages,
   }
+}
+
+function generateNameFromEmail(email: string): string {
+  return email
+    .split('@')[0]
+    .replace(/[._-]/g, ' ')
+    .replace(/\b\w/g, (l) => l.toUpperCase())
 }

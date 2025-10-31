@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Speaker, SpeakerInput } from '@/lib/speaker/types'
-import { useProfile } from '@/hooks/useProfile'
-import { useEmails } from '@/hooks/useEmails'
+import { api } from '@/lib/trpc/client'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline'
 import SpeakerProfilePreviewButton from '@/components/cfp/SpeakerProfilePreviewButton'
+import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
 
 interface CFPProfilePageProps {
   initialSpeaker: Speaker
@@ -17,19 +17,47 @@ export function CFPProfilePage({
   initialSpeaker,
   conferenceId,
 }: CFPProfilePageProps) {
-  const { profile, error, refreshProfile, updateProfile } = useProfile()
-  const { emails } = useEmails()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  // Query current speaker profile
+  const {
+    data: profile,
+    error: profileError,
+    refetch: refreshProfile,
+  } = api.speaker.getCurrent.useQuery(undefined, {
+    initialData: initialSpeaker,
+  })
+
+  // Query OAuth emails
+  const { data: emails } = api.speaker.getEmails.useQuery()
+
+  // Mutation for updating profile
+  const updateProfileMutation = api.speaker.update.useMutation({
+    onSuccess: () => {
+      setSuccessMessage('Profile updated successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+      refreshProfile()
+    },
+  })
+
   const [submitError, setSubmitError] = useState<string[]>([])
   const [successMessage, setSuccessMessage] = useState('')
 
   const speaker = profile || initialSpeaker
-
   const [speakerData, setSpeakerData] = useState(speaker)
+
+  // Use image upload hook
+  const { uploadImage, error: uploadError } = useSpeakerImageUpload({
+    speakerId: speaker._id,
+  })
 
   useEffect(() => {
     setSpeakerData(profile || initialSpeaker)
   }, [profile, initialSpeaker])
+
+  useEffect(() => {
+    if (uploadError) {
+      setSubmitError([uploadError])
+    }
+  }, [uploadError])
 
   const handleSpeakerDataChange = useCallback(
     (updatedSpeakerInput: SpeakerInput) => {
@@ -43,25 +71,13 @@ export function CFPProfilePage({
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
     setSubmitError([])
     setSuccessMessage('')
 
-    try {
-      await updateProfile(speakerData)
-      setSuccessMessage('Profile updated successfully!')
-      setTimeout(() => setSuccessMessage(''), 3000)
-    } catch (error) {
-      console.error('Error updating profile:', error)
-      setSubmitError([
-        error instanceof Error ? error.message : 'Failed to update profile',
-      ])
-    } finally {
-      setIsSubmitting(false)
-    }
+    updateProfileMutation.mutate(speakerData)
   }
 
-  if (error && !profile) {
+  if (profileError && !profile) {
     return (
       <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
         <div className="mt-12 rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
@@ -77,11 +93,11 @@ export function CFPProfilePage({
                 Loading Error: Profile Error
               </h3>
               <div className="font-inter mt-2 text-red-700 dark:text-red-300">
-                <p>{error}</p>
+                <p>{profileError?.message || 'Failed to load profile'}</p>
               </div>
               <div className="mt-4">
                 <button
-                  onClick={refreshProfile}
+                  onClick={() => refreshProfile()}
                   className="font-space-grotesk inline-flex items-center rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-800 transition-colors hover:bg-red-200 focus:outline-2 focus:outline-offset-2 focus:outline-red-500 dark:bg-red-800/30 dark:text-red-200 dark:hover:bg-red-800/50 dark:focus:outline-red-400"
                 >
                   Try Again
@@ -175,20 +191,22 @@ export function CFPProfilePage({
           <SpeakerDetailsForm
             speaker={speakerData}
             setSpeaker={handleSpeakerDataChange}
+            emails={emails}
             mode="profile"
             showEmailField={false}
             showImageUpload={true}
             showLinks={true}
+            onImageUpload={uploadImage}
             className="space-y-6"
           />
 
           <div className="flex justify-end border-t border-brand-frosted-steel pt-6 dark:border-gray-600">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={updateProfileMutation.isPending}
               className="font-space-grotesk inline-flex items-center rounded-lg bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue/90 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus:outline-blue-500"
             >
-              {isSubmitting ? (
+              {updateProfileMutation.isPending ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white"></div>
                   Updating...

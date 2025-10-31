@@ -235,7 +235,7 @@ export async function getPublicSpeaker(
 
 export async function updateSpeaker(
   spekaerId: string,
-  speaker: SpeakerInput,
+  speaker: Partial<SpeakerInput>,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   let err = null
   let updatedSpeaker: Speaker = {} as Speaker

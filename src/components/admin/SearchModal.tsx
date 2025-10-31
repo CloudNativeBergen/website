@@ -18,9 +18,13 @@ import {
   UserIcon,
 } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
-import { SkeletonList } from './LoadingSkeleton'
+import { SkeletonSearchResult } from './LoadingSkeleton'
 import { useProposalSearch } from './hooks/useProposalSearch'
-import { ProposalExisting, statuses, Format } from '@/lib/proposal/types'
+import {
+  ProposalExisting,
+  statuses,
+  isWorkshopFormat,
+} from '@/lib/proposal/types'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { getStatusBadgeStyle } from './utils'
 
@@ -129,15 +133,11 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   query &&
                   searchResults.length > 0 &&
                   (() => {
-                    const talks = searchResults.filter(
-                      (p) =>
-                        p.format !== Format.workshop_120 &&
-                        p.format !== Format.workshop_240,
+                    const nonWorkshops = searchResults.filter(
+                      (p) => !isWorkshopFormat(p.format),
                     )
-                    const workshops = searchResults.filter(
-                      (p) =>
-                        p.format === Format.workshop_120 ||
-                        p.format === Format.workshop_240,
+                    const workshops = searchResults.filter((p) =>
+                      isWorkshopFormat(p.format),
                     )
 
                     const renderProposalOption = (
@@ -202,13 +202,13 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                         as="ul"
                         className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2"
                       >
-                        {talks.length > 0 && (
+                        {nonWorkshops.length > 0 && (
                           <li>
                             <h2 className="text-xs font-semibold text-gray-900 dark:text-white">
-                              Talks ({talks.length})
+                              Talks ({nonWorkshops.length})
                             </h2>
                             <ul className="-mx-4 mt-2 text-sm text-gray-700 dark:text-gray-300">
-                              {talks.map(renderProposalOption)}
+                              {nonWorkshops.map(renderProposalOption)}
                             </ul>
                           </li>
                         )}
@@ -227,9 +227,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   })()}
 
                 {isSearching && (
-                  <div className="px-6 py-6 sm:px-14">
-                    <SkeletonList items={3} itemHeight="h-12" />
-                    <div className="mt-4 text-center">
+                  <div className="max-h-80 transform-gpu scroll-py-10 scroll-pb-2 space-y-4 overflow-y-auto p-4 pb-2">
+                    <SkeletonSearchResult items={3} />
+                    <div className="text-center">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Searching proposals...
                       </p>

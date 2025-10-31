@@ -652,7 +652,7 @@ export function SpeakerTable({
                         <button
                           type="button"
                           onClick={() => onEditSpeaker(speaker)}
-                          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:hover:bg-gray-700 dark:hover:text-gray-300"
                           aria-label={`Edit ${speaker.name}`}
                           title="Edit speaker"
                         >
@@ -661,7 +661,7 @@ export function SpeakerTable({
                         <button
                           type="button"
                           onClick={() => onPreviewSpeaker(speaker)}
-                          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:hover:bg-gray-700 dark:hover:text-gray-300"
                           aria-label={`Preview ${speaker.name} profile`}
                           title="Preview public profile"
                         >

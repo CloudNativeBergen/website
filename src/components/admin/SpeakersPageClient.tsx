@@ -8,7 +8,11 @@ import { SpeakerActions } from '@/components/admin/SpeakerActions'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import { Button } from '@/components/Button'
-import { PlusIcon, UserGroupIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
+import {
+  PlusIcon,
+  UserGroupIcon,
+  EnvelopeIcon,
+} from '@heroicons/react/24/outline'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
@@ -153,7 +157,9 @@ export default function SpeakersPageClient({
             {
               value: `${stats.localSpeakers} (${
                 stats.totalSpeakers > 0
-                  ? Math.round((stats.localSpeakers / stats.totalSpeakers) * 100)
+                  ? Math.round(
+                      (stats.localSpeakers / stats.totalSpeakers) * 100,
+                    )
                   : 0
               }%)`,
               label: 'Local',
@@ -190,30 +196,30 @@ export default function SpeakersPageClient({
           }
         />
 
-      <div className="mt-8">
-        <SpeakerTable
-          speakers={speakers}
-          currentConferenceId={currentConferenceId}
-          onEditSpeaker={handleEditSpeaker}
-          onPreviewSpeaker={handlePreviewSpeaker}
-        />
-      </div>
+        <div className="mt-8">
+          <SpeakerTable
+            speakers={speakers}
+            currentConferenceId={currentConferenceId}
+            onEditSpeaker={handleEditSpeaker}
+            onPreviewSpeaker={handlePreviewSpeaker}
+          />
+        </div>
 
-      <SpeakerManagementModal
-        isOpen={isCreateModalOpen}
-        onClose={handleCloseModals}
-        editingSpeaker={null}
-        onSpeakerCreated={handleSpeakerCreated}
-      />
-
-      {selectedSpeaker && (
         <SpeakerManagementModal
-          isOpen={isEditModalOpen}
+          isOpen={isCreateModalOpen}
           onClose={handleCloseModals}
-          editingSpeaker={selectedSpeaker}
-          onSpeakerUpdated={handleSpeakerUpdated}
+          editingSpeaker={null}
+          onSpeakerCreated={handleSpeakerCreated}
         />
-      )}
+
+        {selectedSpeaker && (
+          <SpeakerManagementModal
+            isOpen={isEditModalOpen}
+            onClose={handleCloseModals}
+            editingSpeaker={selectedSpeaker}
+            onSpeakerUpdated={handleSpeakerUpdated}
+          />
+        )}
 
         {selectedSpeaker && (
           <SpeakerProfilePreview

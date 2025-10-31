@@ -15,7 +15,7 @@ import {
 import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock } from '@portabletext/editor'
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   Checkbox,
   Dropdown,
@@ -55,18 +55,46 @@ export function ProposalDetailsForm({
   const [outline, setOutline] = useState(proposal?.outline ?? '')
   const [tos, setTos] = useState(proposal?.tos ?? false)
 
+  // Use a ref to track if we're syncing from props to avoid circular updates
+  const isSyncingFromProps = useRef(false)
+
+  // Sync local state when proposal prop changes (e.g., when editing a different proposal)
   useEffect(() => {
-    setProposal({
-      title,
-      language,
-      description,
-      format,
-      level,
-      audiences,
-      topics,
-      outline,
-      tos,
-    })
+    isSyncingFromProps.current = true
+    setTitle(proposal?.title ?? '')
+    setLanguage(proposal?.language ?? Language.norwegian)
+    setDescription(proposal?.description ?? [])
+    setFormat(proposal?.format ?? Format.lightning_10)
+    setLevel(proposal?.level ?? Level.beginner)
+    setAudiences(proposal?.audiences ?? [])
+    setTopics(
+      Array.isArray(proposal?.topics)
+        ? proposal.topics.filter((topic): topic is Topic => '_id' in topic)
+        : [],
+    )
+    setOutline(proposal?.outline ?? '')
+    setTos(proposal?.tos ?? false)
+    // Use setTimeout to ensure all state updates complete before clearing the flag
+    setTimeout(() => {
+      isSyncingFromProps.current = false
+    }, 0)
+  }, [proposal])
+
+  // Only update parent when local state changes (not when syncing from props)
+  useEffect(() => {
+    if (!isSyncingFromProps.current) {
+      setProposal({
+        title,
+        language,
+        description,
+        format,
+        level,
+        audiences,
+        topics,
+        outline,
+        tos,
+      })
+    }
   }, [
     title,
     language,
@@ -90,16 +118,16 @@ export function ProposalDetailsForm({
       </p>
 
       <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
-        <div className="col-span-full">
+        <div className="sm:col-span-4">
           <Input name="title" label="Title" value={title} setValue={setTitle} />
         </div>
 
-        <div className="sm:col-span-3">
+        <div className="sm:col-span-2">
           <Dropdown
             name="language"
             label="Language"
             value={language}
-            setValue={setLanguage}
+            setValue={(val) => setLanguage(val as Language)}
             options={languages}
           />
         </div>
@@ -116,7 +144,7 @@ export function ProposalDetailsForm({
             name="format"
             label="Presentation Format"
             value={format}
-            setValue={setFormat}
+            setValue={(val) => setFormat(val as Format)}
             options={
               new Map(
                 Array.from(formats).filter(([key]) =>
@@ -132,7 +160,7 @@ export function ProposalDetailsForm({
             name="level"
             label="Skill Level"
             value={level}
-            setValue={setLevel}
+            setValue={(val) => setLevel(val as Level)}
             options={levels}
           />
         </div>
@@ -155,12 +183,16 @@ export function ProposalDetailsForm({
             label="Topics"
             maxItems={2}
             placeholder="Select topics"
-            options={(conference.topics ?? []).map((topic) => ({
-              id: topic._id,
-              title: topic.title,
-              color: topic.color,
-            }))}
-            value={topics.map((topic) => topic._id)}
+            options={(conference.topics ?? [])
+              .filter((topic) => topic._id && topic.title) // Filter out unexpanded references
+              .map((topic) => ({
+                id: topic._id,
+                title: topic.title,
+                color: topic.color,
+              }))}
+            value={topics
+              .filter((topic) => topic && topic._id)
+              .map((topic) => topic._id)}
             setValue={(val: string[]) => {
               const selectedTopics = val
                 .map((id) =>

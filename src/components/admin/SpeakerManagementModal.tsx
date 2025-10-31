@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Dialog,
   DialogPanel,
@@ -14,10 +14,10 @@ import { SpeakerDetailsForm } from '@/components/cfp/SpeakerDetailsForm'
 import { Button } from '@/components/Button'
 import { Input, ErrorText } from '@/components/Form'
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
-import {
-  createSpeakerAsAdmin,
-  updateSpeakerAsAdmin,
-} from '@/app/(admin)/admin/speakers/actions'
+import { api } from '@/lib/trpc/client'
+import { useQueryClient } from '@tanstack/react-query'
+import { validateSpeakerForAdmin } from '@/lib/speaker/validation'
+import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
 
 interface SpeakerManagementModalProps {
   isOpen: boolean
@@ -35,7 +35,8 @@ export function SpeakerManagementModal({
   onSpeakerUpdated,
 }: SpeakerManagementModalProps) {
   const { theme } = useTheme()
-  const [isPending, startTransition] = useTransition()
+  const queryClient = useQueryClient()
+
   const [speakerData, setSpeakerData] = useState<SpeakerInput>({
     name: '',
     bio: '',
@@ -51,6 +52,50 @@ export function SpeakerManagementModal({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({})
+
+  // Custom hook for image upload
+  const {
+    uploadImage,
+    isUploading,
+    error: uploadError,
+  } = useSpeakerImageUpload({
+    speakerId: editingSpeaker?._id,
+  })
+
+  // tRPC mutations
+  const createMutation = api.speaker.admin.create.useMutation({
+    onSuccess: (speaker) => {
+      queryClient.invalidateQueries({ queryKey: [['speaker']] })
+      onSpeakerCreated?.(speaker)
+      onClose()
+    },
+    onError: (error) => {
+      setError(error.message || 'Failed to create speaker')
+    },
+  })
+
+  const updateMutation = api.speaker.admin.update.useMutation({
+    onSuccess: (speaker) => {
+      queryClient.invalidateQueries({ queryKey: [['speaker']] })
+      onSpeakerUpdated?.(speaker)
+      onClose()
+    },
+    onError: (error) => {
+      setError(error.message || 'Failed to update speaker')
+    },
+  })
+
+  const updateEmailMutation = api.speaker.admin.updateEmail.useMutation({
+    onError: (error) => {
+      setError(error.message || 'Failed to update email')
+    },
+  })
+
+  const isPending =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    updateEmailMutation.isPending ||
+    isUploading
 
   useEffect(() => {
     if (isOpen) {
@@ -86,54 +131,8 @@ export function SpeakerManagementModal({
     }
   }, [isOpen, editingSpeaker])
 
-  const handleImageUpload = async (
-    file: File,
-  ): Promise<{ assetId: string; url: string }> => {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    const response = await fetch('/api/admin/speaker-image', {
-      method: 'POST',
-      body: formData,
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Failed to upload image')
-    }
-
-    const result = await response.json()
-    return result
-  }
-
   const validateForm = () => {
-    const errors: Record<string, string> = {}
-
-    if (!speakerData.name) {
-      errors.name = 'Name is required'
-    }
-
-    if (!editingSpeaker) {
-      if (!email) {
-        errors.email = 'Email is required for new speakers'
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        errors.email = 'Please enter a valid email address'
-      }
-    } else {
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        errors.email = 'Please enter a valid email address'
-      }
-    }
-
-    if (!speakerData.consent?.dataProcessing?.granted) {
-      errors.dataProcessing = 'Data processing consent is required'
-    }
-
-    if (!speakerData.consent?.publicProfile?.granted) {
-      errors.publicProfile = 'Public profile consent is required'
-    }
-
-    return errors
+    return validateSpeakerForAdmin(speakerData, email)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -148,34 +147,31 @@ export function SpeakerManagementModal({
     setError(null)
     setValidationErrors({})
 
-    startTransition(async () => {
-      try {
-        let result
-        if (editingSpeaker) {
-          result = await updateSpeakerAsAdmin(
-            editingSpeaker._id,
-            speakerData,
-            email,
-          )
-        } else {
-          result = await createSpeakerAsAdmin(speakerData, email)
-        }
-
-        if (!result.success) {
-          setError(result.error || 'An error occurred')
-        } else if (result.speaker) {
-          if (editingSpeaker) {
-            onSpeakerUpdated?.(result.speaker)
-          } else {
-            onSpeakerCreated?.(result.speaker)
-          }
-          onClose()
-        }
-      } catch (err) {
-        console.error('Failed to save speaker:', err)
-        setError('Failed to save speaker. Please try again.')
-      }
-    })
+    if (editingSpeaker) {
+      // Update speaker profile
+      updateMutation.mutate(
+        {
+          id: editingSpeaker._id,
+          data: speakerData,
+        },
+        {
+          onSuccess: async () => {
+            // If email changed, update it separately
+            if (email && email !== editingSpeaker.email) {
+              updateEmailMutation.mutate({
+                id: editingSpeaker._id,
+                email,
+              })
+            }
+          },
+        },
+      )
+    } else {
+      createMutation.mutate({
+        ...speakerData,
+        email,
+      })
+    }
   }
 
   return (
@@ -250,7 +246,7 @@ export function SpeakerManagementModal({
                       showImageUpload={true}
                       showLinks={true}
                       className=""
-                      onImageUpload={handleImageUpload}
+                      onImageUpload={uploadImage}
                     />
 
                     {validationErrors.dataProcessing && (
@@ -261,9 +257,9 @@ export function SpeakerManagementModal({
                     )}
                   </div>
 
-                  {error && (
+                  {(error || uploadError) && (
                     <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
-                      {error}
+                      {error || uploadError}
                     </div>
                   )}
 

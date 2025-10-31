@@ -11,7 +11,6 @@ export {
 
 export {
   proposalResponseError,
-  proposalResponse,
   proposalListResponseError,
   proposalListResponse,
 } from './data/server'

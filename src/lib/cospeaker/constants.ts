@@ -1,11 +1,5 @@
 import { Format } from '@/lib/proposal/types'
 
-export const COSPEAKER_API_ENDPOINTS = {
-  INVITATION_CREATE: (proposalId: string) => `/api/invitation/${proposalId}`,
-  INVITATION_RESPOND: '/api/invitation/respond',
-  INVITATION_DELETE: (proposalId: string) => `/api/invitation/${proposalId}`,
-} as const
-
 /**
  * Co-speaker limits based on talk format
  * These limits define the maximum number of co-speakers allowed for each format

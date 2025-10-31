@@ -9,8 +9,8 @@ import {
 import { PortableTextBlock } from '@portabletext/editor'
 import { Reference } from 'sanity'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function convertJsonToProposal(json: any): ProposalInput {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+function convertJsonToProposal(json: any): ProposalInput {
   return {
     title: json.title as string,
     description: convertStringToPortableTextBlocks(
@@ -84,9 +84,8 @@ function generateUniqueKey(): string {
   return Math.random().toString(36).slice(2, 11)
 }
 
-export function validateProposal(
-  proposal: ProposalInput,
-): FormValidationError[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function validateProposal(proposal: ProposalInput): FormValidationError[] {
   const validationErrors = []
 
   if (!proposal.title) {

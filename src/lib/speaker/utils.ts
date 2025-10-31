@@ -33,7 +33,9 @@ export function checkSpeakerFlags(
   return speakers.some((speaker) => speaker?.flags?.includes(flag))
 }
 
-export function getSpeakerIndicators(speakers: (Speaker | SpeakerWithReviewInfo)[]) {
+export function getSpeakerIndicators(
+  speakers: (Speaker | SpeakerWithReviewInfo)[],
+) {
   return {
     isSeasonedSpeaker: speakers.some(
       (speaker) =>
@@ -50,7 +52,13 @@ export function getSpeakerIndicators(speakers: (Speaker | SpeakerWithReviewInfo)
           speaker.previousAcceptedTalks.length === 0,
       ),
     isLocalSpeaker: checkSpeakerFlags(speakers, Flags.localSpeaker),
-    isUnderrepresentedSpeaker: checkSpeakerFlags(speakers, Flags.diverseSpeaker),
-    requiresTravelSupport: checkSpeakerFlags(speakers, Flags.requiresTravelFunding),
+    isUnderrepresentedSpeaker: checkSpeakerFlags(
+      speakers,
+      Flags.diverseSpeaker,
+    ),
+    requiresTravelSupport: checkSpeakerFlags(
+      speakers,
+      Flags.requiresTravelFunding,
+    ),
   }
 }

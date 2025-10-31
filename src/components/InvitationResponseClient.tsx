@@ -9,7 +9,7 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import { formatDistanceToNow } from 'date-fns'
-import { respondToInvitation } from '@/lib/cospeaker/client'
+import { api } from '@/lib/trpc/client'
 import { formatProposalFormat } from '@/lib/cospeaker/types'
 
 interface InvitationResponseClientProps {
@@ -40,9 +40,31 @@ export default function InvitationResponseClient({
   isTestMode = false,
 }: InvitationResponseClientProps) {
   const router = useRouter()
-  const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [isExpired, setIsExpired] = useState(false)
+
+  const respondMutation = api.proposal.invitation.respond.useMutation({
+    onSuccess: (data, variables) => {
+      const successUrl = new URL(
+        '/invitation/respond/success',
+        window.location.origin,
+      )
+      successUrl.searchParams.set(
+        'action',
+        variables.accept ? 'accepted' : 'declined',
+      )
+      successUrl.searchParams.set('title', invitation.proposal.title)
+      if (isTestMode) {
+        successUrl.searchParams.set('test', 'true')
+      }
+      router.push(successUrl.toString())
+    },
+    onError: (error) => {
+      setError(
+        error.message || 'Failed to process your response. Please try again.',
+      )
+    },
+  })
 
   useEffect(() => {
     const checkExpiry = () => {
@@ -66,37 +88,8 @@ export default function InvitationResponseClient({
       return
     }
 
-    setIsProcessing(true)
     setError('')
-
-    try {
-      const result = await respondToInvitation(token, action)
-
-      if (result.success) {
-        const successUrl = new URL(
-          '/invitation/respond/success',
-          window.location.origin,
-        )
-        successUrl.searchParams.set(
-          'action',
-          action === 'accept' ? 'accepted' : 'declined',
-        )
-        successUrl.searchParams.set('title', invitation.proposal.title)
-        if (isTestMode) {
-          successUrl.searchParams.set('test', 'true')
-        }
-        router.push(successUrl.toString())
-      } else {
-        setError(
-          result.error || 'Failed to process your response. Please try again.',
-        )
-      }
-    } catch (err) {
-      console.error('Error responding to invitation:', err)
-      setError('An unexpected error occurred. Please try again.')
-    } finally {
-      setIsProcessing(false)
-    }
+    respondMutation.mutate({ token, accept: action === 'accept' })
   }
 
   const expiresIn = formatDistanceToNow(new Date(invitation.expiresAt), {
@@ -180,10 +173,10 @@ export default function InvitationResponseClient({
               <div className="flex flex-col gap-4 sm:flex-row">
                 <button
                   onClick={() => handleResponse('accept')}
-                  disabled={isProcessing}
+                  disabled={respondMutation.isPending}
                   className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-brand-nordic-purple px-6 py-3 text-white transition-colors hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isProcessing ? (
+                  {respondMutation.isPending ? (
                     <svg
                       className="h-5 w-5 animate-spin"
                       xmlns="http://www.w3.org/2000/svg"
@@ -212,10 +205,10 @@ export default function InvitationResponseClient({
 
                 <button
                   onClick={() => handleResponse('decline')}
-                  disabled={isProcessing}
+                  disabled={respondMutation.isPending}
                   className="flex flex-1 items-center justify-center space-x-2 rounded-lg bg-brand-slate-gray px-6 py-3 text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isProcessing ? (
+                  {respondMutation.isPending ? (
                     <svg
                       className="h-5 w-5 animate-spin"
                       xmlns="http://www.w3.org/2000/svg"

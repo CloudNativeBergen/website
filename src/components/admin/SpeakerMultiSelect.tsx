@@ -147,8 +147,7 @@ export function SpeakerMultiSelect({
         {required && <span className="ml-1 text-red-500">*</span>}
       </label>
       <p className="text-xs text-gray-600 dark:text-gray-400">
-        Select speakers for this proposal. The first speaker will be the primary
-        speaker.
+        Select speakers for this proposal.
       </p>
 
       {/* Selected Speakers Display */}
@@ -159,19 +158,12 @@ export function SpeakerMultiSelect({
           </p>
         ) : (
           <div className="space-y-2">
-            {selectedSpeakers.map((speaker, index) => (
+            {selectedSpeakers.map((speaker) => (
               <div
                 key={speaker._id}
                 className="flex items-center justify-between rounded-md bg-gray-50 p-3 dark:bg-gray-700"
               >
                 <div className="flex items-center gap-3">
-                  <div className="text-gray-400">
-                    {index === 0 && (
-                      <span className="text-xs font-medium text-brand-cloud-blue">
-                        Primary
-                      </span>
-                    )}
-                  </div>
                   {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   <SpeakerAvatars speakers={[speaker as any]} size="sm" />
                   <div>

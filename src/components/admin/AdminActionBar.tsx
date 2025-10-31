@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   CheckIcon,
   XMarkIcon,
@@ -51,6 +51,9 @@ export function AdminActionBar({
   >([])
   const [previewSpeaker, setPreviewSpeaker] = useState<Speaker | null>(null)
 
+  const speakers = extractSpeakersFromProposal(proposal)
+  const indicators = getSpeakerIndicators(speakers)
+
   const handleAction = (action: Action) => {
     const event = new CustomEvent('proposalAction', {
       detail: { action, proposal },
@@ -58,7 +61,7 @@ export function AdminActionBar({
     window.dispatchEvent(event)
   }
 
-  const handleEmailSpeakers = () => {
+  const handleEmailSpeakers = useCallback(() => {
     const speakersWithValidEmail = speakers
       .filter((speaker) => speaker.email)
       .map((speaker) => ({
@@ -71,19 +74,19 @@ export function AdminActionBar({
       setSpeakersWithEmail(speakersWithValidEmail)
       setShowEmailModal(true)
     }
-  }
+  }, [speakers])
 
   const handleEditProposal = () => {
     setShowEditModal(true)
   }
 
-  const handlePreviewSpeaker = () => {
+  const handlePreviewSpeaker = useCallback(() => {
     if (speakers.length > 0) {
       const speakerForPreview = speakers[0] as Speaker
       setPreviewSpeaker(speakerForPreview)
       setShowPreviewModal(true)
     }
-  }
+  }, [speakers])
 
   const handleProposalUpdated = () => {
     router.refresh()
@@ -95,8 +98,45 @@ export function AdminActionBar({
   const canReject =
     proposal.status === 'submitted' || proposal.status === 'accepted'
 
-  const speakers = extractSpeakersFromProposal(proposal)
-  const indicators = getSpeakerIndicators(speakers)
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if Cmd (Mac) or Ctrl (Windows/Linux) is pressed
+      const isCmdOrCtrl = event.metaKey || event.ctrlKey
+
+      if (!isCmdOrCtrl) return
+
+      // Prevent default browser behavior
+      switch (event.key.toLowerCase()) {
+        case 'e':
+          event.preventDefault()
+          handleEditProposal()
+          break
+        case 'p':
+          event.preventDefault()
+          if (speakers.length > 0) {
+            handlePreviewSpeaker()
+          }
+          break
+        case 'm':
+          event.preventDefault()
+          if (
+            speakers.length > 0 &&
+            speakers.some((speaker) => speaker.email)
+          ) {
+            handleEmailSpeakers()
+          }
+          break
+        case 's':
+          // Note: CMD+S will trigger save in edit modal if it's open
+          // This is handled by the ProposalManagementModal component
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [speakers, handleEmailSpeakers, handlePreviewSpeaker])
   const {
     isSeasonedSpeaker,
     isNewSpeaker,
@@ -211,7 +251,10 @@ export function AdminActionBar({
             title="Edit proposal"
           >
             <PencilIcon className="h-3 w-3" />
-            Edit
+            <span>Edit</span>
+            <kbd className="ml-1 hidden rounded border border-indigo-400 bg-indigo-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-indigo-600 dark:bg-indigo-700">
+              ⌘E
+            </kbd>
           </button>
 
           {speakers.length > 0 && (
@@ -221,7 +264,10 @@ export function AdminActionBar({
               title="Preview speaker profile"
             >
               <EyeIcon className="h-3 w-3" />
-              Preview
+              <span>Preview</span>
+              <kbd className="ml-1 hidden rounded border border-purple-400 bg-purple-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-purple-600 dark:bg-purple-700">
+                ⌘P
+              </kbd>
             </button>
           )}
 
@@ -232,7 +278,10 @@ export function AdminActionBar({
               title={`Email ${speakers.length === 1 ? speakers.filter((s) => s.email)[0]?.name : `${speakers.filter((s) => s.email).length} speakers`}`}
             >
               <EnvelopeIcon className="h-3 w-3" />
-              Email
+              <span>Email</span>
+              <kbd className="ml-1 hidden rounded border border-blue-400 bg-blue-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-blue-600 dark:bg-blue-700">
+                ⌘M
+              </kbd>
             </button>
           )}
 

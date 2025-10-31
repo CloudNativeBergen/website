@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { PortableText } from '@portabletext/react'
+import { portableTextComponents } from '@/lib/portabletext/components'
 import { Button } from '@/components/Button'
 import type {
   ProposalWithWorkshopData,
@@ -471,12 +472,15 @@ export default function WorkshopCard({
 
         {workshop.description && (
           <div className="mb-4">
-            <div className="prose prose-sm dark:prose-invert prose-p:my-3 max-w-none text-gray-600 dark:text-gray-300">
+            <div className="text-gray-600 dark:text-gray-300">
               {typeof workshop.description === 'string' ? (
                 <p>{workshop.description}</p>
               ) : Array.isArray(workshop.description) &&
                 workshop.description.length > 0 ? (
-                <PortableText value={workshop.description} />
+                <PortableText
+                  value={workshop.description}
+                  components={portableTextComponents}
+                />
               ) : (
                 <p className="italic">No description provided</p>
               )}

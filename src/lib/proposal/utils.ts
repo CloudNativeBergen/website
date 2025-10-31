@@ -12,21 +12,20 @@ export function extractSpeakersFromProposal(
     return []
   }
 
-  return proposal.speakers
-    .filter(
-      (speaker): speaker is SpeakerWithReviewInfo =>
-        speaker !== null &&
-        typeof speaker === 'object' &&
-        'name' in speaker &&
-        '_id' in speaker,
-    )
+  return proposal.speakers.filter(
+    (speaker): speaker is SpeakerWithReviewInfo =>
+      speaker !== null &&
+      typeof speaker === 'object' &&
+      'name' in speaker &&
+      '_id' in speaker,
+  )
 }
 
 /**
  * Extract speaker IDs from proposal speakers (handles both objects and references)
  */
 export function extractSpeakerIds(
-  speakers?: Array<any>,
+  speakers?: Array<string | Reference | { _id: string }>,
 ): string[] {
   if (!speakers) return []
 
@@ -46,7 +45,9 @@ export function extractSpeakerIds(
  * Calculate average review score for a proposal
  */
 export function calculateReviewScore(
-  reviews: any[],
+  reviews: Array<{
+    score?: { content?: number; relevance?: number; speaker?: number }
+  }>,
   scoreType: 'content' | 'relevance' | 'speaker',
 ): number {
   if (!reviews || reviews.length === 0) return 0
@@ -59,17 +60,4 @@ export function calculateReviewScore(
   }, 0)
 
   return total / reviews.length
-}
-
-/**
- * Calculate overall average review score
- */
-export function calculateOverallReviewScore(reviews: any[]): number {
-  if (!reviews || reviews.length === 0) return 0
-
-  const content = calculateReviewScore(reviews, 'content')
-  const relevance = calculateReviewScore(reviews, 'relevance')
-  const speaker = calculateReviewScore(reviews, 'speaker')
-
-  return (content + relevance + speaker) / 3
 }

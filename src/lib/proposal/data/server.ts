@@ -36,18 +36,6 @@ export function proposalResponseError({
   return response
 }
 
-export function proposalResponse(proposal: ProposalExisting) {
-  const response = NextResponse.json({ proposal } as ProposalResponse)
-  response.headers.set('cache-control', 'no-store')
-  if (proposal._rev) response.headers.set('etag', proposal._rev)
-  if (proposal._updatedAt)
-    response.headers.set(
-      'last-modified',
-      new Date(proposal._updatedAt).toUTCString(),
-    )
-  return response
-}
-
 export function proposalListResponseError(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   error: any,

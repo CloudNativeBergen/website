@@ -1,24 +1,21 @@
 'use client'
 
 import { Conference } from '@/lib/conference/types'
-import { getEmails, putProfile } from '@/lib/profile/client'
-import { ProfileEmail } from '@/lib/profile/types'
-import { postProposal } from '@/lib/proposal'
-import {
-  Format,
-  FormError,
-  ProposalInput,
-  ProposalExisting,
-} from '@/lib/proposal/types'
+import { api } from '@/lib/trpc/client'
+import { Format, ProposalInput, ProposalExisting } from '@/lib/proposal/types'
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
+import { createReference } from '@/lib/sanity/helpers'
+import { ProposalInputSchema } from '@/server/schemas/proposal'
 import { XCircleIcon } from '@heroicons/react/24/solid'
-import { redirect } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { z } from 'zod'
 import { ProposalCoSpeaker } from './ProposalCoSpeaker'
 import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
 import Link from 'next/link'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ProposalDetailsForm } from '@/components/proposal/ProposalDetailsForm'
+import { validateSpeakerConsent } from '@/lib/speaker/validation'
 
 export function ProposalForm({
   initialProposal,
@@ -64,6 +61,29 @@ export function ProposalForm({
       : [],
   )
 
+  const router = useRouter()
+
+  // Query OAuth emails (only for user mode)
+  const { data: emails } = api.speaker.getEmails.useQuery(undefined, {
+    enabled: mode === 'user',
+  })
+
+  // Mutation for creating/updating proposals
+  const createProposalMutation = api.proposal.create.useMutation({
+    onSuccess: () => {
+      router.push('/cfp/list?success=true')
+    },
+  })
+
+  const updateProposalMutation = api.proposal.update.useMutation({
+    onSuccess: () => {
+      router.push('/cfp/list')
+    },
+  })
+
+  // Mutation for updating speaker profile (only in user mode)
+  const updateSpeakerMutation = api.speaker.update.useMutation()
+
   const buttonPrimary = proposalId ? 'Update' : 'Submit'
   const buttonPrimaryLoading = proposalId ? 'Updating...' : 'Submitting...'
 
@@ -77,64 +97,35 @@ export function ProposalForm({
     )
   }
 
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [proposalSubmitError, setProposalSubmitError] = useState(
-    {} as FormError,
-  )
+  const [proposalSubmitError, setProposalSubmitError] = useState<string>('')
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
 
-  const [emails, setEmails] = useState<ProfileEmail[]>([])
-  useEffect(() => {
-    if (mode === 'user') {
-      const fetchEmails = async () => {
-        const emailResponse = await getEmails()
-        if (emailResponse.error) {
-          setProposalSubmitError(emailResponse.error)
-          window.scrollTo(0, 0)
-        } else {
-          setEmails(emailResponse.emails)
-        }
-      }
-      fetchEmails()
-    }
-  }, [mode])
+  // Get current mutation based on mode
+  const proposalMutation = proposalId
+    ? updateProposalMutation
+    : createProposalMutation
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    setIsSubmitting(true)
+    setProposalSubmitError('')
+    setValidationErrors([])
 
     if (mode === 'user') {
-      if (!speaker.consent?.dataProcessing?.granted) {
-        setProposalSubmitError({
-          type: 'Validation Error',
-          message:
-            'You must consent to data processing to submit your proposal.',
-          validationErrors: [
-            {
-              field: 'consent',
-              message:
-                'Data processing consent is required to submit your speaker application.',
-            },
-          ],
-        })
-        setIsSubmitting(false)
+      // Validate speaker consent using shared utility
+      const consentErrors = validateSpeakerConsent(speaker)
+      if (consentErrors.length > 0) {
+        setProposalSubmitError(
+          'You must provide required consents to submit your proposal.',
+        )
+        setValidationErrors(consentErrors)
         window.scrollTo(0, 0)
         return
       }
 
-      if (!speaker.consent?.publicProfile?.granted) {
-        setProposalSubmitError({
-          type: 'Validation Error',
-          message:
-            'You must consent to public profile display to be a conference speaker.',
-          validationErrors: [
-            {
-              field: 'consent',
-              message:
-                'Public profile consent is required as speakers must be displayed publicly on the conference website.',
-            },
-          ],
-        })
-        setIsSubmitting(false)
+      // Update speaker profile first
+      try {
+        await updateSpeakerMutation.mutateAsync(speaker)
+      } catch {
         window.scrollTo(0, 0)
         return
       }
@@ -144,64 +135,58 @@ export function ProposalForm({
       mode === 'admin' && externalSpeakerIds
         ? externalSpeakerIds
         : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
+
+    // Prepare proposal data with proper Sanity references
+    // Type assertion is safe as the data structure matches ProposalInputSchema
+    // and will be validated by tRPC at runtime
     const proposalWithSpeakers = {
       ...proposal,
-      speakers: allSpeakers.map((id) => ({ _type: 'reference', _ref: id })),
-    }
+      speakers: allSpeakers.map(createReference),
+    } as z.infer<typeof ProposalInputSchema>
 
-    const proposalRes = await postProposal(proposalWithSpeakers, proposalId)
-    if (proposalRes.error) {
-      setProposalSubmitError(proposalRes.error)
-      setIsSubmitting(false)
-      window.scrollTo(0, 0)
-      return
-    }
-
-    if (mode === 'user') {
-      const speakerRes = await putProfile(speaker)
-      if (speakerRes.error) {
-        setProposalSubmitError(speakerRes.error)
-        setIsSubmitting(false)
-        window.scrollTo(0, 0)
-        return
-      }
-    }
-
-    if (mode === 'user') {
-      if (!proposalRes.error) {
-        redirect(`/cfp/list${!proposalId ? '?success=true' : ''}`)
-      }
+    if (proposalId) {
+      updateProposalMutation.mutate({
+        id: proposalId,
+        data: proposalWithSpeakers,
+      })
     } else {
-      setIsSubmitting(false)
+      createProposalMutation.mutate(proposalWithSpeakers)
     }
   }
 
   return (
     <form onSubmit={handleSubmit}>
       <div className="space-y-12">
-        {proposalSubmitError.type && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+        {(proposalSubmitError ||
+          proposalMutation.error ||
+          updateSpeakerMutation.error) && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
             <div className="flex">
               <div className="flex-shrink-0">
                 <XCircleIcon
-                  className="h-6 w-6 text-red-500"
+                  className="h-6 w-6 text-red-500 dark:text-red-400"
                   aria-hidden="true"
                 />
               </div>
               <div className="ml-4">
-                <h3 className="font-space-grotesk text-lg font-semibold text-red-800">
-                  Submission failed: {proposalSubmitError.type}
+                <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
+                  Submission failed
                 </h3>
-                <div className="font-inter mt-2 text-red-700">
-                  <p>{proposalSubmitError.message}</p>
-                  {proposalSubmitError.validationErrors &&
-                    proposalSubmitError.validationErrors.length > 0 && (
-                      <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700">
-                        {proposalSubmitError.validationErrors.map((error) => (
-                          <li key={error.field}>{error.message}</li>
-                        ))}
-                      </ul>
-                    )}
+                <div className="font-inter mt-2 text-red-700 dark:text-red-300">
+                  {proposalSubmitError && <p>{proposalSubmitError}</p>}
+                  {proposalMutation.error && (
+                    <p>{proposalMutation.error.message}</p>
+                  )}
+                  {updateSpeakerMutation.error && (
+                    <p>{updateSpeakerMutation.error.message}</p>
+                  )}
+                  {validationErrors.length > 0 && (
+                    <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
+                      {validationErrors.map((error, index) => (
+                        <li key={index}>{error}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             </div>
@@ -264,10 +249,14 @@ export function ProposalForm({
         </Link>
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={
+            proposalMutation.isPending || updateSpeakerMutation.isPending
+          }
           className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
         >
-          {isSubmitting ? buttonPrimaryLoading : buttonPrimary}
+          {proposalMutation.isPending || updateSpeakerMutation.isPending
+            ? buttonPrimaryLoading
+            : buttonPrimary}
         </button>
       </div>
     </form>

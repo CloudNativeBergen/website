@@ -1,7 +1,3 @@
 export * from './client'
 
-export {
-  convertJsonToProposal,
-  convertStringToPortableTextBlocks,
-  validateProposal,
-} from './utils/validation'
+export { convertStringToPortableTextBlocks } from './utils/validation'

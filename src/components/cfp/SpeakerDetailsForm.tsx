@@ -27,6 +27,7 @@ interface SpeakerDetailsFormProps {
   showLinks?: boolean
   className?: string
   onImageUpload?: (file: File) => Promise<{ assetId: string; url: string }>
+  onEmailSelect?: (email: string) => Promise<void>
 }
 
 export function SpeakerDetailsForm({
@@ -40,6 +41,7 @@ export function SpeakerDetailsForm({
   showLinks = true,
   className = '',
   onImageUpload,
+  onEmailSelect,
 }: SpeakerDetailsFormProps) {
   const [speakerName, setSpeakerName] = useState(speaker?.name ?? '')
   const [speakerTitle, setSpeakerTitle] = useState(speaker?.title ?? '')
@@ -69,6 +71,7 @@ export function SpeakerDetailsForm({
   )
 
   const [imageError, setImageError] = useState('')
+  const [emailError, setEmailError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const isMounted = useRef(false)
   const previousSpeakerRef = useRef(speaker)
@@ -93,17 +96,13 @@ export function SpeakerDetailsForm({
     setSpeakerBio(speaker?.bio ?? '')
     setSpeakerImage(speaker?.image ?? '')
     setSpeakerImagePreviewUrl(
-      speaker?.image && speaker.image.startsWith('http') ? speaker.image : null
+      speaker?.image && speaker.image.startsWith('http') ? speaker.image : null,
     )
     setSpeakerFlags(speaker?.flags ?? [])
     setSpeakerLinks(speaker?.links?.length ? speaker.links : [''])
-    setDataProcessingConsent(
-      speaker?.consent?.dataProcessing?.granted ?? false
-    )
+    setDataProcessingConsent(speaker?.consent?.dataProcessing?.granted ?? false)
     setMarketingConsent(speaker?.consent?.marketing?.granted ?? false)
-    setPublicProfileConsent(
-      speaker?.consent?.publicProfile?.granted ?? false
-    )
+    setPublicProfileConsent(speaker?.consent?.publicProfile?.granted ?? false)
     setPhotographyConsent(speaker?.consent?.photography?.granted ?? false)
 
     previousSpeakerRef.current = speaker
@@ -177,10 +176,33 @@ export function SpeakerDetailsForm({
   }
 
   async function emailSelectHandler(email: string) {
-    const res = await putEmail(email)
-    if (res.error) {
+    setEmailError('')
+
+    if (onEmailSelect) {
+      try {
+        await onEmailSelect(email)
+        setSpeakerEmail(email)
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Failed to update email'
+        setEmailError(errorMessage)
+        console.error('Email selection failed:', error)
+      }
     } else {
-      setSpeakerEmail(email)
+      try {
+        const res = await putEmail(email)
+        if (res.error) {
+          setEmailError(res.error.message || 'Failed to update email')
+          console.error('Email update failed:', res.error)
+        } else {
+          setSpeakerEmail(email)
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Failed to update email'
+        setEmailError(errorMessage)
+        console.error('Email update failed:', error)
+      }
     }
   }
 
@@ -303,10 +325,14 @@ export function SpeakerDetailsForm({
               setValue={emailSelectHandler}
               options={emailOptions}
             />
-            <HelpText>
-              Your email address will not be displayed publicly. It will only be
-              used to contact you regarding your presentation.
-            </HelpText>
+            {emailError ? (
+              <ErrorText>{emailError}</ErrorText>
+            ) : (
+              <HelpText>
+                Your email address will not be displayed publicly. It will only
+                be used to contact you regarding your presentation.
+              </HelpText>
+            )}
           </div>
         )}
 

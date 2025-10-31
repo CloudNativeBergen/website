@@ -12,6 +12,7 @@ import { useTheme } from 'next-themes'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { UserIcon as UserIconSolid } from '@heroicons/react/24/solid'
 import { PortableText } from '@portabletext/react'
+import { portableTextComponents } from '@/lib/portabletext/components'
 import { Speaker, Flags, flags } from '@/lib/speaker/types'
 import {
   ProposalExisting,
@@ -195,7 +196,10 @@ export default function SpeakerProfilePreview({
                             </ShowMore>
                           ) : (
                             <ShowMore>
-                              <PortableText value={speaker.bio} />
+                              <PortableText
+                                value={speaker.bio}
+                                components={portableTextComponents}
+                              />
                             </ShowMore>
                           )}
                         </div>
