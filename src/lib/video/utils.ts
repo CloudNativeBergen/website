@@ -66,9 +66,6 @@ export function extractVimeoId(url: string): string | null {
   }
 }
 
-/**
- * Determines the video platform from a URL
- */
 export function getVideoPlatform(url: string): 'youtube' | 'vimeo' | null {
   try {
     const urlObj = new URL(url)

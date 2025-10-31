@@ -17,10 +17,6 @@ export interface ProposalValidationOptions {
   requireCapacity?: boolean
 }
 
-/**
- * Validates proposal data for form submission
- * Returns an object with field names as keys and error messages as values
- */
 export function validateProposalForm(
   proposal: ProposalInput,
   options: ProposalValidationOptions = {},
@@ -68,9 +64,6 @@ export function validateProposalForm(
   return errors
 }
 
-/**
- * Validates proposal for admin creation/update (includes speaker validation)
- */
 export function validateProposalForAdmin(
   proposal: ProposalInput,
   speakerIds: string[],

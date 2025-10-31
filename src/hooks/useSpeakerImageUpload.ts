@@ -16,7 +16,6 @@ export interface UseSpeakerImageUploadReturn {
   clearError: () => void
 }
 
-// Constants for image upload validation
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
 const ALLOWED_IMAGE_TYPES = [
   'image/jpeg',

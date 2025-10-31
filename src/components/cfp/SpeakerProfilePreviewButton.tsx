@@ -31,19 +31,16 @@ export default function SpeakerProfilePreviewButton({
   const [error, setError] = useState<string | null>(null)
 
   const handlePreviewClick = async () => {
-    // If talks are already provided, just open the modal
     if (talks) {
       setIsPreviewOpen(true)
       return
     }
 
-    // If fetchTalks is false and no talks provided, just open with empty talks
     if (!fetchTalks) {
       setIsPreviewOpen(true)
       return
     }
 
-    // Fetch talks from API
     setIsLoading(true)
     setError(null)
 

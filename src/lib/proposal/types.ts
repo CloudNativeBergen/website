@@ -37,11 +37,6 @@ export enum Format {
   workshop_240 = 'workshop_240',
 }
 
-/**
- * Helper function to check if a format is a workshop format
- * @param format - The format to check
- * @returns true if the format is a workshop format
- */
 export function isWorkshopFormat(format: Format): boolean {
   return format === Format.workshop_120 || format === Format.workshop_240
 }

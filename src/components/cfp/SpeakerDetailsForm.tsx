@@ -110,7 +110,6 @@ export function SpeakerDetailsForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [speaker?.name, email])
 
-  // Update email when email prop changes
   useEffect(() => {
     setSpeakerEmail(email ?? '')
   }, [email])
@@ -491,7 +490,6 @@ export function SpeakerDetailsForm({
             </div>
           </fieldset>
 
-          {/* GDPR Consent Section */}
           <fieldset className="border-t border-gray-200 pt-6 dark:border-gray-700">
             <legend className="sr-only">Privacy and Data Processing</legend>
             <div>

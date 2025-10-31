@@ -18,10 +18,6 @@ export interface SpeakerValidationOptions {
   requireConsent?: boolean
 }
 
-/**
- * Validates speaker data for form submission
- * Returns an object with field names as keys and error messages as values
- */
 export function validateSpeakerForm(
   speaker: SpeakerInput,
   options: SpeakerValidationOptions = {},
@@ -50,9 +46,6 @@ export function validateSpeakerForm(
   return errors
 }
 
-/**
- * Validates email format
- */
 export function validateEmail(email: string): string | null {
   if (!email || email.trim() === '') {
     return VALIDATION_MESSAGES.SPEAKER_EMAIL_REQUIRED
@@ -66,9 +59,6 @@ export function validateEmail(email: string): string | null {
   return null
 }
 
-/**
- * Validates speaker consent for CFP submission
- */
 export function validateSpeakerConsent(speaker: SpeakerInput): string[] {
   const errors: string[] = []
 
@@ -83,10 +73,6 @@ export function validateSpeakerConsent(speaker: SpeakerInput): string[] {
   return errors
 }
 
-/**
- * Validates speaker data for admin creation/update
- * Requires bio and consent since speakers are displayed publicly
- */
 export function validateSpeakerForAdmin(
   speaker: SpeakerInput,
   email: string,

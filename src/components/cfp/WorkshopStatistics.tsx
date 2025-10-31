@@ -55,7 +55,6 @@ export function WorkshopStatistics({ statistics }: WorkshopStatisticsProps) {
             {workshop.workshopTitle}
           </h3>
 
-          {/* Signup Overview */}
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
               <div className="flex items-center gap-2">
@@ -88,7 +87,6 @@ export function WorkshopStatistics({ statistics }: WorkshopStatisticsProps) {
             </div>
           </div>
 
-          {/* Experience Levels */}
           {workshop.confirmedCount > 0 && (
             <div className="mb-4">
               <div className="mb-3 flex items-center gap-2">
@@ -126,7 +124,6 @@ export function WorkshopStatistics({ statistics }: WorkshopStatisticsProps) {
             </div>
           )}
 
-          {/* Operating Systems */}
           {workshop.confirmedCount > 0 && (
             <div>
               <div className="mb-3 flex items-center gap-2">

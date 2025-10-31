@@ -2,9 +2,6 @@ import { ProposalExisting } from './types'
 import { SpeakerWithReviewInfo } from '@/lib/speaker/types'
 import { Reference } from 'sanity'
 
-/**
- * Extract and validate speakers from a proposal
- */
 export function extractSpeakersFromProposal(
   proposal: ProposalExisting,
 ): SpeakerWithReviewInfo[] {
@@ -21,9 +18,6 @@ export function extractSpeakersFromProposal(
   )
 }
 
-/**
- * Extract speaker IDs from proposal speakers (handles both objects and references)
- */
 export function extractSpeakerIds(
   speakers?: Array<string | Reference | { _id: string }>,
 ): string[] {
@@ -41,9 +35,6 @@ export function extractSpeakerIds(
     .filter((id): id is string => Boolean(id))
 }
 
-/**
- * Calculate average review score for a proposal
- */
 export function calculateReviewScore(
   reviews: Array<{
     score?: { content?: number; relevance?: number; speaker?: number }

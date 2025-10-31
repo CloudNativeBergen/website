@@ -13,7 +13,7 @@ export function validateExpandedTopics(
   context?: string,
 ): void {
   if (!conference.topics || conference.topics.length === 0) {
-    return // No topics to validate
+    return
   }
 
   const firstTopic = conference.topics[0] as unknown as {
@@ -23,7 +23,6 @@ export function validateExpandedTopics(
     title?: string
   }
 
-  // Check if this looks like a Sanity reference instead of an expanded Topic
   if (
     firstTopic._ref &&
     firstTopic._type === 'reference' &&
@@ -37,7 +36,6 @@ export function validateExpandedTopics(
     )
   }
 
-  // Additional validation: ensure all required Topic fields are present
   const invalidTopics = conference.topics.filter(
     (topic) => !topic._id || !topic.title,
   )

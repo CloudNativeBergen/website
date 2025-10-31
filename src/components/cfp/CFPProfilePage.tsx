@@ -17,7 +17,6 @@ export function CFPProfilePage({
   initialSpeaker,
   conferenceId,
 }: CFPProfilePageProps) {
-  // Query current speaker profile
   const {
     data: profile,
     error: profileError,
@@ -26,10 +25,8 @@ export function CFPProfilePage({
     initialData: initialSpeaker,
   })
 
-  // Query OAuth emails
   const { data: emails } = api.speaker.getEmails.useQuery()
 
-  // Mutation for updating profile
   const updateProfileMutation = api.speaker.update.useMutation({
     onSuccess: () => {
       setSuccessMessage('Profile updated successfully!')
@@ -44,7 +41,6 @@ export function CFPProfilePage({
   const speaker = profile || initialSpeaker
   const [speakerData, setSpeakerData] = useState(speaker)
 
-  // Use image upload hook
   const { uploadImage, error: uploadError } = useSpeakerImageUpload({
     speakerId: speaker._id,
   })
