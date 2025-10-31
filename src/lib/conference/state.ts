@@ -67,7 +67,9 @@ export function isWorkshopRegistrationOpen(conference: Conference): boolean {
   const startDate = new Date(
     conference.workshop_registration_start + 'T00:00:00Z',
   )
-  const endDate = new Date(conference.workshop_registration_end + 'T23:59:59.999Z')
+  const endDate = new Date(
+    conference.workshop_registration_end + 'T23:59:59.999Z',
+  )
   return now >= startDate && now <= endDate
 }
 

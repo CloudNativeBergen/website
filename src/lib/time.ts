@@ -80,6 +80,9 @@ export function formatDatesSafe(
     const month2 = months[date2.getMonth()]
     const year2 = date2.getFullYear()
 
+    if (dateString1 === dateString2) {
+      return `${day1} ${month1} ${year1}`
+    }
     if (year1 !== year2) {
       return `${day1} ${month1} ${year1} - ${day2} ${month2} ${year2}`
     }
