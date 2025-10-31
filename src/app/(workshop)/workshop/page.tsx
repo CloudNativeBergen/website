@@ -71,6 +71,13 @@ export default async function WorkshopPage() {
             <p className="mt-8 text-sm text-gray-600 dark:text-gray-400">
               By signing in, you agree to our{' '}
               <Link
+                href="/terms"
+                className="underline hover:text-blue-600 dark:hover:text-blue-400"
+              >
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link
                 href="/privacy"
                 className="underline hover:text-blue-600 dark:hover:text-blue-400"
               >

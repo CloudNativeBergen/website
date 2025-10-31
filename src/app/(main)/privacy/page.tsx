@@ -48,7 +48,7 @@ export default async function PrivacyPolicyPage() {
     )
   }
 
-  const lastUpdated = 'October 12, 2025'
+  const lastUpdated = 'October 31, 2025'
   const contactEmail = conference.contact_email || 'hello@cloudnativebergen.no'
   const organizationName = 'Cloud Native Bergen'
 
@@ -243,6 +243,9 @@ export default async function PrivacyPolicyPage() {
                               • Operating system preference (Windows, macOS,
                               Linux)
                             </li>
+                            <li>
+                              • WorkOS User ID (unique authentication identifier)
+                            </li>
                           </ul>
                         </div>
                         <div>
@@ -256,6 +259,7 @@ export default async function PrivacyPolicyPage() {
                             <li>• Signup date and confirmation details</li>
                             <li>• Workshop attendance tracking</li>
                             <li>• Capacity and waitlist management</li>
+                            <li>• Authentication session data for workshop access</li>
                           </ul>
                         </div>
                       </div>
@@ -703,17 +707,34 @@ export default async function PrivacyPolicyPage() {
                       <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
                         Authentication Services
                       </h3>
-                      <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
-                        <div className="flex items-start space-x-3">
-                          <LockClosedIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">
-                              GitHub/LinkedIn
-                            </p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              Authentication services (when you choose to sign
-                              in)
-                            </p>
+                      <div className="space-y-3">
+                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
+                          <div className="flex items-start space-x-3">
+                            <LockClosedIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                GitHub/LinkedIn
+                              </p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                Authentication services for Call for Papers (when you choose to sign in)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
+                          <div className="flex items-start space-x-3">
+                            <LockClosedIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white">
+                                WorkOS (AuthKit)
+                              </p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                User authentication and identity management for workshop signups (email, name, user ID, authentication sessions)
+                              </p>
+                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                                Location: United States • Protected by Standard Contractual Clauses
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -835,11 +856,26 @@ export default async function PrivacyPolicyPage() {
                     </div>
 
                     <p className="text-sm text-gray-700 dark:text-gray-300">
-                      Some providers (e.g., Vercel, Slack, Resend) may process
+                      Some providers (e.g., Vercel, Slack, Resend, WorkOS) may process
                       data in the United States. We rely on Standard Contractual
                       Clauses and other safeguards required by GDPR for such
                       transfers.
                     </p>
+                    
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+                      <h4 className="mb-2 font-semibold text-amber-800 dark:text-amber-200">
+                        WorkOS Authentication
+                      </h4>
+                      <p className="text-sm text-amber-700 dark:text-amber-300">
+                        WorkOS processes workshop authentication data in the United States. We rely on:
+                      </p>
+                      <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                        <li>Standard Contractual Clauses (SCCs) approved by the European Commission</li>
+                        <li>WorkOS&apos;s compliance with applicable data protection frameworks</li>
+                        <li>Additional safeguards including encryption at rest and in transit</li>
+                        <li>Transfer Impact Assessment documenting residual risks and mitigations</li>
+                      </ul>
+                    </div>
                   </div>
                 </section>
 
@@ -1028,6 +1064,27 @@ export default async function PrivacyPolicyPage() {
                               Volunteer coordination, event operations, and
                               safety management. Consent for special category
                               data (dietary restrictions)
+                            </td>
+                          </tr>
+                          <tr className="bg-purple-50 dark:bg-purple-900/20">
+                            <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">
+                              WorkOS Authentication Data
+                              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                (User ID, email, name, authentication sessions)
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              Duration of active workshop registration + 2 years
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                              <span className="font-medium text-blue-600 dark:text-blue-400">
+                                Legitimate Interest:
+                              </span>{' '}
+                              User account management, audit trail for capacity management, and preventing duplicate registrations.
+                              <span className="font-medium text-orange-600 dark:text-orange-400">
+                                {' '}Contract Performance:
+                              </span>{' '}
+                              Authentication required to access registered workshops
                             </td>
                           </tr>
                         </tbody>
