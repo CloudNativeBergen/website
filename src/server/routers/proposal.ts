@@ -141,7 +141,33 @@ export const proposalRouter = router({
           })
         }
 
-        // Create proposal with current speaker as the speaker
+        const { isCfpOpen } = await import('@/lib/conference/state')
+        if (!isCfpOpen(conference)) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'The Call for Papers is currently closed. We&apos;d love to have you speak at our next conference! Please check back when the next CFP opens, or contact the organizers if you have any questions.',
+          })
+        }
+
+        const { proposals: existingProposals } = await getProposals({
+          speakerId: ctx.speaker._id,
+          conferenceId: conference._id,
+          returnAll: false,
+        })
+
+        const proposalCount = (existingProposals || []).filter(
+          (p) => p.status !== Status.deleted,
+        ).length
+
+        if (proposalCount >= 3) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message:
+              'You have reached the maximum of 3 proposals per conference. Please edit or withdraw an existing proposal if you need to submit a new one.',
+          })
+        }
+
         const { proposal, err } = await createProposal(
           {
             ...input,
@@ -183,7 +209,6 @@ export const proposalRouter = router({
     .input(IdParamSchema.extend({ data: ProposalUpdateSchema }))
     .mutation(async ({ input, ctx }) => {
       try {
-        // Verify ownership
         const { proposal: existing, proposalError } = await getProposal({
           id: input.id,
           speakerId: ctx.speaker._id,
@@ -206,11 +231,10 @@ export const proposalRouter = router({
           })
         }
 
-        // Check if conference is over (only if not organizer)
         if (!ctx.speaker.is_organizer && existing.conference) {
           const conferenceId =
             typeof existing.conference === 'object' &&
-            '_id' in existing.conference
+              '_id' in existing.conference
               ? existing.conference._id
               : typeof existing.conference === 'string'
                 ? existing.conference
@@ -221,7 +245,7 @@ export const proposalRouter = router({
               revalidate: 0,
             })
             if (conference && conference._id === conferenceId) {
-              const { isConferenceOver } = await import(
+              const { isConferenceOver, isCfpOpen } = await import(
                 '@/lib/conference/state'
               )
               if (isConferenceOver(conference)) {
@@ -231,11 +255,17 @@ export const proposalRouter = router({
                     'Cannot edit proposal after conference has ended. Contact organizers if you need to make changes.',
                 })
               }
+              if (!isCfpOpen(conference)) {
+                throw new TRPCError({
+                  code: 'FORBIDDEN',
+                  message:
+                    'The Call for Papers has closed and proposals can no longer be edited. If you need to make changes, please contact the organizers and we&apos;ll be happy to help.',
+                })
+              }
             }
           }
         }
 
-        // Update proposal (only if there's data to update)
         if (Object.keys(input.data).length === 0) {
           return existing
         }

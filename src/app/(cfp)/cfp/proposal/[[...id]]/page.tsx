@@ -64,6 +64,19 @@ export default async function ProposalPage({
     }
   }
 
+  if (conference && !proposalId) {
+    const { isCfpOpen } = await import('@/lib/conference/state')
+    if (!isCfpOpen(conference)) {
+      const contactEmail = conference.cfp_email || conference.contact_email
+      loadingError = {
+        type: 'CFP Closed',
+        message: contactEmail
+          ? `The Call for Papers is currently closed. We'd love to have you speak at our next conference! Please check back when the next CFP opens, or reach out to ${contactEmail} if you have any questions.`
+          : 'The Call for Papers is currently closed. We&apos;d love to have you speak at our next conference! Please check back when the next CFP opens, or contact the organizers if you have any questions.',
+      }
+    }
+  }
+
   try {
     const { speaker: fetchedSpeaker, err } = await getSpeaker(
       session.speaker._id,
@@ -81,6 +94,28 @@ export default async function ProposalPage({
       }
     } else {
       currentUserSpeaker = fetchedSpeaker
+
+      if (!proposalId && conference && !loadingError) {
+        const { getProposals } = await import('@/lib/proposal/data/sanity')
+        const { Status } = await import('@/lib/proposal/types')
+        const { proposals: existingProposals } = await getProposals({
+          speakerId: session.speaker._id,
+          conferenceId: conference._id,
+          returnAll: false,
+        })
+
+        const proposalCount = (existingProposals || []).filter(
+          (p) => p.status !== Status.deleted,
+        ).length
+
+        if (proposalCount >= 3) {
+          loadingError = {
+            type: 'Maximum Reached',
+            message:
+              'You have reached the maximum of 3 proposals per conference. Please edit or withdraw an existing proposal if you need to submit a new one.',
+          }
+        }
+      }
     }
   } catch (error) {
     console.error('Error loading current user speaker:', error)
@@ -113,7 +148,6 @@ export default async function ProposalPage({
           Array.isArray(fetchedProposal.speakers) &&
           fetchedProposal.speakers.length > 0
         ) {
-          // Find the current user's speaker data, not just the first speaker
           const currentUserSpeakerData = fetchedProposal.speakers.find(
             (s): s is Speaker =>
               typeof s === 'object' &&
@@ -122,7 +156,6 @@ export default async function ProposalPage({
               s._id === session.speaker._id,
           )
 
-          // Fall back to currentUserSpeaker if not found in proposal speakers
           if (currentUserSpeakerData) {
             speaker = currentUserSpeakerData
           } else if (currentUserSpeaker) {
@@ -152,19 +185,19 @@ export default async function ProposalPage({
       </div>
 
       {loadingError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-800/50 dark:bg-blue-900/20">
           <div className="flex">
             <div className="flex-shrink-0">
               <XCircleIcon
-                className="h-6 w-6 text-red-500 dark:text-red-400"
+                className="h-6 w-6 text-blue-600 dark:text-blue-400"
                 aria-hidden="true"
               />
             </div>
             <div className="ml-4">
-              <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
-                Loading Error: {loadingError.type}
+              <h3 className="font-space-grotesk text-lg font-semibold text-blue-900 dark:text-blue-200">
+                {loadingError.type}
               </h3>
-              <div className="font-inter mt-2 text-red-700 dark:text-red-300">
+              <div className="font-inter mt-2 text-blue-800 dark:text-blue-300">
                 <p>{loadingError.message}</p>
               </div>
             </div>
