@@ -35,6 +35,13 @@ export function getProposalDurationMinutes(proposal: ProposalExisting): number {
     return cached
   }
 
+  // Handle null or undefined format
+  if (!proposal.format) {
+    const defaultDuration = 25
+    memoCache.set(cacheKey, defaultDuration)
+    return defaultDuration
+  }
+
   const split = proposal.format.split('_')
   let duration = 25
 
