@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useNotification } from './NotificationProvider'
+import { formatConferenceDateLong } from '@/lib/time'
 import { EmailModal } from './EmailModal'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
@@ -235,11 +236,7 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
         subject={processedSubject}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
-        eventDate={new Date(conference.start_date).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })}
+        eventDate={formatConferenceDateLong(conference.start_date)}
         eventUrl={`https://${conference.domains[0]}`}
         socialLinks={conference.social_links || []}
         content={<div dangerouslySetInnerHTML={{ __html: fullContent }} />}

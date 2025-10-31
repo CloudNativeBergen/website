@@ -65,12 +65,4 @@ export interface ProposalWithWorkshopData
   startTime?: string
   endTime?: string
   room?: string
-  scheduleInfo?: {
-    date?: string
-    timeSlot?: {
-      startTime?: string
-      endTime?: string
-    }
-    room?: string
-  }
 }

@@ -1,5 +1,6 @@
 import type { ProposalWithWorkshopData } from './types'
 import type { Format } from '@/lib/proposal/types'
+import { formatTime12Hour } from '@/lib/time'
 
 export function getWorkshopDuration(format: Format): string {
   if (format === 'workshop_120') return '2 hours'
@@ -7,20 +8,14 @@ export function getWorkshopDuration(format: Format): string {
   return '2 hours'
 }
 
-export function formatTime(timeString: string): string {
-  const [hours, minutes] = timeString.split(':')
-  const hour = parseInt(hours)
-  const ampm = hour >= 12 ? 'PM' : 'AM'
-  const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
-  return `${displayHour}:${minutes} ${ampm}`
-}
+export const formatTime = formatTime12Hour
 
 export function getWorkshopDateTime(workshop: ProposalWithWorkshopData) {
   return {
     date: workshop.date || workshop.scheduleInfo?.date,
     startTime: workshop.startTime || workshop.scheduleInfo?.timeSlot?.startTime,
     endTime: workshop.endTime || workshop.scheduleInfo?.timeSlot?.endTime,
-    room: workshop.room || workshop.scheduleInfo?.room,
+    room: workshop.room,
   }
 }
 

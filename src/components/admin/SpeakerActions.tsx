@@ -6,6 +6,7 @@ import { useNotification } from './NotificationProvider'
 import { EnvelopeIcon } from '@heroicons/react/24/outline'
 
 import { Conference } from '@/lib/conference/types'
+import { formatConferenceDateLong } from '@/lib/time'
 
 interface SpeakerActionsProps {
   eligibleSpeakersCount: number
@@ -100,11 +101,7 @@ export function SpeakerActions({
         fromEmail={fromEmail}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
-        eventDate={new Date(conference.start_date).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })}
+        eventDate={formatConferenceDateLong(conference.start_date)}
         eventUrl={`https://${conference.domains[0]}`}
         socialLinks={conference.social_links || []}
       />

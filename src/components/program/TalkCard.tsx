@@ -69,10 +69,6 @@ interface TalkCardProps {
   status?: TalkStatus
 }
 
-const formatTime = (time: string): string => {
-  return time
-}
-
 const calculateDurationMinutes = (
   startTime: string,
   endTime: string,
@@ -135,7 +131,7 @@ export function TalkCard({
                 <div className="flex items-center gap-1">
                   <ClockIcon className="h-3 w-3" />
                   <span className="font-mono">
-                    {formatTime(talk.startTime)} - {formatTime(talk.endTime)}
+                    {talk.startTime} - {talk.endTime}
                   </span>
                 </div>
                 {showDate && (
@@ -475,7 +471,7 @@ export function TalkCard({
             <div className="flex items-center gap-1">
               <ClockIcon className="h-3 w-3" />
               <span className="font-mono">
-                {formatTime(talk.startTime)} - {formatTime(talk.endTime)}
+                {talk.startTime} - {talk.endTime}
               </span>
             </div>
             {showDate && (

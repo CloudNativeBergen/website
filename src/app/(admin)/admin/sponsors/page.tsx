@@ -1,5 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
+import { formatConferenceDateLong } from '@/lib/time'
 import {
   ErrorDisplay,
   SponsorActions,
@@ -182,14 +183,7 @@ export default async function AdminSponsors() {
             sponsors={sponsors}
             conferenceTitle={conference.title}
             conferenceLocation={`${conference.city}, ${conference.country}`}
-            conferenceDate={new Date(conference.start_date).toLocaleDateString(
-              'en-US',
-              {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              },
-            )}
+            conferenceDate={formatConferenceDateLong(conference.start_date)}
             conferenceUrl={`https://${conference.domains[0]}`}
             socialLinks={conference.social_links || []}
             contactEmail={conference.contact_email}

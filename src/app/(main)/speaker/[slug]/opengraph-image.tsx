@@ -2,6 +2,7 @@ import React from 'react'
 import { ImageResponse } from '@vercel/og'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { formatConferenceDateLong } from '@/lib/time'
 import { sanityImage } from '@/lib/sanity/client'
 
 const USER_ICON_SVG =
@@ -500,11 +501,7 @@ export default async function Image({
 
                 const singleDate =
                   conferenceData.startDate || conferenceData.endDate
-                return new Date(singleDate).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })
+                return formatConferenceDateLong(singleDate)
               })()}
             </div>
           )}

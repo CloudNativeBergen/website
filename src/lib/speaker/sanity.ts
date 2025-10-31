@@ -197,13 +197,15 @@ export async function getPublicSpeaker(
           topics[]-> {
             _id, title, "slug": slug.current
           },
-          "schedule": *[_type == "schedule" && references(^._id)]{
-            date, tracks[]{
-              trackTitle, trackDescription, talks[]{
-                startTime, endTime, talk -> {
-                  _id
-                }
-              }
+          "scheduleInfo": {
+            "talkId": _id,
+            "schedule": *[_type == "schedule" && ^._id in tracks[].talks[].talk._ref][0]
+          } {
+            "date": schedule.date,
+            "trackTitle": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].trackTitle,
+            "timeSlot": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].talks[talk._ref == ^.talkId][0]{
+              startTime,
+              endTime
             }
           }
         }

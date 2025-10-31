@@ -15,6 +15,7 @@ import {
 } from '@/lib/program/dev-time'
 import { getCurrentConferenceTime } from '@/lib/program/time-utils'
 import { ConferenceSchedule } from '@/lib/conference/types'
+import { formatConferenceDateLong } from '@/lib/time'
 
 interface DevTimeControlProps {
   schedules?: ConferenceSchedule[]
@@ -27,11 +28,7 @@ const addDays = (dateString: string, days: number): string => {
 }
 
 const formatDateOption = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  })
+  return formatConferenceDateLong(dateString)
 }
 
 export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {

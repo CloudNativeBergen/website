@@ -79,7 +79,6 @@ describe('Workshop Utils', () => {
             startTime: '13:00',
             endTime: '15:00',
           },
-          room: 'Room B',
         },
       } as ProposalWithWorkshopData
 
@@ -89,7 +88,7 @@ describe('Workshop Utils', () => {
         date: '2025-11-16',
         startTime: '13:00',
         endTime: '15:00',
-        room: 'Room B',
+        room: undefined,
       })
     })
 
@@ -105,7 +104,6 @@ describe('Workshop Utils', () => {
             startTime: '13:00',
             endTime: '15:00',
           },
-          room: 'Room B',
         },
       } as ProposalWithWorkshopData
 

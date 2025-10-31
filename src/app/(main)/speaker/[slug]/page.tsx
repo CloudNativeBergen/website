@@ -22,6 +22,12 @@ import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
 import { VideoEmbed } from '@/components/VideoEmbed'
 import { getVideoPlatform } from '@/lib/video/utils'
+import {
+  CalendarIcon,
+  ClockIcon,
+  MapPinIcon,
+} from '@heroicons/react/24/outline'
+import { formatConferenceDateLong } from '@/lib/time'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -244,7 +250,7 @@ export default async function Profile({ params }: Props) {
               {talks && talks.length > 0 && (
                 <div className="mb-8">
                   <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
-                    {talks.length === 1 ? 'Presentation' : 'Presentations'}
+                    {talks.length === 1 ? 'Session' : 'Sessions'}
                   </h2>
                   <div className="space-y-6">
                     {talks.map((talk) => (
@@ -257,6 +263,30 @@ export default async function Profile({ params }: Props) {
                             <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-brand-slate-gray dark:text-white">
                               {talk.title}
                             </h3>
+
+                            {talk.scheduleInfo?.date &&
+                              talk.scheduleInfo?.timeSlot && (
+                                <div className="mb-3 flex flex-wrap gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                  <span className="flex items-center">
+                                    <CalendarIcon className="mr-1.5 h-4 w-4" />
+                                    {formatConferenceDateLong(
+                                      talk.scheduleInfo.date,
+                                    )}
+                                  </span>
+                                  <span className="flex items-center">
+                                    <ClockIcon className="mr-1.5 h-4 w-4" />
+                                    {
+                                      talk.scheduleInfo.timeSlot.startTime
+                                    } - {talk.scheduleInfo.timeSlot.endTime}
+                                  </span>
+                                  {talk.scheduleInfo.trackTitle && (
+                                    <span className="flex items-center">
+                                      <MapPinIcon className="mr-1.5 h-4 w-4" />
+                                      {talk.scheduleInfo.trackTitle}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
 
                             {talk.speakers && talk.speakers.length > 1 && (
                               <div className="mb-3 flex items-center gap-3">

@@ -7,6 +7,7 @@ import { isValidPortableText } from '@/lib/portabletext/validation'
 import React from 'react'
 import { PortableTextBlock } from '@portabletext/types'
 import { Conference } from '@/lib/conference/types'
+import { formatConferenceDateLong } from '@/lib/time'
 
 export interface EmailRouteContext {
   conference: Conference
@@ -149,11 +150,7 @@ export function renderEmailTemplate({
     subject,
     eventName: conference.title,
     eventLocation: `${conference.city}, ${conference.country}`,
-    eventDate: new Date(conference.start_date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    }),
+    eventDate: formatConferenceDateLong(conference.start_date),
     eventUrl: `https://${conference.domains[0]}`,
     socialLinks: conference.social_links || [],
     unsubscribeUrl,

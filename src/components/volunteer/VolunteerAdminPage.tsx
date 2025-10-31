@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { api } from '@/lib/trpc/client'
+import { formatDateTimeSafe } from '@/lib/time'
 import { VolunteerStatus, VolunteerWithConference } from '@/lib/volunteer/types'
 import {
   UserGroupIcon,
@@ -474,9 +475,7 @@ export default function VolunteerAdminPage() {
                   {selectedVolunteer.reviewedBy && (
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
                       Reviewed by {selectedVolunteer.reviewedBy.name} on{' '}
-                      {new Date(
-                        selectedVolunteer.reviewedAt!,
-                      ).toLocaleDateString()}
+                      {formatDateTimeSafe(selectedVolunteer.reviewedAt!)}
                     </p>
                   )}
                 </div>

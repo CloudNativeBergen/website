@@ -2,6 +2,7 @@ import React from 'react'
 import { getAuthSession } from '@/lib/auth'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getProposals } from '@/lib/proposal/server'
+import { formatConferenceDateLong } from '@/lib/time'
 import { Status } from '@/lib/proposal/types'
 import { SpeakerShare } from '@/components/SpeakerShare'
 import { SponsorThankYou } from '@/components/SponsorThankYou'
@@ -221,11 +222,7 @@ export default async function MarketingPage() {
   const qrCodeUrl = await generateQRCode(programUrl, conferenceDomain, 80)
 
   const eventDate = conference.start_date
-    ? new Date(conference.start_date).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      })
+    ? formatConferenceDateLong(conference.start_date)
     : 'June 15, 2025'
 
   const conferenceDescription = getFirstParagraph(conference.description)

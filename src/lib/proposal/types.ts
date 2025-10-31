@@ -82,6 +82,15 @@ export interface ProposalInput extends Proposal {
   speakers?: Speaker[] | Reference[]
 }
 
+export interface ScheduleInfo {
+  date: string
+  trackTitle?: string
+  timeSlot?: {
+    startTime: string
+    endTime: string
+  }
+}
+
 export interface ProposalExisting extends Proposal {
   _id: string
   _rev: string
@@ -90,7 +99,7 @@ export interface ProposalExisting extends Proposal {
   _updatedAt: string
   status: Status
   speakers?: Speaker[] | Reference[]
-  schedule?: ConferenceSchedule[]
+  scheduleInfo?: ScheduleInfo
   conference: Conference | Reference
   reviews?: Review[]
   coSpeakerInvitations?: CoSpeakerInvitationMinimal[]

@@ -8,6 +8,7 @@ import { useBookmarks } from '@/contexts/BookmarksContext'
 import { TalkCard } from './TalkCard'
 import { getTalkStatusKey } from '@/lib/program/time-utils'
 import type { TalkStatus } from '@/lib/program/time-utils'
+import { formatConferenceDateLong } from '@/lib/time'
 
 interface ProgramAgendaViewProps {
   data: FilteredProgramData
@@ -51,13 +52,7 @@ export const ProgramAgendaView = React.memo(function ProgramAgendaView({
   const sortedDays = Object.keys(talksByDay).sort()
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
+    return formatConferenceDateLong(dateString)
   }
 
   if (isLoaded && bookmarks.length === 0) {

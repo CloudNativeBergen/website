@@ -5,6 +5,7 @@ import {
   createEmailError,
 } from './config'
 import { VolunteerWithConference } from '@/lib/volunteer/types'
+import { formatConferenceDateLong } from '@/lib/time'
 import { VolunteerApprovalTemplate } from '@/components/email/VolunteerApprovalTemplate'
 
 interface ConferenceForEmail {
@@ -48,11 +49,7 @@ export async function sendVolunteerApprovalEmail(
     const eventName = conference.title
     const eventLocation = `${conference.city || 'Bergen'}, ${conference.country || 'Norway'}`
     const eventDate = conference.start_date
-      ? new Date(conference.start_date).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
-        })
+      ? formatConferenceDateLong(conference.start_date)
       : 'TBD'
     const eventUrl = `https://${conference.domains?.[0] || 'cloudnativebergen.no'}`
     const socialLinks = conference.social_links?.map((link) => link.url) || []

@@ -81,6 +81,32 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Do not provide lengthy summaries.
 - Always run `npm run check` before committing changes.
 
+### Date and Time Handling
+
+- **Use Time Utilities:** Always use the utility functions from `/src/lib/time.ts` instead of directly using `new Date()` for date/time formatting and manipulation.
+- **Conference Dates:** Use `formatConferenceDateLong()` or `formatConferenceDateShort()` for displaying conference dates (from Sanity in YYYY-MM-DD format). These ensure proper timezone handling for the conference location (Europe/Oslo).
+- **Timestamps:** Use `getCurrentDateTime()` for generating ISO 8601 timestamps.
+- **Date Ranges:** Use `formatDatesSafe()` for displaying date ranges.
+- **Gallery/Media:** Use the gallery-specific datetime utilities (`fileTimestampToISO()`, `extractDateFromISO()`, etc.) for handling image/media timestamps.
+- **Avoid Direct `new Date()` Usage:** Direct usage of `new Date()` should be limited to:
+  - Internal utility functions (like those in `/src/lib/time.ts`)
+  - Time calculations where you need the Date object itself (not display)
+  - Testing and development tools
+- **Examples:**
+
+  ```typescript
+  // ❌ Don't do this for display
+  new Date(dateString).toLocaleDateString('en-US', {...})
+
+  // ✅ Do this instead
+  import { formatConferenceDateLong } from '@/lib/time'
+  formatConferenceDateLong(dateString)
+
+  // ✅ For timestamps
+  import { getCurrentDateTime } from '@/lib/time'
+  const timestamp = getCurrentDateTime()
+  ```
+
 ### Sanity CMS Requirements
 
 - **Array Items:** All array items in Sanity documents must include a `_key` property. When creating or updating documents with arrays, ensure each array item has a unique `_key` field to prevent validation errors and maintain data integrity.
