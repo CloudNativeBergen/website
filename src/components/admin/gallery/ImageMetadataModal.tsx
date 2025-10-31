@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogPanel,
@@ -56,6 +56,7 @@ export function ImageMetadataModal({
   const [speakerQuery, setSpeakerQuery] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [notifySpeakers, setNotifySpeakers] = useState(false)
+  const speakerInputRef = useRef<HTMLInputElement>(null)
 
   const { data: searchResults } = api.speakers.search.useQuery(
     { query: speakerQuery, includeFeatured: true },
@@ -90,6 +91,31 @@ export function ImageMetadataModal({
     setSelectedSpeakers(image.speakers || [])
     setNotifySpeakers(false)
   }, [image])
+
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        speakerInputRef.current?.focus()
+      }, 100)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        if (!isSubmitting) {
+          const form = document.querySelector('form') as HTMLFormElement | null
+          form?.requestSubmit()
+        }
+      }
+    }
+
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown)
+      return () => window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, isSubmitting])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -328,6 +354,7 @@ export function ImageMetadataModal({
                         >
                           <div className="relative">
                             <ComboboxInput
+                              ref={speakerInputRef}
                               className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                               displayValue={() => ''}
                               onChange={(event) =>

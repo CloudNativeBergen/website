@@ -12,10 +12,7 @@ interface CFPProfilePageProps {
   conferenceId?: string
 }
 
-export function CFPProfilePage({
-  initialSpeaker,
-  conferenceId,
-}: CFPProfilePageProps) {
+export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
   const {
     data: profile,
     error: profileError,

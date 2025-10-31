@@ -317,7 +317,7 @@ export async function getGalleryImages(
         && (!defined($dateTo) || date <= $dateTo)
         && (!defined($photographerSearch) || photographer match $photographerSearch)
         && (!defined($locationSearch) || location match $locationSearch)
-      ] | order(date desc) [$offset...$end] {
+      ] | order(date asc) [$offset...$end] {
         _id,
         _rev,
         _createdAt,
