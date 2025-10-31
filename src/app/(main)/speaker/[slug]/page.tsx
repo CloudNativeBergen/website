@@ -28,6 +28,7 @@ import {
   MapPinIcon,
 } from '@heroicons/react/24/outline'
 import { formatConferenceDateLong } from '@/lib/time'
+import { PhotoGallerySection } from '@/components/PhotoGallerySection'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -224,9 +225,7 @@ export default async function Profile({ params }: Props) {
 
               {speaker.bio && (
                 <div className="mb-8 rounded-xl bg-white p-6 shadow-sm dark:bg-gray-800">
-                  <h2 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-white">
-                    About
-                  </h2>
+                  <h2 className="sr-only">About</h2>
                   <ShowMore className="font-inter prose prose-lg max-w-none text-gray-700 dark:text-gray-300">
                     {typeof speaker.bio === 'string' ? (
                       speaker.bio.split('\n').map(
@@ -245,6 +244,10 @@ export default async function Profile({ params }: Props) {
                     )}
                   </ShowMore>
                 </div>
+              )}
+
+              {speaker.galleryImages && speaker.galleryImages.length > 0 && (
+                <PhotoGallerySection images={speaker.galleryImages} />
               )}
 
               {talks && talks.length > 0 && (

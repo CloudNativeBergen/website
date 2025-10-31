@@ -208,7 +208,21 @@ export async function getPublicSpeaker(
               endTime
             }
           }
-        }
+        },
+        "galleryImages": *[_type == "imageGallery" && conference._ref == $conferenceId && ^._id in speakers[]._ref] {
+          _id,
+          _rev,
+          _createdAt,
+          _updatedAt,
+          image{asset, hotspot, crop, alt},
+          "imageUrl": image.asset->url,
+          "imageAlt": image.alt,
+          photographer,
+          date,
+          location,
+          featured,
+          speakers[]->{_id, name, "slug": slug.current, image}
+        } | order(featured desc, date desc)[0...6]
       }`,
       { speakerSlug, conferenceId },
     )

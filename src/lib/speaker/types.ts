@@ -1,4 +1,5 @@
 import { ProposalExisting } from '@/lib/proposal/types'
+import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 
 export enum Flags {
   localSpeaker = 'local',
@@ -39,6 +40,7 @@ interface SpeakerBase {
   flags?: Flags[]
   consent?: SpeakerConsent
   company?: string
+  galleryImages?: GalleryImageWithSpeakers[]
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type

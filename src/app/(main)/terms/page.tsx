@@ -44,13 +44,13 @@ export default async function TermsOfServicePage() {
             </h1>
             <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300 print:mt-4 print:space-y-4 print:text-base print:text-black">
               <p className="print:leading-relaxed">
-                Welcome to {organizationName}. These Terms of Service govern your use of
-                our website, workshop registration system, speaker submission platform,
-                and related services.
+                Welcome to {organizationName}. These Terms of Service govern
+                your use of our website, workshop registration system, speaker
+                submission platform, and related services.
               </p>
               <p className="print:leading-relaxed">
-                By accessing or using our services, you agree to be bound by these terms.
-                Please read them carefully.
+                By accessing or using our services, you agree to be bound by
+                these terms. Please read them carefully.
               </p>
               <p className="text-xl tracking-tight print:text-base print:font-semibold">
                 <strong>Last updated:</strong> {lastUpdated}
@@ -71,10 +71,10 @@ export default async function TermsOfServicePage() {
                   </div>
                   <div className="space-y-4 print:space-y-3">
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300 print:leading-relaxed print:text-black">
-                      By creating an account, registering for workshops, submitting a talk
-                      proposal, or otherwise using our services, you acknowledge that you
-                      have read, understood, and agree to be bound by these Terms of Service
-                      and our{' '}
+                      By creating an account, registering for workshops,
+                      submitting a talk proposal, or otherwise using our
+                      services, you acknowledge that you have read, understood,
+                      and agree to be bound by these Terms of Service and our{' '}
                       <Link
                         href="/privacy"
                         className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
@@ -84,8 +84,8 @@ export default async function TermsOfServicePage() {
                       .
                     </p>
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
-                      If you do not agree with any part of these terms, you may not use our
-                      services.
+                      If you do not agree with any part of these terms, you may
+                      not use our services.
                     </p>
                   </div>
                 </section>
@@ -105,21 +105,25 @@ export default async function TermsOfServicePage() {
                       </h3>
                       <ul className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
                         <li>
-                          • You may create an account using GitHub or LinkedIn (for Call for
-                          Papers) or WorkOS AuthKit (for workshop registration)
+                          • You may create an account using GitHub or LinkedIn
+                          (for Call for Papers) or WorkOS AuthKit (for workshop
+                          registration)
                         </li>
                         <li>
-                          • You must provide accurate and complete information when creating
-                          an account
-                        </li>
-                        <li>• You are responsible for maintaining the security of your account</li>
-                        <li>
-                          • You must be at least 13 years old to create an account and use
-                          our services
+                          • You must provide accurate and complete information
+                          when creating an account
                         </li>
                         <li>
-                          • One person may not maintain multiple accounts for the same
-                          purpose
+                          • You are responsible for maintaining the security of
+                          your account
+                        </li>
+                        <li>
+                          • You must be at least 13 years old to create an
+                          account and use our services
+                        </li>
+                        <li>
+                          • One person may not maintain multiple accounts for
+                          the same purpose
                         </li>
                       </ul>
                     </div>
@@ -130,16 +134,16 @@ export default async function TermsOfServicePage() {
                       </h3>
                       <ul className="space-y-2 text-sm text-orange-700 dark:text-orange-300">
                         <li>
-                          • You are responsible for all activities that occur under your
-                          account
+                          • You are responsible for all activities that occur
+                          under your account
                         </li>
                         <li>
-                          • You must notify us immediately of any unauthorized use of your
-                          account
+                          • You must notify us immediately of any unauthorized
+                          use of your account
                         </li>
                         <li>
-                          • We reserve the right to suspend or terminate accounts that
-                          violate these terms
+                          • We reserve the right to suspend or terminate
+                          accounts that violate these terms
                         </li>
                       </ul>
                     </div>
@@ -161,20 +165,20 @@ export default async function TermsOfServicePage() {
                       </h3>
                       <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
                         <li>
-                          • Workshop registration requires authentication through WorkOS
-                          AuthKit
+                          • Workshop registration requires authentication
+                          through WorkOS AuthKit
                         </li>
                         <li>
-                          • Workshops have limited capacity and are assigned on a
-                          first-come, first-served basis
+                          • Workshops have limited capacity and are assigned on
+                          a first-come, first-served basis
                         </li>
                         <li>
-                          • Confirmed registrations may be subject to waitlist if capacity
-                          is reached
+                          • Confirmed registrations may be subject to waitlist
+                          if capacity is reached
                         </li>
                         <li>
-                          • You will receive a confirmation email upon successful
-                          registration
+                          • You will receive a confirmation email upon
+                          successful registration
                         </li>
                       </ul>
                     </div>
@@ -186,18 +190,20 @@ export default async function TermsOfServicePage() {
                       </h3>
                       <ul className="space-y-2 text-sm text-red-700 dark:text-red-300">
                         <li>
-                          • You may cancel your workshop registration at any time through
-                          the workshop page
+                          • You may cancel your workshop registration at any
+                          time through the workshop page
                         </li>
                         <li>
-                          • Cancellations will open spots for waitlisted participants
+                          • Cancellations will open spots for waitlisted
+                          participants
                         </li>
                         <li>
-                          • We reserve the right to cancel workshops due to low enrollment
-                          or unforeseen circumstances
+                          • We reserve the right to cancel workshops due to low
+                          enrollment or unforeseen circumstances
                         </li>
                         <li>
-                          • No-shows may be restricted from future workshop registrations
+                          • No-shows may be restricted from future workshop
+                          registrations
                         </li>
                       </ul>
                     </div>
@@ -207,9 +213,10 @@ export default async function TermsOfServicePage() {
                         Participant Conduct
                       </h3>
                       <p className="text-sm text-green-700 dark:text-green-300">
-                        All workshop participants must adhere to our Code of Conduct.
-                        Disruptive or inappropriate behavior may result in removal from the
-                        workshop and conference without refund.
+                        All workshop participants must adhere to our Code of
+                        Conduct. Disruptive or inappropriate behavior may result
+                        in removal from the workshop and conference without
+                        refund.
                       </p>
                     </div>
                   </div>
@@ -231,16 +238,16 @@ export default async function TermsOfServicePage() {
                       <ul className="space-y-2 text-sm text-purple-700 dark:text-purple-300">
                         <li>• All submissions must be original work</li>
                         <li>
-                          • You warrant that you have the right to present the submitted
-                          content
+                          • You warrant that you have the right to present the
+                          submitted content
                         </li>
                         <li>
-                          • Submissions are subject to review and acceptance by the program
-                          committee
+                          • Submissions are subject to review and acceptance by
+                          the program committee
                         </li>
                         <li>
-                          • Accepted speakers agree to have their talks recorded and
-                          published
+                          • Accepted speakers agree to have their talks recorded
+                          and published
                         </li>
                       </ul>
                     </div>
@@ -250,33 +257,36 @@ export default async function TermsOfServicePage() {
                         Content Rights and Licensing
                       </h3>
                       <p className="mb-2 text-sm text-blue-700 dark:text-blue-300">
-                        By submitting a talk proposal and speaking at our conference, you
-                        grant {organizationName}:
+                        By submitting a talk proposal and speaking at our
+                        conference, you grant {organizationName}:
                       </p>
                       <ul className="space-y-2 text-sm text-blue-700 dark:text-blue-300">
                         <li>
-                          • A non-exclusive, worldwide, perpetual license to record,
-                          reproduce, and distribute your presentation
+                          • A non-exclusive, worldwide, perpetual license to
+                          record, reproduce, and distribute your presentation
                         </li>
                         <li>
-                          • The right to publish your talk on our website and official video
-                          platforms
+                          • The right to publish your talk on our website and
+                          official video platforms
                         </li>
                         <li>
-                          • The right to use your name, biography, and photograph in
-                          promotional materials
+                          • The right to use your name, biography, and
+                          photograph in promotional materials
                         </li>
                       </ul>
                       <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
-                        You retain all other rights to your content and may use it elsewhere
-                        as you wish.
+                        You retain all other rights to your content and may use
+                        it elsewhere as you wish.
                       </p>
                     </div>
                   </div>
                 </section>
 
                 {/* Section 5: Acceptable Use */}
-                <section id="acceptable-use" className="space-y-6 print:space-y-4">
+                <section
+                  id="acceptable-use"
+                  className="space-y-6 print:space-y-4"
+                >
                   <div className="flex items-center space-x-3 print:space-x-0">
                     <ShieldCheckIcon className="h-6 w-6 text-gray-600 dark:text-gray-400 print:hidden" />
                     <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
@@ -332,14 +342,14 @@ export default async function TermsOfServicePage() {
                   </div>
                   <div className="space-y-4">
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
-                      All content on our website, including but not limited to text,
-                      graphics, logos, images, and software, is the property of{' '}
-                      {organizationName} or its content suppliers and is protected by
-                      international copyright laws.
+                      All content on our website, including but not limited to
+                      text, graphics, logos, images, and software, is the
+                      property of {organizationName} or its content suppliers
+                      and is protected by international copyright laws.
                     </p>
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
-                      You may not reproduce, distribute, modify, or create derivative works
-                      without our express written permission.
+                      You may not reproduce, distribute, modify, or create
+                      derivative works without our express written permission.
                     </p>
                   </div>
                 </section>
@@ -359,9 +369,10 @@ export default async function TermsOfServicePage() {
                       </h3>
                       <p className="text-sm text-yellow-700 dark:text-yellow-300">
                         Our services are provided &quot;as is&quot; and &quot;as
-                        available&quot; without any warranties of any kind, either express or
-                        implied. We do not warrant that the service will be uninterrupted,
-                        timely, secure, or error-free.
+                        available&quot; without any warranties of any kind,
+                        either express or implied. We do not warrant that the
+                        service will be uninterrupted, timely, secure, or
+                        error-free.
                       </p>
                     </div>
 
@@ -370,17 +381,22 @@ export default async function TermsOfServicePage() {
                         Limitation of Liability
                       </h3>
                       <p className="text-sm text-orange-700 dark:text-orange-300">
-                        To the maximum extent permitted by law, {organizationName} shall not
-                        be liable for any indirect, incidental, special, consequential, or
-                        punitive damages, including but not limited to loss of profits, data,
-                        or other intangible losses resulting from your use of our services.
+                        To the maximum extent permitted by law,{' '}
+                        {organizationName} shall not be liable for any indirect,
+                        incidental, special, consequential, or punitive damages,
+                        including but not limited to loss of profits, data, or
+                        other intangible losses resulting from your use of our
+                        services.
                       </p>
                     </div>
                   </div>
                 </section>
 
                 {/* Section 8: Indemnification */}
-                <section id="indemnification" className="space-y-6 print:space-y-4">
+                <section
+                  id="indemnification"
+                  className="space-y-6 print:space-y-4"
+                >
                   <div className="flex items-center space-x-3 print:space-x-0">
                     <ScaleIcon className="h-6 w-6 text-gray-600 dark:text-gray-400 print:hidden" />
                     <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
@@ -388,10 +404,11 @@ export default async function TermsOfServicePage() {
                     </h2>
                   </div>
                   <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
-                    You agree to indemnify, defend, and hold harmless {organizationName},
-                    its officers, directors, employees, and agents from any claims,
-                    liabilities, damages, losses, and expenses arising from your violation
-                    of these Terms of Service or your use of our services.
+                    You agree to indemnify, defend, and hold harmless{' '}
+                    {organizationName}, its officers, directors, employees, and
+                    agents from any claims, liabilities, damages, losses, and
+                    expenses arising from your violation of these Terms of
+                    Service or your use of our services.
                   </p>
                 </section>
 
@@ -404,15 +421,19 @@ export default async function TermsOfServicePage() {
                     </h2>
                   </div>
                   <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
-                    We reserve the right to modify these Terms of Service at any time. We
-                    will notify users of significant changes via email or through a notice
-                    on our website. Your continued use of our services after such
-                    modifications constitutes acceptance of the updated terms.
+                    We reserve the right to modify these Terms of Service at any
+                    time. We will notify users of significant changes via email
+                    or through a notice on our website. Your continued use of
+                    our services after such modifications constitutes acceptance
+                    of the updated terms.
                   </p>
                 </section>
 
                 {/* Section 10: Governing Law */}
-                <section id="governing-law" className="space-y-6 print:space-y-4">
+                <section
+                  id="governing-law"
+                  className="space-y-6 print:space-y-4"
+                >
                   <div className="flex items-center space-x-3 print:space-x-0">
                     <GlobeAltIcon className="h-6 w-6 text-gray-600 dark:text-gray-400 print:hidden" />
                     <h2 className="font-space-grotesk text-2xl font-semibold text-brand-cloud-blue dark:text-blue-400 print:mt-6 print:mb-3 print:text-xl print:font-bold print:text-black">
@@ -421,15 +442,16 @@ export default async function TermsOfServicePage() {
                   </div>
                   <div className="space-y-4">
                     <p className="text-base leading-7 text-gray-700 dark:text-gray-300">
-                      These Terms of Service are governed by and construed in accordance
-                      with the laws of Norway. Any disputes arising from these terms or your
-                      use of our services shall be subject to the exclusive jurisdiction of
-                      the courts of Norway.
+                      These Terms of Service are governed by and construed in
+                      accordance with the laws of Norway. Any disputes arising
+                      from these terms or your use of our services shall be
+                      subject to the exclusive jurisdiction of the courts of
+                      Norway.
                     </p>
                     <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
                       <p className="text-sm text-blue-700 dark:text-blue-300">
-                        Before pursuing formal legal action, we encourage users to contact us
-                        to resolve disputes amicably.
+                        Before pursuing formal legal action, we encourage users
+                        to contact us to resolve disputes amicably.
                       </p>
                     </div>
                   </div>
@@ -445,8 +467,8 @@ export default async function TermsOfServicePage() {
                   </div>
                   <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
                     <p className="text-sm text-blue-700 dark:text-blue-300">
-                      If you have any questions about these Terms of Service, please contact
-                      us at:{' '}
+                      If you have any questions about these Terms of Service,
+                      please contact us at:{' '}
                       <a
                         href={`mailto:${contactEmail}`}
                         className="font-semibold underline hover:text-blue-900 dark:hover:text-blue-200"
@@ -461,9 +483,10 @@ export default async function TermsOfServicePage() {
 
                 <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
                   <p className="text-sm text-gray-700 dark:text-gray-300">
-                    By using {organizationName}&apos;s services, you acknowledge that you
-                    have read and understood these Terms of Service and agree to be bound by
-                    them. These terms work in conjunction with our{' '}
+                    By using {organizationName}&apos;s services, you acknowledge
+                    that you have read and understood these Terms of Service and
+                    agree to be bound by them. These terms work in conjunction
+                    with our{' '}
                     <Link
                       href="/privacy"
                       className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"

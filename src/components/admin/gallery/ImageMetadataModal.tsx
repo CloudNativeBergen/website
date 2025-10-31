@@ -44,7 +44,8 @@ export function ImageMetadataModal({
   onUpdate,
 }: ImageMetadataModalProps) {
   const isBulkMode = !!images && images.length > 1
-  const singleImage = image || (images && images.length === 1 ? images[0] : null)
+  const singleImage =
+    image || (images && images.length === 1 ? images[0] : null)
   const { showNotification } = useNotification()
   const [formData, setFormData] = useState({
     photographer: singleImage?.photographer || '',
@@ -148,7 +149,9 @@ export function ImageMetadataModal({
         }),
       )
 
-      const successCount = results.filter((r) => r.status === 'fulfilled').length
+      const successCount = results.filter(
+        (r) => r.status === 'fulfilled',
+      ).length
       const failCount = results.filter((r) => r.status === 'rejected').length
 
       setIsSubmitting(false)
@@ -315,9 +318,9 @@ export function ImageMetadataModal({
                                 onChange={(e) => {
                                   const newDate = e.target.value
                                     ? updateDateInISO(
-                                      formData.date,
-                                      e.target.value,
-                                    )
+                                        formData.date,
+                                        e.target.value,
+                                      )
                                     : formData.date
                                   setFormData((prev) => ({
                                     ...prev,
@@ -441,9 +444,10 @@ export function ImageMetadataModal({
                                     key={speaker._id}
                                     value={speaker}
                                     className={({ active }) =>
-                                      `relative cursor-default py-2 pr-4 pl-3 select-none ${active
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'text-gray-900 dark:text-white'
+                                      `relative cursor-default py-2 pr-4 pl-3 select-none ${
+                                        active
+                                          ? 'bg-indigo-600 text-white'
+                                          : 'text-gray-900 dark:text-white'
                                       }`
                                     }
                                   >
@@ -555,7 +559,8 @@ export function ImageMetadataModal({
                               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700 dark:text-indigo-500 dark:focus:ring-indigo-500"
                             />
                             <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                              Send email notification to {isBulkMode ? 'tagged' : 'newly tagged'} speakers
+                              Send email notification to{' '}
+                              {isBulkMode ? 'tagged' : 'newly tagged'} speakers
                             </span>
                           </label>
                           <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
@@ -599,7 +604,10 @@ export function ImageMetadataModal({
                     </button>
                     <button
                       type="submit"
-                      disabled={isSubmitting || (isBulkMode && selectedSpeakers.length === 0)}
+                      disabled={
+                        isSubmitting ||
+                        (isBulkMode && selectedSpeakers.length === 0)
+                      }
                       className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
                     >
                       {isSubmitting
