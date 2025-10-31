@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   CheckIcon,
   XMarkIcon,
@@ -11,23 +11,37 @@ import {
   ExclamationTriangleIcon,
   HeartIcon,
   EnvelopeIcon,
+  PencilIcon,
+  EyeIcon,
 } from '@heroicons/react/20/solid'
 import { ProposalExisting, Action } from '@/lib/proposal/types'
-import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
+import { getSpeakerIndicators } from '@/lib/speaker/utils'
+import { Speaker } from '@/lib/speaker/types'
 import { SpeakerEmailModal } from './SpeakerEmailModal'
+import { ProposalManagementModal } from './ProposalManagementModal'
+import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
+import { useRouter } from 'next/navigation'
+
+import { Conference } from '@/lib/conference/types'
 
 interface AdminActionBarProps {
   proposal: ProposalExisting
   domain?: string
   fromEmail: string
+  conference: Conference
 }
 
 export function AdminActionBar({
   proposal,
   domain,
   fromEmail,
+  conference,
 }: AdminActionBarProps) {
+  const router = useRouter()
   const [showEmailModal, setShowEmailModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [speakersWithEmail, setSpeakersWithEmail] = useState<
     {
       id: string
@@ -35,6 +49,10 @@ export function AdminActionBar({
       email: string
     }[]
   >([])
+  const [previewSpeaker, setPreviewSpeaker] = useState<Speaker | null>(null)
+
+  const speakers = extractSpeakersFromProposal(proposal)
+  const indicators = getSpeakerIndicators(speakers)
 
   const handleAction = (action: Action) => {
     const event = new CustomEvent('proposalAction', {
@@ -43,7 +61,7 @@ export function AdminActionBar({
     window.dispatchEvent(event)
   }
 
-  const handleEmailSpeakers = () => {
+  const handleEmailSpeakers = useCallback(() => {
     const speakersWithValidEmail = speakers
       .filter((speaker) => speaker.email)
       .map((speaker) => ({
@@ -56,6 +74,23 @@ export function AdminActionBar({
       setSpeakersWithEmail(speakersWithValidEmail)
       setShowEmailModal(true)
     }
+  }, [speakers])
+
+  const handleEditProposal = () => {
+    setShowEditModal(true)
+  }
+
+  const handlePreviewSpeaker = useCallback(() => {
+    if (speakers.length > 0) {
+      const speakerForPreview = speakers[0] as Speaker
+      setPreviewSpeaker(speakerForPreview)
+      setShowPreviewModal(true)
+    }
+  }, [speakers])
+
+  const handleProposalUpdated = () => {
+    router.refresh()
+    setShowEditModal(false)
   }
 
   const canApprove = proposal.status === 'submitted'
@@ -63,36 +98,52 @@ export function AdminActionBar({
   const canReject =
     proposal.status === 'submitted' || proposal.status === 'accepted'
 
-  const speakers =
-    proposal.speakers && Array.isArray(proposal.speakers)
-      ? proposal.speakers
-          .filter(
-            (speaker) =>
-              typeof speaker === 'object' && speaker && 'name' in speaker,
-          )
-          .map((speaker) => speaker as SpeakerWithReviewInfo)
-      : []
-  const isSeasonedSpeaker = speakers.some(
-    (speaker) =>
-      speaker?.previousAcceptedTalks &&
-      speaker.previousAcceptedTalks.length > 0,
-  )
-  const isNewSpeaker =
-    speakers.length === 0 ||
-    speakers.every(
-      (speaker) =>
-        !speaker?.previousAcceptedTalks ||
-        speaker.previousAcceptedTalks.length === 0,
-    )
-  const isLocalSpeaker = speakers.some((speaker) =>
-    speaker?.flags?.includes(Flags.localSpeaker),
-  )
-  const isUnderrepresentedSpeaker = speakers.some((speaker) =>
-    speaker?.flags?.includes(Flags.diverseSpeaker),
-  )
-  const requiresTravelSupport = speakers.some((speaker) =>
-    speaker?.flags?.includes(Flags.requiresTravelFunding),
-  )
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Check if Cmd (Mac) or Ctrl (Windows/Linux) is pressed
+      const isCmdOrCtrl = event.metaKey || event.ctrlKey
+
+      if (!isCmdOrCtrl) return
+
+      // Prevent default browser behavior
+      switch (event.key.toLowerCase()) {
+        case 'e':
+          event.preventDefault()
+          handleEditProposal()
+          break
+        case 'p':
+          event.preventDefault()
+          if (speakers.length > 0) {
+            handlePreviewSpeaker()
+          }
+          break
+        case 'm':
+          event.preventDefault()
+          if (
+            speakers.length > 0 &&
+            speakers.some((speaker) => speaker.email)
+          ) {
+            handleEmailSpeakers()
+          }
+          break
+        case 's':
+          // Note: CMD+S will trigger save in edit modal if it's open
+          // This is handled by the ProposalManagementModal component
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [speakers, handleEmailSpeakers, handlePreviewSpeaker])
+  const {
+    isSeasonedSpeaker,
+    isNewSpeaker,
+    isLocalSpeaker,
+    isUnderrepresentedSpeaker,
+    requiresTravelSupport,
+  } = indicators
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
@@ -194,6 +245,32 @@ export function AdminActionBar({
         </div>
 
         <div className="flex flex-shrink-0 items-center gap-2">
+          <button
+            onClick={handleEditProposal}
+            className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+            title="Edit proposal"
+          >
+            <PencilIcon className="h-3 w-3" />
+            <span>Edit</span>
+            <kbd className="ml-1 hidden rounded border border-indigo-400 bg-indigo-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-indigo-600 dark:bg-indigo-700">
+              ⌘E
+            </kbd>
+          </button>
+
+          {speakers.length > 0 && (
+            <button
+              onClick={handlePreviewSpeaker}
+              className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
+              title="Preview speaker profile"
+            >
+              <EyeIcon className="h-3 w-3" />
+              <span>Preview</span>
+              <kbd className="ml-1 hidden rounded border border-purple-400 bg-purple-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-purple-600 dark:bg-purple-700">
+                ⌘P
+              </kbd>
+            </button>
+          )}
+
           {speakers.length > 0 && speakers.some((speaker) => speaker.email) && (
             <button
               onClick={handleEmailSpeakers}
@@ -201,7 +278,10 @@ export function AdminActionBar({
               title={`Email ${speakers.length === 1 ? speakers.filter((s) => s.email)[0]?.name : `${speakers.filter((s) => s.email).length} speakers`}`}
             >
               <EnvelopeIcon className="h-3 w-3" />
-              Email
+              <span>Email</span>
+              <kbd className="ml-1 hidden rounded border border-blue-400 bg-blue-500 px-1.5 py-0.5 text-xs font-semibold text-white sm:inline dark:border-blue-600 dark:bg-blue-700">
+                ⌘M
+              </kbd>
             </button>
           )}
 
@@ -246,6 +326,28 @@ export function AdminActionBar({
           speakers={speakersWithEmail}
           domain={domain}
           fromEmail={fromEmail}
+        />
+      )}
+
+      {showEditModal && (
+        <ProposalManagementModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          editingProposal={proposal}
+          conference={conference}
+          onProposalUpdated={handleProposalUpdated}
+        />
+      )}
+
+      {showPreviewModal && previewSpeaker && (
+        <SpeakerProfilePreview
+          isOpen={showPreviewModal}
+          onClose={() => {
+            setShowPreviewModal(false)
+            setPreviewSpeaker(null)
+          }}
+          speaker={previewSpeaker}
+          talks={[proposal]}
         />
       )}
     </div>

@@ -57,7 +57,7 @@ export function ClickableSpeakerNames({
     <span className={className}>
       {speakersToShow.map((speaker, index) => (
         <span key={speaker._id}>
-          {speaker.slug ? (
+          {speaker.slug && typeof speaker.slug === 'string' ? (
             <Link href={`/speaker/${speaker.slug}`} className={linkClassName}>
               {getDisplayName(speaker)}
             </Link>

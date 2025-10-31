@@ -13,12 +13,15 @@ import { ShowMore } from '@/components/ShowMore'
 import { UserIcon } from '@heroicons/react/24/solid'
 import { sanityImage } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
+import { portableTextComponents } from '@/lib/portabletext/components'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
+import { VideoEmbed } from '@/components/VideoEmbed'
+import { getVideoPlatform } from '@/lib/video/utils'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -229,7 +232,10 @@ export default async function Profile({ params }: Props) {
                           ),
                       )
                     ) : (
-                      <PortableText value={speaker.bio} />
+                      <PortableText
+                        value={speaker.bio}
+                        components={portableTextComponents}
+                      />
                     )}
                   </ShowMore>
                 </div>
@@ -292,13 +298,24 @@ export default async function Profile({ params }: Props) {
                             </div>
                           </div>
                         </div>
+                        {talk.video && getVideoPlatform(talk.video) && (
+                          <div className="mb-4">
+                            <VideoEmbed
+                              url={talk.video}
+                              title={`${talk.title} - Recording`}
+                            />
+                          </div>
+                        )}
                         {talk.description && (
                           <div className="mb-4">
-                            <div className="font-inter prose prose-gray dark:prose-invert max-w-none text-gray-700 dark:text-gray-300 [&>p]:mb-4 [&>p]:leading-relaxed">
+                            <div className="font-inter text-gray-700 dark:text-gray-300">
                               {typeof talk.description === 'string' ? (
                                 <p>{talk.description}</p>
                               ) : (
-                                <PortableText value={talk.description} />
+                                <PortableText
+                                  value={talk.description}
+                                  components={portableTextComponents}
+                                />
                               )}
                             </div>
                           </div>

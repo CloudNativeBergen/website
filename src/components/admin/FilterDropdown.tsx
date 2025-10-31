@@ -31,6 +31,11 @@ export function FilterDropdown({
 }: FilterDropdownProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [shouldDropUp, setShouldDropUp] = useState(false)
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   const getWidthClass = () => {
     switch (width) {
@@ -70,7 +75,7 @@ export function FilterDropdown({
   }
 
   useEffect(() => {
-    if (!menuRef.current) {
+    if (!isClient || !menuRef.current) {
       return
     }
 
@@ -98,7 +103,7 @@ export function FilterDropdown({
     return () => {
       observer.disconnect()
     }
-  }, [shouldDropUp])
+  }, [isClient, shouldDropUp])
 
   const handleMenuButtonClick = () => {
     requestAnimationFrame(() => {
@@ -144,7 +149,7 @@ export function FilterDropdown({
               </span>
               <ChevronDownIcon
                 className={`-mr-1 h-5 w-5 text-gray-400 transition-transform duration-200 dark:text-gray-500 ${
-                  shouldDropUp ? 'rotate-180' : ''
+                  isClient && shouldDropUp ? 'rotate-180' : ''
                 }`}
               />
             </MenuButton>

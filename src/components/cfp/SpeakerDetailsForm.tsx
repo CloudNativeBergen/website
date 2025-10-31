@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { SpeakerInput, Flags } from '@/lib/speaker/types'
 import { ProfileEmail } from '@/lib/profile/types'
 import { postImage, putEmail } from '@/lib/profile/client'
@@ -26,7 +26,8 @@ interface SpeakerDetailsFormProps {
   showImageUpload?: boolean
   showLinks?: boolean
   className?: string
-  onImageUpload?: () => Promise<void>
+  onImageUpload?: (file: File) => Promise<{ assetId: string; url: string }>
+  onEmailSelect?: (email: string) => Promise<void>
 }
 
 export function SpeakerDetailsForm({
@@ -40,12 +41,17 @@ export function SpeakerDetailsForm({
   showLinks = true,
   className = '',
   onImageUpload,
+  onEmailSelect,
 }: SpeakerDetailsFormProps) {
   const [speakerName, setSpeakerName] = useState(speaker?.name ?? '')
   const [speakerTitle, setSpeakerTitle] = useState(speaker?.title ?? '')
+  const [speakerCompany, setSpeakerCompany] = useState(speaker?.company ?? '')
   const [speakerBio, setSpeakerBio] = useState(speaker?.bio ?? '')
   const [speakerEmail, setSpeakerEmail] = useState(email ?? '')
   const [speakerImage, setSpeakerImage] = useState(speaker?.image ?? '')
+  const [speakerImagePreviewUrl, setSpeakerImagePreviewUrl] = useState<
+    string | null
+  >(speaker?.image && speaker.image.startsWith('http') ? speaker.image : null)
   const [speakerFlags, setSpeakerFlags] = useState(speaker?.flags ?? [])
   const [speakerLinks, setSpeakerLinks] = useState(
     speaker?.links?.length ? speaker.links : [''],
@@ -65,7 +71,48 @@ export function SpeakerDetailsForm({
   )
 
   const [imageError, setImageError] = useState('')
+  const [emailError, setEmailError] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+  const isMounted = useRef(false)
+  const previousSpeakerRef = useRef(speaker)
+
+  // Initialize local state from props only on mount or when switching speakers
+  useEffect(() => {
+    // Skip the effect after initial mount if speaker hasn't meaningfully changed
+    if (isMounted.current) {
+      // Check if we're switching to a different speaker (by comparing key properties)
+      const hasSignificantChange =
+        previousSpeakerRef.current?.name !== speaker?.name &&
+        (speaker?.name || speaker?.bio || speaker?.title)
+
+      if (!hasSignificantChange) {
+        return
+      }
+    }
+
+    setSpeakerName(speaker?.name ?? '')
+    setSpeakerTitle(speaker?.title ?? '')
+    setSpeakerCompany(speaker?.company ?? '')
+    setSpeakerBio(speaker?.bio ?? '')
+    setSpeakerImage(speaker?.image ?? '')
+    setSpeakerImagePreviewUrl(
+      speaker?.image && speaker.image.startsWith('http') ? speaker.image : null,
+    )
+    setSpeakerFlags(speaker?.flags ?? [])
+    setSpeakerLinks(speaker?.links?.length ? speaker.links : [''])
+    setDataProcessingConsent(speaker?.consent?.dataProcessing?.granted ?? false)
+    setMarketingConsent(speaker?.consent?.marketing?.granted ?? false)
+    setPublicProfileConsent(speaker?.consent?.publicProfile?.granted ?? false)
+    setPhotographyConsent(speaker?.consent?.photography?.granted ?? false)
+
+    previousSpeakerRef.current = speaker
+    isMounted.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speaker?.name, email])
+
+  useEffect(() => {
+    setSpeakerEmail(email ?? '')
+  }, [email])
 
   const emailOptions = new Map(
     emails.map((email) => [email.email, email.email]),
@@ -101,14 +148,25 @@ export function SpeakerDetailsForm({
     if (e.target.files && e.target.files.length > 0) {
       setIsUploading(true)
       setImageError('')
-      const { error, image } = await postImage(e.target.files[0])
 
-      if (error) {
-        setImageError(error.message)
-      } else if (image) {
-        setSpeakerImage(image.image)
-        if (onImageUpload) {
-          await onImageUpload()
+      const file = e.target.files[0]
+
+      if (onImageUpload) {
+        try {
+          const { assetId, url } = await onImageUpload(file)
+          setSpeakerImage(assetId)
+          setSpeakerImagePreviewUrl(url)
+        } catch (error) {
+          setImageError(
+            error instanceof Error ? error.message : 'Failed to upload image',
+          )
+        }
+      } else {
+        const { error, image } = await postImage(file)
+        if (error) {
+          setImageError(error.message)
+        } else if (image) {
+          setSpeakerImage(image.image)
         }
       }
 
@@ -117,11 +175,33 @@ export function SpeakerDetailsForm({
   }
 
   async function emailSelectHandler(email: string) {
-    const res = await putEmail(email)
-    if (res.error) {
-      console.error('Error updating email', res.error)
+    setEmailError('')
+
+    if (onEmailSelect) {
+      try {
+        await onEmailSelect(email)
+        setSpeakerEmail(email)
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Failed to update email'
+        setEmailError(errorMessage)
+        console.error('Email selection failed:', error)
+      }
     } else {
-      setSpeakerEmail(email)
+      try {
+        const res = await putEmail(email)
+        if (res.error) {
+          setEmailError(res.error.message || 'Failed to update email')
+          console.error('Email update failed:', res.error)
+        } else {
+          setSpeakerEmail(email)
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Failed to update email'
+        setEmailError(errorMessage)
+        console.error('Email update failed:', error)
+      }
     }
   }
 
@@ -131,6 +211,7 @@ export function SpeakerDetailsForm({
     setSpeaker({
       name: speakerName,
       title: speakerTitle,
+      company: speakerCompany,
       bio: speakerBio,
       flags: speakerFlags,
       links,
@@ -160,6 +241,7 @@ export function SpeakerDetailsForm({
   }, [
     speakerName,
     speakerTitle,
+    speakerCompany,
     speakerBio,
     speakerFlags,
     speakerLinks,
@@ -209,6 +291,15 @@ export function SpeakerDetailsForm({
           />
         </div>
 
+        <div className="sm:col-span-4">
+          <Input
+            name="speaker_company"
+            label="Company"
+            value={speakerCompany}
+            setValue={setSpeakerCompany}
+          />
+        </div>
+
         <div className="col-span-full">
           <Textarea
             name="speaker_bio"
@@ -233,10 +324,14 @@ export function SpeakerDetailsForm({
               setValue={emailSelectHandler}
               options={emailOptions}
             />
-            <HelpText>
-              Your email address will not be displayed publicly. It will only be
-              used to contact you regarding your presentation.
-            </HelpText>
+            {emailError ? (
+              <ErrorText>{emailError}</ErrorText>
+            ) : (
+              <HelpText>
+                Your email address will not be displayed publicly. It will only
+                be used to contact you regarding your presentation.
+              </HelpText>
+            )}
           </div>
         )}
 
@@ -249,9 +344,14 @@ export function SpeakerDetailsForm({
               Photo
             </label>
             <div className="mt-2 flex items-center gap-x-3">
-              {speakerImage ? (
+              {speakerImagePreviewUrl || speakerImage ? (
                 <Image
-                  src={`${speakerImage}?w=96&h=96&fit=crop`}
+                  src={
+                    speakerImagePreviewUrl ||
+                    (speakerImage.startsWith('http')
+                      ? `${speakerImage}?w=96&h=96&fit=crop`
+                      : speakerImage)
+                  }
                   alt="Speaker Image"
                   width={48}
                   height={48}
@@ -390,7 +490,6 @@ export function SpeakerDetailsForm({
             </div>
           </fieldset>
 
-          {/* GDPR Consent Section */}
           <fieldset className="border-t border-gray-200 pt-6 dark:border-gray-700">
             <legend className="sr-only">Privacy and Data Processing</legend>
             <div>

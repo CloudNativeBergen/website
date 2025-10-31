@@ -27,10 +27,14 @@ import {
   Audience,
 } from '@/lib/proposal/types'
 import { Flags } from '@/lib/speaker/types'
-import type { Review } from '@/lib/review/types'
 import { PortableText } from '@portabletext/react'
 import { SpeakerAvatarsWithNames } from '@/components/SpeakerAvatars'
 import { calculateAverageRating } from '@/lib/proposal'
+import { portableTextComponents } from '@/lib/portabletext/components'
+import {
+  extractSpeakersFromProposal,
+  calculateReviewScore,
+} from '@/lib/proposal/utils'
 import { formatDateSafe } from '@/lib/time'
 
 interface ProposalPreviewProps {
@@ -60,13 +64,7 @@ function formatAudience(audience: Audience[]): string {
 
 export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const speakers =
-    proposal.speakers && Array.isArray(proposal.speakers)
-      ? proposal.speakers.filter(
-          (speaker) =>
-            typeof speaker === 'object' && speaker && 'name' in speaker,
-        )
-      : []
+  const speakers = extractSpeakersFromProposal(proposal)
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
   const requiresTravelFunding =
@@ -191,14 +189,9 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                     <div className="flex justify-between">
                       <span>Content:</span>
                       <span>
-                        {(
-                          proposal.reviews.reduce((acc, review) => {
-                            const reviewObj =
-                              typeof review === 'object' && 'score' in review
-                                ? (review as Review)
-                                : null
-                            return acc + (reviewObj?.score?.content || 0)
-                          }, 0) / proposal.reviews.length
+                        {calculateReviewScore(
+                          proposal.reviews,
+                          'content',
                         ).toFixed(1)}
                         /5
                       </span>
@@ -206,14 +199,9 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                     <div className="flex justify-between">
                       <span>Relevance:</span>
                       <span>
-                        {(
-                          proposal.reviews.reduce((acc, review) => {
-                            const reviewObj =
-                              typeof review === 'object' && 'score' in review
-                                ? (review as Review)
-                                : null
-                            return acc + (reviewObj?.score?.relevance || 0)
-                          }, 0) / proposal.reviews.length
+                        {calculateReviewScore(
+                          proposal.reviews,
+                          'relevance',
                         ).toFixed(1)}
                         /5
                       </span>
@@ -221,14 +209,9 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                     <div className="flex justify-between">
                       <span>Speaker:</span>
                       <span>
-                        {(
-                          proposal.reviews.reduce((acc, review) => {
-                            const reviewObj =
-                              typeof review === 'object' && 'score' in review
-                                ? (review as Review)
-                                : null
-                            return acc + (reviewObj?.score?.speaker || 0)
-                          }, 0) / proposal.reviews.length
+                        {calculateReviewScore(
+                          proposal.reviews,
+                          'speaker',
                         ).toFixed(1)}
                         /5
                       </span>
@@ -296,8 +279,11 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
               <h4 className="mb-2 text-sm font-medium text-gray-900 dark:text-white">
                 Description
               </h4>
-              <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
-                <PortableText value={proposal.description} />
+              <div className="text-gray-600 dark:text-gray-300">
+                <PortableText
+                  value={proposal.description}
+                  components={portableTextComponents}
+                />
               </div>
             </div>
           )}

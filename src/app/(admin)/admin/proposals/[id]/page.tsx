@@ -8,6 +8,7 @@ import {
   BackToProposalsButton,
   ProposalReviewPanel,
   AdminActionBar,
+  ProposalPublishedContent,
 } from '@/components/admin'
 import { getAuthSession } from '@/lib/auth'
 
@@ -26,6 +27,7 @@ export default async function ProposalDetailPage({
   try {
     const { conference, domain } = await getConferenceForCurrentDomain({
       revalidate: 0,
+      topics: true,
     })
     const { proposal, proposalError } = await getProposalSanity({
       id,
@@ -72,6 +74,7 @@ export default async function ProposalDetailPage({
                 proposal={proposal}
                 domain={domain}
                 fromEmail={conference.cfp_email}
+                conference={conference}
               />
             </div>
 
@@ -79,7 +82,15 @@ export default async function ProposalDetailPage({
           </div>
         </div>
 
-        <div className="lg:block">
+        <div className="w-full lg:w-96 lg:flex-shrink-0">
+          <div className="space-y-4 p-4 lg:p-4">
+            <ProposalPublishedContent
+              proposalId={proposal._id}
+              currentVideoUrl={proposal.video}
+              status={proposal.status}
+              conferenceEndDate={conference.end_date}
+            />
+          </div>
           <ProposalReviewPanel
             proposalId={proposal._id}
             initialReviews={proposal.reviews || []}

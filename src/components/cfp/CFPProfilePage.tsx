@@ -2,29 +2,58 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Speaker, SpeakerInput } from '@/lib/speaker/types'
-import { useProfile } from '@/hooks/useProfile'
-import { useEmails } from '@/hooks/useEmails'
+import { api } from '@/lib/trpc/client'
 import { SpeakerDetailsForm } from './SpeakerDetailsForm'
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline'
+import SpeakerProfilePreviewButton from '@/components/cfp/SpeakerProfilePreviewButton'
+import { useSpeakerImageUpload } from '@/hooks/useSpeakerImageUpload'
 
 interface CFPProfilePageProps {
   initialSpeaker: Speaker
+  conferenceId?: string
 }
 
-export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
-  const { profile, error, refreshProfile, updateProfile } = useProfile()
-  const { emails } = useEmails()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export function CFPProfilePage({
+  initialSpeaker,
+  conferenceId,
+}: CFPProfilePageProps) {
+  const {
+    data: profile,
+    error: profileError,
+    refetch: refreshProfile,
+  } = api.speaker.getCurrent.useQuery(undefined, {
+    initialData: initialSpeaker,
+  })
+
+  const { data: emails } = api.speaker.getEmails.useQuery()
+
+  const updateProfileMutation = api.speaker.update.useMutation({
+    onSuccess: () => {
+      setSuccessMessage('Profile updated successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+      refreshProfile()
+    },
+  })
+
   const [submitError, setSubmitError] = useState<string[]>([])
   const [successMessage, setSuccessMessage] = useState('')
 
   const speaker = profile || initialSpeaker
-
   const [speakerData, setSpeakerData] = useState(speaker)
+
+  const { uploadImage, error: uploadError } = useSpeakerImageUpload({
+    speakerId: speaker._id,
+  })
 
   useEffect(() => {
     setSpeakerData(profile || initialSpeaker)
   }, [profile, initialSpeaker])
+
+  useEffect(() => {
+    if (uploadError) {
+      setSubmitError([uploadError])
+    }
+  }, [uploadError])
 
   const handleSpeakerDataChange = useCallback(
     (updatedSpeakerInput: SpeakerInput) => {
@@ -38,25 +67,13 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsSubmitting(true)
     setSubmitError([])
     setSuccessMessage('')
 
-    try {
-      await updateProfile(speakerData)
-      setSuccessMessage('Profile updated successfully!')
-      setTimeout(() => setSuccessMessage(''), 3000)
-    } catch (error) {
-      console.error('Error updating profile:', error)
-      setSubmitError([
-        error instanceof Error ? error.message : 'Failed to update profile',
-      ])
-    } finally {
-      setIsSubmitting(false)
-    }
+    updateProfileMutation.mutate(speakerData)
   }
 
-  if (error && !profile) {
+  if (profileError && !profile) {
     return (
       <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
         <div className="mt-12 rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
@@ -72,11 +89,11 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
                 Loading Error: Profile Error
               </h3>
               <div className="font-inter mt-2 text-red-700 dark:text-red-300">
-                <p>{error}</p>
+                <p>{profileError?.message || 'Failed to load profile'}</p>
               </div>
               <div className="mt-4">
                 <button
-                  onClick={refreshProfile}
+                  onClick={() => refreshProfile()}
                   className="font-space-grotesk inline-flex items-center rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-800 transition-colors hover:bg-red-200 focus:outline-2 focus:outline-offset-2 focus:outline-red-500 dark:bg-red-800/30 dark:text-red-200 dark:hover:bg-red-800/50 dark:focus:outline-red-400"
                 >
                   Try Again
@@ -92,7 +109,7 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
   return (
     <>
       <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
               Your Speaker Profile
@@ -102,6 +119,14 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
                 Manage your speaker information and how you appear to attendees
               </p>
             </div>
+          </div>
+          <div className="mt-4 sm:mt-0">
+            <SpeakerProfilePreviewButton
+              speaker={speakerData}
+              fetchTalks={true}
+              conferenceId={conferenceId}
+              buttonClassName="w-full sm:w-auto"
+            />
           </div>
         </div>
       </div>
@@ -162,21 +187,22 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
           <SpeakerDetailsForm
             speaker={speakerData}
             setSpeaker={handleSpeakerDataChange}
+            emails={emails}
             mode="profile"
             showEmailField={false}
             showImageUpload={true}
             showLinks={true}
+            onImageUpload={uploadImage}
             className="space-y-6"
-            onImageUpload={refreshProfile}
           />
 
           <div className="flex justify-end border-t border-brand-frosted-steel pt-6 dark:border-gray-600">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={updateProfileMutation.isPending}
               className="font-space-grotesk inline-flex items-center rounded-lg bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue/90 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus:outline-blue-500"
             >
-              {isSubmitting ? (
+              {updateProfileMutation.isPending ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white"></div>
                   Updating...

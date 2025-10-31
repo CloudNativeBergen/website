@@ -1,8 +1,4 @@
-import {
-  ActionInput,
-  ProposalActionResponse,
-  Status,
-} from '@/lib/proposal/types'
+import { ProposalActionResponse, Status } from '@/lib/proposal/types'
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { proposalResponseError } from '@/lib/proposal/server'
 import { NextResponse } from 'next/server'
@@ -16,6 +12,7 @@ import { Speaker } from '@/lib/speaker/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { eventBus } from '@/lib/events/bus'
 import { ProposalStatusChangeEvent } from '@/lib/events/types'
+import { ProposalActionSchema } from '@/server/schemas/proposal'
 import '@/lib/events/registry'
 
 export const dynamic = 'force-dynamic'
@@ -26,7 +23,24 @@ export const POST = auth(
     { params }: { params: Record<string, string | string[] | undefined> },
   ) => {
     const { id } = (await params) as { id: string }
-    const { action, notify, comment } = (await req.json()) as ActionInput
+
+    // Validate request body with Zod schema
+    const body = await req.json()
+    const validationResult = ProposalActionSchema.safeParse(body)
+
+    if (!validationResult.success) {
+      return proposalResponseError({
+        message: 'Invalid request body',
+        type: 'validation',
+        status: 400,
+        validationErrors: validationResult.error.issues.map((issue) => ({
+          field: issue.path.join('.'),
+          message: issue.message,
+        })),
+      })
+    }
+
+    const { action, notify, comment } = validationResult.data
 
     if (
       !req.auth ||

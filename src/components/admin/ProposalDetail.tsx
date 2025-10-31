@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import {
   UserIcon,
   ClockIcon,
   CalendarIcon,
   TagIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from '@heroicons/react/24/outline'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/solid'
 import { PortableText } from '@portabletext/react'
@@ -16,11 +19,14 @@ import {
   languages,
   audiences,
 } from '@/lib/proposal/types'
-import { SpeakerWithReviewInfo, Flags } from '@/lib/speaker/types'
+import { extractSpeakersFromProposal } from '@/lib/proposal/utils'
+import { Flags } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
 import { formatDateSafe, formatDateTimeSafe } from '@/lib/time'
 import { sanityImage } from '@/lib/sanity/client'
-import { getStatusBadgeStyle } from './utils'
+import { getStatusBadgeConfig } from '@/lib/proposal/ui'
+import { portableTextComponents } from '@/lib/portabletext/components'
+import { iconForLink } from '@/components/SocialIcons'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -35,16 +41,115 @@ function isTopicObject(topic: unknown): topic is Topic {
   )
 }
 
+interface SpeakerCardProps {
+  speaker: {
+    _id?: string
+    name: string
+    title?: string
+    bio?: string
+    image?: string
+    links?: string[]
+  }
+  requiresTravelFunding: boolean
+}
+
+function SpeakerCard({ speaker, requiresTravelFunding }: SpeakerCardProps) {
+  const [isBioExpanded, setIsBioExpanded] = useState(false)
+  const bioText = speaker.bio || ''
+  const shouldShowExpand = bioText.length > 150
+
+  return (
+    <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          {speaker.name}
+        </h2>
+        {requiresTravelFunding && (
+          <div className="flex items-center" title="Requires travel funding">
+            <ExclamationTriangleIcon className="h-5 w-5 text-red-500" />
+          </div>
+        )}
+      </div>
+      <div>
+        <div className="float-left mr-4 mb-2">
+          {speaker.image ? (
+            <img
+              src={sanityImage(speaker.image)
+                .width(128)
+                .height(128)
+                .fit('crop')
+                .url()}
+              alt={speaker.name}
+              width={64}
+              height={64}
+              className="h-16 w-16 rounded-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
+              <UserIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0">
+          {speaker.title && (
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+              {speaker.title}
+            </p>
+          )}
+          {speaker.bio && (
+            <div className="mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {isBioExpanded || !shouldShowExpand
+                  ? bioText
+                  : `${bioText.slice(0, 150)}...`}
+              </p>
+              {shouldShowExpand && (
+                <button
+                  type="button"
+                  onClick={() => setIsBioExpanded(!isBioExpanded)}
+                  className="mt-1 inline-flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  {isBioExpanded ? (
+                    <>
+                      Show less
+                      <ChevronUpIcon className="ml-1 h-4 w-4" />
+                    </>
+                  ) : (
+                    <>
+                      Show more
+                      <ChevronDownIcon className="ml-1 h-4 w-4" />
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+          {speaker.links && speaker.links.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {speaker.links.map((link, linkIndex) => (
+                <a
+                  key={linkIndex}
+                  href={link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center text-blue-600 transition-colors hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                  title={link}
+                >
+                  {iconForLink(link, 'h-4 w-4')}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="clear-both" />
+      </div>
+    </div>
+  )
+}
+
 export function ProposalDetail({ proposal }: ProposalDetailProps) {
-  const speakers =
-    proposal.speakers && Array.isArray(proposal.speakers)
-      ? proposal.speakers
-          .filter(
-            (speaker) =>
-              typeof speaker === 'object' && speaker && 'name' in speaker,
-          )
-          .map((speaker) => speaker as SpeakerWithReviewInfo)
-      : []
+  const speakers = extractSpeakersFromProposal(proposal)
   const topics = proposal.topics as Topic[]
   const requiresTravelFunding =
     speakers.some((speaker) =>
@@ -59,16 +164,6 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
             <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl dark:text-white">
               {proposal.title}
             </h1>
-            <div className="mt-2 flex items-center space-x-4">
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(proposal.status)}`}
-              >
-                {statuses.get(proposal.status) || proposal.status}
-              </span>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Submitted {formatDateSafe(proposal._createdAt)}
-              </span>
-            </div>
           </div>
         </div>
       </div>
@@ -80,9 +175,12 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
               <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                 Description
               </h2>
-              <div className="prose prose-sm dark:prose-invert max-w-none text-gray-600 dark:text-gray-300">
+              <div className="text-gray-600 dark:text-gray-300">
                 {proposal.description && proposal.description.length > 0 ? (
-                  <PortableText value={proposal.description} />
+                  <PortableText
+                    value={proposal.description}
+                    components={portableTextComponents}
+                  />
                 ) : (
                   <p className="italic">No description provided</p>
                 )}
@@ -143,7 +241,12 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                             </p>
                             <div className="mt-1 flex items-center space-x-2">
                               <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(talk.status)}`}
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
+                                  const config = getStatusBadgeConfig(
+                                    talk.status,
+                                  )
+                                  return `${config.bgColor} ${config.textColor} ${config.ringColor}`
+                                })()}`}
                               >
                                 {statuses.get(talk.status) || talk.status}
                               </span>
@@ -199,7 +302,12 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                             </p>
                             <div className="mt-1 flex items-center space-x-2">
                               <span
-                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${getStatusBadgeStyle(talk.status)}`}
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${(() => {
+                                  const config = getStatusBadgeConfig(
+                                    talk.status,
+                                  )
+                                  return `${config.bgColor} ${config.textColor} ${config.ringColor}`
+                                })()}`}
                               >
                                 {statuses.get(talk.status) || talk.status}
                               </span>
@@ -250,92 +358,21 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
           </div>
 
           <div className="space-y-6">
-            <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800">
-              <h2 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
-                {speakers.length > 1 ? 'Speakers' : 'Speaker'}
-              </h2>
-              {speakers.length > 0 ? (
-                <div className="space-y-6">
-                  {speakers.map((speaker, index) => (
-                    <div
-                      key={speaker._id || index}
-                      className="flex items-start space-x-4"
-                    >
-                      <div className="flex-shrink-0">
-                        {speaker.image ? (
-                          <img
-                            src={sanityImage(speaker.image)
-                              .width(128)
-                              .height(128)
-                              .fit('crop')
-                              .url()}
-                            alt={speaker.name}
-                            width={64}
-                            height={64}
-                            className="h-16 w-16 rounded-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-                            <UserIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center space-x-2">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {speaker.name}
-                          </p>
-                          {requiresTravelFunding && (
-                            <div
-                              className="flex items-center"
-                              title="Requires travel funding"
-                            >
-                              <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
-                            </div>
-                          )}
-                        </div>
-                        {speaker.bio && (
-                          <p className="mt-1 line-clamp-3 text-sm text-gray-500 dark:text-gray-400">
-                            {speaker.bio}
-                          </p>
-                        )}
-                        {speaker.title && (
-                          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            {speaker.title}
-                          </p>
-                        )}
-                        {speaker.links && speaker.links.length > 0 && (
-                          <div className="mt-3">
-                            <p className="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
-                              Social Links
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {speaker.links.map((link, index) => (
-                                <a
-                                  key={index}
-                                  href={link}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs break-all text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-                                  title={link}
-                                >
-                                  {new URL(link).hostname}
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
+            {speakers.length > 0 ? (
+              speakers.map((speaker, index) => (
+                <SpeakerCard
+                  key={speaker._id || index}
+                  speaker={speaker}
+                  requiresTravelFunding={requiresTravelFunding}
+                />
+              ))
+            ) : (
+              <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800">
                 <p className="text-sm text-gray-500 italic dark:text-gray-400">
                   Speaker information not available
                 </p>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Proposal Details */}
             <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800">

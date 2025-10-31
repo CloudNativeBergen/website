@@ -104,13 +104,20 @@ export default async function Submit({
           Array.isArray(fetchedProposal.speakers) &&
           fetchedProposal.speakers.length > 0
         ) {
-          const primarySpeaker = fetchedProposal.speakers[0]
-          if (
-            typeof primarySpeaker === 'object' &&
-            primarySpeaker &&
-            'name' in primarySpeaker
-          ) {
-            speaker = primarySpeaker as Speaker
+          // Find the current user's speaker data, not just the first speaker
+          const currentUserSpeakerData = fetchedProposal.speakers.find(
+            (s): s is Speaker =>
+              typeof s === 'object' &&
+              s !== null &&
+              '_id' in s &&
+              s._id === session.speaker._id,
+          )
+
+          // Fall back to currentUserSpeaker if not found in proposal speakers
+          if (currentUserSpeakerData) {
+            speaker = currentUserSpeakerData
+          } else if (currentUserSpeaker) {
+            speaker = currentUserSpeaker
           }
         }
       }

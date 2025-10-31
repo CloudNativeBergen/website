@@ -112,6 +112,10 @@ Note: CNB does not offer attendee lead‑scanning or attendee list sharing. Spon
 ### 3.3 Post‑event
 
 - Publish content: review recordings for removals/blur requests; add video descriptions/metadata with privacy info and contact; consider disabling precise location and moderate comments.
+- Video embeds: when embedding videos on the CNB website, use privacy-preserving embed modes:
+  - YouTube: use `youtube-nocookie.com` domain which does not set tracking cookies until the user plays the video
+  - Vimeo: include `dnt=1` (Do Not Track) parameter to disable tracking
+  - These measures reduce passive tracking while preserving full video functionality
 - Data minimization: delete unused drafts, duplicate exports, and raw data beyond retention; move canonical archives to controlled storage.
 - DSRs: run the intake process; verify identity; coordinate across systems; respond within 30 days.
 - Retention enforcement: implement the schedule below; set calendar tasks or automation for deletions.

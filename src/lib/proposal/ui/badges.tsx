@@ -14,6 +14,7 @@ export interface BadgeConfig {
   text: string
   bgColor: string
   textColor: string
+  ringColor?: string
   borderColor?: string
 }
 
@@ -24,6 +25,7 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         text: statuses.get(Status.draft) || 'Draft',
         bgColor: 'bg-yellow-100',
         textColor: 'text-yellow-800',
+        ringColor: 'ring-yellow-600/20',
         borderColor: 'border-l-yellow-500',
       }
     case Status.submitted:
@@ -31,6 +33,7 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         text: statuses.get(Status.submitted) || 'Submitted',
         bgColor: 'bg-blue-100',
         textColor: 'text-blue-800',
+        ringColor: 'ring-blue-600/20',
         borderColor: 'border-l-blue-500',
       }
     case Status.accepted:
@@ -38,6 +41,7 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         text: statuses.get(Status.accepted) || 'Accepted',
         bgColor: 'bg-green-100',
         textColor: 'text-green-800',
+        ringColor: 'ring-green-600/20',
         borderColor: 'border-l-green-500',
       }
     case Status.confirmed:
@@ -45,6 +49,7 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         text: statuses.get(Status.confirmed) || 'Confirmed',
         bgColor: 'bg-green-100',
         textColor: 'text-green-800',
+        ringColor: 'ring-green-700/30',
         borderColor: 'border-l-green-600',
       }
     case Status.rejected:
@@ -52,6 +57,7 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         text: statuses.get(Status.rejected) || 'Rejected',
         bgColor: 'bg-red-100',
         textColor: 'text-red-800',
+        ringColor: 'ring-red-600/20',
         borderColor: 'border-l-red-500',
       }
     case Status.withdrawn:
@@ -59,6 +65,7 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         text: statuses.get(Status.withdrawn) || 'Withdrawn',
         bgColor: 'bg-gray-100',
         textColor: 'text-gray-800',
+        ringColor: 'ring-gray-600/20',
         borderColor: 'border-l-gray-500',
       }
     case Status.deleted:
@@ -66,6 +73,7 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         text: statuses.get(Status.deleted) || 'Deleted',
         bgColor: 'bg-gray-100',
         textColor: 'text-gray-800',
+        ringColor: 'ring-gray-600/20',
         borderColor: 'border-l-gray-500',
       }
     default:
@@ -73,6 +81,7 @@ export function getStatusBadgeConfig(status: Status): BadgeConfig {
         text: 'Unknown',
         bgColor: 'bg-gray-100',
         textColor: 'text-gray-800',
+        ringColor: 'ring-gray-600/20',
         borderColor: 'border-l-gray-500',
       }
   }

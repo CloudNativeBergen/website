@@ -1,12 +1,4 @@
-import { SpeakerInput, SpeakerResponse } from '@/lib/speaker/types'
 import { ProfileEmailResponse, ProfileImageResponse } from './types'
-
-export async function getEmails(): Promise<ProfileEmailResponse> {
-  const url = `/api/profile/emails`
-
-  const res = await fetch(url)
-  return (await res.json()) as ProfileEmailResponse
-}
 
 export async function putEmail(email: string): Promise<ProfileEmailResponse> {
   const url = `/api/profile/emails`
@@ -22,24 +14,6 @@ export async function putEmail(email: string): Promise<ProfileEmailResponse> {
   })
 
   return (await res.json()) as ProfileEmailResponse
-}
-
-export async function putProfile(
-  speaker: SpeakerInput,
-): Promise<SpeakerResponse> {
-  const url = `/api/profile`
-
-  const res = await fetch(url, {
-    next: { revalidate: 0 },
-    cache: 'no-store',
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(speaker),
-  })
-
-  return (await res.json()) as SpeakerResponse
 }
 
 export async function postImage(file: File): Promise<ProfileImageResponse> {

@@ -1,35 +1,92 @@
-import { FormValidationError } from '@/lib/proposal/types'
-import { SpeakerInput } from '@/lib/speaker/types'
+import { SpeakerInput } from './types'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function convertJsonToSpeaker(json: any): SpeakerInput {
-  return {
-    name: json.name as string,
-    title: json.title as string,
-    bio: json.bio as string,
-    links: json.links || [],
-    flags: json.flags || [],
-    image: json.image as string | undefined,
-    consent: json.consent,
-  }
+export const VALIDATION_MESSAGES = {
+  SPEAKER_NAME_REQUIRED: 'Speaker name is required',
+  SPEAKER_EMAIL_REQUIRED: 'Email is required for new speakers',
+  SPEAKER_EMAIL_INVALID: 'Please enter a valid email address',
+  DATA_PROCESSING_REQUIRED:
+    'Data processing consent is required to submit your speaker application',
+  PUBLIC_PROFILE_REQUIRED:
+    'Public profile consent is required as speakers must be displayed publicly on the conference website',
+  SPEAKER_BIO_REQUIRED: 'Speaker bio is required',
+  PRIVACY_POLICY_ACKNOWLEDGMENT: 'You must acknowledge the Privacy Policy',
+} as const
+
+export interface SpeakerValidationOptions {
+  requireEmail?: boolean
+  requireBio?: boolean
+  requireConsent?: boolean
 }
 
-export function validateSpeaker(speaker: SpeakerInput): FormValidationError[] {
-  const validationErrors = []
+export function validateSpeakerForm(
+  speaker: SpeakerInput,
+  options: SpeakerValidationOptions = {},
+): Record<string, string> {
+  const errors: Record<string, string> = {}
+  const { requireBio = false, requireConsent = true } = options
 
-  if (!speaker.name) {
-    validationErrors.push({
-      message: 'Name can not be empty',
-      field: 'speaker_name',
-    })
+  if (!speaker.name || speaker.name.trim() === '') {
+    errors.name = VALIDATION_MESSAGES.SPEAKER_NAME_REQUIRED
   }
 
-  if (speaker.links && speaker.links.some((link) => link === '')) {
-    validationErrors.push({
-      message: 'Links cannot be empty',
-      field: 'speaker_links',
-    })
+  if (requireBio && (!speaker.bio || speaker.bio.trim() === '')) {
+    errors.bio = VALIDATION_MESSAGES.SPEAKER_BIO_REQUIRED
   }
 
-  return validationErrors
+  if (requireConsent) {
+    if (!speaker.consent?.dataProcessing?.granted) {
+      errors.dataProcessing = VALIDATION_MESSAGES.DATA_PROCESSING_REQUIRED
+    }
+
+    if (!speaker.consent?.publicProfile?.granted) {
+      errors.publicProfile = VALIDATION_MESSAGES.PUBLIC_PROFILE_REQUIRED
+    }
+  }
+
+  return errors
+}
+
+export function validateEmail(email: string): string | null {
+  if (!email || email.trim() === '') {
+    return VALIDATION_MESSAGES.SPEAKER_EMAIL_REQUIRED
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return VALIDATION_MESSAGES.SPEAKER_EMAIL_INVALID
+  }
+
+  return null
+}
+
+export function validateSpeakerConsent(speaker: SpeakerInput): string[] {
+  const errors: string[] = []
+
+  if (!speaker.consent?.dataProcessing?.granted) {
+    errors.push(VALIDATION_MESSAGES.DATA_PROCESSING_REQUIRED)
+  }
+
+  if (!speaker.consent?.publicProfile?.granted) {
+    errors.push(VALIDATION_MESSAGES.PUBLIC_PROFILE_REQUIRED)
+  }
+
+  return errors
+}
+
+export function validateSpeakerForAdmin(
+  speaker: SpeakerInput,
+  email: string,
+): Record<string, string> {
+  const errors = validateSpeakerForm(speaker, {
+    requireConsent: true,
+    requireBio: true,
+  })
+
+  // Email validation - always validate format for admin operations
+  const emailError = validateEmail(email)
+  if (emailError) {
+    errors.email = emailError
+  }
+
+  return errors
 }

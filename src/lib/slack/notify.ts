@@ -174,7 +174,8 @@ function createProposalInfoBlocks(
   ]
 }
 
-export async function notifyNewProposal(
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function notifyNewProposal(
   proposal: ProposalExisting,
   conference: Conference,
 ) {

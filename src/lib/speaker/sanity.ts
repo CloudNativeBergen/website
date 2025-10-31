@@ -15,8 +15,20 @@ export function providerAccount(
   return `${provider}:${providerAccountId}`
 }
 
-function generateSlug(name: string): string {
-  return name.toLowerCase().replace(/\s+/g, '-').slice(0, 96)
+export function generateSlug(name: string, suffix?: string): string {
+  const base = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  if (suffix) {
+    const maxBaseLength = 96 - 1 - suffix.length
+    const truncatedBase = base.slice(0, maxBaseLength)
+    return `${truncatedBase}-${suffix}`
+  }
+
+  return base.slice(0, 96)
 }
 
 async function findSpeakerByProvider(
@@ -178,7 +190,7 @@ export async function getPublicSpeaker(
       `*[ _type == "speaker" && slug.current == $speakerSlug && count(*[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]) > 0][0]{
         name, title, bio, links, flags, "image": image.asset->url,
         "talks": *[_type == "talk" && references(^._id) && status == "confirmed" && conference._ref == $conferenceId]{
-          _id, title, description, language, level, format, audiences,
+          _id, title, description, language, level, format, audiences, video,
           speakers[]-> {
             _id, name, title, "slug": slug.current, "image": image.asset->url
           },
@@ -223,7 +235,7 @@ export async function getPublicSpeaker(
 
 export async function updateSpeaker(
   spekaerId: string,
-  speaker: SpeakerInput,
+  speaker: Partial<SpeakerInput>,
 ): Promise<{ speaker: Speaker; err: Error | null }> {
   let err = null
   let updatedSpeaker: Speaker = {} as Speaker

@@ -37,6 +37,10 @@ export enum Format {
   workshop_240 = 'workshop_240',
 }
 
+export function isWorkshopFormat(format: Format): boolean {
+  return format === Format.workshop_120 || format === Format.workshop_240
+}
+
 export enum Status {
   draft = 'draft',
   submitted = 'submitted',
@@ -58,12 +62,6 @@ export enum Action {
   reject = 'reject',
   withdraw = 'withdraw',
   delete = 'delete',
-}
-
-export interface ActionInput {
-  action: Action
-  notify?: boolean
-  comment?: string
 }
 
 interface Proposal {
