@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isRegistrationAvailable } from '@/lib/conference/state'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
@@ -15,8 +16,8 @@ export default async function Tickets() {
     return <div>Error loading conference data</div>
   }
 
-  if (conference.registration_link && conference.registration_enabled) {
-    redirect(conference.registration_link)
+  if (isRegistrationAvailable(conference)) {
+    redirect(conference.registration_link!)
   }
 
   return (

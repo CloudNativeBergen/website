@@ -10,6 +10,12 @@ import {
   TicketIcon,
 } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
+import {
+  isCfpOpen,
+  isProgramPublished,
+  isRegistrationAvailable,
+  isSeekingSponsors,
+} from '@/lib/conference/state'
 import { PortableText } from '@portabletext/react'
 import { TypedObject } from 'sanity'
 
@@ -63,12 +69,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
     },
   ]
 
-  const seekingSponsors =
-    conference.start_date &&
-    new Date(conference.start_date).getTime() - new Date().getTime() >
-      4 * 7 * 24 * 60 * 60 * 1000
-
-  if (seekingSponsors) {
+  if (isSeekingSponsors(conference)) {
     buttons.push({
       label: 'Become a Sponsor',
       href: '/sponsor',
@@ -77,13 +78,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
     })
   }
 
-  const cfpIsOpen =
-    conference.cfp_start_date &&
-    conference.cfp_end_date &&
-    new Date() >= new Date(conference.cfp_start_date) &&
-    new Date() <= new Date(conference.cfp_end_date)
-
-  if (cfpIsOpen) {
+  if (isCfpOpen(conference)) {
     buttons.push({
       label: 'Submit to Speak',
       href: '/cfp',
@@ -92,10 +87,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
     })
   }
 
-  if (
-    conference.program_date &&
-    new Date() >= new Date(conference.program_date)
-  ) {
+  if (isProgramPublished(conference)) {
     buttons.push({
       label: 'View Program',
       href: '/program',
@@ -104,7 +96,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
     })
   }
 
-  if (conference.registration_enabled && conference.registration_link) {
+  if (isRegistrationAvailable(conference)) {
     buttons.push({
       label: 'Tickets',
       href: '/tickets',
@@ -224,8 +216,7 @@ export function Hero({ conference }: { conference: Conference }) {
               experience reports from local and international cloud-native
               experts.
             </p>
-            {conference.program_date &&
-            new Date() >= new Date(conference.program_date) ? (
+            {isProgramPublished(conference) ? (
               <p>
                 <strong>The program is now live!</strong> Explore workshops,
                 presentations, and lightning talks from industry experts
@@ -247,10 +238,7 @@ export function Hero({ conference }: { conference: Conference }) {
 
           {conference.vanity_metrics &&
             conference.vanity_metrics.length > 0 &&
-            !(
-              conference.program_date &&
-              new Date() >= new Date(conference.program_date)
-            ) && (
+            !isProgramPublished(conference) && (
               <dl className="mt-10 grid grid-cols-2 gap-x-8 gap-y-6 sm:mt-16 sm:grid-cols-3 lg:grid-cols-6 lg:justify-start lg:text-left">
                 {conference.vanity_metrics.slice(0, 6).map((metric) => (
                   <div

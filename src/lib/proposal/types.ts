@@ -1,5 +1,5 @@
 import { Speaker } from '@/lib/speaker/types'
-import { Conference, ConferenceSchedule } from '@/lib/conference/types'
+import { Conference } from '@/lib/conference/types'
 import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock, Reference } from 'sanity'
 import { Review } from '@/lib/review/types'

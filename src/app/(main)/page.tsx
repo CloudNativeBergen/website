@@ -36,7 +36,7 @@ export default async function Home() {
           schedules={conference.schedules}
           featuredSpeakers={conference.featured_speakers || []}
           featuredTalks={conference.featured_talks || []}
-          tickets_enabled={conference.registration_enabled}
+          conference={conference}
         />
       )}
       <Sponsors sponsors={conference.sponsors || []} />

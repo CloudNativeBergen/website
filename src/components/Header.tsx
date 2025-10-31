@@ -10,6 +10,10 @@ import Image from 'next/image'
 import { UserCircleIcon } from '@heroicons/react/24/solid'
 import Link from 'next/link'
 import { Conference } from '@/lib/conference/types'
+import {
+  isRegistrationAvailable,
+  isConferenceOver,
+} from '@/lib/conference/state'
 import { formatDatesSafe } from '@/lib/time'
 import { useEffect, useState } from 'react'
 
@@ -20,11 +24,8 @@ export function Header({ c }: { c: Conference }) {
 
   useEffect(() => {
     setIsClient(true)
-    const endDate = new Date(c.end_date)
-    const dayAfterEnd = new Date(endDate)
-    dayAfterEnd.setDate(dayAfterEnd.getDate() + 1)
-    setIsPast(new Date() >= dayAfterEnd)
-  }, [c.end_date])
+    setIsPast(isConferenceOver(c))
+  }, [c])
 
   const currentDomain = c.domains?.[0] ?? 'cloudnativebergen.dev'
   const currentYear = parseInt(currentDomain.split('.')[0])
@@ -90,7 +91,7 @@ export function Header({ c }: { c: Conference }) {
           )}
         </div>
         <div className="hidden whitespace-nowrap sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end">
-          {c.registration_enabled && (
+          {isRegistrationAvailable(c) && (
             <Button
               href={c.registration_link ?? '#'}
               variant="primary"

@@ -2507,7 +2507,7 @@ export default async function BrandingPage() {
                 and ticket reservations with balanced messaging.
               </p>
               <div className="rounded-lg border border-gray-200 bg-white p-8 dark:border-gray-600 dark:bg-gray-800">
-                <CallToAction />
+                <CallToAction conference={conference} />
               </div>
             </div>
 
@@ -2522,6 +2522,7 @@ export default async function BrandingPage() {
               </p>
               <div className="rounded-lg border border-gray-200 bg-white p-8 dark:border-gray-600 dark:bg-gray-800">
                 <CallToAction
+                  conference={conference}
                   isOrganizers={true}
                   title="Join Our Community"
                   description="Whether you're looking to share your expertise or learn from the best, we'd love to have you at Cloud Native Bergen."
@@ -2540,6 +2541,7 @@ export default async function BrandingPage() {
               </p>
               <div className="rounded-lg border border-gray-200 bg-white p-8 dark:border-gray-600 dark:bg-gray-800">
                 <CallToAction
+                  conference={conference}
                   title="Share Your Expertise"
                   description="Join our community of cloud native experts and share your knowledge with the Bergen tech community."
                   showTicketReservation={false}
@@ -2558,6 +2560,7 @@ export default async function BrandingPage() {
               </p>
               <div className="rounded-lg border border-gray-200 bg-white p-8 dark:border-gray-600 dark:bg-gray-800">
                 <CallToAction
+                  conference={conference}
                   title="Secure Your Spot"
                   description="Don't miss this opportunity to learn from industry experts and connect with the Bergen cloud native community."
                   showSpeakerSubmission={false}
@@ -2576,6 +2579,7 @@ export default async function BrandingPage() {
               </p>
               <div className="rounded-lg border border-gray-200 bg-white p-8 dark:border-gray-600 dark:bg-gray-800">
                 <CallToAction
+                  conference={conference}
                   title="Early Bird Special"
                   description="Register now and save 40% on your conference ticket. Limited time offer for the Bergen cloud native community."
                 />

@@ -1,7 +1,11 @@
 import { Button } from '@/components/Button'
 import { MicrophoneIcon, TicketIcon } from '@heroicons/react/24/outline'
+import { Conference } from '@/lib/conference/types'
+import { isRegistrationAvailable } from '@/lib/conference/state'
 
 interface CallToActionProps {
+  conference: Conference
+
   isOrganizers?: boolean
 
   title?: string
@@ -14,6 +18,7 @@ interface CallToActionProps {
 }
 
 export function CallToAction({
+  conference,
   isOrganizers = false,
   title,
   description,
@@ -27,6 +32,14 @@ export function CallToAction({
   const defaultDescription = isOrganizers
     ? "Whether you're looking to share your expertise or learn from the best, we'd love to have you at Cloud Native Bergen."
     : "Don't miss this opportunity to learn from industry experts and connect with the Bergen cloud native community."
+
+  const showTickets =
+    showTicketReservation && isRegistrationAvailable(conference)
+
+  // Hide entire component if there are no actions to show
+  if (!showSpeakerSubmission && !showTickets) {
+    return null
+  }
 
   return (
     <div className="rounded-2xl bg-gradient-to-r from-brand-cloud-blue/10 to-brand-fresh-green/10 p-8 md:p-12">
@@ -51,7 +64,7 @@ export function CallToAction({
             </Button>
           )}
 
-          {showTicketReservation && (
+          {showTickets && (
             <Button
               href="/tickets"
               variant={isOrganizers ? 'primary' : 'outline'}

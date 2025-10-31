@@ -1,5 +1,10 @@
 import Link from 'next/link'
-import { ConferenceSchedule, TrackTalk } from '@/lib/conference/types'
+import {
+  ConferenceSchedule,
+  TrackTalk,
+  Conference,
+} from '@/lib/conference/types'
+import { isRegistrationAvailable } from '@/lib/conference/state'
 import { SpeakerWithTalks, Flags } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { Container } from '@/components/Container'
@@ -307,18 +312,19 @@ function calculateProgramStats(
 }
 
 interface ProgramHighlightsProps {
-  schedules?: ConferenceSchedule[] | null
+  schedules: ConferenceSchedule[]
   featuredTalks?: ProposalExisting[]
   featuredSpeakers?: SpeakerWithTalks[]
-  tickets_enabled?: boolean
+  conference: Conference
 }
 
 export function ProgramHighlights({
   schedules,
   featuredTalks = [],
   featuredSpeakers = [],
-  tickets_enabled = true,
+  conference,
 }: ProgramHighlightsProps) {
+  const tickets_enabled = isRegistrationAvailable(conference)
   if (!schedules || schedules.length === 0) {
     return null
   }
@@ -643,14 +649,17 @@ export function ProgramHighlights({
         )}
 
         {/* Call to Action */}
-        <div className="mt-20">
-          <CallToAction
-            title="Ready to Join the Cloud Native Journey?"
-            description="Don't miss this opportunity to learn from industry experts, discover the latest trends, and connect with the Bergen cloud native community."
-            showSpeakerSubmission={false}
-            showTicketReservation={tickets_enabled}
-          />
-        </div>
+        {tickets_enabled && (
+          <div className="mt-20">
+            <CallToAction
+              conference={conference}
+              title="Ready to Join the Cloud Native Journey?"
+              description="Don't miss this opportunity to learn from industry experts, discover the latest trends, and connect with the Bergen cloud native community."
+              showSpeakerSubmission={false}
+              showTicketReservation={tickets_enabled}
+            />
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center">

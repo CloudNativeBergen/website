@@ -2,6 +2,7 @@ import { getAuthSession } from '@/lib/auth'
 import { getProposals } from '@/lib/proposal/server'
 import { redirect } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isCfpOpen } from '@/lib/conference/state'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
 import { Status } from '@/lib/proposal/types'
 import { getSpeakerSlug } from '@/lib/speaker/utils'
@@ -32,9 +33,7 @@ export default async function SpeakerDashboard() {
     return <ErrorDisplay message="Error loading conference" />
   }
 
-  const cfpIsOpen =
-    new Date() >= new Date(conference.cfp_start_date) &&
-    new Date() <= new Date(conference.cfp_end_date)
+  const cfpOpen = isCfpOpen(conference)
 
   const { proposals: initialProposals, proposalsError } = await getProposals({
     speakerId: session.speaker._id,
@@ -79,7 +78,7 @@ export default async function SpeakerDashboard() {
       speaker={speaker}
       confirmedProposals={confirmedProposals}
       initialProposals={initialProposals}
-      cfpIsOpen={cfpIsOpen}
+      cfpIsOpen={cfpOpen}
       currentConferenceId={conference._id}
       speakerSlug={speakerSlug}
       speakerUrl={speakerUrl}
