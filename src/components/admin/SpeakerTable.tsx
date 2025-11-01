@@ -16,7 +16,9 @@ import {
   XMarkIcon,
   PencilIcon,
   EyeIcon,
+  ArrowRightCircleIcon,
 } from '@heroicons/react/24/outline'
+import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { SpeakerIndicators } from '@/lib/proposal'
 import { getStatusBadgeConfig } from '@/lib/proposal/ui'
@@ -119,7 +121,7 @@ const CopyEmailButton = ({ email }: { email: string }) => {
   return (
     <button
       onClick={() => copyToClipboard(email)}
-      className="ml-2 p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+      className="ml-2 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : 'Copy email'}
     >
       {copied ? (
@@ -146,7 +148,7 @@ const CopyBlueskyUsernameButton = ({
   return (
     <button
       onClick={handleCopy}
-      className="ml-2 p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+      className="ml-2 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied username!' : 'Copy username'}
     >
       {copied ? (
@@ -299,7 +301,7 @@ export function SpeakerTable({
           {hasActiveFilters && (
             <button
               onClick={resetFilters}
-              className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-sm text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
             >
               <XMarkIcon className="h-4 w-4" />
               Clear
@@ -652,7 +654,7 @@ export function SpeakerTable({
                         <button
                           type="button"
                           onClick={() => onEditSpeaker(speaker)}
-                          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                          className="cursor-pointer rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:hover:bg-gray-700 dark:hover:text-gray-300"
                           aria-label={`Edit ${speaker.name}`}
                           title="Edit speaker"
                         >
@@ -661,12 +663,31 @@ export function SpeakerTable({
                         <button
                           type="button"
                           onClick={() => onPreviewSpeaker(speaker)}
-                          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                          className="cursor-pointer rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:hover:bg-gray-700 dark:hover:text-gray-300"
                           aria-label={`Preview ${speaker.name} profile`}
                           title="Preview public profile"
                         >
                           <EyeIcon className="h-4 w-4" />
                         </button>
+                        {AppEnvironment.isDevelopment && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const { addImpersonateParam } = await import(
+                                '@/lib/impersonation'
+                              )
+                              window.open(
+                                addImpersonateParam('/cfp/list', speaker._id),
+                                '_blank',
+                              )
+                            }}
+                            className="cursor-pointer rounded-md p-1.5 text-purple-400 transition-colors hover:bg-purple-50 hover:text-purple-600 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:outline-none dark:text-purple-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300"
+                            aria-label={`View as ${speaker.name}`}
+                            title="View speaker dashboard (dev only)"
+                          >
+                            <ArrowRightCircleIcon className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

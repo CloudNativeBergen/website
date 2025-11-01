@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { UserIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import type { Speaker } from '@/lib/speaker/types'
 
@@ -14,18 +14,14 @@ export function ImpersonationBanner({
   realAdmin,
 }: ImpersonationBannerProps) {
   const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
 
   const handleExitImpersonation = () => {
-    const params = new URLSearchParams(searchParams)
-    params.delete('impersonate')
-    const newUrl = params.toString() ? `${pathname}?${params}` : pathname
-    router.push(newUrl)
+    router.push('/cfp/list')
+    router.refresh()
   }
 
   return (
-    <div className="bg-gradient-to-r from-purple-100 to-blue-100 border-b-2 border-purple-500 dark:from-purple-900/30 dark:to-blue-900/30 dark:border-purple-600">
+    <div className="border-b-2 border-purple-500 bg-gradient-to-r from-purple-100 to-blue-100 dark:border-purple-600 dark:from-purple-900/30 dark:to-blue-900/30">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           <div className="rounded-full bg-purple-600 p-1.5 dark:bg-purple-500">

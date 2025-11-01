@@ -116,7 +116,8 @@ export default async function WorkshopDetailsPage({
       typeof s === 'object' && s !== null && s._id === currentSpeaker._id,
   )
 
-  const isImpersonatingAsOrganizer = session.isImpersonating && session.realAdmin?.is_organizer
+  const isImpersonatingAsOrganizer =
+    session.isImpersonating && session.realAdmin?.is_organizer
 
   if (!isSpeaker && !isImpersonatingAsOrganizer) {
     return (
