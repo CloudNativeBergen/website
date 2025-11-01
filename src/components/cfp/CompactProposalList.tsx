@@ -4,6 +4,7 @@ import Link from 'next/link'
 import {
   PencilIcon,
   ChatBubbleBottomCenterTextIcon,
+  VideoCameraIcon,
 } from '@heroicons/react/24/outline'
 import {
   CheckBadgeIcon,
@@ -188,6 +189,15 @@ export function CompactProposalList({
                   >
                     <ChatBubbleBottomCenterTextIcon className="h-3 w-3" />
                     {totalFeedback}
+                  </span>
+                )}
+                {proposal.video && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-400"
+                    title="Video available"
+                  >
+                    <VideoCameraIcon className="h-3 w-3" />
+                    Video
                   </span>
                 )}
                 <StatusBadge status={proposal.status} />
