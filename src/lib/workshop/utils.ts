@@ -8,6 +8,26 @@ export function getWorkshopDuration(format: Format): string {
   return '2 hours'
 }
 
+export function formatParticipantName(name: string): string {
+  if (name.includes('@') && name.includes('.')) {
+    const localPart = name.split('@')[0]
+    const parts = localPart.split(/[._\-+]/)
+    return parts
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ')
+  }
+  return name
+}
+
+export function getOperatingSystemLabel(os: string): string {
+  const labels: Record<string, string> = {
+    macos: 'macOS',
+    windows: 'Windows',
+    linux: 'Linux',
+  }
+  return labels[os] || os
+}
+
 export const formatTime = formatTime12Hour
 
 export function getWorkshopDateTime(workshop: ProposalWithWorkshopData) {

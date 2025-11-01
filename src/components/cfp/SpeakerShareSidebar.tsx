@@ -7,16 +7,12 @@ interface SpeakerShareSidebarProps {
   speaker: SpeakerWithTalks
   talkTitle: string
   eventName: string
-  upcomingConferencesCount: number
-  totalProposals: number
 }
 
 export async function SpeakerShareSidebar({
   speaker,
   talkTitle,
   eventName,
-  upcomingConferencesCount,
-  totalProposals,
 }: SpeakerShareSidebarProps) {
   const speakerUrl = `/speaker/${speaker.slug || speaker._id}`
   const fullSpeakerUrl = `https://cloudnativebergen.dev${speakerUrl}`
@@ -24,7 +20,6 @@ export async function SpeakerShareSidebar({
 
   return (
     <div className="sticky top-4 space-y-4">
-      {/* Speaker Share Card with Sharing Actions */}
       <SpeakerShareWrapper
         speakerUrl={fullSpeakerUrl}
         talkTitle={talkTitle}
@@ -35,11 +30,7 @@ export async function SpeakerShareSidebar({
         className="w-full"
       />
 
-      {/* Quick Stats */}
-      <DashboardSidebar
-        upcomingConferencesCount={upcomingConferencesCount}
-        totalProposals={totalProposals}
-      />
+      <DashboardSidebar />
     </div>
   )
 }

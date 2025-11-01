@@ -1,12 +1,17 @@
+'use client'
+
 import Link from 'next/link'
 import type { WorkshopStats } from '@/components/cfp/WorkshopStatistics'
 import { CheckCircleIcon, UsersIcon } from '@heroicons/react/24/outline'
+import { useImpersonateQueryString } from '@/lib/impersonation'
 
 interface CompactWorkshopStatsProps {
   stats: WorkshopStats[]
 }
 
 export function CompactWorkshopStats({ stats }: CompactWorkshopStatsProps) {
+  const queryString = useImpersonateQueryString()
+
   return (
     <div>
       <h4 className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -16,7 +21,7 @@ export function CompactWorkshopStats({ stats }: CompactWorkshopStatsProps) {
         {stats.map((stat) => (
           <Link
             key={stat.workshopId}
-            href={`/cfp/workshop/${stat.workshopId}`}
+            href={`/cfp/workshop/${stat.workshopId}${queryString}`}
             className="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm transition-colors hover:bg-gray-100 dark:bg-gray-900/50 dark:hover:bg-gray-800"
           >
             <div className="flex min-w-0 items-center gap-2">

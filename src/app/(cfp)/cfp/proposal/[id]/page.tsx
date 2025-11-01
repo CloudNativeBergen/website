@@ -4,10 +4,12 @@ import { getProposalSanity as getProposal } from '@/lib/proposal/server'
 import { getAuthSession } from '@/lib/auth'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { ProposalForm } from '@/components/cfp/ProposalForm'
-import Link from 'next/link'
-import { ChevronLeftIcon } from '@heroicons/react/20/solid'
-import type { Speaker } from '@/lib/speaker/types'
+import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'
+import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPanel'
+import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
+import { isConferenceOver } from '@/lib/conference/state'
+import { BackLink } from '@/components/BackButton'
+import { buildUrlWithImpersonation } from '@/lib/impersonation'
 
 interface ProposalViewPageProps {
   params: Promise<{
@@ -48,13 +50,7 @@ export default async function ProposalViewPage({
           </p>
         </div>
 
-        <Link
-          href="/cfp/list"
-          className="hover:text-brand-electric-purple inline-flex items-center text-brand-cloud-blue transition-colors"
-        >
-          <ChevronLeftIcon className="mr-2 h-5 w-5" />
-          Back to My Proposals
-        </Link>
+        <BackLink fallbackUrl="/cfp/list">Back to Dashboard</BackLink>
       </div>
     )
   }
@@ -79,13 +75,7 @@ export default async function ProposalViewPage({
           </p>
         </div>
 
-        <Link
-          href="/cfp/list"
-          className="hover:text-brand-electric-purple inline-flex items-center text-brand-cloud-blue transition-colors"
-        >
-          <ChevronLeftIcon className="mr-2 h-5 w-5" />
-          Back to My Proposals
-        </Link>
+        <BackLink fallbackUrl="/cfp/list">Back to Dashboard</BackLink>
       </div>
     )
   }
@@ -104,40 +94,17 @@ export default async function ProposalViewPage({
           </p>
         </div>
 
-        <Link
-          href="/cfp/list"
-          className="hover:text-brand-electric-purple inline-flex items-center text-brand-cloud-blue transition-colors"
-        >
-          <ChevronLeftIcon className="mr-2 h-5 w-5" />
-          Back to My Proposals
-        </Link>
+        <BackLink fallbackUrl="/cfp/list">Back to Dashboard</BackLink>
       </div>
     )
   }
 
-  const currentUserSpeakerData =
-    proposal.speakers?.find(
-      (s): s is Speaker =>
-        typeof s === 'object' &&
-        s !== null &&
-        '_id' in s &&
-        s._id === session.speaker._id,
-    ) || currentUserSpeaker
-
-  const backUrl = session.isImpersonating
-    ? `/cfp/list?impersonate=${session.speaker._id}`
-    : '/cfp/list'
+  const backUrl = buildUrlWithImpersonation('/cfp/list', session)
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <Link
-          href={backUrl}
-          className="hover:text-brand-electric-purple inline-flex items-center text-brand-cloud-blue transition-colors"
-        >
-          <ChevronLeftIcon className="mr-2 h-5 w-5" />
-          Back to My Proposals
-        </Link>
+        <BackLink fallbackUrl={backUrl}>Back to Dashboard</BackLink>
       </div>
 
       <div className="mb-6">
@@ -149,17 +116,23 @@ export default async function ProposalViewPage({
         </p>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <ProposalForm
-          initialProposal={proposal}
-          initialSpeaker={currentUserSpeakerData}
-          proposalId={proposal._id}
-          userEmail={session.speaker.email}
-          conference={conference}
-          allowedFormats={conference.formats}
-          currentUserSpeaker={currentUserSpeaker}
-          mode="readOnly"
-        />
+      <div className="flex gap-6">
+        <div className="flex-1">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <ProposalReadOnlyView proposal={proposal} />
+          </div>
+        </div>
+
+        {isConferenceOver(conference) &&
+          (proposal.status === 'confirmed' ||
+            proposal.status === 'accepted') && (
+            <div className="hidden w-80 flex-shrink-0 space-y-6 lg:block">
+              <PostConferenceVideoPanel videoUrl={proposal.video} />
+              <PostConferenceAudienceFeedbackPanel
+                audienceFeedback={proposal.audienceFeedback}
+              />
+            </div>
+          )}
       </div>
     </div>
   )

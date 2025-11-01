@@ -9,6 +9,7 @@ import {
   ProposalReviewPanel,
   AdminActionBar,
   ProposalPublishedContent,
+  AudienceFeedbackPanel,
 } from '@/components/admin'
 import { getAuthSession } from '@/lib/auth'
 
@@ -89,6 +90,12 @@ export default async function ProposalDetailPage({
               currentVideoUrl={proposal.video}
               status={proposal.status}
               conferenceEndDate={conference.end_date}
+            />
+            <AudienceFeedbackPanel
+              proposalId={proposal._id}
+              currentFeedback={proposal.audienceFeedback}
+              status={proposal.status}
+              conferenceStartDate={conference.start_date}
             />
           </div>
           <ProposalReviewPanel

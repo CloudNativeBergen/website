@@ -119,14 +119,6 @@ export default async function SpeakerDashboard() {
       c.workshopStats.length > 0,
   )
 
-  // Calculate totals
-  const totalProposals = activeConferences.reduce(
-    (sum, c) => sum + c.proposals.length,
-    0,
-  )
-
-  const upcomingConferences = activeConferences.filter((c) => !c.isOver)
-
   // Get confirmed talks for speaker share
   const confirmedTalks = activeConferences
     .flatMap((c) =>
@@ -210,8 +202,6 @@ export default async function SpeakerDashboard() {
             speaker={speakerWithTalks}
             talkTitle={talkTitle}
             eventName={eventName}
-            upcomingConferencesCount={upcomingConferences.length}
-            totalProposals={totalProposals}
           />
         </div>
       </div>

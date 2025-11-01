@@ -64,6 +64,13 @@ export enum Action {
   delete = 'delete',
 }
 
+export interface AudienceFeedback {
+  greenCount: number
+  yellowCount: number
+  redCount: number
+  lastUpdatedAt?: string
+}
+
 interface Proposal {
   title: string
   description: PortableTextBlock[]
@@ -75,7 +82,8 @@ interface Proposal {
   topics?: Topic[] | Reference[]
   tos: boolean
   video?: string
-  capacity?: number // Workshop capacity - only applies to workshop formats
+  capacity?: number
+  audienceFeedback?: AudienceFeedback
 }
 
 export interface ProposalInput extends Proposal {

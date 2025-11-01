@@ -12,6 +12,7 @@ import {
   InvitationCancelSchema,
   IdParamSchema,
   ProposalActionSchema,
+  AudienceFeedbackSchema,
 } from '@/server/schemas/proposal'
 import {
   getProposal,
@@ -652,6 +653,52 @@ export const proposalRouter = router({
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to update video URL',
+            cause: error,
+          })
+        }
+      }),
+
+    updateAudienceFeedback: adminProcedure
+      .input(
+        IdParamSchema.extend({
+          feedback: AudienceFeedbackSchema,
+        }),
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const existing = await clientWrite.getDocument(input.id)
+
+          if (!existing || existing._type !== 'talk') {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Proposal not found',
+            })
+          }
+
+          const result = await clientWrite
+            .patch(input.id)
+            .set({
+              audienceFeedback: {
+                ...input.feedback,
+                lastUpdatedAt: new Date().toISOString(),
+              },
+            })
+            .commit()
+
+          if (!result) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Proposal not found',
+            })
+          }
+
+          return result
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update audience feedback',
             cause: error,
           })
         }

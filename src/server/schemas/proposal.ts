@@ -117,5 +117,10 @@ export const InvitationCancelSchema = z.object({
   invitationId: z.string().min(1, 'Invitation ID is required'),
 })
 
-// ID parameter schema (re-exported from common)
+export const AudienceFeedbackSchema = z.object({
+  greenCount: z.number().int().min(0),
+  yellowCount: z.number().int().min(0),
+  redCount: z.number().int().min(0),
+})
+
 export const IdParamSchema = CommonIdParamSchema

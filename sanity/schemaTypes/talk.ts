@@ -214,6 +214,40 @@ export default defineType({
             return true
           }),
     }),
+    defineField({
+      name: 'audienceFeedback',
+      title: 'Audience Feedback',
+      type: 'object',
+      description: 'Physical card feedback collected during the session',
+      fields: [
+        {
+          name: 'greenCount',
+          title: 'Green Cards',
+          type: 'number',
+          initialValue: 0,
+          validation: (Rule) => Rule.integer().min(0),
+        },
+        {
+          name: 'yellowCount',
+          title: 'Yellow Cards',
+          type: 'number',
+          initialValue: 0,
+          validation: (Rule) => Rule.integer().min(0),
+        },
+        {
+          name: 'redCount',
+          title: 'Red Cards',
+          type: 'number',
+          initialValue: 0,
+          validation: (Rule) => Rule.integer().min(0),
+        },
+        {
+          name: 'lastUpdatedAt',
+          title: 'Last Updated',
+          type: 'datetime',
+        },
+      ],
+    }),
   ],
 
   preview: {
