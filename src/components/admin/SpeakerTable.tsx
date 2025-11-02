@@ -633,7 +633,7 @@ export function SpeakerTable({
                             >
                               <StatusBadge status={proposal.status} />
                               <span
-                                className="max-w-[200px] truncate text-gray-900 dark:text-white"
+                                className="min-w-0 flex-1 truncate text-gray-900 dark:text-white"
                                 title={proposal.title}
                               >
                                 {proposal.title}
