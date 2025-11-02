@@ -27,6 +27,7 @@ import { sanityImage } from '@/lib/sanity/client'
 import { getStatusBadgeConfig } from '@/lib/proposal/ui'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { iconForLink } from '@/components/SocialIcons'
+import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
 
 interface ProposalDetailProps {
   proposal: ProposalExisting
@@ -373,6 +374,12 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                 </p>
               </div>
             )}
+
+            <ProposalAttachmentsPanel
+              proposalId={proposal._id}
+              initialAttachments={proposal.attachments || []}
+              readonly={true}
+            />
 
             {/* Proposal Details */}
             <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800">

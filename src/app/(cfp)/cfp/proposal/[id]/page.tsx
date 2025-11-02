@@ -7,6 +7,7 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ProposalReadOnlyView } from '@/components/cfp/ProposalReadOnlyView'
 import { PostConferenceVideoPanel } from '@/components/cfp/PostConferenceVideoPanel'
 import { PostConferenceAudienceFeedbackPanel } from '@/components/cfp/PostConferenceAudienceFeedbackPanel'
+import { ProposalAttachmentsPanel } from '@/components/proposal/ProposalAttachmentsPanel'
 import { isConferenceOver } from '@/lib/conference/state'
 import { BackLink } from '@/components/BackButton'
 import { buildUrlWithImpersonation } from '@/lib/impersonation'
@@ -117,22 +118,29 @@ export default async function ProposalViewPage({
       </div>
 
       <div className="flex gap-6">
-        <div className="flex-1">
+        <div className="flex-1 space-y-6">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <ProposalReadOnlyView proposal={proposal} />
           </div>
         </div>
 
-        {isConferenceOver(conference) &&
-          (proposal.status === 'confirmed' ||
-            proposal.status === 'accepted') && (
-            <div className="hidden w-80 flex-shrink-0 space-y-6 lg:block">
-              <PostConferenceVideoPanel videoUrl={proposal.video} />
-              <PostConferenceAudienceFeedbackPanel
-                audienceFeedback={proposal.audienceFeedback}
-              />
-            </div>
-          )}
+        {(proposal.status === 'confirmed' ||
+          proposal.status === 'accepted') && (
+          <div className="hidden w-80 flex-shrink-0 space-y-6 lg:block">
+            <ProposalAttachmentsPanel
+              proposalId={proposal._id}
+              initialAttachments={proposal.attachments || []}
+            />
+            {isConferenceOver(conference) && (
+              <>
+                <PostConferenceVideoPanel proposal={proposal} />
+                <PostConferenceAudienceFeedbackPanel
+                  audienceFeedback={proposal.audienceFeedback}
+                />
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

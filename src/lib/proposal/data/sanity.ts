@@ -243,15 +243,17 @@ export async function getProposals({
 
 export async function updateProposal(
   proposalId: string,
-  proposal: ProposalInput,
+  proposal: Partial<ProposalInput>,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let updatedProposal: ProposalExisting = {} as ProposalExisting
 
-  const speakers = prepareReferenceArray(
-    proposal.speakers as Array<Reference | { _id: string }>,
-    'speaker',
-  )
+  const speakers = proposal.speakers
+    ? prepareReferenceArray(
+        proposal.speakers as Array<Reference | { _id: string }>,
+        'speaker',
+      )
+    : undefined
 
   try {
     updatedProposal = await clientWrite

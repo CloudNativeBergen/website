@@ -14,6 +14,7 @@ import { UserIcon as UserIconSolid } from '@heroicons/react/24/solid'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
 import { Speaker, Flags, flags } from '@/lib/speaker/types'
+import { AttachmentDisplay } from '@/components/proposal/AttachmentDisplay'
 import {
   ProposalExisting,
   formats,
@@ -29,8 +30,6 @@ import { ClickableSpeakerNames } from '@/components/ClickableSpeakerNames'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
-import { VideoEmbed } from '@/components/VideoEmbed'
-import { getVideoPlatform } from '@/lib/video/utils'
 
 export interface SpeakerProfilePreviewProps {
   isOpen: boolean
@@ -260,12 +259,12 @@ export default function SpeakerProfilePreview({
                                       </div>
                                     )}
 
-                                  {talk.video &&
-                                    getVideoPlatform(talk.video) && (
+                                  {talk.attachments &&
+                                    talk.attachments.length > 0 && (
                                       <div className="mb-4">
-                                        <VideoEmbed
-                                          url={talk.video}
-                                          title={`${talk.title} - Recording`}
+                                        <AttachmentDisplay
+                                          attachments={talk.attachments}
+                                          showVideos={true}
                                         />
                                       </div>
                                     )}

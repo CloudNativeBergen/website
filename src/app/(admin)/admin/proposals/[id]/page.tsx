@@ -12,6 +12,7 @@ import {
   AudienceFeedbackPanel,
 } from '@/components/admin'
 import { getAuthSession } from '@/lib/auth'
+import { getProposalVideoUrl } from '@/lib/proposal/video'
 
 interface ProposalDetailPageProps {
   params: Promise<{
@@ -87,7 +88,8 @@ export default async function ProposalDetailPage({
           <div className="space-y-4 p-4 lg:p-4">
             <ProposalPublishedContent
               proposalId={proposal._id}
-              currentVideoUrl={proposal.video}
+              currentVideoUrl={getProposalVideoUrl(proposal)}
+              currentAttachments={proposal.attachments}
               status={proposal.status}
               conferenceEndDate={conference.end_date}
             />

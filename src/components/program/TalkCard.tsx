@@ -23,6 +23,7 @@ import {
 } from '@/lib/proposal/ui/badges'
 import { TalkStatus } from '@/lib/program/time-utils'
 import { formatConferenceDateShort } from '@/lib/time'
+import { hasProposalVideo } from '@/lib/proposal/video'
 import clsx from 'clsx'
 
 interface PortableTextChild {
@@ -363,7 +364,7 @@ export function TalkCard({
             </div>
 
             <div className="flex items-center gap-2 print:hidden">
-              {isConfirmed && talkData.video && (
+              {isConfirmed && hasProposalVideo(talkData) && (
                 <div className="rounded-full bg-red-100 p-2 text-red-800 dark:bg-red-900/50 dark:text-red-300">
                   <PlayIcon className="h-4 w-4" />
                 </div>

@@ -20,8 +20,6 @@ import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextTextBlock, PortableTextObject } from 'sanity'
-import { VideoEmbed } from '@/components/VideoEmbed'
-import { getVideoPlatform } from '@/lib/video/utils'
 import {
   CalendarIcon,
   ClockIcon,
@@ -29,6 +27,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { formatConferenceDateLong } from '@/lib/time'
 import { PhotoGallerySection } from '@/components/PhotoGallerySection'
+import { AttachmentDisplay } from '@/components/proposal/AttachmentDisplay'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -331,11 +330,11 @@ export default async function Profile({ params }: Props) {
                             </div>
                           </div>
                         </div>
-                        {talk.video && getVideoPlatform(talk.video) && (
+                        {talk.attachments && talk.attachments.length > 0 && (
                           <div className="mb-4">
-                            <VideoEmbed
-                              url={talk.video}
-                              title={`${talk.title} - Recording`}
+                            <AttachmentDisplay
+                              attachments={talk.attachments}
+                              showVideos={true}
                             />
                           </div>
                         )}

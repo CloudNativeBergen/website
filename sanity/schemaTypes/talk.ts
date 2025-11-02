@@ -165,14 +165,28 @@ export default defineType({
     }),
     defineField({
       name: 'video',
-      title: 'YouTube Video',
+      title: 'YouTube Video (Deprecated)',
       type: 'url',
-      description: 'Link to a published YouTube video for this talk',
+      description:
+        '⚠️ DEPRECATED: Use attachments array instead. This field is kept for backward compatibility only.',
+      deprecated: {
+        reason:
+          'Use attachments array for videos. Add video URLs as urlAttachment with attachmentType="recording"',
+      },
+      hidden: true,
+      readOnly: true,
       validation: (Rule) =>
         Rule.uri({
           scheme: ['http', 'https'],
           allowRelative: false,
         }),
+    }),
+    defineField({
+      name: 'attachments',
+      title: 'Attachments',
+      type: 'array',
+      description: 'Slides, recordings, and other resources for this talk',
+      of: [{ type: 'fileAttachment' }, { type: 'urlAttachment' }],
     }),
     defineField({
       name: 'capacity',

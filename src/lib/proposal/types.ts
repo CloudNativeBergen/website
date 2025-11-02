@@ -4,6 +4,7 @@ import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock, Reference } from 'sanity'
 import { Review } from '@/lib/review/types'
 import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
+import { Attachment } from '@/lib/attachment/types'
 
 export enum Language {
   norwegian = 'norwegian',
@@ -84,6 +85,7 @@ interface Proposal {
   video?: string
   capacity?: number
   audienceFeedback?: AudienceFeedback
+  attachments?: Attachment[]
 }
 
 export interface ProposalInput extends Proposal {

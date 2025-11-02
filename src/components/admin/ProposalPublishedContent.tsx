@@ -12,10 +12,14 @@ import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { VideoEmbed } from '@/components/VideoEmbed'
 import { getVideoPlatform } from '@/lib/video/utils'
+import { AttachmentManager } from '@/components/proposal/AttachmentManager'
+import { Attachment } from '@/lib/attachment/types'
+import { getNonUrlRecordingAttachments } from '@/lib/attachment/filters'
 
 interface ProposalPublishedContentProps {
   proposalId: string
   currentVideoUrl?: string | null
+  currentAttachments?: Attachment[]
   status: string
   conferenceEndDate?: string
 }
@@ -23,45 +27,80 @@ interface ProposalPublishedContentProps {
 export function ProposalPublishedContent({
   proposalId,
   currentVideoUrl,
+  currentAttachments = [],
   status,
   conferenceEndDate,
 }: ProposalPublishedContentProps) {
   const [isEditingVideo, setIsEditingVideo] = useState(false)
   const [videoUrl, setVideoUrl] = useState(currentVideoUrl || '')
   const [videoError, setVideoError] = useState<string | null>(null)
+  const [attachments, setAttachments] =
+    useState<Attachment[]>(currentAttachments)
   const { showNotification } = useNotification()
 
   const utils = api.useUtils()
 
-  const updateVideoMutation = api.proposal.admin.updateVideo.useMutation({
-    onSuccess: (data) => {
+  const updateVideoUrlMutation =
+    api.proposal.admin.updateAttachments.useMutation({
+      onSuccess: () => {
+        showNotification({
+          title: 'Video URL Updated',
+          message: 'The video URL has been updated successfully.',
+          type: 'success',
+        })
+        setIsEditingVideo(false)
+        utils.proposal.admin.getById.invalidate({ id: proposalId })
+      },
+      onError: (error: { message?: string }) => {
+        showNotification({
+          title: 'Update Failed',
+          message: error.message || 'Failed to update video URL.',
+          type: 'error',
+        })
+      },
+    })
+
+  const updateAttachmentsMutation = api.proposal.updateAttachments.useMutation({
+    onSuccess: () => {
       showNotification({
-        title: 'Video URL Updated',
-        message: 'The video URL has been updated successfully.',
+        title: 'Attachments Updated',
+        message: 'Attachments have been updated successfully.',
         type: 'success',
       })
-      setIsEditingVideo(false)
-      // Update local state immediately
-      if (data?.video !== undefined) {
-        setVideoUrl(data.video || '')
-      }
       utils.proposal.admin.getById.invalidate({ id: proposalId })
     },
     onError: (error: { message?: string }) => {
       showNotification({
         title: 'Update Failed',
-        message: error.message || 'Failed to update video URL.',
+        message: error.message || 'Failed to update attachments.',
         type: 'error',
       })
     },
   })
 
-  // Only show for accepted/confirmed talks after conference has ended
+  const deleteAttachmentMutation =
+    api.proposal.admin.deleteAttachment.useMutation({
+      onSuccess: () => {
+        showNotification({
+          title: 'Attachment Deleted',
+          message: 'The attachment has been deleted successfully.',
+          type: 'success',
+        })
+        utils.proposal.admin.getById.invalidate({ id: proposalId })
+      },
+      onError: (error: { message?: string }) => {
+        showNotification({
+          title: 'Delete Failed',
+          message: error.message || 'Failed to delete attachment.',
+          type: 'error',
+        })
+      },
+    })
+
   if (status !== 'accepted' && status !== 'confirmed') {
     return null
   }
 
-  // Check if conference has ended
   const conferenceHasEnded = conferenceEndDate
     ? new Date(conferenceEndDate) < new Date()
     : false
@@ -75,7 +114,6 @@ export function ProposalPublishedContent({
 
     try {
       const urlObj = new URL(url)
-      // Check for YouTube or Vimeo
       const isYouTube =
         urlObj.hostname.includes('youtube.com') ||
         urlObj.hostname.includes('youtu.be')
@@ -97,16 +135,60 @@ export function ProposalPublishedContent({
   const handleSaveVideo = () => {
     if (!validateVideoUrl(videoUrl)) return
 
-    updateVideoMutation.mutate({
+    // Update attachments: remove old recording URLs and add new one
+    const nonRecordingAttachments = getNonUrlRecordingAttachments(attachments)
+
+    const updatedAttachments = videoUrl
+      ? [
+          ...nonRecordingAttachments,
+          {
+            _type: 'urlAttachment' as const,
+            _key: `recording-${Date.now()}`,
+            url: videoUrl,
+            attachmentType: 'recording' as const,
+            title: 'Session Recording',
+            uploadedAt: new Date().toISOString(),
+          },
+        ]
+      : nonRecordingAttachments
+
+    updateVideoUrlMutation.mutate({
       id: proposalId,
-      videoUrl: videoUrl || null,
+      attachments: updatedAttachments,
     })
+
+    setAttachments(updatedAttachments)
   }
 
   const handleCancelVideo = () => {
     setVideoUrl(currentVideoUrl || '')
     setVideoError(null)
     setIsEditingVideo(false)
+  }
+
+  const handleAttachmentsChange = async (newAttachments: Attachment[]) => {
+    setAttachments(newAttachments)
+    await updateAttachmentsMutation.mutateAsync({
+      id: proposalId,
+      attachments: newAttachments,
+    })
+  }
+
+  const handleDeleteAttachment = async (attachmentKey: string) => {
+    const previousAttachments = attachments
+
+    // Optimistically remove from UI
+    setAttachments(attachments.filter((a) => a._key !== attachmentKey))
+
+    try {
+      await deleteAttachmentMutation.mutateAsync({
+        id: proposalId,
+        attachmentKey,
+      })
+    } catch {
+      // Revert on error
+      setAttachments(previousAttachments)
+    }
   }
 
   return (
@@ -156,16 +238,16 @@ export function ProposalPublishedContent({
                   <button
                     type="button"
                     onClick={handleSaveVideo}
-                    disabled={updateVideoMutation.isPending || !!videoError}
+                    disabled={updateVideoUrlMutation.isPending || !!videoError}
                     className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-600"
                   >
                     <CheckIcon className="h-3 w-3" />
-                    {updateVideoMutation.isPending ? 'Saving...' : 'Save'}
+                    {updateVideoUrlMutation.isPending ? 'Saving...' : 'Save'}
                   </button>
                   <button
                     type="button"
                     onClick={handleCancelVideo}
-                    disabled={updateVideoMutation.isPending}
+                    disabled={updateVideoUrlMutation.isPending}
                     className="inline-flex items-center gap-1 rounded-md bg-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
                   >
                     <XMarkIcon className="h-3 w-3" />
@@ -183,7 +265,13 @@ export function ProposalPublishedContent({
                     className="group flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
                   >
                     <VideoCameraIcon className="h-4 w-4" />
-                    <span className="underline">View Recording</span>
+                    <span className="underline">
+                      {getVideoPlatform(videoUrl) === 'youtube'
+                        ? 'YouTube video'
+                        : getVideoPlatform(videoUrl) === 'vimeo'
+                          ? 'Vimeo video'
+                          : 'View Recording'}
+                    </span>
                   </a>
                 ) : (
                   <span className="text-sm text-gray-500 italic dark:text-gray-400">
@@ -204,19 +292,19 @@ export function ProposalPublishedContent({
           </dd>
         </div>
 
-        {/* Slides Section - Coming Soon */}
+        {/* Slides & Attachments Section */}
         <div>
-          <dt className="flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">
+          <dt className="mb-3 flex items-center text-sm font-medium text-gray-500 dark:text-gray-400">
             <DocumentArrowUpIcon className="mr-2 h-4 w-4" />
-            Presentation Slides
+            Presentation Slides & Resources
           </dt>
-          <dd className="mt-2 flex items-center gap-2">
-            <span className="text-sm text-gray-500 italic dark:text-gray-400">
-              No slides uploaded
-            </span>
-            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-              Coming Soon
-            </span>
+          <dd>
+            <AttachmentManager
+              proposalId={proposalId}
+              attachments={attachments}
+              onAttachmentsChange={handleAttachmentsChange}
+              onDeleteAttachment={handleDeleteAttachment}
+            />
           </dd>
         </div>
       </div>

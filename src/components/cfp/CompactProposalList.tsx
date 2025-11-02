@@ -5,6 +5,8 @@ import {
   PencilIcon,
   ChatBubbleBottomCenterTextIcon,
   VideoCameraIcon,
+  ExclamationTriangleIcon,
+  MinusCircleIcon,
 } from '@heroicons/react/24/outline'
 import {
   CheckBadgeIcon,
@@ -12,11 +14,11 @@ import {
   ClockIcon,
   DocumentTextIcon,
   SparklesIcon,
-  HandThumbDownIcon,
 } from '@heroicons/react/24/solid'
 import type { ProposalExisting, Status } from '@/lib/proposal/types'
 import { statuses } from '@/lib/proposal/types'
 import { formatConfig } from '@/lib/proposal'
+import { hasProposalVideo } from '@/lib/proposal/video'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import { useImpersonateQueryString } from '@/lib/impersonation'
 
@@ -26,7 +28,13 @@ interface CompactProposalListProps {
   conferenceHasEnded?: boolean
 }
 
-function StatusBadge({ status }: { status: Status }) {
+function StatusBadge({
+  status,
+  hasApprovedTalk,
+}: {
+  status: Status
+  hasApprovedTalk: boolean
+}) {
   const getStatusConfig = (status: Status) => {
     switch (status) {
       case 'confirmed':
@@ -51,11 +59,19 @@ function StatusBadge({ status }: { status: Status }) {
           label: 'Submitted',
         }
       case 'rejected':
-        return {
-          color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-          icon: HandThumbDownIcon,
-          label: 'Rejected',
-        }
+        return hasApprovedTalk
+          ? {
+              color:
+                'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+              icon: MinusCircleIcon,
+              label: 'Not selected',
+            }
+          : {
+              color:
+                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+              icon: XCircleIcon,
+              label: 'Rejected',
+            }
       case 'withdrawn':
         return {
           color:
@@ -147,6 +163,11 @@ export function CompactProposalList({
               proposal.status === 'withdrawn' ||
               proposal.status === 'submitted')
 
+          const hasAttachments =
+            proposal.attachments &&
+            proposal.attachments.some((a) => a.attachmentType === 'slides')
+          const showMissingAttachments = isApproved && !hasAttachments
+
           return (
             <div
               key={proposal._id}
@@ -191,7 +212,7 @@ export function CompactProposalList({
                     {totalFeedback}
                   </span>
                 )}
-                {proposal.video && (
+                {hasProposalVideo(proposal) && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-400"
                     title="Video available"
@@ -200,7 +221,18 @@ export function CompactProposalList({
                     Video
                   </span>
                 )}
-                <StatusBadge status={proposal.status} />
+                {showMissingAttachments && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                    title="No presentation slides uploaded"
+                  >
+                    <ExclamationTriangleIcon className="h-3 w-3" />
+                  </span>
+                )}
+                <StatusBadge
+                  status={proposal.status}
+                  hasApprovedTalk={hasApprovedTalk}
+                />
                 {canEdit && (
                   <Link
                     href={`/cfp/proposal/${proposal._id}${queryString}`}

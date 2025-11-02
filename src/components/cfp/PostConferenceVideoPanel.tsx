@@ -3,14 +3,18 @@
 import { VideoCameraIcon } from '@heroicons/react/24/outline'
 import { VideoEmbed } from '@/components/VideoEmbed'
 import { getVideoPlatform } from '@/lib/video/utils'
+import type { ProposalExisting } from '@/lib/proposal/types'
+import { getProposalVideoUrl } from '@/lib/proposal/video'
 
 interface PostConferenceVideoPanelProps {
-  videoUrl?: string | null
+  proposal: Pick<ProposalExisting, 'attachments'>
 }
 
 export function PostConferenceVideoPanel({
-  videoUrl,
+  proposal,
 }: PostConferenceVideoPanelProps) {
+  const videoUrl = getProposalVideoUrl(proposal)
+
   if (!videoUrl || !getVideoPlatform(videoUrl)) {
     return null
   }

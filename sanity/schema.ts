@@ -1,5 +1,6 @@
 import { type SchemaTypeDefinition } from 'sanity'
 
+import { fileAttachment, urlAttachment } from './schemaTypes/attachment'
 import conference from './schemaTypes/conference'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import imageGallery from './schemaTypes/imageGallery'
@@ -17,6 +18,8 @@ import workshopSignup from './schemaTypes/workshopSignup'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
+    fileAttachment,
+    urlAttachment,
     conference,
     coSpeakerInvitation,
     imageGallery,

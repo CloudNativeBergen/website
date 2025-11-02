@@ -14,6 +14,7 @@ import {
   ProposalActionSchema,
   AudienceFeedbackSchema,
 } from '@/server/schemas/proposal'
+import { AttachmentSchema } from '@/server/schemas/attachment'
 import {
   getProposal,
   getProposals,
@@ -21,11 +22,92 @@ import {
   updateProposal,
   deleteProposal,
 } from '@/lib/proposal/data/sanity'
+import { Attachment } from '@/lib/attachment/types'
 import {
   createCoSpeakerInvitation,
   updateInvitationStatus,
   sendInvitationEmail,
 } from '@/lib/cospeaker/server'
+
+/**
+ * Helper function to delete an attachment and its associated file asset
+ */
+async function deleteAttachmentHelper(
+  proposalId: string,
+  attachmentKey: string,
+) {
+  // Get current proposal using GROQ query directly
+  const proposal = await clientWrite.fetch<{
+    _id: string
+    attachments?: Array<{
+      _key: string
+      _type: 'fileAttachment' | 'urlAttachment'
+      attachmentType?: string
+      file?: { asset?: { _ref: string } }
+    }>
+  }>(`*[_type == "talk" && _id == $id][0]{ _id, attachments }`, {
+    id: proposalId,
+  })
+
+  if (!proposal) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Proposal not found',
+    })
+  }
+
+  // Find the attachment to delete
+  const attachmentToDelete = proposal.attachments?.find(
+    (a) => a._key === attachmentKey,
+  )
+
+  if (!attachmentToDelete) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Attachment not found',
+    })
+  }
+
+  // If it's a file attachment, delete the asset from Sanity
+  if (
+    attachmentToDelete._type === 'fileAttachment' &&
+    attachmentToDelete.file?.asset?._ref
+  ) {
+    try {
+      await clientWrite.delete(attachmentToDelete.file.asset._ref)
+    } catch (deleteError) {
+      console.error('Failed to delete file asset:', deleteError)
+      // Continue with removing the reference even if asset deletion fails
+    }
+  }
+
+  // Remove attachment from proposal and cast to correct type
+  const updatedAttachments =
+    (proposal.attachments?.filter(
+      (a) => a._key !== attachmentKey,
+    ) as Attachment[]) || []
+
+  const { proposal: updated, err } = await updateProposal(proposalId, {
+    attachments: updatedAttachments,
+  })
+
+  if (err) {
+    throw new TRPCError({
+      code: 'INTERNAL_SERVER_ERROR',
+      message: 'Failed to delete attachment',
+      cause: err,
+    })
+  }
+
+  if (!updated) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'Proposal not found',
+    })
+  }
+
+  return { proposal: updated, attachmentToDelete }
+}
 import { getInvitationByToken } from '@/lib/cospeaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { clientWrite } from '@/lib/sanity/client'
@@ -271,10 +353,7 @@ export const proposalRouter = router({
           return existing
         }
 
-        const { proposal, err } = await updateProposal(
-          input.id,
-          input.data as ProposalInput,
-        )
+        const { proposal, err } = await updateProposal(input.id, input.data)
 
         if (err) {
           throw new TRPCError({
@@ -561,10 +640,7 @@ export const proposalRouter = router({
             } as typeof proposalData
           }
 
-          const { proposal, err } = await updateProposal(
-            input.id,
-            updateData as ProposalInput,
-          )
+          const { proposal, err } = await updateProposal(input.id, updateData)
 
           if (err) {
             throw new TRPCError({
@@ -618,46 +694,6 @@ export const proposalRouter = router({
       }
     }),
 
-    // Update video URL (admin)
-    updateVideo: adminProcedure
-      .input(
-        IdParamSchema.extend({
-          videoUrl: z.string().url().nullable(),
-        }),
-      )
-      .mutation(async ({ input }) => {
-        try {
-          const { proposal, err } = await updateProposal(input.id, {
-            video: input.videoUrl,
-          } as ProposalInput)
-
-          if (err) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to update video URL',
-              cause: err,
-            })
-          }
-
-          if (!proposal) {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Proposal not found',
-            })
-          }
-
-          return proposal
-        } catch (error) {
-          if (error instanceof TRPCError) throw error
-
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to update video URL',
-            cause: error,
-          })
-        }
-      }),
-
     updateAudienceFeedback: adminProcedure
       .input(
         IdParamSchema.extend({
@@ -703,7 +739,190 @@ export const proposalRouter = router({
           })
         }
       }),
+
+    // Update attachments (admin)
+    updateAttachments: adminProcedure
+      .input(
+        IdParamSchema.extend({
+          attachments: z.array(AttachmentSchema),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const { proposal, err } = await updateProposal(input.id, {
+            attachments: input.attachments,
+          })
+
+          if (err) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to update attachments',
+              cause: err,
+            })
+          }
+
+          if (!proposal) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'Proposal not found',
+            })
+          }
+
+          return proposal
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update attachments',
+            cause: error,
+          })
+        }
+      }),
+
+    // Delete attachment (admin)
+    deleteAttachment: adminProcedure
+      .input(
+        IdParamSchema.extend({
+          attachmentKey: z.string(),
+        }),
+      )
+      .mutation(async ({ input }) => {
+        try {
+          const { proposal } = await deleteAttachmentHelper(
+            input.id,
+            input.attachmentKey,
+          )
+          return proposal
+        } catch (error) {
+          if (error instanceof TRPCError) throw error
+
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to delete attachment',
+            cause: error,
+          })
+        }
+      }),
   }),
+
+  // Speaker attachment operations
+  updateAttachments: protectedProcedure
+    .input(
+      IdParamSchema.extend({
+        attachments: z.array(AttachmentSchema),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        // Verify ownership
+        const { proposal, proposalError } = await getProposal({
+          id: input.id,
+          speakerId: ctx.speaker._id,
+          isOrganizer: ctx.speaker.is_organizer === true,
+        })
+
+        if (proposalError || !proposal) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found or access denied',
+          })
+        }
+
+        const { proposal: updated, err } = await updateProposal(input.id, {
+          attachments: input.attachments,
+        })
+
+        if (err) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update attachments',
+            cause: err,
+          })
+        }
+
+        if (!updated) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found',
+          })
+        }
+
+        return updated
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update attachments',
+          cause: error,
+        })
+      }
+    }),
+
+  // Delete attachment (speaker)
+  deleteAttachment: protectedProcedure
+    .input(
+      IdParamSchema.extend({
+        attachmentKey: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        // Verify ownership
+        const { proposal, proposalError } = await getProposal({
+          id: input.id,
+          speakerId: ctx.speaker._id,
+          isOrganizer: ctx.speaker.is_organizer === true,
+        })
+
+        if (proposalError || !proposal) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found or access denied',
+          })
+        }
+
+        // Find the attachment to check permissions
+        const attachmentToCheck = proposal.attachments?.find(
+          (a) => a._key === input.attachmentKey,
+        )
+
+        if (!attachmentToCheck) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Attachment not found',
+          })
+        }
+
+        // Speakers cannot delete recording attachments
+        if (
+          attachmentToCheck.attachmentType === 'recording' &&
+          !ctx.speaker.is_organizer
+        ) {
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'Cannot delete recording attachments',
+          })
+        }
+
+        // Use helper to perform deletion
+        const { proposal: updated } = await deleteAttachmentHelper(
+          input.id,
+          input.attachmentKey,
+        )
+
+        return updated
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete attachment',
+          cause: error,
+        })
+      }
+    }),
 
   // Co-speaker invitation operations
   invitation: router({
