@@ -54,6 +54,7 @@ describe('Workshop Status Utils', () => {
     userWorkOSId: 'workos-123',
     experienceLevel: Level.intermediate,
     operatingSystem: 'macos',
+    signedUpAt: '2025-01-01T00:00:00Z',
     workshop: {
       _type: 'reference',
       _ref: workshopId,

@@ -131,7 +131,6 @@ export async function createWorkshopSignup(
         workshop: signupData.workshop,
         conference: signupData.conference,
         status: signupStatus,
-        signupDate: new Date().toISOString(),
         confirmationEmailSent: false,
         experienceLevel: signupData.experienceLevel,
         operatingSystem: signupData.operatingSystem,
@@ -152,7 +151,7 @@ export async function createWorkshopSignup(
           workshop->{_id, _ref, title, date, startTime, endTime, capacity},
           conference->{_id, _ref, name},
           status,
-          signupDate,
+          signedUpAt,
           _createdAt,
           _updatedAt
         }`,
@@ -186,14 +185,11 @@ export async function verifyWorkshopBelongsToConference(
 
 export async function cancelWorkshopSignup(
   signupId: string,
-  reason: string,
 ): Promise<WorkshopSignupExisting> {
   return clientWrite
     .patch(signupId)
     .set({
-      status: 'cancelled',
-      cancelledAt: new Date().toISOString(),
-      cancellationReason: reason,
+      status: 'waitlist',
     })
     .commit()
 }
@@ -256,7 +252,7 @@ export async function confirmWorkshopSignup(
         name
       },
       status,
-      signupDate,
+      signedUpAt,
       _createdAt,
       _updatedAt
     }`,
@@ -301,7 +297,7 @@ export async function getWorkshopSignupsByWorkshop(
 ): Promise<WorkshopSignupExisting[]> {
   const statusFilter = status ? `&& status == "${status}"` : ''
 
-  const query = groq`*[_type == "workshopSignup" && workshop._ref == $workshopId ${statusFilter}] | order(signupDate desc) {
+  const query = groq`*[_type == "workshopSignup" && workshop._ref == $workshopId ${statusFilter}] | order(signedUpAt desc) {
     _id,
     _type,
     userEmail,
@@ -322,7 +318,7 @@ export async function getWorkshopSignupsByWorkshop(
       name
     },
     status,
-    signupDate,
+    signedUpAt,
     notes,
     _createdAt,
     _updatedAt
@@ -436,7 +432,7 @@ export async function getAllWorkshopSignups(filters: {
   const start = (page - 1) * pageSize
   const end = start + pageSize
 
-  const query = groq`*[${whereClause}] | order(signupDate desc) [${start}...${end}] {
+  const query = groq`*[${whereClause}] | order(signedUpAt desc) [${start}...${end}] {
     _id,
     _type,
     userEmail,
@@ -457,7 +453,7 @@ export async function getAllWorkshopSignups(filters: {
       name
     },
     status,
-    signupDate,
+    signedUpAt,
     notes,
     _createdAt,
     _updatedAt
@@ -552,7 +548,7 @@ export async function getWorkshopStatistics(conferenceId: string) {
     averageUtilization:
       workshopStats.length > 0
         ? workshopStats.reduce((sum: number, s) => sum + s.utilization, 0) /
-          workshopsWithData.length
+        workshopsWithData.length
         : 0,
   }
 

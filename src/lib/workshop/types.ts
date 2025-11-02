@@ -34,10 +34,8 @@ export interface WorkshopSignup {
     year?: string
   }
   status: WorkshopSignupStatus
-  signedUpAt?: string
-  signupDate?: string
+  signedUpAt: string
   confirmedAt?: string
-  cancelledAt?: string
   confirmationEmailSent?: boolean
   notes?: string
 }

@@ -126,7 +126,7 @@ export function SignupDetailsModal({
                                   <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500 dark:text-gray-400">
                                     {(() => {
                                       const dateStr =
-                                        signup.signupDate || signup._createdAt
+                                        signup.signedUpAt || signup._createdAt
                                       if (
                                         !dateStr ||
                                         typeof dateStr !== 'string'

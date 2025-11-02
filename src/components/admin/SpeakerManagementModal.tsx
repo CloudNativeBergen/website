@@ -40,7 +40,6 @@ export function SpeakerManagementModal({
   const [speakerData, setSpeakerData] = useState<SpeakerInput>({
     name: '',
     bio: '',
-    company: '',
     title: '',
     consent: {
       dataProcessing: { granted: false },
@@ -103,7 +102,6 @@ export function SpeakerManagementModal({
         setSpeakerData({
           name: editingSpeaker.name || '',
           bio: editingSpeaker.bio || '',
-          company: editingSpeaker.company || '',
           title: editingSpeaker.title || '',
           image: editingSpeaker.image,
           links: editingSpeaker.links,
@@ -117,7 +115,6 @@ export function SpeakerManagementModal({
         setSpeakerData({
           name: '',
           bio: '',
-          company: '',
           title: '',
           consent: {
             dataProcessing: { granted: false },

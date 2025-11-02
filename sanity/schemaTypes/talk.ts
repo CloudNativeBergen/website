@@ -89,16 +89,6 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'speaker',
-      title: 'Speaker (Deprecated)',
-      type: 'reference',
-      to: [{ type: 'speaker' }],
-      deprecated: {
-        reason: 'Use speakers array instead of single speaker reference',
-      },
-      hidden: true,
-    }),
-    defineField({
       name: 'speakers',
       title: 'Speakers',
       type: 'array',
@@ -162,24 +152,6 @@ export default defineType({
       type: 'reference',
       to: [{ type: 'conference' }],
       validation: (Rule) => Rule.required(),
-    }),
-    defineField({
-      name: 'video',
-      title: 'YouTube Video (Deprecated)',
-      type: 'url',
-      description:
-        '⚠️ DEPRECATED: Use attachments array instead. This field is kept for backward compatibility only.',
-      deprecated: {
-        reason:
-          'Use attachments array for videos. Add video URLs as urlAttachment with attachmentType="recording"',
-      },
-      hidden: true,
-      readOnly: true,
-      validation: (Rule) =>
-        Rule.uri({
-          scheme: ['http', 'https'],
-          allowRelative: false,
-        }),
     }),
     defineField({
       name: 'attachments',

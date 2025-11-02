@@ -45,7 +45,6 @@ export function SpeakerDetailsForm({
 }: SpeakerDetailsFormProps) {
   const [speakerName, setSpeakerName] = useState(speaker?.name ?? '')
   const [speakerTitle, setSpeakerTitle] = useState(speaker?.title ?? '')
-  const [speakerCompany, setSpeakerCompany] = useState(speaker?.company ?? '')
   const [speakerBio, setSpeakerBio] = useState(speaker?.bio ?? '')
   const [speakerEmail, setSpeakerEmail] = useState(email ?? '')
   const [speakerImage, setSpeakerImage] = useState(speaker?.image ?? '')
@@ -92,7 +91,6 @@ export function SpeakerDetailsForm({
 
     setSpeakerName(speaker?.name ?? '')
     setSpeakerTitle(speaker?.title ?? '')
-    setSpeakerCompany(speaker?.company ?? '')
     setSpeakerBio(speaker?.bio ?? '')
     setSpeakerImage(speaker?.image ?? '')
     setSpeakerImagePreviewUrl(
@@ -211,7 +209,6 @@ export function SpeakerDetailsForm({
     setSpeaker({
       name: speakerName,
       title: speakerTitle,
-      company: speakerCompany,
       bio: speakerBio,
       flags: speakerFlags,
       links,
@@ -241,7 +238,6 @@ export function SpeakerDetailsForm({
   }, [
     speakerName,
     speakerTitle,
-    speakerCompany,
     speakerBio,
     speakerFlags,
     speakerLinks,
@@ -288,15 +284,6 @@ export function SpeakerDetailsForm({
             label="Title or affiliation"
             value={speakerTitle}
             setValue={setSpeakerTitle}
-          />
-        </div>
-
-        <div className="sm:col-span-4">
-          <Input
-            name="speaker_company"
-            label="Company"
-            value={speakerCompany}
-            setValue={setSpeakerCompany}
           />
         </div>
 

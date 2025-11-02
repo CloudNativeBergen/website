@@ -181,11 +181,10 @@ export default function WorkshopCard({
               ].map((option) => (
                 <label
                   key={option.value}
-                  className={`flex cursor-pointer items-start rounded-lg border-2 p-3 transition-all ${
-                    experienceLevel === option.value
+                  className={`flex cursor-pointer items-start rounded-lg border-2 p-3 transition-all ${experienceLevel === option.value
                       ? 'border-brand-cloud-blue bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                  }`}
+                    }`}
                 >
                   <input
                     type="radio"
@@ -222,11 +221,10 @@ export default function WorkshopCard({
               ].map((option) => (
                 <label
                   key={option.value}
-                  className={`flex cursor-pointer items-center rounded-lg border-2 p-3 transition-all ${
-                    operatingSystem === option.value
+                  className={`flex cursor-pointer items-center rounded-lg border-2 p-3 transition-all ${operatingSystem === option.value
                       ? 'border-brand-cloud-blue bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                  }`}
+                    }`}
                 >
                   <input
                     type="radio"
@@ -314,9 +312,9 @@ export default function WorkshopCard({
                       >
                         {workshop.speakers[0].name}
                       </Link>
-                      {workshop.speakers[0].company && (
+                      {workshop.speakers[0].title && (
                         <p className="text-xs text-gray-600 dark:text-gray-400">
-                          {workshop.speakers[0].company}
+                          {workshop.speakers[0].title}
                         </p>
                       )}
                     </div>
@@ -429,13 +427,12 @@ export default function WorkshopCard({
                 {duration}
               </span>
               <span
-                className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
-                  actuallyFull
+                className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${actuallyFull
                     ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                     : workshop.available < 5
                       ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                       : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                }`}
+                  }`}
               >
                 <UserGroupIcon className="mr-1.5 h-4 w-4" />
                 {getCapacityStatusMessage(workshop.capacity, workshop.signups)}
@@ -443,12 +440,12 @@ export default function WorkshopCard({
               {((workshop.waitlistCount !== undefined &&
                 workshop.waitlistCount > 0) ||
                 workshop.available < 0) && (
-                <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                  <ClockIcon className="mr-1.5 h-4 w-4" />
-                  {workshop.waitlistCount || Math.abs(workshop.available)} on
-                  waitlist
-                </span>
-              )}
+                  <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    <ClockIcon className="mr-1.5 h-4 w-4" />
+                    {workshop.waitlistCount || Math.abs(workshop.available)} on
+                    waitlist
+                  </span>
+                )}
               {workshop.format && workshop.format.includes('workshop') && (
                 <span className="inline-flex items-center rounded-full bg-accent-purple/10 px-3 py-1 text-sm font-medium text-accent-purple dark:bg-purple-900/30 dark:text-purple-400">
                   <AcademicCapIcon className="mr-1.5 h-4 w-4" />
@@ -497,9 +494,9 @@ export default function WorkshopCard({
                 style={
                   topic.color
                     ? {
-                        backgroundColor: `${topic.color}20`,
-                        color: topic.color,
-                      }
+                      backgroundColor: `${topic.color}20`,
+                      color: topic.color,
+                    }
                     : undefined
                 }
               >
@@ -534,11 +531,10 @@ export default function WorkshopCard({
           {actuallySignedUp ? (
             <div className="space-y-3">
               <div
-                className={`flex items-center justify-center gap-2 text-sm font-medium ${
-                  isOnWaitlist
+                className={`flex items-center justify-center gap-2 text-sm font-medium ${isOnWaitlist
                     ? 'text-blue-600 dark:text-blue-400'
                     : 'text-green-600 dark:text-green-400'
-                }`}
+                  }`}
               >
                 {isOnWaitlist ? (
                   <>

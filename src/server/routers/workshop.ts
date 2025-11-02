@@ -231,7 +231,7 @@ export const workshopRouter = router({
           workshopTitle: signup.workshop?.title ?? input.workshop._ref,
           workshopDate: (signup.workshop as { date?: string })?.date,
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-        }).catch(() => {})
+        }).catch(() => { })
 
         revalidatePath('/workshop')
         revalidatePath('/admin/workshops')
@@ -269,10 +269,7 @@ export const workshopRouter = router({
           })
         }
 
-        await cancelWorkshopSignup(
-          input.signupId,
-          input.reason || 'User cancelled',
-        )
+        await cancelWorkshopSignup(input.signupId)
 
         revalidatePath('/workshop')
 
@@ -383,7 +380,7 @@ export const workshopRouter = router({
               workshopDate: (signup.workshop as { date?: string })?.date,
               workshopTime: (signup.workshop as { startTime?: string })
                 ?.startTime,
-            }).catch(() => {})
+            }).catch(() => { })
           }
         }
 
@@ -438,8 +435,8 @@ export const workshopRouter = router({
 
           const signupsToPromote = waitlistSignups
             .sort((a, b) => {
-              const dateA = new Date(a.signupDate || a._createdAt).getTime()
-              const dateB = new Date(b.signupDate || b._createdAt).getTime()
+              const dateA = new Date(a.signedUpAt || a._createdAt).getTime()
+              const dateB = new Date(b.signedUpAt || b._createdAt).getTime()
               return dateA - dateB
             })
             .slice(0, capacityIncrease)
@@ -520,7 +517,7 @@ export const workshopRouter = router({
                 workshopDate: (signup.workshop as { date?: string })?.date,
                 workshopTime: (signup.workshop as { startTime?: string })
                   ?.startTime,
-              }).catch(() => {})
+              }).catch(() => { })
             }
 
             return signup
@@ -556,9 +553,7 @@ export const workshopRouter = router({
     .mutation(async ({ input }) => {
       try {
         const results = await Promise.allSettled(
-          input.signupIds.map((id) =>
-            cancelWorkshopSignup(id, input.reason || 'Admin cancelled'),
-          ),
+          input.signupIds.map((id) => cancelWorkshopSignup(id)),
         )
 
         const succeeded = results.filter((r) => r.status === 'fulfilled').length
@@ -678,7 +673,7 @@ export const workshopRouter = router({
           workshopTitle: signup.workshop?.title ?? input.workshop._ref,
           workshopDate: (signup.workshop as { date?: string })?.date,
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-        }).catch(() => {})
+        }).catch(() => { })
 
         revalidatePath('/workshop')
         revalidatePath('/admin/workshops')

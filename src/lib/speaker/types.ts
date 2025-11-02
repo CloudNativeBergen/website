@@ -39,7 +39,6 @@ interface SpeakerBase {
   links?: string[]
   flags?: Flags[]
   consent?: SpeakerConsent
-  company?: string
   galleryImages?: GalleryImageWithSpeakers[]
 }
 
