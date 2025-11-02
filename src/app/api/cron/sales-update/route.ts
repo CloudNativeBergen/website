@@ -6,6 +6,7 @@ import type {
   TicketAnalysisResult,
 } from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { isConferenceOver } from '@/lib/conference/state'
 import { getOrganizerCount } from '@/lib/speaker/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
@@ -46,6 +47,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Failed to load conference configuration' },
         { status: 500 },
+      )
+    }
+
+    if (isConferenceOver(conference)) {
+      console.log(
+        `Conference ${conference.title} has ended. Skipping sales update.`,
+      )
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Conference has ended. Sales updates are no longer sent.',
+          conference: conference.title,
+        },
+        { status: 200 },
       )
     }
 

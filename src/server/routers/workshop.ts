@@ -231,7 +231,7 @@ export const workshopRouter = router({
           workshopTitle: signup.workshop?.title ?? input.workshop._ref,
           workshopDate: (signup.workshop as { date?: string })?.date,
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-        }).catch(() => { })
+        }).catch(() => {})
 
         revalidatePath('/workshop')
         revalidatePath('/admin/workshops')
@@ -380,7 +380,7 @@ export const workshopRouter = router({
               workshopDate: (signup.workshop as { date?: string })?.date,
               workshopTime: (signup.workshop as { startTime?: string })
                 ?.startTime,
-            }).catch(() => { })
+            }).catch(() => {})
           }
         }
 
@@ -517,7 +517,7 @@ export const workshopRouter = router({
                 workshopDate: (signup.workshop as { date?: string })?.date,
                 workshopTime: (signup.workshop as { startTime?: string })
                   ?.startTime,
-              }).catch(() => { })
+              }).catch(() => {})
             }
 
             return signup
@@ -673,7 +673,7 @@ export const workshopRouter = router({
           workshopTitle: signup.workshop?.title ?? input.workshop._ref,
           workshopDate: (signup.workshop as { date?: string })?.date,
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
-        }).catch(() => { })
+        }).catch(() => {})
 
         revalidatePath('/workshop')
         revalidatePath('/admin/workshops')
