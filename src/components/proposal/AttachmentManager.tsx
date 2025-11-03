@@ -157,8 +157,21 @@ export function AttachmentManager({
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || 'Upload failed')
+        let errorMessage = 'Upload failed'
+        try {
+          const contentType = response.headers.get('content-type')
+          if (contentType && contentType.includes('application/json')) {
+            const data = await response.json()
+            errorMessage = data.error || errorMessage
+          } else {
+            const text = await response.text()
+            errorMessage = text || `Upload failed (${response.status})`
+          }
+        } catch (parseError) {
+          console.error('Error parsing response:', parseError)
+          errorMessage = `Upload failed (${response.status})`
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -181,9 +194,20 @@ export function AttachmentManager({
       resetForm()
     } catch (err) {
       console.error('Upload error:', err)
-      setError(
-        err instanceof Error ? err.message : 'Failed to upload attachment',
-      )
+      let errorMsg = 'Failed to upload attachment'
+      if (err instanceof Error) {
+        errorMsg = err.message
+        // Provide more helpful context for common errors
+        if (
+          errorMsg.includes('413') ||
+          errorMsg.toLowerCase().includes('too large') ||
+          errorMsg.toLowerCase().includes('entity too large')
+        ) {
+          errorMsg =
+            'File is too large. The current hosting limit is approximately 4.5MB. Please use a smaller file or compress your slides.'
+        }
+      }
+      setError(errorMsg)
     } finally {
       setIsUploading(false)
       setUploadProgress(0)
@@ -341,20 +365,18 @@ export function AttachmentManager({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`rounded-lg border-2 border-dashed transition-colors ${
-            isDragging
+          className={`rounded-lg border-2 border-dashed transition-colors ${isDragging
               ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-900/20'
               : 'border-gray-300 dark:border-gray-600'
-          }`}
+            }`}
         >
           <button
             type="button"
             onClick={() => setIsAdding(true)}
-            className={`flex w-full items-center justify-center p-4 text-sm font-medium transition-colors ${
-              isDragging
+            className={`flex w-full items-center justify-center p-4 text-sm font-medium transition-colors ${isDragging
                 ? 'text-indigo-600 dark:text-indigo-400'
                 : 'text-gray-600 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400'
-            }`}
+              }`}
           >
             <ArrowUpTrayIcon className="mr-2 h-5 w-5" />
             {isDragging ? 'Drop file to upload' : 'Upload Attachment'}
@@ -381,11 +403,10 @@ export function AttachmentManager({
             <button
               type="button"
               onClick={() => setAddType('file')}
-              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                addType === 'file'
+              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${addType === 'file'
                   ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-300'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700'
-              }`}
+                }`}
             >
               <DocumentIcon className="mx-auto mb-1 h-5 w-5" />
               Upload File
@@ -393,11 +414,10 @@ export function AttachmentManager({
             <button
               type="button"
               onClick={() => setAddType('url')}
-              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                addType === 'url'
+              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${addType === 'url'
                   ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-300'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700'
-              }`}
+                }`}
             >
               <LinkIcon className="mx-auto mb-1 h-5 w-5" />
               Add URL
@@ -445,7 +465,8 @@ export function AttachmentManager({
                   className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:text-gray-400 dark:file:bg-indigo-900/30 dark:file:text-indigo-300 dark:hover:file:bg-indigo-900/50"
                 />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Accepted formats: PDF, PPTX, PPT, ODP, KEY (max 50MB)
+                  Accepted formats: PDF, PPTX, PPT, ODP, KEY (max ~4MB due to
+                  hosting limits)
                 </p>
               </div>
 

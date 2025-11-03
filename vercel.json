@@ -4,5 +4,10 @@
       "path": "/api/cron/sales-update",
       "schedule": "0 9 * * 1"
     }
-  ]
+  ],
+  "functions": {
+    "api/upload/proposal-attachment.ts": {
+      "maxDuration": 60
+    }
+  }
 }

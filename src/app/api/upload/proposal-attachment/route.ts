@@ -4,6 +4,10 @@ import { validateAttachmentFile } from '@/lib/attachment/validation'
 import { clientReadUncached as clientRead } from '@/lib/sanity/client'
 import { NextResponse } from 'next/server'
 
+// Configure body size limit - Vercel default is 4.5MB for serverless functions
+// This will apply for all Vercel plans, but the actual limit depends on the plan
+export const maxDuration = 60 // Maximum allowed for Pro plan
+
 export const POST = auth(async (req: NextAuthRequest) => {
   if (
     !req.auth ||
