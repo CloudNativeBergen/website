@@ -12,19 +12,26 @@ import {
 import { TravelSupportService } from '@/lib/travel-support/service'
 import { ExpenseSummary } from './ExpenseSummary'
 import { ErrorBoundary } from './ErrorBoundary'
-import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
+import { CurrencyDollarIcon, PaperClipIcon } from '@heroicons/react/24/outline'
 import { SkeletonCard } from '@/components/admin/LoadingSkeleton'
+import { useExchangeRates } from '@/hooks/useExchangeRates'
+import { ReceiptViewer } from './ReceiptViewer'
 
 export function TravelSupportAdminPage() {
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null)
   const { data: session } = useSession()
 
   const {
-    data: requests,
+    data: allRequests,
     isLoading,
     error,
     refetch,
   } = api.travelSupport.list.useQuery({})
+
+  // Filter out draft requests - only show submitted, approved, rejected, or paid
+  const requests = allRequests?.filter(
+    (r) => r.status !== TravelSupportStatus.DRAFT,
+  )
 
   const { data: selectedRequestDetails, isLoading: isLoadingDetails } =
     api.travelSupport.getById.useQuery(
@@ -52,6 +59,7 @@ export function TravelSupportAdminPage() {
     status: TravelSupportStatus,
     approvedAmount?: number,
     reviewNotes?: string,
+    expectedPaymentDate?: string,
   ) => {
     try {
       await updateStatusMutation.mutateAsync({
@@ -59,6 +67,7 @@ export function TravelSupportAdminPage() {
         status,
         approvedAmount,
         reviewNotes,
+        expectedPaymentDate,
       })
     } catch (error) {
       console.error('Failed to update status:', error)
@@ -136,6 +145,8 @@ export function TravelSupportAdminPage() {
         )}
       </div>
 
+      <SpeakersRequiringSupport />
+
       <ErrorBoundary>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="rounded-lg bg-white shadow ring-1 ring-brand-frosted-steel/20 dark:bg-gray-800 dark:ring-gray-700">
@@ -208,7 +219,13 @@ export function TravelSupportAdminPage() {
   )
 }
 
-function SummaryStats({ requests }: { requests: TravelSupportWithSpeaker[] }) {
+function SummaryStats({
+  requests,
+}: {
+  requests: (TravelSupportWithSpeaker & { expenses?: TravelExpense[] })[]
+}) {
+  const { convertCurrency, isLoading } = useExchangeRates()
+
   const stats = {
     total: requests.length,
     pending: requests.filter((r) => r.status === TravelSupportStatus.SUBMITTED)
@@ -218,17 +235,81 @@ function SummaryStats({ requests }: { requests: TravelSupportWithSpeaker[] }) {
     paid: requests.filter((r) => r.status === TravelSupportStatus.PAID).length,
   }
 
-  const totalRequested = requests.reduce(
-    (sum, r) => sum + (r.totalAmount || 0),
-    0,
-  )
+  // Calculate total requested by summing all expenses and converting to NOK
+  const totalRequested = requests.reduce((sum, r) => {
+    if (!r.expenses || r.expenses.length === 0) return sum
+    // Sum all expenses (pending and approved) in their original currencies, then convert to NOK
+    const requestTotal = r.expenses.reduce((expenseSum, expense) => {
+      const amountInNOK = convertCurrency(
+        expense.amount,
+        expense.currency,
+        'NOK',
+      )
+      return expenseSum + amountInNOK
+    }, 0)
+    return sum + requestTotal
+  }, 0)
+
+  // Calculate total approved by summing only approved expenses and converting to NOK
   const totalApproved = requests
     .filter(
       (r) =>
         r.status === TravelSupportStatus.APPROVED ||
         r.status === TravelSupportStatus.PAID,
     )
-    .reduce((sum, r) => sum + (r.approvedAmount || r.totalAmount || 0), 0)
+    .reduce((sum, r) => {
+      if (r.approvedAmount) {
+        // If there's an explicitly approved amount, use that
+        const amountInNOK = r.bankingDetails?.preferredCurrency
+          ? convertCurrency(
+              r.approvedAmount,
+              r.bankingDetails.preferredCurrency,
+              'NOK',
+            )
+          : r.approvedAmount
+        return sum + amountInNOK
+      } else if (r.expenses && r.expenses.length > 0) {
+        // Otherwise sum approved expenses
+        const approvedExpensesTotal = r.expenses
+          .filter((e) => e.status === ExpenseStatus.APPROVED)
+          .reduce((expenseSum, expense) => {
+            const amountInNOK = convertCurrency(
+              expense.amount,
+              expense.currency,
+              'NOK',
+            )
+            return expenseSum + amountInNOK
+          }, 0)
+        return sum + approvedExpensesTotal
+      }
+      return sum
+    }, 0)
+
+  const formatNOK = (amount: number) => {
+    return new Intl.NumberFormat('nb-NO', {
+      style: 'currency',
+      currency: 'NOK',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+        <StatCard label="Total Requests" value={stats.total} />
+        <StatCard label="Pending Review" value={stats.pending} color="yellow" />
+        <StatCard label="Approved" value={stats.approved} color="green" />
+        <StatCard label="Paid" value={stats.paid} color="purple" />
+        <div className="rounded-lg p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:ring-gray-700">
+          <div className="h-6 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+        </div>
+        <div className="rounded-lg p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:ring-gray-700">
+          <div className="h-6 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
@@ -238,13 +319,13 @@ function SummaryStats({ requests }: { requests: TravelSupportWithSpeaker[] }) {
       <StatCard label="Paid" value={stats.paid} color="purple" />
       <StatCard
         label="Total Requested"
-        value={`$${totalRequested.toLocaleString()}`}
+        value={formatNOK(totalRequested)}
         color="blue"
         isAmount={true}
       />
       <StatCard
         label="Total Approved"
-        value={`$${totalApproved.toLocaleString()}`}
+        value={formatNOK(totalApproved)}
         color="green"
         isAmount={true}
       />
@@ -294,10 +375,20 @@ function RequestCard({
   isSelected,
   onSelect,
 }: {
-  request: TravelSupportWithSpeaker
+  request: TravelSupportWithSpeaker & { expenses?: TravelExpense[] }
   isSelected: boolean
   onSelect: () => void
 }) {
+  const { convertCurrency } = useExchangeRates()
+
+  // Calculate total from expenses if available
+  const totalInNOK =
+    request.expenses && request.expenses.length > 0
+      ? request.expenses.reduce((sum, expense) => {
+          return sum + convertCurrency(expense.amount, expense.currency, 'NOK')
+        }, 0)
+      : request.totalAmount || 0
+
   return (
     <div
       className={`cursor-pointer p-4 transition-colors ${
@@ -321,9 +412,14 @@ function RequestCard({
         </div>
         <div className="text-right">
           <StatusBadge status={request.status} />
-          {request.totalAmount !== undefined && request.totalAmount > 0 && (
+          {totalInNOK > 0 && (
             <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">
-              ${request.totalAmount.toLocaleString()}
+              {new Intl.NumberFormat('nb-NO', {
+                style: 'currency',
+                currency: 'NOK',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              }).format(totalInNOK)}
             </p>
           )}
         </div>
@@ -346,6 +442,7 @@ function RequestDetails({
     status: TravelSupportStatus,
     amount?: number,
     notes?: string,
+    expectedPaymentDate?: string,
   ) => void
   onUpdateExpenseStatus: (
     id: string,
@@ -358,6 +455,31 @@ function RequestDetails({
   const [approvedAmount, setApprovedAmount] = useState<number>(
     request.totalAmount || 0,
   )
+  const [expectedPaymentDate, setExpectedPaymentDate] = useState<string>('')
+  const [viewingReceipt, setViewingReceipt] = useState<{
+    expense: TravelExpense
+    index: number
+  } | null>(null)
+  const { convertCurrency } = useExchangeRates()
+
+  // Calculate total reimbursable (approved + pending expenses) in NOK
+  const totalReimbursableNOK =
+    request.expenses && request.expenses.length > 0
+      ? request.expenses
+          .filter(
+            (e) =>
+              e.status === ExpenseStatus.APPROVED ||
+              e.status === ExpenseStatus.PENDING,
+          )
+          .reduce((sum, expense) => {
+            const amountInNOK = convertCurrency(
+              expense.amount,
+              expense.currency,
+              'NOK',
+            )
+            return sum + amountInNOK
+          }, 0)
+      : 0
 
   const canApprove =
     request.status === TravelSupportStatus.SUBMITTED &&
@@ -445,6 +567,30 @@ function RequestDetails({
                   </div>
                 </div>
 
+                {expense.receipts && expense.receipts.length > 0 && (
+                  <div className="mt-3 border-t border-gray-200 pt-3 dark:border-gray-600">
+                    <p className="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+                      Receipts:
+                    </p>
+                    <div className="space-y-1">
+                      {expense.receipts.map((receipt, receiptIndex) => (
+                        <button
+                          key={receiptIndex}
+                          onClick={() =>
+                            setViewingReceipt({ expense, index: receiptIndex })
+                          }
+                          className="flex w-full cursor-pointer items-center gap-2 rounded bg-white px-2 py-1.5 text-left text-sm transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:bg-gray-800 dark:hover:bg-gray-600 dark:hover:text-indigo-300"
+                        >
+                          <PaperClipIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
+                          <span className="flex-1 text-gray-700 dark:text-gray-300">
+                            {receipt.filename || `Receipt ${receiptIndex + 1}`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {canApprove && expense.status === ExpenseStatus.PENDING && (
                   <div className="mt-3 flex gap-2">
                     <button
@@ -455,7 +601,7 @@ function RequestDetails({
                         )
                       }
                       disabled={isUpdating}
-                      className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700 disabled:opacity-50 dark:bg-green-700 dark:hover:bg-green-600"
+                      className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-700 disabled:opacity-50 dark:bg-green-800 dark:hover:bg-green-700"
                     >
                       Approve
                     </button>
@@ -467,7 +613,7 @@ function RequestDetails({
                         )
                       }
                       disabled={isUpdating}
-                      className="rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700 disabled:opacity-50 dark:bg-red-700 dark:hover:bg-red-600"
+                      className="rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700 disabled:opacity-50 dark:bg-red-800 dark:hover:bg-red-700"
                     >
                       Reject
                     </button>
@@ -498,17 +644,52 @@ function RequestDetails({
 
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Approved Amount ($)
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Approved Amount (NOK)
+                </label>
+                {totalReimbursableNOK > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setApprovedAmount(Math.round(totalReimbursableNOK))
+                    }
+                    className="text-xs text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                  >
+                    Use Total Reimbursable (
+                    {new Intl.NumberFormat('nb-NO', {
+                      style: 'currency',
+                      currency: 'NOK',
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(totalReimbursableNOK)}
+                    )
+                  </button>
+                )}
+              </div>
               <input
                 type="number"
                 value={approvedAmount}
                 onChange={(e) =>
                   setApprovedAmount(parseFloat(e.target.value) || 0)
                 }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Expected Payment Date
+              </label>
+              <input
+                type="date"
+                value={expectedPaymentDate}
+                onChange={(e) => setExpectedPaymentDate(e.target.value)}
+                className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                When the payment will be made to the speaker&apos;s account
+              </p>
             </div>
 
             <div>
@@ -519,9 +700,12 @@ function RequestDetails({
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
                 rows={3}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-blue-400 dark:focus:ring-blue-400"
+                className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-500 dark:focus:border-blue-400 dark:focus:ring-blue-400"
                 placeholder="Optional notes for the speaker..."
               />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                These notes will be visible to the speaker
+              </p>
             </div>
 
             <div className="flex gap-3">
@@ -532,10 +716,11 @@ function RequestDetails({
                     TravelSupportStatus.APPROVED,
                     approvedAmount,
                     reviewNotes,
+                    expectedPaymentDate || undefined,
                   )
                 }
                 disabled={isUpdating}
-                className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50 dark:bg-green-700 dark:hover:bg-green-600"
+                className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50 dark:bg-green-800 dark:hover:bg-green-700"
               >
                 {isUpdating ? 'Updating...' : 'Approve'}
               </button>
@@ -549,7 +734,7 @@ function RequestDetails({
                   )
                 }
                 disabled={isUpdating}
-                className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50 dark:bg-red-700 dark:hover:bg-red-600"
+                className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:opacity-50 dark:bg-red-800 dark:hover:bg-red-700"
               >
                 {isUpdating ? 'Updating...' : 'Reject'}
               </button>
@@ -584,6 +769,124 @@ function RequestDetails({
           </p>
         </div>
       )}
+
+      {viewingReceipt && (
+        <ReceiptViewer
+          receipt={viewingReceipt.expense.receipts[viewingReceipt.index]}
+          receiptIndex={viewingReceipt.index}
+          onClose={() => setViewingReceipt(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function SpeakersRequiringSupport() {
+  const {
+    data: speakers,
+    isLoading,
+    error,
+  } = api.travelSupport.getSpeakersRequiringSupport.useQuery()
+
+  if (isLoading) {
+    return (
+      <div className="mb-6 rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+        <div className="text-sm text-blue-800 dark:text-blue-200">
+          Loading speakers requiring travel support...
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="mb-6 rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
+        <div className="text-sm text-red-800 dark:text-red-200">
+          Failed to load speakers requiring travel support: {error.message}
+        </div>
+      </div>
+    )
+  }
+
+  if (!speakers || speakers.length === 0) {
+    return (
+      <div className="mb-6 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+        <div className="text-sm text-green-800 dark:text-green-200">
+          No speakers with confirmed talks require travel funding, or all have
+          submitted their requests.
+        </div>
+      </div>
+    )
+  }
+
+  const pendingSpeakers = speakers.filter((s) => !s.hasSubmitted)
+  const submittedCount = speakers.filter((s) => s.hasSubmitted).length
+
+  if (pendingSpeakers.length === 0) {
+    return (
+      <div className="mb-6 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+        <div className="text-sm text-green-800 dark:text-green-200">
+          ✓ All {speakers.length} speaker{speakers.length !== 1 ? 's' : ''} with
+          confirmed talks requiring travel funding have submitted their requests
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-6 rounded-lg border-2 border-yellow-200 bg-yellow-50 p-6 dark:border-yellow-800 dark:bg-yellow-900/20">
+      <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-yellow-900 dark:text-yellow-200">
+        <svg
+          className="h-5 w-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+          />
+        </svg>
+        Speakers Awaiting Travel Support Submission ({submittedCount}/
+        {speakers.length} submitted)
+      </h3>
+      <p className="mb-4 text-sm text-yellow-800 dark:text-yellow-300">
+        The following speakers have confirmed talks and require travel funding,
+        but have not yet submitted their travel support request:
+      </p>
+      <div className="space-y-2">
+        {pendingSpeakers.map((speaker) => (
+          <div
+            key={speaker._id}
+            className="rounded-lg border border-yellow-300 bg-white p-3 dark:border-yellow-700 dark:bg-gray-800"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <h4 className="font-medium text-gray-900 dark:text-white">
+                  {speaker.name}
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {speaker.email}
+                </p>
+                <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                  {speaker.confirmedTalks.length} confirmed talk
+                  {speaker.confirmedTalks.length !== 1 ? 's' : ''}
+                  {speaker.confirmedTalks.length > 0 && (
+                    <>
+                      :{' '}
+                      {speaker.confirmedTalks
+                        .map((talk) => talk.title)
+                        .join(', ')}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

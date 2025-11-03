@@ -8,6 +8,7 @@ import { CompactConferenceHeader } from './CompactConferenceHeader'
 import { CompactProposalList } from './CompactProposalList'
 import { CompactPhotoStrip } from './CompactPhotoStrip'
 import { CompactWorkshopStats } from './CompactWorkshopStats'
+import { CompactTravelSupport } from './CompactTravelSupport'
 
 interface CompactConferenceCardProps {
   data: ConferenceWithSpeakerData
@@ -20,10 +21,13 @@ export function CompactConferenceCard({
   defaultExpanded = false,
 }: CompactConferenceCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
-  const { proposals, galleryImages, workshopStats } = data
+  const { proposals, galleryImages, workshopStats, travelSupport } = data
 
   const hasContent =
-    proposals.length > 0 || galleryImages.length > 0 || workshopStats.length > 0
+    proposals.length > 0 ||
+    galleryImages.length > 0 ||
+    workshopStats.length > 0 ||
+    travelSupport !== null
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
@@ -34,7 +38,7 @@ export function CompactConferenceCard({
       >
         <div className="flex items-center gap-3 px-4 py-3">
           {hasContent && (
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               {isExpanded ? (
                 <ChevronDownIcon className="h-5 w-5 text-gray-400" />
               ) : (
@@ -58,6 +62,10 @@ export function CompactConferenceCard({
 
           {workshopStats.length > 0 && (
             <CompactWorkshopStats stats={workshopStats} />
+          )}
+
+          {travelSupport && (
+            <CompactTravelSupport travelSupport={travelSupport} />
           )}
 
           {galleryImages.length > 0 && (

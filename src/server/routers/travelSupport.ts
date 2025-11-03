@@ -27,6 +27,7 @@ import {
   updateExpenseStatus,
   deleteTravelExpense,
   deleteReceipt,
+  getSpeakersRequiringTravelSupport,
 } from '@/lib/travel-support/sanity'
 
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -386,6 +387,7 @@ export const travelSupportRouter = router({
           ctx.speaker._id,
           input.approvedAmount,
           input.reviewNotes,
+          input.expectedPaymentDate,
         )
 
         if (!success || error) {
@@ -724,4 +726,40 @@ export const travelSupportRouter = router({
         })
       }
     }),
+
+  getSpeakersRequiringSupport: adminProcedure.query(async () => {
+    try {
+      const { conference, error: confError } =
+        await getConferenceForCurrentDomain()
+      if (confError || !conference) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to get current conference',
+          cause: confError,
+        })
+      }
+
+      const { speakers, error } = await getSpeakersRequiringTravelSupport(
+        conference._id,
+      )
+
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch speakers requiring travel support',
+          cause: error,
+        })
+      }
+
+      return speakers
+    } catch (error) {
+      if (error instanceof TRPCError) throw error
+
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Unexpected error fetching speakers requiring travel support',
+        cause: error,
+      })
+    }
+  }),
 })

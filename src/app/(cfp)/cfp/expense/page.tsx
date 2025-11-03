@@ -1,15 +1,18 @@
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { TravelSupportPage } from '@/components/travel-support/TravelSupportPage'
+import { headers } from 'next/headers'
+import { TravelSupportPageClient } from '@/components/travel-support/TravelSupportPageClient'
 import { Flags } from '@/lib/speaker/types'
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 import { AppEnvironment } from '@/lib/environment/config'
+import { getTravelSupport } from '@/lib/travel-support/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 function NotEligibleDisplay() {
   return (
     <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-800/50 dark:bg-blue-900/20">
       <div className="flex">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <ExclamationTriangleIcon
             className="h-6 w-6 text-blue-500 dark:text-blue-400"
             aria-hidden="true"
@@ -36,7 +39,10 @@ function NotEligibleDisplay() {
 }
 
 export default async function TravelExpensePage() {
-  const session = await getAuthSession()
+  const headersList = await headers()
+  const fullUrl = headersList.get('x-url') || ''
+  const session = await getAuthSession({ url: fullUrl })
+
   if (!session?.speaker) {
     return redirect('/api/auth/signin?callbackUrl=/cfp/expense')
   }
@@ -46,35 +52,24 @@ export default async function TravelExpensePage() {
     session.speaker.flags?.includes(Flags.requiresTravelFunding)
 
   if (!isEligibleForTravelSupport) {
-    return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-            Travel Support
-          </h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            We&apos;re here to help make your conference journey possible
-          </p>
-        </div>
-
-        <NotEligibleDisplay />
-      </div>
-    )
+    return <NotEligibleDisplay />
   }
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <div className="mb-6">
-        <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-          Travel Support
-        </h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Submit your travel expenses and banking details so we can support your
-          attendance
-        </p>
-      </div>
+  // Fetch travel support data server-side
+  const { conference } = await getConferenceForCurrentDomain()
+  if (!conference) {
+    throw new Error('Conference not found')
+  }
 
-      <TravelSupportPage />
-    </div>
+  const { travelSupport } = await getTravelSupport(
+    session.speaker._id,
+    conference._id,
+  )
+
+  return (
+    <TravelSupportPageClient
+      initialTravelSupport={travelSupport}
+      speakerId={session.speaker._id}
+    />
   )
 }

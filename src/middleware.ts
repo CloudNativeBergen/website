@@ -28,6 +28,17 @@ const nextAuthMiddleware = auth((req) => {
     ) {
       return new NextResponse('Not Found', { status: 404 })
     }
+
+    // SECURITY: Block impersonation in production by rejecting any URL with impersonate parameter
+    if (req.nextUrl.searchParams.has('impersonate')) {
+      console.error(
+        `[SECURITY] Impersonation attempt blocked in production: ${pathname}?${req.nextUrl.searchParams.toString()}`,
+      )
+      // Remove the impersonate parameter and redirect
+      const url = req.nextUrl.clone()
+      url.searchParams.delete('impersonate')
+      return NextResponse.redirect(url)
+    }
   }
 
   const isTestModeActive =

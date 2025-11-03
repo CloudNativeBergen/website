@@ -150,6 +150,23 @@ export default defineType({
       hidden: ({ document }) =>
         ['draft', 'submitted'].includes(document?.status as string),
     }),
+    defineField({
+      name: 'expectedPaymentDate',
+      title: 'Expected Payment Date',
+      type: 'date',
+      description:
+        'Expected date when the payment will be made (set when approving)',
+      hidden: ({ document }) =>
+        !['approved', 'paid'].includes(document?.status as string),
+    }),
+    defineField({
+      name: 'paidAt',
+      title: 'Paid At',
+      type: 'datetime',
+      description: 'When the payment was actually made',
+      readOnly: true,
+      hidden: ({ document }) => document?.status !== 'paid',
+    }),
   ],
   preview: {
     select: {

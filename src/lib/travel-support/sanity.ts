@@ -26,7 +26,13 @@ export async function getTravelSupport(
       await clientRead.fetch<TravelSupportWithExpenses | null>(
         `*[_type == "travelSupport" && speaker._ref == $speakerId && conference._ref == $conferenceId][0] {
         ...,
-        "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] | order(_createdAt desc)
+        "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] | order(_createdAt desc) {
+          ...,
+          receipts[] {
+            ...,
+            "url": file.asset->url
+          }
+        }
       }`,
         { speakerId, conferenceId },
       )
@@ -62,7 +68,13 @@ export async function getTravelSupportById(id: string): Promise<{
           _id,
           name
         },
-        "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] | order(_createdAt desc)
+        "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] | order(_createdAt desc) {
+          ...,
+          receipts[] {
+            ...,
+            "url": file.asset->url
+          }
+        }
       }`,
       { id },
     )
@@ -74,7 +86,7 @@ export async function getTravelSupportById(id: string): Promise<{
 }
 
 export async function getAllTravelSupport(conferenceId?: string): Promise<{
-  travelSupports: TravelSupportWithSpeaker[]
+  travelSupports: (TravelSupportWithSpeaker & { expenses?: TravelExpense[] })[]
   error: Error | null
 }> {
   try {
@@ -82,7 +94,9 @@ export async function getAllTravelSupport(conferenceId?: string): Promise<{
       ? `*[_type == "travelSupport" && conference._ref == $conferenceId] | order(_createdAt desc)`
       : `*[_type == "travelSupport"] | order(_createdAt desc)`
 
-    const travelSupports = await clientRead.fetch<TravelSupportWithSpeaker[]>(
+    const travelSupports = await clientRead.fetch<
+      (TravelSupportWithSpeaker & { expenses?: TravelExpense[] })[]
+    >(
       `${query} {
         ...,
         speaker-> {
@@ -93,6 +107,13 @@ export async function getAllTravelSupport(conferenceId?: string): Promise<{
         conference-> {
           _id,
           name
+        },
+        "expenses": *[_type == "travelExpense" && travelSupport._ref == ^._id] {
+          ...,
+          receipts[] {
+            ...,
+            "url": file.asset->url
+          }
         }
       }`,
       conferenceId ? { conferenceId } : {},
@@ -101,6 +122,76 @@ export async function getAllTravelSupport(conferenceId?: string): Promise<{
     return { travelSupports, error: null }
   } catch (error) {
     return { travelSupports: [], error: error as Error }
+  }
+}
+
+export async function getSpeakersRequiringTravelSupport(
+  conferenceId: string,
+): Promise<{
+  speakers: Array<{
+    _id: string
+    name: string
+    email: string
+    hasSubmitted: boolean
+    confirmedTalks: Array<{ _id: string; title: string }>
+  }>
+  error: Error | null
+}> {
+  try {
+    // Get all speakers with confirmed talks who require travel funding
+    const allSpeakers = await clientRead.fetch<
+      Array<{
+        _id: string
+        name: string
+        email: string
+        confirmedTalks: Array<{ _id: string; title: string }>
+      }>
+    >(
+      `*[_type == "speaker" && "requires-funding" in flags] {
+        _id,
+        name,
+        email,
+        "confirmedTalks": *[
+          _type == "talk"
+          && status == "confirmed"
+          && conference._ref == $conferenceId
+          && references(^._id)
+        ] {
+          _id,
+          title
+        }
+      }`,
+      { conferenceId },
+    )
+
+    // Filter to only speakers with confirmed talks
+    const speakersWithConfirmedTalks = allSpeakers.filter(
+      (s) => s.confirmedTalks && s.confirmedTalks.length > 0,
+    )
+
+    // Get all travel support submissions for this conference (excluding drafts)
+    const existingSubmissions = await clientRead.fetch<
+      Array<{ speakerId: string }>
+    >(
+      `*[_type == "travelSupport" && conference._ref == $conferenceId && status != "draft"] {
+        "speakerId": speaker._ref
+      }`,
+      { conferenceId },
+    )
+
+    const submittedSpeakerIds = new Set(
+      existingSubmissions.map((s) => s.speakerId),
+    )
+
+    // Mark which speakers have submitted
+    const speakers = speakersWithConfirmedTalks.map((speaker) => ({
+      ...speaker,
+      hasSubmitted: submittedSpeakerIds.has(speaker._id),
+    }))
+
+    return { speakers, error: null }
+  } catch (error) {
+    return { speakers: [], error: error as Error }
   }
 }
 
@@ -158,6 +249,7 @@ export async function updateTravelSupportStatus(
   reviewedBy: string,
   approvedAmount?: number,
   reviewNotes?: string,
+  expectedPaymentDate?: string,
 ): Promise<{ success: boolean; error: Error | null }> {
   try {
     const updateData: {
@@ -166,6 +258,8 @@ export async function updateTravelSupportStatus(
       reviewedBy: { _type: 'reference'; _ref: string }
       approvedAmount?: number
       reviewNotes?: string
+      expectedPaymentDate?: string
+      paidAt?: string
     } = {
       status,
       reviewedAt: new Date().toISOString(),
@@ -181,6 +275,14 @@ export async function updateTravelSupportStatus(
 
     if (reviewNotes) {
       updateData.reviewNotes = reviewNotes
+    }
+
+    if (expectedPaymentDate) {
+      updateData.expectedPaymentDate = expectedPaymentDate
+    }
+
+    if (status === TravelSupportStatus.PAID) {
+      updateData.paidAt = new Date().toISOString()
     }
 
     await clientWrite.patch(travelSupportId).set(updateData).commit()
@@ -319,21 +421,20 @@ export async function uploadReceiptFile(file: File): Promise<{
 async function updateTravelSupportTotal(
   travelSupportId: string,
 ): Promise<void> {
-  const expenses = await clientRead.fetch<{ amount: number; status: string }[]>(
-    `*[_type == "travelExpense" && travelSupport._ref == $travelSupportId] { amount, status }`,
+  const expenses = await clientRead.fetch<
+    { amount: number; status: string; currency: string }[]
+  >(
+    `*[_type == "travelExpense" && travelSupport._ref == $travelSupportId] { amount, status, currency }`,
     { travelSupportId },
   )
 
-  const totalAmount = expenses
-    .filter(
-      (expense: { amount: number; status: string }) =>
-        expense.status === ExpenseStatus.APPROVED,
-    )
-    .reduce(
-      (sum: number, expense: { amount: number; status: string }) =>
-        sum + expense.amount,
-      0,
-    )
+  // Sum all expenses (not just approved) to show total requested
+  // Note: This doesn't convert currencies - that's handled in the frontend
+  const totalAmount = expenses.reduce(
+    (sum: number, expense: { amount: number; status: string }) =>
+      sum + expense.amount,
+    0,
+  )
 
   await clientWrite.patch(travelSupportId).set({ totalAmount }).commit()
 }

@@ -3,6 +3,7 @@ import { Flags } from '../speaker/types'
 
 export class AppEnvironment {
   static readonly isDevelopment = process.env.NODE_ENV === 'development'
+  static readonly isProduction = process.env.NODE_ENV === 'production'
 
   static readonly isTestMode =
     AppEnvironment.isDevelopment &&

@@ -130,42 +130,42 @@ export function ExpenseSummary({
         Expense Summary
       </h3>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {formatCurrency(summary.approved.total)}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
             Approved ({summary.approved.count})
           </div>
+          <div className="text-base font-bold text-green-600 dark:text-green-400">
+            {formatCurrency(summary.approved.total).replace(/\s/g, '\u00A0')}
+          </div>
         </div>
 
-        <div className="text-center">
-          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-            {formatCurrency(summary.pending.total)}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
             Pending ({summary.pending.count})
           </div>
+          <div className="text-base font-bold text-yellow-600 dark:text-yellow-400">
+            {formatCurrency(summary.pending.total).replace(/\s/g, '\u00A0')}
+          </div>
         </div>
 
-        <div className="text-center">
-          <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-            {formatCurrency(summary.rejected.total)}
-          </div>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-gray-500 dark:text-gray-400">
             Rejected ({summary.rejected.count})
+          </div>
+          <div className="text-base font-bold text-red-600 dark:text-red-400">
+            {formatCurrency(summary.rejected.total).replace(/\s/g, '\u00A0')}
           </div>
         </div>
       </div>
 
-      <div className="border-t border-gray-200 pt-4 dark:border-gray-600">
-        <div className="flex items-center justify-between">
-          <span className="text-lg font-semibold text-gray-900 dark:text-white">
-            Total Reimbursable:
+      <div className="mt-4 border-t border-gray-200 pt-3 dark:border-gray-600">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+            Total:
           </span>
-          <span className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-            {formatCurrency(summary.grandTotal)}
+          <span className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+            {formatCurrency(summary.grandTotal).replace(/\s/g, '\u00A0')}
           </span>
         </div>
         {preferredCurrency !== 'OTHER' && (

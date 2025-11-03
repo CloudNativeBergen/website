@@ -19,7 +19,7 @@ export async function SpeakerShareSidebar({
   const qrCodeUrl = await generateQRCode(speakerUrl, 512)
 
   return (
-    <div className="sticky top-4 space-y-4">
+    <div className="space-y-4 lg:sticky lg:top-4">
       <SpeakerShareWrapper
         speakerUrl={fullSpeakerUrl}
         talkTitle={talkTitle}

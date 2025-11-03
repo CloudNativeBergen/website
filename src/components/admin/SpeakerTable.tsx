@@ -441,19 +441,19 @@ export function SpeakerTable({
 
       <div className="overflow-x-auto">
         <div className="overflow-hidden shadow-sm ring-1 ring-gray-200 md:rounded-lg dark:ring-gray-700">
-          <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+          <table className="w-full table-fixed divide-y divide-gray-300 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
                 <th
                   scope="col"
-                  className="min-w-0 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+                  className="w-44 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
                 >
                   Speaker
                 </th>
                 {columnVisibility.indicators && (
                   <th
                     scope="col"
-                    className="hidden px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase sm:table-cell dark:text-gray-400"
+                    className="hidden w-24 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase sm:table-cell dark:text-gray-400"
                   >
                     Indicators
                   </th>
@@ -461,7 +461,7 @@ export function SpeakerTable({
                 {columnVisibility.email && (
                   <th
                     scope="col"
-                    className="min-w-0 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+                    className="w-48 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
                   >
                     Email
                   </th>
@@ -469,7 +469,7 @@ export function SpeakerTable({
                 {columnVisibility.linkedin && (
                   <th
                     scope="col"
-                    className="min-w-0 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+                    className="w-32 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
                   >
                     LinkedIn
                   </th>
@@ -477,20 +477,20 @@ export function SpeakerTable({
                 {columnVisibility.bluesky && (
                   <th
                     scope="col"
-                    className="min-w-0 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+                    className="w-32 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
                   >
                     Bluesky
                   </th>
                 )}
                 <th
                   scope="col"
-                  className="min-w-0 px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+                  className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
                 >
                   Talks
                 </th>
                 <th
                   scope="col"
-                  className="px-4 py-3 text-left text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
+                  className="w-28 px-4 py-3 text-right text-xs font-medium tracking-wide text-gray-500 uppercase dark:text-gray-400"
                 >
                   Actions
                 </th>
@@ -649,8 +649,8 @@ export function SpeakerTable({
                           ))}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                    <td className="w-28 px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={() => onEditSpeaker(speaker)}

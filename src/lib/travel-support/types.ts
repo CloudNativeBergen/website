@@ -52,6 +52,7 @@ export interface ExpenseReceipt {
   }
   filename: string
   uploadedAt: string
+  url?: string
 }
 
 export interface TravelExpenseInput {
@@ -105,6 +106,8 @@ export interface TravelSupport extends TravelSupportInput {
     _type: 'reference'
   }
   reviewNotes?: string
+  expectedPaymentDate?: string
+  paidAt?: string
 }
 
 export interface TravelSupportWithExpenses extends TravelSupport {

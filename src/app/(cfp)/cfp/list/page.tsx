@@ -4,6 +4,7 @@ import { headers } from 'next/headers'
 import { getProposals } from '@/lib/proposal/data/sanity'
 import { getGalleryImages } from '@/lib/gallery/sanity'
 import { getWorkshopSignupStatisticsBySpeaker } from '@/lib/workshop/sanity'
+import { getTravelSupport } from '@/lib/travel-support/sanity'
 import { clientReadCached } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
@@ -64,23 +65,25 @@ export default async function SpeakerDashboard() {
   // Fetch data for each conference in parallel
   const conferenceDataPromises = conferences.map(async (conference) => {
     try {
-      const [{ proposals }, galleryImages, workshopStats] = await Promise.all([
-        getProposals({
-          speakerId,
-          conferenceId: conference._id,
-          returnAll: false,
-        }),
-        getGalleryImages(
-          {
+      const [{ proposals }, galleryImages, workshopStats, { travelSupport }] =
+        await Promise.all([
+          getProposals({
             speakerId,
             conferenceId: conference._id,
-          },
-          { useCache: true, revalidate: 300 },
-        ),
-        getWorkshopSignupStatisticsBySpeaker(speakerId, conference._id).catch(
-          () => [],
-        ),
-      ])
+            returnAll: false,
+          }),
+          getGalleryImages(
+            {
+              speakerId,
+              conferenceId: conference._id,
+            },
+            { useCache: true, revalidate: 300 },
+          ),
+          getWorkshopSignupStatisticsBySpeaker(speakerId, conference._id).catch(
+            () => [],
+          ),
+          getTravelSupport(speakerId, conference._id),
+        ])
 
       const isOver = isConferenceOver(conference)
       const canEditProposals = !isOver
@@ -90,6 +93,7 @@ export default async function SpeakerDashboard() {
         proposals: proposals || [],
         galleryImages,
         workshopStats,
+        travelSupport,
         isOver,
         canEditProposals,
       } as ConferenceWithSpeakerData
@@ -103,6 +107,7 @@ export default async function SpeakerDashboard() {
         proposals: [],
         galleryImages: [],
         workshopStats: [],
+        travelSupport: null,
         isOver: isConferenceOver(conference),
         canEditProposals: !isConferenceOver(conference),
       } as ConferenceWithSpeakerData
@@ -116,7 +121,8 @@ export default async function SpeakerDashboard() {
     (c) =>
       c.proposals.length > 0 ||
       c.galleryImages.length > 0 ||
-      c.workshopStats.length > 0,
+      c.workshopStats.length > 0 ||
+      c.travelSupport !== null,
   )
 
   // Get confirmed talks for speaker share
@@ -183,8 +189,8 @@ export default async function SpeakerDashboard() {
         </p>
       </div>
 
-      <div className="flex gap-6">
-        {/* Main Content - 2/3 width */}
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Main Content */}
         <div className="flex-1 space-y-3">
           {activeConferences.map((conferenceData) => (
             <CompactConferenceCard
@@ -196,8 +202,8 @@ export default async function SpeakerDashboard() {
           ))}
         </div>
 
-        {/* Sidebar - Fixed 320px width */}
-        <div className="hidden w-80 flex-shrink-0 lg:block">
+        {/* Sidebar */}
+        <div className="w-full shrink-0 lg:w-80">
           <SpeakerShareSidebar
             speaker={speakerWithTalks}
             talkTitle={talkTitle}

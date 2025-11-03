@@ -14,6 +14,7 @@ import {
   NavigationItem,
 } from '@/components/common/DashboardLayout'
 import { Flags } from '@/lib/speaker/types'
+import { useImpersonateQueryString } from '@/lib/impersonation'
 
 interface CFPLayoutProps {
   children: React.ReactNode
@@ -21,15 +22,28 @@ interface CFPLayoutProps {
 
 export function CFPLayout({ children }: CFPLayoutProps) {
   const { data: session } = useSession()
+  const impersonateQuery = useImpersonateQueryString()
 
   const isEligibleForTravelSupport =
     session?.speaker?.flags?.includes(Flags.requiresTravelFunding) ||
     (AppEnvironment.isTestMode && session?.speaker)
 
   const baseNavigation: NavigationItem[] = [
-    { name: 'Profile', href: '/cfp/profile', icon: UserIcon },
-    { name: 'Submit Talk', href: '/cfp/proposal', icon: PlusIcon },
-    { name: 'My Proposals', href: '/cfp/list', icon: ListBulletIcon },
+    {
+      name: 'Profile',
+      href: `/cfp/profile${impersonateQuery}`,
+      icon: UserIcon,
+    },
+    {
+      name: 'Submit Talk',
+      href: `/cfp/proposal${impersonateQuery}`,
+      icon: PlusIcon,
+    },
+    {
+      name: 'My Proposals',
+      href: `/cfp/list${impersonateQuery}`,
+      icon: ListBulletIcon,
+    },
   ]
 
   const navigationWithTravelSupport: NavigationItem[] =
@@ -38,7 +52,7 @@ export function CFPLayout({ children }: CFPLayoutProps) {
           ...baseNavigation,
           {
             name: 'Travel Support',
-            href: '/cfp/expense',
+            href: `/cfp/expense${impersonateQuery}`,
             icon: CreditCardIcon,
           },
         ]
@@ -46,7 +60,11 @@ export function CFPLayout({ children }: CFPLayoutProps) {
 
   const navigation: NavigationItem[] = [
     ...navigationWithTravelSupport,
-    { name: 'Email Settings', href: '/cfp/admin', icon: EnvelopeIcon },
+    {
+      name: 'Email Settings',
+      href: `/cfp/admin${impersonateQuery}`,
+      icon: EnvelopeIcon,
+    },
   ]
 
   return (

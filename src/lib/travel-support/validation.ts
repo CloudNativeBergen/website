@@ -135,6 +135,7 @@ export const UpdateTravelSupportStatusSchema = z.object({
   status: z.nativeEnum(TravelSupportStatus),
   approvedAmount: z.number().min(0).optional(),
   reviewNotes: z.string().optional(),
+  expectedPaymentDate: z.string().optional(),
 })
 
 export const SubmitTravelSupportSchema = z.object({

@@ -10,6 +10,7 @@ import {
 import { TravelExpense, TravelExpenseInput } from '@/lib/travel-support/types'
 import { TravelSupportService } from '@/lib/travel-support/service'
 import { ExpenseForm } from './ExpenseForm'
+import { ReceiptViewer } from './ReceiptViewer'
 
 interface ExpensesListProps {
   expenses: TravelExpense[]
@@ -47,6 +48,8 @@ function ExpenseItem({
   onStartEdit,
   onCancelEdit,
 }: ExpenseItemProps) {
+  const [viewingReceipt, setViewingReceipt] = useState<number | null>(null)
+
   const categoryName = TravelSupportService.getCategoryDisplayName(
     expense.category,
   )
@@ -70,7 +73,7 @@ function ExpenseItem({
 
   if (isEditing) {
     return (
-      <div className="rounded-lg border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/50 to-blue-50/50 p-4 shadow-sm transition-all duration-200 dark:border-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20">
+      <div className="rounded-lg border-2 border-indigo-200 bg-linear-to-r from-indigo-50/50 to-blue-50/50 p-4 shadow-sm transition-all duration-200 dark:border-indigo-700 dark:from-indigo-900/20 dark:to-blue-900/20">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 animate-pulse rounded-full bg-indigo-500"></div>
@@ -108,23 +111,56 @@ function ExpenseItem({
     )
   }
 
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
+      case 'rejected':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
+      case 'pending':
+      default:
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
+    }
+  }
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return 'Approved'
+      case 'rejected':
+        return 'Rejected'
+      case 'pending':
+      default:
+        return 'Pending Review'
+    }
+  }
+
   return (
     <div className="rounded-lg border border-gray-200 p-4 transition-all duration-200 hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800/50 dark:hover:border-gray-600">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h4 className="font-medium text-gray-900 dark:text-white">
-            {expense.description}
-          </h4>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-200">
-              {categoryName}
+          <div className="flex items-center gap-2">
+            <h4 className="font-medium text-gray-900 dark:text-white">
+              {expense.description}
+            </h4>
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeColor(expense.status)}`}
+            >
+              {getStatusText(expense.status)}
             </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <span className="font-medium">{categoryName}</span>
             {expense.location && (
-              <span className="inline-flex items-center gap-1">
-                <MapPinIcon className="h-4 w-4 text-gray-400" />
-                {expense.location}
-              </span>
+              <>
+                <span>•</span>
+                <span className="inline-flex items-center gap-1">
+                  <MapPinIcon className="h-4 w-4 text-gray-400" />
+                  {expense.location}
+                </span>
+              </>
             )}
+            <span>•</span>
             <span className="inline-flex items-center gap-1">
               <CalendarDaysIcon className="h-4 w-4 text-gray-400" />
               {expense.expenseDate}
@@ -133,6 +169,24 @@ function ExpenseItem({
           <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
             {formattedAmount}
           </p>
+          {expense.reviewNotes &&
+            (expense.status === 'approved' ||
+              expense.status === 'rejected') && (
+              <div
+                className={`mt-2 rounded-md p-2 text-sm ${
+                  expense.status === 'approved'
+                    ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                    : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'
+                }`}
+              >
+                <p className="font-medium">
+                  {expense.status === 'approved'
+                    ? 'Approval notes:'
+                    : 'Rejection reason:'}
+                </p>
+                <p className="mt-0.5">{expense.reviewNotes}</p>
+              </div>
+            )}
           {expense.receipts && expense.receipts.length > 0 && (
             <div className="mt-2 flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
               <PaperClipIcon className="h-4 w-4" />
@@ -177,21 +231,24 @@ function ExpenseItem({
             {expense.receipts.map((receipt, receiptIndex) => (
               <div
                 key={receiptIndex}
-                className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 dark:bg-gray-700/50"
+                className="flex items-center justify-between"
               >
-                <div className="flex items-center gap-2">
-                  <PaperClipIcon className="h-4 w-4 text-gray-400" />
+                <button
+                  onClick={() => setViewingReceipt(receiptIndex)}
+                  className="flex flex-1 cursor-pointer items-center gap-2 rounded-md bg-gray-50 px-3 py-2 text-left transition-colors hover:bg-indigo-50 hover:text-indigo-700 dark:bg-gray-700/50 dark:hover:bg-gray-600 dark:hover:text-indigo-300"
+                >
+                  <PaperClipIcon className="h-4 w-4 text-gray-400 dark:text-gray-500" />
                   <span className="text-sm text-gray-700 dark:text-gray-300">
                     {receipt.filename || `Receipt ${receiptIndex + 1}`}
                   </span>
-                </div>
+                </button>
                 {canEdit &&
                   expense.status === 'pending' &&
                   onDeleteReceipt &&
                   expense.receipts.length > 1 && (
                     <button
                       onClick={() => onDeleteReceipt(expense._id, receiptIndex)}
-                      className="inline-flex items-center rounded-md bg-red-100 p-1 text-red-700 hover:bg-red-200 focus:ring-2 focus:ring-red-600 focus:outline-none dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900/75"
+                      className="ml-2 inline-flex items-center rounded-md bg-red-100 p-1 text-red-700 hover:bg-red-200 focus:ring-2 focus:ring-red-600 focus:outline-none dark:bg-red-900/50 dark:text-red-300 dark:hover:bg-red-900/75"
                       title="Delete receipt"
                     >
                       <XMarkIcon className="h-3 w-3" />
@@ -200,6 +257,13 @@ function ExpenseItem({
               </div>
             ))}
           </div>
+          {viewingReceipt !== null && (
+            <ReceiptViewer
+              receipt={expense.receipts[viewingReceipt]}
+              receiptIndex={viewingReceipt}
+              onClose={() => setViewingReceipt(null)}
+            />
+          )}
         </div>
       )}
     </div>

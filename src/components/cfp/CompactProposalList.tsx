@@ -171,13 +171,13 @@ export function CompactProposalList({
           return (
             <div
               key={proposal._id}
-              className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors ${
+              className={`flex flex-col gap-3 rounded-lg border px-3 py-2.5 text-sm transition-colors sm:flex-row sm:items-center sm:justify-between ${
                 isMuted
                   ? 'border-gray-200/50 bg-gray-50/50 opacity-60 hover:opacity-80 dark:border-gray-700/50 dark:bg-gray-800/50'
                   : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
               }`}
             >
-              <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
                 {proposal.speakers && proposal.speakers.length > 0 && (
                   <SpeakerAvatars
                     speakers={proposal.speakers}
@@ -202,7 +202,7 @@ export function CompactProposalList({
                   {proposal.title}
                 </Link>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
                 {showFeedback && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"

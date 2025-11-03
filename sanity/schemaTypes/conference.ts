@@ -126,6 +126,13 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'travel_support_payment_date',
+      title: 'Travel Support Payment Date',
+      type: 'date',
+      description:
+        'Default expected payment date for travel support requests. This can be overridden per request.',
+    }),
+    defineField({
       name: 'registration_link',
       title: 'Registration Link',
       type: 'string',

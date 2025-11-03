@@ -147,14 +147,23 @@ export async function getAuthSession(req?: {
 
   const session = await _auth()
 
+  // SECURITY: Impersonation is ONLY allowed in development mode
+  // Explicitly check for production to prevent any bypass
+  if (process.env.NODE_ENV === 'production') {
+    return session
+  }
+
+  // Double-check we're in development
   if (!AppEnvironment.isDevelopment) {
     return session
   }
 
+  // SECURITY: Only organizers can impersonate
   if (!session?.speaker?.is_organizer) {
     return session
   }
 
+  // No URL provided, no impersonation possible
   if (!req?.url) {
     return session
   }
@@ -180,6 +189,7 @@ export async function getAuthSession(req?: {
       const { speaker: impersonatedSpeaker } = await getSpeaker(impersonateId)
 
       if (impersonatedSpeaker && !impersonatedSpeaker.is_organizer) {
+        // SECURITY: Log impersonation for audit trail
         console.log(
           `[AUDIT] Admin ${session.speaker.email} (${session.speaker._id}) impersonating ${impersonatedSpeaker.email} (${impersonatedSpeaker._id})`,
         )
@@ -191,8 +201,9 @@ export async function getAuthSession(req?: {
           realAdmin: session.speaker,
         }
       } else if (impersonatedSpeaker?.is_organizer) {
-        console.warn(
-          `Admin ${session.speaker.email} attempted to impersonate another organizer`,
+        // SECURITY: Log attempted organizer impersonation
+        console.error(
+          `[SECURITY] Admin ${session.speaker.email} attempted to impersonate another organizer: ${impersonatedSpeaker.email}`,
         )
       }
     }

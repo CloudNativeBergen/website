@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import { getAuthSession } from '@/lib/auth'
 
 export async function createTRPCContext(opts: { req: NextRequest }) {
-  const session = await getAuthSession()
+  const session = await getAuthSession({ url: opts.req.url })
 
   return {
     req: opts.req,

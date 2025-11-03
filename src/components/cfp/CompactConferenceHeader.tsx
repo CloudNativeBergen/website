@@ -21,7 +21,7 @@ export function CompactConferenceHeader({
   const domain = conference.domains?.[0] || 'cloudnativebergen.dev'
 
   return (
-    <div className="flex flex-1 items-center justify-between gap-4">
+    <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="font-space-grotesk truncate text-base font-bold text-gray-900 dark:text-white">
@@ -50,7 +50,7 @@ export function CompactConferenceHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         {proposals.length > 0 && (
           <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
             <DocumentTextIcon className="h-4 w-4" />
