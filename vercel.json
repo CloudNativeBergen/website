@@ -6,7 +6,7 @@
     }
   ],
   "functions": {
-    "api/upload/proposal-attachment.ts": {
+    "src/app/api/upload/proposal-attachment/route.ts": {
       "maxDuration": 60
     }
   }
