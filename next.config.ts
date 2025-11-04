@@ -5,6 +5,8 @@ const config: NextConfig = {
   experimental: {
     // Add these experimental flags to resolve JSDOM conflicts with Turbopack
     optimizePackageImports: ['isomorphic-dompurify'],
+    // Disable CSS optimization that might cache incorrectly
+    optimizeCss: false,
   },
   serverExternalPackages: ['jsdom'],
   // Force build ID regeneration to prevent stale CSS caching on Vercel
