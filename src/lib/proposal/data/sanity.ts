@@ -36,10 +36,12 @@ export async function getProposal({
   let proposalError = null
   let proposal: ProposalExisting = {} as ProposalExisting
 
-  const speakerFilter = isOrganizer ? '' : `"${speakerId}" in speakers[]._ref`
+  const speakerFilter = isOrganizer
+    ? ''
+    : `&& "${speakerId}" in speakers[]._ref`
 
   try {
-    const query = groq`*[_type == "talk" && _id==$id ${speakerFilter && `&& ${speakerFilter} `}]{
+    const query = groq`*[_type == "talk" && _id==$id ${speakerFilter}]{
       ...,
       speakers[]-> {
         ...,

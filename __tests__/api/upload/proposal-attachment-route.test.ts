@@ -46,52 +46,62 @@ describe('api/upload/proposal-attachment route', () => {
   })
 
   describe('Pathname Validation', () => {
+    const validUUID = '5986a3ca-81da-4308-8c6c-4f3116efeac4'
+    const uuidRegex =
+      /^proposal-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-/i
+
     it('should validate pathname starts with proposal-', () => {
-      const pathname = 'proposal-abc123-1234567890-file.pdf'
+      const pathname = `proposal-${validUUID}-1234567890-file.pdf`
       const isValid = pathname.startsWith('proposal-')
 
       expect(isValid).toBe(true)
     })
 
     it('should reject pathname not starting with proposal-', () => {
-      const pathname = 'invalid-abc123-1234567890-file.pdf'
+      const pathname = `invalid-${validUUID}-1234567890-file.pdf`
       const isValid = pathname.startsWith('proposal-')
 
       expect(isValid).toBe(false)
     })
 
-    it('should validate pathname has sufficient parts', () => {
-      const pathname = 'proposal-abc123-1234567890-file.pdf'
-      const parts = pathname.split('-')
-      const hasEnoughParts = parts.length >= 3
+    it('should extract UUID proposalId from pathname using regex', () => {
+      const pathname = `proposal-${validUUID}-1234567890-file.pdf`
+      const match = pathname.match(uuidRegex)
 
-      expect(hasEnoughParts).toBe(true)
+      expect(match).not.toBeNull()
+      expect(match?.[1]).toBe(validUUID)
     })
 
-    it('should reject pathname with insufficient parts', () => {
-      const pathname = 'proposal-abc123'
-      const parts = pathname.split('-')
-      const hasEnoughParts = parts.length >= 3
+    it('should handle UUIDs correctly (not split on UUID dashes)', () => {
+      const pathname = `proposal-${validUUID}-1730736000000-presentation.pdf`
+      const match = pathname.match(uuidRegex)
+      const proposalId = match?.[1]
 
-      expect(hasEnoughParts).toBe(false)
+      // Should extract full UUID, not partial
+      expect(proposalId).toBe(validUUID)
+      expect(proposalId).toContain('-')
+      expect(proposalId?.split('-').length).toBe(5) // UUID has 5 parts
     })
 
-    it('should extract proposalId from pathname', () => {
-      const pathname = 'proposal-abc123-1234567890-file.pdf'
-      const parts = pathname.split('-')
-      const proposalId = parts[1]
+    it('should reject pathname with invalid UUID format', () => {
+      const pathname = 'proposal-not-a-uuid-1234567890-file.pdf'
+      const match = pathname.match(uuidRegex)
 
-      expect(proposalId).toBe('abc123')
-      expect(proposalId.length).toBeGreaterThan(0)
+      expect(match).toBeNull()
     })
 
     it('should reject pathname with empty proposalId', () => {
       const pathname = 'proposal--1234567890-file.pdf'
-      const parts = pathname.split('-')
-      const proposalId = parts[1]
-      const isValid = !!(proposalId && proposalId.length > 0)
+      const match = pathname.match(uuidRegex)
 
-      expect(isValid).toBe(false)
+      expect(match).toBeNull()
+    })
+
+    it('should reject pathname with short UUID', () => {
+      const pathname = 'proposal-abc123-1234567890-file.pdf'
+      const match = pathname.match(uuidRegex)
+
+      expect(match).toBeNull()
     })
   })
 
@@ -167,10 +177,10 @@ describe('api/upload/proposal-attachment route', () => {
 
   describe('Token Payload', () => {
     it('should include proposalId in token payload', () => {
-      const proposalId = 'abc123'
+      const proposalId = '5986a3ca-81da-4308-8c6c-4f3116efeac4'
       const payload = { proposalId }
 
-      expect(payload.proposalId).toBe('abc123')
+      expect(payload.proposalId).toBe('5986a3ca-81da-4308-8c6c-4f3116efeac4')
     })
 
     it('should include speakerId in token payload', () => {

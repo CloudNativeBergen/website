@@ -72,20 +72,44 @@ export const POST = auth(async (req: NextAuthRequest) => {
           )
         }
 
-        const parts = pathname.split('-')
-        if (parts.length < 3) {
-          throw new Error('Invalid pathname format: insufficient parts')
+        // Extract proposal ID (UUID format: 8-4-4-4-12 characters)
+        // Pattern: proposal-{uuid}-{timestamp}-{filename}
+        const match = pathname.match(
+          /^proposal-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-/i,
+        )
+
+        if (!match) {
+          throw new Error(
+            'Invalid pathname format: missing or invalid proposal ID',
+          )
         }
 
-        const proposalId = parts[1]
-        if (!proposalId || proposalId.length === 0) {
-          throw new Error('Invalid pathname format: missing proposal ID')
+        const proposalId = match[1]
+
+        const speakerId = req.auth?.speaker?._id
+        const isOrganizer = req.auth?.speaker?.is_organizer === true
+
+        console.log('Upload token request:', {
+          proposalId,
+          speakerId,
+          isOrganizer,
+          hasSpeaker: !!req.auth?.speaker,
+        })
+
+        if (!speakerId) {
+          throw new Error('Speaker ID not found in session')
         }
 
         const { proposal, proposalError } = await getProposal({
           id: proposalId,
-          speakerId: req.auth?.speaker?._id,
-          isOrganizer: req.auth?.speaker?.is_organizer === true,
+          speakerId,
+          isOrganizer,
+        })
+
+        console.log('Proposal lookup result:', {
+          found: !!proposal,
+          hasError: !!proposalError,
+          error: proposalError?.message,
         })
 
         if (proposalError || !proposal) {
