@@ -8,6 +8,5 @@
       "path": "/api/cron/cleanup-orphaned-blobs",
       "schedule": "0 3 * * *"
     }
-  ],
-  "functions": {}
+  ]
 }
