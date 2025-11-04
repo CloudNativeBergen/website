@@ -82,6 +82,13 @@ export function useSpeakerImageUpload(
         })
 
         if (!response.ok) {
+          // Handle body size limit (413 Payload Too Large)
+          if (response.status === 413) {
+            throw new Error(
+              'Image file is too large. Maximum file size is 10MB. Please compress or resize your image and try again.',
+            )
+          }
+
           const errorData = await response.json()
           // API returns error messages in the 'error' field
           throw new Error(

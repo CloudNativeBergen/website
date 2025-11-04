@@ -317,6 +317,25 @@ export function ImageUploadZone({
                 type: 'error',
               })
             }
+          } else if (xhr.status === 413) {
+            // Body size limit exceeded
+            setFiles((prev) => {
+              const newFiles = [...prev]
+              newFiles[index] = {
+                ...newFiles[index],
+                status: 'error',
+                error: 'File too large',
+                progress: 100,
+              }
+              return newFiles
+            })
+            failCount++
+            showNotification({
+              title: `Failed: ${file.file.name}`,
+              message:
+                'Image is too large. Maximum file size is 10MB. Please resize your image.',
+              type: 'error',
+            })
           } else {
             setFiles((prev) => {
               const newFiles = [...prev]
@@ -550,11 +569,10 @@ export function ImageUploadZone({
 
       <div
         {...getRootProps()}
-        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-          isDragActive
+        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDragActive
             ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/30'
             : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500'
-        }`}
+          }`}
       >
         <input {...getInputProps()} aria-label="Upload images" />
         <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />

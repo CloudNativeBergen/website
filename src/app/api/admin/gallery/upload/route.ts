@@ -39,7 +39,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const formData = await request.formData()
+    let formData
+    try {
+      formData = await request.formData()
+    } catch (error) {
+      // Body size limit exceeded (4.5MB for serverless functions)
+      if (error instanceof Error && error.message.includes('body')) {
+        return NextResponse.json(
+          {
+            error:
+              'One or more files are too large. Maximum file size per upload is 10MB. Please resize your images and try again.',
+          },
+          { status: 413 },
+        )
+      }
+      throw error
+    }
+
     const files = formData.getAll('files') as File[]
     const metadataString = formData.get('metadata') as string
 
