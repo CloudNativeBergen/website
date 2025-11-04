@@ -6,6 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "build:clean": "rm -rf .next && npm run build",
+    "build:force": "rm -rf .next node_modules/.cache && npm run build",
     "start": "next start",
     "check": "npm run typecheck && npm run lint && npm run knip && npm run format",
     "knip": "knip",

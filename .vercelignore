@@ -21,3 +21,8 @@ docs/
 .env.example
 jest.config.ts
 jest.setup.ts
+
+# DO NOT ignore cache directories - we need Vercel to rebuild CSS
+# Commenting out potential cache ignores to ensure fresh CSS builds
+# .next/cache/
+# node_modules/.cache/

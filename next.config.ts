@@ -7,6 +7,11 @@ const config: NextConfig = {
     optimizePackageImports: ['isomorphic-dompurify'],
   },
   serverExternalPackages: ['jsdom'],
+  // Force build ID regeneration to prevent stale CSS caching on Vercel
+  generateBuildId: async () => {
+    // Use timestamp to ensure fresh builds with new CSS
+    return `build-${Date.now()}`
+  },
   images: {
     remotePatterns: [
       {

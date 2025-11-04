@@ -1,7 +1,11 @@
 @import 'tailwindcss';
 
-@source '../app/(admin)';
-@source '../components/admin';
+/* Comprehensive source scanning for all components and pages */
+@source '../app';
+@source '../components';
+@source '../contexts';
+@source '../hooks';
+@source '../dev-tools';
 
 /* Use class strategy for dark mode but ensure media query fallback works */
 @custom-variant dark (&:where(.dark, .dark *));
