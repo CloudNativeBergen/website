@@ -1,13 +1,48 @@
-import { NextAuthRequest, auth } from '@/lib/auth'
-import { uploadAttachmentFile } from '@/lib/attachment/sanity'
-import { validateAttachmentFile } from '@/lib/attachment/validation'
-import { clientReadUncached as clientRead } from '@/lib/sanity/client'
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
+import { NextAuthRequest, auth } from '@/lib/auth'
+import { getProposal } from '@/lib/proposal/data/sanity'
 
-// Configure body size limit - Vercel default is 4.5MB for serverless functions
-// This will apply for all Vercel plans, but the actual limit depends on the plan
-export const maxDuration = 60 // Maximum allowed for Pro plan
-
+/**
+ * REST API endpoint for generating Vercel Blob upload tokens.
+ *
+ * ## Why REST API instead of tRPC?
+ *
+ * This endpoint MUST be a REST API route because it's part of Vercel Blob's
+ * client-side upload architecture. The @vercel/blob/client upload() function
+ * requires a handleUploadUrl that points to an API route using handleUpload().
+ *
+ * ## Architecture Flow:
+ * 1. Client calls upload() from @vercel/blob/client
+ * 2. upload() makes HTTP request to this REST endpoint (handleUploadUrl)
+ * 3. This endpoint validates and generates a client token via handleUpload()
+ * 4. Client receives token and uploads directly to Vercel Blob
+ * 5. Client then calls tRPC endpoint (proposal.uploadAttachment) for business logic
+ *
+ * ## Why not tRPC?
+ * - handleUpload() is designed to work with Next.js Request/Response objects
+ * - The client-side upload() function expects a standard HTTP endpoint
+ * - tRPC is used for the business logic (Blob→Sanity transfer) which provides
+ *   type safety where it matters most
+ *
+ * ## Responsibilities:
+ * - Authentication verification (NextAuth)
+ * - Proposal ownership verification (before token generation)
+ * - Pathname format validation
+ * - File type restrictions (PDF, PPTX, PPT, ODP, KEY)
+ * - Size limit enforcement (50MB)
+ * - Token generation (via handleUpload)
+ *
+ * ## Security (Defense in Depth):
+ * - Protected by NextAuth authentication
+ * - Verifies proposal ownership BEFORE generating upload token
+ * - Validates pathname format: proposal-{id}-{timestamp}-{filename}
+ * - Token payload includes proposalId and speakerId for verification
+ * - Additional ownership verification in tRPC endpoint (proposal.uploadAttachment)
+ *
+ * @see /docs/ATTACHMENT_STORAGE.md for complete architecture documentation
+ * @see src/server/routers/proposal.ts (proposal.uploadAttachment) for transfer logic
+ */
 export const POST = auth(async (req: NextAuthRequest) => {
   if (
     !req.auth ||
@@ -18,86 +53,75 @@ export const POST = auth(async (req: NextAuthRequest) => {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  let body: HandleUploadBody
   try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File
-    const proposalId = formData.get('proposalId') as string
+    body = (await req.json()) as HandleUploadBody
+  } catch (parseError) {
+    console.error('Failed to parse request body:', parseError)
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
 
-    if (!file) {
-      return NextResponse.json(
-        { error: 'No file was uploaded' },
-        { status: 400 },
-      )
-    }
+  try {
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async (pathname) => {
+        if (!pathname.startsWith('proposal-')) {
+          throw new Error(
+            'Invalid pathname format: must start with "proposal-"',
+          )
+        }
 
-    if (!proposalId) {
-      return NextResponse.json(
-        { error: 'Proposal ID is required' },
-        { status: 400 },
-      )
-    }
+        const parts = pathname.split('-')
+        if (parts.length < 3) {
+          throw new Error('Invalid pathname format: insufficient parts')
+        }
 
-    // Verify proposal ownership (speaker is one of the speakers OR user is organizer)
-    const proposal = await clientRead.fetch<{
-      _id: string
-      speakers: Array<{ _id: string }>
-    } | null>(
-      `*[_type == "talk" && _id == $proposalId][0] {
-        _id,
-        speakers[]-> { _id }
-      }`,
-      { proposalId },
-    )
+        const proposalId = parts[1]
+        if (!proposalId || proposalId.length === 0) {
+          throw new Error('Invalid pathname format: missing proposal ID')
+        }
 
-    if (!proposal) {
-      return NextResponse.json({ error: 'Proposal not found' }, { status: 404 })
-    }
+        const { proposal, proposalError } = await getProposal({
+          id: proposalId,
+          speakerId: req.auth?.speaker?._id,
+          isOrganizer: req.auth?.speaker?.is_organizer === true,
+        })
 
-    const speakerIds = proposal.speakers.map((s) => s._id)
-    const isOwner = speakerIds.includes(req.auth.speaker._id)
-    const isOrganizer = req.auth.speaker.is_organizer === true
+        if (proposalError || !proposal) {
+          throw new Error('Proposal not found or access denied')
+        }
 
-    if (!isOwner && !isOrganizer) {
-      return NextResponse.json(
-        {
-          error:
-            'You do not have permission to upload attachments to this proposal',
-        },
-        { status: 403 },
-      )
-    }
-
-    const validation = validateAttachmentFile(file)
-    if (!validation.valid) {
-      return NextResponse.json({ error: validation.error }, { status: 400 })
-    }
-
-    const { asset, error } = await uploadAttachmentFile(file)
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    if (!asset) {
-      return NextResponse.json(
-        { error: 'Failed to upload file' },
-        { status: 500 },
-      )
-    }
-
-    return NextResponse.json({
-      asset: {
-        _ref: asset._id,
-        _type: 'reference',
-        url: asset.url,
+        return {
+          allowedContentTypes: [
+            'application/pdf',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/vnd.oasis.opendocument.presentation',
+            'application/x-iwork-keynote-sffkey',
+          ],
+          maximumSizeInBytes: 50 * 1024 * 1024,
+          tokenPayload: JSON.stringify({
+            proposalId,
+            speakerId: req.auth?.speaker?._id,
+            uploadedAt: new Date().toISOString(),
+          }),
+        }
       },
-      filename: file.name,
+      onUploadCompleted: async () => {},
     })
+
+    return NextResponse.json(jsonResponse)
   } catch (error) {
-    console.error('Upload attachment error:', error)
+    console.error('Upload token generation error:', error)
     return NextResponse.json(
-      { error: 'Failed to upload attachment' },
-      { status: 500 },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to generate upload token',
+      },
+      { status: 400 },
     )
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

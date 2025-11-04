@@ -1,9 +1,8 @@
 export const AttachmentConfig = {
   fileUpload: {
-    // Note: Vercel has a body size limit of 4.5MB for serverless functions
-    // For larger files, consider using direct client uploads to Sanity
-    // or upgrading to Vercel Enterprise with Edge config (up to 100MB)
-    maxFileSize: 50 * 1024 * 1024, // 50MB - theoretical max, but limited by hosting
+    // Using Vercel Blob as temporary storage to bypass 4.5MB serverless function limit
+    // Files are uploaded to Blob, then transferred to Sanity, and temporary blob is deleted
+    maxFileSize: 50 * 1024 * 1024, // 50MB - practical limit with Blob storage
     allowedMimeTypes: [
       'application/pdf',
       'application/vnd.ms-powerpoint',

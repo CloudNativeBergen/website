@@ -3,11 +3,11 @@
     {
       "path": "/api/cron/sales-update",
       "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/cron/cleanup-orphaned-blobs",
+      "schedule": "0 3 * * *"
     }
   ],
-  "functions": {
-    "src/app/api/upload/proposal-attachment/route.ts": {
-      "maxDuration": 60
-    }
-  }
+  "functions": {}
 }

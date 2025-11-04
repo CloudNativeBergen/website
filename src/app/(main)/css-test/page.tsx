@@ -22,7 +22,7 @@ export default function CssTestPage() {
         {/* Test Cards Grid */}
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {/* Card 1: Unique Purple Gradient with NEW ring animation */}
-          <div className="group rounded-3xl border-4 border-purple-300 bg-linear-to-br from-purple-100 to-purple-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-purple-500/50 hover:ring-8 hover:ring-purple-400/30 dark:border-purple-700 dark:from-purple-900 dark:to-purple-800">
+          <div className="group rounded-3xl border-4 border-purple-300 bg-linear-to-br from-purple-100 to-purple-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:ring-8 hover:shadow-purple-500/50 hover:ring-purple-400/30 dark:border-purple-700 dark:from-purple-900 dark:to-purple-800">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-500 text-3xl shadow-lg transition-transform group-hover:rotate-12">
               🎨
             </div>
@@ -36,7 +36,7 @@ export default function CssTestPage() {
           </div>
 
           {/* Card 2: Unique Pink Gradient with NEW skew effect */}
-          <div className="group rounded-3xl border-4 border-pink-300 bg-linear-to-tr from-pink-100 to-pink-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:skew-y-2 hover:shadow-pink-500/50 hover:ring-4 hover:ring-pink-300 dark:border-pink-700 dark:from-pink-900 dark:to-pink-800">
+          <div className="group rounded-3xl border-4 border-pink-300 bg-linear-to-tr from-pink-100 to-pink-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:skew-y-2 hover:ring-4 hover:shadow-pink-500/50 hover:ring-pink-300 dark:border-pink-700 dark:from-pink-900 dark:to-pink-800">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-500 text-3xl shadow-lg transition-all group-hover:scale-125">
               💖
             </div>
@@ -58,8 +58,7 @@ export default function CssTestPage() {
               Rose Test
             </h2>
             <p className="text-rose-800 dark:text-rose-200">
-              Rose gradient with bottom-left direction and unique shadow
-              colors.
+              Rose gradient with bottom-left direction and unique shadow colors.
             </p>
           </div>
 
@@ -91,7 +90,7 @@ export default function CssTestPage() {
           </div>
 
           {/* Card 6: Unique Indigo Gradient */}
-          <div className="group rounded-3xl border-4 border-indigo-300 bg-linear-to-br from-indigo-100 via-indigo-150 to-indigo-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-indigo-500/50 dark:border-indigo-700 dark:from-indigo-900 dark:to-indigo-800">
+          <div className="group via-indigo-150 rounded-3xl border-4 border-indigo-300 bg-linear-to-br from-indigo-100 to-indigo-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-indigo-500/50 dark:border-indigo-700 dark:from-indigo-900 dark:to-indigo-800">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500 text-3xl shadow-lg">
               🔮
             </div>
@@ -195,8 +194,8 @@ export default function CssTestPage() {
             <li className="flex items-start">
               <span className="mr-3 text-2xl">✅</span>
               <span>
-                <strong>NEW: Cyan and Teal gradients</strong> - two new
-                gradient boxes with ocean and fire themes
+                <strong>NEW: Cyan and Teal gradients</strong> - two new gradient
+                boxes with ocean and fire themes
               </span>
             </li>
             <li className="flex items-start">
@@ -209,15 +208,15 @@ export default function CssTestPage() {
             <li className="flex items-start">
               <span className="mr-3 text-2xl">✅</span>
               <span>
-                <strong>Animations should run</strong> - pulse, bounce, and
-                spin animations with ring borders
+                <strong>Animations should run</strong> - pulse, bounce, and spin
+                animations with ring borders
               </span>
             </li>
             <li className="flex items-start">
               <span className="mr-3 text-2xl">❌</span>
               <span>
-                <strong>If styles are missing</strong> - cards appear
-                unstyled, no gradients, no hover effects = cache issue
+                <strong>If styles are missing</strong> - cards appear unstyled,
+                no gradients, no hover effects = cache issue
               </span>
             </li>
           </ul>

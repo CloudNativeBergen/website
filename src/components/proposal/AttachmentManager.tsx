@@ -11,11 +11,13 @@ import {
   validateAttachmentFile,
   formatFileSize,
 } from '@/lib/attachment/validation'
-import { AttachmentConfig, AttachmentType } from '@/lib/attachment/config'
+import { AttachmentType } from '@/lib/attachment/config'
 import { Attachment } from '@/lib/attachment/types'
 import { getNonRecordingAttachments } from '@/lib/attachment/filters'
 import { Input, Dropdown } from '@/components/Form'
 import { v4 as uuidv4 } from 'uuid'
+import { upload } from '@vercel/blob/client'
+import { api } from '@/lib/trpc/client'
 
 interface AttachmentManagerProps {
   proposalId: string
@@ -127,6 +129,8 @@ export function AttachmentManager({
     setAddType('file')
   }
 
+  const uploadMutation = api.proposal.uploadAttachment.useMutation()
+
   const handleFileUpload = async () => {
     if (!selectedFile) {
       setError('Please select a file')
@@ -137,75 +141,50 @@ export function AttachmentManager({
     setError(null)
     setUploadProgress(0)
 
+    let blobUrl: string | undefined
+
     try {
-      const formData = new FormData()
-      formData.append('file', selectedFile)
-      formData.append('proposalId', proposalId)
-
-      const controller = new AbortController()
-      const timeoutId = setTimeout(
-        () => controller.abort(),
-        AttachmentConfig.timeouts.fileUpload,
+      const timestamp = Date.now()
+      const sanitizedFilename = selectedFile.name.replace(
+        /[^a-zA-Z0-9.-]/g,
+        '_',
       )
+      const pathname = `proposal-${proposalId}-${timestamp}-${sanitizedFilename}`
 
-      const response = await fetch('/api/upload/proposal-attachment', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
+      const blob = await upload(pathname, selectedFile, {
+        access: 'public',
+        handleUploadUrl: '/api/upload/proposal-attachment',
       })
 
-      clearTimeout(timeoutId)
+      blobUrl = blob.url
+      console.log('File uploaded to Blob:', blob.url)
 
-      if (!response.ok) {
-        let errorMessage = 'Upload failed'
-        try {
-          const contentType = response.headers.get('content-type')
-          if (contentType && contentType.includes('application/json')) {
-            const data = await response.json()
-            errorMessage = data.error || errorMessage
-          } else {
-            const text = await response.text()
-            errorMessage = text || `Upload failed (${response.status})`
-          }
-        } catch (parseError) {
-          console.error('Error parsing response:', parseError)
-          errorMessage = `Upload failed (${response.status})`
-        }
-        throw new Error(errorMessage)
-      }
-
-      const data = await response.json()
-
-      const newAttachment: Attachment = {
-        _type: 'fileAttachment',
-        _key: uuidv4(),
-        file: {
-          _type: 'file',
-          asset: data.asset,
-        },
+      const result = await uploadMutation.mutateAsync({
+        id: proposalId,
+        blobUrl: blob.url,
+        filename: selectedFile.name,
         attachmentType,
         title: title || undefined,
         description: description || undefined,
-        filename: data.filename,
-        uploadedAt: new Date().toISOString(),
+      })
+
+      console.log('File transferred to Sanity:', result.asset._id)
+
+      if (result.proposal.attachments) {
+        onAttachmentsChange(result.proposal.attachments)
       }
 
-      onAttachmentsChange([...attachments, newAttachment])
       resetForm()
     } catch (err) {
       console.error('Upload error:', err)
       let errorMsg = 'Failed to upload attachment'
+
+      if (blobUrl) {
+        console.error('Orphaned blob that may need cleanup:', blobUrl)
+        errorMsg = 'File uploaded but failed to save. Please try again.'
+      }
       if (err instanceof Error) {
         errorMsg = err.message
-        // Provide more helpful context for common errors
-        if (
-          errorMsg.includes('413') ||
-          errorMsg.toLowerCase().includes('too large') ||
-          errorMsg.toLowerCase().includes('entity too large')
-        ) {
-          errorMsg =
-            'File is too large. The current hosting limit is approximately 4.5MB. Please use a smaller file or compress your slides.'
-        }
       }
       setError(errorMsg)
     } finally {
@@ -365,18 +344,20 @@ export function AttachmentManager({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`rounded-lg border-2 border-dashed transition-colors ${isDragging
+          className={`rounded-lg border-2 border-dashed transition-colors ${
+            isDragging
               ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-900/20'
               : 'border-gray-300 dark:border-gray-600'
-            }`}
+          }`}
         >
           <button
             type="button"
             onClick={() => setIsAdding(true)}
-            className={`flex w-full items-center justify-center p-4 text-sm font-medium transition-colors ${isDragging
+            className={`flex w-full items-center justify-center p-4 text-sm font-medium transition-colors ${
+              isDragging
                 ? 'text-indigo-600 dark:text-indigo-400'
                 : 'text-gray-600 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400'
-              }`}
+            }`}
           >
             <ArrowUpTrayIcon className="mr-2 h-5 w-5" />
             {isDragging ? 'Drop file to upload' : 'Upload Attachment'}
@@ -403,10 +384,11 @@ export function AttachmentManager({
             <button
               type="button"
               onClick={() => setAddType('file')}
-              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${addType === 'file'
+              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                addType === 'file'
                   ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-300'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700'
-                }`}
+              }`}
             >
               <DocumentIcon className="mx-auto mb-1 h-5 w-5" />
               Upload File
@@ -414,10 +396,11 @@ export function AttachmentManager({
             <button
               type="button"
               onClick={() => setAddType('url')}
-              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${addType === 'url'
+              className={`flex-1 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                addType === 'url'
                   ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/30 dark:text-indigo-300'
                   : 'border-gray-300 bg-white text-gray-700 hover:border-indigo-300 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-500 dark:hover:bg-gray-700'
-                }`}
+              }`}
             >
               <LinkIcon className="mx-auto mb-1 h-5 w-5" />
               Add URL

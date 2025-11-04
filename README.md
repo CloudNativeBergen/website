@@ -188,6 +188,23 @@ The travel support system uses real-time exchange rates for currency conversion.
 
 If not configured, the system will use fallback exchange rates. See [docs/EXCHANGE_RATE_API.md](docs/EXCHANGE_RATE_API.md) for detailed configuration.
 
+## File Attachments
+
+The project uses a two-tier storage architecture for handling proposal attachments (slides, resources):
+
+- **Temporary Storage**: Vercel Blob (client-side direct upload, bypasses 4.5MB serverless limit)
+- **Permanent Storage**: Sanity CMS (asset management)
+
+Files up to 50MB are supported. See [docs/ATTACHMENT_STORAGE.md](docs/ATTACHMENT_STORAGE.md) for detailed architecture documentation.
+
+### Setup
+
+1. Create Vercel Blob store in Vercel Dashboard → Storage → Blob
+2. Pull environment variables: `npx vercel env pull .env.local`
+3. `BLOB_READ_WRITE_TOKEN` is automatically created
+
+The system includes automatic cleanup of temporary files via daily cron job.
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.

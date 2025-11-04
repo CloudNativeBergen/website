@@ -68,20 +68,7 @@ async function deleteAttachmentHelper(
     })
   }
 
-  // If it's a file attachment, delete the asset from Sanity
-  if (
-    attachmentToDelete._type === 'fileAttachment' &&
-    attachmentToDelete.file?.asset?._ref
-  ) {
-    try {
-      await clientWrite.delete(attachmentToDelete.file.asset._ref)
-    } catch (deleteError) {
-      console.error('Failed to delete file asset:', deleteError)
-      // Continue with removing the reference even if asset deletion fails
-    }
-  }
-
-  // Remove attachment from proposal and cast to correct type
+  // Remove attachment from proposal first (must remove reference before deleting asset)
   const updatedAttachments =
     (proposal.attachments?.filter(
       (a) => a._key !== attachmentKey,
@@ -104,6 +91,19 @@ async function deleteAttachmentHelper(
       code: 'NOT_FOUND',
       message: 'Proposal not found',
     })
+  }
+
+  // Now delete the asset from Sanity (after reference is removed)
+  if (
+    attachmentToDelete._type === 'fileAttachment' &&
+    attachmentToDelete.file?.asset?._ref
+  ) {
+    try {
+      await clientWrite.delete(attachmentToDelete.file.asset._ref)
+    } catch (deleteError) {
+      console.error('Failed to delete file asset:', deleteError)
+      // Don't fail the operation if asset deletion fails - reference is already removed
+    }
   }
 
   return { proposal: updated, attachmentToDelete }
@@ -807,6 +807,98 @@ export const proposalRouter = router({
   }),
 
   // Speaker attachment operations
+  uploadAttachment: protectedProcedure
+    .input(
+      IdParamSchema.extend({
+        blobUrl: z.string().url(),
+        filename: z.string(),
+        attachmentType: z.enum(['slides', 'recording', 'resource']),
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const { proposal, proposalError } = await getProposal({
+          id: input.id,
+          speakerId: ctx.speaker._id,
+          isOrganizer: ctx.speaker.is_organizer === true,
+        })
+
+        if (proposalError || !proposal) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found or access denied',
+          })
+        }
+
+        const { transferBlobToSanity } = await import('@/lib/attachment/blob')
+        const { asset, error } = await transferBlobToSanity(
+          input.blobUrl,
+          input.filename,
+        )
+
+        if (error || !asset) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to transfer file to permanent storage',
+            cause: error,
+          })
+        }
+
+        const newAttachment: Attachment = {
+          _type: 'fileAttachment',
+          _key: `attachment-${Date.now()}`,
+          file: {
+            _type: 'file',
+            asset: {
+              _ref: asset._id,
+              _type: 'reference',
+            },
+          },
+          attachmentType: input.attachmentType,
+          title: input.title,
+          description: input.description,
+          filename: input.filename,
+          uploadedAt: new Date().toISOString(),
+        }
+
+        const updatedAttachments = [
+          ...(proposal.attachments || []),
+          newAttachment,
+        ]
+
+        const { proposal: updated, err } = await updateProposal(input.id, {
+          attachments: updatedAttachments,
+        })
+
+        if (err) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update attachments',
+            cause: err,
+          })
+        }
+
+        if (!updated) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Proposal not found',
+          })
+        }
+
+        return { proposal: updated, asset }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to upload attachment',
+          cause: error,
+        })
+      }
+    }),
+
   updateAttachments: protectedProcedure
     .input(
       IdParamSchema.extend({
