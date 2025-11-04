@@ -20,6 +20,12 @@ Finally, open [http://localhost:3000](http://localhost:3000) in your browser to 
 
 ## Development Setup
 
+### Important: Turbopack Configuration
+
+This project uses **Turbopack** for both development and production builds to ensure consistent CSS generation with Tailwind CSS v4. A known incompatibility exists between Turbopack (used in dev) and Webpack (Vercel's default production bundler) that causes Tailwind classes to be missing in production.
+
+**The fix is already in place** via `experimental.turbo: {}` in `next.config.ts`.
+
 ### VS Code Configuration
 
 This project includes VS Code workspace settings in `.vscode/settings.json` that automatically configure:
