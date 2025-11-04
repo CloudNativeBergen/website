@@ -8,6 +8,8 @@ import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
 import speaker from './schemaTypes/speaker'
 import sponsor from './schemaTypes/sponsor'
+import sponsorActivity from './schemaTypes/sponsorActivity'
+import sponsorForConference from './schemaTypes/sponsorForConference'
 import sponsorTier from './schemaTypes/sponsorTier'
 import talk from './schemaTypes/talk'
 import topic from './schemaTypes/topic'
@@ -27,6 +29,8 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     schedule,
     speaker,
     sponsor,
+    sponsorActivity,
+    sponsorForConference,
     sponsorTier,
     talk,
     topic,

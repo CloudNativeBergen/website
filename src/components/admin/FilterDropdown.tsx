@@ -8,6 +8,7 @@ import {
   MenuItems,
   Transition,
 } from '@headlessui/react'
+import clsx from 'clsx'
 import { Fragment, ReactNode, useEffect, useRef, useState } from 'react'
 import { classNames } from './utils'
 
@@ -19,6 +20,8 @@ interface FilterDropdownProps {
   width?: 'default' | 'wide' | 'wider'
   fixedWidth?: boolean
   keepOpen?: boolean
+  disabled?: boolean
+  forceDropUp?: boolean
 }
 
 export function FilterDropdown({
@@ -28,9 +31,11 @@ export function FilterDropdown({
   position = 'left',
   width = 'default',
   fixedWidth = false,
+  disabled = false,
+  forceDropUp = false,
 }: FilterDropdownProps) {
   const menuRef = useRef<HTMLDivElement>(null)
-  const [shouldDropUp, setShouldDropUp] = useState(false)
+  const [shouldDropUp, setShouldDropUp] = useState(forceDropUp)
   const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
@@ -60,7 +65,7 @@ export function FilterDropdown({
   }
 
   const checkDropDirection = () => {
-    if (!menuRef.current) {
+    if (!menuRef.current || forceDropUp) {
       return
     }
 
@@ -75,7 +80,7 @@ export function FilterDropdown({
   }
 
   useEffect(() => {
-    if (!isClient || !menuRef.current) {
+    if (!isClient || !menuRef.current || forceDropUp) {
       return
     }
 
@@ -103,7 +108,7 @@ export function FilterDropdown({
     return () => {
       observer.disconnect()
     }
-  }, [isClient, shouldDropUp])
+  }, [isClient, shouldDropUp, forceDropUp])
 
   const handleMenuButtonClick = () => {
     requestAnimationFrame(() => {
@@ -134,9 +139,14 @@ export function FilterDropdown({
         return (
           <>
             <MenuButton
-              className={`inline-flex items-center justify-between gap-x-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-600 ${
-                fixedWidth ? getButtonWidthClass() : ''
-              }`}
+              disabled={disabled}
+              className={clsx(
+                'inline-flex w-full items-center justify-between gap-x-1.5 rounded-md px-3 py-1.5 text-base outline-1 -outline-offset-1 sm:text-sm/6',
+                disabled
+                  ? 'cursor-not-allowed bg-gray-50 text-gray-400 outline-gray-200 dark:bg-gray-800/50 dark:text-gray-600 dark:outline-gray-700'
+                  : 'bg-white text-gray-900 outline-gray-300 hover:bg-gray-50 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-gray-600',
+                fixedWidth ? getButtonWidthClass() : '',
+              )}
               onClick={handleMenuButtonClick}
             >
               <span className="min-w-0 truncate text-left">

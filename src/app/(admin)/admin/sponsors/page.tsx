@@ -127,6 +127,23 @@ export default async function AdminSponsors() {
 
   return (
     <div className="mx-auto max-w-7xl">
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex gap-2">
+          <Link
+            href="/admin/sponsors"
+            className="rounded-lg border border-brand-cloud-blue bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white hover:bg-brand-cloud-blue-hover dark:bg-blue-600 dark:hover:bg-blue-700"
+          >
+            Active Sponsors
+          </Link>
+          <Link
+            href="/admin/sponsors/crm"
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-brand-slate-gray hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+          >
+            Pipeline / CRM
+          </Link>
+        </div>
+      </div>
+
       <AdminPageHeader
         icon={<BuildingOffice2Icon />}
         title="Sponsor Management"

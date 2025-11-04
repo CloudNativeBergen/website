@@ -1,4 +1,5 @@
 import { TRPCError } from '@trpc/server'
+import { z } from 'zod'
 import { router, adminProcedure } from '../trpc'
 import {
   SponsorInputSchema,
@@ -29,10 +30,36 @@ import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { updateSponsorAudience } from '@/lib/sponsor/audience'
 import { clientWrite } from '@/lib/sanity/client'
+import { getCurrentDateTime } from '@/lib/time'
 import type {
   SponsorTierExisting,
   SponsorWithContactInfo,
 } from '@/lib/sponsor/types'
+import type {
+  SponsorTag,
+  SponsorForConferenceInput,
+} from '@/lib/sponsor-crm/types'
+import {
+  createSponsorForConference,
+  updateSponsorForConference,
+  deleteSponsorForConference,
+  getSponsorForConference,
+  listSponsorsForConference,
+  copySponsorsFromPreviousYear,
+} from '@/lib/sponsor-crm/sanity'
+import {
+  logStageChange,
+  logInvoiceStatusChange,
+} from '@/lib/sponsor-crm/activity'
+import {
+  SponsorForConferenceInputSchema,
+  SponsorForConferenceUpdateSchema,
+  SponsorForConferenceIdSchema,
+  MoveStageSchema,
+  UpdateInvoiceStatusSchema,
+  CopySponsorsSchema,
+} from '@/server/schemas/sponsorForConference'
+import { listActivitiesForSponsor } from '@/lib/sponsor-crm/activities'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -303,6 +330,24 @@ export const sponsorRouter = router({
       return sponsorTiers || []
     }),
 
+    listByConference: adminProcedure
+      .input(z.object({ conferenceId: z.string() }))
+      .query(async ({ input }) => {
+        const { sponsorTiers, error } = await getAllSponsorTiers(
+          input.conferenceId,
+        )
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch sponsor tiers for conference',
+            cause: error,
+          })
+        }
+
+        return sponsorTiers || []
+      }),
+
     getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
       const { sponsorTier, error } = await getSponsorTier(input.id)
 
@@ -518,4 +563,269 @@ export const sponsorRouter = router({
 
       return { success: true }
     }),
+
+  crm: router({
+    list: adminProcedure
+      .input(
+        z.object({
+          conferenceId: z.string().min(1),
+          status: z.array(z.string()).optional(),
+          invoice_status: z.array(z.string()).optional(),
+          assigned_to: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+        }),
+      )
+      .query(async ({ input }) => {
+        const { sponsors, error } = await listSponsorsForConference(
+          input.conferenceId,
+          {
+            status: input.status,
+            invoice_status: input.invoice_status,
+            assigned_to: input.assigned_to,
+            tags: input.tags,
+          },
+        )
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to list sponsors for conference',
+            cause: error,
+          })
+        }
+
+        return sponsors || []
+      }),
+
+    getById: adminProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .query(async ({ input }) => {
+        const { sponsorForConference, error } = await getSponsorForConference(
+          input.id,
+        )
+
+        if (error) {
+          throw new TRPCError({
+            code: error.message.includes('not found')
+              ? 'NOT_FOUND'
+              : 'INTERNAL_SERVER_ERROR',
+            message: error.message,
+            cause: error,
+          })
+        }
+
+        return sponsorForConference
+      }),
+
+    create: adminProcedure
+      .input(SponsorForConferenceInputSchema)
+      .mutation(async ({ input }) => {
+        const { sponsorForConference, error } =
+          await createSponsorForConference({
+            ...input,
+            tags: input.tags as SponsorTag[] | undefined,
+          })
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to create sponsor relationship',
+            cause: error,
+          })
+        }
+
+        return sponsorForConference
+      }),
+
+    update: adminProcedure
+      .input(SponsorForConferenceUpdateSchema)
+      .mutation(async ({ input }) => {
+        const { id, ...updateData } = input
+        const { sponsorForConference, error } =
+          await updateSponsorForConference(id, {
+            ...updateData,
+            assigned_to:
+              updateData.assigned_to === null
+                ? undefined
+                : updateData.assigned_to,
+            contact_initiated_at:
+              updateData.contact_initiated_at === null
+                ? undefined
+                : updateData.contact_initiated_at,
+            contract_signed_at:
+              updateData.contract_signed_at === null
+                ? undefined
+                : updateData.contract_signed_at,
+            contract_value:
+              updateData.contract_value === null
+                ? undefined
+                : updateData.contract_value,
+            invoice_sent_at:
+              updateData.invoice_sent_at === null
+                ? undefined
+                : updateData.invoice_sent_at,
+            invoice_paid_at:
+              updateData.invoice_paid_at === null
+                ? undefined
+                : updateData.invoice_paid_at,
+            notes: updateData.notes === null ? undefined : updateData.notes,
+            tags: updateData.tags as SponsorTag[] | undefined,
+          })
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update sponsor relationship',
+            cause: error,
+          })
+        }
+
+        return sponsorForConference
+      }),
+
+    moveStage: adminProcedure
+      .input(MoveStageSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { sponsorForConference: existing } =
+          await getSponsorForConference(input.id)
+
+        if (!existing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+          })
+        }
+
+        const oldStatus = existing.status
+
+        const { sponsorForConference, error } =
+          await updateSponsorForConference(input.id, {
+            status: input.newStatus,
+          })
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update sponsor status',
+            cause: error,
+          })
+        }
+
+        const userId = ctx.session?.user?.email
+        if (userId && oldStatus !== input.newStatus) {
+          await logStageChange(input.id, oldStatus, input.newStatus, userId)
+        }
+
+        return sponsorForConference
+      }),
+
+    updateInvoiceStatus: adminProcedure
+      .input(UpdateInvoiceStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { sponsorForConference: existing } =
+          await getSponsorForConference(input.id)
+
+        if (!existing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+          })
+        }
+
+        const oldStatus = existing.invoice_status
+        const updateData: Partial<{
+          invoice_status: string
+          invoice_sent_at: string | null
+          invoice_paid_at: string | null
+        }> = {
+          invoice_status: input.newStatus,
+        }
+
+        if (input.newStatus === 'sent' && !existing.invoice_sent_at) {
+          updateData.invoice_sent_at = getCurrentDateTime()
+        }
+
+        if (input.newStatus === 'paid' && !existing.invoice_paid_at) {
+          updateData.invoice_paid_at = getCurrentDateTime()
+        }
+
+        const { sponsorForConference, error } =
+          await updateSponsorForConference(
+            input.id,
+            updateData as Partial<SponsorForConferenceInput>,
+          )
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update invoice status',
+            cause: error,
+          })
+        }
+
+        const userId = ctx.session?.user?.email
+        if (userId && oldStatus !== input.newStatus) {
+          await logInvoiceStatusChange(
+            input.id,
+            oldStatus,
+            input.newStatus,
+            userId,
+          )
+        }
+
+        return sponsorForConference
+      }),
+
+    delete: adminProcedure
+      .input(SponsorForConferenceIdSchema)
+      .mutation(async ({ input }) => {
+        const { error } = await deleteSponsorForConference(input.id)
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to delete sponsor relationship',
+            cause: error,
+          })
+        }
+
+        return { success: true }
+      }),
+
+    copyFromPreviousYear: adminProcedure
+      .input(CopySponsorsSchema)
+      .mutation(async ({ input }) => {
+        const { result, error } = await copySponsorsFromPreviousYear(input)
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to copy sponsors from previous year',
+            cause: error,
+          })
+        }
+
+        return result
+      }),
+
+    activities: router({
+      list: adminProcedure
+        .input(z.object({ sponsorForConferenceId: z.string().min(1) }))
+        .query(async ({ input }) => {
+          const { activities, error } = await listActivitiesForSponsor(
+            input.sponsorForConferenceId,
+          )
+
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to list activities',
+              cause: error,
+            })
+          }
+
+          return activities || []
+        }),
+    }),
+  }),
 })
