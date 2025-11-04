@@ -9,8 +9,5 @@
     "src/app/api/upload/proposal-attachment/route.ts": {
       "maxDuration": 60
     }
-  },
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "framework": "nextjs"
+  }
 }

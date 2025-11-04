@@ -21,9 +21,9 @@ export default function CssTestPage() {
 
         {/* Test Cards Grid */}
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-          {/* Card 1: Unique Purple Gradient */}
-          <div className="group rounded-3xl border-4 border-purple-300 bg-linear-to-br from-purple-100 to-purple-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-purple-500/50 dark:border-purple-700 dark:from-purple-900 dark:to-purple-800">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-500 text-3xl shadow-lg">
+          {/* Card 1: Unique Purple Gradient with NEW ring animation */}
+          <div className="group rounded-3xl border-4 border-purple-300 bg-linear-to-br from-purple-100 to-purple-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-purple-500/50 hover:ring-8 hover:ring-purple-400/30 dark:border-purple-700 dark:from-purple-900 dark:to-purple-800">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-purple-500 text-3xl shadow-lg transition-transform group-hover:rotate-12">
               🎨
             </div>
             <h2 className="mb-3 text-2xl font-bold text-purple-900 dark:text-purple-100">
@@ -35,9 +35,9 @@ export default function CssTestPage() {
             </p>
           </div>
 
-          {/* Card 2: Unique Pink Gradient */}
-          <div className="group rounded-3xl border-4 border-pink-300 bg-linear-to-tr from-pink-100 to-pink-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-pink-500/50 dark:border-pink-700 dark:from-pink-900 dark:to-pink-800">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-500 text-3xl shadow-lg">
+          {/* Card 2: Unique Pink Gradient with NEW skew effect */}
+          <div className="group rounded-3xl border-4 border-pink-300 bg-linear-to-tr from-pink-100 to-pink-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:skew-y-2 hover:shadow-pink-500/50 hover:ring-4 hover:ring-pink-300 dark:border-pink-700 dark:from-pink-900 dark:to-pink-800">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-500 text-3xl shadow-lg transition-all group-hover:scale-125">
               💖
             </div>
             <h2 className="mb-3 text-2xl font-bold text-pink-900 dark:text-pink-100">
@@ -49,9 +49,9 @@ export default function CssTestPage() {
             </p>
           </div>
 
-          {/* Card 3: Unique Rose Gradient */}
-          <div className="group rounded-3xl border-4 border-rose-300 bg-linear-to-bl from-rose-100 to-rose-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:shadow-rose-500/50 dark:border-rose-700 dark:from-rose-900 dark:to-rose-800">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500 text-3xl shadow-lg">
+          {/* Card 3: Unique Rose Gradient with NEW border animation */}
+          <div className="group rounded-3xl border-4 border-rose-300 bg-linear-to-bl from-rose-100 to-rose-200 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:border-8 hover:border-rose-500 hover:shadow-rose-500/50 dark:border-rose-700 dark:from-rose-900 dark:to-rose-800">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-500 text-3xl shadow-lg transition-all group-hover:rounded-full group-hover:bg-rose-600">
               🌹
             </div>
             <h2 className="mb-3 text-2xl font-bold text-rose-900 dark:text-rose-100">
@@ -104,30 +104,59 @@ export default function CssTestPage() {
           </div>
         </div>
 
-        {/* Status Badges Section */}
+        {/* Status Badges Section with NEW styles */}
         <div className="mt-12 space-y-6">
           <h2 className="text-center text-3xl font-bold text-purple-900 dark:text-purple-100">
             Status Badge Tests
           </h2>
           <div className="flex flex-wrap justify-center gap-4">
-            <span className="rounded-full border-2 border-purple-400 bg-purple-100 px-6 py-3 text-lg font-semibold text-purple-900 shadow-lg dark:border-purple-600 dark:bg-purple-900 dark:text-purple-100">
+            <span className="rounded-full border-2 border-purple-400 bg-purple-100 px-6 py-3 text-lg font-semibold text-purple-900 shadow-lg transition-all hover:scale-110 hover:bg-purple-200 dark:border-purple-600 dark:bg-purple-900 dark:text-purple-100">
               Purple Badge
             </span>
-            <span className="rounded-full border-2 border-pink-400 bg-pink-100 px-6 py-3 text-lg font-semibold text-pink-900 shadow-lg dark:border-pink-600 dark:bg-pink-900 dark:text-pink-100">
+            <span className="rounded-full border-2 border-pink-400 bg-pink-100 px-6 py-3 text-lg font-semibold text-pink-900 shadow-lg transition-all hover:scale-110 hover:bg-pink-200 dark:border-pink-600 dark:bg-pink-900 dark:text-pink-100">
               Pink Badge
             </span>
-            <span className="rounded-full border-2 border-rose-400 bg-rose-100 px-6 py-3 text-lg font-semibold text-rose-900 shadow-lg dark:border-rose-600 dark:bg-rose-900 dark:text-rose-100">
+            <span className="rounded-full border-2 border-rose-400 bg-rose-100 px-6 py-3 text-lg font-semibold text-rose-900 shadow-lg transition-all hover:scale-110 hover:bg-rose-200 dark:border-rose-600 dark:bg-rose-900 dark:text-rose-100">
               Rose Badge
             </span>
-            <span className="rounded-full border-2 border-fuchsia-400 bg-fuchsia-100 px-6 py-3 text-lg font-semibold text-fuchsia-900 shadow-lg dark:border-fuchsia-600 dark:bg-fuchsia-900 dark:text-fuchsia-100">
+            <span className="rounded-full border-2 border-fuchsia-400 bg-fuchsia-100 px-6 py-3 text-lg font-semibold text-fuchsia-900 shadow-lg transition-all hover:scale-110 hover:bg-fuchsia-200 dark:border-fuchsia-600 dark:bg-fuchsia-900 dark:text-fuchsia-100">
               Fuchsia Badge
             </span>
-            <span className="rounded-full border-2 border-violet-400 bg-violet-100 px-6 py-3 text-lg font-semibold text-violet-900 shadow-lg dark:border-violet-600 dark:bg-violet-900 dark:text-violet-100">
+            <span className="rounded-full border-2 border-violet-400 bg-violet-100 px-6 py-3 text-lg font-semibold text-violet-900 shadow-lg transition-all hover:scale-110 hover:bg-violet-200 dark:border-violet-600 dark:bg-violet-900 dark:text-violet-100">
               Violet Badge
             </span>
-            <span className="rounded-full border-2 border-indigo-400 bg-indigo-100 px-6 py-3 text-lg font-semibold text-indigo-900 shadow-lg dark:border-indigo-600 dark:bg-indigo-900 dark:text-indigo-100">
+            <span className="rounded-full border-2 border-indigo-400 bg-indigo-100 px-6 py-3 text-lg font-semibold text-indigo-900 shadow-lg transition-all hover:scale-110 hover:bg-indigo-200 dark:border-indigo-600 dark:bg-indigo-900 dark:text-indigo-100">
               Indigo Badge
             </span>
+            <span className="rounded-full border-2 border-cyan-400 bg-cyan-100 px-6 py-3 text-lg font-semibold text-cyan-900 shadow-lg transition-all hover:scale-110 hover:bg-cyan-200 dark:border-cyan-600 dark:bg-cyan-900 dark:text-cyan-100">
+              NEW: Cyan Badge
+            </span>
+            <span className="rounded-full border-2 border-teal-400 bg-teal-100 px-6 py-3 text-lg font-semibold text-teal-900 shadow-lg transition-all hover:scale-110 hover:bg-teal-200 dark:border-teal-600 dark:bg-teal-900 dark:text-teal-100">
+              NEW: Teal Badge
+            </span>
+          </div>
+        </div>
+
+        {/* NEW: Gradient Border Animation Test */}
+        <div className="mt-12 space-y-6">
+          <h2 className="text-center text-3xl font-bold text-purple-900 dark:text-purple-100">
+            NEW: Gradient Border Test
+          </h2>
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="group relative overflow-hidden rounded-3xl border-4 border-transparent bg-linear-to-r from-cyan-400 via-teal-400 to-emerald-400 p-8 shadow-2xl transition-all duration-500 hover:scale-105">
+              <div className="text-center text-white">
+                <span className="text-6xl">🌊</span>
+                <h3 className="mt-4 text-2xl font-bold">Cyan-Teal-Emerald</h3>
+                <p className="mt-2">NEW gradient combination!</p>
+              </div>
+            </div>
+            <div className="group relative overflow-hidden rounded-3xl border-4 border-transparent bg-linear-to-r from-amber-400 via-orange-400 to-red-400 p-8 shadow-2xl transition-all duration-500 hover:scale-105 hover:rotate-1">
+              <div className="text-center text-white">
+                <span className="text-6xl">🔥</span>
+                <h3 className="mt-4 text-2xl font-bold">Amber-Orange-Red</h3>
+                <p className="mt-2">Fire gradient test!</p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -137,9 +166,9 @@ export default function CssTestPage() {
             Animation Tests
           </h2>
           <div className="grid gap-6 md:grid-cols-3">
-            <div className="h-32 animate-pulse rounded-2xl bg-linear-to-r from-purple-400 to-pink-400 shadow-xl"></div>
-            <div className="h-32 animate-bounce rounded-2xl bg-linear-to-r from-pink-400 to-rose-400 shadow-xl"></div>
-            <div className="h-32 animate-spin rounded-2xl bg-linear-to-r from-rose-400 to-fuchsia-400 shadow-xl"></div>
+            <div className="h-32 animate-pulse rounded-2xl bg-linear-to-r from-purple-400 to-pink-400 shadow-xl ring-4 ring-purple-300"></div>
+            <div className="h-32 animate-bounce rounded-2xl bg-linear-to-r from-pink-400 to-rose-400 shadow-xl ring-4 ring-pink-300"></div>
+            <div className="h-32 animate-spin rounded-2xl bg-linear-to-r from-rose-400 to-fuchsia-400 shadow-xl ring-4 ring-rose-300 [animation-duration:3s]"></div>
           </div>
         </div>
 
@@ -159,22 +188,29 @@ export default function CssTestPage() {
             <li className="flex items-start">
               <span className="mr-3 text-2xl">✅</span>
               <span>
-                <strong>Hover effects should work</strong> - cards should scale
-                up and show colored shadows on hover
+                <strong>NEW: Advanced hover effects</strong> - cards should
+                scale up, rotate icons, show rings, and skew on hover
+              </span>
+            </li>
+            <li className="flex items-start">
+              <span className="mr-3 text-2xl">✅</span>
+              <span>
+                <strong>NEW: Cyan and Teal gradients</strong> - two new
+                gradient boxes with ocean and fire themes
               </span>
             </li>
             <li className="flex items-start">
               <span className="mr-3 text-2xl">✅</span>
               <span>
                 <strong>Badges should be styled</strong> - rounded badges with
-                borders and colored backgrounds
+                borders and colored backgrounds (now with hover effects!)
               </span>
             </li>
             <li className="flex items-start">
               <span className="mr-3 text-2xl">✅</span>
               <span>
                 <strong>Animations should run</strong> - pulse, bounce, and
-                spin animations on the boxes
+                spin animations with ring borders
               </span>
             </li>
             <li className="flex items-start">
