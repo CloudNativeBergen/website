@@ -1,11 +1,11 @@
 @import 'tailwindcss';
 
-/* Comprehensive source scanning with explicit file patterns */
-@source '../app/**/*.{js,ts,jsx,tsx}';
-@source '../components/**/*.{js,ts,jsx,tsx}';
-@source '../contexts/**/*.{js,ts,jsx,tsx}';
-@source '../hooks/**/*.{js,ts,jsx,tsx}';
-@source '../dev-tools/**/*.{js,ts,jsx,tsx}';
+/* Source scanning - using directory paths for Webpack compatibility */
+@source '../app';
+@source '../components';
+@source '../contexts';
+@source '../hooks';
+@source '../dev-tools';
 
 /* Use class strategy for dark mode but ensure media query fallback works */
 @custom-variant dark (&:where(.dark, .dark *));
