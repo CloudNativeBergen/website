@@ -9,8 +9,10 @@ import {
   ChevronUpIcon,
   AdjustmentsHorizontalIcon,
   ArrowsPointingOutIcon,
+  QrCodeIcon,
 } from '@heroicons/react/24/outline'
 import { Logo } from '../Logo'
+import QRCodeStyling from 'qr-code-styling'
 import {
   CANVAS_SIZE,
   DEFAULT_BG_COLOR,
@@ -24,6 +26,16 @@ import {
   LOGO_PADDING_DEFAULT,
   TEXT_PADDING_MIN,
   TEXT_PADDING_MAX,
+  QR_SIZE_MIN,
+  QR_SIZE_MAX,
+  QR_SIZE_DEFAULT,
+  QR_VERTICAL_POSITION_DEFAULT,
+  QR_HORIZONTAL_POSITION_DEFAULT,
+  QR_DOTS_COLOR_DEFAULT,
+  QR_BACKGROUND_COLOR_DEFAULT,
+  QR_DOT_TYPES,
+  QR_CORNER_SQUARE_TYPES,
+  QR_CORNER_DOT_TYPES,
   styles,
   type TextLine,
 } from './meme-generator-config'
@@ -71,10 +83,11 @@ const ColorButton = ({
   return (
     <button
       onClick={onClick}
-      className={`group relative flex flex-col items-center gap-1 rounded-lg border-2 p-2 transition-all ${isActive
-        ? 'border-brand-cloud-blue shadow-md dark:border-blue-400'
-        : 'border-brand-frosted-steel hover:border-brand-cloud-blue/50 dark:border-gray-600 dark:hover:border-blue-500/50'
-        }`}
+      className={`group relative flex flex-col items-center gap-1 rounded-lg border-2 p-2 transition-all ${
+        isActive
+          ? 'border-brand-cloud-blue shadow-md dark:border-blue-400'
+          : 'border-brand-frosted-steel hover:border-brand-cloud-blue/50 dark:border-gray-600 dark:hover:border-blue-500/50'
+      }`}
       title={color.name}
     >
       <div
@@ -130,8 +143,9 @@ const ToggleButton = ({
 }) => (
   <button
     onClick={onClick}
-    className={`flex-1 rounded-lg border px-3 py-2 transition-colors ${active ? styles.buttonActive : styles.buttonInactive
-      }`}
+    className={`flex-1 rounded-lg border px-3 py-2 transition-colors ${
+      active ? styles.buttonActive : styles.buttonInactive
+    }`}
     aria-pressed={active}
   >
     {children}
@@ -142,6 +156,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
+  const qrImageRef = useRef<HTMLImageElement | null>(null)
 
   const [backgroundColor, setBackgroundColor] = useState(DEFAULT_BG_COLOR)
   const [backgroundImage, setBackgroundImage] = useState<File | null>(null)
@@ -168,6 +183,24 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
     false,
     false,
   ])
+  const [qrCodeUrl, setQrCodeUrl] = useState('')
+  const [qrCodeImage, setQrCodeImage] = useState<string | null>(null)
+  const [qrSize, setQrSize] = useState(QR_SIZE_DEFAULT)
+  const [qrVerticalPosition, setQrVerticalPosition] = useState(
+    QR_VERTICAL_POSITION_DEFAULT,
+  )
+  const [qrHorizontalPosition, setQrHorizontalPosition] = useState(
+    QR_HORIZONTAL_POSITION_DEFAULT,
+  )
+  const [showQrAdvanced, setShowQrAdvanced] = useState(false)
+  const [qrDotsColor, setQrDotsColor] = useState(QR_DOTS_COLOR_DEFAULT)
+  const [qrDotsType, setQrDotsType] = useState<string>('dots')
+  const [qrCornerSquareType, setQrCornerSquareType] =
+    useState<string>('rounded')
+  const [qrCornerDotType, setQrCornerDotType] = useState<string>('dot')
+  const [qrBackgroundColor, setQrBackgroundColor] = useState(
+    QR_BACKGROUND_COLOR_DEFAULT,
+  )
 
   const getMonochromeColor = useCallback(() => {
     if (backgroundImageUrl) return '#FFFFFF'
@@ -314,8 +347,24 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
           ctx.fillText(textLine, x, y)
         })
       })
+
+      if (qrImageRef.current && qrCodeImage) {
+        const centerX = (qrHorizontalPosition / 100) * CANVAS_SIZE
+        const centerY = (qrVerticalPosition / 100) * CANVAS_SIZE
+        const x = centerX - qrSize / 2
+        const y = centerY - qrSize / 2
+        ctx.drawImage(qrImageRef.current, x, y, qrSize, qrSize)
+      }
     },
-    [backgroundColor, backgroundImageUrl, textLines],
+    [
+      backgroundColor,
+      backgroundImageUrl,
+      textLines,
+      qrCodeImage,
+      qrSize,
+      qrVerticalPosition,
+      qrHorizontalPosition,
+    ],
   )
 
   const draw = useCallback(() => {
@@ -330,6 +379,68 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
   useEffect(() => {
     draw()
   }, [draw])
+
+  useEffect(() => {
+    if (qrCodeUrl) {
+      const qrCode = new QRCodeStyling({
+        width: qrSize * 2,
+        height: qrSize * 2,
+        type: 'canvas',
+        data: qrCodeUrl,
+        dotsOptions: {
+          color: qrDotsColor,
+          type: qrDotsType as
+            | 'rounded'
+            | 'dots'
+            | 'classy'
+            | 'classy-rounded'
+            | 'square'
+            | 'extra-rounded',
+        },
+        backgroundOptions: {
+          color: qrBackgroundColor,
+        },
+        cornersSquareOptions: {
+          type: qrCornerSquareType as 'dot' | 'square' | 'extra-rounded',
+        },
+        cornersDotOptions: {
+          type: qrCornerDotType as 'dot' | 'square',
+        },
+        qrOptions: {
+          errorCorrectionLevel: 'M',
+        },
+      })
+
+      qrCode.getRawData('png').then((blob) => {
+        if (blob && blob instanceof Blob) {
+          const reader = new FileReader()
+          reader.onload = () => {
+            const dataUrl = reader.result as string
+            setQrCodeImage(dataUrl)
+            const img = new window.Image()
+            img.onload = () => {
+              qrImageRef.current = img
+              draw()
+            }
+            img.src = dataUrl
+          }
+          reader.readAsDataURL(blob)
+        }
+      })
+    } else {
+      setQrCodeImage(null)
+      qrImageRef.current = null
+    }
+  }, [
+    qrCodeUrl,
+    qrSize,
+    qrDotsColor,
+    qrDotsType,
+    qrCornerSquareType,
+    qrCornerDotType,
+    qrBackgroundColor,
+    draw,
+  ])
 
   useEffect(() => {
     const maxPosition = CANVAS_SIZE - logoSize
@@ -573,7 +684,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
             {expandedSections[index] && (
               <div className="space-y-4">
                 <div>
-                  <label htmlFor={`text-${index}`} className={styles.label}>
+                  <label htmlFor={`text-${index}`} className="sr-only">
                     Text Content
                   </label>
                   <input
@@ -804,6 +915,165 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
             )}
           </div>
         ))}
+
+        {/* QR Code Section */}
+        <div className={styles.panel}>
+          <div className="mb-4 flex items-center gap-2">
+            <QrCodeIcon className="h-5 w-5 text-brand-slate-gray dark:text-gray-300" />
+            <h3 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
+              QR Code
+            </h3>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="qr-url" className="sr-only">
+                URL
+              </label>
+              <input
+                type="url"
+                id="qr-url"
+                value={qrCodeUrl}
+                onChange={(e) => setQrCodeUrl(e.target.value)}
+                placeholder="https://example.com"
+                className={styles.input}
+              />
+            </div>
+
+            <button
+              onClick={() => setShowQrAdvanced(!showQrAdvanced)}
+              className="flex w-full items-center justify-between text-sm text-brand-slate-gray hover:text-brand-cloud-blue dark:text-gray-400 dark:hover:text-blue-400"
+            >
+              <span>Advanced Options</span>
+              {showQrAdvanced ? (
+                <ChevronUpIcon className="h-4 w-4" />
+              ) : (
+                <ChevronDownIcon className="h-4 w-4" />
+              )}
+            </button>
+
+            {showQrAdvanced && (
+              <div className="space-y-4 pt-2">
+                <div>
+                  <label htmlFor="qr-dots-color" className={styles.label}>
+                    Dots Color
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      id="qr-dots-color"
+                      value={qrDotsColor}
+                      onChange={(e) => setQrDotsColor(e.target.value)}
+                      className="h-10 w-20 cursor-pointer rounded border border-brand-frosted-steel dark:border-gray-600"
+                    />
+                    <input
+                      type="text"
+                      value={qrDotsColor}
+                      onChange={(e) => setQrDotsColor(e.target.value)}
+                      className="flex-1 rounded border border-brand-frosted-steel bg-brand-glacier-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                      placeholder="#000000"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="qr-bg-color" className={styles.label}>
+                    Background Color
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      id="qr-bg-color"
+                      value={qrBackgroundColor}
+                      onChange={(e) => setQrBackgroundColor(e.target.value)}
+                      className="h-10 w-20 cursor-pointer rounded border border-brand-frosted-steel dark:border-gray-600"
+                    />
+                    <input
+                      type="text"
+                      value={qrBackgroundColor}
+                      onChange={(e) => setQrBackgroundColor(e.target.value)}
+                      className="flex-1 rounded border border-brand-frosted-steel bg-brand-glacier-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700"
+                      placeholder="#FFFFFF"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={styles.label}>Dots Style</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {QR_DOT_TYPES.map((type) => (
+                      <ToggleButton
+                        key={type.value}
+                        active={qrDotsType === type.value}
+                        onClick={() => setQrDotsType(type.value)}
+                      >
+                        {type.name}
+                      </ToggleButton>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className={styles.label}>Corner Square Style</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {QR_CORNER_SQUARE_TYPES.map((type) => (
+                      <ToggleButton
+                        key={type.value}
+                        active={qrCornerSquareType === type.value}
+                        onClick={() => setQrCornerSquareType(type.value)}
+                      >
+                        {type.name}
+                      </ToggleButton>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className={styles.label}>Corner Dot Style</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {QR_CORNER_DOT_TYPES.map((type) => (
+                      <ToggleButton
+                        key={type.value}
+                        active={qrCornerDotType === type.value}
+                        onClick={() => setQrCornerDotType(type.value)}
+                      >
+                        {type.name}
+                      </ToggleButton>
+                    ))}
+                  </div>
+                </div>
+
+                <Slider
+                  id="qr-size"
+                  label="QR Code Size"
+                  value={qrSize}
+                  onChange={setQrSize}
+                  min={QR_SIZE_MIN}
+                  max={QR_SIZE_MAX}
+                  suffix="px"
+                />
+                <Slider
+                  id="qr-vertical"
+                  label="Vertical Position"
+                  value={qrVerticalPosition}
+                  onChange={setQrVerticalPosition}
+                  min={0}
+                  max={100}
+                  suffix="%"
+                />
+                <Slider
+                  id="qr-horizontal"
+                  label="Horizontal Position"
+                  value={qrHorizontalPosition}
+                  onChange={setQrHorizontalPosition}
+                  min={0}
+                  max={100}
+                  suffix="%"
+                />
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

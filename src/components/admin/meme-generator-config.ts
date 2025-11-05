@@ -10,6 +10,35 @@ export const TEXT_PADDING_MIN = 0
 export const TEXT_PADDING_MAX = 30
 export const TEXT_PADDING_DEFAULT = 5
 
+export const QR_SIZE_MIN = 100
+export const QR_SIZE_MAX = 400
+export const QR_SIZE_DEFAULT = 250
+export const QR_VERTICAL_POSITION_DEFAULT = 67
+export const QR_HORIZONTAL_POSITION_DEFAULT = 50
+export const QR_DOTS_COLOR_DEFAULT = '#FFFFFF'
+export const QR_BACKGROUND_COLOR_DEFAULT = 'transparent'
+
+export const QR_DOT_TYPES = [
+  { name: 'Square', value: 'square' },
+  { name: 'Rounded', value: 'rounded' },
+  { name: 'Dots', value: 'dots' },
+  { name: 'Classy', value: 'classy' },
+  { name: 'Extra Rounded', value: 'extra-rounded' },
+] as const
+
+export const QR_CORNER_SQUARE_TYPES = [
+  { name: 'Square', value: 'square' },
+  { name: 'Rounded', value: 'rounded' },
+  { name: 'Extra Rounded', value: 'extra-rounded' },
+  { name: 'Dot', value: 'dot' },
+] as const
+
+export const QR_CORNER_DOT_TYPES = [
+  { name: 'Square', value: 'square' },
+  { name: 'Rounded', value: 'rounded' },
+  { name: 'Dot', value: 'dot' },
+] as const
+
 export const BRAND_COLORS = [
   { name: 'Cloud Blue', value: '#1D4ED8' },
   { name: 'Nordic Purple', value: '#6366F1' },
@@ -68,7 +97,7 @@ export const DEFAULT_TEXT_LINES: TextLine[] = [
   },
   {
     text: '',
-    verticalPosition: 50,
+    verticalPosition: 45,
     fontSize: 80,
     fontFamily: 'Space Grotesk',
     isBold: false,
