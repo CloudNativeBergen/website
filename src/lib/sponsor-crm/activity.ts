@@ -1,6 +1,7 @@
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
 import type { ActivityType, SponsorActivityInput } from './types'
+import { formatStatusName } from '@/components/admin/sponsor-crm/utils'
 
 export async function createSponsorActivity(
   sponsorForConferenceId: string,
@@ -55,7 +56,7 @@ export async function logStageChange(
   return createSponsorActivity(
     sponsorForConferenceId,
     'stage_change',
-    `Status changed from ${oldStatus} to ${newStatus}`,
+    `Status changed from ${formatStatusName(oldStatus)} to ${formatStatusName(newStatus)}`,
     createdBy,
     {
       old_value: oldStatus,
@@ -74,7 +75,26 @@ export async function logInvoiceStatusChange(
   return createSponsorActivity(
     sponsorForConferenceId,
     'invoice_status_change',
-    `Invoice status changed from ${oldStatus} to ${newStatus}`,
+    `Invoice status changed from ${formatStatusName(oldStatus)} to ${formatStatusName(newStatus)}`,
+    createdBy,
+    {
+      old_value: oldStatus,
+      new_value: newStatus,
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}
+
+export async function logContractStatusChange(
+  sponsorForConferenceId: string,
+  oldStatus: string,
+  newStatus: string,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'contract_status_change',
+    `Contract status changed from ${formatStatusName(oldStatus ?? 'Not Set')} to ${formatStatusName(newStatus ?? 'Not Set')}`,
     createdBy,
     {
       old_value: oldStatus,

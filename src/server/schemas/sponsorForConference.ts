@@ -16,6 +16,13 @@ export const InvoiceStatusSchema = z.enum([
   'cancelled',
 ])
 
+export const ContractStatusSchema = z.enum([
+  'none',
+  'verbal-agreement',
+  'contract-sent',
+  'contract-signed',
+])
+
 export const SponsorTagSchema = z.enum([
   'warm-lead',
   'returning-sponsor',
@@ -26,12 +33,13 @@ export const SponsorTagSchema = z.enum([
   'multi-year-potential',
 ])
 
-export const CurrencySchema = z.enum(['NOK', 'USD', 'EUR'])
+export const CurrencySchema = z.enum(['NOK', 'USD', 'EUR', 'GBP'])
 
 export const SponsorForConferenceInputSchema = z.object({
   sponsor: z.string().min(1, 'Sponsor ID is required'),
   conference: z.string().min(1, 'Conference ID is required'),
   tier: z.string().optional(),
+  contract_status: ContractStatusSchema,
   status: SponsorStatusSchema,
   assigned_to: z.string().optional(),
   contact_initiated_at: z.string().optional(),
@@ -48,6 +56,7 @@ export const SponsorForConferenceInputSchema = z.object({
 export const SponsorForConferenceUpdateSchema = z.object({
   id: z.string().min(1, 'ID is required'),
   tier: z.string().optional(),
+  contract_status: ContractStatusSchema.optional(),
   status: SponsorStatusSchema.optional(),
   assigned_to: z.string().nullable().optional(),
   contact_initiated_at: z.string().nullable().optional(),

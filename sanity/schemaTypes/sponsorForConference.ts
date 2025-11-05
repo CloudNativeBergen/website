@@ -46,6 +46,22 @@ export default defineType({
       },
     }),
     defineField({
+      name: 'contract_status',
+      title: 'Contract Status',
+      type: 'string',
+      options: {
+        list: [
+          { title: 'None', value: 'none' },
+          { title: 'Verbal Agreement', value: 'verbal-agreement' },
+          { title: 'Contract Sent', value: 'contract-sent' },
+          { title: 'Contract Signed', value: 'contract-signed' },
+        ],
+        layout: 'dropdown',
+      },
+      initialValue: 'none',
+      validation: (Rule) => Rule.required(),
+    }),
+    defineField({
       name: 'status',
       title: 'Status',
       type: 'string',
@@ -176,6 +192,15 @@ export default defineType({
       options: {
         layout: 'tags',
       },
+    }),
+    defineField({
+      name: 'legacy_synced_at',
+      title: 'Legacy Sync Timestamp',
+      type: 'datetime',
+      description:
+        'Internal: Last sync to conference.sponsors[] array (read-only)',
+      readOnly: true,
+      hidden: true,
     }),
   ],
   preview: {

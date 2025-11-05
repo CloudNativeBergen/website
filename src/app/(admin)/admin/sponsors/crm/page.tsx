@@ -1,7 +1,7 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { SponsorCRMClient } from './SponsorCRMClient'
-import Link from 'next/link'
+import { BuildingOffice2Icon } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsorsCRM() {
   const { conference, error: conferenceError } =
@@ -19,28 +19,14 @@ export default async function AdminSponsorsCRM() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex gap-2">
-          <Link
-            href="/admin/sponsors"
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-brand-slate-gray hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-          >
-            Active Sponsors
-          </Link>
-          <Link
-            href="/admin/sponsors/crm"
-            className="rounded-lg border border-brand-cloud-blue bg-brand-cloud-blue px-4 py-2 text-sm font-medium text-white hover:bg-brand-cloud-blue-hover dark:bg-blue-600 dark:hover:bg-blue-700"
-          >
-            Pipeline / CRM
-          </Link>
-        </div>
-      </div>
-
+    <div className="mx-auto max-w-7xl">
       <AdminPageHeader
+        icon={<BuildingOffice2Icon />}
         title="Sponsor Pipeline"
-        description={`Manage sponsor relationships and track deals for ${conference.title}`}
-        icon={undefined}
+        description="Manage sponsor relationships and track deals for"
+        contextHighlight={conference.title}
+        stats={[]}
+        backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
       />
 
       <SponsorCRMClient conferenceId={conference._id} />

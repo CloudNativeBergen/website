@@ -16,7 +16,7 @@
     "test:debug": "jest",
     "test:watch": "jest --watch",
     "format:check": "prettier --check .",
-    "format": "prettier --write .",
+    "format": "prettier --write --list-different .",
     "typecheck": "tsc --noEmit",
     "sanity": "sanity",
     "sanity:deploy": "sanity deploy",

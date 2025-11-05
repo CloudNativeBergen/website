@@ -8,30 +8,32 @@ import {
   DialogTitle,
   Transition,
   TransitionChild,
-  Combobox,
-  ComboboxInput,
-  ComboboxButton,
-  ComboboxOptions,
-  ComboboxOption,
 } from '@headlessui/react'
 import { api } from '@/lib/trpc/client'
 import type {
   SponsorForConferenceExpanded,
   SponsorStatus,
   InvoiceStatus,
+  ContractStatus,
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
-import {
-  XMarkIcon,
-  ChevronDownIcon,
-  UserGroupIcon,
-  PhoneIcon,
-  ChatBubbleLeftRightIcon,
-  XCircleIcon,
-  CheckCircleIcon,
-} from '@heroicons/react/24/outline'
-import { ChevronUpDownIcon, CheckIcon } from '@heroicons/react/20/solid'
+import { sortSponsorTiersByValue } from '@/lib/sponsor/utils'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
+import {
+  StatusListbox,
+  SponsorCombobox,
+  TierRadioGroup,
+  OrganizerCombobox,
+  ContractValueInput,
+} from './form'
+import {
+  STATUSES,
+  INVOICE_STATUSES,
+  CONTRACT_STATUSES,
+  TAGS,
+} from './form/constants'
+import { useNotification } from '@/components/admin/NotificationProvider'
 
 interface SponsorCRMFormProps {
   conferenceId: string
@@ -42,32 +44,6 @@ interface SponsorCRMFormProps {
   existingSponsorsInCRM?: string[]
 }
 
-const STATUSES: Array<{ value: SponsorStatus; label: string }> = [
-  { value: 'prospect', label: 'Prospect' },
-  { value: 'contacted', label: 'Contacted' },
-  { value: 'negotiating', label: 'Negotiating' },
-  { value: 'closed-won', label: 'Won' },
-  { value: 'closed-lost', label: 'Lost' },
-]
-
-const INVOICE_STATUSES: Array<{ value: InvoiceStatus; label: string }> = [
-  { value: 'not-sent', label: 'Not Sent' },
-  { value: 'sent', label: 'Sent' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'overdue', label: 'Overdue' },
-  { value: 'cancelled', label: 'Cancelled' },
-]
-
-const TAGS: Array<{ value: SponsorTag; label: string }> = [
-  { value: 'warm-lead', label: 'Warm Lead' },
-  { value: 'returning-sponsor', label: 'Returning Sponsor' },
-  { value: 'cold-outreach', label: 'Cold Outreach' },
-  { value: 'referral', label: 'Referral' },
-  { value: 'high-priority', label: 'High Priority' },
-  { value: 'needs-follow-up', label: 'Needs Follow-up' },
-  { value: 'multi-year-potential', label: 'Multi-year Potential' },
-]
-
 export function SponsorCRMForm({
   conferenceId,
   sponsor,
@@ -76,15 +52,19 @@ export function SponsorCRMForm({
   onSuccess,
   existingSponsorsInCRM = [],
 }: SponsorCRMFormProps) {
+  const { showNotification } = useNotification()
+
   const [formData, setFormData] = useState({
     sponsorId: '',
     tierId: '',
+    contractStatus: 'none' as ContractStatus,
     status: 'prospect' as SponsorStatus,
     invoiceStatus: 'not-sent' as InvoiceStatus,
     contractValue: '',
     contractCurrency: 'NOK',
     notes: '',
     tags: [] as SponsorTag[],
+    assignedTo: '',
   })
 
   const { data: allSponsors = [] } = api.sponsor.list.useQuery({
@@ -101,45 +81,116 @@ export function SponsorCRMForm({
       { enabled: isOpen },
     )
 
+  const sortedSponsorTiers = sortSponsorTiersByValue(sponsorTiers)
+
+  const { data: organizers = [] } = api.sponsor.crm.listOrganizers.useQuery(
+    undefined,
+    { enabled: isOpen },
+  )
+
   const createMutation = api.sponsor.crm.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Invalidate all sponsor queries to ensure fresh data
+      await utils.sponsor.crm.list.invalidate()
+      await utils.sponsor.crm.list.refetch()
+      showNotification({
+        title: 'Success',
+        message: 'Sponsor added to pipeline',
+        type: 'success',
+      })
       onSuccess()
       onClose()
+    },
+    onError: (error) => {
+      showNotification({
+        title: 'Error',
+        message: error.message || 'Failed to add sponsor',
+        type: 'error',
+      })
     },
   })
 
   const updateMutation = api.sponsor.crm.update.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      // Invalidate all sponsor queries to ensure fresh data
+      await utils.sponsor.crm.list.invalidate()
+      await utils.sponsor.crm.list.refetch()
+      showNotification({
+        title: 'Success',
+        message: 'Sponsor updated successfully',
+        type: 'success',
+      })
       onSuccess()
       onClose()
     },
+    onError: (error) => {
+      showNotification({
+        title: 'Error',
+        message: error.message || 'Failed to update sponsor',
+        type: 'error',
+      })
+    },
   })
 
+  const utils = api.useUtils()
+
+  const resetCreateMutation = createMutation.reset
+  const resetUpdateMutation = updateMutation.reset
+
   useEffect(() => {
-    if (sponsor) {
-      setFormData({
-        sponsorId: sponsor.sponsor._id,
-        tierId: sponsor.tier?._id || '',
-        status: sponsor.status,
-        invoiceStatus: sponsor.invoice_status,
-        contractValue: sponsor.contract_value?.toString() || '',
-        contractCurrency: sponsor.contract_currency || 'NOK',
-        notes: sponsor.notes || '',
-        tags: sponsor.tags || [],
-      })
-    } else {
-      setFormData({
-        sponsorId: '',
-        tierId: '',
-        status: 'prospect',
-        invoiceStatus: 'not-sent',
-        contractValue: '',
-        contractCurrency: 'NOK',
-        notes: '',
-        tags: [],
-      })
+    if (isOpen) {
+      // Reset mutation states when modal opens
+      resetCreateMutation()
+      resetUpdateMutation()
+
+      if (sponsor) {
+        setFormData({
+          sponsorId: sponsor.sponsor._id,
+          tierId: sponsor.tier?._id || '',
+          contractStatus: sponsor.contract_status,
+          status: sponsor.status,
+          invoiceStatus: sponsor.invoice_status,
+          contractValue: sponsor.contract_value?.toString() || '',
+          contractCurrency: sponsor.contract_currency || 'NOK',
+          notes: sponsor.notes || '',
+          tags: sponsor.tags || [],
+          assignedTo: sponsor.assigned_to?._id || '',
+        })
+      } else {
+        setFormData({
+          sponsorId: '',
+          tierId: '',
+          contractStatus: 'none',
+          status: 'prospect',
+          invoiceStatus: 'not-sent',
+          contractValue: '',
+          contractCurrency: 'NOK',
+          notes: '',
+          tags: [],
+          assignedTo: '',
+        })
+      }
     }
-  }, [sponsor, isOpen])
+  }, [sponsor, isOpen, resetCreateMutation, resetUpdateMutation])
+
+  // CMD+S / CTRL+S keyboard shortcut to save the form
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        // Create a synthetic form submit event
+        const form = document.querySelector('form')
+        if (form && !createMutation.isPending && !updateMutation.isPending) {
+          form.requestSubmit()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, createMutation.isPending, updateMutation.isPending])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -148,28 +199,40 @@ export function SponsorCRMForm({
       await updateMutation.mutateAsync({
         id: sponsor._id,
         tier: formData.tierId || undefined,
+        contract_status: formData.contractStatus,
         status: formData.status,
         invoice_status: formData.invoiceStatus,
         contract_value: formData.contractValue
           ? parseFloat(formData.contractValue)
           : undefined,
-        contract_currency: formData.contractCurrency as 'NOK' | 'USD' | 'EUR',
+        contract_currency: formData.contractCurrency as
+          | 'NOK'
+          | 'USD'
+          | 'EUR'
+          | 'GBP',
         notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
+        assigned_to: formData.assignedTo || null,
       })
     } else {
       await createMutation.mutateAsync({
         sponsor: formData.sponsorId,
         conference: conferenceId,
         tier: formData.tierId || undefined,
+        contract_status: formData.contractStatus,
         status: formData.status,
         invoice_status: formData.invoiceStatus,
         contract_value: formData.contractValue
           ? parseFloat(formData.contractValue)
           : undefined,
-        contract_currency: formData.contractCurrency as 'NOK' | 'USD' | 'EUR',
+        contract_currency: formData.contractCurrency as
+          | 'NOK'
+          | 'USD'
+          | 'EUR'
+          | 'GBP',
         notes: formData.notes || undefined,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
+        assigned_to: formData.assignedTo || undefined,
       })
     }
   }
@@ -218,251 +281,94 @@ export function SponsorCRMForm({
                 <form onSubmit={handleSubmit} className="mt-3">
                   <div className="space-y-3">
                     {/* Sponsor Selection */}
-                    <div>
-                      <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                        Sponsor *
-                      </label>
-                      <Combobox
-                        value={formData.sponsorId}
-                        onChange={(value) =>
-                          setFormData({ ...formData, sponsorId: value || '' })
-                        }
-                        disabled={!!sponsor}
-                      >
-                        <div className="relative mt-1.5">
-                          <ComboboxInput
-                            className="grid w-full cursor-default grid-cols-1 rounded-md bg-white py-1.5 pr-8 pl-3 text-left text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500 disabled:outline-gray-200 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:disabled:bg-white/5 dark:disabled:text-gray-400 dark:disabled:outline-white/10"
-                            displayValue={(id: string) =>
-                              availableSponsors.find((s) => s._id === id)
-                                ?.name || ''
-                            }
-                            placeholder="Select a sponsor..."
-                          />
-                          <ComboboxButton className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                            <ChevronUpDownIcon
-                              className="h-5 w-5 text-gray-400 sm:h-4 sm:w-4"
-                              aria-hidden="true"
-                            />
-                          </ComboboxButton>
-                          <ComboboxOptions className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg outline-1 -outline-offset-1 outline-gray-300 focus:outline-none sm:text-sm dark:bg-gray-800 dark:outline-white/10">
-                            {availableSponsors.length === 0 ? (
-                              <div className="relative cursor-default px-3 py-2 text-gray-500 select-none dark:text-gray-400">
-                                No sponsors available
-                              </div>
-                            ) : (
-                              availableSponsors.map((s) => (
-                                <ComboboxOption
-                                  key={s._id}
-                                  value={s._id}
-                                  className="group relative cursor-default py-2 pr-9 pl-3 text-gray-900 select-none data-focus:bg-indigo-600 data-focus:text-white dark:text-white"
-                                >
-                                  <span className="block truncate font-normal group-data-selected:font-semibold">
-                                    {s.name}
-                                  </span>
-                                  <span className="absolute inset-y-0 right-0 hidden items-center pr-4 text-indigo-600 group-data-focus:text-white group-data-selected:flex">
-                                    <CheckIcon
-                                      className="h-5 w-5"
-                                      aria-hidden="true"
-                                    />
-                                  </span>
-                                </ComboboxOption>
-                              ))
-                            )}
-                          </ComboboxOptions>
-                        </div>
-                      </Combobox>
-                    </div>
+                    <SponsorCombobox
+                      value={formData.sponsorId}
+                      onChange={(value) =>
+                        setFormData({ ...formData, sponsorId: value })
+                      }
+                      availableSponsors={availableSponsors}
+                      disabled={!!sponsor}
+                    />
 
                     {/* Tier Selection */}
-                    <fieldset>
-                      <legend className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                        Sponsor Tier
-                      </legend>
-                      <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-                        <label
-                          aria-label="No tier"
-                          className="group relative flex cursor-pointer items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50 has-checked:border-indigo-600 has-checked:bg-indigo-50 has-checked:text-indigo-600 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-indigo-600 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 dark:has-checked:border-indigo-500 dark:has-checked:bg-indigo-500/10 dark:has-checked:text-indigo-400"
-                        >
-                          <input
-                            type="radio"
-                            name="tier"
-                            value=""
-                            checked={!formData.tierId}
-                            onChange={() =>
-                              setFormData({ ...formData, tierId: '' })
-                            }
-                            className="absolute inset-0 appearance-none focus:outline-none"
-                          />
-                          <span className="whitespace-nowrap text-gray-900 group-has-checked:text-indigo-600 dark:text-white dark:group-has-checked:text-indigo-400">
-                            No tier
-                          </span>
-                        </label>
-                        {sponsorTiers.map((tier) => (
-                          <label
-                            key={tier._id}
-                            aria-label={tier.title}
-                            className="group relative flex cursor-pointer items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50 has-checked:border-indigo-600 has-checked:bg-indigo-50 has-checked:text-indigo-600 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-indigo-600 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 dark:has-checked:border-indigo-500 dark:has-checked:bg-indigo-500/10 dark:has-checked:text-indigo-400"
-                          >
-                            <input
-                              type="radio"
-                              name="tier"
-                              value={tier._id}
-                              checked={formData.tierId === tier._id}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  tierId: e.target.value,
-                                })
-                              }
-                              className="absolute inset-0 appearance-none focus:outline-none"
-                            />
-                            <span className="whitespace-nowrap text-gray-900 group-has-checked:text-indigo-600 dark:text-white dark:group-has-checked:text-indigo-400">
-                              {tier.title}
-                            </span>
-                          </label>
-                        ))}
+                    <TierRadioGroup
+                      tiers={sortedSponsorTiers}
+                      value={formData.tierId}
+                      onChange={(value) =>
+                        setFormData({ ...formData, tierId: value })
+                      }
+                    />
+
+                    {/* Status, Contract Status, and Invoice Status */}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div>
+                        <StatusListbox
+                          label="Status *"
+                          value={formData.status}
+                          onChange={(value) =>
+                            setFormData({ ...formData, status: value })
+                          }
+                          options={STATUSES}
+                        />
                       </div>
-                    </fieldset>
 
-                    {/* Status and Invoice Status */}
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <fieldset>
-                        <legend className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                          Status *
-                        </legend>
-                        <div className="mt-1.5 grid grid-cols-2 gap-1.5 lg:grid-cols-3">
-                          {STATUSES.map((status) => {
-                            const Icon =
-                              status.value === 'prospect'
-                                ? UserGroupIcon
-                                : status.value === 'contacted'
-                                  ? PhoneIcon
-                                  : status.value === 'negotiating'
-                                    ? ChatBubbleLeftRightIcon
-                                    : status.value === 'closed-won'
-                                      ? CheckCircleIcon
-                                      : XCircleIcon
-                            return (
-                              <label
-                                key={status.value}
-                                aria-label={status.label}
-                                className="group relative flex cursor-pointer items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50 has-checked:border-indigo-600 has-checked:bg-indigo-50 has-checked:text-indigo-600 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-indigo-600 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 dark:has-checked:border-indigo-500 dark:has-checked:bg-indigo-500/10 dark:has-checked:text-indigo-400"
-                              >
-                                <input
-                                  type="radio"
-                                  name="status"
-                                  value={status.value}
-                                  checked={formData.status === status.value}
-                                  onChange={(e) =>
-                                    setFormData({
-                                      ...formData,
-                                      status: e.target.value as SponsorStatus,
-                                    })
-                                  }
-                                  required
-                                  className="absolute inset-0 appearance-none focus:outline-none"
-                                />
-                                <Icon className="h-4 w-4 shrink-0" />
-                                <span className="whitespace-nowrap text-gray-900 group-has-checked:text-indigo-600 dark:text-white dark:group-has-checked:text-indigo-400">
-                                  {status.label}
-                                </span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                      </fieldset>
+                      <div>
+                        <StatusListbox
+                          label="Contract Status *"
+                          value={formData.contractStatus}
+                          onChange={(value) =>
+                            setFormData({ ...formData, contractStatus: value })
+                          }
+                          options={CONTRACT_STATUSES}
+                        />
+                      </div>
 
-                      <fieldset>
-                        <legend className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                          Invoice Status *
-                        </legend>
-                        <div className="mt-1.5 grid grid-cols-2 gap-1.5 lg:grid-cols-3">
-                          {INVOICE_STATUSES.map((status) => {
-                            const Icon =
-                              status.value === 'not-sent'
-                                ? XMarkIcon
-                                : status.value === 'sent'
-                                  ? PhoneIcon
-                                  : status.value === 'paid'
-                                    ? CheckCircleIcon
-                                    : status.value === 'overdue'
-                                      ? XCircleIcon
-                                      : XMarkIcon
-                            return (
-                              <label
-                                key={status.value}
-                                aria-label={status.label}
-                                className="group relative flex cursor-pointer items-center justify-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50 has-checked:border-indigo-600 has-checked:bg-indigo-50 has-checked:text-indigo-600 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-indigo-600 dark:border-gray-600 dark:bg-gray-800 dark:hover:bg-gray-700 dark:has-checked:border-indigo-500 dark:has-checked:bg-indigo-500/10 dark:has-checked:text-indigo-400"
-                              >
-                                <input
-                                  type="radio"
-                                  name="invoiceStatus"
-                                  value={status.value}
-                                  checked={
-                                    formData.invoiceStatus === status.value
-                                  }
-                                  onChange={(e) =>
-                                    setFormData({
-                                      ...formData,
-                                      invoiceStatus: e.target
-                                        .value as InvoiceStatus,
-                                    })
-                                  }
-                                  required
-                                  className="absolute inset-0 appearance-none focus:outline-none"
-                                />
-                                <Icon className="h-4 w-4 shrink-0" />
-                                <span className="whitespace-nowrap text-gray-900 group-has-checked:text-indigo-600 dark:text-white dark:group-has-checked:text-indigo-400">
-                                  {status.label}
-                                </span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                      </fieldset>
+                      <div>
+                        <StatusListbox
+                          label="Invoice Status *"
+                          value={formData.invoiceStatus}
+                          onChange={(value) =>
+                            setFormData({ ...formData, invoiceStatus: value })
+                          }
+                          options={INVOICE_STATUSES}
+                          disabled={
+                            !formData.contractValue ||
+                            parseFloat(formData.contractValue) === 0
+                          }
+                          helperText={
+                            !formData.contractValue ||
+                            parseFloat(formData.contractValue) === 0
+                              ? '(No cost)'
+                              : undefined
+                          }
+                        />
+                      </div>
                     </div>
 
-                    {/* Contract Value and Tags */}
+                    {/* Assigned To and Contract Value */}
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                          Contract Value
-                        </label>
-                        <div className="mt-1.5 flex gap-2">
-                          <input
-                            type="number"
-                            value={formData.contractValue}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                contractValue: e.target.value,
-                              })
-                            }
-                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
-                          />
-                          <div className="relative grid w-28 grid-cols-1">
-                            <select
-                              value={formData.contractCurrency}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  contractCurrency: e.target.value,
-                                })
-                              }
-                              className="col-start-1 row-start-1 block w-full appearance-none rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
-                            >
-                              <option value="NOK">NOK</option>
-                              <option value="USD">USD</option>
-                              <option value="EUR">EUR</option>
-                            </select>
-                            <ChevronDownIcon
-                              className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
-                              aria-hidden="true"
-                            />
-                          </div>
-                        </div>
-                      </div>
+                      <OrganizerCombobox
+                        value={formData.assignedTo}
+                        onChange={(value) =>
+                          setFormData({ ...formData, assignedTo: value })
+                        }
+                        organizers={organizers}
+                      />
 
+                      <ContractValueInput
+                        value={formData.contractValue}
+                        currency={formData.contractCurrency}
+                        onValueChange={(value) =>
+                          setFormData({ ...formData, contractValue: value })
+                        }
+                        onCurrencyChange={(value) =>
+                          setFormData({ ...formData, contractCurrency: value })
+                        }
+                      />
+                    </div>
+
+                    {/* Tags */}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <div>
                         <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
                           Tags
@@ -527,17 +433,22 @@ export function SponsorCRMForm({
                         createMutation.isPending || updateMutation.isPending
                       }
                       className={clsx(
-                        'inline-flex justify-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
+                        'inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
                         createMutation.isPending || updateMutation.isPending
                           ? 'bg-gray-400 dark:bg-gray-600'
                           : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
                       )}
                     >
-                      {createMutation.isPending || updateMutation.isPending
-                        ? 'Saving...'
-                        : sponsor
-                          ? 'Update'
-                          : 'Add'}
+                      {createMutation.isPending || updateMutation.isPending ? (
+                        'Saving...'
+                      ) : (
+                        <>
+                          {sponsor ? 'Update' : 'Add'}
+                          <kbd className="rounded bg-white/20 px-1.5 py-0.5 font-mono text-xs">
+                            ⌘S
+                          </kbd>
+                        </>
+                      )}
                     </button>
                     <button
                       type="button"

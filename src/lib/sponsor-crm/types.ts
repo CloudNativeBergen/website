@@ -12,9 +12,16 @@ export type InvoiceStatus =
   | 'overdue'
   | 'cancelled'
 
+export type ContractStatus =
+  | 'none'
+  | 'verbal-agreement'
+  | 'contract-sent'
+  | 'contract-signed'
+
 export type ActivityType =
   | 'stage_change'
   | 'invoice_status_change'
+  | 'contract_status_change'
   | 'contract_signed'
   | 'note'
   | 'email'
@@ -43,6 +50,7 @@ export interface SponsorForConference {
   tier?: {
     _ref: string
   }
+  contract_status: ContractStatus
   status: SponsorStatus
   assigned_to?: {
     _ref: string
@@ -85,17 +93,18 @@ export interface SponsorForConferenceExpanded {
       currency: string
     }>
   }
+  contract_status: ContractStatus
   status: SponsorStatus
   assigned_to?: {
     _id: string
     name: string
     email: string
-    avatar?: string
+    image?: string
   }
   contact_initiated_at?: string
   contract_signed_at?: string
   contract_value?: number
-  contract_currency: 'NOK' | 'USD' | 'EUR'
+  contract_currency: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoice_status: InvoiceStatus
   invoice_sent_at?: string
   invoice_paid_at?: string
@@ -126,7 +135,7 @@ export interface SponsorActivityExpanded {
     _id: string
     name: string
     email: string
-    avatar?: string
+    image?: string
   }
   created_at: string
 }
@@ -135,12 +144,13 @@ export interface SponsorForConferenceInput {
   sponsor: string
   conference: string
   tier?: string
+  contract_status: ContractStatus
   status: SponsorStatus
   assigned_to?: string
   contact_initiated_at?: string
   contract_signed_at?: string
   contract_value?: number
-  contract_currency?: 'NOK' | 'USD' | 'EUR'
+  contract_currency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
   invoice_status: InvoiceStatus
   invoice_sent_at?: string
   invoice_paid_at?: string

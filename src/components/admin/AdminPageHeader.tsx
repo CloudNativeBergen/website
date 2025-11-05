@@ -1,4 +1,6 @@
 import React from 'react'
+import Link from 'next/link'
+import { ChevronLeftIcon } from '@heroicons/react/24/outline'
 
 export interface StatCardProps {
   value: string | number
@@ -24,6 +26,11 @@ export interface AdminPageHeaderProps {
   actions?: React.ReactNode
 
   children?: React.ReactNode
+
+  backLink?: {
+    href: string
+    label?: string
+  }
 }
 
 function getValueColorClasses(color: StatCardProps['color'] = 'slate') {
@@ -48,7 +55,7 @@ function StatCard({ value, label, color = 'slate', icon }: StatCardProps) {
   return (
     <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
       <div className="flex items-center gap-2">
-        {icon && <div className="flex-shrink-0">{icon}</div>}
+        {icon && <div className="shrink-0">{icon}</div>}
         <div className={`text-lg font-bold sm:text-xl ${valueColorClasses}`}>
           {value}
         </div>
@@ -68,6 +75,7 @@ export function AdminPageHeader({
   stats,
   actions,
   children,
+  backLink,
 }: AdminPageHeaderProps) {
   const getGridCols = (statCount: number) => {
     if (statCount <= 1) return 'grid-cols-1'
@@ -82,9 +90,20 @@ export function AdminPageHeader({
 
   return (
     <div className="pb-6">
+      {backLink && (
+        <div className="mb-4">
+          <Link
+            href={backLink.href}
+            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+          >
+            <ChevronLeftIcon className="h-4 w-4" />
+            {backLink.label || 'Back'}
+          </Link>
+        </div>
+      )}
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
-          <div className="mt-1 flex-shrink-0">
+          <div className="mt-1 shrink-0">
             <div className="h-6 w-6 text-brand-cloud-blue sm:h-8 sm:w-8 dark:text-blue-300">
               {icon}
             </div>
@@ -115,7 +134,7 @@ export function AdminPageHeader({
         </div>
 
         {actions && (
-          <div className="ml-4 flex-shrink-0">
+          <div className="ml-4 shrink-0">
             <div className="flex flex-col gap-2 sm:flex-row">{actions}</div>
           </div>
         )}

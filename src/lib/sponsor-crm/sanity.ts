@@ -38,11 +38,12 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     }
   },
   status,
+  contract_status,
   assigned_to->{
     _id,
     name,
     email,
-    avatar
+    image
   },
   contact_initiated_at,
   contract_signed_at,
@@ -116,6 +117,8 @@ export async function updateSponsorForConference(
       updates.tier = data.tier ? { _type: 'reference', _ref: data.tier } : null
     }
     if (data.status !== undefined) updates.status = data.status
+    if (data.contract_status !== undefined)
+      updates.contract_status = data.contract_status
     if (data.assigned_to !== undefined) {
       updates.assigned_to = data.assigned_to
         ? { _type: 'reference', _ref: data.assigned_to }
@@ -195,6 +198,7 @@ export async function listSponsorsForConference(
     invoice_status?: string[]
     assigned_to?: string
     tags?: string[]
+    tiers?: string[]
   },
 ): Promise<{
   sponsors?: SponsorForConferenceExpanded[]
@@ -215,6 +219,9 @@ export async function listSponsorsForConference(
     if (filters?.tags && filters.tags.length > 0) {
       filterQuery += ` && count((tags[])[@ in $tags]) > 0`
     }
+    if (filters?.tiers && filters.tiers.length > 0) {
+      filterQuery += ` && tier._ref in $tierIds`
+    }
 
     const sponsors = await clientRead.fetch<SponsorForConferenceExpanded[]>(
       `*[${filterQuery}] | order(status asc, _createdAt desc){${SPONSOR_FOR_CONFERENCE_FIELDS}}`,
@@ -224,6 +231,7 @@ export async function listSponsorsForConference(
         invoiceStatuses: filters?.invoice_status,
         assignedTo: filters?.assigned_to,
         tags: filters?.tags,
+        tierIds: filters?.tiers,
       },
     )
 

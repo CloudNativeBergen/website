@@ -19,7 +19,7 @@ const SPONSOR_ACTIVITY_FIELDS = `
     _id,
     name,
     email,
-    avatar
+    image
   },
   created_at
 `
@@ -34,6 +34,26 @@ export async function listActivitiesForSponsor(
     const activities = await clientRead.fetch<SponsorActivityExpanded[]>(
       `*[_type == "sponsorActivity" && sponsor_for_conference._ref == $sponsorId] | order(created_at desc){${SPONSOR_ACTIVITY_FIELDS}}`,
       { sponsorId: sponsorForConferenceId },
+    )
+
+    return { activities }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function listActivitiesForConference(
+  conferenceId: string,
+  limit?: number,
+): Promise<{
+  activities?: SponsorActivityExpanded[]
+  error?: Error
+}> {
+  try {
+    const limitClause = limit ? ` [0...${limit}]` : ''
+    const activities = await clientRead.fetch<SponsorActivityExpanded[]>(
+      `*[_type == "sponsorActivity" && sponsor_for_conference->conference._ref == $conferenceId] | order(created_at desc)${limitClause}{${SPONSOR_ACTIVITY_FIELDS}}`,
+      { conferenceId },
     )
 
     return { activities }

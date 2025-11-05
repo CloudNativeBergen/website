@@ -50,6 +50,7 @@ import {
 import {
   logStageChange,
   logInvoiceStatusChange,
+  logContractStatusChange,
 } from '@/lib/sponsor-crm/activity'
 import {
   SponsorForConferenceInputSchema,
@@ -59,7 +60,10 @@ import {
   UpdateInvoiceStatusSchema,
   CopySponsorsSchema,
 } from '@/server/schemas/sponsorForConference'
-import { listActivitiesForSponsor } from '@/lib/sponsor-crm/activities'
+import {
+  listActivitiesForSponsor,
+  listActivitiesForConference,
+} from '@/lib/sponsor-crm/activities'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -565,6 +569,28 @@ export const sponsorRouter = router({
     }),
 
   crm: router({
+    listOrganizers: adminProcedure.query(async () => {
+      const { getOrganizers } = await import('@/lib/speaker/sanity')
+      const { speakers, err } = await getOrganizers()
+
+      if (err) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list organizers',
+          cause: err,
+        })
+      }
+
+      return (
+        speakers?.map((s) => ({
+          _id: s._id,
+          name: s.name,
+          email: s.email,
+          avatar: s.image,
+        })) || []
+      )
+    }),
+
     list: adminProcedure
       .input(
         z.object({
@@ -573,6 +599,7 @@ export const sponsorRouter = router({
           invoice_status: z.array(z.string()).optional(),
           assigned_to: z.string().optional(),
           tags: z.array(z.string()).optional(),
+          tiers: z.array(z.string()).optional(),
         }),
       )
       .query(async ({ input }) => {
@@ -583,6 +610,7 @@ export const sponsorRouter = router({
             invoice_status: input.invoice_status,
             assigned_to: input.assigned_to,
             tags: input.tags,
+            tiers: input.tiers,
           },
         )
 
@@ -639,8 +667,20 @@ export const sponsorRouter = router({
 
     update: adminProcedure
       .input(SponsorForConferenceUpdateSchema)
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const { id, ...updateData } = input
+
+        // Fetch existing data for change detection
+        const { sponsorForConference: existing } =
+          await getSponsorForConference(id)
+
+        if (!existing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+          })
+        }
+
         const { sponsorForConference, error } =
           await updateSponsorForConference(id, {
             ...updateData,
@@ -680,6 +720,38 @@ export const sponsorRouter = router({
           })
         }
 
+        // Log activity for key field changes
+        const userId = ctx.speaker._id
+        if (userId) {
+          if (updateData.status && updateData.status !== existing.status) {
+            await logStageChange(id, existing.status, updateData.status, userId)
+          }
+
+          if (
+            updateData.invoice_status &&
+            updateData.invoice_status !== existing.invoice_status
+          ) {
+            await logInvoiceStatusChange(
+              id,
+              existing.invoice_status,
+              updateData.invoice_status,
+              userId,
+            )
+          }
+
+          if (
+            updateData.contract_status &&
+            updateData.contract_status !== existing.contract_status
+          ) {
+            await logContractStatusChange(
+              id,
+              existing.contract_status,
+              updateData.contract_status,
+              userId,
+            )
+          }
+        }
+
         return sponsorForConference
       }),
 
@@ -711,7 +783,7 @@ export const sponsorRouter = router({
           })
         }
 
-        const userId = ctx.session?.user?.email
+        const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
           await logStageChange(input.id, oldStatus, input.newStatus, userId)
         }
@@ -763,7 +835,7 @@ export const sponsorRouter = router({
           })
         }
 
-        const userId = ctx.session?.user?.email
+        const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
           await logInvoiceStatusChange(
             input.id,
@@ -820,6 +892,30 @@ export const sponsorRouter = router({
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message: 'Failed to list activities',
+              cause: error,
+            })
+          }
+
+          return activities || []
+        }),
+
+      listForConference: adminProcedure
+        .input(
+          z.object({
+            conferenceId: z.string().min(1),
+            limit: z.number().optional(),
+          }),
+        )
+        .query(async ({ input }) => {
+          const { activities, error } = await listActivitiesForConference(
+            input.conferenceId,
+            input.limit,
+          )
+
+          if (error) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to list conference activities',
               cause: error,
             })
           }

@@ -33,7 +33,7 @@ export { SpeakerActions } from './SpeakerActions'
 export { default as SponsorTierEditor } from './SponsorTierEditor'
 export { default as SponsorTierManagement } from './SponsorTierManagement'
 export { default as SponsorAddModal } from './SponsorAddModal'
-export { SponsorActions } from './SponsorActions'
+export { default as SponsorPageClient } from './SponsorPageClient'
 export { SponsorContactTable } from './SponsorContactTable'
 export { SponsorContactActions } from './SponsorContactActions'
 
