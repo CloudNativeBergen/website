@@ -14,7 +14,7 @@ export async function SpeakerShareSidebar({
   talkTitle,
   eventName,
 }: SpeakerShareSidebarProps) {
-  const speakerUrl = `/speaker/${speaker.slug || speaker._id}`
+  const speakerUrl = `/speaker/${speaker.slug}`
   const fullSpeakerUrl = `https://cloudnativebergen.dev${speakerUrl}`
   const qrCodeUrl = await generateQRCode(speakerUrl, 512)
 

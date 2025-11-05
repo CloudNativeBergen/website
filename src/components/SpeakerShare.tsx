@@ -222,7 +222,7 @@ export async function SpeakerShare({
   const config = variantConfig[variant]
   const Icon = config.icon
 
-  const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug || speaker._id}`
+  const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug}`
 
   const qrCodeUrl = await generateQRCode(finalCtaUrl, 512)
 

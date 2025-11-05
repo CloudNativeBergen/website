@@ -39,7 +39,7 @@ interface SponsorTierModalProps {
   onDelete?: (tierId: string) => void
 }
 
-const CURRENCY_OPTIONS = ['NOK', 'USD', 'EUR'] as const
+const CURRENCY_OPTIONS = ['NOK', 'USD', 'EUR', 'GBP'] as const
 
 function SponsorTierModal({
   isOpen,

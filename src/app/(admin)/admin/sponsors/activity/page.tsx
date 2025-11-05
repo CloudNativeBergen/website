@@ -1,0 +1,47 @@
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
+import { ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
+
+export default async function AdminSponsorActivity() {
+  const { conference, error: conferenceError } =
+    await getConferenceForCurrentDomain({
+      revalidate: 0,
+    })
+
+  if (conferenceError) {
+    return (
+      <ErrorDisplay
+        title="Error Loading Conference"
+        message={conferenceError.message}
+      />
+    )
+  }
+
+  if (!conference) {
+    return (
+      <ErrorDisplay
+        title="No Conference Found"
+        message="No conference found for current domain"
+      />
+    )
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl">
+      <AdminPageHeader
+        icon={<ClipboardDocumentListIcon />}
+        title="Activity Log"
+        description="Complete history of sponsor activities for"
+        contextHighlight={conference.title}
+        stats={[]}
+        backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
+      />
+
+      <div className="mt-8 rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-600 dark:bg-gray-800">
+        <p className="text-gray-600 dark:text-gray-400">
+          Full activity log with filters and pagination coming soon
+        </p>
+      </div>
+    </div>
+  )
+}

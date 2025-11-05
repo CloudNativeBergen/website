@@ -173,7 +173,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
   )
 
   const finalCtaText = ctaText || (isFeatured ? 'View Speaker' : 'View Profile')
-  const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug || speaker._id}`
+  const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug}`
 
   const { name, title, bio, image } = speaker
 

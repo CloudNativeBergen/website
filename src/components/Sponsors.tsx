@@ -3,56 +3,20 @@
 import { Container } from '@/components/Container'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
+import {
+  groupSponsorsByTier,
+  getDailySeed,
+  deterministicShuffle,
+  getTierMaxPrice,
+} from '@/lib/sponsor/utils'
 import Link from 'next/link'
-
-function deterministicShuffle<T>(array: T[], seed: number): T[] {
-  const shuffled = [...array]
-  let currentIndex = shuffled.length
-
-  let random = seed
-  const next = () => {
-    random = (random * 1664525 + 1013904223) % 2 ** 32
-    return random / 2 ** 32
-  }
-
-  while (currentIndex !== 0) {
-    const randomIndex = Math.floor(next() * currentIndex)
-    currentIndex--
-    ;[shuffled[currentIndex], shuffled[randomIndex]] = [
-      shuffled[randomIndex],
-      shuffled[currentIndex],
-    ]
-  }
-
-  return shuffled
-}
-
-function getDailySeed(): number {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = today.getMonth() + 1
-  const day = today.getDate()
-
-  return year * 10000 + month * 100 + day
-}
 
 export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
   if (!sponsors || sponsors.length === 0) {
     return null
   }
 
-  const groupedSponsors = sponsors.reduce(
-    (acc, sponsor) => {
-      const tierTitle =
-        sponsor.tier.tier_type === 'special' ? 'SPECIAL' : sponsor.tier.title
-      if (!acc[tierTitle]) {
-        acc[tierTitle] = []
-      }
-      acc[tierTitle].push(sponsor)
-      return acc
-    },
-    {} as Record<string, ConferenceSponsor[]>,
-  )
+  const groupedSponsors = groupSponsorsByTier(sponsors)
 
   const dailySeed = getDailySeed()
 
@@ -73,10 +37,10 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
     const bTierSponsors = groupedSponsors[b]
 
     const aMaxPrice = Math.max(
-      ...aTierSponsors.map((s) => s.tier.price?.[0]?.amount || 0),
+      ...aTierSponsors.map((s) => getTierMaxPrice(s.tier)),
     )
     const bMaxPrice = Math.max(
-      ...bTierSponsors.map((s) => s.tier.price?.[0]?.amount || 0),
+      ...bTierSponsors.map((s) => getTierMaxPrice(s.tier)),
     )
 
     if (aMaxPrice !== bMaxPrice) {
