@@ -8,6 +8,7 @@ import {
   XMarkIcon,
   PencilIcon,
 } from '@heroicons/react/24/outline'
+import { v4 as uuidv4 } from 'uuid'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
 import { VideoEmbed } from '@/components/VideoEmbed'
@@ -135,6 +136,12 @@ export function ProposalPublishedContent({
   const handleSaveVideo = () => {
     if (!validateVideoUrl(videoUrl)) return
 
+    // Check if the URL actually changed - avoid creating duplicates
+    if (videoUrl === currentVideoUrl) {
+      setIsEditingVideo(false)
+      return
+    }
+
     // Update attachments: remove old recording URLs and add new one
     const nonRecordingAttachments = getNonUrlRecordingAttachments(attachments)
 
@@ -143,7 +150,7 @@ export function ProposalPublishedContent({
           ...nonRecordingAttachments,
           {
             _type: 'urlAttachment' as const,
-            _key: `recording-${Date.now()}`,
+            _key: uuidv4(),
             url: videoUrl,
             attachmentType: 'recording' as const,
             title: 'Session Recording',

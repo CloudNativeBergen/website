@@ -21,9 +21,7 @@ async function fixMissingSlugs() {
 
   for (const speaker of speakers) {
     const slug = generateSlug(speaker.name)
-    console.log(
-      `Setting slug for ${speaker.name} (${speaker._id}): ${slug}`,
-    )
+    console.log(`Setting slug for ${speaker.name} (${speaker._id}): ${slug}`)
 
     await clientWrite
       .patch(speaker._id)

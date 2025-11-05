@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
+import { v4 as uuidv4 } from 'uuid'
 import { router, protectedProcedure, adminProcedure } from '@/server/trpc'
 import type { InvitationStatus } from '@/lib/cospeaker/types'
 import {
@@ -846,9 +847,20 @@ export const proposalRouter = router({
           })
         }
 
+        // Check if this file is already attached (gracefully handle duplicates)
+        const isDuplicate = proposal.attachments?.some(
+          (a) =>
+            a._type === 'fileAttachment' && a.file?.asset?._ref === asset._id,
+        )
+
+        if (isDuplicate) {
+          // File already attached - return existing proposal without error
+          return { proposal, asset }
+        }
+
         const newAttachment: Attachment = {
           _type: 'fileAttachment',
-          _key: `attachment-${Date.now()}`,
+          _key: uuidv4(),
           file: {
             _type: 'file',
             asset: {
