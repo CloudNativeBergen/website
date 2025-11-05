@@ -1,7 +1,5 @@
 import { Speaker, SpeakerWithReviewInfo, Flags } from './types'
 
-const FALLBACK_SLUG = 'unknown-speaker' as const
-
 export function generateSlugFromName(name: string): string {
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return ''
@@ -13,11 +11,22 @@ export function generateSlugFromName(name: string): string {
 export function getSpeakerSlug(
   speaker: Pick<Speaker, 'slug' | 'name'>,
 ): string {
-  if (speaker.slug?.trim()) {
-    return speaker.slug
+  if (!speaker.slug?.trim()) {
+    const warningMsg = `WARNING: Speaker missing slug! Name: "${speaker.name}", ID: ${(speaker as Speaker)._id || 'unknown'}. Using generated slug as fallback.`
+    console.warn(warningMsg)
+
+    // Generate a fallback slug from the name
+    const generatedSlug = generateSlugFromName(speaker.name)
+    if (generatedSlug) {
+      return generatedSlug
+    }
+
+    // Ultimate fallback if name is also invalid
+    console.error('CRITICAL: Cannot generate slug - invalid speaker name')
+    return 'unknown-speaker'
   }
 
-  return generateSlugFromName(speaker.name) || FALLBACK_SLUG
+  return speaker.slug
 }
 
 export function getSpeakerFilename(

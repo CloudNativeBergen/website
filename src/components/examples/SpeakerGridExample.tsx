@@ -25,7 +25,7 @@ export function SpeakerGridExample({ speakers }: SpeakerGridExampleProps) {
                 variant="featured"
                 isFeatured={true}
                 ctaText="View Speaker"
-                ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                ctaUrl={`/speaker/${speaker.slug}`}
               />
             ))}
           </div>
@@ -53,7 +53,7 @@ export function SpeakerGridExample({ speakers }: SpeakerGridExampleProps) {
                 speaker={speaker}
                 variant="default"
                 ctaText="View Profile"
-                ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+                ctaUrl={`/speaker/${speaker.slug}`}
               />
             ))}
           </div>
@@ -71,7 +71,7 @@ export function SpeakerGridExample({ speakers }: SpeakerGridExampleProps) {
               speaker={speaker}
               variant="compact"
               ctaText="View"
-              ctaUrl={`/speaker/${speaker.slug || speaker._id}`}
+              ctaUrl={`/speaker/${speaker.slug}`}
             />
           ))}
         </div>
