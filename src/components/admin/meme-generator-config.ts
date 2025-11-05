@@ -1,5 +1,14 @@
 export const CANVAS_SIZE = 1080
-export const DEFAULT_BG_COLOR = '#1D4ED8'
+export const DEFAULT_BG_COLOR = '#10B981'
+
+export const LOGO_SIZE_MIN = 300
+export const LOGO_SIZE_MAX = 500
+export const LOGO_SIZE_DEFAULT = 360
+export const LOGO_PADDING_DEFAULT = 40
+
+export const TEXT_PADDING_MIN = 0
+export const TEXT_PADDING_MAX = 30
+export const TEXT_PADDING_DEFAULT = 5
 
 export const BRAND_COLORS = [
   { name: 'Cloud Blue', value: '#1D4ED8' },
@@ -37,33 +46,49 @@ export interface TextLine {
   fontSize: number
   fontFamily: string
   isBold: boolean
+  isUppercase: boolean
   color: string
+  textAlign: 'left' | 'center' | 'right'
+  horizontalPosition: number
+  textPadding: number
 }
 
 export const DEFAULT_TEXT_LINES: TextLine[] = [
   {
     text: '',
-    verticalPosition: 25,
-    fontSize: 48,
-    fontFamily: 'Inter',
+    verticalPosition: 30,
+    fontSize: 120,
+    fontFamily: 'Space Grotesk',
     isBold: false,
+    isUppercase: true,
     color: '#FFFFFF',
+    textAlign: 'center',
+    horizontalPosition: 6,
+    textPadding: TEXT_PADDING_DEFAULT,
   },
   {
     text: '',
     verticalPosition: 50,
-    fontSize: 48,
-    fontFamily: 'Inter',
+    fontSize: 80,
+    fontFamily: 'Space Grotesk',
     isBold: false,
+    isUppercase: true,
     color: '#FFFFFF',
+    textAlign: 'center',
+    horizontalPosition: 6,
+    textPadding: TEXT_PADDING_DEFAULT,
   },
   {
     text: '',
-    verticalPosition: 75,
-    fontSize: 48,
-    fontFamily: 'Inter',
+    verticalPosition: 70,
+    fontSize: 50,
+    fontFamily: 'Space Grotesk',
     isBold: false,
+    isUppercase: true,
     color: '#FFFFFF',
+    textAlign: 'center',
+    horizontalPosition: 6,
+    textPadding: TEXT_PADDING_DEFAULT,
   },
 ]
 
@@ -73,7 +98,7 @@ export const styles = {
   label:
     'block text-sm font-medium text-brand-slate-gray dark:text-gray-300 mb-2',
   panel:
-    'bg-white dark:bg-gray-800 p-6 rounded-lg border border-brand-frosted-steel dark:border-gray-700',
+    'bg-white dark:bg-gray-800 p-4 rounded-lg border border-brand-frosted-steel dark:border-gray-700',
   buttonActive:
     'border-brand-cloud-blue bg-brand-cloud-blue/10 text-brand-cloud-blue dark:border-blue-500 dark:bg-blue-500/20 dark:text-blue-400',
   buttonInactive:
