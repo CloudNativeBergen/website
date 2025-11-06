@@ -10,6 +10,7 @@ import {
   formatConferenceDate,
   formatConferenceDateShort,
   formatConferenceDateLong,
+  formatConferenceDateForBadge,
 } from '@/lib/time'
 
 describe('time.ts', () => {
@@ -130,6 +131,23 @@ describe('time.ts', () => {
       expect(formatConferenceDateLong('2025-10-28')).toBe(
         'Tuesday, October 28, 2025',
       )
+    })
+  })
+
+  describe('formatConferenceDateForBadge', () => {
+    it('should format date for badge display (month and year only)', () => {
+      const result = formatConferenceDateForBadge('2025-10-27')
+      expect(result).toBe('October 2025')
+    })
+
+    it('should handle different months', () => {
+      expect(formatConferenceDateForBadge('2025-01-15')).toBe('January 2025')
+      expect(formatConferenceDateForBadge('2025-12-25')).toBe('December 2025')
+    })
+
+    it('should work across years', () => {
+      expect(formatConferenceDateForBadge('2024-03-10')).toBe('March 2024')
+      expect(formatConferenceDateForBadge('2026-06-20')).toBe('June 2026')
     })
   })
 

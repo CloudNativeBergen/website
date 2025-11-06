@@ -7,6 +7,7 @@ import imageGallery from './schemaTypes/imageGallery'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
 import speaker from './schemaTypes/speaker'
+import speakerBadge from './schemaTypes/speakerBadge'
 import sponsor from './schemaTypes/sponsor'
 import sponsorActivity from './schemaTypes/sponsorActivity'
 import sponsorForConference from './schemaTypes/sponsorForConference'
@@ -28,6 +29,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     review,
     schedule,
     speaker,
+    speakerBadge,
     sponsor,
     sponsorActivity,
     sponsorForConference,

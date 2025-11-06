@@ -49,7 +49,8 @@ export default async function PrivacyPolicyPage() {
   }
 
   const lastUpdated = 'October 31, 2025'
-  const contactEmail = conference.contact_email || 'hello@cloudnativebergen.no'
+  const contactEmail =
+    conference.contact_email || 'contact@cloudnativebergen.dev'
   const organizationName = 'Cloud Native Bergen'
 
   return (

@@ -8,7 +8,7 @@ import { Status, type ProposalExisting } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
 
 const speakerSearchSchema = z.object({
-  query: z.string().min(1, 'Search query is required'),
+  query: z.string().optional().default(''),
   includeFeatured: z.boolean().optional().default(false),
 })
 
@@ -77,6 +77,11 @@ export const speakersRouter = router({
           featuredSpeakerIds.includes(speaker._id)
         ) {
           return false
+        }
+
+        // If no search query, include all speakers
+        if (!input.query || input.query.trim() === '') {
+          return true
         }
 
         const searchTerm = input.query.toLowerCase()

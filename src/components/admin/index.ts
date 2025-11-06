@@ -47,7 +47,9 @@ export { FeaturedSpeakersManager } from './FeaturedSpeakersManager'
 export { FeaturedTalksManager } from './FeaturedTalksManager'
 export { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 
-// Gallery Management Components
+export { BadgeManagementClient } from './BadgeManagementClient'
+export { BadgePreviewModal } from './BadgePreviewModal'
+
 export {
   ImageUploadZone,
   ImageGrid,
@@ -55,7 +57,6 @@ export {
   GalleryFilters,
 } from './gallery'
 
-// Utility Components
 export { ErrorDisplay } from './ErrorDisplay'
 export * from './LoadingSkeleton'
 export * from './PageLoadingSkeleton'

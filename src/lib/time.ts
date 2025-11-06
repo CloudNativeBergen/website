@@ -194,6 +194,17 @@ export function formatConferenceDateLong(dateString: string): string {
 }
 
 /**
+ * Formats a date string for badge display (e.g., "October 2025")
+ * Shows only month and year without day or weekday
+ */
+export function formatConferenceDateForBadge(dateString: string): string {
+  return formatConferenceDate(dateString, {
+    year: 'numeric',
+    month: 'long',
+  })
+}
+
+/**
  * Gallery datetime utilities
  * These functions handle datetime operations for the gallery feature,
  * ensuring consistent datetime handling across upload, display, and editing.

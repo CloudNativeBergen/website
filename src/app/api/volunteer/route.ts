@@ -4,7 +4,7 @@ import { VolunteerFormInputSchema } from '@/lib/volunteer/validation'
 import type { VolunteerInput } from '@/lib/volunteer/types'
 import { PRIVACY_POLICY_VERSION } from '@/lib/privacy/config'
 import { notifyNewVolunteer } from '@/lib/slack/notify'
-import { getConferenceById } from '@/lib/conference/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export async function POST(req: NextRequest) {
   try {
@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const { conference } = await getConferenceById(formData.conferenceId)
-      if (conference) {
+      const { conference, error } = await getConferenceForCurrentDomain()
+      if (!error && conference) {
         void notifyNewVolunteer(result.volunteer, conference)
       }
     } catch {}

@@ -38,8 +38,11 @@ export async function sendBasicWorkshopConfirmation({
     const fromEmail = conference?.contact_email
       ? `${conference.organizer} <${conference.contact_email}>`
       : conference?.domains?.[0]
-        ? `${conference.organizer} <noreply@${conference.domains[0]}>`
-        : 'Cloud Native Bergen <noreply@cloudnativebergen.no>'
+        ? `${conference.organizer} <contact@${conference.domains[0]}>`
+        : 'Cloud Native Bergen <contact@cloudnativebergen.dev>'
+
+    const contactEmail =
+      conference?.contact_email || 'contact@cloudnativebergen.dev'
 
     const subject = `Workshop Confirmation: ${workshopTitle}`
 
@@ -87,7 +90,7 @@ export async function sendBasicWorkshopConfirmation({
 
                     <p style="margin: 24px 0 16px 0; font-size: 16px; line-height: 24px; color: #334155;">We look forward to seeing you at the workshop!</p>
 
-                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:contact@cloudnativebergen.dev" style="color: #1D4ED8; text-decoration: none;">contact@cloudnativebergen.dev</a>.</p>
+                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
 
                     <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference?.organizer || 'Cloud Native Bergen'}</strong></p>
                   </td>
@@ -145,8 +148,11 @@ export async function sendWorkshopSignupInstructions({
     const fromEmail = conference.contact_email
       ? `${conference.organizer} <${conference.contact_email}>`
       : conference.domains?.[0]
-        ? `${conference.organizer} <noreply@${conference.domains[0]}>`
-        : 'Cloud Native Bergen <noreply@cloudnativebergen.no>'
+        ? `${conference.organizer} <contact@${conference.domains[0]}>`
+        : 'Cloud Native Bergen <contact@cloudnativebergen.dev>'
+
+    const contactEmail =
+      conference.contact_email || 'contact@cloudnativebergen.dev'
 
     const workshopUrl = conference.domains?.[0]
       ? `https://${conference.domains[0]}/workshop`
@@ -195,7 +201,7 @@ export async function sendWorkshopSignupInstructions({
                       </tr>
                     </table>
 
-                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions or need assistance, please contact us at <a href="mailto:contact@cloudnativebergen.dev" style="color: #1D4ED8; text-decoration: none;">contact@cloudnativebergen.dev</a>.</p>
+                    <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions or need assistance, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
 
                     <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">See you at the conference!</p>
                     <p style="margin: 8px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference.organizer}</strong></p>

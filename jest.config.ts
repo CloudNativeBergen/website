@@ -12,6 +12,7 @@ const config: Config = {
   testMatch: ['**/__tests__/**/*.test.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
+    '@noble/ed25519': '<rootDir>/__tests__/mocks/noble-ed25519.ts',
     'next-auth': '<rootDir>/__tests__/mocks/next-auth.ts',
     'next-sanity': '<rootDir>/__tests__/mocks/sanity-client.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
