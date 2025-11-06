@@ -52,6 +52,7 @@
     "@vercel/speed-insights": "^1.2.0",
     "@workos-inc/authkit-nextjs": "^2.11.0",
     "apexcharts": "^5.3.5",
+    "bs58": "^6.0.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",

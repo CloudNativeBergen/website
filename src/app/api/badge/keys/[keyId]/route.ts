@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import bs58 from 'bs58'
 
 export const runtime = 'nodejs'
 
@@ -43,14 +44,17 @@ export async function GET(
 
     // Return public key in Multikey format (W3C standard)
     // https://www.w3.org/TR/vc-data-integrity/#multikey
+    // https://www.w3.org/TR/vc-data-integrity/#multikey-0
     const publicKeyBytes = Buffer.from(publicKeyHex, 'hex')
-    const multibasePrefix = 'z' // base58btc encoding indicator
-    const ed25519Prefix = Buffer.from([0xed, 0x01]) // Ed25519 public key multicodec prefix
 
-    // Combine prefix and public key, then encode to base58btc
-    const multikey =
-      multibasePrefix +
-      Buffer.concat([ed25519Prefix, publicKeyBytes]).toString('base64url')
+    // Ed25519 multicodec prefix (0xed01)
+    const ed25519Prefix = Buffer.from([0xed, 0x01])
+
+    // Combine multicodec prefix with public key bytes
+    const multikeyBytes = Buffer.concat([ed25519Prefix, publicKeyBytes])
+
+    // Encode to Base58btc and add 'z' prefix (multibase format)
+    const publicKeyMultibase = 'z' + bs58.encode(multikeyBytes)
 
     return NextResponse.json(
       {
@@ -61,7 +65,7 @@ export async function GET(
         id: fullKeyId,
         type: 'Multikey',
         controller: issuerUrl,
-        publicKeyMultibase: multikey,
+        publicKeyMultibase: publicKeyMultibase,
       },
       {
         headers: {
