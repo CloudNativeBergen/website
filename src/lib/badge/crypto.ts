@@ -6,6 +6,7 @@
  */
 
 import * as ed25519 from '@noble/ed25519'
+import bs58 from 'bs58'
 
 /**
  * Get the private key from environment variables
@@ -16,7 +17,7 @@ function getPrivateKey(): Uint8Array {
   if (!privateKeyHex) {
     throw new Error(
       'BADGE_ISSUER_PRIVATE_KEY environment variable is not set. ' +
-        'Generate a key pair using generateKeyPair() and set it in your .env file.',
+      'Generate a key pair using generateKeyPair() and set it in your .env file.',
     )
   }
 
@@ -38,7 +39,7 @@ function getPublicKey(): Uint8Array {
   if (!publicKeyHex) {
     throw new Error(
       'BADGE_ISSUER_PUBLIC_KEY environment variable is not set. ' +
-        'Generate a key pair using generateKeyPair() and set it in your .env file.',
+      'Generate a key pair using generateKeyPair() and set it in your .env file.',
     )
   }
 
@@ -72,7 +73,7 @@ export function getIssuerUrl(conferenceDomains?: string[]): string {
   if (!issuerUrl) {
     throw new Error(
       'BADGE_ISSUER_URL environment variable is not set. ' +
-        'Set it to your production domain (e.g., https://cloudnativebergen.no)',
+      'Set it to your production domain (e.g., https://cloudnativebergen.no)',
     )
   }
 
@@ -127,8 +128,9 @@ export async function signBadgeData(data: unknown): Promise<string> {
   // Sign with Ed25519
   const signature = await ed25519.signAsync(message, privateKey)
 
-  // Convert to base64 for OpenBadges Data Integrity Proof
-  return Buffer.from(signature).toString('base64')
+  // Convert to multibase format (base58btc with 'z' prefix)
+  // Required by eddsa-rdfc-2022 cryptosuite
+  return 'z' + bs58.encode(Buffer.from(signature))
 }
 
 /**
@@ -136,7 +138,7 @@ export async function signBadgeData(data: unknown): Promise<string> {
  */
 export async function verifyBadgeSignature(
   data: unknown,
-  signatureBase64: string,
+  signatureMultibase: string,
 ): Promise<boolean> {
   try {
     const publicKey = getPublicKey()
@@ -148,8 +150,15 @@ export async function verifyBadgeSignature(
     )
     const message = new TextEncoder().encode(canonicalData)
 
-    // Decode signature from base64
-    const signature = Buffer.from(signatureBase64, 'base64')
+    // Decode signature from multibase format (base58btc with 'z' prefix)
+    // or fallback to base64 for backwards compatibility
+    let signature: Uint8Array
+    if (signatureMultibase.startsWith('z')) {
+      signature = Uint8Array.from(bs58.decode(signatureMultibase.substring(1)))
+    } else {
+      // Fallback for old base64 format
+      signature = Buffer.from(signatureMultibase, 'base64')
+    }
 
     // Verify with Ed25519
     return await ed25519.verifyAsync(signature, message, publicKey)
