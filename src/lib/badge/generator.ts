@@ -108,12 +108,15 @@ export async function generateBadgeCredential(
     },
     issuer: {
       id: `${issuerUrl}`,
-      type: 'Profile',
+      type: ['Profile'],
       name: conference.organizer,
       url: issuerUrl,
       email: issuerEmail,
       description: issuerDescription,
-      image: `${issuerUrl}/og/base.png`,
+      image: {
+        id: `${issuerUrl}/og/base.png`,
+        type: 'Image',
+      },
     },
     ...(evidence.length > 0 && { evidence }),
   }
@@ -128,32 +131,41 @@ export async function generateBadgeCredential(
     type: ['VerifiableCredential', 'AchievementCredential'],
     credentialSubject: {
       id: `mailto:${speakerEmail}`,
-      type: 'AchievementSubject',
+      type: ['AchievementSubject'],
       achievement,
     },
     issuer: {
       id: issuerUrl,
-      type: 'Profile',
+      type: ['Profile'],
       name: conference.organizer,
       url: issuerUrl,
       description: issuerDescription,
-      image: `${issuerUrl}/og/base.png`,
+      image: {
+        id: `${issuerUrl}/og/base.png`,
+        type: 'Image',
+      },
     },
     validFrom: issuedAt,
     name: `${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} Badge for ${conferenceTitle}`,
   }
 
-  // Create Data Integrity Proof
+  // Create Data Integrity Proof (as array per OB 3.0 schema)
   const proofValue = await signBadgeData(assertion)
 
-  assertion.proof = {
-    type: 'DataIntegrityProof',
-    created: issuedAt,
-    verificationMethod: getVerificationMethod(conference.domains),
-    cryptosuite: 'eddsa-rdfc-2022',
-    proofPurpose: 'assertionMethod',
-    proofValue,
-  }
+  assertion.proof = [
+    {
+      type: 'DataIntegrityProof',
+      created: issuedAt,
+      verificationMethod: getVerificationMethod(conference.domains),
+      cryptosuite: 'eddsa-rdfc-2022',
+      proofPurpose: 'assertionMethod',
+      proofValue,
+    },
+  ]
+
+  // Validate schema compliance before returning
+  const { assertValidBadge } = await import('./schema-validator')
+  assertValidBadge(assertion)
 
   return {
     assertion,

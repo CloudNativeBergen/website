@@ -73,7 +73,7 @@ describe('OpenBadges 3.0 Compliance', () => {
       expect(assertion.issuer).toBeDefined()
 
       // Validate credential subject
-      expect(assertion.credentialSubject.type).toBe('AchievementSubject')
+      expect(assertion.credentialSubject.type).toContain('AchievementSubject')
       expect(assertion.credentialSubject.id).toBe('mailto:jane@example.com')
       expect(assertion.credentialSubject.achievement).toBeDefined()
 
@@ -87,17 +87,18 @@ describe('OpenBadges 3.0 Compliance', () => {
       expect(achievement.image.type).toBe('Image')
 
       // Validate issuer
-      expect(assertion.issuer.type).toBe('Profile')
+      expect(assertion.issuer.type).toContain('Profile')
       expect(assertion.issuer.name).toBe('Cloud Native Bergen')
       expect(assertion.issuer.id).toBe('https://cloudnativebergen.no')
 
-      // Validate proof
+      // Validate proof (should be array)
       expect(assertion.proof).toBeDefined()
-      expect(assertion.proof?.type).toBe('DataIntegrityProof')
-      expect(assertion.proof?.cryptosuite).toBe('eddsa-rdfc-2022')
-      expect(assertion.proof?.proofPurpose).toBe('assertionMethod')
-      expect(assertion.proof?.proofValue).toBeDefined()
-      expect(assertion.proof?.verificationMethod).toBeDefined()
+      expect(Array.isArray(assertion.proof)).toBe(true)
+      expect(assertion.proof?.[0]?.type).toBe('DataIntegrityProof')
+      expect(assertion.proof?.[0]?.cryptosuite).toBe('eddsa-rdfc-2022')
+      expect(assertion.proof?.[0]?.proofPurpose).toBe('assertionMethod')
+      expect(assertion.proof?.[0]?.proofValue).toBeDefined()
+      expect(assertion.proof?.[0]?.verificationMethod).toBeDefined()
     })
 
     it('should use conference contact email in issuer', async () => {
@@ -189,11 +190,11 @@ describe('OpenBadges 3.0 Compliance', () => {
 
       expect(assertion.proof).toBeDefined()
 
-      // Verify the assertion
+      // Verify the assertion (proof is array)
       const { proof, ...assertionWithoutProof } = assertion
       const isValid = await verifyBadgeSignature(
         assertionWithoutProof,
-        proof!.proofValue,
+        proof![0].proofValue,
       )
 
       expect(isValid).toBe(true)
@@ -223,12 +224,12 @@ describe('OpenBadges 3.0 Compliance', () => {
   <text x="460" y="460" text-anchor="middle">SPEAKER</text>
 </svg>`
 
-      const verificationUrl =
-        'https://cloudnativebergen.no/api/badge/test-123/verify'
-      const bakedSvg = bakeBadge(svgContent, assertion, verificationUrl)
+      const bakedSvg = bakeBadge(svgContent, assertion)
 
       // Validate baked SVG uses OB 3.0 format with openbadges:credential
-      expect(bakedSvg).toContain('xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0"')
+      expect(bakedSvg).toContain(
+        'xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0"',
+      )
       expect(bakedSvg).toContain('<openbadges:credential>')
       expect(bakedSvg).toContain('</openbadges:credential>')
       expect(bakedSvg).toContain('<![CDATA[')
@@ -267,9 +268,7 @@ describe('OpenBadges 3.0 Compliance', () => {
   <circle cx="460" cy="460" r="460" fill="#06B6D4"/>
 </svg>`
 
-      const verificationUrl =
-        'https://cloudnativebergen.no/api/badge/test-123/verify'
-      const bakedSvg = bakeBadge(svgContent, assertion, verificationUrl)
+      const bakedSvg = bakeBadge(svgContent, assertion)
 
       // Extract the assertion
       const extracted = extractBadgeFromSVG(bakedSvg)
@@ -341,11 +340,7 @@ describe('OpenBadges 3.0 Compliance', () => {
 </svg>`
 
       // Test OB 3.0 format
-      const ob3BakedSvg = bakeBadge(
-        svgContent,
-        assertion,
-        'https://cloudnativebergen.no/api/badge/test-123/verify',
-      )
+      const ob3BakedSvg = bakeBadge(svgContent, assertion)
       const ob3Validation = validateBakedSVG(ob3BakedSvg)
       expect(ob3Validation.isValid).toBe(true)
 
@@ -455,8 +450,8 @@ describe('OpenBadges 3.0 Compliance', () => {
         mockConference,
       )
 
-      expect(assertion.proof?.type).toBe('DataIntegrityProof')
-      expect(assertion.proof?.cryptosuite).toBe('eddsa-rdfc-2022')
+      expect(assertion.proof?.[0]?.type).toBe('DataIntegrityProof')
+      expect(assertion.proof?.[0]?.cryptosuite).toBe('eddsa-rdfc-2022')
     })
 
     it('should structure achievement with proper image object', async () => {

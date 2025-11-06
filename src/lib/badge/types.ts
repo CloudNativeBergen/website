@@ -19,12 +19,15 @@ export interface BadgeCredential {
   }
   issuer: {
     id: string
-    type: string
+    type: string[]
     name: string
     url: string
     email?: string
     description?: string
-    image?: string
+    image?: {
+      id: string
+      type: string
+    }
   }
   evidence?: Array<{
     id: string
@@ -41,26 +44,29 @@ export interface BadgeAssertion {
   name: string
   credentialSubject: {
     id: string
-    type: string
+    type: string[]
     achievement: BadgeCredential
   }
   issuer: {
     id: string
-    type: string
+    type: string[]
     name: string
     url: string
     description?: string
-    image?: string
+    image?: {
+      id: string
+      type: string
+    }
   }
   validFrom: string
-  proof?: {
+  proof?: Array<{
     type: string
     created: string
     verificationMethod: string
     cryptosuite: string
     proofPurpose: string
     proofValue: string
-  }
+  }>
 }
 
 export interface BadgeRecord {

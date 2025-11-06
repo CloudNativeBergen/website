@@ -40,8 +40,16 @@ Our implementation follows the official [1EdTech OpenBadges 3.0 specification](h
 ✅ **Achievement Structure**
 
 - Properly structured `Achievement` object
-- Image as object with `id` and `type` fields
+- Image as object with `id` and `type` fields (not string)
 - Criteria with narrative description
+- Type fields as arrays (e.g., `type: ['Achievement']`)
+
+✅ **Schema Compliance**
+
+- All badges validated against official OB 3.0 JSON schema
+- Automatic validation on badge generation
+- Type fields must be arrays (even for single values)
+- Image and proof fields must be properly structured objects/arrays
 
 ## Architecture
 
@@ -77,7 +85,7 @@ Features:
 - Signature verification
 - Verification method generation
 
-#### 3. Badge Baking (`/lib/badge/baking.ts`)
+#### 4. Badge Baking (`/lib/badge/baking.ts`)
 
 Embeds badge credentials into SVG images:
 
@@ -87,12 +95,39 @@ const bakedSvg = bakeBadge(svgContent, assertion, verificationUrl)
 
 Implements OpenBadges 3.0 baking specification:
 
-- Embeds credential in `<script type="application/ld+json">` tag
-- Places script tag immediately after opening `<svg>` tag
-- JSON is directly embedded (no CDATA wrapping needed)
-- Backward compatible with OB 2.0 extraction for legacy badges
+- Uses `xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0"` namespace
+- Embeds credential in `<openbadges:credential>` element with CDATA wrapper
+- Places element immediately after opening `<svg>` tag
+- Includes verification URL in element attributes
 
-#### 4. Sanity Integration (`/lib/badge/sanity.ts`)
+#### 5. Schema Validation (`/lib/badge/schema-validator.ts`)
+
+Validates badges against OpenBadges 3.0 JSON schema:
+
+```typescript
+// Validate and get result
+const result = validateBadgeSchema(assertion)
+if (!result.valid) {
+  console.error(result.errors)
+}
+
+// Assert valid (throws on error)
+assertValidBadge(assertion)
+
+// Get human-readable errors
+const errors = getValidationErrors(assertion)
+```
+
+Features:
+
+- Complete OpenBadges 3.0 AchievementCredential schema
+- Validates required fields (context, type, credentialSubject, issuer, validFrom)
+- Enforces array types for `type` fields
+- Validates object structure for `image` and `proof`
+- Automatic validation on badge generation
+- AJV-based JSON Schema validation
+
+#### 6. Sanity Integration (`/lib/badge/sanity.ts`)
 
 Manages badge lifecycle in Sanity CMS:
 
@@ -323,22 +358,50 @@ Fallback: `noreply@cloudnativebergen.no`
 
 ## Testing
 
-Comprehensive test suite in `__tests__/lib/badge/openbadges-compliance.test.ts`:
+Comprehensive test suite validates OpenBadges 3.0 compliance:
 
 ```bash
-npm run test -- openbadges-compliance
+# Run all badge tests
+npm run test:badges
+
+# Run specific test suites
+npm test -- openbadges-compliance
+npm test -- schema-validator
 ```
 
-Tests cover:
+### Test Coverage
+
+**OpenBadges Compliance Tests** (`openbadges-compliance.test.ts`):
 
 - ✅ OpenBadges 3.0 credential structure
-- ✅ Context URLs and types
+- ✅ Context URLs and types (as arrays)
 - ✅ Date field naming (validFrom vs issuanceDate)
-- ✅ Proof structure (DataIntegrityProof)
+- ✅ Proof structure (DataIntegrityProof array)
 - ✅ Cryptographic signing and verification
-- ✅ Badge baking and extraction
-- ✅ Achievement structure
+- ✅ Badge baking with xmlns:openbadges format
+- ✅ Achievement structure with image objects
 - ✅ Multi-tenant email configuration
+
+**Schema Validation Tests** (`schema-validator.test.ts`):
+
+- ✅ Valid badge passes schema validation
+- ✅ Detects missing required fields (@context, type, credentialSubject, issuer, validFrom)
+- ✅ Validates type fields must be arrays
+- ✅ Validates image fields must be objects with id/type
+- ✅ Validates proof must be array of DataIntegrityProof objects
+- ✅ Provides human-readable error messages
+- ✅ assertValidBadge throws on validation errors
+
+### Validation Integration
+
+All generated badges are automatically validated:
+
+```typescript
+// In generator.ts
+const { assertion } = await generateBadgeCredential(params, conference)
+// Validation happens automatically before return
+// Throws error if badge doesn't match OB 3.0 schema
+```
 
 ## Integration
 

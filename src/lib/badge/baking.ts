@@ -22,11 +22,12 @@ import type { BadgeAssertion } from './types'
  * 1. Add xmlns:openbadges namespace to <svg> tag
  * 2. Add <openbadges:credential> tag immediately after <svg> tag
  * 3. Embed JSON representation in CDATA section (for embedded proof format)
+ *
+ * The verification URL is already included in the assertion's `id` field.
  */
 export function bakeBadge(
   svgContent: string,
   assertion: BadgeAssertion,
-  verificationUrl: string,
 ): string {
   // Validate SVG content
   if (!svgContent.includes('<svg') || !svgContent.includes('</svg>')) {
@@ -51,7 +52,7 @@ export function bakeBadge(
   // Format assertion JSON with proper indentation
   const assertionJson = JSON.stringify(assertion, null, 2)
     .split('\n')
-    .map(line => `      ${line}`)
+    .map((line) => `      ${line}`)
     .join('\n')
 
   // Create the openbadges:credential tag with CDATA-wrapped JSON (OB 3.0 embedded proof format)
@@ -63,7 +64,10 @@ ${assertionJson}
 `
 
   // Insert credential immediately after modified SVG tag
-  const bakedSvg = svgContent.replace(svgTagMatch[0], svgTag + '\n' + credentialTag)
+  const bakedSvg = svgContent.replace(
+    svgTagMatch[0],
+    svgTag + '\n' + credentialTag,
+  )
 
   return bakedSvg
 }
@@ -178,4 +182,3 @@ export function validateBakedSVG(svgContent: string): {
 
   return { isValid: true }
 }
-
