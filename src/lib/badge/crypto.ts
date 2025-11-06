@@ -166,7 +166,8 @@ export function getVerificationMethod(conferenceDomains?: string[]): string {
   const issuerUrl = getIssuerUrl(conferenceDomains)
   const publicKeyHex = bytesToHex(getPublicKey())
 
-  // Return verification method as a DID or URL
-  // Format: {issuerUrl}#key-{first8CharsOfPublicKey}
-  return `${issuerUrl}#key-${publicKeyHex.substring(0, 8)}`
+  // Return verification method as a resolvable URL to the public key endpoint
+  // Format: {issuerUrl}/api/badge/keys/key-{first8CharsOfPublicKey}
+  // This URL resolves to a JSON-LD document containing the public key in Multikey format
+  return `${issuerUrl}/api/badge/keys/key-${publicKeyHex.substring(0, 8)}`
 }

@@ -169,7 +169,10 @@ describe('OpenBadges 3.0 Compliance', () => {
 
     it('should generate proper verification method', () => {
       const verificationMethod = getVerificationMethod(['cloudnativebergen.no'])
-      expect(verificationMethod).toMatch(/^https?:\/\/.+#key-[0-9a-f]+$/)
+      // Updated to match new resolvable URL format instead of fragment
+      expect(verificationMethod).toMatch(
+        /^https?:\/\/.+\/api\/badge\/keys\/key-[0-9a-f]+$/,
+      )
     })
 
     it('should verify badge assertion signature', async () => {
