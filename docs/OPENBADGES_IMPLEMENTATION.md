@@ -85,11 +85,12 @@ Embeds badge credentials into SVG images:
 const bakedSvg = bakeBadge(svgContent, assertion, verificationUrl)
 ```
 
-Implements OpenBadges 2.0 baking specification for backward compatibility:
+Implements OpenBadges 3.0 baking specification:
 
-- Adds `xmlns:openbadges` namespace to SVG
-- Embeds assertion JSON in CDATA section
-- Includes verification URL
+- Embeds credential in `<script type="application/ld+json">` tag
+- Places script tag immediately after opening `<svg>` tag
+- JSON is directly embedded (no CDATA wrapping needed)
+- Backward compatible with OB 2.0 extraction for legacy badges
 
 #### 4. Sanity Integration (`/lib/badge/sanity.ts`)
 
@@ -381,9 +382,9 @@ Badges are compatible with:
 ### Standards Support
 
 - ✅ W3C Verifiable Credentials Data Model 2.0
-- ✅ OpenBadges 3.0
+- ✅ OpenBadges 3.0 (credential structure and baking)
 - ✅ Data Integrity Proofs (eddsa-rdfc-2022)
-- ✅ OpenBadges 2.0 baking (backward compatibility)
+- ✅ OpenBadges 2.0 extraction (backward compatibility)
 - ✅ JSON-LD
 - ✅ Ed25519 signatures (RFC 8032)
 

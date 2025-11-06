@@ -201,7 +201,7 @@ describe('OpenBadges 3.0 Compliance', () => {
   })
 
   describe('Badge Baking', () => {
-    it('should bake badge assertion into SVG', async () => {
+    it('should bake badge assertion into SVG using OpenBadges 3.0 format', async () => {
       const { assertion } = await generateBadgeCredential(
         {
           speakerId: 'speaker-123',
@@ -227,18 +227,26 @@ describe('OpenBadges 3.0 Compliance', () => {
         'https://cloudnativebergen.no/api/badge/test-123/verify'
       const bakedSvg = bakeBadge(svgContent, assertion, verificationUrl)
 
-      // Validate baked SVG
-      expect(bakedSvg).toContain('xmlns:openbadges="http://openbadges.org"')
-      expect(bakedSvg).toContain('<openbadges:assertion')
-      expect(bakedSvg).toContain(verificationUrl)
-      expect(bakedSvg).toContain('CDATA')
+      // Validate baked SVG uses OB 3.0 format with openbadges:credential
+      expect(bakedSvg).toContain('xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0"')
+      expect(bakedSvg).toContain('<openbadges:credential>')
+      expect(bakedSvg).toContain('</openbadges:credential>')
+      expect(bakedSvg).toContain('<![CDATA[')
+      expect(bakedSvg).toContain(']]>')
+      expect(bakedSvg).toContain('"@context"')
+      expect(bakedSvg).toContain('"VerifiableCredential"')
+      expect(bakedSvg).toContain('"AchievementCredential"')
+
+      // Should NOT contain old OB 2.0 format
+      expect(bakedSvg).not.toContain('<openbadges:assertion')
+      expect(bakedSvg).not.toContain('verify="')
 
       // Validate the baked SVG structure
       const validation = validateBakedSVG(bakedSvg)
       expect(validation.isValid).toBe(true)
     })
 
-    it('should extract badge assertion from baked SVG', async () => {
+    it('should extract badge assertion from OB 3.0 baked SVG', async () => {
       const { assertion } = await generateBadgeCredential(
         {
           speakerId: 'speaker-123',
@@ -267,9 +275,105 @@ describe('OpenBadges 3.0 Compliance', () => {
       const extracted = extractBadgeFromSVG(bakedSvg)
 
       expect(extracted.assertion).toBeDefined()
-      expect(extracted.verificationUrl).toBe(verificationUrl)
+      expect(extracted.verificationUrl).toBeDefined()
       expect(extracted.assertion?.id).toBe(assertion.id)
       expect(extracted.assertion?.type).toEqual(assertion.type)
+      expect(extracted.assertion?.credentialSubject).toEqual(
+        assertion.credentialSubject,
+      )
+    })
+
+    it('should extract badge assertion from legacy OB 2.0 baked SVG', async () => {
+      const { assertion } = await generateBadgeCredential(
+        {
+          speakerId: 'speaker-123',
+          speakerName: 'Jane Doe',
+          speakerEmail: 'jane@example.com',
+          conferenceId: 'conf-123',
+          conferenceTitle: 'Cloud Native Day Bergen 2025',
+          conferenceYear: '2025',
+          conferenceDate: 'June 1, 2025',
+          badgeType: 'speaker',
+          issuerUrl: 'https://cloudnativebergen.no',
+        },
+        mockConference,
+      )
+
+      // Manually create OB 2.0 format baked SVG
+      const legacyBakedSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns:openbadges="http://openbadges.org" viewBox="0 0 920 920" xmlns="http://www.w3.org/2000/svg">
+  <openbadges:assertion verify="https://cloudnativebergen.no/api/badge/test-123/verify">
+    <![CDATA[${JSON.stringify(assertion, null, 2)}]]>
+  </openbadges:assertion>
+  <circle cx="460" cy="460" r="460" fill="#06B6D4"/>
+</svg>`
+
+      // Extract the assertion from legacy format
+      const extracted = extractBadgeFromSVG(legacyBakedSvg)
+
+      expect(extracted.assertion).toBeDefined()
+      expect(extracted.verificationUrl).toBe(
+        'https://cloudnativebergen.no/api/badge/test-123/verify',
+      )
+      expect(extracted.assertion?.id).toBe(assertion.id)
+      expect(extracted.assertion?.type).toEqual(assertion.type)
+    })
+
+    it('should validate both OB 3.0 and OB 2.0 baked SVG formats', async () => {
+      const { assertion } = await generateBadgeCredential(
+        {
+          speakerId: 'speaker-123',
+          speakerName: 'Jane Doe',
+          speakerEmail: 'jane@example.com',
+          conferenceId: 'conf-123',
+          conferenceTitle: 'Cloud Native Day Bergen 2025',
+          conferenceYear: '2025',
+          conferenceDate: 'June 1, 2025',
+          badgeType: 'speaker',
+          issuerUrl: 'https://cloudnativebergen.no',
+        },
+        mockConference,
+      )
+
+      const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 920 920" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="460" cy="460" r="460" fill="#06B6D4"/>
+</svg>`
+
+      // Test OB 3.0 format
+      const ob3BakedSvg = bakeBadge(
+        svgContent,
+        assertion,
+        'https://cloudnativebergen.no/api/badge/test-123/verify',
+      )
+      const ob3Validation = validateBakedSVG(ob3BakedSvg)
+      expect(ob3Validation.isValid).toBe(true)
+
+      // Test OB 2.0 format (legacy)
+      const legacyBakedSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns:openbadges="http://openbadges.org" viewBox="0 0 920 920" xmlns="http://www.w3.org/2000/svg">
+  <openbadges:assertion verify="https://cloudnativebergen.no/api/badge/test-123/verify">
+    <![CDATA[${JSON.stringify(assertion, null, 2)}]]>
+  </openbadges:assertion>
+  <circle cx="460" cy="460" r="460" fill="#06B6D4"/>
+</svg>`
+      const legacyValidation = validateBakedSVG(legacyBakedSvg)
+      expect(legacyValidation.isValid).toBe(true)
+    })
+
+    it('should handle SVG without badge data', () => {
+      const plainSvg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 920 920" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="460" cy="460" r="460" fill="#06B6D4"/>
+</svg>`
+
+      const extracted = extractBadgeFromSVG(plainSvg)
+      expect(extracted.assertion).toBeNull()
+      expect(extracted.verificationUrl).toBeNull()
+
+      const validation = validateBakedSVG(plainSvg)
+      expect(validation.isValid).toBe(false)
+      expect(validation.error).toBe('Missing badge credential data')
     })
   })
 

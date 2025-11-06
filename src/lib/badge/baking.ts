@@ -1,24 +1,27 @@
 /**
  * Badge Baking Module
  *
- * Implements OpenBadges 2.0 badge baking specification for SVG files.
+ * Implements OpenBadges 3.0 badge baking specification for SVG files.
  * Embeds badge assertion JSON directly into SVG images for portability.
  *
- * Reference: https://www.imsglobal.org/sites/default/files/Badges/OBv2p0Final/baking/index.html
+ * OpenBadges 3.0 (Section 5.3.2.1) specifies:
+ * 1. Add xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0" to <svg> tag
+ * 2. Add <openbadges:credential> tag after <svg> tag
+ * 3. For embedded proof: JSON goes in <![CDATA[...]]> wrapper
+ * 4. For VC-JWT proof: JWT goes in verify="" attribute
+ *
+ * Reference: https://www.imsglobal.org/spec/ob/v3p0/#svg-baking
  */
 
 import type { BadgeAssertion } from './types'
 
-const OPENBADGES_NAMESPACE = 'http://openbadges.org'
-
 /**
- * Bake a badge assertion into an SVG file
+ * Bake a badge assertion into an SVG file (OpenBadges 3.0 format)
  *
- * According to OpenBadges 2.0 baking spec:
- * 1. Add xmlns:openbadges attribute to <svg> tag
- * 2. Insert <openbadges:assertion> tag directly after <svg> tag
- * 3. Set verify attribute to the badge verification URL
- * 4. Wrap JSON in CDATA section
+ * According to OpenBadges 3.0 spec (Section 5.3.2.1):
+ * 1. Add xmlns:openbadges namespace to <svg> tag
+ * 2. Add <openbadges:credential> tag immediately after <svg> tag
+ * 3. Embed JSON representation in CDATA section (for embedded proof format)
  */
 export function bakeBadge(
   svgContent: string,
@@ -36,32 +39,31 @@ export function bakeBadge(
     throw new Error('Invalid SVG content: cannot parse <svg> tag')
   }
 
-  const svgTag = svgTagMatch[0]
-  const svgAttributes = svgTagMatch[1] || ''
+  let svgTag = svgTagMatch[0]
+  const svgAttributes = svgTagMatch[1]
 
-  // Check if already has openbadges namespace
-  const hasNamespace = svgAttributes.includes('xmlns:openbadges')
-
-  // Create new SVG tag with openbadges namespace
-  let newSvgTag = svgTag
-  if (!hasNamespace) {
-    newSvgTag = svgTag.replace(
-      '<svg',
-      `<svg xmlns:openbadges="${OPENBADGES_NAMESPACE}"`,
-    )
+  // Add xmlns:openbadges namespace if not present
+  const obNamespace = 'https://purl.imsglobal.org/ob/v3p0'
+  if (!svgAttributes.includes('xmlns:openbadges=')) {
+    svgTag = svgTag.replace('>', ` xmlns:openbadges="${obNamespace}">`)
   }
 
-  // Create the assertion tag with CDATA wrapped JSON
+  // Format assertion JSON with proper indentation
   const assertionJson = JSON.stringify(assertion, null, 2)
-  const assertionTag = `
-  <openbadges:assertion verify="${verificationUrl}">
-    <![CDATA[${assertionJson}]]>
-  </openbadges:assertion>`
+    .split('\n')
+    .map(line => `      ${line}`)
+    .join('\n')
 
-  // Replace the SVG tag and insert assertion immediately after
-  const bakedSvg = svgContent
-    .replace(svgTag, newSvgTag)
-    .replace(newSvgTag, newSvgTag + assertionTag)
+  // Create the openbadges:credential tag with CDATA-wrapped JSON (OB 3.0 embedded proof format)
+  const credentialTag = `  <openbadges:credential>
+    <![CDATA[
+${assertionJson}
+    ]]>
+  </openbadges:credential>
+`
+
+  // Insert credential immediately after modified SVG tag
+  const bakedSvg = svgContent.replace(svgTagMatch[0], svgTag + '\n' + credentialTag)
 
   return bakedSvg
 }
@@ -69,14 +71,39 @@ export function bakeBadge(
 /**
  * Extract badge assertion from a baked SVG
  *
- * Parses the <openbadges:assertion> tag and returns the JSON data
+ * Supports OpenBadges 3.0 format: <openbadges:credential> with CDATA
+ * Also supports legacy OB 2.0: <openbadges:assertion> with verify attribute
  */
 export function extractBadgeFromSVG(bakedSvgContent: string): {
   assertion: BadgeAssertion | null
   verificationUrl: string | null
 } {
   try {
-    // Find the openbadges:assertion tag
+    // Try OpenBadges 3.0 format: <openbadges:credential>
+    const credentialMatch = bakedSvgContent.match(
+      /<openbadges:credential[^>]*>([\s\S]*?)<\/openbadges:credential>/,
+    )
+
+    if (credentialMatch) {
+      const content = credentialMatch[1]
+
+      // Extract JSON from CDATA
+      const cdataMatch = content.match(/<!\[CDATA\[([\s\S]*?)\]\]>/)
+      if (!cdataMatch) {
+        // Try without CDATA (in case of plain JSON)
+        const assertion = JSON.parse(content.trim()) as BadgeAssertion
+        const verificationUrl = assertion.id || null
+        return { assertion, verificationUrl }
+      }
+
+      const jsonString = cdataMatch[1].trim()
+      const assertion = JSON.parse(jsonString) as BadgeAssertion
+      const verificationUrl = assertion.id || null
+
+      return { assertion, verificationUrl }
+    }
+
+    // Fallback to OpenBadges 2.0 format: <openbadges:assertion>
     const assertionMatch = bakedSvgContent.match(
       /<openbadges:assertion\s+verify="([^"]+)"[^>]*>([\s\S]*?)<\/openbadges:assertion>/,
     )
@@ -106,9 +133,13 @@ export function extractBadgeFromSVG(bakedSvgContent: string): {
 
 /**
  * Check if an SVG has been baked with badge data
+ * Supports both OB 3.0 (<openbadges:credential>) and OB 2.0 (<openbadges:assertion>) formats
  */
 export function isBakedSVG(svgContent: string): boolean {
-  return svgContent.includes('<openbadges:assertion')
+  return (
+    svgContent.includes('<openbadges:credential') ||
+    svgContent.includes('<openbadges:assertion')
+  )
 }
 
 /**
@@ -124,25 +155,16 @@ export function validateBakedSVG(svgContent: string): {
     return { isValid: false, error: 'Invalid SVG structure' }
   }
 
-  // Check for openbadges namespace
-  if (!svgContent.includes('xmlns:openbadges')) {
-    return { isValid: false, error: 'Missing openbadges namespace' }
-  }
-
-  // Check for assertion tag
+  // Check for baked badge data
   if (!isBakedSVG(svgContent)) {
-    return { isValid: false, error: 'Missing openbadges:assertion tag' }
+    return { isValid: false, error: 'Missing badge credential data' }
   }
 
   // Try to extract and validate JSON
-  const { assertion, verificationUrl } = extractBadgeFromSVG(svgContent)
+  const { assertion } = extractBadgeFromSVG(svgContent)
 
   if (!assertion) {
     return { isValid: false, error: 'Cannot extract badge assertion JSON' }
-  }
-
-  if (!verificationUrl) {
-    return { isValid: false, error: 'Missing verification URL' }
   }
 
   // Validate assertion structure
@@ -156,3 +178,4 @@ export function validateBakedSVG(svgContent: string): {
 
   return { isValid: true }
 }
+
