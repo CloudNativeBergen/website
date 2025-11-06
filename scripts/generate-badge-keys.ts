@@ -18,7 +18,6 @@ async function generateKeys() {
   console.log('Add these to your .env.local file:\n')
   console.log(`BADGE_ISSUER_PRIVATE_KEY=${privateKeyHex}`)
   console.log(`BADGE_ISSUER_PUBLIC_KEY=${publicKeyHex}`)
-  console.log(`BADGE_ISSUER_URL=http://localhost:3000`)
   console.log(
     '\n⚠️  Keep the private key secret! Never commit it to version control.\n',
   )

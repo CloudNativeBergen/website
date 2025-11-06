@@ -22,7 +22,6 @@ describe('Badge Crypto - Multibase Format', () => {
         'd6e2f676b1c106ffe56b08424a77b5590d8a19cb119ecb35a005b1b4baa570d2',
       BADGE_ISSUER_PUBLIC_KEY:
         '36f594e8fc805ad04bbc0718bdb053cff38c13b4b296c3dbe42f8aad9f2016e2',
-      BADGE_ISSUER_URL: 'https://cloudnativebergen.no',
     }
   })
 

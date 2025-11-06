@@ -76,7 +76,7 @@ try {
 }
 
 // Test verification method URL
-const issuerUrl = process.env.BADGE_ISSUER_URL || 'https://cloudnativebergen.no'
+const issuerUrl = 'https://localhost:3000'
 const keyId = `key-${publicKeyHex.substring(0, 8)}`
 const verificationMethod = `${issuerUrl}/api/badge/keys/${keyId}`
 

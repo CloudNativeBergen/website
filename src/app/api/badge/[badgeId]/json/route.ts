@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
+import {
+  parseBadgeJson,
+  BadgeNotFoundError,
+  BadgeVerificationError,
+} from '@/lib/badge/verification'
 
 export const runtime = 'nodejs'
 
@@ -20,12 +25,19 @@ export async function GET(
     const { badge, error } = await getBadgeById(badgeId)
 
     if (error || !badge) {
-      return NextResponse.json({ error: 'Badge not found' }, { status: 404 })
+      throw new BadgeNotFoundError('Badge not found')
     }
 
-    const badgeAssertion = JSON.parse(badge.badge_json)
+    // Parse and validate badge JSON
+    const { assertion, error: parseError } = parseBadgeJson(badge.badge_json)
 
-    return new NextResponse(JSON.stringify(badgeAssertion, null, 2), {
+    if (parseError || !assertion) {
+      throw new BadgeVerificationError(
+        parseError || 'Failed to parse badge JSON',
+      )
+    }
+
+    return new NextResponse(JSON.stringify(assertion, null, 2), {
       status: 200,
       headers: {
         'Content-Type': 'application/ld+json',
@@ -36,6 +48,15 @@ export async function GET(
     })
   } catch (error) {
     console.error('Error fetching badge JSON:', error)
+
+    if (error instanceof BadgeNotFoundError) {
+      return NextResponse.json({ error: error.message }, { status: 404 })
+    }
+
+    if (error instanceof BadgeVerificationError) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 },

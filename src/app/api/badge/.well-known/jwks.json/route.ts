@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getIssuerUrl } from '@/lib/badge/crypto'
 
 export const runtime = 'nodejs'
 
@@ -18,8 +20,8 @@ export async function GET() {
       )
     }
 
-    const issuerUrl =
-      process.env.BADGE_ISSUER_URL || process.env.NEXT_PUBLIC_VERCEL_URL
+    const { conference } = await getConferenceForCurrentDomain()
+    const issuerUrl = getIssuerUrl(conference.domains)
     const keyId = `${issuerUrl}#key-${publicKeyHex.substring(0, 8)}`
 
     return NextResponse.json(

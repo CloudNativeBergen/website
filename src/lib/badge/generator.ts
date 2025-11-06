@@ -6,6 +6,7 @@
  */
 
 import { signBadgeData, getVerificationMethod } from './crypto'
+import { generateBadgeId } from './utils'
 import type {
   BadgeAssertion,
   BadgeCredential,
@@ -13,13 +14,6 @@ import type {
 } from './types'
 import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
-
-/**
- * Generate a unique badge ID
- */
-export function generateBadgeId(): string {
-  return `badge-${Date.now()}-${Math.random().toString(36).substring(7)}`
-}
 
 /**
  * Generate OpenBadges v3.0 credential JSON-LD

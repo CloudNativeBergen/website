@@ -313,7 +313,6 @@ Keys must be stored in environment variables:
 
 - `BADGE_ISSUER_PRIVATE_KEY` - Keep secret!
 - `BADGE_ISSUER_PUBLIC_KEY` - Used for verification
-- `BADGE_ISSUER_URL` - Your production domain
 
 ### Signature Verification
 
