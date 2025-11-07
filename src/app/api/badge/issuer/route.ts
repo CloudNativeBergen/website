@@ -31,7 +31,13 @@ export async function GET() {
     // Get conference from domain
     const { conference, domain: domainName } =
       await getConferenceForCurrentDomain()
-    const domain = `https://${domainName}`
+
+    // Build base URL - use http for localhost, https otherwise
+    const domain = domainName.startsWith('http')
+      ? domainName
+      : domainName.includes('localhost')
+        ? `http://${domainName}`
+        : `https://${domainName}`
 
     // Generate key ID from public key
     const keyId = generateKeyId(publicKeyHex)

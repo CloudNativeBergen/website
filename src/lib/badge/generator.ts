@@ -5,7 +5,11 @@
  * Uses the OpenBadges library for all cryptographic operations.
  */
 
-import { signCredential, createCredential } from '@/lib/openbadges'
+import {
+  signCredential,
+  createCredential,
+  generateKeyId,
+} from '@/lib/openbadges'
 import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
 import type { BadgeAssertion, BadgeGenerationParams } from './types'
@@ -52,12 +56,11 @@ function generateBadgeId(): string {
 /**
  * Generate verification method URL for the badge issuer
  */
-function getVerificationMethod(domains?: string[]): string {
-  const baseUrl = buildIssuerUrl(domains)
+function getVerificationMethod(baseUrl: string): string {
   const { publicKey } = getBadgeKeys()
 
-  // Generate key ID from public key (first 16 chars)
-  const keyId = publicKey.substring(0, 16)
+  // Generate key ID using the same function as issuer profile
+  const keyId = generateKeyId(publicKey)
 
   return `${baseUrl}/api/badge/keys/${keyId}`
 }
@@ -163,7 +166,7 @@ export async function generateBadgeCredential(
 
   // Sign the credential
   const { privateKey, publicKey } = getBadgeKeys()
-  const verificationMethod = getVerificationMethod(conference.domains)
+  const verificationMethod = getVerificationMethod(baseUrl)
 
   const signedCredential = await signCredential(credential, {
     privateKey,

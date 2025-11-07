@@ -49,6 +49,7 @@ export { WorkshopRegistrationSettings } from './WorkshopRegistrationSettings'
 
 export { BadgeManagementClient } from './BadgeManagementClient'
 export { BadgePreviewModal } from './BadgePreviewModal'
+export { default as BadgeValidator } from './BadgeValidator'
 
 export {
   ImageUploadZone,

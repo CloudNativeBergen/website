@@ -14,7 +14,7 @@ import {
   BadgeIdInputSchema,
   ResendBadgeEmailInputSchema,
 } from '@/server/schemas/badge'
-import { generateBadgeCredential, buildIssuerUrl } from '@/lib/badge/generator'
+import { generateBadgeCredential } from '@/lib/badge/generator'
 import { generateBadgeSVG } from '@/lib/badge/svg'
 import { bakeBadge } from '@/lib/openbadges'
 import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
@@ -132,9 +132,14 @@ export const badgeRouter = router({
           ? formatConferenceDateForBadge(conference.start_date)
           : 'TBD'
 
-        // Get base URL and issuer profile URL
-        const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`
-        const issuerUrl = buildIssuerUrl(conference.domains)
+        // Get base URL and issuer profile URL from current domain
+        // Use http for localhost, https otherwise
+        const baseUrl = domain.startsWith('http')
+          ? domain
+          : domain.includes('localhost')
+            ? `http://${domain}`
+            : `https://${domain}`
+        const issuerUrl = `${baseUrl}/api/badge/issuer`
 
         // Fetch accepted talk for evidence (speaker badges only)
         let talkId: string | undefined
@@ -365,11 +370,14 @@ export const badgeRouter = router({
             ? formatConferenceDateForBadge(conference.start_date)
             : 'TBD'
 
-          // Get base URL and issuer profile URL
+          // Get base URL and issuer profile URL from current domain
+          // Use http for localhost, https otherwise
           const baseUrl = domain.startsWith('http')
             ? domain
-            : `https://${domain}`
-          const issuerUrl = buildIssuerUrl(conference.domains)
+            : domain.includes('localhost')
+              ? `http://${domain}`
+              : `https://${domain}`
+          const issuerUrl = baseUrl
 
           // Fetch accepted talk for evidence (speaker badges only)
           let talkId: string | undefined
