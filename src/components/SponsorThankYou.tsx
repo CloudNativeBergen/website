@@ -8,6 +8,7 @@ import {
   BoltIcon,
 } from '@heroicons/react/24/solid'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
+import { InlineSvg } from './InlineSvg'
 
 interface SponsorData {
   _id: string
@@ -150,8 +151,8 @@ const SponsorLogo = ({
         className={`flex items-center justify-center ${className}`}
         style={dimensions}
       >
-        <div
-          dangerouslySetInnerHTML={{ __html: logoSrc }}
+        <InlineSvg
+          value={logoSrc}
           className="flex h-full w-full items-center justify-center [&>svg]:h-full [&>svg]:max-h-full [&>svg]:w-full [&>svg]:max-w-full [&>svg]:object-contain"
         />
       </div>

@@ -1,4 +1,4 @@
-import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
+import { InlineSvg } from './InlineSvg'
 
 interface SponsorLogoProps {
   logo: string | null | undefined
@@ -27,20 +27,12 @@ export function SponsorLogo({
         className={hasResponsiveBehavior ? 'block dark:hidden' : 'block'}
         aria-label={name}
       >
-        <InlineSvgPreviewComponent
-          value={logo}
-          className={className}
-          style={style}
-        />
+        <InlineSvg value={logo} className={className} style={style} />
       </div>
 
       {logoBright && (
         <div className="hidden dark:block" aria-label={name}>
-          <InlineSvgPreviewComponent
-            value={logoBright}
-            className={className}
-            style={style}
-          />
+          <InlineSvg value={logoBright} className={className} style={style} />
         </div>
       )}
     </div>

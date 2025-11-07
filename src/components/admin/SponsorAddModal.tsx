@@ -21,7 +21,7 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import { ChevronDownIcon as ChevronDownIconSmall } from '@heroicons/react/16/solid'
-import { InlineSvgPreviewComponent } from '@starefossen/sanity-plugin-inline-svg-input'
+import { InlineSvg } from '@/components/InlineSvg'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import {
   ConferenceSponsorWithContact,
@@ -736,7 +736,7 @@ export default function SponsorAddModal({
                                     Logo Preview:
                                   </p>
                                   <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
-                                    <InlineSvgPreviewComponent
+                                    <InlineSvg
                                       value={formData.logo}
                                       style={LOGO_PREVIEW_SIZE}
                                     />
@@ -779,7 +779,7 @@ export default function SponsorAddModal({
                                     Bright Logo Preview:
                                   </p>
                                   <div className="inline-block rounded-lg border border-gray-200 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
-                                    <InlineSvgPreviewComponent
+                                    <InlineSvg
                                       value={formData.logo_bright}
                                       style={LOGO_PREVIEW_SIZE}
                                     />
@@ -813,7 +813,7 @@ export default function SponsorAddModal({
                                   Light Mode
                                 </p>
                                 <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
-                                  <InlineSvgPreviewComponent
+                                  <InlineSvg
                                     value={formData.logo}
                                     style={LOGO_PREVIEW_SIZE}
                                   />
@@ -824,7 +824,7 @@ export default function SponsorAddModal({
                                   Dark Mode
                                 </p>
                                 <div className="inline-block rounded-lg border border-gray-600 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
-                                  <InlineSvgPreviewComponent
+                                  <InlineSvg
                                     value={formData.logo_bright}
                                     style={LOGO_PREVIEW_SIZE}
                                   />
