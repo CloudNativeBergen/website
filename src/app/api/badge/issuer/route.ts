@@ -1,0 +1,104 @@
+/**
+ * Issuer Profile Endpoint (OpenBadges 3.0)
+ *
+ * Returns the issuer profile with verification methods (public keys)
+ * as required by the OpenBadges 3.0 specification.
+ *
+ * Reference: https://www.imsglobal.org/spec/ob/v3p0/impl/
+ */
+
+import { NextResponse } from 'next/server'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { generateMultikeyDocument, validateKeyId } from '@/lib/badge/keys'
+
+export const runtime = 'nodejs'
+
+export async function GET() {
+  try {
+    const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
+
+    if (!publicKeyHex) {
+      return NextResponse.json(
+        { error: 'Public key not configured' },
+        { status: 500 },
+      )
+    }
+
+    // Get conference from domain
+    const { conference, domain: domainName } =
+      await getConferenceForCurrentDomain()
+    const domain = `https://${domainName}`
+
+    // Generate key ID from public key (first 8 chars)
+    const keyId = `key-${publicKeyHex.slice(0, 8)}`
+
+    // Validate key configuration
+    const keyValidation = validateKeyId(keyId, publicKeyHex)
+    if (!keyValidation.valid) {
+      return NextResponse.json(
+        { error: `Invalid public key configuration: ${keyValidation.error}` },
+        { status: 500 },
+      )
+    }
+
+    // Generate Multikey document
+    const multikeyDoc = generateMultikeyDocument(publicKeyHex, keyId, domain)
+
+    // Issuer profile URL - this should be the controller
+    const issuerProfileUrl = `${domain}/api/badge/issuer`
+
+    // OpenBadges 3.0 Issuer Profile with verificationMethod
+    const issuerProfile = {
+      '@context': [
+        'https://www.w3.org/ns/did/v1',
+        'https://www.w3.org/ns/credentials/v2',
+        'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
+      ],
+      id: issuerProfileUrl,
+      type: 'Profile',
+      name: conference.title,
+      url: domain,
+      email: 'contact@cloudnativebergen.dev',
+      description: conference.description || conference.tagline || '',
+      image: {
+        id: `${domain}/og/base.png`,
+        type: 'Image',
+      },
+      verificationMethod: [
+        {
+          id: multikeyDoc.id,
+          type: multikeyDoc.type,
+          controller: issuerProfileUrl, // Override to match issuer profile ID
+          publicKeyMultibase: multikeyDoc.publicKeyMultibase,
+        },
+      ],
+    }
+
+    return NextResponse.json(issuerProfile, {
+      headers: {
+        'Content-Type': 'application/ld+json',
+        'Cache-Control': 'public, max-age=3600, immutable',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      },
+    })
+  } catch (error) {
+    console.error('Error generating issuer profile:', error)
+    return NextResponse.json(
+      { error: 'Failed to generate issuer profile' },
+      { status: 500 },
+    )
+  }
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept',
+    },
+  })
+}

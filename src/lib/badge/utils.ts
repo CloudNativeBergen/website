@@ -77,12 +77,13 @@ export function validateIssuerUrl(url: string): {
 
 /**
  * Build issuer URL from conference domains
+ * Returns the issuer profile URL that supports content negotiation
  */
 export function buildIssuerUrl(conferenceDomains?: string[]): string {
   if (!conferenceDomains || conferenceDomains.length === 0) {
     throw new Error(
       'Conference domains must be provided. ' +
-        'Use getConferenceForCurrentDomain() to get the conference context.',
+      'Use getConferenceForCurrentDomain() to get the conference context.',
     )
   }
 
@@ -91,11 +92,13 @@ export function buildIssuerUrl(conferenceDomains?: string[]): string {
   if (domain.includes('*')) {
     throw new Error(
       `Cannot use wildcard domain "${domain}" as issuer URL. ` +
-        'Ensure a specific domain is configured for the conference.',
+      'Ensure a specific domain is configured for the conference.',
     )
   }
 
-  return domain.startsWith('http') ? domain : `https://${domain}`
+  const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`
+  // Return the issuer profile endpoint that includes verificationMethod
+  return `${baseUrl}/api/badge/issuer`
 }
 
 /**
