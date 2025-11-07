@@ -159,6 +159,77 @@ export async function POST(request: NextRequest) {
                 },
               })
             } else {
+              // Controller consistency: issuer.id must match verificationMethod.controller
+              const controller = (verificationMethod as { controller?: string })
+                .controller
+              const controllerIssues: string[] = []
+              if (!controller) {
+                controllerIssues.push(
+                  'Missing controller on verification method',
+                )
+              } else {
+                if (issuerId && controller !== issuerId) {
+                  controllerIssues.push('Controller does not match issuer.id')
+                }
+                if (!controller.endsWith('/api/badge/issuer')) {
+                  controllerIssues.push(
+                    'Controller does not end with /api/badge/issuer',
+                  )
+                }
+              }
+
+              // Optionally fetch key document to confirm controller alignment
+              try {
+                const keyDocResp = await fetch(proof.verificationMethod, {
+                  headers: {
+                    Accept: 'application/ld+json',
+                    'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
+                  },
+                  signal: AbortSignal.timeout(4000),
+                })
+                if (keyDocResp.ok) {
+                  const keyDoc = await keyDocResp.json()
+                  if (
+                    keyDoc.controller &&
+                    issuerId &&
+                    keyDoc.controller !== issuerId
+                  ) {
+                    controllerIssues.push(
+                      'Key document controller mismatch issuer.id',
+                    )
+                  }
+                  if (!keyDoc.publicKeyMultibase) {
+                    controllerIssues.push(
+                      'Missing publicKeyMultibase in key document',
+                    )
+                  }
+                } else {
+                  controllerIssues.push(
+                    `Failed to fetch key document (${keyDocResp.status})`,
+                  )
+                }
+              } catch (e) {
+                controllerIssues.push(
+                  `Key document fetch error: ${e instanceof Error ? e.message : 'Unknown error'}`,
+                )
+              }
+
+              if (controllerIssues.length > 0) {
+                checks.push({
+                  name: 'controller',
+                  status: 'error',
+                  message: 'Controller / key document consistency issues',
+                  details: { issues: controllerIssues },
+                })
+              } else {
+                checks.push({
+                  name: 'controller',
+                  status: 'success',
+                  message: 'Controller and key document are consistent',
+                  details: { controller },
+                })
+              }
+
               checks.push({
                 name: 'proof',
                 status: 'success',
@@ -167,6 +238,7 @@ export async function POST(request: NextRequest) {
                   cryptosuite: proof.cryptosuite,
                   created: proof.created,
                   verificationMethod: proof.verificationMethod,
+                  controllerMatch: controllerIssues.length === 0,
                 },
               })
             }

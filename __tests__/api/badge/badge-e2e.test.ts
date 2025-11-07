@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals'
+import { describe, it, expect } from '@jest/globals'
 import { generateBadgeCredential } from '@/lib/badge/generator'
 import { generateBadgeSVG } from '@/lib/badge/svg'
 import {
@@ -7,8 +7,6 @@ import {
   verifyCredential,
   validateCredential,
 } from '@/lib/openbadges'
-import { createBadge, uploadBadgeSVGAsset } from '@/lib/badge/sanity'
-import { clientWrite } from '@/lib/sanity/client'
 import type { Conference } from '@/lib/conference/types'
 import type { BadgeAssertion, BadgeGenerationParams } from '@/lib/badge/types'
 import type { SignedCredential } from '@/lib/openbadges/types'

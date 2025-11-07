@@ -31,22 +31,6 @@ function getBadgeKeys(): { privateKey: string; publicKey: string } {
 }
 
 /**
- * Build issuer URL from conference domains
- */
-function buildIssuerUrl(domains?: string[]): string {
-  if (!domains || domains.length === 0) {
-    return 'https://cloudnativebergen.no'
-  }
-
-  const domain = domains[0]
-  if (domain.includes('*')) {
-    return 'https://cloudnativebergen.no'
-  }
-
-  return domain.startsWith('http') ? domain : `https://${domain}`
-}
-
-/**
  * Generate a badge ID
  */
 function generateBadgeId(): string {
@@ -179,5 +163,3 @@ export async function generateBadgeCredential(
     badgeId,
   }
 }
-
-export { buildIssuerUrl, generateBadgeId, getVerificationMethod }

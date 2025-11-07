@@ -14,6 +14,7 @@ import {
   generateKeyId,
   generateErrorResponse,
 } from '@/lib/openbadges'
+import { normalizeProtocolForDomain } from '@/lib/badge/protocol'
 
 export const runtime = 'nodejs'
 
@@ -32,21 +33,21 @@ export async function GET() {
     const { conference, domain: domainName } =
       await getConferenceForCurrentDomain()
 
-    // Build base URL - use http for localhost, https otherwise
-    const domain = domainName.startsWith('http')
-      ? domainName
-      : domainName.includes('localhost')
-        ? `http://${domainName}`
-        : `https://${domainName}`
+    // Normalize protocol for domain (http for localhost, https otherwise)
+    const domain = normalizeProtocolForDomain(domainName)
+
+    // Issuer profile URL - this should be the controller
+    const issuerProfileUrl = `${domain}/api/badge/issuer`
 
     // Generate key ID from public key
     const keyId = generateKeyId(publicKeyHex)
 
-    // Generate Multikey document
-    const multikeyDoc = generateMultikeyDocument(publicKeyHex, keyId, domain)
-
-    // Issuer profile URL - this should be the controller
-    const issuerProfileUrl = `${domain}/api/badge/issuer`
+    // Generate Multikey document with issuer profile as controller
+    const multikeyDoc = generateMultikeyDocument(
+      publicKeyHex,
+      keyId,
+      issuerProfileUrl,
+    )
 
     // OpenBadges 3.0 Issuer Profile with verificationMethod
     const issuerProfile = {
@@ -69,7 +70,7 @@ export async function GET() {
         {
           id: multikeyDoc.id,
           type: multikeyDoc.type,
-          controller: issuerProfileUrl, // Override to match issuer profile ID
+          controller: multikeyDoc.controller,
           publicKeyMultibase: multikeyDoc.publicKeyMultibase,
         },
       ],

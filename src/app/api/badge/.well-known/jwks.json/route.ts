@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { generateKeyId } from '@/lib/openbadges'
+import { normalizeProtocolForDomain } from '@/lib/badge/protocol'
 
 export const runtime = 'nodejs'
 
@@ -21,7 +22,7 @@ export async function GET() {
     }
 
     const { domain } = await getConferenceForCurrentDomain()
-    const issuerUrl = domain.startsWith('http') ? domain : `https://${domain}`
+    const issuerUrl = normalizeProtocolForDomain(domain)
     const keyId = `${issuerUrl}#${generateKeyId(publicKeyHex)}`
 
     return NextResponse.json(

@@ -50,7 +50,7 @@ const VALID_PUBLIC_KEY =
 const VALID_KEY_ID = generateKeyId(VALID_PUBLIC_KEY)
 
 const VALID_ISSUER = {
-  id: 'https://example.com/issuer',
+  id: 'https://example.com/api/badge/issuer',
   name: 'Test Issuer',
   url: 'https://example.com',
   email: 'test@example.com',
@@ -87,7 +87,7 @@ const VALID_CREDENTIAL_CONFIG: CredentialConfig = {
 const VALID_SIGNING_CONFIG: SigningConfig = {
   privateKey: VALID_PRIVATE_KEY,
   publicKey: VALID_PUBLIC_KEY,
-  verificationMethod: `https://example.com/keys/${VALID_KEY_ID}`,
+  verificationMethod: `https://example.com/api/badge/keys/${VALID_KEY_ID}`,
 }
 
 const VALID_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
@@ -480,7 +480,11 @@ describe('Extraction - Edge Cases', () => {
 describe('Multikey Documents - Edge Cases', () => {
   it('should reject invalid public key', () => {
     expect(() =>
-      generateMultikeyDocument('invalid', VALID_KEY_ID, 'https://example.com'),
+      generateMultikeyDocument(
+        'invalid',
+        VALID_KEY_ID,
+        'https://example.com/api/badge/issuer',
+      ),
     ).toThrow(KeyFormatError)
   })
 
@@ -500,7 +504,7 @@ describe('Multikey Documents - Edge Cases', () => {
     const doc = generateMultikeyDocument(
       VALID_PUBLIC_KEY,
       VALID_KEY_ID,
-      'https://example.com',
+      'https://example.com/api/badge/issuer',
     )
     expect(doc['@context']).toEqual([
       'https://www.w3.org/ns/credentials/v2',
@@ -508,7 +512,7 @@ describe('Multikey Documents - Edge Cases', () => {
     ])
     expect(doc.type).toBe('Multikey')
     expect(doc.id).toBe(`https://example.com/api/badge/keys/${VALID_KEY_ID}`)
-    expect(doc.controller).toBe('https://example.com')
+    expect(doc.controller).toBe('https://example.com/api/badge/issuer')
     expect(doc.publicKeyMultibase).toMatch(/^z/)
   })
 })

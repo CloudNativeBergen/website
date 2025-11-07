@@ -133,11 +133,30 @@ export function generateMultikeyDocument(
   validateKeyId(keyId, publicKeyHex)
   validateUrl(controller, 'Controller URL')
 
+  // Enforce controller to point at issuer profile endpoint (defensive)
+  // This prevents accidental use of bare domain causing validation failures.
+  // Allowed pattern: <origin>/api/badge/issuer
+  try {
+    const url = new URL(controller)
+    const expectedPath = '/api/badge/issuer'
+    if (!url.pathname.endsWith(expectedPath)) {
+      throw new ConfigurationError(
+        'Controller URL must point to issuer profile endpoint',
+        { controller, expectedSuffix: expectedPath },
+      )
+    }
+  } catch (e) {
+    if (e instanceof ConfigurationError) throw e
+    throw new ConfigurationError('Invalid controller URL', { controller })
+  }
+
   // Generate multibase-encoded public key
   const publicKeyMultibase = publicKeyToMultibase(publicKeyHex)
 
-  // Construct full key ID URL
-  const keyIdUrl = `${controller}/api/badge/keys/${keyId}`
+  // Derive base origin for key document if controller is issuer profile
+  // Controller must end with /api/badge/issuer (enforced above)
+  const baseOrigin = controller.replace(/\/api\/badge\/issuer$/, '')
+  const keyIdUrl = `${baseOrigin}/api/badge/keys/${keyId}`
 
   return {
     '@context': [
