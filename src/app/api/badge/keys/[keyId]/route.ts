@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import {
-  generateMultikeyDocument,
-  validateKeyId,
-  KeyNotFoundError,
-  KeyConfigurationError,
-  KeyValidationError,
-} from '@/lib/badge/keys'
+import { generateMultikeyDocument, validateKeyId } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
@@ -30,14 +24,14 @@ export async function GET(
     const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
 
     if (!publicKeyHex) {
-      throw new KeyConfigurationError('Public key not configured')
+      return NextResponse.json(
+        { error: 'Public key not configured' },
+        { status: 500 },
+      )
     }
 
-    // Validate that the requested key matches our public key
-    const validation = validateKeyId(keyId, publicKeyHex)
-    if (!validation.valid) {
-      throw new KeyNotFoundError(validation.error || 'Key not found')
-    }
+    // Validate that the requested key matches our public key (throws on error)
+    validateKeyId(keyId, publicKeyHex)
 
     // Get the domain from the current request
     const { domain } = await getConferenceForCurrentDomain()
@@ -57,21 +51,11 @@ export async function GET(
   } catch (error) {
     console.error('Error fetching public key:', error)
 
-    if (error instanceof KeyNotFoundError) {
-      return NextResponse.json({ error: error.message }, { status: 404 })
-    }
+    const message =
+      error instanceof Error ? error.message : 'Failed to retrieve public key'
+    const is404 =
+      message.includes('not found') || message.includes('does not match')
 
-    if (error instanceof KeyConfigurationError) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    if (error instanceof KeyValidationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-
-    return NextResponse.json(
-      { error: 'Failed to retrieve public key' },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: message }, { status: is404 ? 404 : 500 })
   }
 }

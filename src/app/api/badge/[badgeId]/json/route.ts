@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
-import {
-  parseBadgeJson,
-  BadgeNotFoundError,
-  BadgeVerificationError,
-} from '@/lib/badge/verification'
+import { generateErrorResponse } from '@/lib/openbadges'
+import type { BadgeAssertion } from '@/lib/badge/types'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +14,7 @@ export async function GET(
 
     if (!badgeId) {
       return NextResponse.json(
-        { error: 'Badge ID is required' },
+        generateErrorResponse('Badge ID is required', 400),
         { status: 400 },
       )
     }
@@ -25,15 +22,19 @@ export async function GET(
     const { badge, error } = await getBadgeById(badgeId)
 
     if (error || !badge) {
-      throw new BadgeNotFoundError('Badge not found')
+      return NextResponse.json(generateErrorResponse('Badge not found', 404), {
+        status: 404,
+      })
     }
 
-    // Parse and validate badge JSON
-    const { assertion, error: parseError } = parseBadgeJson(badge.badge_json)
-
-    if (parseError || !assertion) {
-      throw new BadgeVerificationError(
-        parseError || 'Failed to parse badge JSON',
+    // Parse badge JSON
+    let assertion: BadgeAssertion
+    try {
+      assertion = JSON.parse(badge.badge_json) as BadgeAssertion
+    } catch {
+      return NextResponse.json(
+        generateErrorResponse('Invalid badge JSON', 500),
+        { status: 500 },
       )
     }
 
@@ -49,17 +50,11 @@ export async function GET(
   } catch (error) {
     console.error('Error fetching badge JSON:', error)
 
-    if (error instanceof BadgeNotFoundError) {
-      return NextResponse.json({ error: error.message }, { status: 404 })
-    }
+    const message =
+      error instanceof Error ? error.message : 'Internal server error'
 
-    if (error instanceof BadgeVerificationError) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 },
-    )
+    return NextResponse.json(generateErrorResponse(message, 500), {
+      status: 500,
+    })
   }
 }

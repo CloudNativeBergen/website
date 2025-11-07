@@ -14,10 +14,9 @@ import {
   BadgeIdInputSchema,
   ResendBadgeEmailInputSchema,
 } from '@/server/schemas/badge'
-import { generateBadgeCredential } from '@/lib/badge/generator'
+import { generateBadgeCredential, buildIssuerUrl } from '@/lib/badge/generator'
 import { generateBadgeSVG } from '@/lib/badge/svg'
-import { bakeBadge } from '@/lib/badge/baking'
-import { buildIssuerUrl } from '@/lib/badge/utils'
+import { bakeBadge } from '@/lib/openbadges'
 import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import {
@@ -188,7 +187,10 @@ export const badgeRouter = router({
         })
 
         const verificationUrl = `${baseUrl}/api/badge/${badgeId}/verify`
-        const bakedSvg = bakeBadge(svgContent, assertion)
+        const bakedSvg = bakeBadge(
+          svgContent,
+          assertion as Parameters<typeof bakeBadge>[1],
+        )
 
         const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
           bakedSvg,
@@ -420,7 +422,10 @@ export const badgeRouter = router({
           })
 
           const verificationUrl = `${baseUrl}/api/badge/${badgeId}/verify`
-          const bakedSvg = bakeBadge(svgContent, assertion)
+          const bakedSvg = bakeBadge(
+            svgContent,
+            assertion as Parameters<typeof bakeBadge>[1],
+          )
 
           const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
             bakedSvg,
@@ -664,15 +669,14 @@ export const badgeRouter = router({
 
       const badgeAssertion = JSON.parse(badge.badge_json)
 
-      const { verifyBadgeSignature } = await import('@/lib/badge/crypto')
+      const { verifyCredential } = await import('@/lib/openbadges')
       let signatureValid = false
-      if (badgeAssertion.proof && badgeAssertion.proof.proofValue) {
-        const { proof, ...assertionWithoutProof } = badgeAssertion
-
-        signatureValid = await verifyBadgeSignature(
-          assertionWithoutProof,
-          proof.proofValue,
-        )
+      if (badgeAssertion.proof && badgeAssertion.proof.length > 0) {
+        // Get public key from environment
+        const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
+        if (publicKeyHex) {
+          signatureValid = await verifyCredential(badgeAssertion, publicKeyHex)
+        }
       }
 
       return {

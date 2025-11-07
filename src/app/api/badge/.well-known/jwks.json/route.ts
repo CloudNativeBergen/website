@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getIssuerUrl } from '@/lib/badge/crypto'
+import { buildIssuerUrl } from '@/lib/badge/generator'
+import { generateKeyId } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
@@ -21,8 +22,8 @@ export async function GET() {
     }
 
     const { conference } = await getConferenceForCurrentDomain()
-    const issuerUrl = getIssuerUrl(conference.domains)
-    const keyId = `${issuerUrl}#key-${publicKeyHex.substring(0, 8)}`
+    const issuerUrl = buildIssuerUrl(conference.domains)
+    const keyId = `${issuerUrl}#${generateKeyId(publicKeyHex)}`
 
     return NextResponse.json(
       {

@@ -9,7 +9,11 @@
 
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { generateMultikeyDocument, validateKeyId } from '@/lib/badge/keys'
+import {
+  generateMultikeyDocument,
+  generateKeyId,
+  generateErrorResponse,
+} from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
@@ -19,7 +23,7 @@ export async function GET() {
 
     if (!publicKeyHex) {
       return NextResponse.json(
-        { error: 'Public key not configured' },
+        generateErrorResponse('Public key not configured', 500),
         { status: 500 },
       )
     }
@@ -29,17 +33,8 @@ export async function GET() {
       await getConferenceForCurrentDomain()
     const domain = `https://${domainName}`
 
-    // Generate key ID from public key (first 8 chars)
-    const keyId = `key-${publicKeyHex.slice(0, 8)}`
-
-    // Validate key configuration
-    const keyValidation = validateKeyId(keyId, publicKeyHex)
-    if (!keyValidation.valid) {
-      return NextResponse.json(
-        { error: `Invalid public key configuration: ${keyValidation.error}` },
-        { status: 500 },
-      )
-    }
+    // Generate key ID from public key
+    const keyId = generateKeyId(publicKeyHex)
 
     // Generate Multikey document
     const multikeyDoc = generateMultikeyDocument(publicKeyHex, keyId, domain)
@@ -85,10 +80,13 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Error generating issuer profile:', error)
-    return NextResponse.json(
-      { error: 'Failed to generate issuer profile' },
-      { status: 500 },
-    )
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Failed to generate issuer profile'
+    return NextResponse.json(generateErrorResponse(message, 500), {
+      status: 500,
+    })
   }
 }
 

@@ -1,26 +1,26 @@
 /**
- * OpenBadges 3.0 JSON Schema Validator
+ * OpenBadges 3.0 Schema Validation
  *
- * Validates badge credentials against the official OpenBadges 3.0 JSON schema
- * from 1EdTech: https://purl.imsglobal.org/spec/ob/v3p0/schema/json/
+ * Validates credentials against the OpenBadges 3.0 JSON schema using AJV.
  */
 
 import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
-import type { BadgeAssertion } from './types'
+import { ValidationError } from './errors'
+import type { Credential, SignedCredential, ValidationResult } from './types'
 
-// Initialize AJV with proper options for OpenBadges 3.0
+// Initialize AJV
 const ajv = new Ajv({
-  strict: false, // OpenBadges uses additional properties
-  allErrors: true, // Get all validation errors
-  verbose: true, // Include schema and data in errors
+  strict: false,
+  allErrors: true,
+  verbose: true,
 })
 
-// Add format validators (date-time, uri, email, etc.)
+// Add format validators
 addFormats(ajv)
 
 /**
- * OpenBadges 3.0 AchievementCredential schema
+ * OpenBadges 3.0 AchievementCredential JSON Schema
  * Based on: https://purl.imsglobal.org/spec/ob/v3p0/schema/json/ob_v3p0_achievementcredential_schema.json
  */
 const achievementCredentialSchema = {
@@ -55,8 +55,13 @@ const achievementCredentialSchema = {
         },
         achievement: {
           type: 'object',
-          required: ['id', 'type', 'name', 'criteria'],
+          required: ['@context', 'id', 'type', 'name', 'criteria'],
           properties: {
+            '@context': {
+              type: 'array',
+              minItems: 2,
+              items: { type: 'string' },
+            },
             id: { type: 'string', format: 'uri' },
             type: {
               type: 'array',
@@ -67,6 +72,7 @@ const achievementCredentialSchema = {
             description: { type: 'string' },
             criteria: {
               type: 'object',
+              required: ['narrative'],
               properties: {
                 id: { type: 'string', format: 'uri' },
                 narrative: { type: 'string' },
@@ -102,6 +108,22 @@ const achievementCredentialSchema = {
                     id: { type: 'string', format: 'uri' },
                     type: { const: 'Image' },
                   },
+                },
+              },
+            },
+            evidence: {
+              type: 'array',
+              items: {
+                type: 'object',
+                required: ['id', 'type', 'name'],
+                properties: {
+                  id: { type: 'string', format: 'uri' },
+                  type: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                  name: { type: 'string' },
+                  description: { type: 'string' },
                 },
               },
             },
@@ -161,67 +183,58 @@ const achievementCredentialSchema = {
   additionalProperties: true,
 }
 
-// Compile the schema
+// Compile schema
 const validateSchema = ajv.compile(achievementCredentialSchema)
 
-export interface ValidationResult {
-  valid: boolean
-  errors?: Array<{
-    field: string
-    message: string
-    value?: unknown
-  }>
-}
-
 /**
- * Validate a badge assertion against the OpenBadges 3.0 schema
+ * Validate a credential against OpenBadges 3.0 schema
+ *
+ * @param credential - The credential to validate
+ * @returns Validation result with detailed errors if invalid
  */
-export function validateBadgeSchema(
-  assertion: BadgeAssertion,
+export function validateCredential(
+  credential: Credential | SignedCredential,
 ): ValidationResult {
-  const valid = validateSchema(assertion)
+  const valid = validateSchema(credential)
 
   if (valid) {
     return { valid: true }
   }
 
-  const errors = (validateSchema.errors || []).map((error) => ({
-    field: error.instancePath || error.schemaPath,
-    message: error.message || 'Validation error',
-    value: error.data,
-  }))
+  const errors = (validateSchema.errors || []).map((error) => {
+    const field = error.instancePath || error.schemaPath
+    const message = error.message || 'Validation error'
+
+    return {
+      field: field.replace(/^\//, '').replace(/\//g, '.'),
+      message,
+      value: error.data,
+    }
+  })
 
   return { valid: false, errors }
 }
 
 /**
- * Validate a badge assertion and throw if invalid
+ * Assert that a credential is valid
+ * Throws ValidationError if invalid
+ *
+ * @param credential - The credential to validate
+ * @throws {ValidationError} if validation fails
  */
-export function assertValidBadge(assertion: BadgeAssertion): void {
-  const result = validateBadgeSchema(assertion)
+export function assertValidCredential(
+  credential: Credential | SignedCredential,
+): void {
+  const result = validateCredential(credential)
 
   if (!result.valid) {
     const errorMessages = result.errors
       ?.map((e) => `${e.field}: ${e.message}`)
       .join('\n')
-    throw new Error(`Badge validation failed:\n${errorMessages}`)
+
+    throw new ValidationError(
+      `Credential validation failed:\n${errorMessages}`,
+      { errors: result.errors },
+    )
   }
-}
-
-/**
- * Get human-readable validation errors
- */
-export function getValidationErrors(assertion: BadgeAssertion): string[] {
-  const result = validateBadgeSchema(assertion)
-
-  if (result.valid) {
-    return []
-  }
-
-  return (
-    result.errors?.map((e) => {
-      const field = e.field.replace('/credentialSubject/', 'credentialSubject.')
-      return `${field}: ${e.message}`
-    }) || []
-  )
 }

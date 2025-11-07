@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
+import {
+  generateAchievementResponse,
+  generateErrorResponse,
+} from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
@@ -16,7 +20,7 @@ export async function GET(
 
     if (!badgeId) {
       return NextResponse.json(
-        { error: 'Badge ID is required' },
+        generateErrorResponse('Badge ID is required', 400),
         { status: 400 },
       )
     }
@@ -24,7 +28,9 @@ export async function GET(
     const { badge, error } = await getBadgeById(badgeId)
 
     if (error || !badge) {
-      return NextResponse.json({ error: 'Badge not found' }, { status: 404 })
+      return NextResponse.json(generateErrorResponse('Badge not found', 404), {
+        status: 404,
+      })
     }
 
     // Parse the badge JSON to extract the achievement
@@ -33,12 +39,12 @@ export async function GET(
 
     if (!achievement) {
       return NextResponse.json(
-        { error: 'Achievement not found in badge' },
+        generateErrorResponse('Achievement not found in badge', 404),
         { status: 404 },
       )
     }
 
-    return NextResponse.json(achievement, {
+    return NextResponse.json(generateAchievementResponse(achievement), {
       status: 200,
       headers: {
         'Content-Type': 'application/ld+json',
@@ -47,9 +53,10 @@ export async function GET(
     })
   } catch (error) {
     console.error('Error fetching badge achievement:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 },
-    )
+    const message =
+      error instanceof Error ? error.message : 'Internal server error'
+    return NextResponse.json(generateErrorResponse(message, 500), {
+      status: 500,
+    })
   }
 }
