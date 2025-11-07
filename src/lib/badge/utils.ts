@@ -83,7 +83,7 @@ export function buildIssuerUrl(conferenceDomains?: string[]): string {
   if (!conferenceDomains || conferenceDomains.length === 0) {
     throw new Error(
       'Conference domains must be provided. ' +
-      'Use getConferenceForCurrentDomain() to get the conference context.',
+        'Use getConferenceForCurrentDomain() to get the conference context.',
     )
   }
 
@@ -92,7 +92,7 @@ export function buildIssuerUrl(conferenceDomains?: string[]): string {
   if (domain.includes('*')) {
     throw new Error(
       `Cannot use wildcard domain "${domain}" as issuer URL. ` +
-      'Ensure a specific domain is configured for the conference.',
+        'Ensure a specific domain is configured for the conference.',
     )
   }
 

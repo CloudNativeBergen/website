@@ -17,6 +17,7 @@ import {
 import { generateBadgeCredential } from '@/lib/badge/generator'
 import { generateBadgeSVG } from '@/lib/badge/svg'
 import { bakeBadge } from '@/lib/badge/baking'
+import { buildIssuerUrl } from '@/lib/badge/utils'
 import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import {
@@ -132,10 +133,9 @@ export const badgeRouter = router({
           ? formatConferenceDateForBadge(conference.start_date)
           : 'TBD'
 
-        // Get issuer URL from current domain
-        const issuerUrl = domain.startsWith('http')
-          ? domain
-          : `https://${domain}`
+        // Get base URL and issuer profile URL
+        const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`
+        const issuerUrl = buildIssuerUrl(conference.domains)
 
         // Fetch accepted talk for evidence (speaker badges only)
         let talkId: string | undefined
@@ -170,6 +170,7 @@ export const badgeRouter = router({
             conferenceYear,
             conferenceDate,
             badgeType: input.badgeType,
+            baseUrl,
             issuerUrl,
             centerGraphicSvg: input.centerGraphicSvg,
             talkId,
@@ -186,7 +187,7 @@ export const badgeRouter = router({
           centerGraphicSvg: input.centerGraphicSvg,
         })
 
-        const verificationUrl = `${issuerUrl}/api/badge/${badgeId}/verify`
+        const verificationUrl = `${baseUrl}/api/badge/${badgeId}/verify`
         const bakedSvg = bakeBadge(svgContent, assertion)
 
         const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
@@ -362,10 +363,11 @@ export const badgeRouter = router({
             ? formatConferenceDateForBadge(conference.start_date)
             : 'TBD'
 
-          // Get issuer URL from current domain
-          const issuerUrl = domain.startsWith('http')
+          // Get base URL and issuer profile URL
+          const baseUrl = domain.startsWith('http')
             ? domain
             : `https://${domain}`
+          const issuerUrl = buildIssuerUrl(conference.domains)
 
           // Fetch accepted talk for evidence (speaker badges only)
           let talkId: string | undefined
@@ -400,6 +402,7 @@ export const badgeRouter = router({
               conferenceYear,
               conferenceDate,
               badgeType: input.badgeType,
+              baseUrl,
               issuerUrl,
               centerGraphicSvg: input.centerGraphicSvg,
               talkId,
@@ -416,7 +419,7 @@ export const badgeRouter = router({
             centerGraphicSvg: input.centerGraphicSvg,
           })
 
-          const verificationUrl = `${issuerUrl}/api/badge/${badgeId}/verify`
+          const verificationUrl = `${baseUrl}/api/badge/${badgeId}/verify`
           const bakedSvg = bakeBadge(svgContent, assertion)
 
           const { assetId, error: uploadError } = await uploadBadgeSVGAsset(

@@ -104,7 +104,8 @@ export interface BadgeGenerationParams {
   conferenceYear: string
   conferenceDate: string
   badgeType: BadgeType
-  issuerUrl: string
+  baseUrl: string // Base domain URL (e.g., https://2025.cloudnativebergen.dev)
+  issuerUrl: string // Issuer profile URL (e.g., https://2025.cloudnativebergen.dev/api/badge/issuer)
   centerGraphicSvg?: string
   talkId?: string
   talkTitle?: string

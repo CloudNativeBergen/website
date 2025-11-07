@@ -40,15 +40,16 @@ describe('OpenBadges 3.0 Compliance', () => {
     it('should generate a valid OpenBadges 3.0 credential', async () => {
       const { assertion } = await generateBadgeCredential(
         {
-          speakerId: 'speaker-123',
+          speakerId: 'test-speaker-id',
           speakerName: 'Jane Doe',
           speakerEmail: 'jane@example.com',
-          conferenceId: 'conf-123',
-          conferenceTitle: 'Cloud Native Day Bergen 2025',
+          conferenceId: 'test-conf-id',
+          conferenceTitle: 'CloudNative Bergen 2025',
           conferenceYear: '2025',
-          conferenceDate: 'June 1, 2025',
+          conferenceDate: 'June 4-5, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -89,7 +90,9 @@ describe('OpenBadges 3.0 Compliance', () => {
       // Validate issuer
       expect(assertion.issuer.type).toContain('Profile')
       expect(assertion.issuer.name).toBe('Cloud Native Bergen')
-      expect(assertion.issuer.id).toBe('https://cloudnativebergen.no')
+      expect(assertion.issuer.id).toBe(
+        'https://cloudnativebergen.no/api/badge/issuer',
+      )
 
       // Validate proof (should be array)
       expect(assertion.proof).toBeDefined()
@@ -112,7 +115,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -133,7 +137,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -186,7 +191,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -216,7 +222,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -261,7 +268,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -296,7 +304,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -332,7 +341,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -387,7 +397,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -408,7 +419,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -428,7 +440,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -448,7 +461,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )
@@ -468,7 +482,8 @@ describe('OpenBadges 3.0 Compliance', () => {
           conferenceYear: '2025',
           conferenceDate: 'June 1, 2025',
           badgeType: 'speaker',
-          issuerUrl: 'https://cloudnativebergen.no',
+          baseUrl: 'https://cloudnativebergen.no',
+          issuerUrl: 'https://cloudnativebergen.no/api/badge/issuer',
         },
         mockConference,
       )

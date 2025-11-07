@@ -31,6 +31,7 @@ export async function generateBadgeCredential(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     conferenceYear,
     badgeType,
+    baseUrl,
     issuerUrl,
     talkId,
     talkTitle,
@@ -85,12 +86,12 @@ export async function generateBadgeCredential(
       'https://www.w3.org/ns/credentials/v2',
       'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
     ],
-    id: `${issuerUrl}/api/badge/${badgeId}/achievement`,
+    id: `${baseUrl}/api/badge/${badgeId}/achievement`,
     type: ['Achievement'],
     name: `${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} at ${conferenceTitle}`,
     description: `This badge recognizes ${speakerName} as a ${badgeType} at ${conferenceTitle}, demonstrating their contribution to the cloud native community in Bergen, Norway.`,
     image: {
-      id: `${issuerUrl}/api/badge/${badgeId}/image`,
+      id: `${baseUrl}/api/badge/${badgeId}/image`,
       type: 'Image',
       caption: `${conferenceTitle} ${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} Badge`,
     },
@@ -101,14 +102,14 @@ export async function generateBadgeCredential(
           : `Served as an organizer for ${conferenceTitle}, helping to create a successful community event.`,
     },
     issuer: {
-      id: `${issuerUrl}`,
+      id: issuerUrl,
       type: ['Profile'],
       name: conference.organizer,
       url: issuerUrl,
       email: issuerEmail,
       description: issuerDescription,
       image: {
-        id: `${issuerUrl}/og/base.png`,
+        id: `${baseUrl}/og/base.png`,
         type: 'Image',
       },
     },
@@ -121,7 +122,7 @@ export async function generateBadgeCredential(
       'https://www.w3.org/ns/credentials/v2',
       'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
     ],
-    id: `${issuerUrl}/api/badge/${badgeId}`,
+    id: `${baseUrl}/api/badge/${badgeId}`,
     type: ['VerifiableCredential', 'AchievementCredential'],
     credentialSubject: {
       id: `mailto:${speakerEmail}`,
@@ -135,7 +136,7 @@ export async function generateBadgeCredential(
       url: issuerUrl,
       description: issuerDescription,
       image: {
-        id: `${issuerUrl}/og/base.png`,
+        id: `${baseUrl}/og/base.png`,
         type: 'Image',
       },
     },

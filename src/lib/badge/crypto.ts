@@ -122,12 +122,28 @@ export async function verifyBadgeSignature(
  * Get the verification method identifier for Data Integrity Proof
  */
 export function getVerificationMethod(conferenceDomains?: string[]): string {
-  const issuerUrl = buildIssuerUrl(conferenceDomains)
+  if (!conferenceDomains || conferenceDomains.length === 0) {
+    throw new Error(
+      'Conference domains must be provided. ' +
+        'Use getConferenceForCurrentDomain() to get the conference context.',
+    )
+  }
+
+  const domain = conferenceDomains[0]
+
+  if (domain.includes('*')) {
+    throw new Error(
+      `Cannot use wildcard domain "${domain}" as issuer URL. ` +
+        'Ensure a specific domain is configured for the conference.',
+    )
+  }
+
+  const baseUrl = domain.startsWith('http') ? domain : `https://${domain}`
   const publicKeyHex = bytesToHex(getPublicKey())
   const keyId = getKeyIdFromPublicKey(publicKeyHex)
 
   // Return verification method as a resolvable URL to the public key endpoint
-  // Format: {issuerUrl}/api/badge/keys/{keyId}
+  // Format: {baseUrl}/api/badge/keys/{keyId}
   // This URL resolves to a JSON-LD document containing the public key in Multikey format
-  return `${issuerUrl}/api/badge/keys/${keyId}`
+  return `${baseUrl}/api/badge/keys/${keyId}`
 }
