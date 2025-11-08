@@ -132,7 +132,16 @@ async function canonicalizeForProof(
   const { proof: _ignore, ...withoutProof } = unsigned
 
   const canonicalDoc = await canonicalizeData(withoutProof)
-  const canonicalProof = await canonicalizeData(proof)
+
+  // Per W3C Data Integrity spec, proof must be canonicalized with proper @context
+  // Wrap the proof in a document with the credentials v2 context so JSON-LD
+  // processor can properly interpret the proof terms during canonicalization
+  const proofWithContext = {
+    '@context': 'https://www.w3.org/ns/credentials/v2',
+    ...proof,
+  }
+  const canonicalProof = await canonicalizeData(proofWithContext)
+
   return { canonicalDoc, canonicalProof }
 }
 
