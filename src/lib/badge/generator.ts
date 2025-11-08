@@ -10,7 +10,7 @@ function getBadgeKeys(): { privateKey: string; publicKey: string } {
   if (!privateKey || !publicKey) {
     throw new Error(
       'Badge issuer RSA keys must be set in environment. ' +
-        'Set BADGE_ISSUER_RSA_PRIVATE_KEY and BADGE_ISSUER_RSA_PUBLIC_KEY',
+      'Set BADGE_ISSUER_RSA_PRIVATE_KEY and BADGE_ISSUER_RSA_PUBLIC_KEY',
     )
   }
 
@@ -75,7 +75,8 @@ export async function generateBadgeCredential(
     `${conference.organizer} hosts ${conferenceTitle}, bringing together the cloud native community in ${conference.city}, ${conference.country}.`
 
   const { publicKey, privateKey } = getBadgeKeys()
-  const issuerId = `${baseUrl}/api/badge/issuer`
+  // Issuer ID should be the organization's base URL, matching the issuer profile endpoint
+  const issuerId = baseUrl
   const verificationMethod = `${baseUrl}/api/badge/issuer#key-1`
 
   const credential = createCredential({

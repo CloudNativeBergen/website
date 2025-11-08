@@ -30,7 +30,8 @@
     "sanity.**",
     "sanity/**",
     "migrations/**",
-    "**/middleware.ts"
+    "**/middleware.ts",
+    "src/lib/empty-module.ts"
   ],
   "ignoreDependencies": [
     "eslint-config-next",

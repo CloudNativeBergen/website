@@ -118,10 +118,8 @@ describe('Badge System E2E', () => {
       )
       expect(decodedCredential.credentialSubject.achievement).toBeDefined()
 
-      // Verify issuer (RSA mode uses HTTP(S) URL pointing to issuer profile endpoint)
-      expect(decodedCredential.issuer.id).toBe(
-        `https://${TEST_HOST}/api/badge/issuer`,
-      )
+      // Verify issuer (issuer.id should be the organization's base URL)
+      expect(decodedCredential.issuer.id).toBe(`https://${TEST_HOST}`)
       expect(decodedCredential.issuer.name).toBe(testConference.organizer)
 
       // Verify temporal validity
@@ -177,10 +175,9 @@ describe('Badge System E2E', () => {
       expect(decodedCredential.issuer.url).not.toContain('/api/badge/issuer')
       expect(decodedCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
 
-      // issuer.id should point to issuer profile endpoint (spec-compliant)
-      expect(decodedCredential.issuer.id).toBe(
-        `https://${TEST_HOST}/api/badge/issuer`,
-      )
+      // issuer.id should be the organization's base URL (matches issuer profile endpoint's id field)
+      expect(decodedCredential.issuer.id).toBe(`https://${TEST_HOST}`)
+      expect(decodedCredential.issuer.id).toBe(testBadgeParams.issuerUrl)
 
       console.log('✓ Issuer URL correctly points to organization homepage')
     })
