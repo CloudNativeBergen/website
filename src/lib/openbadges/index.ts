@@ -24,7 +24,11 @@ export {
   generateKeyId,
   validateKeyId,
   publicKeyToMultibase,
+  publicKeyToDidKey,
+  generateDidKeyVerificationMethod,
+  generateDidKeyMultikeyDocument,
   generateMultikeyDocument,
+  didKeyToPublicKeyHex,
 } from './keys'
 
 // Encoding utilities

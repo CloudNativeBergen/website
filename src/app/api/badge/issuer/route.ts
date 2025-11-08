@@ -10,11 +10,10 @@
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import {
-  generateMultikeyDocument,
-  generateKeyId,
   generateErrorResponse,
+  publicKeyToDidKey,
+  generateDidKeyMultikeyDocument,
 } from '@/lib/openbadges'
-import { normalizeProtocolForDomain } from '@/lib/badge/protocol'
 
 export const runtime = 'nodejs'
 
@@ -33,21 +32,9 @@ export async function GET() {
     const { conference, domain: domainName } =
       await getConferenceForCurrentDomain()
 
-    // Normalize protocol for domain (http for localhost, https otherwise)
-    const domain = normalizeProtocolForDomain(domainName)
-
-    // Issuer profile URL - this should be the controller
-    const issuerProfileUrl = `${domain}/api/badge/issuer`
-
-    // Generate key ID from public key
-    const keyId = generateKeyId(publicKeyHex)
-
-    // Generate Multikey document with issuer profile as controller
-    const multikeyDoc = generateMultikeyDocument(
-      publicKeyHex,
-      keyId,
-      issuerProfileUrl,
-    )
+    // Generate did:key and Multikey document
+    const didKey = publicKeyToDidKey(publicKeyHex)
+    const multikeyDoc = generateDidKeyMultikeyDocument(publicKeyHex)
 
     // OpenBadges 3.0 Issuer Profile with verificationMethod
     const issuerProfile = {
@@ -56,14 +43,14 @@ export async function GET() {
         'https://www.w3.org/ns/credentials/v2',
         'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
       ],
-      id: issuerProfileUrl,
+      id: didKey,
       type: 'Profile',
       name: conference.title,
-      url: domain,
+      url: domainName,
       email: 'contact@cloudnativebergen.dev',
       description: conference.description || conference.tagline || '',
       image: {
-        id: `${domain}/og/base.png`,
+        id: `${domainName}/og/base.png`,
         type: 'Image',
       },
       verificationMethod: [

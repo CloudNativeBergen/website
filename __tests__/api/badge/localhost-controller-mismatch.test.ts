@@ -1,10 +1,10 @@
 import { describe, it, expect, jest } from '@jest/globals'
 
-// This test captures the current bug: keys route uses https for localhost
-// while issuer route uses http, causing controller mismatch in validator.
+// Test ensures that both issuer and keys routes use did:key consistently
+// instead of HTTP(S) URLs, avoiding protocol mismatch issues
 
-describe('Badge Key Document - Localhost Controller Consistency', () => {
-  it('uses matching protocol and path for controller and issuer profile on localhost', async () => {
+describe('Badge Key Document - DID-based Controller Consistency', () => {
+  it('uses did:key controller for both issuer profile and key documents', async () => {
     // Simulate localhost environment by mocking getConferenceForCurrentDomain
     jest.resetModules()
     jest.doMock('@/lib/conference/sanity', () => ({
@@ -22,7 +22,9 @@ describe('Badge Key Document - Localhost Controller Consistency', () => {
     const issuerResp = await issuerGET()
     expect(issuerResp.status).toBe(200)
     const issuerProfile = await issuerResp.json()
-    expect(issuerProfile.id).toBe('http://localhost:3000/api/badge/issuer')
+
+    // Issuer profile ID should be a did:key
+    expect(issuerProfile.id).toMatch(/^did:key:z[1-9A-HJ-NP-Za-km-z]+$/)
 
     const { GET: keyGET } = await import('@/app/api/badge/keys/[keyId]/route')
     const keyResp = await keyGET(
@@ -32,7 +34,14 @@ describe('Badge Key Document - Localhost Controller Consistency', () => {
     expect(keyResp.status).toBe(200)
     const keyDoc = await keyResp.json()
 
-    // After fix: controller must match issuer profile id
+    // Key document controller should match issuer profile id (both did:key)
     expect(keyDoc.controller).toBe(issuerProfile.id)
+    expect(keyDoc.controller).toMatch(/^did:key:z[1-9A-HJ-NP-Za-km-z]+$/)
+
+    // Verification method in issuer profile should reference the same DID
+    expect(issuerProfile.verificationMethod).toBeDefined()
+    expect(issuerProfile.verificationMethod[0].controller).toBe(
+      issuerProfile.id,
+    )
   })
 })

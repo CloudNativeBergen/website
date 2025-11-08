@@ -132,14 +132,13 @@ export const badgeRouter = router({
           ? formatConferenceDateForBadge(conference.start_date)
           : 'TBD'
 
-        // Get base URL and issuer profile URL from current domain
+        // Get base URL from current domain
         // Use http for localhost, https otherwise
         const baseUrl = domain.startsWith('http')
           ? domain
           : domain.includes('localhost')
             ? `http://${domain}`
             : `https://${domain}`
-        const issuerUrl = `${baseUrl}/api/badge/issuer`
 
         // Fetch accepted talk for evidence (speaker badges only)
         let talkId: string | undefined
@@ -175,7 +174,7 @@ export const badgeRouter = router({
             conferenceDate,
             badgeType: input.badgeType,
             baseUrl,
-            issuerUrl,
+            issuerUrl: baseUrl, // Use baseUrl as issuer URL (organization home page)
             centerGraphicSvg: input.centerGraphicSvg,
             talkId,
             talkTitle,

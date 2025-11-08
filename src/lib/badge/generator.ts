@@ -8,7 +8,8 @@
 import {
   signCredential,
   createCredential,
-  generateKeyId,
+  publicKeyToDidKey,
+  generateDidKeyVerificationMethod,
 } from '@/lib/openbadges'
 import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
@@ -35,18 +36,6 @@ function getBadgeKeys(): { privateKey: string; publicKey: string } {
  */
 function generateBadgeId(): string {
   return crypto.randomUUID()
-}
-
-/**
- * Generate verification method URL for the badge issuer
- */
-function getVerificationMethod(baseUrl: string): string {
-  const { publicKey } = getBadgeKeys()
-
-  // Generate key ID using the same function as issuer profile
-  const keyId = generateKeyId(publicKey)
-
-  return `${baseUrl}/api/badge/keys/${keyId}`
 }
 
 /**
@@ -88,7 +77,7 @@ export async function generateBadgeCredential(
 
   if (speakerSlug) {
     evidence.push({
-      id: `${issuerUrl}/speaker/${speakerSlug}`,
+      id: `${baseUrl}/speaker/${speakerSlug}`,
       type: ['Evidence'],
       name: `${speakerName} Speaker Profile`,
       description: `Public speaker profile for ${speakerName} at ${conferenceTitle}`,
@@ -97,7 +86,7 @@ export async function generateBadgeCredential(
 
   if (badgeType === 'speaker' && talkId && talkTitle) {
     evidence.push({
-      id: `${issuerUrl}/program#talk-${talkId}`,
+      id: `${baseUrl}/program#talk-${talkId}`,
       type: ['Evidence'],
       name: talkTitle,
       description: `Talk presented by ${speakerName} at ${conferenceTitle}`,
@@ -108,6 +97,11 @@ export async function generateBadgeCredential(
   const issuerDescription =
     conference.description ||
     `${conference.organizer} hosts ${conferenceTitle}, bringing together the cloud native community in ${conference.city}, ${conference.country}.`
+
+  // Generate did:key for issuer and verification method
+  const { publicKey } = getBadgeKeys()
+  const didKey = publicKeyToDidKey(publicKey)
+  const verificationMethod = generateDidKeyVerificationMethod(publicKey)
 
   // Create the credential using OpenBadges library
   const credential = createCredential({
@@ -135,7 +129,7 @@ export async function generateBadgeCredential(
       ...(evidence.length > 0 && { evidence }),
     },
     issuer: {
-      id: issuerUrl,
+      id: didKey,
       name: conference.organizer,
       url: issuerUrl,
       email: issuerEmail,
@@ -148,10 +142,8 @@ export async function generateBadgeCredential(
     validFrom: issuedAt,
   })
 
-  // Sign the credential
-  const { privateKey, publicKey } = getBadgeKeys()
-  const verificationMethod = getVerificationMethod(baseUrl)
-
+  // Sign the credential with did:key verification method
+  const { privateKey } = getBadgeKeys()
   const signedCredential = await signCredential(credential, {
     privateKey,
     publicKey,

@@ -64,7 +64,7 @@ describe('Badge System E2E', () => {
     conferenceDate: testConference.start_date,
     badgeType: 'speaker',
     baseUrl: `https://${TEST_HOST}`,
-    issuerUrl: `https://${TEST_HOST}/api/badge/issuer`,
+    issuerUrl: `https://${TEST_HOST}`, // Organization homepage, not /api/badge/issuer
     talkId: 'test-talk-456',
     talkTitle: 'Kubernetes at Scale',
   }
@@ -101,8 +101,10 @@ describe('Badge System E2E', () => {
       )
       expect(badgeCredential.credentialSubject.achievement).toBeDefined()
 
-      // Verify issuer
-      expect(badgeCredential.issuer.id).toBe(testBadgeParams.issuerUrl)
+      // Verify issuer (now using did:key instead of HTTP(S) URL)
+      expect(badgeCredential.issuer.id).toMatch(
+        /^did:key:z[1-9A-HJ-NP-Za-km-z]+$/,
+      )
       expect(badgeCredential.issuer.name).toBe(testConference.organizer)
 
       // Verify temporal validity
@@ -117,7 +119,10 @@ describe('Badge System E2E', () => {
       expect(proof.type).toBe('DataIntegrityProof')
       expect(proof.cryptosuite).toBe('eddsa-rdfc-2022')
       expect(proof.proofPurpose).toBe('assertionMethod')
-      expect(proof.verificationMethod).toMatch(/^https:\/\//)
+      // Verification method now uses did:key format
+      expect(proof.verificationMethod).toMatch(
+        /^did:key:z[1-9A-HJ-NP-Za-km-z]+#z[1-9A-HJ-NP-Za-km-z]+$/,
+      )
       expect(proof.created).toMatch(/^\d{4}-\d{2}-\d{2}T/)
       expect(proof.proofValue).toMatch(/^z[1-9A-HJ-NP-Za-km-z]+$/) // Multibase z-prefix
 
@@ -144,7 +149,30 @@ describe('Badge System E2E', () => {
       expect(firstEvidence.type).toBeDefined()
       expect(Array.isArray(firstEvidence.type)).toBe(true)
 
-      console.log('✓ Achievement includes valid evidence')
+      // Verify evidence URL format (should NOT contain /api/badge/issuer)
+      expect(firstEvidence.id).toMatch(/\/speaker\/jane-doe$/)
+      expect(firstEvidence.id).not.toContain('/api/badge/issuer')
+      expect(firstEvidence.id).toBe(
+        `${testBadgeParams.baseUrl}/speaker/jane-doe`,
+      )
+
+      console.log(
+        '✓ Achievement includes valid evidence with correct URL format',
+      )
+    })
+
+    it('should have correct issuer.url pointing to organization homepage', async () => {
+      // issuer.url should be the organization homepage, not the /api/badge/issuer endpoint
+      expect(badgeCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
+      expect(badgeCredential.issuer.url).not.toContain('/api/badge/issuer')
+      expect(badgeCredential.issuer.url).toBe(testBadgeParams.baseUrl)
+
+      // issuer.id should be did:key
+      expect(badgeCredential.issuer.id).toMatch(
+        /^did:key:z[1-9A-HJ-NP-Za-km-z]+$/,
+      )
+
+      console.log('✓ Issuer URL correctly points to organization homepage')
     })
   })
 
@@ -346,6 +374,44 @@ describe('Badge System E2E', () => {
       }
 
       console.log('✓ Complete badge lifecycle completed successfully')
+    })
+
+    it('should cryptographically verify badge through validator API', async () => {
+      // 1. Generate and bake badge
+      const svg = generateBadgeSVG({
+        conferenceTitle: testBadgeParams.conferenceTitle,
+        conferenceYear: testBadgeParams.conferenceYear,
+        conferenceDate: testBadgeParams.conferenceDate,
+        badgeType: testBadgeParams.badgeType,
+      })
+
+      const { assertion } = await generateBadgeCredential(
+        testBadgeParams,
+        testConference,
+      )
+
+      const signedCredential = assertion as unknown as SignedCredential
+      const bakedSVG = bakeBadge(svg, signedCredential)
+
+      // 2. Validate through API (which includes cryptographic verification)
+      const { POST } = await import('@/app/api/badge/validate/route')
+      const request = {
+        json: async () => ({ svg: bakedSVG }),
+      } as any
+
+      const response = await POST(request)
+      expect(response.status).toBe(200)
+
+      const result = await response.json()
+      expect(result.checks).toBeDefined()
+
+      // Find the proof check
+      const proofCheck = result.checks.find((c: any) => c.name === 'proof')
+      expect(proofCheck).toBeDefined()
+      expect(proofCheck.status).toBe('success')
+      expect(proofCheck.details?.signatureValid).toBe(true)
+
+      console.log('✓ Validator API cryptographically verified badge signature')
     })
   })
 })

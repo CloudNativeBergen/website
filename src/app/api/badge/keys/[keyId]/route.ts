@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { generateMultikeyDocument, validateKeyId } from '@/lib/openbadges'
-import { normalizeProtocolForDomain } from '@/lib/badge/protocol'
+import { validateKeyId, generateDidKeyMultikeyDocument } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
@@ -34,13 +32,8 @@ export async function GET(
     // Validate that the requested key matches our public key (throws on error)
     validateKeyId(keyId, publicKeyHex)
 
-    // Get the domain from the current request and normalize protocol
-    const { domain: domainName } = await getConferenceForCurrentDomain()
-    const baseDomain = normalizeProtocolForDomain(domainName)
-    const issuerUrl = `${baseDomain}/api/badge/issuer`
-
-    // Generate the Multikey document
-    const multikeyDoc = generateMultikeyDocument(publicKeyHex, keyId, issuerUrl)
+    // Generate Multikey document with DID controller
+    const multikeyDoc = generateDidKeyMultikeyDocument(publicKeyHex)
 
     return NextResponse.json(multikeyDoc, {
       headers: {

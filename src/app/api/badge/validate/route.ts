@@ -5,7 +5,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { extractBadge } from '@/lib/openbadges'
+import {
+  extractBadge,
+  verifyCredential,
+  didKeyToPublicKeyHex,
+} from '@/lib/openbadges'
 import type { SignedCredential } from '@/lib/openbadges/types'
 
 export const runtime = 'nodejs'
@@ -108,158 +112,239 @@ export async function POST(request: NextRequest) {
 
     // Step 3: Fetch and validate issuer profile (server-side to avoid CORS)
     if (issuerId) {
-      try {
-        const issuerResponse = await fetch(issuerId, {
-          headers: {
-            Accept: 'application/ld+json',
-            'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
+      // Check if issuer is a did:key (self-sovereign identifier)
+      const isDidKey = issuerId.startsWith('did:key:')
+
+      if (isDidKey) {
+        // DID-based issuer: no HTTP endpoint to fetch, validate structure
+        checks.push({
+          name: 'issuer',
+          status: 'success',
+          message: 'DID-based issuer (self-sovereign identity)',
+          details: {
+            issuerId,
+            type: 'did:key',
+            note: 'DID-based issuers are self-describing and do not require HTTP endpoints',
           },
-          // Add timeout
-          signal: AbortSignal.timeout(5000),
         })
 
-        if (!issuerResponse.ok) {
-          checks.push({
-            name: 'issuer',
-            status: 'warning',
-            message: `Issuer profile endpoint returned ${issuerResponse.status}`,
-            details: { status: issuerResponse.status },
-          })
-        } else {
-          const issuerProfile = await issuerResponse.json()
-          checks.push({
-            name: 'issuer',
-            status: 'success',
-            message: 'Issuer profile retrieved successfully',
-            details: {
-              issuerName: issuerProfile.name,
-              hasVerificationMethod: !!issuerProfile.verificationMethod,
-            },
-          })
+        // Step 4: Verify proof structure for DID-based issuers
+        if (credential.proof && credential.proof.length > 0) {
+          const proof = credential.proof[0]
 
-          // Step 4: Verify proof using issuer's verification method
-          if (credential.proof && credential.proof.length > 0) {
-            const proof = credential.proof[0]
+          // For did:key, verificationMethod should reference the same DID
+          const expectedVmPrefix = issuerId
+          if (!proof.verificationMethod.startsWith(expectedVmPrefix)) {
+            checks.push({
+              name: 'proof',
+              status: 'error',
+              message: 'Verification method does not match issuer DID',
+              details: {
+                expected: `${expectedVmPrefix}#...`,
+                actual: proof.verificationMethod,
+              },
+            })
+          } else {
+            // Cryptographically verify the signature
+            try {
+              const publicKeyHex = didKeyToPublicKeyHex(issuerId)
+              const isValid = await verifyCredential(credential, publicKeyHex)
 
-            const verificationMethod = issuerProfile.verificationMethod?.find(
-              (vm: { id: string }) => vm.id === proof.verificationMethod,
-            )
-
-            if (!verificationMethod) {
-              checks.push({
-                name: 'proof',
-                status: 'warning',
-                message: 'Verification method not found in issuer profile',
-                details: {
-                  expected: proof.verificationMethod,
-                  available:
-                    issuerProfile.verificationMethod?.map(
-                      (vm: { id: string }) => vm.id,
-                    ) || [],
-                },
-              })
-            } else {
-              // Controller consistency: issuer.id must match verificationMethod.controller
-              const controller = (verificationMethod as { controller?: string })
-                .controller
-              const controllerIssues: string[] = []
-              if (!controller) {
-                controllerIssues.push(
-                  'Missing controller on verification method',
-                )
-              } else {
-                if (issuerId && controller !== issuerId) {
-                  controllerIssues.push('Controller does not match issuer.id')
-                }
-                if (!controller.endsWith('/api/badge/issuer')) {
-                  controllerIssues.push(
-                    'Controller does not end with /api/badge/issuer',
-                  )
-                }
-              }
-
-              // Optionally fetch key document to confirm controller alignment
-              try {
-                const keyDocResp = await fetch(proof.verificationMethod, {
-                  headers: {
-                    Accept: 'application/ld+json',
-                    'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
-                  },
-                  signal: AbortSignal.timeout(4000),
-                })
-                if (keyDocResp.ok) {
-                  const keyDoc = await keyDocResp.json()
-                  if (
-                    keyDoc.controller &&
-                    issuerId &&
-                    keyDoc.controller !== issuerId
-                  ) {
-                    controllerIssues.push(
-                      'Key document controller mismatch issuer.id',
-                    )
-                  }
-                  if (!keyDoc.publicKeyMultibase) {
-                    controllerIssues.push(
-                      'Missing publicKeyMultibase in key document',
-                    )
-                  }
-                } else {
-                  controllerIssues.push(
-                    `Failed to fetch key document (${keyDocResp.status})`,
-                  )
-                }
-              } catch (e) {
-                controllerIssues.push(
-                  `Key document fetch error: ${e instanceof Error ? e.message : 'Unknown error'}`,
-                )
-              }
-
-              if (controllerIssues.length > 0) {
+              if (isValid) {
                 checks.push({
-                  name: 'controller',
-                  status: 'error',
-                  message: 'Controller / key document consistency issues',
-                  details: { issues: controllerIssues },
-                })
-              } else {
-                checks.push({
-                  name: 'controller',
+                  name: 'proof',
                   status: 'success',
-                  message: 'Controller and key document are consistent',
-                  details: { controller },
+                  message: `Cryptographic proof verified successfully (${proof.cryptosuite})`,
+                  details: {
+                    cryptosuite: proof.cryptosuite,
+                    created: proof.created,
+                    verificationMethod: proof.verificationMethod,
+                    didBased: true,
+                    signatureValid: true,
+                  },
+                })
+              } else {
+                checks.push({
+                  name: 'proof',
+                  status: 'error',
+                  message: 'Cryptographic signature verification failed',
+                  details: {
+                    cryptosuite: proof.cryptosuite,
+                    verificationMethod: proof.verificationMethod,
+                    signatureValid: false,
+                  },
                 })
               }
-
+            } catch (error) {
               checks.push({
                 name: 'proof',
-                status: 'success',
-                message: `Proof validation passed (${proof.cryptosuite})`,
+                status: 'error',
+                message: `Signature verification error: ${error instanceof Error ? error.message : 'Unknown error'}`,
                 details: {
-                  cryptosuite: proof.cryptosuite,
-                  created: proof.created,
-                  verificationMethod: proof.verificationMethod,
-                  controllerMatch: controllerIssues.length === 0,
+                  error: error instanceof Error ? error.message : String(error),
                 },
               })
             }
           }
         }
-      } catch (error) {
-        console.error('[Badge Validator] Failed to fetch issuer profile:', {
-          issuerId,
-          error: error instanceof Error ? error.message : error,
-          stack: error instanceof Error ? error.stack : undefined,
-        })
-        checks.push({
-          name: 'issuer',
-          status: 'error',
-          message: `Failed to fetch issuer profile: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          details: {
+      } else {
+        // HTTP(S)-based issuer: fetch issuer profile
+        try {
+          const issuerResponse = await fetch(issuerId, {
+            headers: {
+              Accept: 'application/ld+json',
+              'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
+            },
+            // Add timeout
+            signal: AbortSignal.timeout(5000),
+          })
+
+          if (!issuerResponse.ok) {
+            checks.push({
+              name: 'issuer',
+              status: 'warning',
+              message: `Issuer profile endpoint returned ${issuerResponse.status}`,
+              details: { status: issuerResponse.status },
+            })
+          } else {
+            const issuerProfile = await issuerResponse.json()
+            checks.push({
+              name: 'issuer',
+              status: 'success',
+              message: 'Issuer profile retrieved successfully',
+              details: {
+                issuerName: issuerProfile.name,
+                hasVerificationMethod: !!issuerProfile.verificationMethod,
+              },
+            })
+
+            // Step 4: Verify proof using issuer's verification method
+            if (credential.proof && credential.proof.length > 0) {
+              const proof = credential.proof[0]
+
+              const verificationMethod = issuerProfile.verificationMethod?.find(
+                (vm: { id: string }) => vm.id === proof.verificationMethod,
+              )
+
+              if (!verificationMethod) {
+                checks.push({
+                  name: 'proof',
+                  status: 'warning',
+                  message: 'Verification method not found in issuer profile',
+                  details: {
+                    expected: proof.verificationMethod,
+                    available:
+                      issuerProfile.verificationMethod?.map(
+                        (vm: { id: string }) => vm.id,
+                      ) || [],
+                  },
+                })
+              } else {
+                // Controller consistency for HTTP(S) issuers
+                const controller = (
+                  verificationMethod as { controller?: string }
+                ).controller
+                const controllerIssues: string[] = []
+                if (!controller) {
+                  controllerIssues.push(
+                    'Missing controller on verification method',
+                  )
+                } else {
+                  if (issuerId && controller !== issuerId) {
+                    controllerIssues.push('Controller does not match issuer.id')
+                  }
+                  // For HTTP(S) controllers, check issuer endpoint pattern
+                  if (
+                    !controller.startsWith('did:') &&
+                    !controller.endsWith('/api/badge/issuer')
+                  ) {
+                    controllerIssues.push(
+                      'HTTP(S) controller does not end with /api/badge/issuer',
+                    )
+                  }
+                } // Optionally fetch key document to confirm controller alignment
+                try {
+                  const keyDocResp = await fetch(proof.verificationMethod, {
+                    headers: {
+                      Accept: 'application/ld+json',
+                      'User-Agent': 'CloudNativeBergen-BadgeValidator/1.0',
+                    },
+                    signal: AbortSignal.timeout(4000),
+                  })
+                  if (keyDocResp.ok) {
+                    const keyDoc = await keyDocResp.json()
+                    if (
+                      keyDoc.controller &&
+                      issuerId &&
+                      keyDoc.controller !== issuerId
+                    ) {
+                      controllerIssues.push(
+                        'Key document controller mismatch issuer.id',
+                      )
+                    }
+                    if (!keyDoc.publicKeyMultibase) {
+                      controllerIssues.push(
+                        'Missing publicKeyMultibase in key document',
+                      )
+                    }
+                  } else {
+                    controllerIssues.push(
+                      `Failed to fetch key document (${keyDocResp.status})`,
+                    )
+                  }
+                } catch (e) {
+                  controllerIssues.push(
+                    `Key document fetch error: ${e instanceof Error ? e.message : 'Unknown error'}`,
+                  )
+                }
+
+                if (controllerIssues.length > 0) {
+                  checks.push({
+                    name: 'controller',
+                    status: 'error',
+                    message: 'Controller / key document consistency issues',
+                    details: { issues: controllerIssues },
+                  })
+                } else {
+                  checks.push({
+                    name: 'controller',
+                    status: 'success',
+                    message: 'Controller and key document are consistent',
+                    details: { controller },
+                  })
+                }
+
+                checks.push({
+                  name: 'proof',
+                  status: 'success',
+                  message: `Proof validation passed (${proof.cryptosuite})`,
+                  details: {
+                    cryptosuite: proof.cryptosuite,
+                    created: proof.created,
+                    verificationMethod: proof.verificationMethod,
+                    controllerMatch: controllerIssues.length === 0,
+                  },
+                })
+              }
+            }
+          }
+        } catch (error) {
+          console.error('[Badge Validator] Failed to fetch issuer profile:', {
             issuerId,
-            errorType:
-              error instanceof Error ? error.constructor.name : typeof error,
-          },
-        })
+            error: error instanceof Error ? error.message : error,
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+          checks.push({
+            name: 'issuer',
+            status: 'error',
+            message: `Failed to fetch issuer profile: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            details: {
+              issuerId,
+              errorType:
+                error instanceof Error ? error.constructor.name : typeof error,
+            },
+          })
+        }
       }
     }
 
@@ -318,7 +403,52 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 6: Check temporal validity
+    // Step 6: Validate evidence URLs and issuer.url format
+    const achievement = credential.credentialSubject?.achievement
+    if (achievement && typeof achievement === 'object') {
+      const urlIssues: string[] = []
+
+      // Check evidence URLs don't contain /api/badge/issuer (common mistake)
+      if (achievement.evidence && Array.isArray(achievement.evidence)) {
+        achievement.evidence.forEach(
+          (evidence: { id?: string }, index: number) => {
+            if (evidence.id?.includes('/api/badge/issuer')) {
+              urlIssues.push(
+                `Evidence[${index}] URL incorrectly contains /api/badge/issuer`,
+              )
+            }
+          },
+        )
+      }
+
+      // Check issuer.url is not the /api/badge/issuer endpoint
+      const issuerUrl =
+        typeof credential.issuer === 'object'
+          ? credential.issuer.url
+          : undefined
+      if (issuerUrl?.endsWith('/api/badge/issuer')) {
+        urlIssues.push(
+          'issuer.url should point to organization homepage, not /api/badge/issuer endpoint',
+        )
+      }
+
+      if (urlIssues.length > 0) {
+        checks.push({
+          name: 'url-format',
+          status: 'warning',
+          message: 'URL format issues detected',
+          details: { issues: urlIssues },
+        })
+      } else if (achievement.evidence || issuerUrl) {
+        checks.push({
+          name: 'url-format',
+          status: 'success',
+          message: 'Evidence and issuer URLs are correctly formatted',
+        })
+      }
+    }
+
+    // Step 7: Check temporal validity
     if (credential.validFrom) {
       const validFromDate = new Date(credential.validFrom)
       const now = new Date()
