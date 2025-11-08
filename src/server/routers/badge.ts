@@ -17,6 +17,7 @@ import {
 import { generateBadgeCredential } from '@/lib/badge/generator'
 import { generateBadgeSVG } from '@/lib/badge/svg'
 import { bakeBadge } from '@/lib/openbadges'
+import { isJWTFormat } from '@/lib/badge/types'
 import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import {
@@ -191,10 +192,7 @@ export const badgeRouter = router({
         })
 
         const verificationUrl = `${baseUrl}/api/badge/${badgeId}/verify`
-        const bakedSvg = bakeBadge(
-          svgContent,
-          assertion as Parameters<typeof bakeBadge>[1],
-        )
+        const bakedSvg = bakeBadge(svgContent, assertion)
 
         const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
           bakedSvg,
@@ -215,7 +213,7 @@ export const badgeRouter = router({
           conferenceId: conference._id,
           badgeType: input.badgeType,
           issuedAt: getCurrentDateTime(),
-          badgeJson: JSON.stringify(assertion),
+          badgeJson: assertion, // Store JWT string directly
           bakedSvgAssetId: assetId,
           verificationUrl,
         })
@@ -429,10 +427,7 @@ export const badgeRouter = router({
           })
 
           const verificationUrl = `${baseUrl}/api/badge/${badgeId}/verify`
-          const bakedSvg = bakeBadge(
-            svgContent,
-            assertion as Parameters<typeof bakeBadge>[1],
-          )
+          const bakedSvg = bakeBadge(svgContent, assertion)
 
           const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
             bakedSvg,
@@ -454,7 +449,7 @@ export const badgeRouter = router({
             conferenceId: conference._id,
             badgeType: input.badgeType,
             issuedAt: getCurrentDateTime(),
-            badgeJson: JSON.stringify(assertion),
+            badgeJson: assertion, // Store JWT string directly
             bakedSvgAssetId: assetId,
             verificationUrl,
           })
@@ -674,23 +669,61 @@ export const badgeRouter = router({
         })
       }
 
-      const badgeAssertion = JSON.parse(badge.badge_json)
-
-      const { verifyCredential } = await import('@/lib/openbadges')
-      let signatureValid = false
-      if (badgeAssertion.proof && badgeAssertion.proof.length > 0) {
-        // Get public key from environment
+      let badgeAssertion
+      if (isJWTFormat(badge.badge_json)) {
+        // Decode JWT to get credential
+        const { verifyCredentialJWT } = await import('@/lib/openbadges')
         const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-        if (publicKeyHex) {
-          signatureValid = await verifyCredential(badgeAssertion, publicKeyHex)
+        if (!publicKeyHex) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Public key not configured',
+          })
         }
-      }
 
-      return {
-        valid: true,
-        signatureValid,
-        credential: badgeAssertion,
-        verifiedAt: new Date().toISOString(),
+        try {
+          badgeAssertion = await verifyCredentialJWT(
+            badge.badge_json,
+            publicKeyHex,
+          )
+          // JWT verification succeeded
+          return {
+            valid: true,
+            signatureValid: true,
+            credential: badgeAssertion,
+            verifiedAt: new Date().toISOString(),
+          }
+        } catch {
+          return {
+            valid: false,
+            signatureValid: false,
+            credential: null,
+            verifiedAt: new Date().toISOString(),
+          }
+        }
+      } else {
+        // Legacy: Parse JSON (Data Integrity Proof format)
+        badgeAssertion = JSON.parse(badge.badge_json)
+
+        const { verifyCredential } = await import('@/lib/openbadges')
+        let signatureValid = false
+        if (badgeAssertion.proof && badgeAssertion.proof.length > 0) {
+          // Get public key from environment
+          const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
+          if (publicKeyHex) {
+            signatureValid = await verifyCredential(
+              badgeAssertion,
+              publicKeyHex,
+            )
+          }
+        }
+
+        return {
+          valid: true,
+          signatureValid,
+          credential: badgeAssertion,
+          verifiedAt: new Date().toISOString(),
+        }
       }
     } catch (error) {
       if (error instanceof TRPCError) throw error

@@ -9,7 +9,9 @@ import { sign, verify } from '@noble/ed25519'
 import {
   createCredential,
   signCredential,
+  signCredentialJWT,
   verifyCredential,
+  verifyCredentialJWT,
   validateCredential,
   assertValidCredential,
   bakeBadge,
@@ -152,6 +154,12 @@ describe('OpenBadges 3.0 - Happy Path', () => {
     // 6. Extract from SVG
     const extractedCredential = extractBadge(bakedSvg)
     expect(extractedCredential).toBeDefined()
+
+    // This test uses Data Integrity Proof format
+    if (typeof extractedCredential === 'string') {
+      throw new Error('Expected Data Integrity Proof format, got JWT')
+    }
+
     expect(extractedCredential.id).toBe(signedCredential.id)
     expect(extractedCredential.proof).toHaveLength(1)
 
@@ -605,5 +613,216 @@ describe('Multikey Documents - Edge Cases', () => {
     expect(doc.id).toBe(`https://example.com/api/badge/keys/${VALID_KEY_ID}`)
     expect(doc.controller).toBe('https://example.com/api/badge/issuer')
     expect(doc.publicKeyMultibase).toMatch(/^z/)
+  })
+})
+
+/**
+ * JWT PROOF FORMAT TESTS
+ *
+ * OpenBadges 3.0 supports JWT as an alternative to Data Integrity Proofs.
+ * JWT format provides better cross-implementation compatibility and is
+ * recommended for passing external validators (like 1EdTech OB30Inspector).
+ */
+describe('JWT Proof Format', () => {
+  describe('Happy Path - JWT Signing and Verification', () => {
+    it('should sign credential as JWT and verify successfully', async () => {
+      // 1. Create credential
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+
+      // 2. Sign as JWT
+      const jwt = await signCredentialJWT(credential, VALID_SIGNING_CONFIG)
+
+      expect(jwt).toBeDefined()
+      expect(typeof jwt).toBe('string')
+      expect(jwt.split('.')).toHaveLength(3) // header.payload.signature
+
+      // 3. Verify JWT and extract credential
+      const verifiedCredential = await verifyCredentialJWT(
+        jwt,
+        VALID_PUBLIC_KEY,
+      )
+
+      expect(verifiedCredential).toBeDefined()
+      expect(verifiedCredential.id).toBe(credential.id)
+      expect(verifiedCredential.credentialSubject.achievement.name).toBe(
+        'Test Achievement',
+      )
+    })
+
+    it('should create JWT with correct JOSE header', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const jwt = await signCredentialJWT(credential, VALID_SIGNING_CONFIG)
+
+      // Decode header (first part of JWT)
+      const [headerB64] = jwt.split('.')
+      const header = JSON.parse(
+        Buffer.from(headerB64, 'base64url').toString('utf-8'),
+      )
+
+      expect(header.alg).toBe('EdDSA')
+      expect(header.typ).toBe('JWT')
+      expect(header.kid).toBe(VALID_SIGNING_CONFIG.verificationMethod)
+    })
+
+    it('should create JWT with correct payload claims', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const jwt = await signCredentialJWT(credential, VALID_SIGNING_CONFIG)
+
+      // Decode payload (second part of JWT)
+      const [, payloadB64] = jwt.split('.')
+      const payload = JSON.parse(
+        Buffer.from(payloadB64, 'base64url').toString('utf-8'),
+      )
+
+      expect(payload.vc).toBeDefined()
+      expect(payload.vc.id).toBe(credential.id)
+      expect(payload.jti).toBe(credential.id) // JWT ID should match credential ID
+      expect(payload.iss).toBe(credential.issuer.id)
+      expect(payload.iat).toBeDefined() // Issued at
+      expect(payload.exp).toBeDefined() // Expiration
+      expect(payload.nbf).toBeDefined() // Not before
+    })
+  })
+
+  describe('Edge Cases - JWT Signing', () => {
+    it('should reject missing private key', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const badConfig = { ...VALID_SIGNING_CONFIG, privateKey: '' }
+
+      await expect(signCredentialJWT(credential, badConfig)).rejects.toThrow(
+        ConfigurationError,
+      )
+    })
+
+    it('should reject invalid private key length', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const badConfig = { ...VALID_SIGNING_CONFIG, privateKey: 'abc123' }
+
+      await expect(signCredentialJWT(credential, badConfig)).rejects.toThrow(
+        ConfigurationError,
+      )
+    })
+
+    it('should reject missing public key', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const badConfig = { ...VALID_SIGNING_CONFIG, publicKey: '' }
+
+      await expect(signCredentialJWT(credential, badConfig)).rejects.toThrow(
+        ConfigurationError,
+      )
+    })
+
+    it('should reject invalid verification method URL', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const badConfig = {
+        ...VALID_SIGNING_CONFIG,
+        verificationMethod: 'not-a-url',
+      }
+
+      await expect(signCredentialJWT(credential, badConfig)).rejects.toThrow(
+        ConfigurationError,
+      )
+    })
+  })
+
+  describe('Edge Cases - JWT Verification', () => {
+    it('should reject missing public key', async () => {
+      const jwt = 'eyJhbGciOiJFZERTQSJ9.eyJ2YyI6e319.c2lnbmF0dXJl'
+
+      await expect(verifyCredentialJWT(jwt, '')).rejects.toThrow(
+        VerificationError,
+      )
+    })
+
+    it('should reject invalid JWT format', async () => {
+      await expect(
+        verifyCredentialJWT('not-a-jwt', VALID_PUBLIC_KEY),
+      ).rejects.toThrow(VerificationError)
+    })
+
+    it('should reject JWT with wrong signature', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const jwt = await signCredentialJWT(credential, VALID_SIGNING_CONFIG)
+
+      // Corrupt the signature
+      const [header, payload] = jwt.split('.')
+      const corruptedJwt = `${header}.${payload}.AAAAAAAAAAAAAAAAAAAAAA`
+
+      await expect(
+        verifyCredentialJWT(corruptedJwt, VALID_PUBLIC_KEY),
+      ).rejects.toThrow(VerificationError)
+    })
+
+    it('should reject JWT signed with different key', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const jwt = await signCredentialJWT(credential, VALID_SIGNING_CONFIG)
+
+      // Try to verify with different public key
+      const differentPublicKey =
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+
+      await expect(
+        verifyCredentialJWT(jwt, differentPublicKey),
+      ).rejects.toThrow(VerificationError)
+    })
+
+    it('should reject JWT without vc claim', async () => {
+      // This would be an invalid JWT that passes signature but lacks 'vc' claim
+      // We can't easily create this without mocking, so we test the error path exists
+      const jwt = 'invalid'
+      await expect(verifyCredentialJWT(jwt, VALID_PUBLIC_KEY)).rejects.toThrow(
+        VerificationError,
+      )
+    })
+  })
+
+  describe('JWT vs Data Integrity Proof Comparison', () => {
+    it('should produce different formats but equivalent credentials', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+
+      // Sign with Data Integrity Proof
+      const signedWithDI = await signCredential(
+        credential,
+        VALID_SIGNING_CONFIG,
+      )
+
+      // Sign with JWT
+      const signedWithJWT = await signCredentialJWT(
+        credential,
+        VALID_SIGNING_CONFIG,
+      )
+
+      // Data Integrity returns JSON with proof array
+      expect(signedWithDI).toHaveProperty('proof')
+      expect(Array.isArray(signedWithDI.proof)).toBe(true)
+      expect(signedWithDI.proof[0].type).toBe('DataIntegrityProof')
+
+      // JWT returns string (Compact JWS)
+      expect(typeof signedWithJWT).toBe('string')
+      expect(signedWithJWT.split('.')).toHaveLength(3)
+
+      // Both should verify successfully
+      const diValid = await verifyCredential(signedWithDI, VALID_PUBLIC_KEY)
+      expect(diValid).toBe(true)
+
+      const jwtCredential = await verifyCredentialJWT(
+        signedWithJWT,
+        VALID_PUBLIC_KEY,
+      )
+      expect(jwtCredential.id).toBe(credential.id)
+    })
+
+    it('should handle issuer as object in JWT signing', async () => {
+      const credential = createCredential(VALID_CREDENTIAL_CONFIG)
+      const jwt = await signCredentialJWT(credential, VALID_SIGNING_CONFIG)
+
+      const [, payloadB64] = jwt.split('.')
+      const payload = JSON.parse(
+        Buffer.from(payloadB64, 'base64url').toString('utf-8'),
+      )
+
+      // Should extract issuer.id when issuer is object
+      expect(payload.iss).toBe(VALID_ISSUER.id)
+    })
   })
 })

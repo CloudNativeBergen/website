@@ -39,19 +39,69 @@ function validateSvg(svg: string): void {
  * Per OpenBadges 3.0 spec (Section 5.3.2.1):
  * 1. Add xmlns:openbadges namespace to <svg> tag
  * 2. Add <openbadges:credential> tag after <svg> tag
- * 3. Embed JSON in CDATA section
+ * 3. Embed credential in CDATA section
  *
  * @param svg - The SVG content to bake into
- * @param credential - The signed credential to embed
+ * @param credential - The signed credential (JWT string or Data Integrity Proof object)
  * @returns SVG with baked credential
  * @throws {BakingError} if baking fails
  */
-export function bakeBadge(svg: string, credential: SignedCredential): string {
-  // Validate inputs
+export function bakeBadge(
+  svg: string,
+  credential: SignedCredential | string,
+): string {
   validateSvg(svg)
 
+  if (typeof credential === 'string') {
+    return bakeJWT(svg, credential)
+  }
+
+  return bakeDataIntegrityProof(svg, credential)
+}
+
+/**
+ * Bake a JWT credential into SVG
+ */
+function bakeJWT(svg: string, jwt: string): string {
+  if (!jwt.startsWith('eyJ')) {
+    throw new BakingError(
+      'Credential string must be a valid JWT (should start with "eyJ")',
+      { received: jwt.substring(0, 10) },
+    )
+  }
+
+  try {
+    const svgTagMatch = svg.match(/<svg([^>]*)>/)
+    if (!svgTagMatch) {
+      throw new BakingError('Cannot parse <svg> tag')
+    }
+
+    let svgTag = svgTagMatch[0]
+    const svgAttributes = svgTagMatch[1]
+
+    if (!svgAttributes.includes('xmlns:openbadges=')) {
+      svgTag = svgTag.replace('>', ` xmlns:openbadges="${OB_NAMESPACE}">`)
+    }
+
+    const credentialXml = `\n  <openbadges:credential verify="${jwt}"><![CDATA[${jwt}]]></openbadges:credential>`
+    return svg.replace(svgTagMatch[0], svgTag + credentialXml)
+  } catch (error) {
+    if (error instanceof BakingError) throw error
+    throw new BakingError('Failed to bake JWT into SVG', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * Bake a Data Integrity Proof credential into SVG
+ */
+function bakeDataIntegrityProof(
+  svg: string,
+  credential: SignedCredential,
+): string {
   if (!credential || typeof credential !== 'object') {
-    throw new BakingError('Credential must be an object', {
+    throw new BakingError('Credential must be an object or JWT string', {
       received: typeof credential,
     })
   }
@@ -67,7 +117,6 @@ export function bakeBadge(svg: string, credential: SignedCredential): string {
   }
 
   try {
-    // Find the <svg> opening tag
     const svgTagMatch = svg.match(/<svg([^>]*)>/)
     if (!svgTagMatch) {
       throw new BakingError('Cannot parse <svg> tag')
@@ -76,18 +125,15 @@ export function bakeBadge(svg: string, credential: SignedCredential): string {
     let svgTag = svgTagMatch[0]
     const svgAttributes = svgTagMatch[1]
 
-    // Add xmlns:openbadges namespace if not present
     if (!svgAttributes.includes('xmlns:openbadges=')) {
       svgTag = svgTag.replace('>', ` xmlns:openbadges="${OB_NAMESPACE}">`)
     }
 
-    // Format credential JSON with proper indentation
     const credentialJson = JSON.stringify(credential, null, 2)
       .split('\n')
       .map((line) => `      ${line}`)
       .join('\n')
 
-    // Create the openbadges:credential tag with CDATA-wrapped JSON
     const credentialTag = `  <openbadges:credential>
     <![CDATA[
 ${credentialJson}
@@ -95,14 +141,9 @@ ${credentialJson}
   </openbadges:credential>
 `
 
-    // Insert credential immediately after modified SVG tag
-    const bakedSvg = svg.replace(svgTagMatch[0], svgTag + '\n' + credentialTag)
-
-    return bakedSvg
+    return svg.replace(svgTagMatch[0], svgTag + '\n' + credentialTag)
   } catch (error) {
-    if (error instanceof BakingError) {
-      throw error
-    }
+    if (error instanceof BakingError) throw error
     throw new BakingError('Failed to bake credential into SVG', {
       error: error instanceof Error ? error.message : String(error),
     })
@@ -113,12 +154,13 @@ ${credentialJson}
  * Extract a credential from a baked SVG
  *
  * Supports OpenBadges 3.0 format: <openbadges:credential> with CDATA
+ * Supports both JWT and Data Integrity Proof formats
  *
  * @param svg - The baked SVG content
- * @returns The extracted signed credential
+ * @returns The extracted credential (JWT string or signed credential object)
  * @throws {ExtractionError} if extraction fails
  */
-export function extractBadge(svg: string): SignedCredential {
+export function extractBadge(svg: string): SignedCredential | string {
   if (!svg || typeof svg !== 'string') {
     throw new ExtractionError('SVG content must be a non-empty string', {
       received: typeof svg,
@@ -139,17 +181,17 @@ export function extractBadge(svg: string): SignedCredential {
 
     const content = credentialMatch[1]
 
-    // Extract JSON from CDATA
+    // Extract content from CDATA
     const cdataMatch = content.match(/<!\[CDATA\[([\s\S]*?)\]\]>/)
+    const credentialString = cdataMatch ? cdataMatch[1].trim() : content.trim()
 
-    if (!cdataMatch) {
-      // Try without CDATA (in case of plain JSON)
-      const credential = JSON.parse(content.trim()) as SignedCredential
-      return credential
+    // Check if it's a JWT (starts with "eyJ")
+    if (credentialString.startsWith('eyJ')) {
+      return credentialString
     }
 
-    const jsonString = cdataMatch[1].trim()
-    const credential = JSON.parse(jsonString) as SignedCredential
+    // Otherwise, parse as JSON (Data Integrity Proof format)
+    const credential = JSON.parse(credentialString) as SignedCredential
 
     // Validate that it's a signed credential
     if (

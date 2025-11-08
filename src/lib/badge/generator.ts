@@ -2,18 +2,18 @@
  * Badge Generator
  *
  * Generates OpenBadges 3.0 credentials for conference speakers and organizers.
- * Uses the OpenBadges library for all cryptographic operations.
+ * Uses JWT proof format for maximum validator compatibility.
  */
 
 import {
-  signCredential,
+  signCredentialJWT,
   createCredential,
   publicKeyToDidKey,
   generateDidKeyVerificationMethod,
 } from '@/lib/openbadges'
 import { getCurrentDateTime } from '@/lib/time'
 import type { Conference } from '@/lib/conference/types'
-import type { BadgeAssertion, BadgeGenerationParams } from './types'
+import type { BadgeGenerationParams } from './types'
 
 /**
  * Get badge issuer keys from environment
@@ -40,11 +40,12 @@ function generateBadgeId(): string {
 
 /**
  * Generate an OpenBadges 3.0 credential for a conference badge
+ * Returns JWT string (Compact JWS format) - this IS the signed credential
  */
 export async function generateBadgeCredential(
   params: BadgeGenerationParams,
   conference: Conference,
-): Promise<{ assertion: BadgeAssertion; badgeId: string }> {
+): Promise<{ assertion: string; badgeId: string }> {
   const {
     speakerName,
     speakerEmail,
@@ -142,16 +143,17 @@ export async function generateBadgeCredential(
     validFrom: issuedAt,
   })
 
-  // Sign the credential with did:key verification method
+  // Sign the credential as JWT (Compact JWS format)
+  // This is the recommended format for OpenBadges 3.0 with better validator compatibility
   const { privateKey } = getBadgeKeys()
-  const signedCredential = await signCredential(credential, {
+  const jwt = await signCredentialJWT(credential, {
     privateKey,
     publicKey,
     verificationMethod,
   })
 
   return {
-    assertion: signedCredential as unknown as BadgeAssertion,
+    assertion: jwt, // JWT string is the complete signed credential
     badgeId,
   }
 }

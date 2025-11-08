@@ -10,7 +10,12 @@
 
 // Core credential operations
 export { createCredential } from './credential'
-export { signCredential, verifyCredential } from './crypto'
+export {
+  signCredential,
+  verifyCredential,
+  signCredentialJWT,
+  verifyCredentialJWT,
+} from './crypto'
 
 // Validation
 export { validateCredential, assertValidCredential } from './validator'

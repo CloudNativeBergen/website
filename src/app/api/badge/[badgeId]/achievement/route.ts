@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
+import { isJWTFormat } from '@/lib/badge/types'
 import {
   generateAchievementResponse,
   generateErrorResponse,
+  verifyCredentialJWT,
 } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
 /**
  * GET /api/badge/[badgeId]/achievement
- * Returns the Achievement (badge class) part of the OpenBadges credential
+ * Returns the Achievement (badge class) from the credential
  */
 export async function GET(
   request: NextRequest,
@@ -33,8 +35,39 @@ export async function GET(
       })
     }
 
-    // Parse the badge JSON to extract the achievement
-    const badgeAssertion = JSON.parse(badge.badge_json)
+    let badgeAssertion
+    if (isJWTFormat(badge.badge_json)) {
+      // Decode JWT to get credential
+      const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
+      if (!publicKeyHex) {
+        return NextResponse.json(
+          generateErrorResponse('Public key not configured', 500),
+          { status: 500 },
+        )
+      }
+
+      try {
+        badgeAssertion = await verifyCredentialJWT(
+          badge.badge_json,
+          publicKeyHex,
+        )
+      } catch {
+        return NextResponse.json(generateErrorResponse('Invalid JWT', 500), {
+          status: 500,
+        })
+      }
+    } else {
+      // Parse JSON (legacy Data Integrity Proof format)
+      try {
+        badgeAssertion = JSON.parse(badge.badge_json)
+      } catch {
+        return NextResponse.json(
+          generateErrorResponse('Invalid badge JSON', 500),
+          { status: 500 },
+        )
+      }
+    }
+
     const achievement = badgeAssertion.credentialSubject?.achievement
 
     if (!achievement) {

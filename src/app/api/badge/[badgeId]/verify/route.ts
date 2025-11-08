@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
+import { isJWTFormat } from '@/lib/badge/types'
 import {
   verifyCredential,
+  verifyCredentialJWT,
   validateCredential,
   generateVerificationResponse,
   generateErrorResponse,
 } from '@/lib/openbadges'
-import type { BadgeAssertion } from '@/lib/badge/types'
 
 export const runtime = 'nodejs'
 
+/**
+ * GET /api/badge/[badgeId]/verify
+ *
+ * Verifies an OpenBadges 3.0 credential signature.
+ */
 export async function GET(
   request: NextRequest,
   segmentData: { params: Promise<{ badgeId: string }> },
@@ -30,10 +36,66 @@ export async function GET(
       return NextResponse.json({ error: 'Badge not found' }, { status: 404 })
     }
 
-    // Parse badge JSON
-    let assertion: BadgeAssertion
+    const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
+    if (!publicKeyHex) {
+      return NextResponse.json(
+        generateErrorResponse('Public key not configured', 500),
+        { status: 500 },
+      )
+    }
+
+    if (isJWTFormat(badge.badge_json)) {
+      try {
+        const credential = await verifyCredentialJWT(
+          badge.badge_json,
+          publicKeyHex,
+        )
+
+        const validation = validateCredential(
+          credential as Parameters<typeof validateCredential>[0],
+        )
+
+        const response = generateVerificationResponse(
+          validation.valid,
+          credential as Parameters<typeof verifyCredential>[0],
+          validation.errors,
+        )
+
+        return NextResponse.json(response, {
+          headers: {
+            'Content-Type': 'application/ld+json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET',
+            'Cache-Control': 'public, max-age=3600',
+          },
+        })
+      } catch (verifyError) {
+        console.error('JWT verification failed:', verifyError)
+        return NextResponse.json(
+          {
+            verified: false,
+            errors: [
+              verifyError instanceof Error
+                ? verifyError.message
+                : 'JWT signature verification failed',
+            ],
+          },
+          {
+            headers: {
+              'Content-Type': 'application/ld+json',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'GET',
+              'Cache-Control': 'public, max-age=3600',
+            },
+          },
+        )
+      }
+    }
+
+    // Legacy: Verify Data Integrity Proof format
+    let assertion
     try {
-      assertion = JSON.parse(badge.badge_json) as BadgeAssertion
+      assertion = JSON.parse(badge.badge_json)
     } catch {
       return NextResponse.json({ error: 'Invalid badge JSON' }, { status: 500 })
     }
@@ -44,14 +106,6 @@ export async function GET(
     )
 
     // Verify signature using OpenBadges library
-    const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-    if (!publicKeyHex) {
-      return NextResponse.json(
-        generateErrorResponse('Public key not configured', 500),
-        { status: 500 },
-      )
-    }
-
     let signatureValid = false
     try {
       signatureValid = await verifyCredential(

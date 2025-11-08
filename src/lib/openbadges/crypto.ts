@@ -1,12 +1,16 @@
 /**
  * Cryptographic Operations
  *
- * Ed25519 signing and verification for OpenBadges 3.0 Data Integrity Proofs.
- * Uses eddsa-rdfc-2022 cryptosuite with multibase-encoded signatures.
+ * OpenBadges 3.0 supports two proof formats:
+ * 1. Data Integrity Proofs (eddsa-rdfc-2022 cryptosuite) - JSON-LD based
+ * 2. JWT Proofs (RFC7519/RFC7515) - Better cross-implementation compatibility
+ *
+ * JWT format is recommended for maximum validator compatibility.
  */
 
 import * as ed25519 from '@noble/ed25519'
 import * as jsonld from 'jsonld'
+import { SignJWT, jwtVerify, importJWK, type JWK } from 'jose'
 import {
   hexToBytes,
   bytesToHex,
@@ -27,6 +31,14 @@ type JsonLdContext = Record<string, unknown>
 /**
  * Custom document loader for JSON-LD contexts
  * Provides local contexts to avoid network fetches during canonicalization
+ *
+ * NOTE: Cross-implementation verification limitations
+ * Different OpenBadges implementations may use different JSON-LD processors,
+ * which can produce slightly different canonical N-Quads even with identical
+ * contexts. This is a known challenge in JSON-LD signature verification.
+ * Our implementation follows W3C Data Integrity and OpenBadges 3.0 specs,
+ * and badges verify correctly with our own verifier. However, external
+ * validators may produce different results due to library differences.
  */
 const customDocumentLoader = async (url: string) => {
   const LOCAL_CONTEXTS: Record<string, JsonLdContext> = {
@@ -317,5 +329,144 @@ export async function verifyCredential(
 
     // Return false for invalid signatures
     return false
+  }
+}
+
+/**
+ * Convert Ed25519 private key (hex) to JWK format for JWT signing
+ */
+function privateKeyToJWK(privateKeyHex: string, publicKeyHex: string): JWK {
+  // Remove 0x prefix if present
+  const cleanPrivateKey = privateKeyHex.replace(/^0x/, '').replace(/\s/g, '')
+  const cleanPublicKey = publicKeyHex.replace(/^0x/, '').replace(/\s/g, '')
+
+  // Ed25519 keys in JWK format use base64url encoding
+  const privateKeyBytes = hexToBytes(cleanPrivateKey)
+  const publicKeyBytes = hexToBytes(cleanPublicKey)
+
+  // Convert to base64url
+  const d = Buffer.from(privateKeyBytes).toString('base64url')
+  const x = Buffer.from(publicKeyBytes).toString('base64url')
+
+  return {
+    kty: 'OKP',
+    crv: 'Ed25519',
+    x,
+    d,
+  }
+}
+
+/**
+ * Convert Ed25519 public key (hex) to JWK format for JWT verification
+ */
+function publicKeyToJWK(publicKeyHex: string): JWK {
+  const cleanPublicKey = publicKeyHex.replace(/^0x/, '').replace(/\s/g, '')
+  const publicKeyBytes = hexToBytes(cleanPublicKey)
+  const x = Buffer.from(publicKeyBytes).toString('base64url')
+
+  return {
+    kty: 'OKP',
+    crv: 'Ed25519',
+    x,
+  }
+}
+
+/**
+ * Sign a credential using JWT format (Compact JWS)
+ * Returns the JWT as a string (this IS the signed credential)
+ *
+ * Per OpenBadges 3.0 spec section "JSON Web Token Proof Format":
+ * - JOSE header includes: kid (verification method URL), typ: "JWT", alg: "EdDSA"
+ * - Payload includes entire credential plus iss, exp, nbf, jti
+ * - Compact JWS format: base64url(header).base64url(payload).base64url(signature)
+ */
+export async function signCredentialJWT(
+  credential: Credential,
+  config: SigningConfig,
+): Promise<string> {
+  validateSigningConfig(config)
+
+  try {
+    const jwk = privateKeyToJWK(config.privateKey, config.publicKey)
+    const privateKey = await importJWK(jwk, 'EdDSA')
+
+    // Build JWT claims per OpenBadges 3.0 spec
+    const now = Math.floor(Date.now() / 1000)
+    const exp = now + 365 * 24 * 60 * 60 // 1 year expiration
+
+    const jwt = await new SignJWT({
+      vc: credential, // Embed entire credential as 'vc' claim
+    })
+      .setProtectedHeader({
+        alg: 'EdDSA',
+        typ: 'JWT',
+        kid: config.verificationMethod, // Verification method URL
+      })
+      .setIssuedAt(now)
+      .setExpirationTime(exp)
+      .setNotBefore(now)
+      .setJti(credential.id) // Use credential ID as JWT ID
+      .setIssuer(
+        typeof credential.issuer === 'string'
+          ? credential.issuer
+          : credential.issuer.id,
+      )
+      .sign(privateKey)
+
+    return jwt
+  } catch (error) {
+    if (error instanceof SigningError || error instanceof ConfigurationError) {
+      throw error
+    }
+    throw new SigningError('Failed to sign credential as JWT', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+  }
+}
+
+/**
+ * Verify a JWT credential signature and extract the credential
+ * Returns the decoded credential if valid, throws VerificationError if invalid
+ */
+export async function verifyCredentialJWT(
+  jwt: string,
+  publicKey: string,
+): Promise<Credential> {
+  if (!publicKey || typeof publicKey !== 'string') {
+    throw new VerificationError(
+      'Public key is required and must be a hex string',
+      { hasPublicKey: !!publicKey },
+    )
+  }
+
+  if (!jwt || typeof jwt !== 'string') {
+    throw new VerificationError('JWT is required and must be a string', {
+      hasJWT: !!jwt,
+    })
+  }
+
+  try {
+    const jwk = publicKeyToJWK(publicKey)
+    const publicKeyObj = await importJWK(jwk, 'EdDSA')
+
+    const { payload } = await jwtVerify(jwt, publicKeyObj, {
+      algorithms: ['EdDSA'],
+    })
+
+    // Extract credential from 'vc' claim
+    if (!payload.vc || typeof payload.vc !== 'object') {
+      throw new VerificationError('JWT payload missing "vc" claim', { payload })
+    }
+
+    return payload.vc as Credential
+  } catch (error) {
+    if (error instanceof VerificationError) {
+      throw error
+    }
+    throw new VerificationError('JWT verification failed', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
   }
 }

@@ -109,3 +109,10 @@ export interface BadgeGenerationParams {
   talkId?: string
   talkTitle?: string
 }
+
+/**
+ * Check if a badge JSON string is in JWT format
+ */
+export function isJWTFormat(badgeJson: string): boolean {
+  return badgeJson.startsWith('eyJ')
+}
