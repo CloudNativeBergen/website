@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
-import { isJWTFormat } from '@/lib/badge/types'
 import {
   verifyCredential,
   verifyCredentialJWT,
   validateCredential,
   generateVerificationResponse,
   generateErrorResponse,
+  isJWTFormat,
 } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
@@ -36,10 +36,11 @@ export async function GET(
       return NextResponse.json({ error: 'Badge not found' }, { status: 404 })
     }
 
-    const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-    if (!publicKeyHex) {
+    const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
+
+    if (!publicKey) {
       return NextResponse.json(
-        generateErrorResponse('Public key not configured', 500),
+        generateErrorResponse('RSA public key not configured', 500),
         { status: 500 },
       )
     }
@@ -48,7 +49,7 @@ export async function GET(
       try {
         const credential = await verifyCredentialJWT(
           badge.badge_json,
-          publicKeyHex,
+          publicKey,
         )
 
         const validation = validateCredential(
@@ -110,7 +111,7 @@ export async function GET(
     try {
       signatureValid = await verifyCredential(
         assertion as Parameters<typeof verifyCredential>[0],
-        publicKeyHex,
+        publicKey,
       )
     } catch (error) {
       console.error('Verification error:', error)

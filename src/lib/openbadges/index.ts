@@ -1,14 +1,3 @@
-/**
- * OpenBadges 3.0 Library
- *
- * A modern, type-safe implementation of the OpenBadges 3.0 specification.
- * Provides credential creation, signing, verification, validation, and baking.
- *
- * @version 1.0.0
- * @license MIT
- */
-
-// Core credential operations
 export { createCredential } from './credential'
 export {
   signCredential,
@@ -17,26 +6,21 @@ export {
   verifyCredentialJWT,
 } from './crypto'
 
-// Validation
 export { validateCredential, assertValidCredential } from './validator'
 
-// Badge baking
 export { bakeBadge, extractBadge, isBakedSvg } from './baking'
 
-// Key management
 export {
   validatePublicKey,
   generateKeyId,
   validateKeyId,
   publicKeyToMultibase,
   publicKeyToDidKey,
-  generateDidKeyVerificationMethod,
   generateDidKeyMultikeyDocument,
   generateMultikeyDocument,
   didKeyToPublicKeyHex,
 } from './keys'
 
-// Encoding utilities
 export {
   hexToBytes,
   bytesToHex,
@@ -47,14 +31,12 @@ export {
   stringToBytes,
 } from './encoding'
 
-// API response generators
 export {
   generateVerificationResponse,
   generateAchievementResponse,
   generateErrorResponse,
 } from './outputs'
 
-// Errors
 export {
   OpenBadgesError,
   SigningError,
@@ -68,7 +50,6 @@ export {
   ERROR_CODES,
 } from './errors'
 
-// Types
 export type {
   Credential,
   SignedCredential,
@@ -83,5 +64,4 @@ export type {
   MultikeyDocument,
 } from './types'
 
-// Constants
-export { OB_CONTEXT } from './types'
+export { OB_CONTEXT, isJWTFormat, normalizeProtocolForDomain } from './types'

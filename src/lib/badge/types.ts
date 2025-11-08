@@ -103,16 +103,9 @@ export interface BadgeGenerationParams {
   conferenceYear: string
   conferenceDate: string
   badgeType: BadgeType
-  baseUrl: string // Base domain URL (e.g., https://2025.cloudnativebergen.dev)
-  issuerUrl: string // Issuer profile URL (e.g., https://2025.cloudnativebergen.dev/api/badge/issuer)
+  baseUrl: string
+  issuerUrl: string
   centerGraphicSvg?: string
   talkId?: string
   talkTitle?: string
-}
-
-/**
- * Check if a badge JSON string is in JWT format
- */
-export function isJWTFormat(badgeJson: string): boolean {
-  return badgeJson.startsWith('eyJ')
 }

@@ -6,7 +6,8 @@ This document provides a high-level architectural overview of the OpenBadges 3.0
 
 The badge system issues **OpenBadges 3.0 compliant** digital credentials to speakers and organizers. These badges are:
 
-- **Cryptographically signed** using Ed25519 with **did:key** identifiers (self-sovereign, portable)
+- **Cryptographically signed** using RS256 (RSA) or EdDSA (Ed25519) algorithms
+- **JWT-based** with dereferenceable public keys for external validator compatibility
 - **Verifiable** using W3C Verifiable Credentials Data Model 2.0
 - **Portable** across digital wallet platforms (Credly, Badgr, LinkedIn)
 - **Embeddable** in SVG images with "baked" credentials
@@ -57,9 +58,9 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 **Key Modules:**
 
 - **`credential.ts`** - Create unsigned credentials with validation
-- **`crypto.ts`** - Ed25519 signing and verification with did:key support
+- **`crypto.ts`** - JWT signing and verification (RS256/EdDSA), JWK conversion
 - **`keys.ts`** - DID key management (generation, conversion, extraction)
-- **`baking.ts`** - Embed/extract credentials in SVG files
+- **`baking.ts`** - Embed/extract credentials in SVG files (supports JWT format)
 - **`validator.ts`** - JSON schema validation against OB 3.0 spec
 - **`errors.ts`** - Typed error handling
 
@@ -115,15 +116,15 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 
 **Key Routes:**
 
-| Endpoint                          | Purpose                                     | Content Type          |
-| --------------------------------- | ------------------------------------------- | --------------------- |
-| `GET /api/badge/issuer`           | DID issuer profile with verification method | `application/ld+json` |
-| `GET /api/badge/[id]/json`        | Raw credential JSON-LD                      | `application/ld+json` |
-| `GET /api/badge/[id]/verify`      | Credential + verification status            | `application/json`    |
-| `GET /api/badge/[id]/image`       | Badge SVG visual                            | `image/svg+xml`       |
-| `GET /api/badge/[id]/download`    | Baked SVG download                          | `image/svg+xml`       |
-| `GET /api/badge/[id]/achievement` | Achievement definition                      | `application/ld+json` |
-| `POST /api/badge/validate`        | Admin validation tool                       | `application/json`    |
+| Endpoint                          | Purpose                            | Content Type          |
+| --------------------------------- | ---------------------------------- | --------------------- |
+| `GET /api/badge/issuer`           | Issuer profile with JWK public key | `application/ld+json` |
+| `GET /api/badge/[id]/json`        | Raw credential JSON-LD             | `application/ld+json` |
+| `GET /api/badge/[id]/verify`      | Credential + verification status   | `application/json`    |
+| `GET /api/badge/[id]/image`       | Badge SVG visual                   | `image/svg+xml`       |
+| `GET /api/badge/[id]/download`    | Baked SVG download                 | `image/svg+xml`       |
+| `GET /api/badge/[id]/achievement` | Achievement definition             | `application/ld+json` |
+| `POST /api/badge/validate`        | Admin validation tool              | `application/json`    |
 
 ---
 
@@ -176,9 +177,9 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 
 **Identity Management:**
 
-- **Issuer ID:** `did:key:z6Mkg51...` (self-sovereign, no HTTP endpoint required)
+- **Issuer ID:** `https://domain.com` (HTTP issuer for RS256) or `did:key:z6Mkg51...` (DID for EdDSA)
 - **Subject ID:** `mailto:speaker@example.com` (email-based recipient identity)
-- **Verification Method:** `did:key:z6Mkg51...#z6Mkg51...` (DID fragment notation)
+- **Verification Method:** `{baseUrl}/api/badge/issuer#key-1` (RS256) or `did:key:...#...` (EdDSA)
 
 **URLs:**
 
@@ -188,7 +189,14 @@ The badge system issues **OpenBadges 3.0 compliant** digital credentials to spea
 - **Issuer URL:** `https://domain.com` (organization homepage)
 - **Evidence:** `https://domain.com/speaker/{slug}`, `https://domain.com/program#talk-{id}`
 
-**Proof:**
+**JWT Proof (RS256):**
+
+- **Type:** JWT Compact Serialization
+- **Algorithm:** RS256 (RSA with SHA-256)
+- **Header:** `alg: "RS256"`, `typ: "JWT"`, `kid: "{baseUrl}/api/badge/issuer#key-1"`
+- **Claims:** `iss`, `jti`, `sub`, `nbf`, `exp`, `vc` (full credential)
+
+**Data Integrity Proof (EdDSA - Legacy):**
 
 - **Type:** `DataIntegrityProof`
 - **Cryptosuite:** `eddsa-rdfc-2022` (Ed25519 signatures)
@@ -202,7 +210,13 @@ See example credential in `/lib/openbadges/README.md`
 
 ### Key Generation
 
-Generate Ed25519 key pairs:
+**RSA Keys (Recommended - OpenBadges 3.0 Compliant):**
+
+```bash
+npx tsx scripts/generate-rsa-keys.ts
+```
+
+**Ed25519 Keys (Legacy Support):**
 
 ```bash
 npx tsx scripts/generate-badge-keys.ts
@@ -210,36 +224,45 @@ npx tsx scripts/generate-badge-keys.ts
 
 ### Environment Variables
 
-**Required:**
+**RSA Keys (Recommended):**
 
-- `BADGE_ISSUER_PRIVATE_KEY` - Hex-encoded private key (keep secret!)
-- `BADGE_ISSUER_PUBLIC_KEY` - Hex-encoded public key (used for verification)
+- `BADGE_ISSUER_RSA_PRIVATE_KEY` - PEM-encoded RSA private key (keep secret!)
+- `BADGE_ISSUER_RSA_PUBLIC_KEY` - PEM-encoded RSA public key
+
+**Ed25519 Keys (Fallback):**
+
+- `BADGE_ISSUER_PRIVATE_KEY` - Hex-encoded Ed25519 private key
+- `BADGE_ISSUER_PUBLIC_KEY` - Hex-encoded Ed25519 public key
 
 **Key Storage:**
 
 - Store in `.env.local` for development
 - Use Vercel environment variables for production
 - Never commit private keys to version control
+- System prefers RSA keys when both types are present
 
-### DID-based Identity
+### Cryptographic Signing
 
-The system uses **did:key** for self-sovereign identity:
+The system supports two signing methods:
 
-- Public key embedded in the DID itself
-- No external HTTP endpoint required for verification
-- Portable across environments (localhost ↔ production)
-- Cryptographic proof can be verified offline
+#### JWT Proof Format (RS256 - Default)
 
-### Cryptographic Signing Process
+- **Algorithm:** RS256 (RSA with SHA-256) per OpenBadges 3.0 spec section 8.2.3
+- **Key Reference:** `kid` header points to `{baseUrl}/api/badge/issuer#key-1`
+- **Public Key:** Exposed as JWK at issuer endpoint
+- **Format:** Compact JWS (header.payload.signature)
+- **Verification:** External validators can dereference public key from issuer endpoint
+- **Baking:** JWT embedded in SVG using `<openbadges:credential verify="{jwt}">`
 
-The implementation follows the **eddsa-rdfc-2022** cryptosuite specification:
+#### Data Integrity Proof (EdDSA - Legacy)
 
-1. **RDF Dataset Canonicalization (URDNA2015):** The credential (without proof) and proof (without proofValue) are independently canonicalized to N-Quads format using the URDNA2015 algorithm.
-2. **Concatenation:** The canonical credential and canonical proof N-Quads are concatenated.
-3. **Ed25519 Signature:** The concatenated bytes are signed using Ed25519, producing the `proofValue`.
-4. **Verification:** To verify, the same canonicalization and concatenation process is repeated, and the signature is verified against the public key.
+- **Cryptosuite:** `eddsa-rdfc-2022` with Ed25519 signatures
+- **Identity:** `did:key` for self-sovereign, portable verification
+- **Process:** RDF Dataset Canonicalization (URDNA2015) + Ed25519 signature
+- **Verification:** Offline verification, no HTTP endpoint required
+- **Baking:** Credential embedded in SVG with CDATA wrapper
 
-This ensures **byte-for-byte reproducibility** of the signed data, making badges verifiable by external validators that follow the W3C Data Integrity specification.
+The JWT format with RS256 is recommended for maximum compatibility with external OpenBadges 3.0 validators and digital wallet platforms.
 
 ---
 

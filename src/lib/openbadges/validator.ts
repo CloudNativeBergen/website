@@ -1,28 +1,16 @@
-/**
- * OpenBadges 3.0 Schema Validation
- *
- * Validates credentials against the OpenBadges 3.0 JSON schema using AJV.
- */
-
 import Ajv from 'ajv'
 import addFormats from 'ajv-formats'
 import { ValidationError } from './errors'
 import type { Credential, SignedCredential, ValidationResult } from './types'
 
-// Initialize AJV
 const ajv = new Ajv({
   strict: false,
   allErrors: true,
   verbose: true,
 })
 
-// Add format validators
 addFormats(ajv)
 
-/**
- * OpenBadges 3.0 AchievementCredential JSON Schema
- * Based on: https://purl.imsglobal.org/spec/ob/v3p0/schema/json/ob_v3p0_achievementcredential_schema.json
- */
 const achievementCredentialSchema = {
   type: 'object',
   required: ['@context', 'type', 'credentialSubject', 'issuer', 'validFrom'],
@@ -178,15 +166,8 @@ const achievementCredentialSchema = {
   additionalProperties: true,
 }
 
-// Compile schema
 const validateSchema = ajv.compile(achievementCredentialSchema)
 
-/**
- * Validate a credential against OpenBadges 3.0 schema
- *
- * @param credential - The credential to validate
- * @returns Validation result with detailed errors if invalid
- */
 export function validateCredential(
   credential: Credential | SignedCredential,
 ): ValidationResult {
@@ -210,13 +191,6 @@ export function validateCredential(
   return { valid: false, errors }
 }
 
-/**
- * Assert that a credential is valid
- * Throws ValidationError if invalid
- *
- * @param credential - The credential to validate
- * @throws {ValidationError} if validation fails
- */
 export function assertValidCredential(
   credential: Credential | SignedCredential,
 ): void {

@@ -10,7 +10,15 @@
 
 import * as ed25519 from '@noble/ed25519'
 import * as jsonld from 'jsonld'
-import { SignJWT, jwtVerify, importJWK, type JWK } from 'jose'
+import {
+  SignJWT,
+  jwtVerify,
+  importJWK,
+  importPKCS8,
+  importSPKI,
+  type JWK,
+} from 'jose'
+import { createPublicKey } from 'crypto'
 import {
   hexToBytes,
   bytesToHex,
@@ -372,23 +380,52 @@ function publicKeyToJWK(publicKeyHex: string): JWK {
 }
 
 /**
- * Sign a credential using JWT format (Compact JWS)
+ * Convert RSA public key (PEM) to JWK format for JWT verification
+ * Extracts n (modulus) and e (exponent) from the public key
+ * @internal - Used by issuer endpoint for exposing public key
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function rsaPublicKeyToJWK(publicKeyPem: string): JWK {
+  const publicKey = createPublicKey(publicKeyPem)
+  const jwk = publicKey.export({ format: 'jwk' })
+  return jwk as JWK
+}
+
+/**
+ * Sign a credential using JWT format (Compact JWS) with RS256
  * Returns the JWT as a string (this IS the signed credential)
  *
  * Per OpenBadges 3.0 spec section "JSON Web Token Proof Format":
- * - JOSE header includes: kid (verification method URL), typ: "JWT", alg: "EdDSA"
+ * - JOSE header includes: kid (verification method URL), typ: "JWT", alg: "RS256"
  * - Payload includes entire credential plus iss, exp, nbf, jti
  * - Compact JWS format: base64url(header).base64url(payload).base64url(signature)
+ *
+ * OpenBadges 3.0 requires RS256 (RSA with SHA-256) as the minimum algorithm.
  */
 export async function signCredentialJWT(
   credential: Credential,
   config: SigningConfig,
 ): Promise<string> {
-  validateSigningConfig(config)
-
   try {
-    const jwk = privateKeyToJWK(config.privateKey, config.publicKey)
-    const privateKey = await importJWK(jwk, 'EdDSA')
+    // Check if we have RSA keys (PEM format) or Ed25519 keys (hex format)
+    const isRSA =
+      config.privateKey.includes('BEGIN') &&
+      config.privateKey.includes('PRIVATE KEY')
+
+    let privateKey: CryptoKey
+    let algorithm: string
+
+    if (isRSA) {
+      // Use RS256 with RSA keys (OpenBadges 3.0 compliant)
+      privateKey = await importPKCS8(config.privateKey, 'RS256')
+      algorithm = 'RS256'
+    } else {
+      // Fallback to EdDSA with Ed25519 keys (for backward compatibility)
+      validateSigningConfig(config)
+      const jwk = privateKeyToJWK(config.privateKey, config.publicKey)
+      privateKey = (await importJWK(jwk, 'EdDSA')) as CryptoKey
+      algorithm = 'EdDSA'
+    }
 
     // Build JWT claims per OpenBadges 3.0 spec
     const now = Math.floor(Date.now() / 1000)
@@ -398,7 +435,7 @@ export async function signCredentialJWT(
       vc: credential, // Embed entire credential as 'vc' claim
     })
       .setProtectedHeader({
-        alg: 'EdDSA',
+        alg: algorithm,
         typ: 'JWT',
         kid: config.verificationMethod, // Verification method URL
       })
@@ -406,6 +443,7 @@ export async function signCredentialJWT(
       .setExpirationTime(exp)
       .setNotBefore(now)
       .setJti(credential.id) // Use credential ID as JWT ID
+      .setSubject(credential.credentialSubject.id) // Required: subject ID
       .setIssuer(
         typeof credential.issuer === 'string'
           ? credential.issuer
@@ -428,16 +466,16 @@ export async function signCredentialJWT(
 /**
  * Verify a JWT credential signature and extract the credential
  * Returns the decoded credential if valid, throws VerificationError if invalid
+ * Supports both RS256 (RSA) and EdDSA (Ed25519) algorithms
  */
 export async function verifyCredentialJWT(
   jwt: string,
   publicKey: string,
 ): Promise<Credential> {
   if (!publicKey || typeof publicKey !== 'string') {
-    throw new VerificationError(
-      'Public key is required and must be a hex string',
-      { hasPublicKey: !!publicKey },
-    )
+    throw new VerificationError('Public key is required and must be a string', {
+      hasPublicKey: !!publicKey,
+    })
   }
 
   if (!jwt || typeof jwt !== 'string') {
@@ -447,11 +485,26 @@ export async function verifyCredentialJWT(
   }
 
   try {
-    const jwk = publicKeyToJWK(publicKey)
-    const publicKeyObj = await importJWK(jwk, 'EdDSA')
+    // Check if we have RSA key (PEM format) or Ed25519 key (hex format)
+    const isRSA =
+      publicKey.includes('BEGIN') && publicKey.includes('PUBLIC KEY')
+
+    let publicKeyObj: CryptoKey
+    let algorithms: string[]
+
+    if (isRSA) {
+      // Use RS256 with RSA keys
+      publicKeyObj = await importSPKI(publicKey, 'RS256')
+      algorithms = ['RS256']
+    } else {
+      // Use EdDSA with Ed25519 keys
+      const jwk = publicKeyToJWK(publicKey)
+      publicKeyObj = (await importJWK(jwk, 'EdDSA')) as CryptoKey
+      algorithms = ['EdDSA']
+    }
 
     const { payload } = await jwtVerify(jwt, publicKeyObj, {
-      algorithms: ['EdDSA'],
+      algorithms,
     })
 
     // Extract credential from 'vc' claim

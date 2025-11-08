@@ -114,26 +114,6 @@ export function publicKeyToDidKey(publicKeyHex: string): string {
 }
 
 /**
- * Generate did:key verification method URI
- * Creates a verification method reference using DID fragment notation
- *
- * @param publicKeyHex - The Ed25519 public key as hex string
- * @returns Verification method URI (did:key with fragment)
- * @throws {KeyFormatError} if key is invalid
- *
- * @example
- * ```ts
- * const verificationMethod = generateDidKeyVerificationMethod('1804a6dd...')
- * // => 'did:key:z6Mkf5rG...#z6Mkf5rG...'
- * ```
- */
-export function generateDidKeyVerificationMethod(publicKeyHex: string): string {
-  const didKey = publicKeyToDidKey(publicKeyHex)
-  const keyFragment = publicKeyToMultibase(publicKeyHex)
-  return `${didKey}#${keyFragment}`
-}
-
-/**
  * Generate a W3C Multikey document with did:key controller
  * Creates a self-describing cryptographic key document for OpenBadges 3.0
  *

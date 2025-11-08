@@ -1,154 +1,166 @@
-# @cloudnativebergen/openbadges
+# OpenBadges 3.0 Library
 
-A TypeScript library for creating, signing, and verifying [OpenBadges 3.0](https://www.imsglobal.org/spec/ob/v3p0/) compliant digital credentials.
+A modern, production-ready TypeScript implementation of the OpenBadges 3.0 specification for issuing verifiable digital credentials.
+
+## Overview
+
+This library provides a complete toolkit for creating, signing, verifying, and managing OpenBadges 3.0 compliant credentials. Built with type safety, security, and interoperability as core principles.
 
 ## Features
 
-- ✅ **OpenBadges 3.0 Compliant**: Strict adherence to the 1EdTech OpenBadges 3.0 specification
-- 🔐 **Ed25519 Signatures**: Cryptographic signing using Ed25519 with Data Integrity Proofs
-- 🎨 **SVG Badge Baking**: Embed credentials directly into SVG images
-- ✨ **Type-Safe**: Full TypeScript support with comprehensive type definitions
-- 🚀 **Fail-Fast Validation**: Immediate error feedback with detailed context
-- 📦 **Zero Dependencies**: Core logic with minimal peer dependencies
-
-## Installation
-
-```bash
-npm install @cloudnativebergen/openbadges
-```
-
-### Peer Dependencies
-
-```bash
-npm install @noble/ed25519 ajv ajv-formats bs58
-```
+- **JWT Proof Format**: RS256 (RSA) and EdDSA (Ed25519) signature algorithms
+- **Type Safety**: Full TypeScript support with comprehensive types
+- **Spec Compliant**: Implements W3C Verifiable Credentials Data Model 2.0 and OpenBadges 3.0
+- **Badge Baking**: Embed and extract credentials from SVG images
+- **Validation**: JSON schema validation and cryptographic verification
+- **Key Management**: Support for DID:key and HTTP(S) verification methods
+- **Error Handling**: Detailed error classes with context
 
 ## Quick Start
 
-```typescript
-import {
-  createCredential,
-  signCredential,
-  bakeBadge,
-  extractBadge,
-  verifyCredential,
-  validateCredential,
-} from '@cloudnativebergen/openbadges'
+### Creating a Credential
 
-// 1. Create a credential
+```typescript
+import { createCredential, signCredentialJWT } from '@/lib/openbadges'
+
 const credential = createCredential({
-  issuer: {
-    id: 'https://example.org/api/badge/issuer',
-    name: 'Example Organization',
-    url: 'https://example.org',
-    email: 'contact@example.org',
-    description: 'Example organization issuing badges',
-  },
+  credentialId: 'https://example.com/credentials/123',
+  name: 'Achievement Badge',
   subject: {
     id: 'mailto:recipient@example.com',
     type: ['AchievementSubject'],
   },
   achievement: {
-    id: 'https://example.org/api/badge/badge-123/achievement',
-    name: 'Example Achievement',
-    description: 'Awarded for completing example tasks',
+    id: 'https://example.com/achievements/speaking',
+    name: 'Conference Speaker',
+    description: 'Presented at our annual conference',
     criteria: {
-      narrative: 'Complete all example tasks successfully',
-    },
-    image: {
-      id: 'https://example.org/api/badge/badge-123/image',
-      type: 'Image',
+      narrative: 'Delivered a talk to the community',
     },
   },
-  credentialId: 'https://example.org/api/badge/badge-123',
+  issuer: {
+    id: 'https://example.com',
+    name: 'Example Organization',
+    url: 'https://example.com',
+  },
   validFrom: new Date().toISOString(),
 })
 
-// 2. Sign the credential
-const signedCredential = await signCredential(credential, {
-  privateKey: 'your-ed25519-private-key-hex',
-  publicKey: 'your-ed25519-public-key-hex',
-  verificationMethod: 'https://example.org/api/badge/keys/key-abc123',
+// Sign with RS256 (recommended)
+const jwt = await signCredentialJWT(credential, {
+  privateKey: rsaPrivateKeyPEM,
+  publicKey: rsaPublicKeyPEM,
+  verificationMethod: 'https://example.com/issuer#key-1',
 })
-
-// 3. Validate against OpenBadges 3.0 schema
-const validation = validateCredential(signedCredential)
-if (!validation.valid) {
-  console.error('Validation errors:', validation.errors)
-}
-
-// 4. Bake into SVG
-const svgContent = '<svg>...</svg>'
-const bakedSvg = bakeBadge(svgContent, signedCredential)
-
-// 5. Extract from SVG
-const extracted = extractBadge(bakedSvg)
-
-// 6. Verify signature
-const isValid = await verifyCredential(extracted, 'your-ed25519-public-key-hex')
 ```
 
-## API Reference
+### Verifying a Credential
 
-### Credential Creation
+```typescript
+import { verifyCredentialJWT, validateCredential } from '@/lib/openbadges'
 
-#### `createCredential(config: CredentialConfig): Credential`
+// Verify JWT signature and extract credential
+const credential = await verifyCredentialJWT(jwt, publicKeyPEM)
 
-Creates an unsigned OpenBadges 3.0 credential.
+// Validate credential structure
+const result = validateCredential(credential)
+if (!result.valid) {
+  console.error('Validation errors:', result.errors)
+}
+```
 
-### Cryptographic Operations
+### Baking Badges
 
-#### `signCredential(credential: Credential, config: SigningConfig): Promise<SignedCredential>`
+```typescript
+import { bakeBadge, extractBadge } from '@/lib/openbadges'
 
-Signs a credential using Ed25519 with Data Integrity Proof.
+// Embed credential in SVG
+const bakedSvg = bakeBadge(svgContent, jwt)
 
-#### `verifyCredential(credential: SignedCredential, publicKey: string): Promise<boolean>`
+// Extract credential from SVG
+const extractedCredential = extractBadge(bakedSvg)
+```
 
-Verifies the cryptographic signature of a credential.
+## Architecture
 
-### Badge Baking
+### Core Modules
 
-#### `bakeBadge(svg: string, credential: SignedCredential): string`
+- **credential.ts** - Create unsigned credentials
+- **crypto.ts** - Sign and verify credentials (JWT and Data Integrity Proofs)
+- **validator.ts** - JSON schema validation
+- **baking.ts** - Embed/extract credentials in SVG images
+- **keys.ts** - Key format conversions (DID:key, JWK, Multikey)
+- **encoding.ts** - Hex, base58, and multibase encoding utilities
+- **types.ts** - TypeScript type definitions
+- **errors.ts** - Error classes with detailed context
 
-Embeds a signed credential into an SVG image.
+### Key Formats Supported
 
-#### `extractBadge(svg: string): SignedCredential`
+- **RSA Keys**: PEM format (PKCS#8 private, SPKI public) - RS256 algorithm
+- **Ed25519 Keys**: Hex strings (64 chars) - EdDSA algorithm
+- **DID:key**: Decentralized identifier format with multibase encoding
+- **JWK**: JSON Web Key format for JWKS endpoints
 
-Extracts a credential from a baked SVG image.
+## Environment Variables
 
-### Validation
+```bash
+# RSA Keys (Recommended - OpenBadges 3.0 compliant)
+BADGE_ISSUER_RSA_PRIVATE_KEY=<PEM format>
+BADGE_ISSUER_RSA_PUBLIC_KEY=<PEM format>
 
-#### `validateCredential(credential: Credential): ValidationResult`
+# Ed25519 Keys (Legacy support)
+BADGE_ISSUER_PRIVATE_KEY=<64-char hex>
+BADGE_ISSUER_PUBLIC_KEY=<64-char hex>
+```
 
-Validates a credential against the OpenBadges 3.0 JSON schema.
+## API Routes
 
-### Output Generators
+The library is used by several API endpoints:
 
-Functions for generating API endpoint responses:
-
-- `generateCredentialResponse(credential): object`
-- `generateVerificationResponse(credential, verified, error?): object`
-- `generateIssuerProfile(config, verificationMethods): object`
-- `generateMultikeyDocument(publicKey, keyId, controller): object`
-- `generateAchievementResponse(achievement): object`
+- **`/api/badge/issuer`** - Issuer profile with public keys
+- **`/api/badge/[id]/json`** - Credential data (JWT or JSON-LD)
+- **`/api/badge/[id]/verify`** - Verify signature and validate structure
+- **`/api/badge/[id]/achievement`** - Extract achievement definition
+- **`/api/badge/.well-known/jwks.json`** - Public key set (JWKS)
+- **`/api/badge/validate`** - Comprehensive validation tool
 
 ## Error Handling
 
-The library uses fail-fast validation with descriptive error messages:
-
 ```typescript
-import { OpenBadgesError, ERROR_CODES } from '@cloudnativebergen/openbadges'
+import {
+  SigningError,
+  VerificationError,
+  ValidationError,
+  ConfigurationError,
+} from '@/lib/openbadges'
 
 try {
-  const credential = createCredential(config)
+  const jwt = await signCredentialJWT(credential, config)
 } catch (error) {
-  if (error instanceof OpenBadgesError) {
-    console.error(`Error ${error.code}: ${error.message}`)
-    console.error('Context:', error.context)
+  if (error instanceof SigningError) {
+    console.error('Signing failed:', error.message, error.context)
+  } else if (error instanceof ConfigurationError) {
+    console.error('Invalid config:', error.message)
   }
 }
 ```
 
+## Testing
+
+The library includes comprehensive test coverage for all core functionality. Run tests with:
+
+```bash
+npm test
+```
+
+## References
+
+- [OpenBadges 3.0 Specification](https://www.imsglobal.org/spec/ob/v3p0/)
+- [W3C Verifiable Credentials Data Model 2.0](https://www.w3.org/TR/vc-data-model-2.0/)
+- [W3C Data Integrity](https://www.w3.org/TR/vc-data-integrity/)
+- [RFC 7515 - JSON Web Signature (JWS)](https://datatracker.ietf.org/doc/html/rfc7515)
+- [RFC 7519 - JSON Web Token (JWT)](https://datatracker.ietf.org/doc/html/rfc7519)
+
 ## License
 
-MIT © Cloud Native Bergen
+MIT

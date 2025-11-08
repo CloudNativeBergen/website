@@ -30,3 +30,7 @@ export const BadgeIdInputSchema = z.object({
 export const ResendBadgeEmailInputSchema = z.object({
   badgeId: z.string().min(1, 'Badge ID is required'),
 })
+
+export const DeleteBadgeInputSchema = z.object({
+  badgeId: z.string().min(1, 'Badge ID is required'),
+})

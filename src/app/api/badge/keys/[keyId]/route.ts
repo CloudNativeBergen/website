@@ -1,56 +1,22 @@
+/**
+ * DEPRECATED: This endpoint was used for Ed25519 did:key verification
+ *
+ * RSA mode uses /api/badge/issuer#key-1 for public key verification instead.
+ * This route is kept for backward compatibility with legacy badges but should
+ * be removed once all badges are migrated to RSA.
+ */
+
 import { NextResponse } from 'next/server'
-import { validateKeyId, generateDidKeyMultikeyDocument } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
-interface RouteContext {
-  params: Promise<{
-    keyId: string
-  }>
-}
-
-/**
- * Public Key endpoint for badge verification
- * Returns the public key for a specific key ID in Multikey format
- * This endpoint is referenced in the verificationMethod field of badge proofs
- */
-export async function GET(
-  request: Request,
-  context: RouteContext,
-): Promise<NextResponse> {
-  try {
-    const { keyId } = await context.params
-    const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-
-    if (!publicKeyHex) {
-      return NextResponse.json(
-        { error: 'Public key not configured' },
-        { status: 500 },
-      )
-    }
-
-    // Validate that the requested key matches our public key (throws on error)
-    validateKeyId(keyId, publicKeyHex)
-
-    // Generate Multikey document with DID controller
-    const multikeyDoc = generateDidKeyMultikeyDocument(publicKeyHex)
-
-    return NextResponse.json(multikeyDoc, {
-      headers: {
-        'Content-Type': 'application/ld+json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
-        'Cache-Control': 'public, max-age=86400, immutable', // 24 hours
-      },
-    })
-  } catch (error) {
-    console.error('Error fetching public key:', error)
-
-    const message =
-      error instanceof Error ? error.message : 'Failed to retrieve public key'
-    const is404 =
-      message.includes('not found') || message.includes('does not match')
-
-    return NextResponse.json({ error: message }, { status: is404 ? 404 : 500 })
-  }
+export async function GET(): Promise<NextResponse> {
+  return NextResponse.json(
+    {
+      error:
+        'This endpoint is deprecated. RSA badges use /api/badge/issuer#key-1 for verification.',
+      migration: 'Please use the issuer profile endpoint instead',
+    },
+    { status: 410 }, // 410 Gone
+  )
 }

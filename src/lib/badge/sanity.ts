@@ -1,9 +1,3 @@
-/**
- * Badge Sanity Operations
- *
- * CRUD operations for speaker badges with Sanity CMS integration
- */
-
 import {
   clientReadUncached as clientRead,
   clientWrite,
@@ -46,9 +40,6 @@ const BADGE_FIELDS = `
   email_error
 `
 
-/**
- * Upload baked badge SVG to Sanity assets
- */
 export async function uploadBadgeSVGAsset(
   svgContent: string,
   filename: string,
@@ -69,9 +60,6 @@ export async function uploadBadgeSVGAsset(
   }
 }
 
-/**
- * Create a new badge record
- */
 export async function createBadge(params: {
   badgeId: string
   speakerId: string
@@ -126,9 +114,6 @@ export async function createBadge(params: {
   }
 }
 
-/**
- * Get badge by ID
- */
 export async function getBadgeById(
   badgeId: string,
 ): Promise<{ badge?: BadgeRecord; error?: Error }> {
@@ -149,9 +134,6 @@ export async function getBadgeById(
   }
 }
 
-/**
- * List all badges for a conference
- */
 export async function listBadgesForConference(
   conferenceId: string,
 ): Promise<{ badges?: BadgeRecord[]; error?: Error }> {
@@ -168,9 +150,6 @@ export async function listBadgesForConference(
   }
 }
 
-/**
- * List all badges for a speaker
- */
 export async function listBadgesForSpeaker(
   speakerId: string,
 ): Promise<{ badges?: BadgeRecord[]; error?: Error }> {
@@ -187,9 +166,6 @@ export async function listBadgesForSpeaker(
   }
 }
 
-/**
- * Update badge email sent status
- */
 export async function updateBadgeEmailStatus(
   badgeId: string,
   status: 'sent' | 'failed',
@@ -235,9 +211,6 @@ export async function updateBadgeEmailStatus(
   }
 }
 
-/**
- * Check if a badge already exists for a speaker/conference/type combination
- */
 export async function checkBadgeExists(
   speakerId: string,
   conferenceId: string,
@@ -256,15 +229,11 @@ export async function checkBadgeExists(
   }
 }
 
-/**
- * Get badge SVG download URL from Sanity asset
- */
 export function getBadgeSVGUrl(badge: BadgeRecord): string | null {
   if (!badge.baked_svg?.asset) {
     return null
   }
 
-  // Type guard to check if asset is expanded
   const asset = badge.baked_svg.asset
   if ('url' in asset && typeof asset.url === 'string') {
     return asset.url
@@ -273,9 +242,6 @@ export function getBadgeSVGUrl(badge: BadgeRecord): string | null {
   return null
 }
 
-/**
- * Get badge statistics for a conference
- */
 export async function getBadgeStats(conferenceId: string): Promise<{
   totalBadges: number
   speakerBadges: number
@@ -314,5 +280,39 @@ export async function getBadgeStats(conferenceId: string): Promise<{
       emailsSent: 0,
       emailsFailed: 0,
     }
+  }
+}
+
+export async function deleteBadge(
+  badgeId: string,
+): Promise<{ success: boolean; error?: Error }> {
+  try {
+    const badge = await clientRead.fetch<{
+      _id: string
+      baked_svg?: { asset?: { _ref?: string } }
+    }>(
+      `*[_type == "speakerBadge" && badge_id == $badgeId][0]{ _id, baked_svg }`,
+      { badgeId },
+    )
+
+    if (!badge) {
+      return { success: false, error: new Error('Badge not found') }
+    }
+
+    const assetId = badge.baked_svg?.asset?._ref
+    if (assetId) {
+      try {
+        await clientWrite.delete(assetId)
+      } catch (assetError) {
+        console.warn('Failed to delete badge SVG asset:', assetError)
+      }
+    }
+
+    await clientWrite.delete(badge._id)
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to delete badge:', error)
+    return { success: false, error: error as Error }
   }
 }

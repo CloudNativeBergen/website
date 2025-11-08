@@ -20,6 +20,7 @@ import {
   EyeIcon,
   UserGroupIcon,
   ShieldCheckIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 import { BadgePreviewModal } from '@/components/admin/BadgePreviewModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
@@ -129,7 +130,26 @@ export function BadgeManagementClient({
       showNotification({
         type: 'error',
         title: 'Failed to Issue Badges',
-        message: error.message || 'An error occurred while issuing badges',
+        message: error.message || 'An error occurred during bulk issuance',
+      })
+    },
+  })
+
+  const deleteMutation = api.badge.delete.useMutation({
+    onSuccess: (data) => {
+      refetchBadges()
+      showNotification({
+        type: 'success',
+        title: 'Badge Deleted',
+        message: data.message || 'Badge deleted successfully',
+      })
+    },
+    onError: (error) => {
+      console.error('Failed to delete badge:', error)
+      showNotification({
+        type: 'error',
+        title: 'Failed to Delete Badge',
+        message: error.message || 'An error occurred while deleting the badge',
       })
     },
   })
@@ -287,6 +307,28 @@ export function BadgeManagementClient({
     setSelectedBadge(badge)
     setShowBadgePreview(true)
   }
+
+  const handleDeleteBadge = async (badgeId: string, speakerName: string) => {
+    if (
+      !confirm(
+        `Are you sure you want to delete the badge for ${speakerName}? This action cannot be undone.`,
+      )
+    ) {
+      return
+    }
+
+    try {
+      await deleteMutation.mutateAsync({ badgeId })
+    } catch (error) {
+      console.error('Error deleting badge:', error)
+    }
+  }
+
+  const isDevelopment =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      process.env.NODE_ENV === 'development')
 
   return (
     <div className="space-y-6">
@@ -651,6 +693,22 @@ export function BadgeManagementClient({
                                 >
                                   Download
                                 </a>
+                                {isDevelopment && (
+                                  <button
+                                    onClick={() =>
+                                      handleDeleteBadge(
+                                        badge.badge_id,
+                                        speaker.name,
+                                      )
+                                    }
+                                    disabled={deleteMutation.isPending}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-50 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+                                    title="Delete badge (dev only)"
+                                  >
+                                    <TrashIcon className="h-4 w-4" />
+                                    Delete
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <span className="text-xs text-gray-400 dark:text-gray-500">

@@ -13,11 +13,11 @@ import {
   ListBadgesInputSchema,
   BadgeIdInputSchema,
   ResendBadgeEmailInputSchema,
+  DeleteBadgeInputSchema,
 } from '@/server/schemas/badge'
 import { generateBadgeCredential } from '@/lib/badge/generator'
 import { generateBadgeSVG } from '@/lib/badge/svg'
-import { bakeBadge } from '@/lib/openbadges'
-import { isJWTFormat } from '@/lib/badge/types'
+import { bakeBadge, isJWTFormat } from '@/lib/openbadges'
 import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import {
@@ -27,6 +27,7 @@ import {
   listBadgesForSpeaker,
   uploadBadgeSVGAsset,
   checkBadgeExists,
+  deleteBadge,
 } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
@@ -226,7 +227,8 @@ export const badgeRouter = router({
           })
         }
 
-        if (input.sendEmail !== false) {
+        // Skip email sending in development mode
+        if (input.sendEmail !== false && !isLocalhostEnvironment()) {
           const { sendBadgeEmailWithRetry } = await import('@/lib/email/badge')
           sendBadgeEmailWithRetry({
             badge,
@@ -573,6 +575,14 @@ export const badgeRouter = router({
   resendEmail: adminProcedure
     .input(ResendBadgeEmailInputSchema)
     .mutation(async ({ input }) => {
+      // Skip email sending in development mode
+      if (isLocalhostEnvironment()) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Email sending is disabled in development mode',
+        })
+      }
+
       try {
         const { badge, error } = await getBadgeById(input.badgeId)
 
@@ -735,4 +745,52 @@ export const badgeRouter = router({
       })
     }
   }),
+
+  /**
+   * Delete a badge (development mode only)
+   */
+  delete: adminProcedure
+    .input(DeleteBadgeInputSchema)
+    .mutation(async ({ input }) => {
+      if (!isLocalhostEnvironment()) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Badge deletion is only allowed in development mode',
+        })
+      }
+
+      try {
+        const { badge, error: fetchError } = await getBadgeById(input.badgeId)
+
+        if (fetchError || !badge) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Badge not found',
+          })
+        }
+
+        const { success, error } = await deleteBadge(input.badgeId)
+
+        if (!success || error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: error?.message || 'Failed to delete badge',
+            cause: error,
+          })
+        }
+
+        return {
+          success: true,
+          message: `Badge ${input.badgeId} deleted successfully`,
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete badge',
+          cause: error,
+        })
+      }
+    }),
 })

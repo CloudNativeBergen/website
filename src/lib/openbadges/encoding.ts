@@ -1,17 +1,6 @@
-/**
- * Encoding Utilities
- *
- * Centralized encoding/decoding functions with fail-fast validation.
- * Supports hex, base58, multibase, and UTF-8 string conversions.
- */
-
 import bs58 from 'bs58'
 import { EncodingError, ERROR_CODES } from './errors'
 
-/**
- * Convert hex string to Uint8Array
- * @throws {EncodingError} if hex string is invalid
- */
 export function hexToBytes(hex: string): Uint8Array {
   if (typeof hex !== 'string') {
     throw new EncodingError(
@@ -54,10 +43,6 @@ export function hexToBytes(hex: string): Uint8Array {
   return bytes
 }
 
-/**
- * Convert Uint8Array to hex string
- * @throws {EncodingError} if input is invalid
- */
 export function bytesToHex(bytes: Uint8Array): string {
   if (!(bytes instanceof Uint8Array)) {
     throw new EncodingError(
@@ -72,10 +57,6 @@ export function bytesToHex(bytes: Uint8Array): string {
     .join('')
 }
 
-/**
- * Encode bytes to base58
- * @throws {EncodingError} if encoding fails
- */
 export function encodeBase58(bytes: Uint8Array): string {
   if (!(bytes instanceof Uint8Array)) {
     throw new EncodingError(
@@ -96,10 +77,6 @@ export function encodeBase58(bytes: Uint8Array): string {
   }
 }
 
-/**
- * Decode base58 string to bytes
- * @throws {EncodingError} if decoding fails
- */
 export function decodeBase58(encoded: string): Uint8Array {
   if (typeof encoded !== 'string') {
     throw new EncodingError(
@@ -139,21 +116,11 @@ export function decodeBase58(encoded: string): Uint8Array {
   }
 }
 
-/**
- * Encode bytes to multibase format (base58btc with 'z' prefix)
- * Per OB 3.0 spec for eddsa-rdfc-2022 cryptosuite
- * @throws {EncodingError} if encoding fails
- */
 export function encodeMultibase(bytes: Uint8Array): string {
   const base58 = encodeBase58(bytes)
   return 'z' + base58
 }
 
-/**
- * Decode multibase string to bytes
- * Only supports base58btc (z-prefix) per OB 3.0 spec
- * @throws {EncodingError} if decoding fails or format is invalid
- */
 export function decodeMultibase(encoded: string): Uint8Array {
   if (typeof encoded !== 'string') {
     throw new EncodingError(
@@ -182,10 +149,6 @@ export function decodeMultibase(encoded: string): Uint8Array {
   return decodeBase58(base58Part)
 }
 
-/**
- * Convert UTF-8 string to bytes
- * @throws {EncodingError} if encoding fails
- */
 export function stringToBytes(str: string): Uint8Array {
   if (typeof str !== 'string') {
     throw new EncodingError(

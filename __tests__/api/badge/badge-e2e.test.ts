@@ -90,9 +90,9 @@ describe('Badge System E2E', () => {
       expect(badgeCredential).toMatch(/^eyJ/) // JWT starts with eyJ
 
       // Decode JWT to verify contents
-      const publicKey = process.env.BADGE_ISSUER_PUBLIC_KEY
+      const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
       if (!publicKey) {
-        throw new Error('BADGE_ISSUER_PUBLIC_KEY not set')
+        throw new Error('BADGE_ISSUER_RSA_PUBLIC_KEY not set')
       }
       decodedCredential = (await verifyCredentialJWT(
         badgeCredential as string,
@@ -118,9 +118,9 @@ describe('Badge System E2E', () => {
       )
       expect(decodedCredential.credentialSubject.achievement).toBeDefined()
 
-      // Verify issuer (now using did:key instead of HTTP(S) URL)
-      expect(decodedCredential.issuer.id).toMatch(
-        /^did:key:z[1-9A-HJ-NP-Za-km-z]+$/,
+      // Verify issuer (RSA mode uses HTTP(S) URL pointing to issuer profile endpoint)
+      expect(decodedCredential.issuer.id).toBe(
+        `https://${TEST_HOST}/api/badge/issuer`,
       )
       expect(decodedCredential.issuer.name).toBe(testConference.organizer)
 
@@ -175,11 +175,11 @@ describe('Badge System E2E', () => {
       // issuer.url should be the organization homepage, not the /api/badge/issuer endpoint
       expect(decodedCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
       expect(decodedCredential.issuer.url).not.toContain('/api/badge/issuer')
-      expect(decodedCredential.issuer.url).toBe(testBadgeParams.baseUrl)
+      expect(decodedCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
 
-      // issuer.id should be did:key
-      expect(decodedCredential.issuer.id).toMatch(
-        /^did:key:z[1-9A-HJ-NP-Za-km-z]+$/,
+      // issuer.id should point to issuer profile endpoint (spec-compliant)
+      expect(decodedCredential.issuer.id).toBe(
+        `https://${TEST_HOST}/api/badge/issuer`,
       )
 
       console.log('✓ Issuer URL correctly points to organization homepage')
@@ -263,9 +263,9 @@ describe('Badge System E2E', () => {
 
     it('should verify JWT credential signature', async () => {
       // JWT verification already happened during decode, but test it again explicitly
-      const publicKey = process.env.BADGE_ISSUER_PUBLIC_KEY
+      const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
       if (!publicKey) {
-        throw new Error('BADGE_ISSUER_PUBLIC_KEY not set')
+        throw new Error('BADGE_ISSUER_RSA_PUBLIC_KEY not set')
       }
 
       // Verify JWT signature
@@ -309,7 +309,8 @@ describe('Badge System E2E', () => {
     it('GET /api/badge/issuer should return issuer profile', async () => {
       const { GET } = await import('@/app/api/badge/issuer/route')
 
-      const response = await GET()
+      const mockRequest = new Request('http://localhost:3000/api/badge/issuer')
+      const response = await GET(mockRequest)
       expect(response.status).toBe(200)
 
       const data = await response.json()
@@ -393,9 +394,9 @@ describe('Badge System E2E', () => {
       expect(assertion).toMatch(/^eyJ/)
 
       // 2. Decode JWT to get credential
-      const publicKey1 = process.env.BADGE_ISSUER_PUBLIC_KEY
+      const publicKey1 = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
       if (!publicKey1) {
-        throw new Error('BADGE_ISSUER_PUBLIC_KEY not set')
+        throw new Error('BADGE_ISSUER_RSA_PUBLIC_KEY not set')
       }
       const credential = (await verifyCredentialJWT(
         assertion,

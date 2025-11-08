@@ -1,9 +1,3 @@
-/**
- * Credential Creation
- *
- * Functions for creating OpenBadges 3.0 compliant credentials.
- */
-
 import { ConfigurationError } from './errors'
 import { OB_CONTEXT } from './types'
 import type {
@@ -17,10 +11,6 @@ import type {
   SubjectProfile,
 } from './types'
 
-/**
- * Validate issuer profile configuration
- * @throws {ConfigurationError} if invalid
- */
 function validateIssuerProfile(config: IssuerProfileConfig): void {
   if (!config.id || typeof config.id !== 'string') {
     throw new ConfigurationError('Issuer ID is required', {
@@ -90,10 +80,6 @@ function validateIssuerProfile(config: IssuerProfileConfig): void {
   }
 }
 
-/**
- * Validate achievement configuration
- * @throws {ConfigurationError} if invalid
- */
 function validateAchievementConfig(config: AchievementConfig): void {
   if (!config.id || typeof config.id !== 'string') {
     throw new ConfigurationError('Achievement ID is required', {
@@ -191,10 +177,6 @@ function validateAchievementConfig(config: AchievementConfig): void {
   }
 }
 
-/**
- * Validate subject profile
- * @throws {ConfigurationError} if invalid
- */
 function validateSubjectProfile(config: SubjectProfile): void {
   if (!config.id || typeof config.id !== 'string') {
     throw new ConfigurationError('Subject ID is required', {
@@ -218,10 +200,6 @@ function validateSubjectProfile(config: SubjectProfile): void {
   }
 }
 
-/**
- * Validate credential configuration
- * @throws {ConfigurationError} if invalid
- */
 function validateCredentialConfig(config: CredentialConfig): void {
   if (!config.credentialId || typeof config.credentialId !== 'string') {
     throw new ConfigurationError('Credential ID is required', {
@@ -246,7 +224,6 @@ function validateCredentialConfig(config: CredentialConfig): void {
     })
   }
 
-  // Validate ISO 8601 format
   try {
     const date = new Date(config.validFrom)
     if (isNaN(date.getTime())) {
@@ -273,15 +250,11 @@ function validateCredentialConfig(config: CredentialConfig): void {
     }
   }
 
-  // Validate nested configs
   validateIssuerProfile(config.issuer)
   validateSubjectProfile(config.subject)
   validateAchievementConfig(config.achievement)
 }
 
-/**
- * Build issuer profile from configuration
- */
 function buildIssuerProfile(config: IssuerProfileConfig): IssuerProfile {
   const profile: IssuerProfile = {
     id: config.id,
@@ -308,9 +281,6 @@ function buildIssuerProfile(config: IssuerProfileConfig): IssuerProfile {
   return profile
 }
 
-/**
- * Build achievement from configuration
- */
 function buildAchievement(
   config: AchievementConfig,
   issuer: IssuerProfile,
@@ -342,31 +312,18 @@ function buildAchievement(
   return achievement
 }
 
-/**
- * Create an unsigned OpenBadges 3.0 credential
- *
- * @param config - Credential configuration
- * @returns Unsigned credential ready for signing
- * @throws {ConfigurationError} if configuration is invalid
- */
 export function createCredential(config: CredentialConfig): Credential {
-  // Validate configuration (fail-fast)
   validateCredentialConfig(config)
 
-  // Build issuer profile
   const issuer = buildIssuerProfile(config.issuer)
-
-  // Build achievement with issuer
   const achievement = buildAchievement(config.achievement, issuer)
 
-  // Build achievement subject
   const credentialSubject: AchievementSubject = {
     id: config.subject.id,
     type: config.subject.type,
     achievement,
   }
 
-  // Build credential
   const credential: Credential = {
     '@context': [...OB_CONTEXT],
     id: config.credentialId,

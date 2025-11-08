@@ -1,40 +1,35 @@
 import { NextResponse } from 'next/server'
+import { createPublicKey } from 'crypto'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { generateKeyId } from '@/lib/openbadges'
-import { normalizeProtocolForDomain } from '@/lib/badge/protocol'
+import { normalizeProtocolForDomain } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
-/**
- * JWK Set endpoint for badge verification
- * Returns the public key used to verify badge signatures
- * This endpoint is referenced in the verificationMethod field of badge proofs
- */
 export async function GET() {
   try {
-    const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
+    const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
 
-    if (!publicKeyHex) {
+    if (!publicKey) {
       return NextResponse.json(
-        { error: 'Public key not configured' },
+        { error: 'RSA public key not configured' },
         { status: 500 },
       )
     }
 
     const { domain } = await getConferenceForCurrentDomain()
     const issuerUrl = normalizeProtocolForDomain(domain)
-    const keyId = `${issuerUrl}#${generateKeyId(publicKeyHex)}`
+
+    const publicKeyObj = createPublicKey(publicKey)
+    const jwk = publicKeyObj.export({ format: 'jwk' })
 
     return NextResponse.json(
       {
         keys: [
           {
-            kty: 'OKP',
-            crv: 'Ed25519',
-            x: Buffer.from(publicKeyHex, 'hex').toString('base64url'),
-            kid: keyId,
+            ...jwk,
+            kid: `${issuerUrl}/api/badge/issuer#key-1`,
             use: 'sig',
-            alg: 'EdDSA',
+            alg: 'RS256',
           },
         ],
       },
@@ -43,7 +38,7 @@ export async function GET() {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET',
-          'Cache-Control': 'public, max-age=86400', // 24 hours
+          'Cache-Control': 'public, max-age=86400',
         },
       },
     )

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
-import { isJWTFormat } from '@/lib/badge/types'
-import { generateErrorResponse } from '@/lib/openbadges'
+import { generateErrorResponse, isJWTFormat } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 

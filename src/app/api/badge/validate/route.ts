@@ -49,21 +49,21 @@ export async function POST(request: NextRequest) {
       // Handle JWT format
       if (typeof credentialData === 'string') {
         isJWT = true
-        const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
-        if (!publicKeyHex) {
+        const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
+
+        if (!publicKey) {
           checks.push({
             name: 'extraction',
             status: 'error',
-            message: 'Public key not configured for JWT verification',
+            message: 'RSA public key not configured for JWT verification',
           })
           return NextResponse.json({ checks, credential: null })
         }
 
         try {
-          // Verify JWT and extract credential
           credential = (await verifyCredentialJWT(
             credentialData,
-            publicKeyHex,
+            publicKey,
           )) as SignedCredential
 
           checks.push({
@@ -377,10 +377,10 @@ export async function POST(request: NextRequest) {
           checks.push({
             name: 'proof',
             status: 'success',
-            message: 'JWT signature verified during extraction (EdDSA)',
+            message: 'JWT signature verified during extraction (RS256)',
             details: {
-              cryptosuite: 'EdDSA (JWT)',
-              didBased: true,
+              cryptosuite: 'RS256 (JWT)',
+              didBased: false,
               signatureValid: true,
             },
           })

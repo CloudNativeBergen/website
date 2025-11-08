@@ -1,22 +1,8 @@
-/**
- * Badge Baking
- *
- * Embeds and extracts OpenBadges 3.0 credentials in SVG images.
- * Implements OB 3.0 baking specification (Section 5.3.2.1).
- */
-
 import { BakingError, ExtractionError } from './errors'
 import type { SignedCredential } from './types'
 
-/**
- * OpenBadges 3.0 namespace
- */
 const OB_NAMESPACE = 'https://purl.imsglobal.org/ob/v3p0'
 
-/**
- * Validate SVG content
- * @throws {BakingError} if SVG is invalid
- */
 function validateSvg(svg: string): void {
   if (!svg || typeof svg !== 'string') {
     throw new BakingError('SVG content must be a non-empty string', {
@@ -33,19 +19,6 @@ function validateSvg(svg: string): void {
   }
 }
 
-/**
- * Bake a signed credential into an SVG image
- *
- * Per OpenBadges 3.0 spec (Section 5.3.2.1):
- * 1. Add xmlns:openbadges namespace to <svg> tag
- * 2. Add <openbadges:credential> tag after <svg> tag
- * 3. Embed credential in CDATA section
- *
- * @param svg - The SVG content to bake into
- * @param credential - The signed credential (JWT string or Data Integrity Proof object)
- * @returns SVG with baked credential
- * @throws {BakingError} if baking fails
- */
 export function bakeBadge(
   svg: string,
   credential: SignedCredential | string,
@@ -59,9 +32,6 @@ export function bakeBadge(
   return bakeDataIntegrityProof(svg, credential)
 }
 
-/**
- * Bake a JWT credential into SVG
- */
 function bakeJWT(svg: string, jwt: string): string {
   if (!jwt.startsWith('eyJ')) {
     throw new BakingError(
@@ -83,7 +53,7 @@ function bakeJWT(svg: string, jwt: string): string {
       svgTag = svgTag.replace('>', ` xmlns:openbadges="${OB_NAMESPACE}">`)
     }
 
-    const credentialXml = `\n  <openbadges:credential verify="${jwt}"><![CDATA[${jwt}]]></openbadges:credential>`
+    const credentialXml = `\n  <openbadges:credential verify="${jwt}"></openbadges:credential>`
     return svg.replace(svgTagMatch[0], svgTag + credentialXml)
   } catch (error) {
     if (error instanceof BakingError) throw error
@@ -93,9 +63,6 @@ function bakeJWT(svg: string, jwt: string): string {
   }
 }
 
-/**
- * Bake a Data Integrity Proof credential into SVG
- */
 function bakeDataIntegrityProof(
   svg: string,
   credential: SignedCredential,
@@ -150,16 +117,6 @@ ${credentialJson}
   }
 }
 
-/**
- * Extract a credential from a baked SVG
- *
- * Supports OpenBadges 3.0 format: <openbadges:credential> with CDATA
- * Supports both JWT and Data Integrity Proof formats
- *
- * @param svg - The baked SVG content
- * @returns The extracted credential (JWT string or signed credential object)
- * @throws {ExtractionError} if extraction fails
- */
 export function extractBadge(svg: string): SignedCredential | string {
   if (!svg || typeof svg !== 'string') {
     throw new ExtractionError('SVG content must be a non-empty string', {
@@ -179,9 +136,16 @@ export function extractBadge(svg: string): SignedCredential | string {
       })
     }
 
-    const content = credentialMatch[1]
+    // Check for verify attribute (JWT format)
+    const verifyMatch = svg.match(
+      /<openbadges:credential[^>]*\s+verify="([^"]+)"/,
+    )
+    if (verifyMatch) {
+      return verifyMatch[1]
+    }
 
-    // Extract content from CDATA
+    // Otherwise extract from CDATA (Data Integrity Proof format)
+    const content = credentialMatch[1]
     const cdataMatch = content.match(/<!\[CDATA\[([\s\S]*?)\]\]>/)
     const credentialString = cdataMatch ? cdataMatch[1].trim() : content.trim()
 
@@ -216,12 +180,6 @@ export function extractBadge(svg: string): SignedCredential | string {
   }
 }
 
-/**
- * Check if an SVG contains a baked credential
- *
- * @param svg - The SVG content to check
- * @returns True if SVG contains an OpenBadges 3.0 credential
- */
 export function isBakedSvg(svg: string): boolean {
   if (!svg || typeof svg !== 'string') {
     return false

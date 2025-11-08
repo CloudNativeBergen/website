@@ -4,26 +4,25 @@
  * Returns the issuer profile with verification methods (public keys)
  * as required by the OpenBadges 3.0 specification.
  *
+ * Uses RSA keys (RS256) and exposes JWK at #key-1 fragment for JWT verification.
+ *
  * Reference: https://www.imsglobal.org/spec/ob/v3p0/impl/
  */
 
 import { NextResponse } from 'next/server'
+import { createPublicKey } from 'crypto'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import {
-  generateErrorResponse,
-  publicKeyToDidKey,
-  generateDidKeyMultikeyDocument,
-} from '@/lib/openbadges'
+import { generateErrorResponse } from '@/lib/openbadges'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
+    const rsaPublicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
 
-    if (!publicKeyHex) {
+    if (!rsaPublicKey) {
       return NextResponse.json(
-        generateErrorResponse('Public key not configured', 500),
+        generateErrorResponse('RSA public key not configured', 500),
         { status: 500 },
       )
     }
@@ -32,33 +31,51 @@ export async function GET() {
     const { conference, domain: domainName } =
       await getConferenceForCurrentDomain()
 
-    // Generate did:key and Multikey document
-    const didKey = publicKeyToDidKey(publicKeyHex)
-    const multikeyDoc = generateDidKeyMultikeyDocument(publicKeyHex)
+    const url = new URL(request.url)
+    const fragment = url.hash
 
-    // OpenBadges 3.0 Issuer Profile with verificationMethod
+    const publicKeyObj = createPublicKey(rsaPublicKey)
+    const jwk = publicKeyObj.export({ format: 'jwk' })
+
+    // If fragment is #key-1, return JWK directly
+    if (fragment === '#key-1') {
+      return NextResponse.json(jwk, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=3600, immutable',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Accept',
+        },
+      })
+    }
+
+    // Return issuer profile
+
     const issuerProfile = {
       '@context': [
-        'https://www.w3.org/ns/did/v1',
         'https://www.w3.org/ns/credentials/v2',
         'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
       ],
-      id: didKey,
+      id: domainName,
       type: 'Profile',
-      name: conference.title,
+      name: conference.organizer,
       url: domainName,
-      email: 'contact@cloudnativebergen.dev',
+      email:
+        conference.contact_email ||
+        (conference.domains?.[0]
+          ? `contact@${conference.domains[0]}`
+          : 'contact@cloudnativebergen.dev'),
       description: conference.description || conference.tagline || '',
       image: {
         id: `${domainName}/og/base.png`,
         type: 'Image',
       },
-      verificationMethod: [
+      publicKey: [
         {
-          id: multikeyDoc.id,
-          type: multikeyDoc.type,
-          controller: multikeyDoc.controller,
-          publicKeyMultibase: multikeyDoc.publicKeyMultibase,
+          id: `${domainName}/api/badge/issuer#key-1`,
+          type: 'JsonWebKey',
+          publicKeyJwk: jwk,
         },
       ],
     }
