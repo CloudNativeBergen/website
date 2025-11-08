@@ -212,7 +212,6 @@ export async function signCredential(
     }
 
     const baseProof: Omit<DataIntegrityProof, 'proofValue'> = {
-      '@context': 'https://www.w3.org/ns/credentials/v2',
       type: 'DataIntegrityProof',
       created: new Date().toISOString(),
       verificationMethod: config.verificationMethod,
@@ -288,7 +287,6 @@ export async function verifyCredential(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { proof: _proofArr, ...unsigned } = credential
     const baseProof: Omit<DataIntegrityProof, 'proofValue'> = {
-      '@context': proof['@context'] || 'https://www.w3.org/ns/credentials/v2',
       type: 'DataIntegrityProof',
       created: proof.created,
       verificationMethod: proof.verificationMethod,
