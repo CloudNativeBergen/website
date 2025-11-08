@@ -66,6 +66,7 @@ export function BadgeManagementClient({
   const [selectedBadge, setSelectedBadge] = useState<BadgeRecord | null>(null)
   const [showBadgePreview, setShowBadgePreview] = useState(false)
   const [filterAlreadyIssued, setFilterAlreadyIssued] = useState(false)
+  const [sendEmail, setSendEmail] = useState(true)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -197,12 +198,14 @@ export function BadgeManagementClient({
         speakerId,
         conferenceId,
         badgeType,
+        sendEmail,
       })
     } else {
       bulkIssueMutation.mutate({
         speakerIds: Array.from(selectedSpeakers),
         conferenceId,
         badgeType,
+        sendEmail,
       })
     }
   }
@@ -292,22 +295,20 @@ export function BadgeManagementClient({
         <nav className="-mb-px flex space-x-8">
           <button
             onClick={() => setActiveTab('issue')}
-            className={`flex items-center gap-2 border-b-2 px-1 py-4 text-sm font-medium transition-colors ${
-              activeTab === 'issue'
+            className={`flex items-center gap-2 border-b-2 px-1 py-4 text-sm font-medium transition-colors ${activeTab === 'issue'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
+              }`}
           >
             <AcademicCapIcon className="h-5 w-5" />
             Issue Badges
           </button>
           <button
             onClick={() => setActiveTab('validate')}
-            className={`flex items-center gap-2 border-b-2 px-1 py-4 text-sm font-medium transition-colors ${
-              activeTab === 'validate'
+            className={`flex items-center gap-2 border-b-2 px-1 py-4 text-sm font-medium transition-colors ${activeTab === 'validate'
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-            }`}
+              }`}
           >
             <ShieldCheckIcon className="h-5 w-5" />
             Validate Badge
@@ -349,11 +350,10 @@ export function BadgeManagementClient({
                 <button
                   type="button"
                   onClick={() => handleBadgeTypeChange('speaker')}
-                  className={`relative inline-flex items-center gap-2 rounded-l-md px-3 py-2 text-sm font-semibold inset-ring-1 focus:z-10 ${
-                    badgeType === 'speaker'
+                  className={`relative inline-flex items-center gap-2 rounded-l-md px-3 py-2 text-sm font-semibold inset-ring-1 focus:z-10 ${badgeType === 'speaker'
                       ? 'bg-brand-aqua inset-ring-brand-aqua/50 text-white dark:bg-brand-cloud-blue dark:inset-ring-brand-cloud-blue/50'
                       : 'bg-white/10 text-gray-700 inset-ring-gray-300 hover:bg-gray-50 dark:bg-gray-800/50 dark:text-gray-300 dark:inset-ring-gray-600 dark:hover:bg-gray-700/50'
-                  }`}
+                    }`}
                 >
                   <AcademicCapIcon className="h-4 w-4" />
                   Speaker
@@ -361,11 +361,10 @@ export function BadgeManagementClient({
                 <button
                   type="button"
                   onClick={() => handleBadgeTypeChange('organizer')}
-                  className={`relative -ml-px inline-flex items-center gap-2 rounded-r-md px-3 py-2 text-sm font-semibold inset-ring-1 focus:z-10 ${
-                    badgeType === 'organizer'
+                  className={`relative -ml-px inline-flex items-center gap-2 rounded-r-md px-3 py-2 text-sm font-semibold inset-ring-1 focus:z-10 ${badgeType === 'organizer'
                       ? 'bg-brand-aqua inset-ring-brand-aqua/50 text-white dark:bg-brand-cloud-blue dark:inset-ring-brand-cloud-blue/50'
                       : 'bg-white/10 text-gray-700 inset-ring-gray-300 hover:bg-gray-50 dark:bg-gray-800/50 dark:text-gray-300 dark:inset-ring-gray-600 dark:hover:bg-gray-700/50'
-                  }`}
+                    }`}
                 >
                   <UserGroupIcon className="h-4 w-4" />
                   Organizer
@@ -432,7 +431,9 @@ export function BadgeManagementClient({
               )}
               <FilterDropdown
                 label="Filters"
-                activeCount={filterAlreadyIssued ? 1 : 0}
+                activeCount={
+                  (filterAlreadyIssued ? 1 : 0) + (sendEmail ? 0 : 1)
+                }
                 position="right"
               >
                 <div className="p-1.5">
@@ -442,6 +443,13 @@ export function BadgeManagementClient({
                     keepOpen
                   >
                     Hide already issued
+                  </FilterOption>
+                  <FilterOption
+                    checked={sendEmail}
+                    onClick={() => setSendEmail(!sendEmail)}
+                    keepOpen
+                  >
+                    Send email notification
                   </FilterOption>
                   <div className="mt-2 px-2 py-1 text-xs text-gray-500 dark:text-gray-400">
                     {badgeType === 'speaker' ? (
@@ -540,13 +548,12 @@ export function BadgeManagementClient({
                       return (
                         <tr
                           key={speaker._id}
-                          className={`${
-                            isSelected
+                          className={`${isSelected
                               ? 'bg-brand-sky-mist dark:bg-brand-cloud-blue/10'
                               : hasBadge
                                 ? 'bg-gray-50 dark:bg-gray-900/50'
                                 : 'hover:bg-gray-50 dark:hover:bg-gray-900/50'
-                          } transition-colors`}
+                            } transition-colors`}
                         >
                           <td className="px-4 py-4">
                             <input
@@ -586,11 +593,10 @@ export function BadgeManagementClient({
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2">
                                   <span
-                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                      hasEmailError
+                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${hasEmailError
                                         ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                                         : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                    }`}
+                                      }`}
                                   >
                                     {hasEmailError ? (
                                       <>
