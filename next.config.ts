@@ -2,11 +2,15 @@ import { NextConfig } from 'next'
 
 const config: NextConfig = {
   reactStrictMode: false, // disabled due to https://github.com/vercel/next.js/issues/35822
-  experimental: {
-    // Use Turbopack for production builds to fix Tailwind v4 CSS generation
-    turbo: {},
-  },
+  turbopack: {}, // Use Turbopack for production builds to fix Tailwind v4 CSS generation
   serverExternalPackages: ['jsdom', 'isomorphic-dompurify', 'dompurify'],
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Ignore optional native dependency that's not available in serverless environments
+      config.resolve.alias['rdf-canonize-native'] = false
+    }
+    return config
+  },
   images: {
     remotePatterns: [
       {
