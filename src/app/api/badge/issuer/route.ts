@@ -31,6 +31,9 @@ export async function GET(request: Request) {
     const { conference, domain: domainName } =
       await getConferenceForCurrentDomain()
 
+    // Ensure domain includes protocol (domainName is just hostname from headers)
+    const baseUrl = `https://${domainName}`
+
     const url = new URL(request.url)
     const fragment = url.hash
 
@@ -57,10 +60,10 @@ export async function GET(request: Request) {
         'https://www.w3.org/ns/credentials/v2',
         'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
       ],
-      id: domainName,
+      id: baseUrl,
       type: 'Profile',
       name: conference.organizer,
-      url: domainName,
+      url: baseUrl,
       email:
         conference.contact_email ||
         (conference.domains?.[0]
@@ -68,12 +71,12 @@ export async function GET(request: Request) {
           : 'contact@cloudnativebergen.dev'),
       description: conference.description || conference.tagline || '',
       image: {
-        id: `${domainName}/og/base.png`,
+        id: `${baseUrl}/og/base.png`,
         type: 'Image',
       },
       publicKey: [
         {
-          id: `${domainName}/api/badge/issuer#key-1`,
+          id: `${baseUrl}/api/badge/issuer#key-1`,
           type: 'JsonWebKey',
           publicKeyJwk: jwk,
         },
