@@ -17,6 +17,7 @@ import {
   importPKCS8,
   importSPKI,
   type JWK,
+  type JWTPayload,
 } from 'jose'
 import { createPublicKey } from 'crypto'
 import {
@@ -440,9 +441,16 @@ export async function signCredentialJWT(
     const now = Math.floor(Date.now() / 1000)
     const exp = now + 365 * 24 * 60 * 60 // 1 year expiration
 
+    // Extract issuer ID for registered claims
+    const issuerId =
+      typeof credential.issuer === 'string'
+        ? credential.issuer
+        : credential.issuer.id
+
     // Build protected header with optional JWK for inline verification
+    // Per spec: spread credential properties at top level, then add registered JWT claims
     const jwt = await new SignJWT({
-      vc: credential, // Embed entire credential as 'vc' claim
+      ...credential, // All credential properties at top level (not wrapped in 'vc')
     })
       .setProtectedHeader({
         alg: algorithm,
@@ -453,13 +461,9 @@ export async function signCredentialJWT(
       .setIssuedAt(now)
       .setExpirationTime(exp)
       .setNotBefore(now)
-      .setJti(credential.id) // Use credential ID as JWT ID
-      .setSubject(credential.credentialSubject.id) // Required: subject ID
-      .setIssuer(
-        typeof credential.issuer === 'string'
-          ? credential.issuer
-          : credential.issuer.id,
-      )
+      .setJti(credential.id) // Use credential ID as JWT ID (duplicates 'id')
+      .setSubject(credential.credentialSubject.id) // Subject ID (duplicates credentialSubject.id)
+      .setIssuer(issuerId) // Issuer ID (duplicates issuer.id)
       .sign(privateKey)
 
     return jwt
@@ -518,12 +522,28 @@ export async function verifyCredentialJWT(
       algorithms,
     })
 
-    // Extract credential from 'vc' claim
-    if (!payload.vc || typeof payload.vc !== 'object') {
-      throw new VerificationError('JWT payload missing "vc" claim', { payload })
+    // Per OpenBadges 3.0 spec: credential properties are at top level in payload
+    // Validate required OpenBadges credential fields
+    if (!payload['@context'] || !payload.type || !payload.id) {
+      throw new VerificationError(
+        'JWT payload missing required credential fields (@context, type, id)',
+        { payload },
+      )
     }
 
-    return payload.vc as Credential
+    // Remove registered JWT claims (iss, jti, sub, iat, exp, nbf, aud) to get clean credential
+    const {
+      iss,
+      jti,
+      sub,
+      iat,
+      exp,
+      nbf,
+      aud,
+      ...credential
+    } = payload as JWTPayload & Credential
+
+    return credential
   } catch (error) {
     if (error instanceof VerificationError) {
       throw error

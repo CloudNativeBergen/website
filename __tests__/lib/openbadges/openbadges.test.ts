@@ -684,10 +684,18 @@ describe('JWT Proof Format', () => {
         Buffer.from(payloadB64, 'base64url').toString('utf-8'),
       )
 
-      expect(payload.vc).toBeDefined()
-      expect(payload.vc.id).toBe(credential.id)
+      // Per OpenBadges 3.0 spec: credential properties are at top level, not wrapped in 'vc'
+      expect(payload['@context']).toBeDefined()
+      expect(payload.type).toContain('VerifiableCredential')
+      // Our library uses AchievementCredential type
+      expect(payload.type).toContain('AchievementCredential')
+      expect(payload.id).toBe(credential.id)
+      expect(payload.issuer).toBeDefined()
+      expect(payload.credentialSubject).toBeDefined()
+      // Registered JWT claims duplicate credential fields
       expect(payload.jti).toBe(credential.id) // JWT ID should match credential ID
       expect(payload.iss).toBe(credential.issuer.id)
+      expect(payload.sub).toBe(credential.credentialSubject.id)
       expect(payload.iat).toBeDefined() // Issued at
       expect(payload.exp).toBeDefined() // Expiration
       expect(payload.nbf).toBeDefined() // Not before
@@ -777,8 +785,8 @@ describe('JWT Proof Format', () => {
       ).rejects.toThrow()
     })
 
-    it('should reject JWT without vc claim', async () => {
-      // This would be an invalid JWT that passes signature but lacks 'vc' claim
+    it('should reject JWT without required credential fields', async () => {
+      // This would be an invalid JWT that passes signature but lacks required OpenBadges fields
       // We can't easily create this without mocking, so we test the error path exists
       const jwt = 'invalid'
       await expect(verifyCredentialJWT(jwt, VALID_PUBLIC_KEY)).rejects.toThrow(
