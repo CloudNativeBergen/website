@@ -666,6 +666,12 @@ describe('JWT Proof Format', () => {
       expect(header.alg).toBe('EdDSA')
       expect(header.typ).toBe('JWT')
       expect(header.kid).toBe(VALID_SIGNING_CONFIG.verificationMethod)
+      // Verify jwk is included for validator compatibility
+      expect(header.jwk).toBeDefined()
+      expect(header.jwk.kty).toBe('OKP') // Octet Key Pair for Ed25519
+      expect(header.jwk.crv).toBe('Ed25519')
+      expect(header.jwk.x).toBeDefined() // Public key parameter
+      expect(header.jwk.d).toBeUndefined() // Private key should NOT be in header
     })
 
     it('should create JWT with correct payload claims', async () => {

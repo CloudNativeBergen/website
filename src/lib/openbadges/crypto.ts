@@ -396,11 +396,12 @@ function rsaPublicKeyToJWK(publicKeyPem: string): JWK {
  * Returns the JWT as a string (this IS the signed credential)
  *
  * Per OpenBadges 3.0 spec section "JSON Web Token Proof Format":
- * - JOSE header includes: kid (verification method URL), typ: "JWT", alg: "RS256"
+ * - JOSE header includes: kid (verification method URL), jwk (public key), typ: "JWT", alg: "RS256"
  * - Payload includes entire credential plus iss, exp, nbf, jti
  * - Compact JWS format: base64url(header).base64url(payload).base64url(signature)
  *
  * OpenBadges 3.0 requires RS256 (RSA with SHA-256) as the minimum algorithm.
+ * The jwk header parameter is included for maximum validator compatibility.
  */
 export async function signCredentialJWT(
   credential: Credential,
@@ -414,23 +415,32 @@ export async function signCredentialJWT(
 
     let privateKey: CryptoKey
     let algorithm: string
+    let publicKeyJwk: JWK | undefined
 
     if (isRSA) {
       // Use RS256 with RSA keys (OpenBadges 3.0 compliant)
       privateKey = await importPKCS8(config.privateKey, 'RS256')
       algorithm = 'RS256'
+
+      // Extract public key JWK for header inclusion
+      const publicKeyObj = createPublicKey(config.publicKey)
+      publicKeyJwk = publicKeyObj.export({ format: 'jwk' }) as JWK
     } else {
       // Fallback to EdDSA with Ed25519 keys (for backward compatibility)
       validateSigningConfig(config)
       const jwk = privateKeyToJWK(config.privateKey, config.publicKey)
       privateKey = (await importJWK(jwk, 'EdDSA')) as CryptoKey
       algorithm = 'EdDSA'
+
+      // Extract public key JWK (without private key 'd' parameter)
+      publicKeyJwk = publicKeyToJWK(config.publicKey)
     }
 
     // Build JWT claims per OpenBadges 3.0 spec
     const now = Math.floor(Date.now() / 1000)
     const exp = now + 365 * 24 * 60 * 60 // 1 year expiration
 
+    // Build protected header with optional JWK for inline verification
     const jwt = await new SignJWT({
       vc: credential, // Embed entire credential as 'vc' claim
     })
@@ -438,6 +448,7 @@ export async function signCredentialJWT(
         alg: algorithm,
         typ: 'JWT',
         kid: config.verificationMethod, // Verification method URL
+        ...(publicKeyJwk && { jwk: publicKeyJwk }), // Include public key JWK for validator compatibility
       })
       .setIssuedAt(now)
       .setExpirationTime(exp)
