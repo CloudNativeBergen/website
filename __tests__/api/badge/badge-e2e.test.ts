@@ -18,11 +18,11 @@ const TEST_HOST = 'cloudnativeday.no'
  *
  * Tests the complete badge lifecycle using real data:
  * 1. Badge generation with conference context
- * 2. Data Integrity Proof creation and validation
+ * 2. Data Integrity Proof creation with eddsa-rdfc-2022 (RDF canonicalization)
  * 3. Achievement verification
  * 4. SVG baking (embedding credentials)
  * 5. Credential extraction from baked SVG
- * 6. Signature verification
+ * 6. Signature verification using RDF Dataset Canonicalization (URDNA2015)
  * 7. All API endpoints
  */
 describe('Badge System E2E', () => {
@@ -405,13 +405,24 @@ describe('Badge System E2E', () => {
       const result = await response.json()
       expect(result.checks).toBeDefined()
 
+      // Verify canonicalization check (RDF Dataset Canonicalization)
+      const canonCheck = result.checks.find(
+        (c: any) => c.name === 'canonicalization',
+      )
+      expect(canonCheck).toBeDefined()
+      expect(canonCheck.status).toBe('success')
+      expect(canonCheck.details?.canonicalizationResult).toBeDefined()
+      expect(typeof canonCheck.details?.canonicalizationResult).toBe('string')
+
       // Find the proof check
       const proofCheck = result.checks.find((c: any) => c.name === 'proof')
       expect(proofCheck).toBeDefined()
       expect(proofCheck.status).toBe('success')
       expect(proofCheck.details?.signatureValid).toBe(true)
 
-      console.log('✓ Validator API cryptographically verified badge signature')
+      console.log(
+        '✓ Validator API cryptographically verified badge signature with RDF canonicalization',
+      )
     })
   })
 })

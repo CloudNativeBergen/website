@@ -81,6 +81,8 @@ export interface AchievementSubject {
  * Data Integrity Proof (eddsa-rdfc-2022)
  */
 export interface DataIntegrityProof {
+  /** JSON-LD context required for Data Integrity Proof canonicalization */
+  '@context'?: string | string[]
   type: 'DataIntegrityProof'
   created: string
   verificationMethod: string

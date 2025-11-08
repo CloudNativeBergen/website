@@ -1,459 +1,336 @@
 # OpenBadges 3.0 Implementation
 
-This document describes the OpenBadges 3.0 implementation for the Cloud Native Bergen website.
+This document provides a high-level architectural overview of the OpenBadges 3.0 implementation for the Cloud Native Bergen website.
 
 ## Overview
 
 The badge system issues **OpenBadges 3.0 compliant** digital credentials to speakers and organizers. These badges are:
 
-- Cryptographically signed using Ed25519 signatures
-- Verifiable using W3C Verifiable Credentials Data Model 2.0
-- Portable across digital wallet platforms
-- Embeddable in SVG images for sharing
-
-## Specification Compliance
-
-### OpenBadges 3.0 Requirements
-
-Our implementation follows the official [1EdTech OpenBadges 3.0 specification](https://www.imsglobal.org/spec/ob/v3p0/):
-
-✅ **Correct Context URLs**
-
-- `https://www.w3.org/ns/credentials/v2`
-- `https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json`
-
-✅ **Proper Credential Types**
-
-- `VerifiableCredential` (W3C standard)
-- `AchievementCredential` (OpenBadges 3.0 type)
-
-✅ **Valid Date Fields**
-
-- Uses `validFrom` instead of deprecated `issuanceDate`
-
-✅ **Data Integrity Proofs**
-
-- Type: `DataIntegrityProof`
-- Cryptosuite: `eddsa-rdfc-2022`
-- Algorithm: Ed25519 signature scheme
-
-✅ **Achievement Structure**
-
-- Properly structured `Achievement` object
-- Image as object with `id` and `type` fields (not string)
-- Criteria with narrative description
-- Type fields as arrays (e.g., `type: ['Achievement']`)
-
-✅ **Schema Compliance**
-
-- All badges validated against official OB 3.0 JSON schema
-- Automatic validation on badge generation
-- Type fields must be arrays (even for single values)
-- Image and proof fields must be properly structured objects/arrays
+- **Cryptographically signed** using Ed25519 with **did:key** identifiers (self-sovereign, portable)
+- **Verifiable** using W3C Verifiable Credentials Data Model 2.0
+- **Portable** across digital wallet platforms (Credly, Badgr, LinkedIn)
+- **Embeddable** in SVG images with "baked" credentials
+- **Multi-tenant** supporting multiple conferences with independent configurations
 
 ## Architecture
 
-### Core Modules
+### High-Level Overview
 
-#### 1. Badge Generator (`/lib/badge/generator.ts`)
-
-Generates OpenBadges 3.0 compliant JSON-LD credentials:
-
-```typescript
-const { assertion, badgeId } = await generateBadgeCredential(params, conference)
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                     Admin Interface                          │
+│  /admin/speakers/badge - Issue badges via UI                │
+└────────────────┬────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Badge Generation Layer                     │
+│  /lib/badge/generator.ts - Orchestrates badge creation      │
+│  /server/routers/badge.ts - tRPC endpoints                  │
+└────────────┬────────────────────────────────────────────────┘
+             │
+             ├──────────────┬─────────────────┬────────────────┐
+             ▼              ▼                 ▼                ▼
+┌──────────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│  OpenBadges Lib  │ │  Badge SVG   │ │ Email System │ │   Storage    │
+│ /lib/openbadges/ │ │  Generator   │ │  /lib/email  │ │    Sanity    │
+└──────────────────┘ └──────────────┘ └──────────────┘ └──────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Public API Endpoints                       │
+│  /api/badge/[id]/json    - Credential JSON-LD              │
+│  /api/badge/[id]/verify  - Verification with proof check   │
+│  /api/badge/[id]/image   - SVG image                       │
+│  /api/badge/[id]/download - Baked SVG download            │
+│  /api/badge/issuer       - DID issuer profile             │
+│  /api/badge/validate     - Admin validation tool          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Creates:
+### Core Components
 
-- `Achievement` - defines what was accomplished
-- `AchievementCredential` - verifiable credential asserting the achievement
-- `DataIntegrityProof` - cryptographic signature
+#### 1. OpenBadges Library (`/lib/openbadges/`)
 
-#### 2. Cryptography (`/lib/badge/crypto.ts`)
+**Purpose:** Reusable TypeScript library implementing OpenBadges 3.0 specification.
 
-Handles Ed25519 key management and signing:
+**Key Modules:**
 
-```typescript
-const signature = await signBadgeData(assertion)
-const isValid = await verifyBadgeSignature(data, signature)
-```
+- **`credential.ts`** - Create unsigned credentials with validation
+- **`crypto.ts`** - Ed25519 signing and verification with did:key support
+- **`keys.ts`** - DID key management (generation, conversion, extraction)
+- **`baking.ts`** - Embed/extract credentials in SVG files
+- **`validator.ts`** - JSON schema validation against OB 3.0 spec
+- **`errors.ts`** - Typed error handling
 
-Features:
+**Export:** Single entry point via `/lib/openbadges/index.ts`
 
-- Ed25519 key pair generation
-- Data signing with canonicalization (sorted JSON keys)
-- Signature verification
-- Verification method generation
+**Documentation:** `/lib/openbadges/README.md`
 
-#### 4. Badge Baking (`/lib/badge/baking.ts`)
+---
 
-Embeds badge credentials into SVG images:
+#### 2. Badge Generator (`/lib/badge/`)
 
-```typescript
-const bakedSvg = bakeBadge(svgContent, assertion, verificationUrl)
-```
+**Purpose:** Application-specific badge generation using OpenBadges library.
 
-Implements OpenBadges 3.0 baking specification:
+**Key Files:**
 
-- Uses `xmlns:openbadges="https://purl.imsglobal.org/ob/v3p0"` namespace
-- Embeds credential in `<openbadges:credential>` element with CDATA wrapper
-- Places element immediately after opening `<svg>` tag
-- Includes verification URL in element attributes
+- **`generator.ts`** - `generateBadgeCredential()` - orchestrates credential creation
+- **`svg.ts`** - `generateBadgeSVG()` - creates visual badge design
+- **`types.ts`** - Type definitions for badge parameters
 
-#### 5. Schema Validation (`/lib/badge/schema-validator.ts`)
+**Responsibilities:**
 
-Validates badges against OpenBadges 3.0 JSON schema:
+- Constructs achievement definitions
+- Generates evidence URLs (speaker profiles, talk references)
+- Creates issuer profiles with conference data
+- Signs credentials with environment keys
+- Returns baked SVG with embedded credential
 
-```typescript
-// Validate and get result
-const result = validateBadgeSchema(assertion)
-if (!result.valid) {
-  console.error(result.errors)
-}
+---
 
-// Assert valid (throws on error)
-assertValidBadge(assertion)
+#### 3. tRPC Badge Router (`/server/routers/badge.ts`)
 
-// Get human-readable errors
-const errors = getValidationErrors(assertion)
-```
+**Purpose:** Server-side API for badge operations.
 
-Features:
+**Endpoints:**
 
-- Complete OpenBadges 3.0 AchievementCredential schema
-- Validates required fields (context, type, credentialSubject, issuer, validFrom)
-- Enforces array types for `type` fields
-- Validates object structure for `image` and `proof`
-- Automatic validation on badge generation
-- AJV-based JSON Schema validation
+- **`badge.issue`** - Issue single badge to speaker
+- **`badge.bulkIssue`** - Issue badges to multiple speakers
+- **`badge.list`** - List badges for conference/speaker
+- **`badge.verify`** - Verify badge signature (admin)
 
-#### 6. Sanity Integration (`/lib/badge/sanity.ts`)
+**Features:**
 
-Manages badge lifecycle in Sanity CMS:
+- Conference-aware (multi-tenant)
+- Automatic email sending via Resend
+- Sanity CMS integration for speaker/conference data
+- Error handling and validation
 
-- Creates badge records
-- Uploads baked SVG assets
-- Tracks email delivery status
-- Queries badges by conference/speaker
+---
 
-## API Endpoints
+#### 4. Public API Endpoints (`/app/api/badge/`)
 
-### Public Endpoints
+**Purpose:** Public REST endpoints for badge access and verification.
 
-#### `GET /api/badge/[badgeId]/verify`
+**Key Routes:**
 
-Returns the complete badge credential with verification status:
+| Endpoint                          | Purpose                                     | Content Type          |
+| --------------------------------- | ------------------------------------------- | --------------------- |
+| `GET /api/badge/issuer`           | DID issuer profile with verification method | `application/ld+json` |
+| `GET /api/badge/[id]/json`        | Raw credential JSON-LD                      | `application/ld+json` |
+| `GET /api/badge/[id]/verify`      | Credential + verification status            | `application/json`    |
+| `GET /api/badge/[id]/image`       | Badge SVG visual                            | `image/svg+xml`       |
+| `GET /api/badge/[id]/download`    | Baked SVG download                          | `image/svg+xml`       |
+| `GET /api/badge/[id]/achievement` | Achievement definition                      | `application/ld+json` |
+| `POST /api/badge/validate`        | Admin validation tool                       | `application/json`    |
 
-```json
-{
-  "@context": [...],
-  "type": ["VerifiableCredential", "AchievementCredential"],
-  "credentialSubject": {...},
-  "proof": {...},
-  "verified": true,
-  "verificationStatus": {
-    "valid": true,
-    "signatureValid": true,
-    "verifiedAt": "2025-11-06T..."
-  }
-}
-```
+---
 
-#### `GET /api/badge/[badgeId]/json`
+#### 5. Badge Validator (`/app/api/badge/validate/route.ts`)
 
-Returns the raw badge credential as JSON-LD:
+**Purpose:** Comprehensive server-side badge verification for admin UI.
 
-- Content-Type: `application/ld+json`
-- CORS enabled
-- Immutable caching
+**Admin Interface:** `/components/admin/BadgeValidator.tsx`
 
-#### `GET /api/badge/[badgeId]/image`
+**Validation Checks:**
 
-Returns the badge SVG image:
+1. **Extraction** - Extract credential from baked SVG
+2. **Structure** - OpenBadges 3.0 schema compliance
+3. **Issuer** - Validate issuer (supports both did:key and HTTP(S))
+4. **Proof** - Cryptographic signature verification
+5. **URL Format** - Check evidence and issuer URLs
+6. **Temporal Validity** - Validate date ranges
 
-- Content-Type: `image/svg+xml`
-- Immutable caching
+**Cryptographic Verification:**
 
-#### `GET /api/badge/[badgeId]/download`
+- Extracts public key from `did:key` URI
+- Verifies Ed25519 signature using `verifyCredential()`
+- Returns `signatureValid: true/false` in results
 
-Downloads the baked SVG with embedded credential:
+---
 
-- Content-Disposition: attachment
-- Filename: `badge-{speaker}-{badgeId}.svg`
+#### 6. Admin UI (`/components/admin/` & `/app/admin/`)
 
-#### `GET /api/badge/.well-known/jwks.json`
+**Badge Management:**
 
-Returns the public key set for signature verification:
+- **`/admin/speakers/badge`** - Issue badges to speakers
+  - Speaker selection
+  - Badge type (Speaker/Organizer)
+  - Bulk issuance
+  - Email preview
 
-```json
-{
-  "keys": [
-    {
-      "kty": "OKP",
-      "crv": "Ed25519",
-      "x": "base64url-encoded-public-key",
-      "kid": "key-id",
-      "use": "sig",
-      "alg": "EdDSA"
-    }
-  ]
-}
-```
+**Validation Tools:**
 
-### Admin Endpoints (tRPC)
+- **`BadgeValidator.tsx`** - Upload and verify baked SVG badges
+  - Visual preview
+  - Comprehensive validation checks
+  - Cryptographic verification
+  - Detailed error reporting
 
-#### `badge.issue`
-
-Issues a single badge to a speaker:
-
-```typescript
-await trpc.badge.issue.mutate({
-  speakerId: 'speaker-id',
-  conferenceId: 'conf-id',
-  badgeType: 'speaker',
-  sendEmail: true,
-})
-```
-
-#### `badge.bulkIssue`
-
-Issues badges to multiple speakers:
-
-```typescript
-await trpc.badge.bulkIssue.mutate({
-  speakerIds: ['id1', 'id2', 'id3'],
-  conferenceId: 'conf-id',
-  badgeType: 'speaker',
-})
-```
-
-#### `badge.list`
-
-Lists badges for a conference or speaker:
-
-```typescript
-const badges = await trpc.badge.list.query({ conferenceId: 'conf-id' })
-```
-
-#### `badge.verify`
-
-Verifies a badge signature (admin):
-
-```typescript
-const result = await trpc.badge.verify.query({ badgeId: 'badge-123' })
-```
+---
 
 ## Badge Credential Structure
 
-### Example Credential
+### Key Features
 
-```json
-{
-  "@context": [
-    "https://www.w3.org/ns/credentials/v2",
-    "https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json"
-  ],
-  "id": "https://cloudnativebergen.no/api/badge/badge-xyz/",
-  "type": ["VerifiableCredential", "AchievementCredential"],
-  "name": "Speaker Badge for Cloud Native Day Bergen 2025",
-  "credentialSubject": {
-    "id": "mailto:speaker@example.com",
-    "type": "AchievementSubject",
-    "achievement": {
-      "@context": [...],
-      "id": "https://cloudnativebergen.no/api/badge/badge-xyz/achievement",
-      "type": ["Achievement"],
-      "name": "Speaker at Cloud Native Day Bergen 2025",
-      "description": "This badge recognizes ...",
-      "image": {
-        "id": "https://cloudnativebergen.no/api/badge/badge-xyz/image",
-        "type": "Image"
-      },
-      "criteria": {
-        "narrative": "Presented a talk or workshop..."
-      },
-      "issuer": {
-        "id": "https://cloudnativebergen.no",
-        "type": "Profile",
-        "name": "Cloud Native Bergen",
-        "url": "https://cloudnativebergen.no",
-        "email": "contact@cloudnativebergen.no"
-      }
-    }
-  },
-  "issuer": {
-    "id": "https://cloudnativebergen.no",
-    "type": "Profile",
-    "name": "Cloud Native Bergen",
-    "url": "https://cloudnativebergen.no"
-  },
-  "validFrom": "2025-11-06T14:30:00Z",
-  "proof": {
-    "type": "DataIntegrityProof",
-    "created": "2025-11-06T14:30:00Z",
-    "verificationMethod": "https://cloudnativebergen.no#key-a1b2c3d4",
-    "cryptosuite": "eddsa-rdfc-2022",
-    "proofPurpose": "assertionMethod",
-    "proofValue": "base64-encoded-signature"
-  }
-}
-```
+**Identity Management:**
 
-## Security
+- **Issuer ID:** `did:key:z6Mkg51...` (self-sovereign, no HTTP endpoint required)
+- **Subject ID:** `mailto:speaker@example.com` (email-based recipient identity)
+- **Verification Method:** `did:key:z6Mkg51...#z6Mkg51...` (DID fragment notation)
 
-### Key Management
+**URLs:**
 
-Ed25519 key pairs are generated using `@noble/ed25519`:
+- **Credential ID:** `https://domain.com/api/badge/{uuid}`
+- **Achievement ID:** `https://domain.com/api/badge/{uuid}/achievement`
+- **Image ID:** `https://domain.com/api/badge/{uuid}/image`
+- **Issuer URL:** `https://domain.com` (organization homepage)
+- **Evidence:** `https://domain.com/speaker/{slug}`, `https://domain.com/program#talk-{id}`
+
+**Proof:**
+
+- **Type:** `DataIntegrityProof`
+- **Cryptosuite:** `eddsa-rdfc-2022` (Ed25519 signatures)
+- **Proof Purpose:** `assertionMethod`
+
+See example credential in `/lib/openbadges/README.md`
+
+---
+
+## Security & Key Management
+
+### Key Generation
+
+Generate Ed25519 key pairs:
 
 ```bash
 npx tsx scripts/generate-badge-keys.ts
 ```
 
-Keys must be stored in environment variables:
+### Environment Variables
 
-- `BADGE_ISSUER_PRIVATE_KEY` - Keep secret!
-- `BADGE_ISSUER_PUBLIC_KEY` - Used for verification
+**Required:**
 
-### Signature Verification
+- `BADGE_ISSUER_PRIVATE_KEY` - Hex-encoded private key (keep secret!)
+- `BADGE_ISSUER_PUBLIC_KEY` - Hex-encoded public key (used for verification)
 
-Signatures are verified using:
+**Key Storage:**
 
-1. Canonical JSON (sorted keys)
-2. UTF-8 encoding
-3. Ed25519 signature verification
-4. Public key from environment
+- Store in `.env.local` for development
+- Use Vercel environment variables for production
+- Never commit private keys to version control
 
-Verification flow:
+### DID-based Identity
 
-```typescript
-const { proof, ...credential } = badgeAssertion
-const canonicalJson = JSON.stringify(credential, Object.keys(credential).sort())
-const isValid = await verifyBadgeSignature(credential, proof.proofValue)
-```
+The system uses **did:key** for self-sovereign identity:
+
+- Public key embedded in the DID itself
+- No external HTTP endpoint required for verification
+- Portable across environments (localhost ↔ production)
+- Cryptographic proof can be verified offline
+
+### Cryptographic Signing Process
+
+The implementation follows the **eddsa-rdfc-2022** cryptosuite specification:
+
+1. **RDF Dataset Canonicalization (URDNA2015):** The credential (without proof) and proof (without proofValue) are independently canonicalized to N-Quads format using the URDNA2015 algorithm.
+2. **Concatenation:** The canonical credential and canonical proof N-Quads are concatenated.
+3. **Ed25519 Signature:** The concatenated bytes are signed using Ed25519, producing the `proofValue`.
+4. **Verification:** To verify, the same canonicalization and concatenation process is repeated, and the signature is verified against the public key.
+
+This ensures **byte-for-byte reproducibility** of the signed data, making badges verifiable by external validators that follow the W3C Data Integrity specification.
+
+---
 
 ## Multi-Tenant Support
 
-The badge system is fully multi-tenant:
+### Conference-Specific Configuration
 
-### Dynamic Configuration
+Each conference can have:
 
-Each conference can have its own:
+- **Custom domains:** `conference.domains[]`
+- **Organization name:** `conference.organizer`
+- **Contact email:** `conference.contact_email`
+- **Branding:** Conference-specific badge designs
 
-- **Contact Email**: `conference.contact_email`
-- **Domain**: `conference.domains[0]`
-- **Organization Name**: `conference.organizer`
+### Dynamic Email Configuration
 
-### Email Addresses
+Badges are sent from conference-specific addresses:
 
-Badge emails are sent from:
+- Format: `{organizer} <{contact_email}>`
+- Fallback: `{organizer} <noreply@{domain}>`
+- Default: `noreply@cloudnativebergen.dev`
 
-```typescript
-const fromEmail = conference.contact_email
-  ? `${conference.organizer} <${conference.contact_email}>`
-  : `${conference.organizer} <noreply@${conference.domains[0]}>`
-```
+---
 
-Fallback: `noreply@cloudnativebergen.no`
+## Testing & Validation
 
-## Testing
+### Test Suites
 
-Comprehensive test suite validates OpenBadges 3.0 compliance:
+**Badge E2E Tests** (`__tests__/api/badge/badge-e2e.test.ts`)
+
+- Complete badge lifecycle (generation → signing → baking → extraction → verification)
+- Evidence URL validation
+- Issuer URL format validation
+- Cryptographic signature verification via validator API
+
+**OpenBadges Tests** (`__tests__/lib/openbadges/`)
+
+- Credential creation and validation
+- Signature verification
+- DID key utilities
+- Badge baking/extraction
+- Controller validation (did:key and HTTP(S))
+
+**Commands:**
 
 ```bash
-# Run all badge tests
-npm run test:badges
-
-# Run specific test suites
-npm test -- openbadges-compliance
-npm test -- schema-validator
+npm test badge-e2e.test.ts        # Full badge lifecycle
+npm test openbadges.test.ts       # OpenBadges library
+npm test controller-validation    # DID/HTTP controller tests
 ```
-
-### Test Coverage
-
-**OpenBadges Compliance Tests** (`openbadges-compliance.test.ts`):
-
-- ✅ OpenBadges 3.0 credential structure
-- ✅ Context URLs and types (as arrays)
-- ✅ Date field naming (validFrom vs issuanceDate)
-- ✅ Proof structure (DataIntegrityProof array)
-- ✅ Cryptographic signing and verification
-- ✅ Badge baking with xmlns:openbadges format
-- ✅ Achievement structure with image objects
-- ✅ Multi-tenant email configuration
-
-**Schema Validation Tests** (`schema-validator.test.ts`):
-
-- ✅ Valid badge passes schema validation
-- ✅ Detects missing required fields (@context, type, credentialSubject, issuer, validFrom)
-- ✅ Validates type fields must be arrays
-- ✅ Validates image fields must be objects with id/type
-- ✅ Validates proof must be array of DataIntegrityProof objects
-- ✅ Provides human-readable error messages
-- ✅ assertValidBadge throws on validation errors
 
 ### Validation Integration
 
-All generated badges are automatically validated:
+All badges are automatically validated against OpenBadges 3.0 schema during generation. Invalid badges throw errors before being issued.
 
-```typescript
-// In generator.ts
-const { assertion } = await generateBadgeCredential(params, conference)
-// Validation happens automatically before return
-// Throws error if badge doesn't match OB 3.0 schema
-```
+---
 
-## Integration
+### Specification Compliance
 
-### Issuing Badges
+#### OpenBadges 3.0 ✅
 
-Admin interface at `/admin/speakers/badge`:
+- W3C Verifiable Credentials Data Model 2.0
+- Proper context URLs and credential types
+- `validFrom` (not deprecated `issuanceDate`)
+- Data Integrity Proofs with `eddsa-rdfc-2022`
+- Achievement structure with proper image objects
+- Type fields as arrays (per JSON-LD spec)
 
-1. Select badge type (Speaker/Organizer)
-2. Search and select speakers
-3. Preview badge design
-4. Issue badges (automatically sent via email)
+### Digital Wallet Compatibility
 
-### Badge Display
+Compatible with:
 
-Recipients receive:
+- **Credly** - Import via JSON-LD
+- **Badgr** - OpenBadges 3.0 support
+- **LinkedIn** - Badge import feature
+- Any W3C Verifiable Credentials wallet
 
-- Email with download link
-- Baked SVG file (contains embedded credential)
-- Verification URL for validators
-
-### Verification
-
-Anyone can verify a badge:
-
-1. Visit `/api/badge/{badgeId}/verify`
-2. Check `verificationStatus.signatureValid`
-3. Verify issuer details
-4. Validate achievement criteria
-
-## Compatibility
-
-### Digital Wallets
-
-Badges are compatible with:
-
-- Credly
-- Badgr
-- LinkedIn (via badge import)
-- Any W3C VC Data Model 2.0 wallet
-
-### Standards Support
-
-- ✅ W3C Verifiable Credentials Data Model 2.0
-- ✅ OpenBadges 3.0 (credential structure and baking)
-- ✅ Data Integrity Proofs (eddsa-rdfc-2022)
-- ✅ OpenBadges 2.0 extraction (backward compatibility)
-- ✅ JSON-LD
-- ✅ Ed25519 signatures (RFC 8032)
+---
 
 ## References
 
-- [OpenBadges 3.0 Specification](https://www.imsglobal.org/spec/ob/v3p0/)
-- [W3C Verifiable Credentials Data Model 2.0](https://www.w3.org/TR/vc-data-model-2.0/)
+### Specifications
+
+- [OpenBadges 3.0](https://www.imsglobal.org/spec/ob/v3p0/)
+- [W3C Verifiable Credentials 2.0](https://www.w3.org/TR/vc-data-model-2.0/)
 - [Data Integrity Proofs](https://www.w3.org/TR/vc-data-integrity/)
-- [Ed25519 Signature Algorithm](https://datatracker.ietf.org/doc/html/rfc8032)
-- [OpenBadges Baking Specification](https://www.imsglobal.org/sites/default/files/Badges/OBv2p0Final/baking/)
+- [DID:key Method Spec](https://w3c-ccg.github.io/did-method-key/)
+- [Ed25519 (RFC 8032)](https://datatracker.ietf.org/doc/html/rfc8032)
+
+### Implementation Docs
+
+- `/lib/openbadges/README.md` - Library documentation with usage examples
+- `/docs/EMAIL_SYSTEM.md` - Email notification system
+- `/docs/ADMIN_NOTIFICATION_SYSTEM.md` - Admin event handling

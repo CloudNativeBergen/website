@@ -6,6 +6,7 @@
  */
 
 import * as ed25519 from '@noble/ed25519'
+import * as jsonld from 'jsonld'
 import {
   hexToBytes,
   bytesToHex,
@@ -21,25 +22,120 @@ import type {
   DataIntegrityProof,
 } from './types'
 
+type JsonLdContext = Record<string, unknown>
+
 /**
- * Canonicalize data for signing/verification
- * Uses JSON stringify with sorted keys as per RDF canonicalization
+ * Custom document loader for JSON-LD contexts
+ * Provides local contexts to avoid network fetches during canonicalization
  */
-function canonicalizeData(data: unknown): string {
-  if (typeof data !== 'object' || data === null) {
-    throw new SigningError('Data must be an object', { data })
+const customDocumentLoader = async (url: string) => {
+  const LOCAL_CONTEXTS: Record<string, JsonLdContext> = {
+    'https://www.w3.org/ns/credentials/v2': {
+      '@context': {
+        id: '@id',
+        type: '@type',
+        VerifiableCredential:
+          'https://www.w3.org/2018/credentials#VerifiableCredential',
+        credentialSubject:
+          'https://www.w3.org/2018/credentials#credentialSubject',
+        issuer: 'https://www.w3.org/2018/credentials#issuer',
+        validFrom: 'https://www.w3.org/2018/credentials#validFrom',
+        DataIntegrityProof: 'https://w3id.org/security#DataIntegrityProof',
+        verificationMethod: 'https://w3id.org/security#verificationMethod',
+        proofPurpose: 'https://w3id.org/security#proofPurpose',
+        assertionMethod: 'https://w3id.org/security#assertionMethod',
+        cryptosuite: 'https://w3id.org/security#cryptosuite',
+        created: 'http://purl.org/dc/terms/created',
+      },
+    },
+    'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json': {
+      '@context': {
+        Profile: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Profile',
+        Achievement:
+          'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Achievement',
+        AchievementSubject:
+          'https://purl.imsglobal.org/spec/vc/ob/vocab.html#AchievementSubject',
+        Criteria: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Criteria',
+        Evidence: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Evidence',
+        Image: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Image',
+        OpenBadgeCredential:
+          'https://purl.imsglobal.org/spec/vc/ob/vocab.html#OpenBadgeCredential',
+        achievement:
+          'https://purl.imsglobal.org/spec/vc/ob/vocab.html#achievement',
+        narrative: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#narrative',
+        image: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#image',
+        name: 'https://schema.org/name',
+        description: 'https://schema.org/description',
+        url: 'https://schema.org/url',
+        email: 'https://schema.org/email',
+        caption: 'https://schema.org/caption',
+      },
+    },
   }
 
-  return JSON.stringify(
-    data,
-    Object.keys(data as Record<string, unknown>).sort(),
-  )
+  if (LOCAL_CONTEXTS[url]) {
+    return {
+      contextUrl: undefined,
+      documentUrl: url,
+      document: LOCAL_CONTEXTS[url],
+    }
+  }
+
+  // Fallback: return empty context for unknown URLs
+  return {
+    contextUrl: undefined,
+    documentUrl: url,
+    document: { '@context': {} },
+  }
 }
 
 /**
- * Validate signing configuration
- * @throws {ConfigurationError} if config is invalid
+ * Canonicalize JSON-LD data using RDF Dataset Canonicalization (URDNA2015)
+ * This is required for eddsa-rdfc-2022 cryptosuite compliance
  */
+async function canonicalizeData(data: unknown): Promise<string> {
+  if (typeof data !== 'object' || data === null) {
+    throw new SigningError('Data must be an object', { data })
+  }
+  try {
+    // Use jsonld.canonize (URDNA2015) returning N-Quads with custom document loader
+    // Disable safe mode to allow custom document loader (safe option not in types)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await (jsonld.canonize as any)(
+      data as Record<string, unknown>,
+      {
+        algorithm: 'URDNA2015',
+        format: 'application/n-quads',
+        documentLoader: customDocumentLoader,
+        safe: false,
+      },
+    )
+    return result as string
+  } catch (error) {
+    throw new SigningError('Failed to canonicalize JSON-LD data', {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    })
+  }
+}
+
+/**
+ * Canonicalize credential and proof separately per eddsa-rdfc-2022
+ * Returns canonical N-Quads for both document (without proof) and proof (without proofValue)
+ */
+async function canonicalizeForProof(
+  credential: Credential,
+  proof: Omit<DataIntegrityProof, 'proofValue'>,
+) {
+  const unsigned: Record<string, unknown> = { ...credential }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { proof: _ignore, ...withoutProof } = unsigned
+
+  const canonicalDoc = await canonicalizeData(withoutProof)
+  const canonicalProof = await canonicalizeData(proof)
+  return { canonicalDoc, canonicalProof }
+}
+
 function validateSigningConfig(config: SigningConfig): void {
   if (!config.privateKey || typeof config.privateKey !== 'string') {
     throw new ConfigurationError(
@@ -64,7 +160,6 @@ function validateSigningConfig(config: SigningConfig): void {
     })
   }
 
-  // Validate key lengths (Ed25519 keys are 32 bytes = 64 hex chars)
   const cleanedPrivateKey = config.privateKey
     .replace(/^0x/, '')
     .replace(/\s/g, '')
@@ -86,7 +181,6 @@ function validateSigningConfig(config: SigningConfig): void {
     )
   }
 
-  // Validate verification method URL format
   try {
     new URL(config.verificationMethod)
   } catch {
@@ -97,27 +191,18 @@ function validateSigningConfig(config: SigningConfig): void {
 }
 
 /**
- * Sign a credential using Ed25519
- * Returns a signed credential with DataIntegrityProof
- *
- * @param credential - The unsigned credential to sign
- * @param config - Signing configuration with keys and verification method
- * @returns Signed credential with proof array
- * @throws {SigningError} if signing fails
+ * Sign a credential using Ed25519 with eddsa-rdfc-2022 cryptosuite
  */
 export async function signCredential(
   credential: Credential,
   config: SigningConfig,
 ): Promise<SignedCredential> {
-  // Validate configuration
   validateSigningConfig(config)
 
   try {
-    // Convert keys from hex
     const privateKey = hexToBytes(config.privateKey)
     const publicKey = hexToBytes(config.publicKey)
 
-    // Verify that the public key matches the private key
     const derivedPublicKey = await ed25519.getPublicKeyAsync(privateKey)
     if (bytesToHex(derivedPublicKey) !== bytesToHex(publicKey)) {
       throw new SigningError('Public key does not match private key', {
@@ -126,31 +211,28 @@ export async function signCredential(
       })
     }
 
-    // Canonicalize the credential for signing
-    const canonicalData = canonicalizeData(credential)
-    const message = stringToBytes(canonicalData)
-
-    // Sign with Ed25519
-    const signature = await ed25519.signAsync(message, privateKey)
-
-    // Encode signature as multibase (base58btc with 'z' prefix)
-    const proofValue = encodeMultibase(signature)
-
-    // Create Data Integrity Proof
-    const proof: DataIntegrityProof = {
+    const baseProof: Omit<DataIntegrityProof, 'proofValue'> = {
+      '@context': 'https://www.w3.org/ns/credentials/v2',
       type: 'DataIntegrityProof',
       created: new Date().toISOString(),
       verificationMethod: config.verificationMethod,
       cryptosuite: 'eddsa-rdfc-2022',
       proofPurpose: 'assertionMethod',
-      proofValue,
     }
 
-    // Return signed credential with proof array
-    return {
-      ...credential,
-      proof: [proof],
-    }
+    const { canonicalDoc, canonicalProof } = await canonicalizeForProof(
+      credential,
+      baseProof,
+    )
+
+    const message = stringToBytes(canonicalDoc + canonicalProof)
+
+    const signature = await ed25519.signAsync(message, privateKey)
+    const proofValue = encodeMultibase(signature)
+
+    const fullProof: DataIntegrityProof = { ...baseProof, proofValue }
+
+    return { ...credential, proof: [fullProof] }
   } catch (error) {
     if (error instanceof SigningError || error instanceof ConfigurationError) {
       throw error
@@ -163,12 +245,7 @@ export async function signCredential(
 }
 
 /**
- * Verify a credential's signature
- *
- * @param credential - The signed credential to verify
- * @param publicKey - The Ed25519 public key as hex string
- * @returns True if signature is valid, false otherwise
- * @throws {VerificationError} if verification process fails (not if signature is invalid)
+ * Verify a credential's cryptographic signature using eddsa-rdfc-2022
  */
 export async function verifyCredential(
   credential: SignedCredential,
@@ -192,7 +269,6 @@ export async function verifyCredential(
   }
 
   try {
-    // Get the first proof (OB 3.0 allows multiple proofs)
     const proof = credential.proof[0]
 
     if (proof.type !== 'DataIntegrityProof') {
@@ -209,28 +285,24 @@ export async function verifyCredential(
       })
     }
 
-    // Extract credential without proof for verification
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { proof: _proof, ...credentialWithoutProof } = credential
-
-    // Canonicalize the credential (same as signing)
-    const canonicalData = canonicalizeData(credentialWithoutProof)
-    const message = stringToBytes(canonicalData)
-
-    // Decode signature from multibase
-    const signature = decodeMultibase(proof.proofValue)
-
-    // Convert public key from hex
-    const publicKeyBytes = hexToBytes(publicKey)
-
-    // Verify with Ed25519
-    const isValid = await ed25519.verifyAsync(
-      signature,
-      message,
-      publicKeyBytes,
+    const { proof: _proofArr, ...unsigned } = credential
+    const baseProof: Omit<DataIntegrityProof, 'proofValue'> = {
+      '@context': proof['@context'] || 'https://www.w3.org/ns/credentials/v2',
+      type: 'DataIntegrityProof',
+      created: proof.created,
+      verificationMethod: proof.verificationMethod,
+      cryptosuite: proof.cryptosuite,
+      proofPurpose: proof.proofPurpose,
+    }
+    const { canonicalDoc, canonicalProof } = await canonicalizeForProof(
+      unsigned as Credential,
+      baseProof,
     )
-
-    return isValid
+    const message = stringToBytes(canonicalDoc + canonicalProof)
+    const signature = decodeMultibase(proof.proofValue)
+    const publicKeyBytes = hexToBytes(publicKey)
+    return await ed25519.verifyAsync(signature, message, publicKeyBytes)
   } catch (error) {
     if (error instanceof VerificationError) {
       throw error

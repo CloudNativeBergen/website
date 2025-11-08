@@ -10,6 +10,8 @@ import {
   verifyCredential,
   didKeyToPublicKeyHex,
 } from '@/lib/openbadges'
+import * as jsonld from 'jsonld'
+import crypto from 'node:crypto'
 import type { SignedCredential } from '@/lib/openbadges/types'
 
 export const runtime = 'nodejs'
@@ -110,13 +112,137 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Step 3: Fetch and validate issuer profile (server-side to avoid CORS)
+    // Step 2b: RDF Dataset Canonicalization (URDNA2015) per eddsa-rdfc-2022
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { proof: _proofIgnore, ...unsigned } = credential
+
+      type JsonLdContext = Record<string, unknown>
+      const LOCAL_CONTEXTS: Record<string, JsonLdContext> = {
+        'https://www.w3.org/ns/credentials/v2': {
+          '@context': {
+            id: '@id',
+            type: '@type',
+            VerifiableCredential:
+              'https://www.w3.org/2018/credentials#VerifiableCredential',
+            credentialSubject:
+              'https://www.w3.org/2018/credentials#credentialSubject',
+            issuer: 'https://www.w3.org/2018/credentials#issuer',
+            validFrom: 'https://www.w3.org/2018/credentials#validFrom',
+            DataIntegrityProof: 'https://w3id.org/security#DataIntegrityProof',
+            verificationMethod: 'https://w3id.org/security#verificationMethod',
+            proofPurpose: 'https://w3id.org/security#proofPurpose',
+            assertionMethod: 'https://w3id.org/security#assertionMethod',
+            cryptosuite: 'https://w3id.org/security#cryptosuite',
+            created: {
+              '@id': 'http://purl.org/dc/terms/created',
+              '@type': 'http://www.w3.org/2001/XMLSchema#dateTime',
+            },
+          },
+        },
+        'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json': {
+          '@context': {
+            Profile: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Profile',
+            Achievement:
+              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Achievement',
+            AchievementSubject:
+              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#AchievementSubject',
+            AchievementCredential:
+              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#OpenBadgeCredential',
+            Criteria:
+              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Criteria',
+            Evidence:
+              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Evidence',
+            Image: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#Image',
+            achievement:
+              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#achievement',
+            narrative:
+              'https://purl.imsglobal.org/spec/vc/ob/vocab.html#narrative',
+            image: 'https://purl.imsglobal.org/spec/vc/ob/vocab.html#image',
+            name: 'https://schema.org/name',
+            description: 'https://schema.org/description',
+            email: 'https://schema.org/email',
+            url: 'https://schema.org/url',
+            caption: 'https://schema.org/caption',
+          },
+        },
+      }
+
+      const customDocLoader = async (url: string) => {
+        if (LOCAL_CONTEXTS[url]) {
+          return {
+            contextUrl: null,
+            documentUrl: url,
+            document: LOCAL_CONTEXTS[url],
+          }
+        }
+        throw new Error(`Context not found: ${url}`)
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const canonicalDoc = await (jsonld.canonize as any)(
+        unsigned as unknown as Record<string, unknown>,
+        {
+          algorithm: 'URDNA2015',
+          format: 'application/n-quads',
+          documentLoader: customDocLoader,
+          safe: false,
+        },
+      )
+
+      const proofObj = credential.proof[0]
+      const canonicalProofInput = {
+        '@context': 'https://www.w3.org/ns/credentials/v2',
+        type: proofObj.type,
+        created: proofObj.created,
+        verificationMethod: proofObj.verificationMethod,
+        cryptosuite: proofObj.cryptosuite,
+        proofPurpose: proofObj.proofPurpose,
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const canonicalProof = await (jsonld.canonize as any)(
+        canonicalProofInput,
+        {
+          algorithm: 'URDNA2015',
+          format: 'application/n-quads',
+          documentLoader: customDocLoader,
+          safe: false,
+        },
+      )
+
+      const concatenated = canonicalDoc + canonicalProof
+      const canonicalizationResult = crypto
+        .createHash('sha256')
+        .update(concatenated, 'utf8')
+        .digest('hex')
+
+      checks.push({
+        name: 'canonicalization',
+        status: 'success',
+        message: 'Canonicalization completed (URDNA2015)',
+        details: {
+          canonicalDocLines: (canonicalDoc as string)
+            .split('\n')
+            .filter(Boolean).length,
+          canonicalProofLines: (canonicalProof as string)
+            .split('\n')
+            .filter(Boolean).length,
+          canonicalizationResult,
+        },
+      })
+    } catch (error) {
+      checks.push({
+        name: 'canonicalization',
+        status: 'error',
+        message: `Canonicalization failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      })
+    }
+
+    // Step 3: Validate issuer profile
     if (issuerId) {
-      // Check if issuer is a did:key (self-sovereign identifier)
       const isDidKey = issuerId.startsWith('did:key:')
 
       if (isDidKey) {
-        // DID-based issuer: no HTTP endpoint to fetch, validate structure
         checks.push({
           name: 'issuer',
           status: 'success',
@@ -128,11 +254,10 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        // Step 4: Verify proof structure for DID-based issuers
+        // Step 4: Verify proof structure and cryptographic signature
         if (credential.proof && credential.proof.length > 0) {
           const proof = credential.proof[0]
 
-          // For did:key, verificationMethod should reference the same DID
           const expectedVmPrefix = issuerId
           if (!proof.verificationMethod.startsWith(expectedVmPrefix)) {
             checks.push({
@@ -145,7 +270,6 @@ export async function POST(request: NextRequest) {
               },
             })
           } else {
-            // Cryptographically verify the signature
             try {
               const publicKeyHex = didKeyToPublicKeyHex(issuerId)
               const isValid = await verifyCredential(credential, publicKeyHex)
