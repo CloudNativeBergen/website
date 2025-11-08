@@ -316,7 +316,6 @@ function buildAchievement(
   issuer: IssuerProfile,
 ): Achievement {
   const achievement: Achievement = {
-    '@context': [...OB_CONTEXT],
     id: config.id,
     type: ['Achievement'],
     name: config.name,

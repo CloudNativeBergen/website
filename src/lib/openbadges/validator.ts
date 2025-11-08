@@ -55,13 +55,8 @@ const achievementCredentialSchema = {
         },
         achievement: {
           type: 'object',
-          required: ['@context', 'id', 'type', 'name', 'criteria'],
+          required: ['id', 'type', 'name', 'criteria'],
           properties: {
-            '@context': {
-              type: 'array',
-              minItems: 2,
-              items: { type: 'string' },
-            },
             id: { type: 'string', format: 'uri' },
             type: {
               type: 'array',

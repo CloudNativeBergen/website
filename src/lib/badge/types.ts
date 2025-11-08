@@ -4,7 +4,6 @@ import type { Conference } from '@/lib/conference/types'
 export type BadgeType = 'speaker' | 'organizer'
 
 export interface BadgeCredential {
-  '@context': string[]
   id: string
   type: string[]
   name: string

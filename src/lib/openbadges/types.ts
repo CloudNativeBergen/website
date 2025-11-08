@@ -57,7 +57,6 @@ export interface IssuerProfile {
  * Achievement (badge class definition)
  */
 export interface Achievement {
-  '@context': readonly string[]
   id: string
   type: string[]
   name: string
