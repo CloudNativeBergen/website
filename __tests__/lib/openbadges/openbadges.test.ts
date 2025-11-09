@@ -687,8 +687,8 @@ describe('JWT Proof Format', () => {
       // Per OpenBadges 3.0 spec: credential properties are at top level, not wrapped in 'vc'
       expect(payload['@context']).toBeDefined()
       expect(payload.type).toContain('VerifiableCredential')
-      // Our library uses AchievementCredential type
-      expect(payload.type).toContain('AchievementCredential')
+      // Our library uses OpenBadgeCredential type per OpenBadges 3.0 spec
+      expect(payload.type).toContain('OpenBadgeCredential')
       expect(payload.id).toBe(credential.id)
       expect(payload.issuer).toBeDefined()
       expect(payload.credentialSubject).toBeDefined()

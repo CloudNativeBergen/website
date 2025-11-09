@@ -3,6 +3,13 @@ import type { Conference } from '@/lib/conference/types'
 
 export type BadgeType = 'speaker' | 'organizer'
 
+// Re-export configuration types for convenience
+export type {
+  BadgeConfiguration,
+  SigningConfiguration,
+  IssuerConfiguration,
+} from './config'
+
 export interface BadgeCredential {
   id: string
   type: string[]
@@ -103,8 +110,6 @@ export interface BadgeGenerationParams {
   conferenceYear: string
   conferenceDate: string
   badgeType: BadgeType
-  baseUrl: string
-  issuerUrl: string
   centerGraphicSvg?: string
   talkId?: string
   talkTitle?: string

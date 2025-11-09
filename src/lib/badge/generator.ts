@@ -1,28 +1,28 @@
 import { signCredentialJWT, createCredential } from '@/lib/openbadges'
 import { getCurrentDateTime } from '@/lib/time'
-import type { Conference } from '@/lib/conference/types'
-import type { BadgeGenerationParams } from './types'
+import type { BadgeGenerationParams, BadgeConfiguration } from './types'
 
-function getBadgeKeys(): { privateKey: string; publicKey: string } {
-  const privateKey = process.env.BADGE_ISSUER_RSA_PRIVATE_KEY
-  const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
-
-  if (!privateKey || !publicKey) {
-    throw new Error(
-      'Badge issuer RSA keys must be set in environment. ' +
-        'Set BADGE_ISSUER_RSA_PRIVATE_KEY and BADGE_ISSUER_RSA_PUBLIC_KEY',
-    )
-  }
-
-  return { privateKey, publicKey }
-}
-function generateBadgeId(): string {
-  return crypto.randomUUID()
-}
-
+/**
+ * Generate a badge credential with pure function design
+ *
+ * This function accepts all required configuration through the BadgeConfiguration
+ * parameter, making it pure and testable without environment variable dependencies.
+ *
+ * @param params - Badge generation parameters (speaker info, talk info, etc.)
+ * @param config - Badge configuration (keys, URLs, issuer info)
+ * @returns Promise resolving to assertion JWT and badge ID
+ *
+ * @example
+ * ```typescript
+ * const config = await createBadgeConfiguration(conference, domain)
+ * const badge = await generateBadgeCredential(params, config)
+ * // badge.assertion is the signed JWT credential
+ * // badge.badgeId is the unique identifier
+ * ```
+ */
 export async function generateBadgeCredential(
   params: BadgeGenerationParams,
-  conference: Conference,
+  config: BadgeConfiguration,
 ): Promise<{ assertion: string; badgeId: string }> {
   const {
     speakerName,
@@ -30,20 +30,12 @@ export async function generateBadgeCredential(
     speakerSlug,
     conferenceTitle,
     badgeType,
-    baseUrl,
-    issuerUrl,
     talkId,
     talkTitle,
   } = params
 
-  const badgeId = generateBadgeId()
+  const badgeId = crypto.randomUUID()
   const issuedAt = getCurrentDateTime()
-
-  const issuerEmail =
-    conference.contact_email ||
-    (conference.domains?.[0]
-      ? `contact@${conference.domains[0]}`
-      : 'contact@cloudnativebergen.dev')
 
   const evidence: Array<{
     id: string
@@ -54,7 +46,7 @@ export async function generateBadgeCredential(
 
   if (speakerSlug) {
     evidence.push({
-      id: `${baseUrl}/speaker/${speakerSlug}`,
+      id: `${config.baseUrl}/speaker/${speakerSlug}`,
       type: ['Evidence'],
       name: `${speakerName} Speaker Profile`,
       description: `Public speaker profile for ${speakerName} at ${conferenceTitle}`,
@@ -63,35 +55,26 @@ export async function generateBadgeCredential(
 
   if (badgeType === 'speaker' && talkId && talkTitle) {
     evidence.push({
-      id: `${baseUrl}/program#talk-${talkId}`,
+      id: `${config.baseUrl}/program#talk-${talkId}`,
       type: ['Evidence'],
       name: talkTitle,
       description: `Talk presented by ${speakerName} at ${conferenceTitle}`,
     })
   }
 
-  const issuerDescription =
-    conference.description ||
-    `${conference.organizer} hosts ${conferenceTitle}, bringing together the cloud native community in ${conference.city}, ${conference.country}.`
-
-  const { publicKey, privateKey } = getBadgeKeys()
-  // Issuer ID must point to the issuer profile endpoint (returns JSON-LD)
-  const issuerId = `${baseUrl}/api/badge/issuer`
-  const verificationMethod = `${baseUrl}/api/badge/issuer#key-1`
-
   const credential = createCredential({
-    credentialId: `${baseUrl}/api/badge/${badgeId}`,
+    credentialId: `${config.baseUrl}/api/badge/${badgeId}`,
     name: `${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} Badge for ${conferenceTitle}`,
     subject: {
       id: `mailto:${speakerEmail}`,
       type: ['AchievementSubject'],
     },
     achievement: {
-      id: `${baseUrl}/api/badge/${badgeId}/achievement`,
+      id: `${config.baseUrl}/api/badge/${badgeId}/achievement`,
       name: `${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} at ${conferenceTitle}`,
       description: `This badge recognizes ${speakerName} as ${badgeType === 'speaker' ? 'a speaker' : 'an organizer'} at ${conferenceTitle}, demonstrating their contribution to the cloud native community in Bergen, Norway.`,
       image: {
-        id: `${baseUrl}/api/badge/${badgeId}/image`,
+        id: `${config.baseUrl}/api/badge/${badgeId}/image`,
         type: 'Image',
         caption: `${conferenceTitle} ${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} Badge`,
       },
@@ -104,24 +87,22 @@ export async function generateBadgeCredential(
       ...(evidence.length > 0 && { evidence }),
     },
     issuer: {
-      id: issuerId,
-      name: conference.organizer,
-      url: issuerUrl,
-      email: issuerEmail,
-      description: issuerDescription,
-      image: {
-        id: `${baseUrl}/og/base.png`,
-        type: 'Image',
-      },
+      id: config.issuer.id,
+      name: config.issuer.name,
+      url: config.issuer.url,
+      email: config.issuer.email,
+      description: config.issuer.description,
+      image: config.issuer.imageUrl
+        ? {
+            id: config.issuer.imageUrl,
+            type: 'Image',
+          }
+        : undefined,
     },
     validFrom: issuedAt,
   })
 
-  const jwt = await signCredentialJWT(credential, {
-    privateKey,
-    publicKey,
-    verificationMethod,
-  })
+  const jwt = await signCredentialJWT(credential, config.signing)
 
   return {
     assertion: jwt,

@@ -7,14 +7,6 @@ export function isJWTFormat(credential: string): boolean {
   return credential.startsWith('eyJ')
 }
 
-export function normalizeProtocolForDomain(domain: string): string {
-  if (domain.startsWith('http://') || domain.startsWith('https://')) {
-    return domain
-  }
-  const protocol = domain.includes('localhost') ? 'http' : 'https'
-  return `${protocol}://${domain}`
-}
-
 export interface ImageObject {
   id: string
   type: 'Image'

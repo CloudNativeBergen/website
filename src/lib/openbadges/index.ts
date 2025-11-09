@@ -64,4 +64,4 @@ export type {
   MultikeyDocument,
 } from './types'
 
-export { OB_CONTEXT, isJWTFormat, normalizeProtocolForDomain } from './types'
+export { OB_CONTEXT, isJWTFormat } from './types'

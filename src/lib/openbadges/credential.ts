@@ -327,7 +327,7 @@ export function createCredential(config: CredentialConfig): Credential {
   const credential: Credential = {
     '@context': [...OB_CONTEXT],
     id: config.credentialId,
-    type: ['VerifiableCredential', 'AchievementCredential'],
+    type: ['VerifiableCredential', 'OpenBadgeCredential'],
     name: config.name || `${config.achievement.name}`,
     credentialSubject,
     issuer,

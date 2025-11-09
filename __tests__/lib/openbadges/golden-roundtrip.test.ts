@@ -109,7 +109,7 @@ describe('Golden Data Round-Trip - Create and Validate', () => {
       )
 
       expect(credential.type).toContain('VerifiableCredential')
-      expect(credential.type).toContain('AchievementCredential')
+      expect(credential.type).toContain('OpenBadgeCredential')
 
       expect(credential.id).toBe(config.credentialId)
       expect(credential.name).toBe(config.name)

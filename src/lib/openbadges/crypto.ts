@@ -401,8 +401,14 @@ function rsaPublicKeyToJWK(publicKeyPem: string): JWK {
  * - Payload includes entire credential plus iss, exp, nbf, jti
  * - Compact JWS format: base64url(header).base64url(payload).base64url(signature)
  *
- * OpenBadges 3.0 requires RS256 (RSA with SHA-256) as the minimum algorithm.
- * The jwk header parameter is included for maximum validator compatibility.
+ * CRITICAL VALIDATION REQUIREMENTS:
+ * - Algorithm MUST be RS256 or ES256 for 1EdTech validator compliance
+ * - EdDSA is NOT supported by the official 1EdTech OB30Inspector validator
+ * - The kid URL MUST be a direct HTTP endpoint (no fragment identifiers)
+ * - Fragment identifiers (#key-1) are stripped by HTTP clients and cause validation failures
+ *
+ * @see https://www.imsglobal.org/spec/ob/v3p0/impl/#external-proof-jwt-proof
+ * @see https://github.com/1EdTech/digital-credentials-public-validator/blob/main/inspector-vc/src/main/java/org/oneedtech/inspect/vc/probe/ExternalProofProbe.java#L54-57
  */
 export async function signCredentialJWT(
   credential: Credential,
@@ -413,6 +419,23 @@ export async function signCredentialJWT(
     const isRSA =
       config.privateKey.includes('BEGIN') &&
       config.privateKey.includes('PRIVATE KEY')
+
+    // Check if RSA-only mode is enforced
+    const rsaOnly = process.env.BADGE_ISSUER_RSA_ONLY === 'true'
+
+    if (rsaOnly && !isRSA) {
+      throw new ConfigurationError(
+        'BADGE_ISSUER_RSA_ONLY is enabled but RSA keys are not provided. ' +
+          'JWT format requires RS256 algorithm for 1EdTech validator compliance. ' +
+          'EdDSA/Ed25519 is NOT supported by the official validator. ' +
+          'See: https://github.com/cloudnativebergen/website/blob/main/docs/OPENBADGES_IMPLEMENTATION.md#rs256-requirement',
+        {
+          algorithm: 'EdDSA',
+          supported: ['RS256', 'ES256'],
+          rsaOnly,
+        },
+      )
+    }
 
     let privateKey: CryptoKey
     let algorithm: string
@@ -426,8 +449,27 @@ export async function signCredentialJWT(
       // Extract public key JWK for header inclusion
       const publicKeyObj = createPublicKey(config.publicKey)
       publicKeyJwk = publicKeyObj.export({ format: 'jwk' }) as JWK
+
+      // Ensure no private key material is exposed
+      if (publicKeyJwk && 'd' in publicKeyJwk) {
+        delete publicKeyJwk.d
+        console.warn(
+          'WARNING: Private key parameter (d) was present in JWK and has been removed. ' +
+            'This should not happen. Check key export logic.',
+        )
+      }
     } else {
       // Fallback to EdDSA with Ed25519 keys (for backward compatibility)
+      // WARNING: EdDSA is NOT supported by 1EdTech validator
+      if (!rsaOnly) {
+        console.warn(
+          'WARNING: Using EdDSA algorithm for JWT signing. ' +
+            'This is NOT supported by the 1EdTech OB30Inspector validator. ' +
+            'Set BADGE_ISSUER_RSA_ONLY=true to enforce RS256. ' +
+            'See: https://github.com/cloudnativebergen/website/blob/main/docs/OPENBADGES_IMPLEMENTATION.md#rs256-requirement',
+        )
+      }
+
       validateSigningConfig(config)
       const jwk = privateKeyToJWK(config.privateKey, config.publicKey)
       privateKey = (await importJWK(jwk, 'EdDSA')) as CryptoKey

@@ -162,11 +162,11 @@ describe('OpenBadges 3.0 Specification Compliance', () => {
       )
     })
 
-    it('should have type array including VerifiableCredential and AchievementCredential', () => {
+    it('should have type array including VerifiableCredential and OpenBadgeCredential', () => {
       const credential = createCredential(mockCredentialConfig)
 
       expect(credential.type).toContain('VerifiableCredential')
-      expect(credential.type).toContain('AchievementCredential')
+      expect(credential.type).toContain('OpenBadgeCredential')
     })
 
     it('should have all required OpenBadges fields', () => {

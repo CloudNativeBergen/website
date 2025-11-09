@@ -16,6 +16,7 @@ import {
   DeleteBadgeInputSchema,
 } from '@/server/schemas/badge'
 import { generateBadgeCredential } from '@/lib/badge/generator'
+import { createBadgeConfiguration } from '@/lib/badge/config'
 import { generateBadgeSVG } from '@/lib/badge/svg'
 import { bakeBadge, isJWTFormat } from '@/lib/openbadges'
 import { formatConferenceDateForBadge, getCurrentDateTime } from '@/lib/time'
@@ -134,13 +135,8 @@ export const badgeRouter = router({
           ? formatConferenceDateForBadge(conference.start_date)
           : 'TBD'
 
-        // Get base URL from current domain
-        // Use http for localhost, https otherwise
-        const baseUrl = domain.startsWith('http')
-          ? domain
-          : domain.includes('localhost')
-            ? `http://${domain}`
-            : `https://${domain}`
+        // Create badge configuration with keys and URLs
+        const config = await createBadgeConfiguration(conference, domain)
 
         // Fetch accepted talk for evidence (speaker badges only)
         let talkId: string | undefined
@@ -175,13 +171,11 @@ export const badgeRouter = router({
             conferenceYear,
             conferenceDate,
             badgeType: input.badgeType,
-            baseUrl,
-            issuerUrl: baseUrl, // Use baseUrl as issuer URL (organization home page)
             centerGraphicSvg: input.centerGraphicSvg,
             talkId,
             talkTitle,
           },
-          conference,
+          config,
         )
 
         const svgContent = generateBadgeSVG({
@@ -192,7 +186,7 @@ export const badgeRouter = router({
           centerGraphicSvg: input.centerGraphicSvg,
         })
 
-        const verificationUrl = `${baseUrl}/api/badge/${badgeId}/verify`
+        const verificationUrl = `${config.baseUrl}/api/badge/${badgeId}/verify`
         const bakedSvg = bakeBadge(svgContent, assertion)
 
         const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
@@ -369,14 +363,8 @@ export const badgeRouter = router({
             ? formatConferenceDateForBadge(conference.start_date)
             : 'TBD'
 
-          // Get base URL and issuer profile URL from current domain
-          // Use http for localhost, https otherwise
-          const baseUrl = domain.startsWith('http')
-            ? domain
-            : domain.includes('localhost')
-              ? `http://${domain}`
-              : `https://${domain}`
-          const issuerUrl = baseUrl
+          // Create badge configuration with keys and URLs
+          const config = await createBadgeConfiguration(conference, domain)
 
           // Fetch accepted talk for evidence (speaker badges only)
           let talkId: string | undefined
@@ -411,13 +399,11 @@ export const badgeRouter = router({
               conferenceYear,
               conferenceDate,
               badgeType: input.badgeType,
-              baseUrl,
-              issuerUrl,
               centerGraphicSvg: input.centerGraphicSvg,
               talkId,
               talkTitle,
             },
-            conference,
+            config,
           )
 
           const svgContent = generateBadgeSVG({
@@ -428,7 +414,7 @@ export const badgeRouter = router({
             centerGraphicSvg: input.centerGraphicSvg,
           })
 
-          const verificationUrl = `${baseUrl}/api/badge/${badgeId}/verify`
+          const verificationUrl = `${config.baseUrl}/api/badge/${badgeId}/verify`
           const bakedSvg = bakeBadge(svgContent, assertion)
 
           const { assetId, error: uploadError } = await uploadBadgeSVGAsset(

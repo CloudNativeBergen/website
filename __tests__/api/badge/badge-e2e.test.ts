@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@jest/globals'
 import { generateBadgeCredential } from '@/lib/badge/generator'
+import { createTestConfiguration } from '@/lib/badge/config'
 import { generateBadgeSVG } from '@/lib/badge/svg'
 import {
   bakeBadge,
@@ -64,8 +65,6 @@ describe('Badge System E2E', () => {
     conferenceYear: '2025',
     conferenceDate: testConference.start_date,
     badgeType: 'speaker',
-    baseUrl: `https://${TEST_HOST}`,
-    issuerUrl: `https://${TEST_HOST}`, // Organization homepage, not /api/badge/issuer
     talkId: 'test-talk-456',
     talkTitle: 'Kubernetes at Scale',
   }
@@ -76,10 +75,18 @@ describe('Badge System E2E', () => {
 
   describe('Badge Generation', () => {
     it('should generate valid OpenBadges 3.0 credential as JWT', async () => {
-      const result = await generateBadgeCredential(
-        testBadgeParams,
-        testConference,
-      )
+      const config = createTestConfiguration({
+        baseUrl: `https://${TEST_HOST}`,
+        issuer: {
+          id: `https://${TEST_HOST}/api/badge/issuer`,
+          name: testConference.organizer,
+          url: `https://${TEST_HOST}`,
+          email: testConference.contact_email,
+          description: `Test organization for ${testConference.title}`,
+        },
+      })
+
+      const result = await generateBadgeCredential(testBadgeParams, config)
 
       badgeCredential = result.assertion
       badgeId = result.badgeId
@@ -105,7 +112,7 @@ describe('Badge System E2E', () => {
         'https://www.w3.org/ns/credentials/v2',
       )
       expect(decodedCredential.type).toContain('VerifiableCredential')
-      expect(decodedCredential.type).toContain('AchievementCredential')
+      expect(decodedCredential.type).toContain('OpenBadgeCredential')
 
       // Verify IDs
       expect(decodedCredential.id).toMatch(/^https:\/\//)
@@ -159,9 +166,7 @@ describe('Badge System E2E', () => {
       // Verify evidence URL format (should NOT contain /api/badge/issuer)
       expect(firstEvidence.id).toMatch(/\/speaker\/jane-doe$/)
       expect(firstEvidence.id).not.toContain('/api/badge/issuer')
-      expect(firstEvidence.id).toBe(
-        `${testBadgeParams.baseUrl}/speaker/jane-doe`,
-      )
+      expect(firstEvidence.id).toBe(`https://${TEST_HOST}/speaker/jane-doe`)
 
       console.log(
         '✓ Achievement includes valid evidence with correct URL format',
@@ -173,16 +178,15 @@ describe('Badge System E2E', () => {
         throw new Error('Credential not decoded yet')
       }
       // issuer.url should be the organization homepage, not the /api/badge/issuer endpoint
-      expect(decodedCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
+      expect(decodedCredential.issuer.url).toBe(`https://${TEST_HOST}`)
       expect(decodedCredential.issuer.url).not.toContain('/api/badge/issuer')
-      expect(decodedCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
 
       // issuer.id should point to the issuer profile endpoint
       expect(decodedCredential.issuer.id).toBe(
         `https://${TEST_HOST}/api/badge/issuer`,
       )
       // issuer.url should point to organization homepage
-      expect(decodedCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
+      expect(decodedCredential.issuer.url).toBe(`https://${TEST_HOST}`)
 
       console.log('✓ Issuer URL correctly points to organization homepage')
     })
@@ -387,10 +391,22 @@ describe('Badge System E2E', () => {
 
   describe('Complete Badge Lifecycle', () => {
     it('should complete full badge workflow: generate → decode → bake → extract → verify', async () => {
+      // Create test configuration
+      const config = createTestConfiguration({
+        baseUrl: `https://${TEST_HOST}`,
+        issuer: {
+          id: `https://${TEST_HOST}/api/badge/issuer`,
+          name: testConference.organizer,
+          url: `https://${TEST_HOST}`,
+          email: testConference.contact_email,
+          description: `Test organization for ${testConference.title}`,
+        },
+      })
+
       // 1. Generate badge (JWT format)
       const { assertion } = await generateBadgeCredential(
         testBadgeParams,
-        testConference,
+        config,
       )
       expect(typeof assertion).toBe('string')
       expect(assertion).toMatch(/^eyJ/)
@@ -433,6 +449,18 @@ describe('Badge System E2E', () => {
     })
 
     it.skip('should cryptographically verify badge through validator API (Data Integrity Proof only)', async () => {
+      // Create test configuration
+      const config = createTestConfiguration({
+        baseUrl: `https://${TEST_HOST}`,
+        issuer: {
+          id: `https://${TEST_HOST}/api/badge/issuer`,
+          name: testConference.organizer,
+          url: `https://${TEST_HOST}`,
+          email: testConference.contact_email,
+          description: `Test organization for ${testConference.title}`,
+        },
+      })
+
       // 1. Generate and bake badge
       const svg = generateBadgeSVG({
         conferenceTitle: testBadgeParams.conferenceTitle,
@@ -443,7 +471,7 @@ describe('Badge System E2E', () => {
 
       const { assertion } = await generateBadgeCredential(
         testBadgeParams,
-        testConference,
+        config,
       )
 
       // Bake JWT string into SVG

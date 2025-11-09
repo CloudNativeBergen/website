@@ -404,9 +404,9 @@ describe('Golden Data - Official OpenBadges 3.0 Spec Example', () => {
       // Golden data uses OpenBadgeCredential
       expect(goldenPayload.type).toContain('OpenBadgeCredential')
 
-      // Our implementation uses AchievementCredential
+      // Our implementation uses OpenBadgeCredential per spec
       // Both are valid per spec
-      const ourType = ['VerifiableCredential', 'AchievementCredential']
+      const ourType = ['VerifiableCredential', 'OpenBadgeCredential']
       const specType = ['VerifiableCredential', 'OpenBadgeCredential']
 
       // Both should validate
@@ -421,7 +421,7 @@ describe('Golden Data - Official OpenBadges 3.0 Spec Example', () => {
           'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
         ],
         id: 'https://example.com/credentials/123',
-        type: ['VerifiableCredential', 'AchievementCredential'],
+        type: ['VerifiableCredential', 'OpenBadgeCredential'],
         name: 'Test Badge',
         credentialSubject: {
           id: 'https://example.com/users/test',
