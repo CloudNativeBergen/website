@@ -298,7 +298,7 @@ function buildAchievement(
       type: 'Image',
       caption: config.image.caption,
     },
-    issuer,
+    creator: issuer, // Per OpenBadges 3.0 spec: Achievement uses "creator", not "issuer"
   }
 
   if (config.criteria.id) {

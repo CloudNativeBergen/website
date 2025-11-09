@@ -50,7 +50,7 @@ export interface Achievement {
   description: string
   criteria: Criteria
   image: ImageObject
-  issuer: IssuerProfile
+  creator: IssuerProfile // Per OpenBadges 3.0 spec: Achievement uses "creator" property
   evidence?: Evidence[]
 }
 
