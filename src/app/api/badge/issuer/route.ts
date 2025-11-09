@@ -61,7 +61,7 @@ export async function GET(request: Request) {
         'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
       ],
       id: `${baseUrl}/api/badge/issuer`,
-      type: 'Profile',
+      type: ['Profile'],
       name: conference.organizer,
       url: baseUrl,
       email:

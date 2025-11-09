@@ -202,6 +202,12 @@ describe('OpenBadges 3.0 Specification Compliance', () => {
       expect(achievement.creator).toHaveProperty('id')
       expect(achievement.creator).toHaveProperty('type')
       expect(achievement.creator).toHaveProperty('name')
+
+      // Verify Profile type is an array (OpenBadges 3.0 requirement)
+      expect(Array.isArray(credential.issuer.type)).toBe(true)
+      expect(credential.issuer.type).toContain('Profile')
+      expect(Array.isArray(achievement.creator.type)).toBe(true)
+      expect(achievement.creator.type).toContain('Profile')
     })
   })
 

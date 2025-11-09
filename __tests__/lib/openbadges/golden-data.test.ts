@@ -99,6 +99,12 @@ describe('Golden Data - Official OpenBadges 3.0 Spec Example', () => {
       expect(creator).toHaveProperty('id')
       expect(creator).toHaveProperty('type')
       expect(creator).toHaveProperty('name')
+
+      // Verify Profile type is an array (OpenBadges 3.0 requirement)
+      expect(Array.isArray(issuer.type)).toBe(true)
+      expect(issuer.type).toContain('Profile')
+      expect(Array.isArray(creator.type)).toBe(true)
+      expect(creator.type).toContain('Profile')
     })
   })
 
