@@ -10,7 +10,7 @@ function getBadgeKeys(): { privateKey: string; publicKey: string } {
   if (!privateKey || !publicKey) {
     throw new Error(
       'Badge issuer RSA keys must be set in environment. ' +
-      'Set BADGE_ISSUER_RSA_PRIVATE_KEY and BADGE_ISSUER_RSA_PUBLIC_KEY',
+        'Set BADGE_ISSUER_RSA_PRIVATE_KEY and BADGE_ISSUER_RSA_PUBLIC_KEY',
     )
   }
 

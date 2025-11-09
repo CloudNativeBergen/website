@@ -437,19 +437,18 @@ export async function signCredentialJWT(
       publicKeyJwk = publicKeyToJWK(config.publicKey)
     }
 
-    // Build JWT claims per OpenBadges 3.0 spec
-    const now = Math.floor(Date.now() / 1000)
-    const exp = now + 365 * 24 * 60 * 60 // 1 year expiration
-
+    // Build JWT claims per OpenBadges 3.0 spec section 8.2.4.1
     // Extract issuer ID for registered claims
     const issuerId =
       typeof credential.issuer === 'string'
         ? credential.issuer
         : credential.issuer.id
 
-    // Build protected header with optional JWK for inline verification
-    // Per spec: spread credential properties at top level, then add registered JWT claims
-    const jwt = await new SignJWT({
+    // Convert ISO 8601 dates to NumericDate (seconds since epoch)
+    const nbf = Math.floor(new Date(credential.validFrom).getTime() / 1000)
+
+    // Build JWT with required claims per spec
+    const jwtBuilder = new SignJWT({
       ...credential, // All credential properties at top level (not wrapped in 'vc')
     })
       .setProtectedHeader({
@@ -458,13 +457,18 @@ export async function signCredentialJWT(
         kid: config.verificationMethod, // Verification method URL
         ...(publicKeyJwk && { jwk: publicKeyJwk }), // Include public key JWK for validator compatibility
       })
-      .setIssuedAt(now)
-      .setExpirationTime(exp)
-      .setNotBefore(now)
-      .setJti(credential.id) // Use credential ID as JWT ID (duplicates 'id')
-      .setSubject(credential.credentialSubject.id) // Subject ID (duplicates credentialSubject.id)
-      .setIssuer(issuerId) // Issuer ID (duplicates issuer.id)
-      .sign(privateKey)
+      .setIssuer(issuerId) // iss: issuer.id (required)
+      .setJti(credential.id) // jti: credential id (required)
+      .setNotBefore(nbf) // nbf: validFrom as NumericDate (required)
+      .setSubject(credential.credentialSubject.id) // sub: credentialSubject.id (required)
+
+    // exp: validUntil as NumericDate (required if validUntil exists)
+    if (credential.validUntil) {
+      const exp = Math.floor(new Date(credential.validUntil).getTime() / 1000)
+      jwtBuilder.setExpirationTime(exp)
+    }
+
+    const jwt = await jwtBuilder.sign(privateKey)
 
     return jwt
   } catch (error) {
@@ -532,16 +536,8 @@ export async function verifyCredentialJWT(
     }
 
     // Remove registered JWT claims (iss, jti, sub, iat, exp, nbf, aud) to get clean credential
-    const {
-      iss,
-      jti,
-      sub,
-      iat,
-      exp,
-      nbf,
-      aud,
-      ...credential
-    } = payload as JWTPayload & Credential
+    const { iss, jti, sub, iat, exp, nbf, aud, ...credential } =
+      payload as JWTPayload & Credential
 
     return credential
   } catch (error) {

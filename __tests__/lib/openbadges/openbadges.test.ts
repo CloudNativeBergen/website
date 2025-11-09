@@ -692,13 +692,20 @@ describe('JWT Proof Format', () => {
       expect(payload.id).toBe(credential.id)
       expect(payload.issuer).toBeDefined()
       expect(payload.credentialSubject).toBeDefined()
-      // Registered JWT claims duplicate credential fields
-      expect(payload.jti).toBe(credential.id) // JWT ID should match credential ID
-      expect(payload.iss).toBe(credential.issuer.id)
-      expect(payload.sub).toBe(credential.credentialSubject.id)
-      expect(payload.iat).toBeDefined() // Issued at
-      expect(payload.exp).toBeDefined() // Expiration
-      expect(payload.nbf).toBeDefined() // Not before
+
+      // Registered JWT claims per OpenBadges 3.0 spec section 8.2.4.1
+      expect(payload.jti).toBe(credential.id) // jti: credential.id (required)
+      expect(payload.iss).toBe(credential.issuer.id) // iss: issuer.id (required)
+      expect(payload.sub).toBe(credential.credentialSubject.id) // sub: credentialSubject.id (required)
+      expect(payload.nbf).toBeDefined() // nbf: validFrom (required)
+
+      // iat is NOT in OpenBadges 3.0 spec, should not be present
+      expect(payload).not.toHaveProperty('iat')
+
+      // exp is optional (only if validUntil exists)
+      if (credential.validUntil) {
+        expect(payload.exp).toBeDefined()
+      }
     })
   })
 

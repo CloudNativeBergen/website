@@ -1,9 +1,19 @@
-import Ajv from 'ajv'
+import Ajv2019 from 'ajv/dist/2019'
 import addFormats from 'ajv-formats'
 import { ValidationError } from './errors'
 import type { Credential, SignedCredential, ValidationResult } from './types'
+import officialSchema from './schema/json/ob_v3p0_achievementcredential_schema.json'
 
-const ajv = new Ajv({
+/**
+ * OpenBadges 3.0 Credential Schema Validator
+ *
+ * Validates credentials against the official OpenBadges 3.0 JSON Schema from 1EdTech:
+ * https://purl.imsglobal.org/spec/ob/v3p0/schema/json/ob_v3p0_achievementcredential_schema.json
+ *
+ * Uses Ajv2019 to support JSON Schema Draft 2019-09 (required by official schema)
+ */
+
+const ajv = new Ajv2019({
   strict: false,
   allErrors: true,
   verbose: true,
@@ -11,162 +21,7 @@ const ajv = new Ajv({
 
 addFormats(ajv)
 
-const achievementCredentialSchema = {
-  type: 'object',
-  required: ['@context', 'type', 'credentialSubject', 'issuer', 'validFrom'],
-  properties: {
-    '@context': {
-      type: 'array',
-      minItems: 2,
-      items: { type: 'string' },
-      contains: {
-        const: 'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
-      },
-    },
-    id: { type: 'string', format: 'uri' },
-    type: {
-      type: 'array',
-      minItems: 2,
-      contains: { const: 'VerifiableCredential' },
-      items: { type: 'string' },
-    },
-    name: { type: 'string' },
-    credentialSubject: {
-      type: 'object',
-      required: ['type', 'achievement'],
-      properties: {
-        id: { type: 'string' },
-        type: {
-          type: 'array',
-          contains: { const: 'AchievementSubject' },
-          items: { type: 'string' },
-        },
-        achievement: {
-          type: 'object',
-          required: ['id', 'type', 'name', 'criteria'],
-          properties: {
-            id: { type: 'string', format: 'uri' },
-            type: {
-              type: 'array',
-              contains: { const: 'Achievement' },
-              items: { type: 'string' },
-            },
-            name: { type: 'string' },
-            description: { type: 'string' },
-            criteria: {
-              type: 'object',
-              required: ['narrative'],
-              properties: {
-                id: { type: 'string', format: 'uri' },
-                narrative: { type: 'string' },
-              },
-            },
-            image: {
-              type: 'object',
-              required: ['id', 'type'],
-              properties: {
-                id: { type: 'string', format: 'uri' },
-                type: { const: 'Image' },
-                caption: { type: 'string' },
-              },
-            },
-            issuer: {
-              type: 'object',
-              required: ['id', 'type', 'name'],
-              properties: {
-                id: { type: 'string', format: 'uri' },
-                type: {
-                  type: 'array',
-                  contains: { const: 'Profile' },
-                  items: { type: 'string' },
-                },
-                name: { type: 'string' },
-                url: { type: 'string', format: 'uri' },
-                email: { type: 'string', format: 'email' },
-                description: { type: 'string' },
-                image: {
-                  type: 'object',
-                  required: ['id', 'type'],
-                  properties: {
-                    id: { type: 'string', format: 'uri' },
-                    type: { const: 'Image' },
-                  },
-                },
-              },
-            },
-            evidence: {
-              type: 'array',
-              items: {
-                type: 'object',
-                required: ['id', 'type', 'name'],
-                properties: {
-                  id: { type: 'string', format: 'uri' },
-                  type: {
-                    type: 'array',
-                    items: { type: 'string' },
-                  },
-                  name: { type: 'string' },
-                  description: { type: 'string' },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    issuer: {
-      type: 'object',
-      required: ['id', 'type', 'name'],
-      properties: {
-        id: { type: 'string', format: 'uri' },
-        type: {
-          type: 'array',
-          contains: { const: 'Profile' },
-          items: { type: 'string' },
-        },
-        name: { type: 'string' },
-        url: { type: 'string', format: 'uri' },
-        description: { type: 'string' },
-        image: {
-          type: 'object',
-          required: ['id', 'type'],
-          properties: {
-            id: { type: 'string', format: 'uri' },
-            type: { const: 'Image' },
-          },
-        },
-      },
-    },
-    validFrom: { type: 'string', format: 'date-time' },
-    validUntil: { type: 'string', format: 'date-time' },
-    proof: {
-      type: 'array',
-      minItems: 1,
-      items: {
-        type: 'object',
-        required: [
-          'type',
-          'created',
-          'verificationMethod',
-          'cryptosuite',
-          'proofPurpose',
-          'proofValue',
-        ],
-        properties: {
-          type: { const: 'DataIntegrityProof' },
-          created: { type: 'string', format: 'date-time' },
-          verificationMethod: { type: 'string', format: 'uri' },
-          cryptosuite: { type: 'string' },
-          proofPurpose: { type: 'string' },
-          proofValue: { type: 'string' },
-        },
-      },
-    },
-  },
-  additionalProperties: true,
-}
-
-const validateSchema = ajv.compile(achievementCredentialSchema)
+const validateSchema = ajv.compile(officialSchema)
 
 export function validateCredential(
   credential: Credential | SignedCredential,
