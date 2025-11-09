@@ -111,8 +111,8 @@ Our implementation successfully:
 
 ## Compliance Summary
 
-| Requirement                 | Status      | Notes                                |
-| --------------------------- | ----------- | ------------------------------------ |
+| Requirement                 | Status       | Notes                                |
+| --------------------------- | ------------ | ------------------------------------ |
 | **OpenBadges 3.0 Spec**     | ✅ Compliant | All required fields and structures   |
 | **JWT Format (8.2.2)**      | ✅ Compliant | Compact JWS, 3-part structure        |
 | **JWT Claims (8.2.4.1)**    | ✅ Compliant | All required claims, no extra claims |

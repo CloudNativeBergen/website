@@ -7,6 +7,7 @@
  * - Schema validation against official JSON schemas
  */
 
+import { describe, it, expect } from '@jest/globals'
 import { signCredentialJWT, verifyCredentialJWT } from '@/lib/openbadges/crypto'
 import { createCredential } from '@/lib/openbadges/credential'
 import { validateCredential } from '@/lib/openbadges/validator'

@@ -7,6 +7,7 @@
  * Reference: https://purl.imsglobal.org/spec/ob/v3p0
  */
 
+import { describe, it, expect } from '@jest/globals'
 import { validateCredential } from '@/lib/openbadges/validator'
 import { signCredentialJWT, verifyCredentialJWT } from '@/lib/openbadges/crypto'
 import type { Credential } from '@/lib/openbadges/types'
@@ -435,6 +436,7 @@ describe('Golden Data - Official OpenBadges 3.0 Spec Example', () => {
               id: 'https://example.com/issuer',
               type: ['Profile'],
               name: 'Test Issuer',
+              url: 'https://example.com/issuer',
             },
           },
         },
@@ -442,6 +444,7 @@ describe('Golden Data - Official OpenBadges 3.0 Spec Example', () => {
           id: 'https://example.com/issuer',
           type: ['Profile'],
           name: 'Test Issuer',
+          url: 'https://example.com/issuer',
         },
         validFrom: '2024-01-01T00:00:00Z',
       }

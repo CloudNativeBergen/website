@@ -97,7 +97,7 @@ describe('Badge System E2E', () => {
       decodedCredential = (await verifyCredentialJWT(
         badgeCredential as string,
         publicKey,
-      )) as BadgeAssertion
+      )) as unknown as BadgeAssertion
 
       // Verify structure of decoded credential
       expect(decodedCredential).toBeDefined()
@@ -118,8 +118,10 @@ describe('Badge System E2E', () => {
       )
       expect(decodedCredential.credentialSubject.achievement).toBeDefined()
 
-      // Verify issuer (issuer.id should be the organization's base URL)
-      expect(decodedCredential.issuer.id).toBe(`https://${TEST_HOST}`)
+      // Verify issuer (issuer.id points to issuer profile endpoint)
+      expect(decodedCredential.issuer.id).toBe(
+        `https://${TEST_HOST}/api/badge/issuer`,
+      )
       expect(decodedCredential.issuer.name).toBe(testConference.organizer)
 
       // Verify temporal validity
@@ -175,9 +177,12 @@ describe('Badge System E2E', () => {
       expect(decodedCredential.issuer.url).not.toContain('/api/badge/issuer')
       expect(decodedCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
 
-      // issuer.id should be the organization's base URL (matches issuer profile endpoint's id field)
-      expect(decodedCredential.issuer.id).toBe(`https://${TEST_HOST}`)
-      expect(decodedCredential.issuer.id).toBe(testBadgeParams.issuerUrl)
+      // issuer.id should point to the issuer profile endpoint
+      expect(decodedCredential.issuer.id).toBe(
+        `https://${TEST_HOST}/api/badge/issuer`,
+      )
+      // issuer.url should point to organization homepage
+      expect(decodedCredential.issuer.url).toBe(testBadgeParams.issuerUrl)
 
       console.log('✓ Issuer URL correctly points to organization homepage')
     })
@@ -398,7 +403,7 @@ describe('Badge System E2E', () => {
       const credential = (await verifyCredentialJWT(
         assertion,
         publicKey1,
-      )) as BadgeAssertion
+      )) as unknown as BadgeAssertion
 
       // 3. Generate SVG
       const svg = generateBadgeSVG({

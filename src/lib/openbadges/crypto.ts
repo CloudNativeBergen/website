@@ -536,6 +536,7 @@ export async function verifyCredentialJWT(
     }
 
     // Remove registered JWT claims (iss, jti, sub, iat, exp, nbf, aud) to get clean credential
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { iss, jti, sub, iat, exp, nbf, aud, ...credential } =
       payload as JWTPayload & Credential
 

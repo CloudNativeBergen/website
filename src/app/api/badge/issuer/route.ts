@@ -60,7 +60,7 @@ export async function GET(request: Request) {
         'https://www.w3.org/ns/credentials/v2',
         'https://purl.imsglobal.org/spec/ob/v3p0/context-3.0.3.json',
       ],
-      id: baseUrl,
+      id: `${baseUrl}/api/badge/issuer`,
       type: 'Profile',
       name: conference.organizer,
       url: baseUrl,

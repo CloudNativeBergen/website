@@ -75,8 +75,8 @@ export async function generateBadgeCredential(
     `${conference.organizer} hosts ${conferenceTitle}, bringing together the cloud native community in ${conference.city}, ${conference.country}.`
 
   const { publicKey, privateKey } = getBadgeKeys()
-  // Issuer ID should be the organization's base URL, matching the issuer profile endpoint
-  const issuerId = baseUrl
+  // Issuer ID must point to the issuer profile endpoint (returns JSON-LD)
+  const issuerId = `${baseUrl}/api/badge/issuer`
   const verificationMethod = `${baseUrl}/api/badge/issuer#key-1`
 
   const credential = createCredential({
