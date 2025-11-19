@@ -228,7 +228,7 @@ export async function getPublicSpeaker(
           location,
           featured,
           speakers[]->{_id, name, "slug": slug.current, image}
-        } | order(featured desc, date desc)[0...6]
+        } | order(featured desc, date desc)
       }`,
       { speakerSlug, conferenceId },
     )

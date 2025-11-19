@@ -33,21 +33,36 @@ export function SimpleImageCarousel({
     globalKeyboard: false,
   })
 
+  const currentImage = images[currentIndex]
+
   const handleImageLoad = useCallback((imageId: string) => {
     setLoadedImageIds((prev) => new Set(prev).add(imageId))
   }, [])
+
+  const handleImageRef = useCallback(
+    (el: HTMLImageElement | null) => {
+      if (el && el.complete && el.naturalHeight > 0 && currentImage) {
+        setLoadedImageIds((prev) => {
+          if (prev.has(currentImage._id)) {
+            return prev
+          }
+          return new Set(prev).add(currentImage._id)
+        })
+      }
+    },
+    [currentImage],
+  )
 
   if (!images || images.length === 0) {
     return null
   }
 
-  const currentImage = images[currentIndex]
   const isCurrentImageLoaded =
     currentImage && loadedImageIds.has(currentImage._id)
 
   return (
     <div className={cn('relative w-full lg:hidden', className)}>
-      <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
         <div
           className="relative h-full w-full"
           onTouchStart={(e) => handleTouchStart(e.nativeEvent)}
@@ -64,6 +79,7 @@ export function SimpleImageCarousel({
               className="h-full w-full cursor-pointer"
             >
               <img
+                ref={handleImageRef}
                 src={`${currentImage.imageUrl}?w=1200&q=85&auto=format&fit=max`}
                 alt={
                   currentImage.imageAlt ??

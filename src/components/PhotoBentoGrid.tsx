@@ -24,6 +24,12 @@ function PhotoGridItem({
     ? `${image.imageUrl}?w=800&h=800&q=85&auto=format&fit=crop`
     : ''
 
+  const handleImageRef = (el: HTMLImageElement | null) => {
+    if (el && el.complete && el.naturalHeight > 0) {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <button
       onClick={onClick}
@@ -34,6 +40,7 @@ function PhotoGridItem({
       )}
       {imageUrl && (
         <img
+          ref={handleImageRef}
           src={imageUrl}
           alt={
             image.imageAlt ||
@@ -53,13 +60,41 @@ export function PhotoBentoGrid({
   onImageClick,
   className,
 }: PhotoBentoGridProps) {
-  const sortedImages = [...images].sort((a, b) => {
-    if (a.featured && !b.featured) return -1
-    if (!a.featured && b.featured) return 1
-    return 0
-  })
+  // Select a diverse set of images for preview
+  // Keep track of original indices before any sorting
+  const getPreviewImages = () => {
+    // Add original index to each image before sorting
+    const imagesWithIndex = images.map((img, idx) => ({
+      image: img,
+      originalIndex: idx,
+    }))
 
-  const limitedImages = sortedImages.slice(0, 6)
+    // Sort by featured status
+    const sorted = [...imagesWithIndex].sort((a, b) => {
+      if (a.image.featured && !b.image.featured) return -1
+      if (!a.image.featured && b.image.featured) return 1
+      return 0
+    })
+
+    if (sorted.length <= 6) {
+      return sorted
+    }
+
+    // Take featured images first
+    const featured = sorted.filter((item) => item.image.featured).slice(0, 3)
+    const remaining = 6 - featured.length
+
+    // Spread remaining picks across non-featured images
+    const nonFeatured = sorted.filter((item) => !item.image.featured)
+    const step = Math.max(1, Math.floor(nonFeatured.length / remaining))
+    const spreadPicks = Array.from({ length: remaining }, (_, i) =>
+      nonFeatured[Math.min(i * step, nonFeatured.length - 1)]
+    )
+
+    return [...featured, ...spreadPicks].slice(0, 6)
+  }
+
+  const previewImages = getPreviewImages()
 
   return (
     <div
@@ -68,12 +103,12 @@ export function PhotoBentoGrid({
         className,
       )}
     >
-      {limitedImages.map((image, index) => (
+      {previewImages.map(({ image, originalIndex }, displayIndex) => (
         <PhotoGridItem
           key={image._id}
           image={image}
-          index={index}
-          onClick={() => onImageClick(index)}
+          index={displayIndex}
+          onClick={() => onImageClick(originalIndex)}
         />
       ))}
     </div>
