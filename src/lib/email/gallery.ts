@@ -28,6 +28,22 @@ export async function sendGalleryTagEmail(
   try {
     const { speaker, image, conference, domain } = request
 
+    // Skip email sending in development mode
+    if (process.env.NODE_ENV === 'development') {
+      logger.info('Gallery tag email (development mode - not sent)', {
+        speakerName: speaker.name,
+        speakerEmail: speaker.email,
+        imageId: image._id,
+        eventName: conference.title,
+        galleryUrl: buildGalleryImageUrl(domain, image._id),
+      })
+      return {
+        success: true,
+        message: 'Email skipped in development mode',
+        recipient: speaker.email,
+      }
+    }
+
     // Validate required fields
     if (!speaker.email) {
       return {
