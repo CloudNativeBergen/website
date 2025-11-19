@@ -78,10 +78,6 @@ export async function createGalleryImage(
           },
         )
         assetRef = createReference(uploadedAsset._id)
-        logger.info('Successfully uploaded asset', {
-          assetId: uploadedAsset._id,
-          filename: (file as File).name,
-        })
       } catch (uploadError) {
         logger.error('Failed to upload asset to Sanity', {
           error:
@@ -118,9 +114,6 @@ export async function createGalleryImage(
     }
 
     const created = await clientWrite.create(document)
-    logger.info('Successfully created gallery document', {
-      documentId: created._id,
-    })
 
     const image = await getGalleryImage(created._id)
 
@@ -183,17 +176,17 @@ export async function updateGalleryImage(
         (patch.file as { _type?: string })._type === 'reference'
           ? (patch.file as { _type: 'reference'; _ref: string })
           : createReference(
-              (
-                await clientWrite.assets.upload(
-                  'image',
-                  patch.file as Uploadable,
-                  {
-                    filename: (patch.file as File).name || 'image',
-                    contentType: (patch.file as File).type || 'image/jpeg',
-                  },
-                )
-              )._id,
-            )
+            (
+              await clientWrite.assets.upload(
+                'image',
+                patch.file as Uploadable,
+                {
+                  filename: (patch.file as File).name || 'image',
+                  contentType: (patch.file as File).type || 'image/jpeg',
+                },
+              )
+            )._id,
+          )
 
       updatePatch.image = {
         _type: 'image',

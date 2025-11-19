@@ -109,12 +109,6 @@ export async function POST(request: NextRequest) {
           imageAlt: metadata.imageAlt || fileName,
         })
 
-        console.log(`Uploading ${fileName}:`, {
-          size: file.size,
-          type: file.type,
-          metadata: validatedMetadata,
-        })
-
         const res = await createGalleryImage({
           file,
           ...validatedMetadata,
