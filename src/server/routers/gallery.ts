@@ -5,12 +5,14 @@ import {
   galleryImageFilterSchema,
   galleryImageDeleteSchema,
   galleryImageToggleFeaturedSchema,
+  galleryImageUntagSelfSchema,
 } from '@/server/schemas/gallery'
 import {
   getGalleryImages,
   getGalleryImageCount,
   updateGalleryImage,
   deleteGalleryImage,
+  untagSpeakerFromImage,
 } from '@/lib/gallery/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
@@ -190,4 +192,31 @@ export const galleryRouter = router({
       })
     }
   }),
+
+  untagSelf: protectedProcedure
+    .input(galleryImageUntagSelfSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const result = await untagSpeakerFromImage(
+          input.imageId,
+          ctx.speaker._id,
+        )
+
+        if (!result.success) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: result.error || 'Failed to untag yourself from photo',
+          })
+        }
+
+        return { success: true }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to untag yourself from photo',
+          cause: error,
+        })
+      }
+    }),
 })

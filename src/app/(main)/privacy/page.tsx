@@ -33,6 +33,7 @@ import {
   ChatBubbleOvalLeftIcon,
   FlagIcon,
   HandRaisedIcon,
+  UserMinusIcon,
 } from '@heroicons/react/24/outline'
 
 export default async function PrivacyPolicyPage() {
@@ -290,6 +291,58 @@ export default async function PrivacyPolicyPage() {
                           announcements
                         </li>
                       </ul>
+                    </div>
+
+                    {/* Photo Gallery Data */}
+                    <div className="rounded-lg border border-pink-200 bg-pink-50 p-6 dark:border-pink-800 dark:bg-pink-900/20">
+                      <h3 className="mb-4 flex items-center text-lg font-semibold text-pink-800 dark:text-pink-200">
+                        <VideoCameraIcon className="mr-3 h-5 w-5" />
+                        Photo Gallery & Event Documentation
+                      </h3>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 font-medium text-pink-800 dark:text-pink-200">
+                            Photo Tagging
+                          </h4>
+                          <ul className="space-y-1 text-sm text-pink-700 dark:text-pink-300">
+                            <li>
+                              • Speaker and attendee identification in event
+                              photos
+                            </li>
+                            <li>
+                              • Photo metadata (photographer, location, date)
+                            </li>
+                            <li>
+                              • Untagging history (speakers who removed
+                              themselves from photos)
+                            </li>
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="mb-2 font-medium text-pink-800 dark:text-pink-200">
+                            Your Control
+                          </h4>
+                          <ul className="space-y-1 text-sm text-pink-700 dark:text-pink-300">
+                            <li>
+                              • Remove yourself from any photo at any time
+                            </li>
+                            <li>
+                              • Prevents automatic re-tagging in that photo
+                            </li>
+                            <li>
+                              • Your removal choice is permanently respected
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div className="mt-3 rounded-lg bg-pink-100 p-2 dark:bg-pink-800/30">
+                        <p className="text-xs text-pink-800 dark:text-pink-200">
+                          <strong>Legal Basis:</strong> Legitimate interest for
+                          event documentation and community engagement. You can
+                          untag yourself at any time through your speaker
+                          profile or by contacting us.
+                        </p>
+                      </div>
                     </div>
 
                     {/* Attendee & Participant Information */}
@@ -1231,6 +1284,21 @@ export default async function PrivacyPolicyPage() {
                         Object to processing based on legitimate interests or
                         for marketing purposes. This includes the right to
                         object to analytics based on our legitimate interests.
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
+                      <h3 className="mb-2 flex items-center text-lg font-semibold">
+                        <UserMinusIcon className="mr-2 h-5 w-5 text-gray-600 dark:text-gray-400" />
+                        Right to Untag from Photos{' '}
+                        <span className="ml-2 text-sm font-normal text-gray-500">
+                          (Photo Gallery Control)
+                        </span>
+                      </h3>
+                      <p className="text-sm">
+                        Remove yourself from event photos at any time. Once you
+                        untag yourself, the system prevents re-tagging you in
+                        that photo, permanently respecting your choice.
                       </p>
                     </div>
                   </div>

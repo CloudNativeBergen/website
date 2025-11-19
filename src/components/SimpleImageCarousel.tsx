@@ -61,7 +61,7 @@ export function SimpleImageCarousel({
           {currentImage?.imageUrl && (
             <button
               onClick={() => onImageClick(currentIndex)}
-              className="h-full w-full"
+              className="h-full w-full cursor-pointer"
             >
               <img
                 src={`${currentImage.imageUrl}?w=1200&q=85&auto=format&fit=max`}

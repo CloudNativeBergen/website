@@ -27,7 +27,7 @@ function PhotoGridItem({
   return (
     <button
       onClick={onClick}
-      className="group relative aspect-square overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-700"
+      className="group relative aspect-square cursor-pointer overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-700"
     >
       {isLoading && (
         <div className="absolute inset-0 animate-pulse bg-gray-200 dark:bg-gray-700" />

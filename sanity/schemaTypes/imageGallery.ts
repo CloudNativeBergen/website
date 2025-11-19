@@ -72,6 +72,25 @@ export default defineType({
       validation: (Rule) => Rule.unique(),
     }),
     defineField({
+      name: 'untaggedSpeakers',
+      title: 'Untagged Speakers',
+      type: 'array',
+      of: [
+        {
+          type: 'reference',
+          to: [{ type: 'speaker' }],
+        },
+      ],
+      description:
+        'Speakers who have untagged themselves from this image (prevents re-tagging)',
+      validation: (Rule) => Rule.unique(),
+      readOnly: true,
+      hidden: ({ document }) =>
+        !document?.untaggedSpeakers ||
+        (Array.isArray(document.untaggedSpeakers) &&
+          document.untaggedSpeakers.length === 0),
+    }),
+    defineField({
       name: 'conference',
       title: 'Conference',
       type: 'reference',

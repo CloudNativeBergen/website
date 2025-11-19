@@ -1,22 +1,26 @@
 'use client'
 
-import React, { Fragment } from 'react'
+import React, { Fragment, useState, useEffect } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import {
   XMarkIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  UserMinusIcon,
 } from '@heroicons/react/24/outline'
+import { useSession } from 'next-auth/react'
 import { useImageCarousel } from '@/hooks/useImageCarousel'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import { api } from '@/lib/trpc/client'
 
 interface GalleryModalProps {
   isOpen: boolean
   onClose: () => void
   images: GalleryImageWithSpeakers[]
   initialIndex?: number
+  onImageUpdated?: () => void
 }
 
 export function GalleryModal({
@@ -24,7 +28,11 @@ export function GalleryModal({
   onClose,
   images,
   initialIndex = 0,
+  onImageUpdated,
 }: GalleryModalProps) {
+  const { data: session } = useSession()
+  const [untagError, setUntagError] = useState<string | null>(null)
+  const [localImages, setLocalImages] = useState(images)
   const {
     currentIndex,
     goToNext,
@@ -34,7 +42,7 @@ export function GalleryModal({
     handleTouchMove,
     handleTouchEnd,
   } = useImageCarousel({
-    totalImages: images.length,
+    totalImages: localImages.length,
     initialIndex: initialIndex,
     enableKeyboard: isOpen,
     enableTouch: true,
@@ -42,11 +50,64 @@ export function GalleryModal({
     onEscape: onClose,
   })
 
-  if (!images || images.length === 0) {
+  // Sync localImages when images prop changes
+  useEffect(() => {
+    setLocalImages(images)
+  }, [images])
+
+  const untagMutation = api.gallery.untagSelf.useMutation({
+    onSuccess: () => {
+      setUntagError(null)
+      // Optimistically update the local images array
+      if (currentSpeakerId) {
+        setLocalImages((prev) =>
+          prev.map((img, idx) =>
+            idx === currentIndex
+              ? {
+                  ...img,
+                  speakers: img.speakers?.filter(
+                    (s) => s._id !== currentSpeakerId,
+                  ),
+                }
+              : img,
+          ),
+        )
+      }
+      onImageUpdated?.()
+    },
+    onError: (error) => {
+      setUntagError(error.message || 'Failed to remove tag. Please try again.')
+    },
+  })
+
+  // Reset mutation state and error when navigating to a different image
+  useEffect(() => {
+    setUntagError(null)
+    untagMutation.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex])
+
+  if (!localImages || localImages.length === 0) {
     return null
   }
 
-  const currentImage = images[currentIndex]
+  const currentImage = localImages[currentIndex]
+  const currentSpeakerId = session?.speaker?._id
+  const isCurrentSpeakerTagged =
+    currentSpeakerId &&
+    currentImage?.speakers?.some((s) => s._id === currentSpeakerId)
+
+  const handleUntagSelf = async () => {
+    if (!currentImage || !currentSpeakerId || untagMutation.isPending) return
+
+    setUntagError(null)
+    try {
+      await untagMutation.mutateAsync({ imageId: currentImage._id })
+    } catch {
+      // Error is already handled by the mutation's onError callback
+      // This catch prevents unhandled promise rejection
+    }
+  }
 
   return (
     <Transition.Root show={isOpen} as={Fragment}>
@@ -79,7 +140,7 @@ export function GalleryModal({
                   <div className="flex items-center justify-between border-b border-gray-800 bg-black/50 px-4 py-3 backdrop-blur-sm sm:px-6">
                     <div className="flex items-center space-x-4">
                       <Dialog.Title className="font-space-grotesk text-lg font-semibold text-white">
-                        {currentIndex + 1} of {images.length}
+                        {currentIndex + 1} of {localImages.length}
                       </Dialog.Title>
                       {currentImage?.location && (
                         <span className="hidden text-sm text-gray-300/90 sm:block">
@@ -122,7 +183,7 @@ export function GalleryModal({
                         </div>
                       )}
 
-                      {images.length > 1 && (
+                      {localImages.length > 1 && (
                         <>
                           <button
                             onClick={goToPrevious}
@@ -184,9 +245,10 @@ export function GalleryModal({
                             <span>{currentImage.location}</span>
                           )}
                         </div>
-                        {currentImage?.speakers &&
-                          currentImage.speakers.length > 0 && (
-                            <div className="flex flex-wrap gap-2 pt-2">
+                        <div className="flex items-center justify-between gap-4 pt-2">
+                          {currentImage?.speakers &&
+                          currentImage.speakers.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
                               {currentImage.speakers.map((speaker) =>
                                 speaker.slug ? (
                                   <Link
@@ -206,17 +268,41 @@ export function GalleryModal({
                                 ),
                               )}
                             </div>
+                          ) : (
+                            <div />
                           )}
+                          {isCurrentSpeakerTagged && (
+                            <button
+                              onClick={handleUntagSelf}
+                              disabled={untagMutation.isPending}
+                              className="flex shrink-0 cursor-pointer items-center gap-2 rounded-md bg-red-600/80 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Remove yourself from this photo"
+                            >
+                              <UserMinusIcon className="h-4 w-4" />
+                              {untagMutation.isPending
+                                ? 'Removing...'
+                                : 'Remove Me'}
+                            </button>
+                          )}
+                        </div>
+                        {untagError && (
+                          <p className="text-xs text-red-400">{untagError}</p>
+                        )}
+                        {untagMutation.isSuccess && (
+                          <p className="text-xs text-green-400">
+                            You&apos;ve been removed from this photo
+                          </p>
+                        )}
                       </div>
 
                       <div className="overflow-x-auto">
                         <div className="flex space-x-2 pb-2">
-                          {images.map((image, index) => (
+                          {localImages.map((image, index) => (
                             <button
                               key={image._id}
                               onClick={() => goToIndex(index)}
                               className={cn(
-                                'relative h-16 w-24 flex-shrink-0 overflow-hidden rounded',
+                                'relative h-16 w-24 shrink-0 cursor-pointer overflow-hidden rounded',
                                 'transition-all hover:opacity-100',
                                 index === currentIndex
                                   ? 'ring-2 ring-white ring-offset-2 ring-offset-black'

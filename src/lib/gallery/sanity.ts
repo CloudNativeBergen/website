@@ -146,11 +146,17 @@ export async function updateGalleryImage(
 ): Promise<GalleryImageResponse> {
   try {
     let originalSpeakerIds: string[] = []
+    let untaggedSpeakerIds: string[] = []
     if (patch.speakers !== undefined) {
       const original = await clientReadUncached.fetch<{
         speakers?: Array<{ _ref: string }>
-      }>(groq`*[_type == "imageGallery" && _id == $id][0]{ speakers }`, { id })
+        untaggedSpeakers?: Array<{ _ref: string }>
+      }>(
+        groq`*[_type == "imageGallery" && _id == $id][0]{ speakers, untaggedSpeakers }`,
+        { id },
+      )
       originalSpeakerIds = (original?.speakers || []).map((s) => s._ref)
+      untaggedSpeakerIds = (original?.untaggedSpeakers || []).map((s) => s._ref)
     }
 
     const updatePatch: Record<string, unknown> = {}
@@ -163,12 +169,30 @@ export async function updateGalleryImage(
       updatePatch.conference = createReference(patch.conference)
     if (patch.featured !== undefined) updatePatch.featured = patch.featured
     if (patch.speakers !== undefined) {
-      updatePatch.speakers = Array.from(new Set(patch.speakers))
-        .filter(Boolean)
-        .map((speakerId) => ({
-          ...createReference(speakerId),
-          _key: `speaker-${speakerId}`,
-        }))
+      const requestedSpeakers = Array.from(new Set(patch.speakers)).filter(
+        Boolean,
+      )
+
+      // Filter out speakers who have previously untagged themselves from this image.
+      // This respects user privacy choices - once a speaker untags themselves,
+      // they cannot be re-tagged in that photo (GDPR "right to object").
+      const allowedSpeakers = requestedSpeakers.filter(
+        (speakerId) => !untaggedSpeakerIds.includes(speakerId),
+      )
+
+      if (requestedSpeakers.length !== allowedSpeakers.length) {
+        const blockedCount = requestedSpeakers.length - allowedSpeakers.length
+        logger.warn('Some speakers blocked from being re-tagged', {
+          imageId: id,
+          blockedCount,
+          requestedCount: requestedSpeakers.length,
+        })
+      }
+
+      updatePatch.speakers = allowedSpeakers.map((speakerId) => ({
+        ...createReference(speakerId),
+        _key: `speaker-${speakerId}`,
+      }))
     }
 
     if (patch.file) {
@@ -449,5 +473,70 @@ export async function deleteGalleryImage(id: string): Promise<boolean> {
       imageId: id,
     })
     return false
+  }
+}
+
+/**
+ * Untag a speaker from a gallery image
+ * This removes the speaker from the speakers array and adds them to untaggedSpeakers
+ * to prevent future re-tagging
+ */
+export async function untagSpeakerFromImage(
+  imageId: string,
+  speakerId: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const image = await clientReadUncached.fetch<{
+      speakers?: Array<{ _ref: string; _key: string }>
+      untaggedSpeakers?: Array<{ _ref: string; _key: string }>
+    }>(
+      groq`*[_type == "imageGallery" && _id == $imageId][0]{ speakers, untaggedSpeakers }`,
+      { imageId },
+    )
+
+    if (!image) {
+      return { success: false, error: 'Image not found' }
+    }
+
+    const currentSpeakers = image.speakers || []
+    const currentUntagged = image.untaggedSpeakers || []
+
+    const speakerToRemove = currentSpeakers.find((s) => s._ref === speakerId)
+    if (!speakerToRemove) {
+      return { success: false, error: 'Speaker is not tagged in this image' }
+    }
+
+    const isAlreadyUntagged = currentUntagged.some((s) => s._ref === speakerId)
+
+    const patch = clientWrite
+      .patch(imageId)
+      .unset([`speakers[_key=="${speakerToRemove._key}"]`])
+
+    if (!isAlreadyUntagged) {
+      patch.setIfMissing({ untaggedSpeakers: [] })
+      patch.append('untaggedSpeakers', [
+        {
+          ...createReference(speakerId),
+          _key: `untagged-${speakerId}`,
+        },
+      ])
+    }
+
+    await patch.commit()
+
+    return { success: true }
+  } catch (error) {
+    logger.error('Error untagging speaker from image', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      imageId,
+      speakerId,
+    })
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Failed to untag speaker from image',
+    }
   }
 }

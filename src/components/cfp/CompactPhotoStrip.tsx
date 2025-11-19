@@ -37,7 +37,7 @@ export function CompactPhotoStrip({
               setSelectedIndex(0)
               setIsModalOpen(true)
             }}
-            className="text-xs font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300"
+            className="cursor-pointer text-xs font-medium text-brand-cloud-blue transition-colors hover:text-brand-cloud-blue/80 dark:text-blue-400 dark:hover:text-blue-300"
           >
             View All →
           </button>

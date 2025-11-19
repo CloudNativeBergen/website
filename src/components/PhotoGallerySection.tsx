@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { PhotoBentoGrid } from '@/components/PhotoBentoGrid'
 import { SimpleImageCarousel } from '@/components/SimpleImageCarousel'
@@ -13,6 +14,7 @@ interface PhotoGallerySectionProps {
 export function PhotoGallerySection({ images }: PhotoGallerySectionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+  const router = useRouter()
 
   if (!images || images.length === 0) {
     return null
@@ -21,6 +23,10 @@ export function PhotoGallerySection({ images }: PhotoGallerySectionProps) {
   const handleImageClick = (index: number) => {
     setSelectedImageIndex(index)
     setIsModalOpen(true)
+  }
+
+  const handleImageUpdated = () => {
+    router.refresh()
   }
 
   return (
@@ -38,6 +44,7 @@ export function PhotoGallerySection({ images }: PhotoGallerySectionProps) {
         onClose={() => setIsModalOpen(false)}
         images={images}
         initialIndex={selectedImageIndex}
+        onImageUpdated={handleImageUpdated}
       />
     </>
   )

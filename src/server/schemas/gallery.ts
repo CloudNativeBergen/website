@@ -50,3 +50,7 @@ export const galleryImageToggleFeaturedSchema = z.object({
   id: z.string().min(1, 'Image ID is required'),
   featured: z.boolean(),
 })
+
+export const galleryImageUntagSelfSchema = z.object({
+  imageId: z.string().min(1, 'Image ID is required'),
+})
