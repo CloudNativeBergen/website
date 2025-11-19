@@ -2,7 +2,6 @@ import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components'
 import { Layout } from '@/components/Layout'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notFound } from 'next/navigation'
-import { TRPCProvider } from '@/components/providers/TRPCProvider'
 
 export default async function WorkshopLayout({
   children,
@@ -17,9 +16,7 @@ export default async function WorkshopLayout({
 
   return (
     <Layout conference={conference}>
-      <AuthKitProvider>
-        <TRPCProvider>{children}</TRPCProvider>
-      </AuthKitProvider>
+      <AuthKitProvider>{children}</AuthKitProvider>
     </Layout>
   )
 }

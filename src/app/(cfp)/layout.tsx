@@ -1,5 +1,4 @@
 import { CFPLayout } from '@/components/cfp/CFPLayout'
-import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { ImpersonationBanner } from '@/components/ImpersonationBanner'
 import { getAuthSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
@@ -21,7 +20,7 @@ export default async function CFPGroupLayout({
   }
 
   return (
-    <TRPCProvider>
+    <>
       {session.isImpersonating && session.realAdmin && (
         <ImpersonationBanner
           impersonatedSpeaker={session.speaker}
@@ -29,6 +28,6 @@ export default async function CFPGroupLayout({
         />
       )}
       <CFPLayout>{children}</CFPLayout>
-    </TRPCProvider>
+    </>
   )
 }

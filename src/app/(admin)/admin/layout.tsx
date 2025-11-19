@@ -1,5 +1,4 @@
 import { AdminLayout } from '@/components/admin'
-import { TRPCProvider } from '@/components/providers/TRPCProvider'
 import { getAuthSession } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
@@ -18,9 +17,5 @@ export default async function AdminRootLayout({
     )
   }
 
-  return (
-    <TRPCProvider>
-      <AdminLayout>{children}</AdminLayout>
-    </TRPCProvider>
-  )
+  return <AdminLayout>{children}</AdminLayout>
 }
