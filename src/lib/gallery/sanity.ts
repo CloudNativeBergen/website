@@ -176,17 +176,17 @@ export async function updateGalleryImage(
         (patch.file as { _type?: string })._type === 'reference'
           ? (patch.file as { _type: 'reference'; _ref: string })
           : createReference(
-            (
-              await clientWrite.assets.upload(
-                'image',
-                patch.file as Uploadable,
-                {
-                  filename: (patch.file as File).name || 'image',
-                  contentType: (patch.file as File).type || 'image/jpeg',
-                },
-              )
-            )._id,
-          )
+              (
+                await clientWrite.assets.upload(
+                  'image',
+                  patch.file as Uploadable,
+                  {
+                    filename: (patch.file as File).name || 'image',
+                    contentType: (patch.file as File).type || 'image/jpeg',
+                  },
+                )
+              )._id,
+            )
 
       updatePatch.image = {
         _type: 'image',

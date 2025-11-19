@@ -108,7 +108,7 @@ export default async function WorkshopPage() {
                 <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
                   Workshop Access Required
                 </h1>
-                <Link href="/api/auth/signout" prefetch={false}>
+                <Link href="/api/auth/signout?callbackUrl=/" prefetch={false}>
                   <Button variant="outline">Sign Out</Button>
                 </Link>
               </div>
@@ -182,7 +182,7 @@ export default async function WorkshopPage() {
             <h1 className="font-display text-4xl font-bold tracking-tighter text-blue-600 sm:text-5xl lg:text-7xl dark:text-blue-400">
               Workshop Signup
             </h1>
-            <Link href="/api/auth/signout" prefetch={false}>
+            <Link href="/api/auth/signout?callbackUrl=/" prefetch={false}>
               <Button variant="outline" className="shrink-0 whitespace-nowrap">
                 Sign Out
               </Button>
