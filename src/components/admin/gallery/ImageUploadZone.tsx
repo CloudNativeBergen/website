@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { useDropzone } from 'react-dropzone'
+import { useDropzone, type FileRejection } from 'react-dropzone'
 import { CloudArrowUpIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useNotification } from '../NotificationProvider'
 import { GALLERY_CONSTANTS } from '@/lib/gallery/constants'
@@ -196,20 +196,22 @@ export function ImageUploadZone({
   )
 
   const onDrop = useCallback(
-    async (acceptedFiles: File[], rejectedFiles: Array<{ file: File; errors: Array<{ code: string; message: string }> }>) => {
+    async (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       if (rejectedFiles.length > 0) {
         rejectedFiles.forEach((rejection) => {
           const fileName = rejection.file.name
-          const errors = rejection.errors.map((e) => {
-            switch (e.code) {
-              case 'file-too-large':
-                return `File too large (max ${GALLERY_CONSTANTS.UPLOAD.MAX_FILE_SIZE_MB}MB)`
-              case 'file-invalid-type':
-                return 'Invalid file type (only images allowed)'
-              default:
-                return e.message
-            }
-          }).join(', ')
+          const errors = rejection.errors
+            .map((e) => {
+              switch (e.code) {
+                case 'file-too-large':
+                  return `File too large (max ${GALLERY_CONSTANTS.UPLOAD.MAX_FILE_SIZE_MB}MB)`
+                case 'file-invalid-type':
+                  return 'Invalid file type (only images allowed)'
+                default:
+                  return e.message
+              }
+            })
+            .join(', ')
 
           showNotification({
             title: `Rejected: ${fileName}`,
@@ -238,7 +240,8 @@ export function ImageUploadZone({
           } catch (error) {
             showNotification({
               title: `Failed to process ${file.name}`,
-              message: error instanceof Error ? error.message : 'Processing failed',
+              message:
+                error instanceof Error ? error.message : 'Processing failed',
               type: 'error',
             })
             throw error
@@ -247,7 +250,17 @@ export function ImageUploadZone({
       )
 
       const successfulFiles = processedFiles
-        .filter((result): result is PromiseFulfilledResult<UploadFile> => result.status === 'fulfilled')
+        .filter(
+          (
+            result,
+          ): result is PromiseFulfilledResult<{
+            file: File
+            preview: string
+            progress: number
+            status: 'pending'
+            extractedDate: string | undefined
+          }> => result.status === 'fulfilled',
+        )
         .map((result) => result.value)
 
       const failedCount = processedFiles.filter(
@@ -624,10 +637,11 @@ export function ImageUploadZone({
 
       <div
         {...getRootProps()}
-        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDragActive
+        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+          isDragActive
             ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/30'
             : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500'
-          }`}
+        }`}
       >
         <input {...getInputProps()} aria-label="Upload images" />
         <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
