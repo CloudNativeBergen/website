@@ -58,6 +58,8 @@ export function ImageGallery({
     setIsModalOpen(true)
   }
 
+  const hasAllImages = allImages.length > 0
+
   return (
     <section className={cn('py-16 sm:py-24', className)}>
       <Container>
@@ -77,14 +79,12 @@ export function ImageGallery({
             images={featured}
             autoPlay={true}
             showThumbnails={false}
-            onFullscreenClick={
-              allImages.length > 0 ? handleViewGallery : undefined
-            }
+            onFullscreenClick={hasAllImages ? handleViewGallery : undefined}
             className="mx-auto"
           />
         </div>
 
-        {allImages.length > 0 && (
+        {hasAllImages && (
           <GalleryModal
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}

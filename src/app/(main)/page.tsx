@@ -13,7 +13,7 @@ export default async function Home() {
     featuredTalks: true,
     schedule: true,
     sponsors: true,
-    gallery: true,
+    gallery: { featuredOnly: true },
     revalidate,
   })
 
@@ -25,12 +25,10 @@ export default async function Home() {
   return (
     <>
       <Hero conference={conference} />
-      {conference.galleryImages && conference.galleryImages.length > 0 && (
-        <ImageGallery
-          featuredImages={conference.featuredGalleryImages}
-          allImages={conference.galleryImages}
-        />
-      )}
+      {conference.featuredGalleryImages &&
+        conference.featuredGalleryImages.length > 0 && (
+          <ImageGallery featuredImages={conference.featuredGalleryImages} />
+        )}
       {conference.schedules && conference.schedules.length > 0 && (
         <ProgramHighlights
           schedules={conference.schedules}
