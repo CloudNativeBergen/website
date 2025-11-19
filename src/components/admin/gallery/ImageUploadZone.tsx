@@ -70,7 +70,7 @@ export function ImageUploadZone({
   const uploadAbortController = useRef<AbortController | null>(null)
 
   const resizeImage = useCallback(async (file: File): Promise<File> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const img = document.createElement('img')
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
@@ -110,7 +110,7 @@ export function ImageUploadZone({
               })
               resolve(resizedFile)
             } else {
-              resolve(file)
+              reject(new Error(`Failed to resize ${file.name}`))
             }
           },
           file.type,
@@ -118,7 +118,9 @@ export function ImageUploadZone({
         )
       }
 
-      img.onerror = () => resolve(file)
+      img.onerror = () => {
+        reject(new Error(`Failed to load image: ${file.name}`))
+      }
       img.src = URL.createObjectURL(file)
     })
   }, [])
@@ -194,23 +196,76 @@ export function ImageUploadZone({
   )
 
   const onDrop = useCallback(
-    async (acceptedFiles: File[]) => {
-      const resizedFiles = await Promise.all(
+    async (acceptedFiles: File[], rejectedFiles: Array<{ file: File; errors: Array<{ code: string; message: string }> }>) => {
+      if (rejectedFiles.length > 0) {
+        rejectedFiles.forEach((rejection) => {
+          const fileName = rejection.file.name
+          const errors = rejection.errors.map((e) => {
+            switch (e.code) {
+              case 'file-too-large':
+                return `File too large (max ${GALLERY_CONSTANTS.UPLOAD.MAX_FILE_SIZE_MB}MB)`
+              case 'file-invalid-type':
+                return 'Invalid file type (only images allowed)'
+              default:
+                return e.message
+            }
+          }).join(', ')
+
+          showNotification({
+            title: `Rejected: ${fileName}`,
+            message: errors,
+            type: 'error',
+          })
+        })
+      }
+
+      if (acceptedFiles.length === 0) {
+        return
+      }
+
+      const processedFiles = await Promise.allSettled(
         acceptedFiles.map(async (file) => {
-          const resized = await resizeImage(file)
-          const exifData = await extractExifMetadata(file)
-          return {
-            file: resized,
-            preview: URL.createObjectURL(resized),
-            progress: 0,
-            status: 'pending' as const,
-            extractedDate: exifData.date,
+          try {
+            const resized = await resizeImage(file)
+            const exifData = await extractExifMetadata(file)
+            return {
+              file: resized,
+              preview: URL.createObjectURL(resized),
+              progress: 0,
+              status: 'pending' as const,
+              extractedDate: exifData.date,
+            }
+          } catch (error) {
+            showNotification({
+              title: `Failed to process ${file.name}`,
+              message: error instanceof Error ? error.message : 'Processing failed',
+              type: 'error',
+            })
+            throw error
           }
         }),
       )
-      setFiles((prev) => [...prev, ...resizedFiles])
+
+      const successfulFiles = processedFiles
+        .filter((result): result is PromiseFulfilledResult<UploadFile> => result.status === 'fulfilled')
+        .map((result) => result.value)
+
+      const failedCount = processedFiles.filter(
+        (result) => result.status === 'rejected',
+      ).length
+
+      if (failedCount > 0) {
+        showNotification({
+          title: `${failedCount} file(s) failed to process`,
+          type: 'error',
+        })
+      }
+
+      if (successfulFiles.length > 0) {
+        setFiles((prev) => [...prev, ...successfulFiles])
+      }
     },
-    [resizeImage, extractExifMetadata],
+    [resizeImage, extractExifMetadata, showNotification],
   )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -498,7 +553,7 @@ export function ImageUploadZone({
             placeholder="Conference Hall"
           />
         </div>
-        <div className="w-[160px]">
+        <div className="w-40">
           <label
             htmlFor="date"
             className="mb-1 block text-sm font-medium text-gray-900 dark:text-white"
@@ -521,7 +576,7 @@ export function ImageUploadZone({
               }
             }}
             placeholder="Auto from EXIF"
-            className="block h-9 w-full rounded-md border-0 px-3 text-sm text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:ring-inset dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:ring-white/10 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
+            className="block h-9 w-full rounded-md border-0 px-3 text-sm text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:ring-inset dark:bg-white/5 dark:text-white dark:scheme-dark dark:ring-white/10 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
           />
         </div>
         <div className="w-[120px]">
@@ -547,7 +602,7 @@ export function ImageUploadZone({
               }
             }}
             placeholder="Auto from EXIF"
-            className="block h-9 w-full rounded-md border-0 px-3 text-sm text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:ring-inset dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:ring-white/10 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
+            className="block h-9 w-full rounded-md border-0 px-3 text-sm text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:ring-inset dark:bg-white/5 dark:text-white dark:scheme-dark dark:ring-white/10 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
           />
         </div>
         <div className="flex h-9 items-center">
@@ -569,11 +624,10 @@ export function ImageUploadZone({
 
       <div
         {...getRootProps()}
-        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-          isDragActive
+        className={`relative rounded-lg border-2 border-dashed p-6 text-center transition-colors ${isDragActive
             ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/30'
             : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500'
-        }`}
+          }`}
       >
         <input {...getInputProps()} aria-label="Upload images" />
         <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />

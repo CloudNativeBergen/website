@@ -50,24 +50,49 @@ export async function createGalleryImage(
     } = input
 
     if (!photographer || !date || !location || !conference) {
+      const missingFields = []
+      if (!photographer) missingFields.push('photographer')
+      if (!date) missingFields.push('date')
+      if (!location) missingFields.push('location')
+      if (!conference) missingFields.push('conference')
+      logger.error('Missing required fields for gallery image', {
+        missingFields,
+      })
       return {
-        error:
-          'Missing required fields: photographer, date, location, or conference',
+        error: `Missing required fields: ${missingFields.join(', ')}`,
         status: 400,
       }
     }
 
-    const assetRef =
-      (file as { _type?: string })?._type === 'reference'
-        ? (file as { _type: 'reference'; _ref: string })
-        : createReference(
-            (
-              await clientWrite.assets.upload('image', file as Uploadable, {
-                filename: (file as File).name || 'image',
-                contentType: (file as File).type || 'image/jpeg',
-              })
-            )._id,
-          )
+    let assetRef
+    if ((file as { _type?: string })?._type === 'reference') {
+      assetRef = file as { _type: 'reference'; _ref: string }
+    } else {
+      try {
+        const uploadedAsset = await clientWrite.assets.upload(
+          'image',
+          file as Uploadable,
+          {
+            filename: (file as File).name || 'image',
+            contentType: (file as File).type || 'image/jpeg',
+          },
+        )
+        assetRef = createReference(uploadedAsset._id)
+        logger.info('Successfully uploaded asset', {
+          assetId: uploadedAsset._id,
+          filename: (file as File).name,
+        })
+      } catch (uploadError) {
+        logger.error('Failed to upload asset to Sanity', {
+          error: uploadError instanceof Error ? uploadError.message : 'Unknown error',
+          filename: (file as File).name,
+        })
+        return {
+          error: 'Failed to upload image to storage',
+          status: 500,
+        }
+      }
+    }
 
     const document = {
       _type: 'imageGallery',
@@ -90,6 +115,9 @@ export async function createGalleryImage(
     }
 
     const created = await clientWrite.create(document)
+    logger.info('Successfully created gallery document', {
+      documentId: created._id,
+    })
 
     const image = await getGalleryImage(created._id)
 
@@ -101,6 +129,7 @@ export async function createGalleryImage(
   } catch (error) {
     logger.error('Error creating gallery image', {
       error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
     })
     return {
       error:
@@ -151,17 +180,17 @@ export async function updateGalleryImage(
         (patch.file as { _type?: string })._type === 'reference'
           ? (patch.file as { _type: 'reference'; _ref: string })
           : createReference(
-              (
-                await clientWrite.assets.upload(
-                  'image',
-                  patch.file as Uploadable,
-                  {
-                    filename: (patch.file as File).name || 'image',
-                    contentType: (patch.file as File).type || 'image/jpeg',
-                  },
-                )
-              )._id,
-            )
+            (
+              await clientWrite.assets.upload(
+                'image',
+                patch.file as Uploadable,
+                {
+                  filename: (patch.file as File).name || 'image',
+                  contentType: (patch.file as File).type || 'image/jpeg',
+                },
+              )
+            )._id,
+          )
 
       updatePatch.image = {
         _type: 'image',

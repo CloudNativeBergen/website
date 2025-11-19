@@ -109,10 +109,23 @@ export async function POST(request: NextRequest) {
           imageAlt: metadata.imageAlt || fileName,
         })
 
+        console.log(`Uploading ${fileName}:`, {
+          size: file.size,
+          type: file.type,
+          metadata: validatedMetadata,
+        })
+
         const res = await createGalleryImage({
           file,
           ...validatedMetadata,
         })
+
+        if (!res.image && res.error) {
+          console.error(`Failed to create gallery image for ${fileName}:`, {
+            error: res.error,
+            status: res.status,
+          })
+        }
 
         results.push({
           success: !!res.image,
@@ -121,7 +134,10 @@ export async function POST(request: NextRequest) {
           fileName,
         })
       } catch (error) {
-        console.error(`Failed to upload ${fileName}:`, error)
+        console.error(`Failed to upload ${fileName}:`, {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+        })
         results.push({
           success: false,
           error: error instanceof Error ? error.message : 'Upload failed',
