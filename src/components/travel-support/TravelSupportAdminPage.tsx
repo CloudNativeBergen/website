@@ -392,8 +392,8 @@ function RequestCard({
   return (
     <div
       className={`cursor-pointer p-4 transition-colors ${isSelected
-          ? 'border-l-4 border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20'
-          : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
+        ? 'border-l-4 border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20'
+        : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
         }`}
       onClick={onSelect}
     >
@@ -482,6 +482,15 @@ function RequestDetails({
 
   const canApprove =
     request.status === TravelSupportStatus.SUBMITTED &&
+    currentUserId &&
+    TravelSupportService.canUserApprove(
+      true,
+      request.speaker._id,
+      currentUserId,
+    )
+
+  const canMarkAsPaid =
+    request.status === TravelSupportStatus.APPROVED &&
     currentUserId &&
     TravelSupportService.canUserApprove(
       true,
@@ -738,6 +747,55 @@ function RequestDetails({
                 {isUpdating ? 'Updating...' : 'Reject'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {canMarkAsPaid && (
+        <div className="border-t border-gray-200 pt-6 dark:border-gray-600">
+          <h4 className="mb-3 font-medium text-gray-900 dark:text-white">
+            Payment Actions
+          </h4>
+          <div className="space-y-3">
+            {request.approvedAmount && (
+              <div className="rounded bg-blue-50 p-3 dark:bg-blue-900/20">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Approved Amount:</strong>{' '}
+                  {new Intl.NumberFormat('nb-NO', {
+                    style: 'currency',
+                    currency: 'NOK',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  }).format(request.approvedAmount)}
+                </p>
+                {request.expectedPaymentDate && (
+                  <p className="mt-1 text-sm text-blue-800 dark:text-blue-200">
+                    <strong>Expected Payment Date:</strong>{' '}
+                    {new Date(request.expectedPaymentDate).toLocaleDateString(
+                      'en-US',
+                      {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      },
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+            <button
+              onClick={() =>
+                onUpdateStatus(
+                  request._id,
+                  TravelSupportStatus.PAID,
+                  request.approvedAmount,
+                )
+              }
+              disabled={isUpdating}
+              className="rounded-md bg-purple-600 px-4 py-2 text-white hover:bg-purple-700 disabled:opacity-50 dark:bg-purple-800 dark:hover:bg-purple-700"
+            >
+              {isUpdating ? 'Updating...' : 'Mark as Paid'}
+            </button>
           </div>
         </div>
       )}
