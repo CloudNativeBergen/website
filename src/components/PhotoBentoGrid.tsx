@@ -87,8 +87,9 @@ export function PhotoBentoGrid({
     // Spread remaining picks across non-featured images
     const nonFeatured = sorted.filter((item) => !item.image.featured)
     const step = Math.max(1, Math.floor(nonFeatured.length / remaining))
-    const spreadPicks = Array.from({ length: remaining }, (_, i) =>
-      nonFeatured[Math.min(i * step, nonFeatured.length - 1)]
+    const spreadPicks = Array.from(
+      { length: remaining },
+      (_, i) => nonFeatured[Math.min(i * step, nonFeatured.length - 1)],
     )
 
     return [...featured, ...spreadPicks].slice(0, 6)

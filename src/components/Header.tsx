@@ -36,7 +36,7 @@ export function Header({ c }: { c: Conference }) {
   return (
     <header className="relative z-50 flex-none lg:pt-11">
       <Container className="flex flex-wrap items-center justify-center sm:justify-between lg:flex-nowrap">
-        <div className="mt-10 lg:mt-0 lg:grow lg:basis-0">
+        <div className="mt-10 lg:mt-0">
           <Link href="/">
             <Logo className="h-12 w-auto text-brand-slate-gray dark:text-white" />
           </Link>
