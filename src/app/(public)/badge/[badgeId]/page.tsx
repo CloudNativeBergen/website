@@ -51,14 +51,22 @@ export async function generateMetadata({
   const speakerName = speaker?.name || 'Speaker'
   const conferenceName = conference?.title || 'Cloud Native Bergen'
   const badgeTypeName = badge.badge_type === 'speaker' ? 'Speaker' : 'Organizer'
+  const title = `${badgeTypeName} Badge - ${speakerName}`
+  const description = `Verified ${badgeTypeName} Badge for ${speakerName} at ${conferenceName}. OpenBadges 3.0 compliant digital credential.`
 
   return {
-    title: `${badgeTypeName} Badge - ${speakerName}`,
-    description: `Verified ${badgeTypeName} Badge for ${speakerName} at ${conferenceName}. OpenBadges 3.0 compliant digital credential.`,
+    title,
+    description,
     openGraph: {
-      title: `${badgeTypeName} Badge - ${speakerName}`,
+      title,
       description: `Verified badge earned at ${conferenceName}`,
-      type: 'article',
+      type: 'website',
+      siteName: conferenceName,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description: `Verified badge earned at ${conferenceName}`,
     },
   }
 }
