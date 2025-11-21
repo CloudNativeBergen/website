@@ -11,7 +11,13 @@ import {
 } from '@heroicons/react/24/outline'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from './NotificationProvider'
-import { FilterDropdown, FilterOption } from './FilterDropdown'
+import {
+  FilterDropdown,
+  FilterOption,
+  ActionMenu,
+  ActionMenuItem,
+  ActionMenuDivider,
+} from '@/components/admin'
 import { SponsorDiscountEmailModal } from './SponsorDiscountEmailModal'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
@@ -725,10 +731,10 @@ export function DiscountCodeManager({
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                    <td className="px-6 py-4 text-right text-sm whitespace-nowrap">
                       {getSponsorDiscounts(sponsor).length > 0 ? (
-                        <div className="flex items-center space-x-2">
-                          <button
+                        <ActionMenu ariaLabel={`Actions for ${sponsor.name}`}>
+                          <ActionMenuItem
                             onClick={() => {
                               const sponsorDiscounts =
                                 getSponsorDiscounts(sponsor)
@@ -739,13 +745,13 @@ export function DiscountCodeManager({
                                 )
                               }
                             }}
+                            icon={EnvelopeIcon}
                             disabled={loading !== null}
-                            className="inline-flex items-center rounded-md border border-gray-300 p-2 text-gray-700 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400"
-                            title="Send Email"
                           >
-                            <EnvelopeIcon className="h-4 w-4" />
-                          </button>
-                          <button
+                            Send Email
+                          </ActionMenuItem>
+                          <ActionMenuDivider />
+                          <ActionMenuItem
                             onClick={() => {
                               const sponsorDiscounts =
                                 getSponsorDiscounts(sponsor)
@@ -755,23 +761,21 @@ export function DiscountCodeManager({
                                 )
                               }
                             }}
+                            icon={TrashIcon}
+                            variant="danger"
                             disabled={
                               getSponsorDiscounts(sponsor).length > 0 &&
                               loading ===
                                 getSponsorDiscounts(sponsor)[0]?.triggerValue
                             }
-                            className="inline-flex items-center rounded-md border border-rose-300 bg-rose-50 p-2 text-rose-700 shadow-xs hover:border-rose-400 hover:bg-rose-100 hover:text-rose-800 disabled:opacity-50 dark:border-rose-500 dark:bg-rose-900/50 dark:text-rose-300 dark:hover:border-rose-400 dark:hover:bg-rose-800/60 dark:hover:text-rose-200"
-                            title="Delete Code"
                           >
                             {getSponsorDiscounts(sponsor).length > 0 &&
                             loading ===
-                              getSponsorDiscounts(sponsor)[0]?.triggerValue ? (
-                              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <TrashIcon className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
+                              getSponsorDiscounts(sponsor)[0]?.triggerValue
+                              ? 'Deleting...'
+                              : 'Delete Code'}
+                          </ActionMenuItem>
+                        </ActionMenu>
                       ) : (
                         <button
                           onClick={() => createDiscountCode(sponsor)}

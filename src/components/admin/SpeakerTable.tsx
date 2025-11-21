@@ -22,8 +22,13 @@ import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { SpeakerIndicators } from '@/lib/proposal'
 import { getStatusBadgeConfig } from '@/lib/proposal/ui'
-import { FilterDropdown } from '@/components/admin'
-import { FilterOption } from '@/components/admin/FilterDropdown'
+import {
+  FilterDropdown,
+  FilterOption,
+  ActionMenu,
+  ActionMenuItem,
+  ActionMenuDivider,
+} from '@/components/admin'
 import { useState, useMemo } from 'react'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
@@ -649,45 +654,44 @@ export function SpeakerTable({
                           ))}
                       </div>
                     </td>
-                    <td className="w-28 px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onEditSpeaker(speaker)}
-                          className="cursor-pointer rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:hover:bg-gray-700 dark:hover:text-gray-300"
-                          aria-label={`Edit ${speaker.name}`}
-                          title="Edit speaker"
-                        >
-                          <PencilIcon className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onPreviewSpeaker(speaker)}
-                          className="cursor-pointer rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:hover:bg-gray-700 dark:hover:text-gray-300"
-                          aria-label={`Preview ${speaker.name} profile`}
-                          title="Preview public profile"
-                        >
-                          <EyeIcon className="h-4 w-4" />
-                        </button>
-                        {AppEnvironment.isDevelopment && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const { addImpersonateParam } = await import(
-                                '@/lib/impersonation'
-                              )
-                              window.open(
-                                addImpersonateParam('/cfp/list', speaker._id),
-                                '_blank',
-                              )
-                            }}
-                            className="cursor-pointer rounded-md p-1.5 text-purple-400 transition-colors hover:bg-purple-50 hover:text-purple-600 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:outline-none dark:text-purple-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300"
-                            aria-label={`View as ${speaker.name}`}
-                            title="View speaker dashboard (dev only)"
+                    <td className="w-20 px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center justify-end">
+                        <ActionMenu ariaLabel={`Actions for ${speaker.name}`}>
+                          <ActionMenuItem
+                            onClick={() => onEditSpeaker(speaker)}
+                            icon={PencilIcon}
                           >
-                            <ArrowRightCircleIcon className="h-4 w-4" />
-                          </button>
-                        )}
+                            Edit Speaker
+                          </ActionMenuItem>
+                          <ActionMenuItem
+                            onClick={() => onPreviewSpeaker(speaker)}
+                            icon={EyeIcon}
+                          >
+                            Preview Profile
+                          </ActionMenuItem>
+                          {AppEnvironment.isDevelopment && (
+                            <>
+                              <ActionMenuDivider />
+                              <ActionMenuItem
+                                onClick={async () => {
+                                  const { addImpersonateParam } = await import(
+                                    '@/lib/impersonation'
+                                  )
+                                  window.open(
+                                    addImpersonateParam(
+                                      '/cfp/list',
+                                      speaker._id,
+                                    ),
+                                    '_blank',
+                                  )
+                                }}
+                                icon={ArrowRightCircleIcon}
+                              >
+                                View as Speaker (dev)
+                              </ActionMenuItem>
+                            </>
+                          )}
+                        </ActionMenu>
                       </div>
                     </td>
                   </tr>

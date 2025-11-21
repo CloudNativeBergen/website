@@ -21,6 +21,8 @@ import {
   UserGroupIcon,
   ShieldCheckIcon,
   TrashIcon,
+  ClipboardDocumentIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 import { BadgePreviewModal } from '@/components/admin/BadgePreviewModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
@@ -28,6 +30,11 @@ import type { BadgeRecord } from '@/lib/badge/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
 import { useNotification } from './NotificationProvider'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
+import {
+  ActionMenu,
+  ActionMenuItem,
+  ActionMenuDivider,
+} from '@/components/admin/ActionMenu'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 
@@ -306,6 +313,26 @@ export function BadgeManagementClient({
   const handleViewBadge = (badge: BadgeRecord) => {
     setSelectedBadge(badge)
     setShowBadgePreview(true)
+  }
+
+  const handleCopyBadgeUrl = async (badgeId: string, speakerName: string) => {
+    const badgeUrl = `${window.location.origin}/api/badge/${badgeId}/download`
+
+    try {
+      await navigator.clipboard.writeText(badgeUrl)
+      showNotification({
+        type: 'success',
+        title: 'URL Copied',
+        message: `Badge URL for ${speakerName} copied to clipboard`,
+      })
+    } catch (error) {
+      console.error('Failed to copy URL:', error)
+      showNotification({
+        type: 'error',
+        title: 'Copy Failed',
+        message: 'Failed to copy badge URL to clipboard',
+      })
+    }
   }
 
   const handleDeleteBadge = async (badgeId: string, speakerName: string) => {
@@ -678,38 +705,51 @@ export function BadgeManagementClient({
                           </td>
                           <td className="px-4 py-4 text-right">
                             {hasBadge && badge ? (
-                              <div className="flex justify-end gap-2">
-                                <button
+                              <ActionMenu ariaLabel="Badge actions">
+                                <ActionMenuItem
                                   onClick={() => handleViewBadge(badge)}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                  icon={EyeIcon}
                                 >
-                                  <EyeIcon className="h-4 w-4" />
-                                  View
-                                </button>
-                                <a
+                                  View Badge
+                                </ActionMenuItem>
+                                <ActionMenuItem
+                                  onClick={() =>
+                                    handleCopyBadgeUrl(
+                                      badge.badge_id,
+                                      speaker.name,
+                                    )
+                                  }
+                                  icon={ClipboardDocumentIcon}
+                                >
+                                  Copy URL
+                                </ActionMenuItem>
+                                <ActionMenuItem
+                                  onClick={() => {}}
+                                  icon={ArrowDownTrayIcon}
                                   href={`/api/badge/${badge.badge_id}/download`}
                                   download
-                                  className="inline-flex items-center rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
                                 >
                                   Download
-                                </a>
+                                </ActionMenuItem>
                                 {isDevelopment && (
-                                  <button
-                                    onClick={() =>
-                                      handleDeleteBadge(
-                                        badge.badge_id,
-                                        speaker.name,
-                                      )
-                                    }
-                                    disabled={deleteMutation.isPending}
-                                    className="inline-flex items-center gap-1 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-50 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
-                                    title="Delete badge (dev only)"
-                                  >
-                                    <TrashIcon className="h-4 w-4" />
-                                    Delete
-                                  </button>
+                                  <>
+                                    <ActionMenuDivider />
+                                    <ActionMenuItem
+                                      onClick={() =>
+                                        handleDeleteBadge(
+                                          badge.badge_id,
+                                          speaker.name,
+                                        )
+                                      }
+                                      icon={TrashIcon}
+                                      variant="danger"
+                                      disabled={deleteMutation.isPending}
+                                    >
+                                      Delete
+                                    </ActionMenuItem>
+                                  </>
                                 )}
-                              </div>
+                              </ActionMenu>
                             ) : (
                               <span className="text-xs text-gray-400 dark:text-gray-500">
                                 —
