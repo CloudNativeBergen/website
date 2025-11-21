@@ -72,9 +72,8 @@ export default async function BadgePage({ params }: BadgePageProps) {
   }
 
   // Verify badge belongs to current domain's conference
-  const { conference: currentConference } = await getConferenceForCurrentDomain(
-    {},
-  )
+  const { conference: currentConference, domain } =
+    await getConferenceForCurrentDomain({})
   const badgeConferenceId =
     typeof badge.conference === 'object' && '_id' in badge.conference
       ? badge.conference._id
@@ -104,6 +103,7 @@ export default async function BadgePage({ params }: BadgePageProps) {
         speaker={speaker}
         conference={conference}
         badgeId={badgeId}
+        domain={domain}
       />
     </div>
   )

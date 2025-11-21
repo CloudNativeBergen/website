@@ -19,12 +19,14 @@ import { sanityImage } from '@/lib/sanity/client'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { BlueskyIcon, LinkedInIcon } from '@/components/SocialIcons'
+import { shareSocial, shareToCredly, buildFullUrl } from '@/lib/share/social'
 
 interface BadgeDisplayProps {
   badge: BadgeRecord
   speaker: Speaker
   conference: Conference
   badgeId: string
+  domain: string
 }
 
 export function BadgeDisplay({
@@ -32,6 +34,7 @@ export function BadgeDisplay({
   speaker,
   conference,
   badgeId,
+  domain,
 }: BadgeDisplayProps) {
   const [copied, setCopied] = useState<'url' | null>(null)
 
@@ -42,14 +45,17 @@ export function BadgeDisplay({
     day: 'numeric',
   })
 
-  const badgeUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/badge/${badgeId}`
+  const badgeUrl = `/badge/${badgeId}`
   const downloadUrl = `/api/badge/${badgeId}/download`
+  const jsonUrl = `/api/badge/${badgeId}/json`
+  const fullBadgeUrl = buildFullUrl(domain, badgeUrl)
+  const fullJsonUrl = buildFullUrl(domain, jsonUrl)
   const badgeSvgUrl = badge.baked_svg?.asset?.url
   const speakerProfileUrl = speaker.slug ? `/speaker/${speaker.slug}` : null
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(badgeUrl)
+      await navigator.clipboard.writeText(fullBadgeUrl)
       setCopied('url')
       setTimeout(() => setCopied(null), 2000)
     } catch (error) {
@@ -59,15 +65,7 @@ export function BadgeDisplay({
 
   const handleShare = (platform: 'bluesky' | 'linkedin') => {
     const text = `🎉 I earned a ${badgeTypeName} Badge at ${conference.title}! 🎉`
-    const url = badgeUrl
-
-    if (platform === 'bluesky') {
-      const blueskyUrl = `https://bsky.app/intent/compose?text=${encodeURIComponent(`${text} ${url}`)}`
-      window.open(blueskyUrl, '_blank', 'width=550,height=600')
-    } else if (platform === 'linkedin') {
-      const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`
-      window.open(linkedinUrl, '_blank', 'width=550,height=420')
-    }
+    shareSocial({ platform, text, url: fullBadgeUrl })
   }
 
   const speakerImageUrl = speaker.image
@@ -181,7 +179,7 @@ export function BadgeDisplay({
       <div className="grid gap-3 sm:grid-cols-3">
         <button
           onClick={() => handleShare('bluesky')}
-          className="flex items-center justify-center gap-2 rounded-xl bg-[#0085ff] px-6 py-4 font-semibold text-white transition-transform hover:scale-105"
+          className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#0085ff] px-6 py-4 font-semibold text-white transition-transform hover:scale-105"
         >
           <BlueskyIcon className="h-5 w-5" />
           Share on Bluesky
@@ -189,7 +187,7 @@ export function BadgeDisplay({
 
         <button
           onClick={() => handleShare('linkedin')}
-          className="flex items-center justify-center gap-2 rounded-xl bg-[#0A66C2] px-6 py-4 font-semibold text-white transition-transform hover:scale-105"
+          className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#0A66C2] px-6 py-4 font-semibold text-white transition-transform hover:scale-105"
         >
           <LinkedInIcon className="h-5 w-5" />
           Share on LinkedIn
@@ -211,7 +209,7 @@ export function BadgeDisplay({
       <div className="grid gap-3 sm:grid-cols-3">
         <button
           onClick={handleCopy}
-          className="flex items-center justify-center gap-2 rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+          className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
         >
           {copied === 'url' ? (
             <>
@@ -236,15 +234,13 @@ export function BadgeDisplay({
           Add to Passport
         </a>
 
-        <a
-          href={`https://www.credly.com/badges/import?url=${encodeURIComponent(`/api/badge/${badgeId}/json`)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-center gap-2 rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        <button
+          onClick={() => shareToCredly(fullJsonUrl)}
+          className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
         >
           <ShieldCheckIcon className="h-4 w-4" />
           Add to Credly
-        </a>
+        </button>
       </div>
 
       {/* Event & Issuer Info */}

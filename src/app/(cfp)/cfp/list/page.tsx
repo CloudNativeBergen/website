@@ -8,11 +8,12 @@ import { getTravelSupport } from '@/lib/travel-support/sanity'
 import { clientReadCached } from '@/lib/sanity/client'
 import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
-import { SpeakerShare, generateQRCode } from '@/components/SpeakerShare'
+import { SpeakerShare } from '@/components/SpeakerShare'
 import { BadgeShare } from '@/components/cfp/BadgeShare'
-import { sanityImage } from '@/lib/sanity/client'
+import { DashboardSidebar } from '@/components/cfp/DashboardSidebar'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
 import type { BadgeRecord } from '@/lib/badge/types'
@@ -20,6 +21,7 @@ import type { BadgeRecord } from '@/lib/badge/types'
 export default async function SpeakerDashboard() {
   const headersList = await headers()
   const fullUrl = headersList.get('x-url') || ''
+  const { domain } = await getConferenceForCurrentDomain({})
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
@@ -187,33 +189,17 @@ export default async function SpeakerDashboard() {
       )?.conference.title || 'Cloud Native Bergen'
     : 'Cloud Native Bergen'
 
-  // Determine what to show in sidebar: confirmed talk or latest badge
-  const showBadgeInSidebar = !primaryTalk && latestBadge
+  // Determine what to show in sidebar: latest badge takes priority over confirmed talk
+  const showBadgeInSidebar = latestBadge
 
-  let badgeQrCodeUrl: string | undefined
   let badgeEventName: string | undefined
-  let speakerImageUrl: string | undefined
 
   if (showBadgeInSidebar && latestBadge) {
-    // Generate QR code for badge verification URL
-    badgeQrCodeUrl = latestBadge.verification_url
-      ? await generateQRCode(latestBadge.verification_url, 512)
-      : undefined
-
     // Get the conference name for the badge
     const badgeConference = activeConferences.find((c) =>
       c.badges.some((b) => b._id === latestBadge._id),
     )
     badgeEventName = badgeConference?.conference.title || 'Cloud Native Bergen'
-
-    // Get speaker image URL
-    if (speaker.image) {
-      speakerImageUrl = sanityImage(speaker.image)
-        .width(400)
-        .height(400)
-        .fit('crop')
-        .url()
-    }
   }
 
   if (activeConferences.length === 0) {
@@ -271,14 +257,12 @@ export default async function SpeakerDashboard() {
         </div>
 
         {/* Sidebar */}
-        <div className="w-full shrink-0 lg:w-80">
-          {showBadgeInSidebar && latestBadge && badgeQrCodeUrl ? (
+        <div className="w-full shrink-0 space-y-4 lg:w-80">
+          {showBadgeInSidebar && latestBadge ? (
             <BadgeShare
               badge={latestBadge}
-              speakerName={speaker.name}
-              speakerImage={speakerImageUrl}
               eventName={badgeEventName || 'Cloud Native Bergen'}
-              qrCodeUrl={badgeQrCodeUrl}
+              domain={domain}
               className="w-full"
             />
           ) : (
@@ -288,6 +272,7 @@ export default async function SpeakerDashboard() {
               eventName={eventName}
             />
           )}
+          <DashboardSidebar />
         </div>
       </div>
     </div>
