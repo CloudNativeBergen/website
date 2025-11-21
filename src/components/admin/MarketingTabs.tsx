@@ -6,9 +6,10 @@ import {
   UserGroupIcon,
   TrophyIcon,
   SparklesIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline'
 
-type IconType = 'presentation' | 'users' | 'trophy' | 'sparkles'
+type IconType = 'presentation' | 'users' | 'trophy' | 'sparkles' | 'photo'
 
 interface Tab {
   id: string
@@ -29,6 +30,7 @@ const iconMap = {
   users: UserGroupIcon,
   trophy: TrophyIcon,
   sparkles: SparklesIcon,
+  photo: PhotoIcon,
 } as const
 
 export function MarketingTabs({
@@ -80,7 +82,7 @@ export function MarketingTabs({
                 aria-selected={isActive}
                 role="tab"
               >
-                <Icon className="h-4 w-4 flex-shrink-0" />
+                <Icon className="h-4 w-4 shrink-0" />
                 <span className="font-space-grotesk hidden font-semibold sm:inline">
                   {tab.name}
                 </span>

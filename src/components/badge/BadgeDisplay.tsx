@@ -92,8 +92,8 @@ export function BadgeDisplay({
   // Get first talk for evidence (if available)
   const speakerTalks =
     'talks' in speaker &&
-      Array.isArray(speaker.talks) &&
-      speaker.talks.length > 0
+    Array.isArray(speaker.talks) &&
+    speaker.talks.length > 0
       ? speaker.talks
       : null
   const firstTalk = speakerTalks ? speakerTalks[0] : null

@@ -47,8 +47,8 @@ export function BadgeShare({
     // Extract organization name from badge or use default
     const organizationName =
       typeof badge.conference === 'object' &&
-        'organizer' in badge.conference &&
-        badge.conference.organizer
+      'organizer' in badge.conference &&
+      badge.conference.organizer
         ? badge.conference.organizer
         : 'Cloud Native Bergen'
 

@@ -10,8 +10,10 @@ import { DownloadSpeakerImage } from '@/components/branding/DownloadSpeakerImage
 import { AdminPageHeader } from '@/components/admin'
 import { MarketingTabs } from '@/components/admin/MarketingTabs'
 import { MemeGeneratorWithDownload } from '@/components/admin/MemeGeneratorWithDownload'
+import { PhotoGalleryWithDownload } from '@/components/admin/PhotoGalleryWithDownload'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { getSpeakerFilename } from '@/lib/speaker/utils'
+import { getFeaturedGalleryImages } from '@/lib/gallery/sanity'
 import {
   UserGroupIcon,
   CalendarDaysIcon,
@@ -19,6 +21,7 @@ import {
   UsersIcon,
   MicrophoneIcon,
   TrophyIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline'
 
 interface SponsorData {
@@ -138,6 +141,8 @@ export default async function MarketingPage() {
     return <ErrorDisplay message="Error loading conference data" />
   }
 
+  const featuredPhotos = await getFeaturedGalleryImages(100, 0, conference._id)
+
   const { proposals: allProposals, proposalsError } = await getProposals({
     conferenceId: conference._id,
     returnAll: true,
@@ -158,12 +163,12 @@ export default async function MarketingPage() {
     const speakers =
       proposal.speakers && Array.isArray(proposal.speakers)
         ? proposal.speakers.filter(
-            (speaker) =>
-              typeof speaker === 'object' &&
-              speaker &&
-              'name' in speaker &&
-              '_id' in speaker,
-          )
+          (speaker) =>
+            typeof speaker === 'object' &&
+            speaker &&
+            'name' in speaker &&
+            '_id' in speaker,
+        )
         : []
 
     speakers.forEach((speaker) => {
@@ -265,6 +270,14 @@ export default async function MarketingPage() {
             count: 1,
             description:
               'High-quality conference promotional image perfect for social media and marketing campaigns.',
+          },
+          {
+            id: 'photo-gallery',
+            name: 'Photo Gallery',
+            icon: 'photo',
+            count: featuredPhotos.length,
+            description:
+              'Showcase conference moments with customizable photo grid layouts, perfect for social media promotion.',
           },
           {
             id: 'speakers',
@@ -374,6 +387,28 @@ export default async function MarketingPage() {
               </div>
             </div>
           </DownloadSpeakerImage>
+        </div>
+
+        {/* Photo Gallery Tab */}
+        <div>
+          {featuredPhotos.length === 0 ? (
+            <div className="py-12 text-center">
+              <PhotoIcon className="mx-auto mb-4 h-12 w-12 text-gray-400 dark:text-gray-500" />
+              <h3 className="font-space-grotesk mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+                No Featured Photos Yet
+              </h3>
+              <p className="font-inter text-gray-600 dark:text-gray-400">
+                Featured photo galleries will appear here once photos are
+                uploaded and marked as featured.
+              </p>
+            </div>
+          ) : (
+            <PhotoGalleryWithDownload
+              photos={featuredPhotos}
+              qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
+              conferenceTitle={conference.title || 'Cloud Native Bergen'}
+            />
+          )}
         </div>
 
         {/* Speaker Cards Tab */}
