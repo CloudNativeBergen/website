@@ -11,6 +11,7 @@ import { useImageCarousel } from '@/hooks/useImageCarousel'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/Button'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface ImageCarouselProps {
   images: GalleryImageWithSpeakers[]
@@ -118,11 +119,15 @@ export function ImageCarousel({
             </div>
           )}
 
-          {currentImage?.imageUrl && !hasCurrentImageError && (
+          {currentImage?.image && !hasCurrentImageError && (
             <img
               ref={(el) => setImageRef(el, currentImage._id)}
-              src={`${currentImage.imageUrl}?w=2400&q=85&auto=format&fit=max`}
-              srcSet={`${currentImage.imageUrl}?w=1200&q=85&auto=format&fit=max 1x, ${currentImage.imageUrl}?w=2400&q=85&auto=format&fit=max 2x`}
+              src={sanityImage(currentImage.image)
+                .width(2400)
+                .quality(85)
+                .fit('max')
+                .url()}
+              srcSet={`${sanityImage(currentImage.image).width(1200).quality(85).fit('max').url()} 1x, ${sanityImage(currentImage.image).width(2400).quality(85).fit('max').url()} 2x`}
               alt={
                 currentImage.imageAlt ??
                 (currentImage.photographer
@@ -221,10 +226,15 @@ export function ImageCarousel({
                 )}
                 aria-label={`Go to image ${index + 1}`}
               >
-                {image.imageUrl && (
+                {image.image && (
                   <img
-                    src={`${image.imageUrl}?w=512&h=320&q=85&auto=format&fit=crop`}
-                    srcSet={`${image.imageUrl}?w=256&h=160&q=85&auto=format&fit=crop 1x, ${image.imageUrl}?w=512&h=320&q=85&auto=format&fit=crop 2x`}
+                    src={sanityImage(image.image)
+                      .width(512)
+                      .height(320)
+                      .quality(85)
+                      .fit('crop')
+                      .url()}
+                    srcSet={`${sanityImage(image.image).width(256).height(160).quality(85).fit('crop').url()} 1x, ${sanityImage(image.image).width(512).height(320).quality(85).fit('crop').url()} 2x`}
                     alt={
                       image.imageAlt ||
                       (image.photographer

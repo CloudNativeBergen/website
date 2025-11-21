@@ -23,6 +23,18 @@ export interface UpdateGalleryImageInput {
   speakers?: string[]
   imageAlt?: string
   notifySpeakers?: boolean
+  hotspot?: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+  crop?: {
+    top: number
+    bottom: number
+    left: number
+    right: number
+  }
 }
 
 export interface GalleryImage {
@@ -41,6 +53,18 @@ export interface GalleryImage {
       _type: 'reference'
     }
     alt?: string
+    crop?: {
+      bottom: number
+      left: number
+      right: number
+      top: number
+    }
+    hotspot?: {
+      height: number
+      width: number
+      x: number
+      y: number
+    }
   }
   speakers: Array<{ _type: 'reference'; _ref: string }>
   imageUrl?: string

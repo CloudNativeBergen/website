@@ -21,6 +21,8 @@ import {
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '../NotificationProvider'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
+import { sanityImage } from '@/lib/sanity/client'
+import { ImageHotspotEditor } from './ImageHotspotEditor'
 import {
   extractDateFromISO,
   extractTimeFromISO,
@@ -60,6 +62,18 @@ export function ImageMetadataModal({
   const [speakerQuery, setSpeakerQuery] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [notifySpeakers, setNotifySpeakers] = useState(false)
+  const [hotspot, setHotspot] = useState<{
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(singleImage?.image?.hotspot || null)
+  const [crop, setCrop] = useState<{
+    top: number
+    bottom: number
+    left: number
+    right: number
+  } | null>(singleImage?.image?.crop || null)
   const speakerInputRef = useRef<HTMLInputElement>(null)
 
   const { data: searchResults } = api.speakers.search.useQuery(
@@ -97,6 +111,8 @@ export function ImageMetadataModal({
         featured: singleImage.featured,
       })
       setSelectedSpeakers(singleImage.speakers || [])
+      setHotspot(singleImage.image?.hotspot || null)
+      setCrop(singleImage.image?.crop || null)
     } else {
       // Reset form for bulk mode
       setFormData({
@@ -107,6 +123,8 @@ export function ImageMetadataModal({
         featured: false,
       })
       setSelectedSpeakers([])
+      setHotspot(null)
+      setCrop(null)
     }
     setNotifySpeakers(true)
   }, [singleImage])
@@ -201,6 +219,8 @@ export function ImageMetadataModal({
         ...formData,
         speakers: selectedSpeakers.map((s) => s._id),
         notifySpeakers,
+        hotspot: hotspot || undefined,
+        crop: crop || undefined,
       })
     }
   }
@@ -332,14 +352,17 @@ export function ImageMetadataModal({
 
                 <form onSubmit={handleSubmit} className="mt-4 space-y-4">
                   <div className="space-y-4">
-                    {!isBulkMode && singleImage?.imageUrl && (
-                      <div className="relative h-64 w-full overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800">
-                        <img
-                          src={`${singleImage.imageUrl}?w=1200&q=85&auto=format&fit=max`}
-                          alt={formData.imageAlt}
-                          className="h-full w-full object-contain"
-                        />
-                      </div>
+                    {!isBulkMode && singleImage?.image && (
+                      <ImageHotspotEditor
+                        imageUrl={sanityImage(singleImage.image)
+                          .width(1200)
+                          .quality(85)
+                          .auto('format')
+                          .url()}
+                        imageAlt={formData.imageAlt}
+                        hotspot={hotspot}
+                        onChange={(newHotspot) => setHotspot(newHotspot)}
+                      />
                     )}
 
                     {!isBulkMode && (

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface PhotoBentoGridProps {
   images: GalleryImageWithSpeakers[]
@@ -20,8 +21,13 @@ function PhotoGridItem({
   onClick: () => void
 }) {
   const [isLoading, setIsLoading] = useState(true)
-  const imageUrl = image.imageUrl
-    ? `${image.imageUrl}?w=800&h=800&q=85&auto=format&fit=crop`
+  const imageUrl = image.image
+    ? sanityImage(image.image)
+      .width(800)
+      .height(800)
+      .quality(85)
+      .fit('crop')
+      .url()
     : ''
 
   const handleImageRef = (el: HTMLImageElement | null) => {

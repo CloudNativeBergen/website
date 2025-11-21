@@ -23,6 +23,22 @@ export const galleryImageUpdateSchema = z.object({
   speakers: z.array(z.string()).optional(),
   imageAlt: z.string().optional(),
   notifySpeakers: z.boolean().optional().default(false),
+  hotspot: z
+    .object({
+      x: z.number().min(0).max(1),
+      y: z.number().min(0).max(1),
+      width: z.number().min(0).max(1),
+      height: z.number().min(0).max(1),
+    })
+    .optional(),
+  crop: z
+    .object({
+      top: z.number().min(0).max(1),
+      bottom: z.number().min(0).max(1),
+      left: z.number().min(0).max(1),
+      right: z.number().min(0).max(1),
+    })
+    .optional(),
 })
 
 export const galleryImageFilterSchema = z.object({

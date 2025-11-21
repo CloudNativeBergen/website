@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
 import { useImageCarousel } from '@/hooks/useImageCarousel'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface SimpleImageCarouselProps {
   images: GalleryImageWithSpeakers[]
@@ -73,14 +74,18 @@ export function SimpleImageCarousel({
             <div className="absolute inset-0 animate-pulse bg-gray-200 dark:bg-gray-700" />
           )}
 
-          {currentImage?.imageUrl && (
+          {currentImage?.image && (
             <button
               onClick={() => onImageClick(currentIndex)}
               className="h-full w-full cursor-pointer"
             >
               <img
                 ref={handleImageRef}
-                src={`${currentImage.imageUrl}?w=1200&q=85&auto=format&fit=max`}
+                src={sanityImage(currentImage.image)
+                  .width(1200)
+                  .quality(85)
+                  .fit('max')
+                  .url()}
                 alt={
                   currentImage.imageAlt ??
                   (currentImage.photographer

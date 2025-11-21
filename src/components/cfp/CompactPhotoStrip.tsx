@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { GalleryModal } from '@/components/GalleryModal'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { PhotoIcon } from '@heroicons/react/24/outline'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface CompactPhotoStripProps {
   images: GalleryImageWithSpeakers[]
@@ -50,9 +51,13 @@ export function CompactPhotoStrip({
               onClick={() => handleImageClick(index)}
               className="group relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200 transition-transform hover:scale-105 dark:bg-gray-700"
             >
-              {image.imageUrl && (
+              {image.image && (
                 <img
-                  src={`${image.imageUrl}?w=160&h=160&fit=crop&auto=format`}
+                  src={sanityImage(image.image)
+                    .width(160)
+                    .height(160)
+                    .fit('crop')
+                    .url()}
                   alt={image.imageAlt || `Photo from ${conferenceName}`}
                   className="h-full w-full object-cover"
                 />

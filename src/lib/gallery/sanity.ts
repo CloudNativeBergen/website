@@ -216,9 +216,20 @@ export async function updateGalleryImage(
         _type: 'image',
         asset: assetRef,
         ...(patch.imageAlt !== undefined ? { alt: patch.imageAlt } : {}),
+        ...(patch.hotspot !== undefined ? { hotspot: patch.hotspot } : {}),
+        ...(patch.crop !== undefined ? { crop: patch.crop } : {}),
       }
-    } else if (patch.imageAlt !== undefined) {
-      updatePatch['image.alt'] = patch.imageAlt
+    } else {
+      // Update alt text, hotspot, or crop without changing the asset
+      if (patch.imageAlt !== undefined) {
+        updatePatch['image.alt'] = patch.imageAlt
+      }
+      if (patch.hotspot !== undefined) {
+        updatePatch['image.hotspot'] = patch.hotspot
+      }
+      if (patch.crop !== undefined) {
+        updatePatch['image.crop'] = patch.crop
+      }
     }
 
     const updated = await clientWrite.patch(id).set(updatePatch).commit()
@@ -265,7 +276,7 @@ export async function getGalleryImage(
         _rev,
         _createdAt,
         _updatedAt,
-        image{asset, alt},
+        image{asset, alt, crop, hotspot},
         "imageUrl": image.asset->url,
         "imageAlt": image.alt,
         photographer,
@@ -371,7 +382,7 @@ export async function getGalleryImages(
         _rev,
         _createdAt,
         _updatedAt,
-        image{asset, alt},
+        image{asset, alt, crop, hotspot},
         "imageUrl": image.asset->url,
         "imageAlt": image.alt,
         photographer,

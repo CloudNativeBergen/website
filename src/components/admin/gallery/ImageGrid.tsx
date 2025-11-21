@@ -10,6 +10,7 @@ import {
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { ConfirmationModal } from '../ConfirmationModal'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface ImageGridProps {
   images: GalleryImageWithSpeakers[]
@@ -205,9 +206,15 @@ export function ImageGrid({
                 }
               }}
             >
-              {image.imageUrl ? (
+              {image.image ? (
                 <img
-                  src={`${image.imageUrl}?w=800&q=85&auto=format&fit=max`}
+                  src={sanityImage(image.image)
+                    .width(800)
+                    .height(450)
+                    .fit('crop')
+                    .quality(85)
+                    .auto('format')
+                    .url()}
                   alt={image.imageAlt || ''}
                   className="h-full w-full object-cover"
                   loading="lazy"

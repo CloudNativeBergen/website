@@ -71,7 +71,7 @@ function shuffleArray<T>(array: T[]): T[] {
   const shuffled = [...array]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-      ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
   return shuffled
 }
@@ -635,13 +635,15 @@ export function PhotoGalleryBuilder({
                     key={layoutOption.id}
                     onClick={() => setLayout(layoutOption.id)}
                     disabled={initialPhotos.length < layoutOption.photoCount}
-                    className={`flex cursor-pointer items-center justify-between rounded-lg border-2 p-3 transition-all ${layout === layoutOption.id
+                    className={`flex cursor-pointer items-center justify-between rounded-lg border-2 p-3 transition-all ${
+                      layout === layoutOption.id
                         ? styles.buttonActive
                         : styles.buttonInactive
-                      } ${initialPhotos.length < layoutOption.photoCount
+                    } ${
+                      initialPhotos.length < layoutOption.photoCount
                         ? 'cursor-not-allowed opacity-50'
                         : ''
-                      }`}
+                    }`}
                   >
                     <div className="text-left">
                       <div className="font-medium">{layoutOption.name}</div>

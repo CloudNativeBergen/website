@@ -14,6 +14,7 @@ import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { api } from '@/lib/trpc/client'
+import { sanityImage } from '@/lib/sanity/client'
 
 interface GalleryModalProps {
   isOpen: boolean
@@ -64,11 +65,11 @@ export function GalleryModal({
           prev.map((img, idx) =>
             idx === currentIndex
               ? {
-                  ...img,
-                  speakers: img.speakers?.filter(
-                    (s) => s._id !== currentSpeakerId,
-                  ),
-                }
+                ...img,
+                speakers: img.speakers?.filter(
+                  (s) => s._id !== currentSpeakerId,
+                ),
+              }
               : img,
           ),
         )
@@ -165,10 +166,14 @@ export function GalleryModal({
                       onTouchMove={(e) => handleTouchMove(e.nativeEvent)}
                       onTouchEnd={handleTouchEnd}
                     >
-                      {currentImage?.imageUrl && (
+                      {currentImage?.image && (
                         <div className="relative h-full w-full">
                           <img
-                            src={`${currentImage.imageUrl}?w=1920&q=90&auto=format&fit=max`}
+                            src={sanityImage(currentImage.image)
+                              .width(1920)
+                              .quality(90)
+                              .fit('max')
+                              .url()}
                             alt={
                               currentImage.imageAlt ??
                               (currentImage.photographer
@@ -247,7 +252,7 @@ export function GalleryModal({
                         </div>
                         <div className="flex items-center justify-between gap-4 pt-2">
                           {currentImage?.speakers &&
-                          currentImage.speakers.length > 0 ? (
+                            currentImage.speakers.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {currentImage.speakers.map((speaker) =>
                                 speaker.slug ? (
@@ -309,9 +314,14 @@ export function GalleryModal({
                                   : 'opacity-50',
                               )}
                             >
-                              {image.imageUrl && (
+                              {image.image && (
                                 <img
-                                  src={`${image.imageUrl}?w=192&h=128&q=85&auto=format&fit=crop`}
+                                  src={sanityImage(image.image)
+                                    .width(192)
+                                    .height(128)
+                                    .quality(85)
+                                    .fit('crop')
+                                    .url()}
                                   alt={
                                     image.imageAlt ||
                                     (image.photographer
