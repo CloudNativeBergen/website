@@ -302,6 +302,14 @@ export function ImageUploadZone({
       return
     }
 
+    if (!metadata.photographer || !metadata.location) {
+      showNotification({
+        title: 'Photographer and location are required',
+        type: 'error',
+      })
+      return
+    }
+
     setIsUploading(true)
     showNotification({
       title: `Uploading ${files.length} ${files.length === 1 ? 'image' : 'images'}...`,
@@ -532,7 +540,7 @@ export function ImageUploadZone({
             htmlFor="photographer"
             className="mb-1 block text-sm font-medium text-gray-900 dark:text-white"
           >
-            Photographer
+            Photographer <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -546,6 +554,7 @@ export function ImageUploadZone({
             }
             className="block h-9 w-full rounded-md border-0 px-3 text-sm text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:ring-inset dark:bg-white/5 dark:text-white dark:ring-white/10 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
             placeholder="John Doe"
+            required
           />
         </div>
         <div className="min-w-[200px] flex-1">
@@ -553,7 +562,7 @@ export function ImageUploadZone({
             htmlFor="location"
             className="mb-1 block text-sm font-medium text-gray-900 dark:text-white"
           >
-            Location
+            Location <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -564,6 +573,7 @@ export function ImageUploadZone({
             }
             className="block h-9 w-full rounded-md border-0 px-3 text-sm text-gray-900 ring-1 ring-gray-300 ring-inset placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:ring-inset dark:bg-white/5 dark:text-white dark:ring-white/10 dark:placeholder:text-gray-500 dark:focus:ring-indigo-500"
             placeholder="Conference Hall"
+            required
           />
         </div>
         <div className="w-40">

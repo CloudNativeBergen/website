@@ -99,10 +99,19 @@ export async function POST(request: NextRequest) {
       }
 
       try {
+        if (!metadata.photographer || !metadata.location) {
+          results.push({
+            success: false,
+            error: 'Photographer and location are required',
+            fileName,
+          })
+          continue
+        }
+
         const validatedMetadata = galleryImageCreateSchema.parse({
-          photographer: metadata.photographer || 'Unknown',
+          photographer: metadata.photographer,
           date: metadata.date || getCurrentDateTime(),
-          location: metadata.location || 'Unknown',
+          location: metadata.location,
           conference: conference._id,
           featured: metadata.featured || false,
           speakers: metadata.speakers || [],

@@ -122,7 +122,7 @@ export function ImageGrid({
                 onClick={onBulkTag}
                 className="rounded-md bg-indigo-600 px-3 py-1 text-sm font-medium text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
               >
-                Tag Speakers
+                Bulk Update
               </button>
             )}
             <button

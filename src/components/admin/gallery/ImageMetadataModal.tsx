@@ -98,6 +98,14 @@ export function ImageMetadataModal({
       })
       setSelectedSpeakers(singleImage.speakers || [])
     } else {
+      // Reset form for bulk mode
+      setFormData({
+        photographer: '',
+        date: '',
+        location: '',
+        imageAlt: '',
+        featured: false,
+      })
       setSelectedSpeakers([])
     }
     setNotifySpeakers(true)
@@ -141,11 +149,28 @@ export function ImageMetadataModal({
             new Set([...existingSpeakerIds, ...newSpeakerIds]),
           )
 
-          return updateMutation.mutateAsync({
+          // Build update object with only fields that have values
+          const updateData: {
+            id: string
+            speakers: string[]
+            notifySpeakers: boolean
+            photographer?: string
+            location?: string
+          } = {
             id: img._id,
             speakers: mergedSpeakerIds,
             notifySpeakers,
-          })
+          }
+
+          // Add photographer and location if they have values (bulk update)
+          if (formData.photographer) {
+            updateData.photographer = formData.photographer
+          }
+          if (formData.location) {
+            updateData.location = formData.location
+          }
+
+          return updateMutation.mutateAsync(updateData)
         }),
       )
 
@@ -157,13 +182,13 @@ export function ImageMetadataModal({
       setIsSubmitting(false)
       if (failCount === 0) {
         showNotification({
-          title: `Successfully tagged ${successCount} image${successCount !== 1 ? 's' : ''}`,
+          title: `Successfully updated ${successCount} image${successCount !== 1 ? 's' : ''}`,
           type: 'success',
         })
         onUpdate()
       } else {
         showNotification({
-          title: `Tagged ${successCount} images, ${failCount} failed`,
+          title: `Updated ${successCount} images, ${failCount} failed`,
           type: failCount === images.length ? 'error' : 'warning',
         })
         if (successCount > 0) {
@@ -238,7 +263,7 @@ export function ImageMetadataModal({
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
                     {isBulkMode
-                      ? `Tag ${images!.length} Images`
+                      ? `Bulk Update ${images!.length} Images`
                       : 'Edit Image Metadata'}
                   </h3>
                   <button
@@ -252,15 +277,56 @@ export function ImageMetadataModal({
                 </div>
 
                 {isBulkMode && (
-                  <div className="mt-4 rounded-md bg-blue-50 p-3 dark:bg-blue-500/10">
-                    <p className="text-sm text-blue-700 dark:text-blue-400">
-                      Add speakers to{' '}
-                      <span className="font-semibold">
-                        {images!.length} selected image
-                        {images!.length !== 1 ? 's' : ''}
-                      </span>
-                      . Selected speakers will be added to all images.
-                    </p>
+                  <div className="mt-4 space-y-3">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label
+                          htmlFor="bulk-photographer"
+                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                        >
+                          Photographer (optional)
+                        </label>
+                        <div className="mt-2">
+                          <input
+                            type="text"
+                            id="bulk-photographer"
+                            value={formData.photographer}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                photographer: e.target.value,
+                              }))
+                            }
+                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                            placeholder="Leave empty to keep existing"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="bulk-location"
+                          className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                        >
+                          Location (optional)
+                        </label>
+                        <div className="mt-2">
+                          <input
+                            type="text"
+                            id="bulk-location"
+                            value={formData.location}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                location: e.target.value,
+                              }))
+                            }
+                            className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                            placeholder="Leave empty to keep existing"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -606,16 +672,19 @@ export function ImageMetadataModal({
                       type="submit"
                       disabled={
                         isSubmitting ||
-                        (isBulkMode && selectedSpeakers.length === 0)
+                        (isBulkMode &&
+                          selectedSpeakers.length === 0 &&
+                          !formData.photographer &&
+                          !formData.location)
                       }
                       className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
                     >
                       {isSubmitting
                         ? isBulkMode
-                          ? 'Tagging...'
+                          ? 'Updating...'
                           : 'Saving...'
                         : isBulkMode
-                          ? 'Tag Images'
+                          ? 'Update Images'
                           : 'Save Changes'}
                     </button>
                   </div>
