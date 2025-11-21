@@ -7,7 +7,12 @@ import {
 } from '@heroicons/react/24/outline'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/solid'
 import { BlueskyIcon, LinkedInIcon } from '@/components/SocialIcons'
-import { shareSocial, shareToCredly, buildFullUrl } from '@/lib/share/social'
+import {
+  shareSocial,
+  shareToCredly,
+  buildFullUrl,
+  addToLinkedInProfile,
+} from '@/lib/share/social'
 import type { BadgeRecord } from '@/lib/badge/types'
 import Link from 'next/link'
 
@@ -32,9 +37,29 @@ export function BadgeShare({
   const fullBadgeUrl = buildFullUrl(domain, badgeUrl)
   const fullJsonUrl = buildFullUrl(domain, jsonUrl)
 
-  const handleShare = (platform: 'bluesky' | 'linkedin') => {
+  const handleShare = (platform: 'bluesky') => {
     const text = `🎉 I earned a ${badgeTypeName} Badge at ${eventName}! 🎉`
     shareSocial({ platform, text, url: fullBadgeUrl })
+  }
+
+  const handleAddToLinkedIn = () => {
+    const issueDate = new Date(badge.issued_at)
+    // Extract organization name from badge or use default
+    const organizationName =
+      typeof badge.conference === 'object' &&
+        'organizer' in badge.conference &&
+        badge.conference.organizer
+        ? badge.conference.organizer
+        : 'Cloud Native Bergen'
+
+    addToLinkedInProfile({
+      name: `${eventName} ${badgeTypeName} Badge`,
+      organizationName,
+      issueYear: issueDate.getFullYear(),
+      issueMonth: issueDate.getMonth() + 1,
+      certUrl: fullBadgeUrl,
+      certId: badge.badge_id,
+    })
   }
 
   const handleCredly = () => {
@@ -88,7 +113,7 @@ export function BadgeShare({
               Bluesky
             </button>
             <button
-              onClick={() => handleShare('linkedin')}
+              onClick={handleAddToLinkedIn}
               className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
             >
               <LinkedInIcon className="h-4 w-4" />

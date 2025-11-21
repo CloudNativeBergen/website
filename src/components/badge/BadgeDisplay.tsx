@@ -19,7 +19,12 @@ import { sanityImage } from '@/lib/sanity/client'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { BlueskyIcon, LinkedInIcon } from '@/components/SocialIcons'
-import { shareSocial, shareToCredly, buildFullUrl } from '@/lib/share/social'
+import {
+  shareSocial,
+  shareToCredly,
+  buildFullUrl,
+  addToLinkedInProfile,
+} from '@/lib/share/social'
 
 interface BadgeDisplayProps {
   badge: BadgeRecord
@@ -63,9 +68,21 @@ export function BadgeDisplay({
     }
   }
 
-  const handleShare = (platform: 'bluesky' | 'linkedin') => {
+  const handleShare = (platform: 'bluesky') => {
     const text = `🎉 I earned a ${badgeTypeName} Badge at ${conference.title}! 🎉`
     shareSocial({ platform, text, url: fullBadgeUrl })
+  }
+
+  const handleAddToLinkedIn = () => {
+    const issueDate = new Date(badge.issued_at)
+    addToLinkedInProfile({
+      name: `${conference.title} ${badgeTypeName} Badge`,
+      organizationName: conference.organizer || 'Cloud Native Bergen',
+      issueYear: issueDate.getFullYear(),
+      issueMonth: issueDate.getMonth() + 1,
+      certUrl: fullBadgeUrl,
+      certId: badgeId,
+    })
   }
 
   const speakerImageUrl = speaker.image
@@ -75,8 +92,8 @@ export function BadgeDisplay({
   // Get first talk for evidence (if available)
   const speakerTalks =
     'talks' in speaker &&
-    Array.isArray(speaker.talks) &&
-    speaker.talks.length > 0
+      Array.isArray(speaker.talks) &&
+      speaker.talks.length > 0
       ? speaker.talks
       : null
   const firstTalk = speakerTalks ? speakerTalks[0] : null
@@ -186,11 +203,11 @@ export function BadgeDisplay({
         </button>
 
         <button
-          onClick={() => handleShare('linkedin')}
+          onClick={handleAddToLinkedIn}
           className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#0A66C2] px-6 py-4 font-semibold text-white transition-transform hover:scale-105"
         >
           <LinkedInIcon className="h-5 w-5" />
-          Share on LinkedIn
+          Add to Profile
         </button>
 
         {badgeSvgUrl && (
