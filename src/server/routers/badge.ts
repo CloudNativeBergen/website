@@ -186,7 +186,7 @@ export const badgeRouter = router({
           centerGraphicSvg: input.centerGraphicSvg,
         })
 
-        const verificationUrl = `${config.baseUrl}/api/badge/${badgeId}/verify`
+        const verificationUrl = `${config.baseUrl}/badge/${badgeId}`
         const bakedSvg = bakeBadge(svgContent, assertion)
 
         const { assetId, error: uploadError } = await uploadBadgeSVGAsset(
@@ -414,7 +414,7 @@ export const badgeRouter = router({
             centerGraphicSvg: input.centerGraphicSvg,
           })
 
-          const verificationUrl = `${config.baseUrl}/api/badge/${badgeId}/verify`
+          const verificationUrl = `${config.baseUrl}/badge/${badgeId}`
           const bakedSvg = bakeBadge(svgContent, assertion)
 
           const { assetId, error: uploadError } = await uploadBadgeSVGAsset(

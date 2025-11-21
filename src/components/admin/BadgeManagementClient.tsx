@@ -316,7 +316,7 @@ export function BadgeManagementClient({
   }
 
   const handleCopyBadgeUrl = async (badgeId: string, speakerName: string) => {
-    const badgeUrl = `${window.location.origin}/api/badge/${badgeId}/download`
+    const badgeUrl = `${window.location.origin}/badge/${badgeId}`
 
     try {
       await navigator.clipboard.writeText(badgeUrl)

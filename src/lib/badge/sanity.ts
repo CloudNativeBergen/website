@@ -13,12 +13,21 @@ const BADGE_FIELDS = `
     _id,
     name,
     email,
-    "image": image.asset->url
+    "image": image.asset->url,
+    title,
+    "slug": slug.current,
+    talks[]->{
+      _id,
+      title
+    }
   },
   conference->{
     _id,
     title,
     organizer,
+    city,
+    country,
+    tagline,
     start_date,
     end_date
   },

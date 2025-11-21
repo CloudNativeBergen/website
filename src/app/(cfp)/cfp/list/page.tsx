@@ -10,9 +10,12 @@ import { groq } from 'next-sanity'
 import { isConferenceOver } from '@/lib/conference/state'
 import { CompactConferenceCard } from '@/components/cfp/CompactConferenceCard'
 import { SpeakerShareSidebar } from '@/components/cfp/SpeakerShareSidebar'
-import { SpeakerShare } from '@/components/SpeakerShare'
+import { SpeakerShare, generateQRCode } from '@/components/SpeakerShare'
+import { BadgeShare } from '@/components/cfp/BadgeShare'
+import { sanityImage } from '@/lib/sanity/client'
 import type { Conference } from '@/lib/conference/types'
 import type { ConferenceWithSpeakerData } from '@/lib/dashboard/types'
+import type { BadgeRecord } from '@/lib/badge/types'
 
 export default async function SpeakerDashboard() {
   const headersList = await headers()
@@ -65,25 +68,48 @@ export default async function SpeakerDashboard() {
   // Fetch data for each conference in parallel
   const conferenceDataPromises = conferences.map(async (conference) => {
     try {
-      const [{ proposals }, galleryImages, workshopStats, { travelSupport }] =
-        await Promise.all([
-          getProposals({
+      const [
+        { proposals },
+        galleryImages,
+        workshopStats,
+        { travelSupport },
+        badges,
+      ] = await Promise.all([
+        getProposals({
+          speakerId,
+          conferenceId: conference._id,
+          returnAll: false,
+        }),
+        getGalleryImages(
+          {
             speakerId,
             conferenceId: conference._id,
-            returnAll: false,
-          }),
-          getGalleryImages(
-            {
-              speakerId,
-              conferenceId: conference._id,
-            },
-            { useCache: true, revalidate: 300 },
-          ),
-          getWorkshopSignupStatisticsBySpeaker(speakerId, conference._id).catch(
-            () => [],
-          ),
-          getTravelSupport(speakerId, conference._id),
-        ])
+          },
+          { useCache: true, revalidate: 300 },
+        ),
+        getWorkshopSignupStatisticsBySpeaker(speakerId, conference._id).catch(
+          () => [],
+        ),
+        getTravelSupport(speakerId, conference._id),
+        clientReadCached.fetch<BadgeRecord[]>(
+          groq`*[_type == "speakerBadge" && speaker._ref == $speakerId && conference._ref == $conferenceId] | order(issued_at desc) {
+            _id,
+            _createdAt,
+            badge_id,
+            badge_type,
+            issued_at,
+            verification_url,
+            baked_svg{
+              asset->{
+                _id,
+                url
+              }
+            }
+          }`,
+          { speakerId, conferenceId: conference._id },
+          { next: { revalidate: 300 } },
+        ),
+      ])
 
       const isOver = isConferenceOver(conference)
       const canEditProposals = !isOver
@@ -94,6 +120,7 @@ export default async function SpeakerDashboard() {
         galleryImages,
         workshopStats,
         travelSupport,
+        badges: badges || [],
         isOver,
         canEditProposals,
       } as ConferenceWithSpeakerData
@@ -108,6 +135,7 @@ export default async function SpeakerDashboard() {
         galleryImages: [],
         workshopStats: [],
         travelSupport: null,
+        badges: [],
         isOver: isConferenceOver(conference),
         canEditProposals: !isConferenceOver(conference),
       } as ConferenceWithSpeakerData
@@ -122,7 +150,8 @@ export default async function SpeakerDashboard() {
       c.proposals.length > 0 ||
       c.galleryImages.length > 0 ||
       c.workshopStats.length > 0 ||
-      c.travelSupport !== null,
+      c.travelSupport !== null ||
+      c.badges.length > 0,
   )
 
   // Get confirmed talks for speaker share
@@ -133,6 +162,16 @@ export default async function SpeakerDashboard() {
       ),
     )
     .slice(0, 1) // Show only the first confirmed talk
+
+  // Get all badges sorted by issue date (newest first)
+  const allBadges = activeConferences
+    .flatMap((c) => c.badges)
+    .sort(
+      (a, b) =>
+        new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime(),
+    )
+
+  const latestBadge = allBadges[0]
 
   const speakerWithTalks = {
     ...speaker,
@@ -147,6 +186,35 @@ export default async function SpeakerDashboard() {
         c.proposals.some((p) => p._id === primaryTalk._id),
       )?.conference.title || 'Cloud Native Bergen'
     : 'Cloud Native Bergen'
+
+  // Determine what to show in sidebar: confirmed talk or latest badge
+  const showBadgeInSidebar = !primaryTalk && latestBadge
+
+  let badgeQrCodeUrl: string | undefined
+  let badgeEventName: string | undefined
+  let speakerImageUrl: string | undefined
+
+  if (showBadgeInSidebar && latestBadge) {
+    // Generate QR code for badge verification URL
+    badgeQrCodeUrl = latestBadge.verification_url
+      ? await generateQRCode(latestBadge.verification_url, 512)
+      : undefined
+
+    // Get the conference name for the badge
+    const badgeConference = activeConferences.find((c) =>
+      c.badges.some((b) => b._id === latestBadge._id),
+    )
+    badgeEventName = badgeConference?.conference.title || 'Cloud Native Bergen'
+
+    // Get speaker image URL
+    if (speaker.image) {
+      speakerImageUrl = sanityImage(speaker.image)
+        .width(400)
+        .height(400)
+        .fit('crop')
+        .url()
+    }
+  }
 
   if (activeConferences.length === 0) {
     return (
@@ -204,11 +272,22 @@ export default async function SpeakerDashboard() {
 
         {/* Sidebar */}
         <div className="w-full shrink-0 lg:w-80">
-          <SpeakerShareSidebar
-            speaker={speakerWithTalks}
-            talkTitle={talkTitle}
-            eventName={eventName}
-          />
+          {showBadgeInSidebar && latestBadge && badgeQrCodeUrl ? (
+            <BadgeShare
+              badge={latestBadge}
+              speakerName={speaker.name}
+              speakerImage={speakerImageUrl}
+              eventName={badgeEventName || 'Cloud Native Bergen'}
+              qrCodeUrl={badgeQrCodeUrl}
+              className="w-full"
+            />
+          ) : (
+            <SpeakerShareSidebar
+              speaker={speakerWithTalks}
+              talkTitle={talkTitle}
+              eventName={eventName}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -9,6 +9,7 @@ import { CompactProposalList } from './CompactProposalList'
 import { CompactPhotoStrip } from './CompactPhotoStrip'
 import { CompactWorkshopStats } from './CompactWorkshopStats'
 import { CompactTravelSupport } from './CompactTravelSupport'
+import { CompactBadges } from './CompactBadges'
 
 interface CompactConferenceCardProps {
   data: ConferenceWithSpeakerData
@@ -21,13 +22,15 @@ export function CompactConferenceCard({
   defaultExpanded = false,
 }: CompactConferenceCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
-  const { proposals, galleryImages, workshopStats, travelSupport } = data
+  const { proposals, galleryImages, workshopStats, travelSupport, badges } =
+    data
 
   const hasContent =
     proposals.length > 0 ||
     galleryImages.length > 0 ||
     workshopStats.length > 0 ||
-    travelSupport !== null
+    travelSupport !== null ||
+    badges.length > 0
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
@@ -52,6 +55,8 @@ export function CompactConferenceCard({
 
       {isExpanded && hasContent && (
         <div className="space-y-4 border-t border-gray-200 px-4 py-4 dark:border-gray-700">
+          {badges.length > 0 && <CompactBadges badges={badges} />}
+
           {proposals.length > 0 && (
             <CompactProposalList
               proposals={proposals}
