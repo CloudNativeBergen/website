@@ -4,16 +4,16 @@ Official website for Cloud Native Bergen and Cloud Native Day Bergen.
 
 ## Getting started
 
-To get started with this template, first install the npm dependencies:
+To get started with this template, first install the pnpm dependencies:
 
 ```bash
-npm install
+pnpm install
 ```
 
 Next, run the development server:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Finally, open [http://localhost:3000](http://localhost:3000) in your browser to view the website.
@@ -57,19 +57,19 @@ The project uses **Prettier** for code formatting with these settings:
 To format all files manually:
 
 ```bash
-npm run format
+pnpm run format
 ```
 
 To check for linting issues:
 
 ```bash
-npm run lint
+pnpm run lint
 ```
 
 To run TypeScript type checking:
 
 ```bash
-npm run typecheck
+pnpm run typecheck
 ```
 
 ## Sanity
@@ -77,7 +77,7 @@ npm run typecheck
 Install the Sanity CLI:
 
 ```bash
-npm install --global sanity@latest
+pnpm install --global sanity@latest
 ```
 
 Deploy Sanity Studio to Sanity.io

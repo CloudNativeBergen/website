@@ -133,199 +133,197 @@ export default async function Image({
   }
 
   return new ImageResponse(
-    (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        background: STYLES.gradient,
+        color: 'white',
+        padding: '60px',
+        fontFamily: STYLES.fontFamily,
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <BackgroundPatterns />
+
+      {/* Domain badge in top left */}
       <div
         style={{
-          width: '100%',
-          height: '100%',
+          position: 'absolute',
+          top: '40px',
+          left: '60px',
+          fontSize: '16px',
+          fontWeight: '600',
+          opacity: 0.8,
+          zIndex: 2,
+          textShadow: STYLES.shadow.textSmall,
           display: 'flex',
-          flexDirection: 'column',
-          background: STYLES.gradient,
-          color: 'white',
-          padding: '60px',
-          fontFamily: STYLES.fontFamily,
-          position: 'relative',
-          overflow: 'hidden',
+          whiteSpace: 'nowrap',
         }}
       >
-        <BackgroundPatterns />
+        {domain}
+      </div>
 
-        {/* Domain badge in top left */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '40px',
-            left: '60px',
-            fontSize: '16px',
-            fontWeight: '600',
-            opacity: 0.8,
-            zIndex: 2,
-            textShadow: STYLES.shadow.textSmall,
-            display: 'flex',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {domain}
-        </div>
+      {/* OpenBadges verification badge in top right */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '40px',
+          right: '60px',
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: STYLES.colors.whiteTransparent,
+          padding: '8px 16px',
+          borderRadius: '12px',
+          color: '#1e40af',
+          fontSize: '14px',
+          fontWeight: '600',
+          zIndex: 2,
+        }}
+      >
+        <img src={SHIELD_ICON_SVG} alt="" width={20} height={20} />
+        <span>OpenBadges 3.0 Verified</span>
+      </div>
 
-        {/* OpenBadges verification badge in top right */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '40px',
-            right: '60px',
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: STYLES.colors.whiteTransparent,
-            padding: '8px 16px',
-            borderRadius: '12px',
-            color: '#1e40af',
-            fontSize: '14px',
-            fontWeight: '600',
-            zIndex: 2,
-          }}
-        >
-          <img src={SHIELD_ICON_SVG} alt="" width={20} height={20} />
-          <span>OpenBadges 3.0 Verified</span>
-        </div>
-
-        {/* Main content */}
+      {/* Main content */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '60px',
+          flex: 1,
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        {/* Badge SVG on left */}
         <div
           style={{
             display: 'flex',
-            flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '60px',
-            flex: 1,
-            position: 'relative',
-            zIndex: 1,
           }}
         >
-          {/* Badge SVG on left */}
-          <div
+          {badgeSvgContent ? (
+            <img
+              src={badgeSvgContent}
+              alt={`${badgeTypeName} Badge`}
+              width={360}
+              height={360}
+              style={{
+                filter: 'drop-shadow(0 20px 40px rgba(0, 0, 0, 0.2))',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '360px',
+                height: '360px',
+                borderRadius: '50%',
+                background:
+                  'linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1))',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '3px solid rgba(255, 255, 255, 0.2)',
+                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
+              }}
+            >
+              <img
+                src={SHIELD_ICON_SVG}
+                alt=""
+                width={120}
+                height={120}
+                style={{ opacity: 0.5 }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Text content on right */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            maxWidth: '500px',
+          }}
+        >
+          <h1
             style={{
+              fontSize: '64px',
+              fontWeight: '700',
+              margin: '0 0 16px 0',
+              lineHeight: 1.1,
+              fontFamily: STYLES.fontFamily,
+              textShadow: STYLES.shadow.text,
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
             }}
           >
-            {badgeSvgContent ? (
-              <img
-                src={badgeSvgContent}
-                alt={`${badgeTypeName} Badge`}
-                width={360}
-                height={360}
-                style={{
-                  filter: 'drop-shadow(0 20px 40px rgba(0, 0, 0, 0.2))',
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: '360px',
-                  height: '360px',
-                  borderRadius: '50%',
-                  background:
-                    'linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1))',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '3px solid rgba(255, 255, 255, 0.2)',
-                  boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
-                }}
-              >
-                <img
-                  src={SHIELD_ICON_SVG}
-                  alt=""
-                  width={120}
-                  height={120}
-                  style={{ opacity: 0.5 }}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Text content on right */}
+            {speakerName}
+          </h1>
           <div
             style={{
+              fontSize: '32px',
+              fontWeight: '600',
+              margin: '0 0 24px 0',
+              opacity: 0.95,
+              fontFamily: STYLES.fontFamily,
+              textShadow: STYLES.shadow.textSmall,
+              display: 'flex',
+            }}
+          >
+            {badgeTypeName} Badge
+          </div>
+          <div
+            style={{
+              fontSize: '24px',
+              fontWeight: '500',
+              margin: '0',
+              opacity: 0.9,
+              fontFamily: STYLES.fontFamily,
+              textShadow: STYLES.shadow.textSmall,
               display: 'flex',
               flexDirection: 'column',
-              maxWidth: '500px',
+              gap: '8px',
             }}
           >
-            <h1
-              style={{
-                fontSize: '64px',
-                fontWeight: '700',
-                margin: '0 0 16px 0',
-                lineHeight: 1.1,
-                fontFamily: STYLES.fontFamily,
-                textShadow: STYLES.shadow.text,
-                display: 'flex',
-              }}
-            >
-              {speakerName}
-            </h1>
-            <div
-              style={{
-                fontSize: '32px',
-                fontWeight: '600',
-                margin: '0 0 24px 0',
-                opacity: 0.95,
-                fontFamily: STYLES.fontFamily,
-                textShadow: STYLES.shadow.textSmall,
-                display: 'flex',
-              }}
-            >
-              {badgeTypeName} Badge
-            </div>
-            <div
-              style={{
-                fontSize: '24px',
-                fontWeight: '500',
-                margin: '0',
-                opacity: 0.9,
-                fontFamily: STYLES.fontFamily,
-                textShadow: STYLES.shadow.textSmall,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-              }}
-            >
-              <div style={{ display: 'flex' }}>{conferenceName}</div>
-              <div style={{ display: 'flex', opacity: 0.8 }}>
-                {conferenceLocation}
-              </div>
+            <div style={{ display: 'flex' }}>{conferenceName}</div>
+            <div style={{ display: 'flex', opacity: 0.8 }}>
+              {conferenceLocation}
             </div>
           </div>
         </div>
-
-        {/* Footer text */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '40px',
-            left: '60px',
-            right: '60px',
-            display: 'flex',
-            justifyContent: 'center',
-            fontSize: '16px',
-            fontWeight: '500',
-            opacity: 0.7,
-            textAlign: 'center',
-            fontFamily: STYLES.fontFamily,
-            textShadow: STYLES.shadow.textSmall,
-            zIndex: 2,
-          }}
-        >
-          Cryptographically verified digital credential compliant with W3C
-          Verifiable Credentials 2.0
-        </div>
       </div>
-    ),
+
+      {/* Footer text */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '40px',
+          left: '60px',
+          right: '60px',
+          display: 'flex',
+          justifyContent: 'center',
+          fontSize: '16px',
+          fontWeight: '500',
+          opacity: 0.7,
+          textAlign: 'center',
+          fontFamily: STYLES.fontFamily,
+          textShadow: STYLES.shadow.textSmall,
+          zIndex: 2,
+        }}
+      >
+        Cryptographically verified digital credential compliant with W3C
+        Verifiable Credentials 2.0
+      </div>
+    </div>,
     size,
   )
 }

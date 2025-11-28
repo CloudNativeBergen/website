@@ -309,9 +309,9 @@ Badges are sent from conference-specific addresses:
 **Commands:**
 
 ```bash
-npm test badge-e2e.test.ts        # Full badge lifecycle
-npm test openbadges.test.ts       # OpenBadges library
-npm test controller-validation    # DID/HTTP controller tests
+pnpm test badge-e2e.test.ts        # Full badge lifecycle
+pnpm test openbadges.test.ts       # OpenBadges library
+pnpm test controller-validation    # DID/HTTP controller tests
 ```
 
 ### Validation Integration

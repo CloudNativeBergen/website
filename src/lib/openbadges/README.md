@@ -150,7 +150,7 @@ try {
 The library includes comprehensive test coverage for all core functionality. Run tests with:
 
 ```bash
-npm test
+pnpm test
 ```
 
 ## References

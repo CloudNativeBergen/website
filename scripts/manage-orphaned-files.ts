@@ -6,8 +6,8 @@
  * Find and optionally delete orphaned file assets that are not referenced by any documents.
  *
  * Usage:
- *   npm run manage-orphaned-files          # List orphaned files (dry run)
- *   npm run manage-orphaned-files --delete # Delete orphaned files
+ *   pnpm run manage-orphaned-files          # List orphaned files (dry run)
+ *   pnpm run manage-orphaned-files --delete # Delete orphaned files
  */
 
 // Load environment variables FIRST before any other imports
@@ -137,7 +137,7 @@ async function manageOrphanedFiles() {
     console.log(`\n✅ Cleanup complete! Freed ${totalMB} MB of storage.`)
   } else {
     console.log(`\n💡 To delete these files, run:`)
-    console.log('   npm run manage-orphaned-files -- --delete')
+    console.log('   pnpm run manage-orphaned-files -- --delete')
   }
 }
 

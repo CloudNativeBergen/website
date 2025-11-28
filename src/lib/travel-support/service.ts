@@ -23,10 +23,10 @@ export class TravelSupportService {
     const { bankingDetails } = travelSupport
     return Boolean(
       bankingDetails.beneficiaryName &&
-        bankingDetails.bankName &&
-        bankingDetails.swiftCode &&
-        bankingDetails.country &&
-        (bankingDetails.iban || bankingDetails.accountNumber),
+      bankingDetails.bankName &&
+      bankingDetails.swiftCode &&
+      bankingDetails.country &&
+      (bankingDetails.iban || bankingDetails.accountNumber),
     )
   }
 

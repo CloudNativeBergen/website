@@ -124,7 +124,7 @@ async function cleanOrphanedFiles() {
     }
   } else {
     console.log('\n💡 To actually delete these files, run:')
-    console.log('   npm run clean-orphaned-files -- --delete')
+    console.log('   pnpm run clean-orphaned-files -- --delete')
   }
 }
 

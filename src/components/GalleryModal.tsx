@@ -65,11 +65,11 @@ export function GalleryModal({
           prev.map((img, idx) =>
             idx === currentIndex
               ? {
-                ...img,
-                speakers: img.speakers?.filter(
-                  (s) => s._id !== currentSpeakerId,
-                ),
-              }
+                  ...img,
+                  speakers: img.speakers?.filter(
+                    (s) => s._id !== currentSpeakerId,
+                  ),
+                }
               : img,
           ),
         )
@@ -252,7 +252,7 @@ export function GalleryModal({
                         </div>
                         <div className="flex items-center justify-between gap-4 pt-2">
                           {currentImage?.speakers &&
-                            currentImage.speakers.length > 0 ? (
+                          currentImage.speakers.length > 0 ? (
                             <div className="flex flex-wrap gap-2">
                               {currentImage.speakers.map((speaker) =>
                                 speaker.slug ? (

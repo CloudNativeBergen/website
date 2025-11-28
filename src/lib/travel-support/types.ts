@@ -114,8 +114,10 @@ export interface TravelSupportWithExpenses extends TravelSupport {
   expenses: TravelExpense[]
 }
 
-export interface TravelSupportWithSpeaker
-  extends Omit<TravelSupport, 'speaker' | 'conference'> {
+export interface TravelSupportWithSpeaker extends Omit<
+  TravelSupport,
+  'speaker' | 'conference'
+> {
   speaker: {
     _id: string
     name: string

@@ -329,9 +329,8 @@ export const proposalRouter = router({
               revalidate: 0,
             })
             if (conference && conference._id === conferenceId) {
-              const { isConferenceOver, isCfpOpen } = await import(
-                '@/lib/conference/state'
-              )
+              const { isConferenceOver, isCfpOpen } =
+                await import('@/lib/conference/state')
               if (isConferenceOver(conference)) {
                 throw new TRPCError({
                   code: 'FORBIDDEN',

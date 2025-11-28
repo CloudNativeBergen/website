@@ -157,7 +157,7 @@ Any modifications made to the schema files within the `sanity/schemaTypes/` dire
 To deploy schema changes, run the following command from the project root:
 
 ```bash
-npm run sanity:deploy
+pnpm run sanity:deploy
 # or if you have the Sanity CLI installed globally:
 # sanity deploy
 ```

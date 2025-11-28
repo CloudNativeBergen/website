@@ -31,7 +31,8 @@
     "sanity/**",
     "migrations/**",
     "**/middleware.ts",
-    "src/lib/empty-module.ts"
+    "src/lib/empty-module.ts",
+    "scripts/strip-comments.ts"
   ],
   "ignoreDependencies": [
     "eslint-config-next",

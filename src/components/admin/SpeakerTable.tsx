@@ -674,9 +674,8 @@ export function SpeakerTable({
                               <ActionMenuDivider />
                               <ActionMenuItem
                                 onClick={async () => {
-                                  const { addImpersonateParam } = await import(
-                                    '@/lib/impersonation'
-                                  )
+                                  const { addImpersonateParam } =
+                                    await import('@/lib/impersonation')
                                   window.open(
                                     addImpersonateParam(
                                       '/cfp/list',

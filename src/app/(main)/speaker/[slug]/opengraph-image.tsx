@@ -381,24 +381,22 @@ export default async function Image({
 
   if (err || !speaker || !talks?.length) {
     return new ImageResponse(
-      (
-        <div
-          style={{
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #1e40af, #10b981)',
-            color: 'white',
-            fontSize: 48,
-            fontWeight: 'bold',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-          }}
-        >
-          Speaker not found
-        </div>
-      ),
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #1e40af, #10b981)',
+          color: 'white',
+          fontSize: 48,
+          fontWeight: 'bold',
+          fontFamily: 'system-ui, -apple-system, sans-serif',
+        }}
+      >
+        Speaker not found
+      </div>,
       size,
     )
   }
@@ -434,94 +432,36 @@ export default async function Image({
   const mainContentHeight = hasOtherSponsors ? '480px' : '520px'
 
   return new ImageResponse(
-    (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'row',
+        background: 'linear-gradient(135deg, #1e40af, #10b981)',
+        color: 'white',
+        padding: '40px 40px 80px 40px',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      <BackgroundPatterns />
+
       <div
         style={{
-          width: '100%',
-          height: '100%',
+          position: 'absolute',
+          top: '20px',
+          left: '40px',
           display: 'flex',
           flexDirection: 'row',
-          background: 'linear-gradient(135deg, #1e40af, #10b981)',
-          color: 'white',
-          padding: '40px 40px 80px 40px',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-          position: 'relative',
-          overflow: 'hidden',
+          alignItems: 'center',
+          gap: '32px',
+          zIndex: 2,
+          maxWidth: '800px',
         }}
       >
-        <BackgroundPatterns />
-
-        <div
-          style={{
-            position: 'absolute',
-            top: '20px',
-            left: '40px',
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: '32px',
-            zIndex: 2,
-            maxWidth: '800px',
-          }}
-        >
-          {(conferenceData.startDate || conferenceData.endDate) && (
-            <div
-              style={{
-                fontSize: '18px',
-                fontWeight: '700',
-                color: 'white',
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-                display: 'flex',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {(() => {
-                if (conferenceData.startDate && conferenceData.endDate) {
-                  const startDate = new Date(conferenceData.startDate)
-                  const endDate = new Date(conferenceData.endDate)
-
-                  if (startDate.toDateString() === endDate.toDateString()) {
-                    return startDate.toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })
-                  }
-
-                  if (
-                    startDate.getMonth() === endDate.getMonth() &&
-                    startDate.getFullYear() === endDate.getFullYear()
-                  ) {
-                    return `${startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${endDate.getDate()}, ${endDate.getFullYear()}`
-                  }
-
-                  return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                }
-
-                const singleDate =
-                  conferenceData.startDate || conferenceData.endDate
-                return formatConferenceDateLong(singleDate)
-              })()}
-            </div>
-          )}
-          {(conferenceData.city || conferenceData.country) && (
-            <div
-              style={{
-                fontSize: '18px',
-                fontWeight: '700',
-                color: 'white',
-                fontFamily: 'system-ui, -apple-system, sans-serif',
-                textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-                display: 'flex',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {[conferenceData.city, conferenceData.country]
-                .filter(Boolean)
-                .join(', ')}
-            </div>
-          )}
+        {(conferenceData.startDate || conferenceData.endDate) && (
           <div
             style={{
               fontSize: '18px',
@@ -533,86 +473,204 @@ export default async function Image({
               whiteSpace: 'nowrap',
             }}
           >
-            {domain}
-          </div>
-        </div>
+            {(() => {
+              if (conferenceData.startDate && conferenceData.endDate) {
+                const startDate = new Date(conferenceData.startDate)
+                const endDate = new Date(conferenceData.endDate)
 
-        {ingressSponsors.length > 0 && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '40px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-end',
-              gap: '8px',
-              zIndex: 2,
-              maxWidth: '400px',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: '12px',
-                flexWrap: 'wrap',
-                justifyContent: 'flex-end',
-              }}
-            >
-              {ingressSponsors
-                .sort((a, b) =>
-                  (a.sponsor?.name || '').localeCompare(b.sponsor?.name || ''),
-                )
-                .slice(0, 3)
-                .map((sponsor, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: '8px 12px',
-                      minWidth: '80px',
-                      minHeight: '40px',
-                    }}
-                  >
-                    {renderSponsorLogo(
-                      sponsor?.sponsor?.logo || null,
-                      sponsor?.sponsor?.logo_bright || null,
-                      sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
-                      'small',
-                    )}
-                  </div>
-                ))}
-            </div>
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                opacity: 0.9,
-                color: STYLES.colors.white,
-                fontFamily: STYLES.fontFamily,
-                textAlign: 'right',
-                textShadow: STYLES.shadow.textSmall,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                display: 'flex',
-              }}
-            >
-              INGRESS SPONSORS
-            </div>
+                if (startDate.toDateString() === endDate.toDateString()) {
+                  return startDate.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })
+                }
+
+                if (
+                  startDate.getMonth() === endDate.getMonth() &&
+                  startDate.getFullYear() === endDate.getFullYear()
+                ) {
+                  return `${startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${endDate.getDate()}, ${endDate.getFullYear()}`
+                }
+
+                return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+              }
+
+              const singleDate =
+                conferenceData.startDate || conferenceData.endDate
+              return formatConferenceDateLong(singleDate)
+            })()}
           </div>
         )}
+        {(conferenceData.city || conferenceData.country) && (
+          <div
+            style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: 'white',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+              textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+              display: 'flex',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {[conferenceData.city, conferenceData.country]
+              .filter(Boolean)
+              .join(', ')}
+          </div>
+        )}
+        <div
+          style={{
+            fontSize: '18px',
+            fontWeight: '700',
+            color: 'white',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
+            textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+            display: 'flex',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {domain}
+        </div>
+      </div>
+
+      {ingressSponsors.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '40px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: '8px',
+            zIndex: 2,
+            maxWidth: '400px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: '12px',
+              flexWrap: 'wrap',
+              justifyContent: 'flex-end',
+            }}
+          >
+            {ingressSponsors
+              .sort((a, b) =>
+                (a.sponsor?.name || '').localeCompare(b.sponsor?.name || ''),
+              )
+              .slice(0, 3)
+              .map((sponsor, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '8px 12px',
+                    minWidth: '80px',
+                    minHeight: '40px',
+                  }}
+                >
+                  {renderSponsorLogo(
+                    sponsor?.sponsor?.logo || null,
+                    sponsor?.sponsor?.logo_bright || null,
+                    sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
+                    'small',
+                  )}
+                </div>
+              ))}
+          </div>
+          <div
+            style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              opacity: 0.9,
+              color: STYLES.colors.white,
+              fontFamily: STYLES.fontFamily,
+              textAlign: 'right',
+              textShadow: STYLES.shadow.textSmall,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              display: 'flex',
+            }}
+          >
+            INGRESS SPONSORS
+          </div>
+        </div>
+      )}
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          width: '100%',
+          height: mainContentHeight,
+          alignItems: 'center',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            width: '40%',
+            paddingRight: '30px',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          <SpeakerImage imageUrl={speakerImageUrl} name={speakerData.name} />
+
+          <h2
+            style={{
+              fontSize: '42px',
+              fontWeight: '700',
+              margin: '0 0 16px 0',
+              lineHeight: 1.0,
+              textAlign: 'center',
+              maxWidth: '100%',
+              fontFamily: STYLES.fontFamily,
+              textShadow: STYLES.shadow.text,
+              display: 'flex',
+            }}
+          >
+            {speakerData.name}
+          </h2>
+
+          {speakerData.title && (
+            <p
+              style={{
+                fontSize: '26px',
+                fontWeight: '500',
+                margin: '0',
+                opacity: 0.9,
+                lineHeight: 1.2,
+                textAlign: 'center',
+                maxWidth: '100%',
+                fontFamily: STYLES.fontFamily,
+                textShadow: STYLES.shadow.textSmall,
+                display: 'flex',
+              }}
+            >
+              {speakerData.title}
+            </p>
+          )}
+        </div>
 
         <div
           style={{
             display: 'flex',
-            flexDirection: 'row',
-            width: '100%',
-            height: mainContentHeight,
-            alignItems: 'center',
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            width: '60%',
+            paddingLeft: '30px',
             position: 'relative',
             zIndex: 1,
           }}
@@ -621,179 +679,117 @@ export default async function Image({
             style={{
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              width: '40%',
-              paddingRight: '30px',
-              position: 'relative',
-              zIndex: 1,
+              marginBottom: '36px',
             }}
           >
-            <SpeakerImage imageUrl={speakerImageUrl} name={speakerData.name} />
-
-            <h2
-              style={{
-                fontSize: '42px',
-                fontWeight: '700',
-                margin: '0 0 16px 0',
-                lineHeight: 1.0,
-                textAlign: 'center',
-                maxWidth: '100%',
-                fontFamily: STYLES.fontFamily,
-                textShadow: STYLES.shadow.text,
-                display: 'flex',
-              }}
-            >
-              {speakerData.name}
-            </h2>
-
-            {speakerData.title && (
-              <p
-                style={{
-                  fontSize: '26px',
-                  fontWeight: '500',
-                  margin: '0',
-                  opacity: 0.9,
-                  lineHeight: 1.2,
-                  textAlign: 'center',
-                  maxWidth: '100%',
-                  fontFamily: STYLES.fontFamily,
-                  textShadow: STYLES.shadow.textSmall,
-                  display: 'flex',
-                }}
-              >
-                {speakerData.title}
-              </p>
-            )}
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'flex-start',
-              width: '60%',
-              paddingLeft: '30px',
-              position: 'relative',
-              zIndex: 1,
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                marginBottom: '36px',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  marginBottom: '16px',
-                  fontSize: '26px',
-                  fontWeight: '600',
-                  opacity: 0.95,
-                  fontFamily: STYLES.fontFamily,
-                  textShadow: STYLES.shadow.textSmall,
-                }}
-              >
-                <div style={{ display: 'flex', marginRight: '12px' }}>
-                  <MicrophoneIcon size={26} />
-                </div>
-                Speaker at
-              </div>
-              <h1
-                style={{
-                  fontSize: '42px',
-                  fontWeight: '700',
-                  margin: 0,
-                  lineHeight: 0.95,
-                  maxWidth: '100%',
-                  fontFamily: STYLES.fontFamily,
-                  letterSpacing: '-0.02em',
-                  textShadow: STYLES.shadow.text,
-                  background: 'linear-gradient(45deg, #ffffff, #e0f2fe)',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                  display: 'flex',
-                }}
-              >
-                {conferenceData.title}
-              </h1>
-            </div>
-
-            {primaryTalk && <TalkCard title={primaryTalk.title} />}
-          </div>
-        </div>
-
-        {hasOtherSponsors && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '20px',
-              left: '40px',
-              right: '40px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              zIndex: 1,
-            }}
-          >
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                marginBottom: '10px',
-                opacity: 0.9,
-                fontFamily: STYLES.fontFamily,
-                color: STYLES.colors.white,
-                textAlign: 'center',
-                textShadow: STYLES.shadow.textSmall,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                display: 'flex',
-              }}
-            >
-              SERVICE SPONSORS
-            </div>
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: '20px',
-                flexWrap: 'wrap',
-                maxWidth: '100%',
+                marginBottom: '16px',
+                fontSize: '26px',
+                fontWeight: '600',
+                opacity: 0.95,
+                fontFamily: STYLES.fontFamily,
+                textShadow: STYLES.shadow.textSmall,
               }}
             >
-              {otherSponsors
-                .filter((sponsor) => sponsor.tier?.title === 'Service')
-                .sort((a, b) =>
-                  (a.sponsor?.name || '').localeCompare(b.sponsor?.name || ''),
-                )
-                .map((sponsor, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: '45px',
-                    }}
-                  >
-                    {renderSponsorLogo(
-                      sponsor?.sponsor?.logo || null,
-                      sponsor?.sponsor?.logo_bright || null,
-                      sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
-                      'small',
-                    )}
-                  </div>
-                ))}
+              <div style={{ display: 'flex', marginRight: '12px' }}>
+                <MicrophoneIcon size={26} />
+              </div>
+              Speaker at
             </div>
+            <h1
+              style={{
+                fontSize: '42px',
+                fontWeight: '700',
+                margin: 0,
+                lineHeight: 0.95,
+                maxWidth: '100%',
+                fontFamily: STYLES.fontFamily,
+                letterSpacing: '-0.02em',
+                textShadow: STYLES.shadow.text,
+                background: 'linear-gradient(45deg, #ffffff, #e0f2fe)',
+                backgroundClip: 'text',
+                color: 'transparent',
+                display: 'flex',
+              }}
+            >
+              {conferenceData.title}
+            </h1>
           </div>
-        )}
+
+          {primaryTalk && <TalkCard title={primaryTalk.title} />}
+        </div>
       </div>
-    ),
+
+      {hasOtherSponsors && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '20px',
+            left: '40px',
+            right: '40px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            zIndex: 1,
+          }}
+        >
+          <div
+            style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              marginBottom: '10px',
+              opacity: 0.9,
+              fontFamily: STYLES.fontFamily,
+              color: STYLES.colors.white,
+              textAlign: 'center',
+              textShadow: STYLES.shadow.textSmall,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              display: 'flex',
+            }}
+          >
+            SERVICE SPONSORS
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '20px',
+              flexWrap: 'wrap',
+              maxWidth: '100%',
+            }}
+          >
+            {otherSponsors
+              .filter((sponsor) => sponsor.tier?.title === 'Service')
+              .sort((a, b) =>
+                (a.sponsor?.name || '').localeCompare(b.sponsor?.name || ''),
+              )
+              .map((sponsor, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '45px',
+                  }}
+                >
+                  {renderSponsorLogo(
+                    sponsor?.sponsor?.logo || null,
+                    sponsor?.sponsor?.logo_bright || null,
+                    sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
+                    'small',
+                  )}
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>,
     size,
   )
 }

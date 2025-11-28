@@ -79,7 +79,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - Keep chat interactions short and concise.
 - Prefer working code over lengthy examples.
 - Do not provide lengthy summaries.
-- Always run `npm run check` before committing changes.
+- Always run `pnpm run check` before committing changes.
 
 ### Date and Time Handling
 
@@ -137,16 +137,16 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 
 ### Commands
 
-- **Linting:** `npm run lint` - Runs ESLint to check for code quality and style issues.
-- **Linting (Fix):** `npm run lint:fix` - Runs ESLint with automatic fixes.
-- **Formatting:** `npm run format` - Formats code using Prettier.
-- **Format Check:** `npm run format:check` - Checks if code is formatted correctly.
-- **Type Checking:** `npm run typecheck` - Runs TypeScript type checks.
-- **Development Server:** `npm run dev` - Starts the Next.js development server with Turbopack.
-- **Build for Production:** `npm run build` - Builds the application for production.
-- **Testing:** `npm run test` - Runs Jest tests silently.
-- **Testing (Debug):** `npm run test:debug` - Runs Jest tests with debug output.
-- **Testing (Watch):** `npm run test:watch` - Runs Jest tests in watch mode.
+- **Linting:** `pnpm run lint` - Runs ESLint to check for code quality and style issues.
+- **Linting (Fix):** `pnpm run lint:fix` - Runs ESLint with automatic fixes.
+- **Formatting:** `pnpm run format` - Formats code using Prettier.
+- **Format Check:** `pnpm run format:check` - Checks if code is formatted correctly.
+- **Type Checking:** `pnpm run typecheck` - Runs TypeScript type checks.
+- **Development Server:** `pnpm run dev` - Starts the Next.js development server with Turbopack.
+- **Build for Production:** `pnpm run build` - Builds the application for production.
+- **Testing:** `pnpm run test` - Runs Jest tests silently.
+- **Testing (Debug):** `pnpm run test:debug` - Runs Jest tests with debug output.
+- **Testing (Watch):** `pnpm run test:watch` - Runs Jest tests in watch mode.
 
 ## Code Organization & Refactoring
 

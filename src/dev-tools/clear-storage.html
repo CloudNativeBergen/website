@@ -107,12 +107,12 @@
       </div>
 
       <div>
-        <button class="button" onclick="window.location.href='/admin'">
+        <button class="button" onclick="window.location.href = '/admin'">
           Go to Admin
         </button>
         <button
           class="button"
-          onclick="window.location.href='/api/admin/clear-session?clear=true'"
+          onclick="window.location.href = '/api/admin/clear-session?clear=true'"
         >
           API Clear
         </button>
@@ -299,9 +299,7 @@
             }
 
             updateStatus(
-              '�️ IndexedDB cleared: ' +
-                databases.length +
-                ' databases deleted',
+              '�️ IndexedDB cleared: ' + databases.length + ' databases deleted',
               'success',
             )
           } else {

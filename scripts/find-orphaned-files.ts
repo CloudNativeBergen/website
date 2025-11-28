@@ -97,7 +97,7 @@ async function findOrphanedFiles() {
   const totalMB = (totalSize / 1024 / 1024).toFixed(2)
   console.log(`📊 Total wasted storage: ${totalMB} MB`)
   console.log(
-    `\n💡 To delete these files, run: npm run clean-orphaned-files --delete`,
+    `\n💡 To delete these files, run: pnpm run clean-orphaned-files --delete`,
   )
 }
 

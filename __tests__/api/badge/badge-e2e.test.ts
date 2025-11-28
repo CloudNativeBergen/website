@@ -370,9 +370,8 @@ describe('Badge System E2E', () => {
     })
 
     it('GET /api/badge/[badgeId]/achievement should return achievement', async () => {
-      const { GET } = await import(
-        '@/app/api/badge/[badgeId]/achievement/route'
-      )
+      const { GET } =
+        await import('@/app/api/badge/[badgeId]/achievement/route')
 
       const response = await GET(
         { params: Promise.resolve({ badgeId }) } as any,

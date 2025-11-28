@@ -473,7 +473,7 @@ curl -X GET "https://your-domain.com/api/cron/cleanup-orphaned-blobs" \
 1. **Start Development Server**:
 
    ```bash
-   npm run dev
+   pnpm run dev
    ```
 
 2. **Test File Upload**:
@@ -515,7 +515,7 @@ curl -X GET "https://your-domain.com/api/cron/cleanup-orphaned-blobs" \
 ```bash
 npx vercel env pull .env.local
 # Restart dev server
-npm run dev
+pnpm run dev
 ```
 
 ### Blob not deleted after upload

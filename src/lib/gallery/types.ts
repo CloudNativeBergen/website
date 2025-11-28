@@ -83,8 +83,10 @@ export interface ConferenceReference {
   domains?: string[]
 }
 
-export interface GalleryImageWithSpeakers
-  extends Omit<GalleryImage, 'speakers'> {
+export interface GalleryImageWithSpeakers extends Omit<
+  GalleryImage,
+  'speakers'
+> {
   speakers: SpeakerReference[]
   conference?: ConferenceReference
   /**

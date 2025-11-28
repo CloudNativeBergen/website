@@ -63,8 +63,10 @@ export interface Volunteer extends VolunteerInput {
   reviewNotes?: string
 }
 
-export interface VolunteerWithConference
-  extends Omit<Volunteer, 'conference' | 'reviewedBy'> {
+export interface VolunteerWithConference extends Omit<
+  Volunteer,
+  'conference' | 'reviewedBy'
+> {
   conference: {
     _id: string
     title: string

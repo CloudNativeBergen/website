@@ -1,4 +1,4 @@
-#!/usr/bin/env ts-node
+#!/usr/bin/env tsx
 /**
  * Script: strip-comments.ts
  * Purpose: Remove non-essential comments from source files according to project guideline:

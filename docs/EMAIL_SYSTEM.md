@@ -352,10 +352,10 @@ Basic validation and error handling tests:
 
 ```bash
 # Run email system tests
-npm test __tests__/lib/email/speaker.test.ts
+pnpm test __tests__/lib/email/speaker.test.ts
 
 # Run all tests
-npm test
+pnpm test
 ```
 
 ### Manual Testing Checklist
@@ -478,7 +478,7 @@ Monitor email delivery through the Resend dashboard:
 Enable detailed logging in development:
 
 ```bash
-NODE_ENV=development npm run dev
+NODE_ENV=development pnpm run dev
 ```
 
 ### Error Recovery

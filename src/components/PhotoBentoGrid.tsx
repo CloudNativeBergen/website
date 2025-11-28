@@ -23,11 +23,11 @@ function PhotoGridItem({
   const [isLoading, setIsLoading] = useState(true)
   const imageUrl = image.image
     ? sanityImage(image.image)
-      .width(800)
-      .height(800)
-      .quality(85)
-      .fit('crop')
-      .url()
+        .width(800)
+        .height(800)
+        .quality(85)
+        .fit('crop')
+        .url()
     : ''
 
   const handleImageRef = (el: HTMLImageElement | null) => {
