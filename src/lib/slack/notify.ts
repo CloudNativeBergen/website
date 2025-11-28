@@ -1,11 +1,4 @@
-import {
-  ProposalExisting,
-  formats,
-  levels,
-  languages,
-  audiences,
-} from '@/lib/proposal/types'
-import { PortableTextBlock } from 'sanity'
+import { ProposalExisting } from '@/lib/proposal/types'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { Action } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
@@ -94,21 +87,6 @@ async function resolveSpeakerNames(
   return resolvedSpeakers.join(', ')
 }
 
-function formatDescription(
-  description: PortableTextBlock[] | undefined,
-): string {
-  if (!description || description.length === 0) {
-    return 'No description provided'
-  }
-
-  return description
-    .map((block: PortableTextBlock) => {
-      const children = block.children as { text: string }[] | undefined
-      return children?.[0]?.text || ''
-    })
-    .join('\n')
-}
-
 function getDomainFromConference(conference: Conference): string | null {
   return conference.domains && conference.domains.length > 0
     ? conference.domains[0]
@@ -172,69 +150,6 @@ function createProposalInfoBlocks(
       ],
     },
   ]
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function notifyNewProposal(
-  proposal: ProposalExisting,
-  conference: Conference,
-) {
-  const speakerNames = await resolveSpeakerNames(proposal)
-  const domain = getDomainFromConference(conference)
-
-  const blocks: SlackBlock[] = [
-    {
-      type: 'header',
-      text: {
-        type: 'plain_text',
-        text: '🎉 New CFP Submission',
-        emoji: true,
-      },
-    },
-    ...createProposalInfoBlocks(proposal, speakerNames),
-    {
-      type: 'section',
-      fields: [
-        {
-          type: 'mrkdwn',
-          text: `*Format:*\n${formats.get(proposal.format) || proposal.format}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Level:*\n${levels.get(proposal.level) || proposal.level}`,
-        },
-      ],
-    },
-    {
-      type: 'section',
-      fields: [
-        {
-          type: 'mrkdwn',
-          text: `*Language:*\n${languages.get(proposal.language) || proposal.language}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Audience:*\n${proposal.audiences ? proposal.audiences.map((aud) => audiences.get(aud) || aud).join(', ') : 'Not specified'}`,
-        },
-      ],
-    },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `*Description:*\n${formatDescription(proposal.description)}`,
-      },
-    },
-  ]
-
-  if (domain) {
-    blocks.push(
-      createAdminButton(proposal, domain, 'Review in Admin', 'review_proposal'),
-    )
-  }
-
-  const message = { blocks }
-  await sendSlackMessage(message)
 }
 
 function getActionEmoji(action: Action): string {

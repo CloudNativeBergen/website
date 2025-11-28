@@ -23,11 +23,7 @@ export function ActionMenu({
 }: ActionMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [shouldDropUp, setShouldDropUp] = useState(false)
-  const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
+  const [isClient] = useState(() => typeof window !== 'undefined')
 
   const checkDropDirection = () => {
     if (!menuRef.current) {

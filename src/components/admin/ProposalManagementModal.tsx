@@ -58,68 +58,7 @@ export function ProposalManagementModal({
   const queryClient = useQueryClient()
   const { showNotification } = useNotification()
 
-  // Validate that topics are properly expanded - this will throw a helpful error
-  // if the parent page forgot to pass `topics: true` to getConferenceForCurrentDomain
-  useEffect(() => {
-    try {
-      validateExpandedTopics(conference, 'ProposalManagementModal')
-    } catch (error) {
-      console.error(error)
-      setError(
-        error instanceof Error
-          ? error.message
-          : 'Conference topics are not properly loaded',
-      )
-    }
-  }, [conference])
-
-  // tRPC mutations
-  const createMutation = api.proposal.admin.create.useMutation({
-    onSuccess: (proposal) => {
-      queryClient.invalidateQueries({ queryKey: [['proposal']] })
-      showNotification({
-        type: 'success',
-        title: 'Proposal created',
-        message: 'The proposal has been created successfully.',
-      })
-      onProposalCreated?.(proposal)
-      onClose()
-    },
-    onError: (error) => {
-      const errorMessage = error.message || 'Failed to create proposal'
-      setError(errorMessage)
-      showNotification({
-        type: 'error',
-        title: 'Failed to create proposal',
-        message: errorMessage,
-      })
-    },
-  })
-
-  const updateMutation = api.proposal.admin.update.useMutation({
-    onSuccess: (proposal) => {
-      queryClient.invalidateQueries({ queryKey: [['proposal']] })
-      showNotification({
-        type: 'success',
-        title: 'Proposal updated',
-        message: 'The proposal has been updated successfully.',
-      })
-      onProposalUpdated?.(proposal)
-      onClose()
-    },
-    onError: (error) => {
-      const errorMessage = error.message || 'Failed to update proposal'
-      setError(errorMessage)
-      showNotification({
-        type: 'error',
-        title: 'Failed to update proposal',
-        message: errorMessage,
-      })
-    },
-  })
-
-  const isPending = createMutation.isPending || updateMutation.isPending
-
+  // State declarations must come before useEffect that uses them
   const getInitialProposalData = (): ProposalInput => {
     if (editingProposal) {
       const topicsArray = editingProposal.topics || []
@@ -173,6 +112,68 @@ export function ProposalManagementModal({
     Record<string, string>
   >({})
 
+  // Validate that topics are properly expanded - this will throw a helpful error
+  // if the parent page forgot to pass `topics: true` to getConferenceForCurrentDomain
+  useEffect(() => {
+    try {
+      validateExpandedTopics(conference, 'ProposalManagementModal')
+    } catch (error) {
+      console.error(error)
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'Conference topics are not properly loaded',
+      )
+    }
+  }, [conference, setError])
+
+  // tRPC mutations
+  const createMutation = api.proposal.admin.create.useMutation({
+    onSuccess: (proposal) => {
+      queryClient.invalidateQueries({ queryKey: [['proposal']] })
+      showNotification({
+        type: 'success',
+        title: 'Proposal created',
+        message: 'The proposal has been created successfully.',
+      })
+      onProposalCreated?.(proposal)
+      onClose()
+    },
+    onError: (error) => {
+      const errorMessage = error.message || 'Failed to create proposal'
+      setError(errorMessage)
+      showNotification({
+        type: 'error',
+        title: 'Failed to create proposal',
+        message: errorMessage,
+      })
+    },
+  })
+
+  const updateMutation = api.proposal.admin.update.useMutation({
+    onSuccess: (proposal) => {
+      queryClient.invalidateQueries({ queryKey: [['proposal']] })
+      showNotification({
+        type: 'success',
+        title: 'Proposal updated',
+        message: 'The proposal has been updated successfully.',
+      })
+      onProposalUpdated?.(proposal)
+      onClose()
+    },
+    onError: (error) => {
+      const errorMessage = error.message || 'Failed to update proposal'
+      setError(errorMessage)
+      showNotification({
+        type: 'error',
+        title: 'Failed to update proposal',
+        message: errorMessage,
+      })
+    },
+  })
+
+  const isPending = createMutation.isPending || updateMutation.isPending
+
   // Reset form when modal opens or when editing a different proposal
   useEffect(() => {
     if (isOpen) {
@@ -189,7 +190,6 @@ export function ProposalManagementModal({
           '_id' in topic &&
           'title' in topic,
       )
-
       setProposalData(
         editingProposal
           ? {
@@ -218,14 +218,11 @@ export function ProposalManagementModal({
               tos: false,
             },
       )
-
-      setSelectedSpeakerIds(extractSpeakerIds(editingProposal?.speakers))
+      setSelectedSpeakerIds(extractSpeakerIds(editingProposal?.speakers) || [])
     }
-    // Only reset when modal opens/closes or proposal ID changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, editingProposal?._id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- conference.formats and editingProposal are stable, isOpen triggers reset
+  }, [isOpen])
 
-  // Keyboard shortcut for saving (CMD+S / Ctrl+S)
   useEffect(() => {
     if (!isOpen) return
 
@@ -235,10 +232,8 @@ export function ProposalManagementModal({
       if (isCmdOrCtrl && event.key.toLowerCase() === 's') {
         event.preventDefault()
 
-        // Don't save if already pending
         if (isPending) return
 
-        // Validate and submit
         const errors = validateProposalForAdmin(
           proposalData,
           selectedSpeakerIds,
@@ -292,6 +287,8 @@ export function ProposalManagementModal({
     conference._id,
     updateMutation,
     createMutation,
+    setError,
+    setValidationErrors,
   ])
 
   const validateForm = (): Record<string, string> => {
@@ -435,7 +432,7 @@ export function ProposalManagementModal({
                     {/* Error Display */}
                     {error && (
                       <div className="mt-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-                        <XCircleIcon className="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-400" />
+                        <XCircleIcon className="h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
                         <p className="text-sm text-red-800 dark:text-red-200">
                           {error}
                         </p>

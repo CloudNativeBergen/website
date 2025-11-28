@@ -103,6 +103,7 @@ export function ImageMetadataModal({
 
   useEffect(() => {
     if (singleImage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from image metadata
       setFormData({
         photographer: singleImage.photographer,
         date: singleImage.date,

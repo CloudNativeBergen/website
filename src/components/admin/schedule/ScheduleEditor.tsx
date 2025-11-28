@@ -354,8 +354,6 @@ const AddTrackModal = ({
 
 export function ScheduleEditor({
   initialSchedules,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  conference: _,
   initialProposals,
 }: ScheduleEditorProps) {
   const dragTimer = usePerformanceTimer('ScheduleEditor', 'drag-operation')
@@ -391,7 +389,8 @@ export function ScheduleEditor({
       )
       hasInitialized.current = true
     }
-  }, [currentSchedule, initialProposals, currentDayIndex, modifiedSchedules]) // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scheduleEditor is stable ref
+  }, [currentSchedule, initialProposals, currentDayIndex, modifiedSchedules])
 
   useEffect(() => {
     if (hasInitialized.current) {

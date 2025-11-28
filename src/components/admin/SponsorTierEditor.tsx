@@ -45,7 +45,6 @@ function SponsorTierModal({
   isOpen,
   onClose,
   tier,
-  conferenceId: _conferenceId, // eslint-disable-line @typescript-eslint/no-unused-vars
   onSave,
   onDelete,
 }: SponsorTierModalProps) {
@@ -101,6 +100,7 @@ function SponsorTierModal({
 
   useEffect(() => {
     if (tier) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from tier data
       setFormData({
         title: tier.title,
         tagline: tier.tagline,

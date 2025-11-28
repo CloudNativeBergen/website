@@ -1,8 +1,6 @@
 /**
  * @jest-environment node
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 // All mocks must be declared before any imports that use them
 const mockSendAcceptRejectNotification = jest.fn() as jest.MockedFunction<
   typeof import('@/lib/proposal/server').sendAcceptRejectNotification

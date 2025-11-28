@@ -87,8 +87,7 @@ export function GalleryFilters({
       setLocalPhotographer(photographer || '')
       setLocalLocation(location || '')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [onFiltersChange, searchParams])
 
   const updateURL = useCallback(
     (newFilters: typeof filters) => {
@@ -187,7 +186,7 @@ export function GalleryFilters({
       onFiltersChange(newFilters)
       updateURL(newFilters)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filters and callbacks are stable
   }, [debouncedPhotographer])
 
   useEffect(() => {
@@ -199,7 +198,7 @@ export function GalleryFilters({
       onFiltersChange(newFilters)
       updateURL(newFilters)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- filters and callbacks are stable
   }, [debouncedLocation])
 
   return (
@@ -324,7 +323,7 @@ export function GalleryFilters({
               onFiltersChange(newFilters)
               updateURL(newFilters)
             }}
-            className="h-9 w-36 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:[color-scheme:dark]"
+            className="h-9 w-36 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark"
             aria-label="Filter from date"
           />
         </div>
@@ -345,7 +344,7 @@ export function GalleryFilters({
               onFiltersChange(newFilters)
               updateURL(newFilters)
             }}
-            className="h-9 w-36 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:[color-scheme:dark]"
+            className="h-9 w-36 rounded-md border-gray-300 py-1.5 pr-3 pl-8 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:scheme-dark"
             aria-label="Filter to date"
           />
         </div>

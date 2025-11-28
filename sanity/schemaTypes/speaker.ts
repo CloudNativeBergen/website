@@ -85,7 +85,7 @@ export default defineType({
           for (const link of links as string[]) {
             try {
               new URL(link)
-            } catch (error) {
+            } catch {
               return 'Invalid URL format'
             }
           }

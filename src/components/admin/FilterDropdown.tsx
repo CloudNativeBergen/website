@@ -36,11 +36,7 @@ export function FilterDropdown({
 }: FilterDropdownProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [shouldDropUp, setShouldDropUp] = useState(forceDropUp)
-  const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
+  const [isClient] = useState(() => typeof window !== 'undefined')
 
   const getWidthClass = () => {
     switch (width) {

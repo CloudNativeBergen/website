@@ -1,5 +1,6 @@
 'use client'
 
+import React, { useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import type {
   TicketAnalysisResult,
@@ -145,8 +146,14 @@ export function TicketSalesChartDisplay({
   const { statistics: paidStatistics, performance: paidPerformance } =
     paidAnalysis
 
-  const StatusIcon = getStatusIcon(paidPerformance.variance)
-  const statusColorClasses = getStatusColors(paidPerformance.variance)
+  const statusIconType = useMemo(
+    () => getStatusIcon(paidPerformance.variance),
+    [paidPerformance.variance],
+  )
+  const statusColorClasses = useMemo(
+    () => getStatusColors(paidPerformance.variance),
+    [paidPerformance.variance],
+  )
   const capacityPercentage = calculateCapacityPercentage(
     paidStatistics.totalPaidTickets,
     paidAnalysis.capacity,
@@ -313,7 +320,9 @@ export function TicketSalesChartDisplay({
           value={`${paidPerformance.currentPercentage.toFixed(1)}%`}
           subtitle={
             <span className={`flex items-center ${statusColorClasses}`}>
-              <StatusIcon className="mr-1 h-3 w-3 flex-shrink-0" />
+              {React.createElement(statusIconType, {
+                className: 'mr-1 h-3 w-3 shrink-0',
+              })}
               {paidPerformance.isOnTrack ? 'On Track' : 'Behind'} (
               {paidPerformance.variance > 0 ? '+' : ''}
               {paidPerformance.variance.toFixed(1)}%)

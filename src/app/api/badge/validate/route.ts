@@ -171,8 +171,8 @@ export async function POST(request: NextRequest) {
     // JWT uses standard JWT signature verification instead
     if (!isJWT) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { proof: _proofIgnore, ...unsigned } = credential
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- proof extracted but not used
+        const { proof: _proof, ...unsigned } = credential
 
         type JsonLdContext = Record<string, unknown>
         const LOCAL_CONTEXTS: Record<string, JsonLdContext> = {
@@ -239,16 +239,17 @@ export async function POST(request: NextRequest) {
           throw new Error(`Context not found: ${url}`)
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const canonicalDoc = await (jsonld.canonize as any)(
-          unsigned as unknown as Record<string, unknown>,
-          {
-            algorithm: 'URDNA2015',
-            format: 'application/n-quads',
-            documentLoader: customDocLoader,
-            safe: false,
-          },
-        )
+        const canonicalDoc = await (
+          jsonld.canonize as (
+            doc: unknown,
+            options: Record<string, unknown>,
+          ) => Promise<string>
+        )(unsigned as unknown as Record<string, unknown>, {
+          algorithm: 'URDNA2015',
+          format: 'application/n-quads',
+          documentLoader: customDocLoader,
+          safe: false,
+        })
 
         const proofObj = credential.proof[0]
         const canonicalProofInput = {
@@ -259,16 +260,17 @@ export async function POST(request: NextRequest) {
           cryptosuite: proofObj.cryptosuite,
           proofPurpose: proofObj.proofPurpose,
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const canonicalProof = await (jsonld.canonize as any)(
-          canonicalProofInput,
-          {
-            algorithm: 'URDNA2015',
-            format: 'application/n-quads',
-            documentLoader: customDocLoader,
-            safe: false,
-          },
-        )
+        const canonicalProof = await (
+          jsonld.canonize as (
+            doc: unknown,
+            options: Record<string, unknown>,
+          ) => Promise<string>
+        )(canonicalProofInput, {
+          algorithm: 'URDNA2015',
+          format: 'application/n-quads',
+          documentLoader: customDocLoader,
+          safe: false,
+        })
 
         const concatenated = canonicalDoc + canonicalProof
         const canonicalizationResult = crypto

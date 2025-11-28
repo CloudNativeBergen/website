@@ -207,6 +207,7 @@ export function SponsorContactTable({
         row.contact._key === 'new-contact-temp'
       ) {
         const newContact: ContactPerson = {
+          // eslint-disable-next-line react-hooks/purity -- Unique key generation for new contact
           _key: `contact-${Date.now()}`,
           name: editingContact.name,
           email: editingContact.email,
@@ -608,7 +609,7 @@ export function SponsorContactTable({
                         ) : row.sponsor.billing && row.sponsor.billing.email ? (
                           <>
                             <div className="flex items-center text-sm text-gray-900 dark:text-white">
-                              <EnvelopeIcon className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                              <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
                               <a
                                 href={`mailto:${row.sponsor.billing.email}`}
                                 className="truncate hover:text-blue-600 dark:hover:text-blue-400"

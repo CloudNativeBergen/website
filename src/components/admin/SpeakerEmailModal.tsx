@@ -62,6 +62,7 @@ export function SpeakerEmailModal({
     if (isOpen) {
       const greeting = `Dear ${greetingNames},\n\n`
       const portableTextBlocks = convertStringToPortableTextBlocks(greeting)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize message template on modal open
       setInitialMessage(portableTextBlocks)
     }
   }, [isOpen, greetingNames])

@@ -100,7 +100,9 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
     if (sponsorId && sponsors.length > 0 && !isFormOpen) {
       const sponsor = sponsors.find((s) => s._id === sponsorId)
       if (sponsor) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional sync from URL params
         setSelectedSponsor(sponsor)
+
         setIsFormOpen(true)
         // Remove the sponsor param from URL after opening
         const params = new URLSearchParams(searchParams.toString())

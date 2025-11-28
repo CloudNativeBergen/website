@@ -67,9 +67,11 @@ We're excited to share your sponsor discount code for ${conference.title}!
 As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimentary ticket{{{TICKET_COUNT_PLURAL}}} for the conference.`
 
       const portableTextBlocks = convertStringToPortableTextBlocks(greeting)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize email template on modal open
       setInitialMessage(portableTextBlocks)
 
       const defaultTicketUrl = `https://${conference.domains[0]}/tickets`
+
       setTicketUrl(defaultTicketUrl)
       setAdditionalFields({ ticketUrl: defaultTicketUrl })
 

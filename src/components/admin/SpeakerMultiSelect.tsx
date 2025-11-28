@@ -164,8 +164,10 @@ export function SpeakerMultiSelect({
                 className="flex items-center justify-between rounded-md bg-gray-50 p-3 dark:bg-gray-700"
               >
                 <div className="flex items-center gap-3">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  <SpeakerAvatars speakers={[speaker as any]} size="sm" />
+                  <SpeakerAvatars
+                    speakers={[speaker as unknown as Speaker]}
+                    size="sm"
+                  />
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">
                       {speaker.name}

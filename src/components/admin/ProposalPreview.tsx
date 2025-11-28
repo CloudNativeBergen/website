@@ -294,7 +294,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                 Topics
               </h4>
               <div className="flex flex-wrap gap-2">
-                {proposal.topics.map((topic) => {
+                {proposal.topics?.map((topic, index) => {
                   const topicTitle =
                     typeof topic === 'object' && 'title' in topic
                       ? topic.title
@@ -306,7 +306,7 @@ export function ProposalPreview({ proposal, onClose }: ProposalPreviewProps) {
                       ? topic._id
                       : typeof topic === 'object' && '_ref' in topic
                         ? topic._ref
-                        : Math.random().toString()
+                        : `topic-${index}`
 
                   return (
                     <span

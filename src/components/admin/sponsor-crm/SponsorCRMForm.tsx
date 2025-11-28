@@ -144,6 +144,7 @@ export function SponsorCRMForm({
       resetUpdateMutation()
 
       if (sponsor) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from sponsor data
         setFormData({
           sponsorId: sponsor.sponsor._id,
           tierId: sponsor.tier?._id || '',

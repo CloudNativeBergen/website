@@ -64,6 +64,7 @@ export function ProposalDetailsForm({
   // Sync local state when proposal prop changes (e.g., when editing a different proposal)
   useEffect(() => {
     isSyncingFromProps.current = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from proposal data
     setTitle(proposal?.title ?? '')
     setLanguage(proposal?.language ?? Language.norwegian)
     setDescription(proposal?.description ?? [])

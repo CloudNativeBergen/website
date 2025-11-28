@@ -263,7 +263,7 @@ export async function updateSpeaker(
   let updatedSpeaker: Speaker = {} as Speaker
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- image is excluded from patch
     const { image: _image, ...speakerWithoutImage } = speaker
     await clientWrite.patch(spekaerId).set(speakerWithoutImage).commit()
 

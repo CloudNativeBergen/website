@@ -16,21 +16,12 @@ export default async function WorkshopAdminPage() {
     )
   }
 
-  try {
-    const workshops = await getWorkshopsByConference(conference._id)
+  const workshops = await getWorkshopsByConference(conference._id)
 
-    return (
-      <WorkshopsClientPage
-        conferenceId={conference._id}
-        initialWorkshops={workshops}
-      />
-    )
-  } catch (error) {
-    return (
-      <ErrorDisplay
-        title="Error Loading Workshops"
-        message={error instanceof Error ? error.message : 'Unknown error'}
-      />
-    )
-  }
+  return (
+    <WorkshopsClientPage
+      conferenceId={conference._id}
+      initialWorkshops={workshops}
+    />
+  )
 }

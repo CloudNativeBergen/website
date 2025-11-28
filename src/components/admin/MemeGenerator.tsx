@@ -428,6 +428,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
         }
       })
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional cleanup on qr clear
       setQrCodeImage(null)
       qrImageRef.current = null
     }
@@ -445,6 +446,7 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
   useEffect(() => {
     const maxPosition = CANVAS_SIZE - logoSize
     if (logoVerticalPosition > maxPosition) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Bounds constraint enforcement
       setLogoVerticalPosition(maxPosition)
     }
     if (logoHorizontalPosition > maxPosition) {

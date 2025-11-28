@@ -42,11 +42,13 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
   })
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync speaker data with profile
     setSpeakerData(profile || initialSpeaker)
   }, [profile, initialSpeaker])
 
   useEffect(() => {
     if (uploadError) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Propagate upload error
       setSubmitError([uploadError])
     }
   }, [uploadError])

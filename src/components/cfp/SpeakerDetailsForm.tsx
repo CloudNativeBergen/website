@@ -105,8 +105,7 @@ export function SpeakerDetailsForm({
 
     previousSpeakerRef.current = speaker
     isMounted.current = true
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [speaker?.name, email])
+  }, [speaker, email])
 
   useEffect(() => {
     setSpeakerEmail(email ?? '')
@@ -233,8 +232,7 @@ export function SpeakerDetailsForm({
         privacyPolicyVersion: '2025-09-02',
       },
     })
-    // setSpeaker is intentionally omitted from deps to prevent infinite loops
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setSpeaker is stable callback prop
   }, [
     speakerName,
     speakerTitle,

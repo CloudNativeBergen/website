@@ -348,6 +348,7 @@ export function DiscountCodeManager({
 
   const generateDiscountCode = (sponsorName: string): string => {
     const cleanName = sponsorName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    // eslint-disable-next-line react-hooks/purity -- Intentional timestamp for unique code generation
     const timestamp = Date.now().toString().slice(-4)
     return `${cleanName}${timestamp}`
   }

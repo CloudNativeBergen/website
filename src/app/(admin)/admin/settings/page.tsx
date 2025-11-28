@@ -82,7 +82,13 @@ function FieldRow({
   type = 'text',
 }: {
   label: string
-  value: string | boolean | Array<any> | number | null | undefined // eslint-disable-line @typescript-eslint/no-explicit-any
+  value:
+    | string
+    | boolean
+    | Array<string | NamedItem>
+    | number
+    | null
+    | undefined
   type?:
     | 'text'
     | 'date'

@@ -85,7 +85,7 @@ export function GalleryModal({
   useEffect(() => {
     setUntagError(null)
     untagMutation.reset()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- untagMutation is stable from tRPC
   }, [currentIndex])
 
   if (!localImages || localImages.length === 0) {

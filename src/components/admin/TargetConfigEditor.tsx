@@ -36,15 +36,17 @@ export function TargetConfigEditor({
     },
   })
 
-  const [config, setConfig] = useState<SalesTargetConfig>(
-    currentConfig || {
-      enabled: true,
-      sales_start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-        .toISOString()
-        .split('T')[0],
-      target_curve: 'late_push',
-      milestones: [],
-    },
+  const [config, setConfig] = useState<SalesTargetConfig>(() =>
+    currentConfig
+      ? currentConfig
+      : {
+          enabled: true,
+          sales_start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split('T')[0],
+          target_curve: 'late_push',
+          milestones: [],
+        },
   )
 
   const [editCapacity, setEditCapacity] = useState(capacity)

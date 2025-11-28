@@ -15,18 +15,15 @@ import {
   isConferenceOver,
 } from '@/lib/conference/state'
 import { formatDatesSafe } from '@/lib/time'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 
 export function Header({ c }: { c: Conference }) {
   const { data: session } = useSession()
-  const [isPast, setIsPast] = useState(false)
-  const [isClient, setIsClient] = useState(false)
+  const [isClient] = useState(() => typeof window !== 'undefined')
 
-  useEffect(() => {
-    setIsClient(true)
-    setIsPast(isConferenceOver(c))
-  }, [c])
+  // Compute isPast directly from conference data
+  const isPast = isClient ? isConferenceOver(c) : false
 
   const currentDomain = c.domains?.[0] ?? 'cloudnativebergen.dev'
   const currentYear = parseInt(currentDomain.split('.')[0])

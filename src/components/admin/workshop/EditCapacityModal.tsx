@@ -26,6 +26,7 @@ export function EditCapacityModal({
   const [capacity, setCapacity] = useState(currentCapacity)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Sync capacity with current value on modal open
     setCapacity(currentCapacity)
   }, [currentCapacity, isOpen])
 

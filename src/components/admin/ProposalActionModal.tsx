@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   Dialog,
   DialogPanel,
@@ -109,8 +109,11 @@ export function ProposalActionModal({
   const [comment, setComment] = useState<string>('')
   const { theme } = useTheme()
 
-  const ActionIcon = iconForAction(action)
-  const [iconBgColor, iconTextColor, buttonColor] = colorForAction(action)
+  const actionIconType = useMemo(() => iconForAction(action), [action])
+  const [iconBgColor, iconTextColor, buttonColor] = useMemo(
+    () => colorForAction(action),
+    [action],
+  )
 
   const actionMutation = api.proposal.action.useMutation({
     onSuccess: (data) => {
@@ -177,10 +180,10 @@ export function ProposalActionModal({
                       'mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full sm:mx-0 sm:h-10 sm:w-10',
                     )}
                   >
-                    <ActionIcon
-                      className={clsx(iconTextColor, 'h-6 w-6')}
-                      aria-hidden="true"
-                    />
+                    {React.createElement(actionIconType, {
+                      className: clsx(iconTextColor, 'h-6 w-6'),
+                      'aria-hidden': 'true',
+                    })}
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                     <DialogTitle

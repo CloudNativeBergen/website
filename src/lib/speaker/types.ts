@@ -42,8 +42,7 @@ interface SpeakerBase {
   galleryImages?: GalleryImageWithSpeakers[]
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface SpeakerInput extends SpeakerBase {}
+export type SpeakerInput = SpeakerBase
 
 export interface Speaker extends SpeakerBase {
   _id: string

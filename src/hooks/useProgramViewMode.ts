@@ -147,6 +147,7 @@ export function useProgramViewMode() {
   useEffect(() => {
     const storedViewMode = storageOperations.get()
     if (storedViewMode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Restore view mode from localStorage
       setViewMode(storedViewMode)
       return
     }

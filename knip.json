@@ -7,7 +7,7 @@
     "src/app/**/loading.{ts,tsx}",
     "src/app/**/not-found.{ts,tsx}",
     "src/app/**/middleware.{ts,tsx}",
-    "src/middleware.{ts,tsx}",
+    "src/proxy.{ts,tsx}",
     "src/server/routers/**/*.ts",
     "sanity.cli.ts",
     "sanity.config.ts",

@@ -18,6 +18,36 @@ import { EmailModal } from '@/components/admin/EmailModal'
 import { PortableTextBlock } from '@sanity/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 
+function StatusBadge({ status }: { status: VolunteerStatus }) {
+  const config = {
+    [VolunteerStatus.PENDING]: {
+      icon: ClockIcon,
+      className:
+        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+    },
+    [VolunteerStatus.APPROVED]: {
+      icon: CheckCircleIcon,
+      className:
+        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    },
+    [VolunteerStatus.REJECTED]: {
+      icon: XCircleIcon,
+      className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    },
+  }
+
+  const { icon: Icon, className } = config[status]
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {status}
+    </span>
+  )
+}
+
 export default function VolunteerAdminPage() {
   const [selectedVolunteerId, setSelectedVolunteerId] = useState<string | null>(
     null,
@@ -126,37 +156,6 @@ export default function VolunteerAdminPage() {
       return
     }
     await deleteVolunteer.mutateAsync({ volunteerId })
-  }
-
-  const StatusBadge = ({ status }: { status: VolunteerStatus }) => {
-    const config = {
-      [VolunteerStatus.PENDING]: {
-        icon: ClockIcon,
-        className:
-          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-      },
-      [VolunteerStatus.APPROVED]: {
-        icon: CheckCircleIcon,
-        className:
-          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-      },
-      [VolunteerStatus.REJECTED]: {
-        icon: XCircleIcon,
-        className:
-          'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-      },
-    }
-
-    const { icon: Icon, className } = config[status]
-
-    return (
-      <span
-        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}
-      >
-        <Icon className="h-3.5 w-3.5" />
-        {status}
-      </span>
-    )
   }
 
   return (

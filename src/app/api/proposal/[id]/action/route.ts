@@ -161,5 +161,5 @@ export const POST = auth(
       { status: 200 },
     )
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- NextAuth route handler type workaround
 ) as any

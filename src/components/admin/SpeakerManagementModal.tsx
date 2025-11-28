@@ -99,6 +99,7 @@ export function SpeakerManagementModal({
   useEffect(() => {
     if (isOpen) {
       if (editingSpeaker) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from editing speaker
         setSpeakerData({
           name: editingSpeaker.name || '',
           bio: editingSpeaker.bio || '',

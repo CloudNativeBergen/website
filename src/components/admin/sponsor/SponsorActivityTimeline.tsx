@@ -1,5 +1,6 @@
 'use client'
 
+import React, { useMemo } from 'react'
 import { api } from '@/lib/trpc/client'
 import Link from 'next/link'
 import type { SponsorActivityExpanded } from '@/lib/sponsor-crm/types'
@@ -17,7 +18,10 @@ interface SponsorActivityTimelineProps {
 }
 
 function ActivityItem({ activity }: { activity: SponsorActivityExpanded }) {
-  const Icon = getActivityIcon(activity.activity_type)
+  const iconType = useMemo(
+    () => getActivityIcon(activity.activity_type),
+    [activity.activity_type],
+  )
   const timeAgo = formatDistanceToNow(new Date(activity.created_at), {
     addSuffix: true,
   })
@@ -30,7 +34,7 @@ function ActivityItem({ activity }: { activity: SponsorActivityExpanded }) {
           getActivityColor(activity.activity_type),
         )}
       >
-        <Icon className="h-4 w-4" />
+        {React.createElement(iconType, { className: 'h-4 w-4' })}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">

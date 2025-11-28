@@ -165,7 +165,7 @@ export function useImageCarousel({
     const clampedIndex = Math.min(Math.max(0, initialIndex), totalImages - 1)
     setCurrentIndex(clampedIndex)
     onIndexChange?.(clampedIndex)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onIndexChange is stable callback prop
   }, [initialIndex, totalImages])
 
   // Sync auto-play state with prop changes

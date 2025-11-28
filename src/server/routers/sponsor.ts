@@ -240,9 +240,7 @@ export const sponsorRouter = router({
             })
           }
 
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { tierId: _, ...sponsorData } = mergedData
-          const { sponsor, error } = await updateSponsor(input.id, sponsorData)
+          const { sponsor, error } = await updateSponsor(input.id, mergedData)
 
           if (error) {
             throw new TRPCError({

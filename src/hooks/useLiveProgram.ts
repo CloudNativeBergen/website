@@ -33,7 +33,7 @@ export function useLiveProgram(
 
   const currentTime = useMemo(
     () => getCurrentConferenceTime(),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerUpdate intentionally triggers recalculation
     [triggerUpdate],
   )
 

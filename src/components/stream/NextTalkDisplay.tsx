@@ -197,7 +197,7 @@ export default function NextTalkDisplay({
       clearInterval(interval)
       unsubscribe()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- findNextTalkForRoom and findNextSession are stable helpers
   }, [schedules, roomTrackTitle])
 
   if (isLoading) {

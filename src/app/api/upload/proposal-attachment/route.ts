@@ -148,5 +148,5 @@ export const POST = auth(async (req: NextAuthRequest) => {
       { status: 400 },
     )
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- NextAuth route handler type workaround
 }) as any

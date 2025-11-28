@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import { UserIcon, ClockIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import {
@@ -33,15 +34,18 @@ export function ProposalCard({
   onSelect,
   isSelected = false,
 }: ProposalCardProps) {
-  const speakers =
-    proposal.speakers && Array.isArray(proposal.speakers)
-      ? proposal.speakers
-          .filter(
-            (speaker) =>
-              typeof speaker === 'object' && speaker && 'name' in speaker,
-          )
-          .map((speaker) => speaker as SpeakerWithReviewInfo)
-      : []
+  const speakers = useMemo(
+    () =>
+      proposal.speakers && Array.isArray(proposal.speakers)
+        ? proposal.speakers
+            .filter(
+              (speaker) =>
+                typeof speaker === 'object' && speaker && 'name' in speaker,
+            )
+            .map((speaker) => speaker as SpeakerWithReviewInfo)
+        : [],
+    [proposal],
+  )
 
   const averageRating = calculateAverageRating(proposal)
   const reviewCount = proposal.reviews?.length || 0
@@ -56,88 +60,98 @@ export function ProposalCard({
         ? proposal.conference
         : undefined
 
-  const CardContent = () => (
-    <div className="flex items-start space-x-4">
-      <div className="flex-shrink-0">
-        {proposal.speakers &&
-        Array.isArray(proposal.speakers) &&
-        proposal.speakers.length > 0 ? (
-          <SpeakerAvatars
-            speakers={proposal.speakers}
-            size="md"
-            maxVisible={3}
-          />
-        ) : (
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
-            <UserIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-          </div>
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="focus:outline-none">
-          <div className="mb-2 flex items-start justify-between gap-2">
-            <h3 className="line-clamp-2 flex-1 text-sm font-medium text-gray-900 dark:text-white">
-              {proposal.title}
-            </h3>
-            <div className="flex flex-shrink-0 items-center gap-2">
-              <StatusBadge status={proposal.status} variant="compact" />
-            </div>
-          </div>
-
-          <div className="mb-2 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-            <div className="flex min-w-0 flex-1 items-center">
-              <span className="truncate font-medium">{speakerNames}</span>
-            </div>
-
-            {speakers.length > 0 && (
-              <div className="ml-2">
-                <SpeakerIndicators
-                  speakers={speakers}
-                  size="md"
-                  maxVisible={5}
-                  currentConferenceId={currentConferenceId}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-1">
-            <MetadataRow icon={ClockIcon}>
-              {formats.get(proposal.format) ||
-                proposal.format ||
-                'Not specified'}
-            </MetadataRow>
-
-            <RatingDisplay
-              rating={averageRating}
-              reviewCount={reviewCount}
+  const cardContent = useMemo(
+    () => (
+      <div className="flex items-start space-x-4">
+        <div className="shrink-0">
+          {proposal.speakers &&
+          Array.isArray(proposal.speakers) &&
+          proposal.speakers.length > 0 ? (
+            <SpeakerAvatars
+              speakers={proposal.speakers}
               size="md"
-              showText={true}
+              maxVisible={3}
             />
+          ) : (
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
+              <UserIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+            </div>
+          )}
+        </div>
 
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              {levels.get(proposal.level) ||
-                proposal.level ||
-                'Level not specified'}{' '}
-              •{' '}
-              {languages.get(proposal.language) ||
-                proposal.language ||
-                'Language not specified'}
+        <div className="min-w-0 flex-1">
+          <div className="focus:outline-none">
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <h3 className="line-clamp-2 flex-1 text-sm font-medium text-gray-900 dark:text-white">
+                {proposal.title}
+              </h3>
+              <div className="flex shrink-0 items-center gap-2">
+                <StatusBadge status={proposal.status} variant="compact" />
+              </div>
             </div>
 
-            {proposal.audiences && proposal.audiences.length > 0 && (
-              <div className="line-clamp-1 text-xs text-gray-500 dark:text-gray-400">
-                Audience:{' '}
-                {proposal.audiences
-                  .map((aud) => audiences.get(aud) || aud)
-                  .join(', ')}
+            <div className="mb-2 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex min-w-0 flex-1 items-center">
+                <span className="truncate font-medium">{speakerNames}</span>
               </div>
-            )}
+
+              {speakers.length > 0 && (
+                <div className="ml-2">
+                  <SpeakerIndicators
+                    speakers={speakers}
+                    size="md"
+                    maxVisible={5}
+                    currentConferenceId={currentConferenceId}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <MetadataRow icon={ClockIcon}>
+                {formats.get(proposal.format) ||
+                  proposal.format ||
+                  'Not specified'}
+              </MetadataRow>
+
+              <RatingDisplay
+                rating={averageRating}
+                reviewCount={reviewCount}
+                size="md"
+                showText={true}
+              />
+
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {levels.get(proposal.level) ||
+                  proposal.level ||
+                  'Level not specified'}{' '}
+                •{' '}
+                {languages.get(proposal.language) ||
+                  proposal.language ||
+                  'Language not specified'}
+              </div>
+
+              {proposal.audiences && proposal.audiences.length > 0 && (
+                <div className="line-clamp-1 text-xs text-gray-500 dark:text-gray-400">
+                  Audience:{' '}
+                  {proposal.audiences
+                    .map((aud) => audiences.get(aud) || aud)
+                    .join(', ')}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    ),
+    [
+      proposal,
+      speakerNames,
+      speakers,
+      currentConferenceId,
+      averageRating,
+      reviewCount,
+    ],
   )
 
   const baseCardClasses =
@@ -159,7 +173,7 @@ export function ProposalCard({
   return (
     <div className={`${cardClasses} relative`}>
       <Link href={href || '#'} className="block" onClick={handleClick}>
-        <CardContent />
+        {cardContent}
         {onSelect && (
           <div className="absolute top-3 left-3 hidden lg:block">
             <div

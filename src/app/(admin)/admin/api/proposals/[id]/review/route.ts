@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export const POST = auth(
   async (
     req: NextAuthRequest,
-    context: { params: Record<string, string | string[] | undefined> },
+    context: { params: Promise<{ id: string }> },
   ) => {
     // This needs to be awaited – do not remove
     // https://stackoverflow.com/questions/79145063/params-should-be-awaited-nextjs15
@@ -25,7 +25,7 @@ export const POST = auth(
 
     const { proposal: existingProposal, proposalError: checkErr } =
       await getProposalSanity({
-        id: id as string,
+        id: id,
         speakerId: req.auth!.speaker._id,
         isOrganizer: req.auth!.speaker.is_organizer,
         includeReviews: true,
@@ -92,5 +92,4 @@ export const POST = auth(
       },
     )
   },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-) as any
+)

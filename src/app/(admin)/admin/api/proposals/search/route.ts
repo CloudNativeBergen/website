@@ -56,5 +56,5 @@ export const GET = auth(async (req: NextAuthRequest): Promise<Response> => {
   }
 
   return proposalListResponse(proposals)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- NextAuth route handler type workaround
 }) as any

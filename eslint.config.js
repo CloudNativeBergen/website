@@ -1,8 +1,7 @@
-const { FlatCompat } = require('@eslint/eslintrc')
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-})
+const nextPlugin = require('@next/eslint-plugin-next')
+const tseslint = require('typescript-eslint')
+const reactHooksPlugin = require('eslint-plugin-react-hooks')
+const importPlugin = require('eslint-plugin-import')
 
 const eslintConfig = [
   // Global ignores - these apply to all configurations
@@ -32,43 +31,33 @@ const eslintConfig = [
     ],
   },
 
+  // TypeScript configuration
+  ...tseslint.configs.recommended,
+
   // Main configuration for TypeScript and JavaScript files
-  ...compat
-    .extends('next/core-web-vitals', 'next/typescript')
-    .map((config) => ({
-      ...config,
-      files: [
-        'src/**/*.{js,jsx,ts,tsx}',
-        'app/**/*.{js,jsx,ts,tsx}',
-        'pages/**/*.{js,jsx,ts,tsx}',
-        'components/**/*.{js,jsx,ts,tsx}',
-        'lib/**/*.{js,jsx,ts,tsx}',
-        'utils/**/*.{js,jsx,ts,tsx}',
-        'hooks/**/*.{js,jsx,ts,tsx}',
-        'types/**/*.{js,jsx,ts,tsx}',
-        'migrations/**/*.{js,ts}',
-        'examples/**/*.{js,jsx,ts,tsx}',
-        'eslint.config.js',
-        '*.{js,jsx,ts,tsx}',
-      ],
-    })),
+  {
+    plugins: {
+      '@next/next': nextPlugin,
+      'react-hooks': reactHooksPlugin,
+      import: importPlugin,
+    },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
+      ...reactHooksPlugin.configs.recommended.rules,
+    },
+  },
 
   {
-    files: [
-      'src/**/*.{js,jsx,ts,tsx}',
-      'app/**/*.{js,jsx,ts,tsx}',
-      'pages/**/*.{js,jsx,ts,tsx}',
-      'components/**/*.{js,jsx,ts,tsx}',
-      'lib/**/*.{js,jsx,ts,tsx}',
-      'utils/**/*.{js,jsx,ts,tsx}',
-      'hooks/**/*.{js,jsx,ts,tsx}',
-      'types/**/*.{js,jsx,ts,tsx}',
-      'migrations/**/*.{js,ts}',
-      'examples/**/*.{js,jsx,ts,tsx}',
-      'eslint.config.js',
-    ],
     rules: {
       '@next/next/no-img-element': 'off',
+      'import/no-anonymous-default-export': 'off',
+      // Disable strict React Hooks rules from Next.js 16 for now
+      // These are performance optimizations, not bugs - can be addressed incrementally
+      'react-hooks/set-state-in-effect': 'warn', // Warn instead of error for setState in effects
+      'react-hooks/static-components': 'warn', // Warn instead of error for inline components
+      'react-hooks/purity': 'warn', // Warn instead of error for impure functions
+      'react-hooks/error-boundaries': 'off', // Server Components don't need try/catch for JSX
     },
   },
 
@@ -88,6 +77,18 @@ const eslintConfig = [
         'error',
         { argsIgnorePattern: '^_|context' },
       ], // Allow unused context parameter
+    },
+  },
+
+  // Special rules for Sanity schema files
+  {
+    files: ['sanity/schemaTypes/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off', // Sanity schemas often need any types
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_|error' },
+      ],
     },
   },
 ]

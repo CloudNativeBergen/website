@@ -1,7 +1,6 @@
 /**
  * @jest-environment node
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { expect, it, jest, beforeEach } from '@jest/globals'
 import * as appHandler from './route'
 import { clientReadUncached } from '@/lib/sanity/client'

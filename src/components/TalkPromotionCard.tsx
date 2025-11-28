@@ -113,7 +113,7 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
 
   const { date, time, location } = slot || {}
 
-  const TalkHeader = () => (
+  const talkHeader = (
     <header className="mb-4 flex items-start justify-between">
       <div
         className={`flex items-center space-x-2 rounded-full px-3 py-1 ${config.bgColor} ${config.borderColor} border`}
@@ -139,7 +139,7 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
     </header>
   )
 
-  const TalkBody = () => (
+  const talkBody = (
     <div className="flex-1">
       <h3 className={`mb-3 ${variantSettings.titleClass}`}>{talk.title}</h3>
 
@@ -210,7 +210,7 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
     </div>
   )
 
-  const TalkFooter = () => (
+  const talkFooter = (
     <footer className="mt-auto border-t border-gray-100 pt-4 dark:border-gray-700">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
@@ -270,9 +270,9 @@ export const TalkPromotionCard = memo(function TalkPromotionCard({
 
   return (
     <div className={`${variantSettings.containerClass} ${className}`}>
-      <TalkHeader />
-      <TalkBody />
-      <TalkFooter />
+      {talkHeader}
+      {talkBody}
+      {talkFooter}
     </div>
   )
 })

@@ -31,6 +31,7 @@ export function ExchangeRateDebugPanel() {
       const savedMinimized = localStorage.getItem('debug-panel-minimized')
 
       if (savedVisible !== null) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Restore visibility from localStorage
         setIsVisible(JSON.parse(savedVisible))
       }
       if (savedMinimized !== null) {

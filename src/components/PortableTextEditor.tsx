@@ -16,7 +16,7 @@ import {
 } from '@portabletext/editor'
 import { EventListenerPlugin } from '@portabletext/editor/plugins'
 import { HelpText } from './Form'
-import { ReactNode, useId, useEffect, useState } from 'react'
+import { ReactNode, useId, useState } from 'react'
 import './PortableTextEditor.css'
 import {
   BoldIcon,
@@ -372,17 +372,13 @@ export function PortableTextEditor({
   forceRemountKey?: string | number
 }) {
   const id = useId()
-  const [isClient, setIsClient] = useState(false)
+  const [isClient] = useState(() => typeof window !== 'undefined')
 
   const safeValue = value || []
 
   const editorKey = forceRemountKey
     ? `editor-${id}-${forceRemountKey}`
     : `editor-${id}`
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
 
   if (!isClient) {
     return (
