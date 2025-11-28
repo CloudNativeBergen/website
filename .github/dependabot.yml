@@ -11,5 +11,4 @@ updates:
       development-dependencies:
         dependency-type: 'development'
     cooldown:
-      default-days: 7
       semver-patch-days: 3
