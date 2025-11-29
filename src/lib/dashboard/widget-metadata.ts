@@ -5,6 +5,8 @@
  * Each widget declares its sizing preferences, constraints, and metadata.
  */
 
+import type { ConferencePhase } from '@/lib/conference/phase'
+
 export interface WidgetSizePreset {
   /** Preset name for UI display */
   name: 'compact' | 'small' | 'medium' | 'large' | 'wide' | 'full'
@@ -33,6 +35,20 @@ export interface WidgetSizeConstraints {
   prefersPortrait?: boolean
 }
 
+/**
+ * Configuration for phase-aware widget behavior
+ */
+export interface WidgetPhaseConfig {
+  /** Phases where this widget is most relevant */
+  relevantPhases: ConferencePhase[]
+  /** Whether widget should be hidden in irrelevant phases */
+  hideInIrrelevantPhases?: boolean
+  /** Whether widget adapts its display based on phase */
+  isPhaseAdaptive?: boolean
+  /** Optional phase-specific titles */
+  phaseTitles?: Partial<Record<ConferencePhase, string>>
+}
+
 export interface WidgetMetadata {
   /** Unique widget type identifier */
   type: string
@@ -56,6 +72,8 @@ export interface WidgetMetadata {
   isAvailable?: boolean
   /** Tags for search/filtering */
   tags?: string[]
+  /** Optional phase configuration for adaptive behavior */
+  phaseConfig?: WidgetPhaseConfig
 }
 
 /**

@@ -3,13 +3,27 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
+  CalendarIcon,
+  CheckCircleIcon,
+  DocumentTextIcon,
+} from '@heroicons/react/24/outline'
+import {
   getScheduleStatusData,
   type ScheduleStatusData,
 } from '@/hooks/dashboard/useDashboardData'
+import { getCurrentPhase } from '@/lib/conference/phase'
+import type { Conference } from '@/lib/conference/types'
 
-export function ScheduleBuilderStatusWidget() {
+interface ScheduleBuilderStatusWidgetProps {
+  conference?: Conference
+}
+
+export function ScheduleBuilderStatusWidget({
+  conference,
+}: ScheduleBuilderStatusWidgetProps) {
   const [data, setData] = useState<ScheduleStatusData | null>(null)
   const [loading, setLoading] = useState(true)
+  const phase = conference ? getCurrentPhase(conference) : null
 
   useEffect(() => {
     getScheduleStatusData().then((result) => {
@@ -24,6 +38,91 @@ export function ScheduleBuilderStatusWidget() {
     )
   }
 
+  // Initialization phase: Timeline planning guide
+  if (phase === 'initialization') {
+    return (
+      <div className="flex h-full flex-col p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <CalendarIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Schedule Planning
+          </h3>
+        </div>
+        <div className="flex flex-1 flex-col justify-center space-y-3 text-sm text-gray-600 dark:text-gray-400">
+          <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
+            <p className="text-xs font-medium text-purple-900 dark:text-purple-300">
+              Plan your conference schedule:
+            </p>
+            <ul className="mt-2 space-y-1 text-xs text-purple-800 dark:text-purple-400">
+              <li>• Define track structure and rooms</li>
+              <li>• Set time slots and break times</li>
+              <li>• Plan keynote and workshop sessions</li>
+            </ul>
+          </div>
+          <Link
+            href="/admin/schedule"
+            className="block rounded-lg bg-purple-600 px-4 py-2 text-center text-xs font-medium text-white transition-colors hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
+          >
+            Configure Schedule
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  // Post-conference phase: Archived schedule summary
+  if (phase === 'post-conference') {
+    if (!data || data.totalSlots === 0) {
+      return (
+        <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No schedule data available
+          </p>
+        </div>
+      )
+    }
+
+    const overallProgress = (data.filledSlots / data.totalSlots) * 100
+
+    return (
+      <div className="flex h-full flex-col p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Conference Schedule
+          </h3>
+        </div>
+        <div className="flex flex-1 flex-col justify-center space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+              <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+                Total Sessions
+              </div>
+              <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                {data.filledSlots}
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+              <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+                Completion
+              </div>
+              <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                {overallProgress.toFixed(0)}%
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+            <DocumentTextIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <p className="text-xs text-green-800 dark:text-green-300">
+              View archived schedule and session recordings
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Planning & Execution phases: Active schedule building
   if (!data || data.totalSlots === 0) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">

@@ -1,13 +1,20 @@
 'use client'
 
+import { useState } from 'react'
 import {
   DocumentTextIcon,
   ChartBarIcon,
   ClockIcon,
+  CheckCircleIcon,
+  CalendarIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline'
+import { Conference } from '@/lib/conference/types'
+import { getCurrentPhase } from '@/lib/conference/phase'
 
 interface CFPHealthWidgetProps {
-  data: {
+  conference?: Conference
+  data?: {
     totalSubmissions: number
     submissionGoal: number
     submissionsPerDay: { date: string; count: number }[]
@@ -17,12 +24,192 @@ interface CFPHealthWidgetProps {
   }
 }
 
-export function CFPHealthWidget({ data }: CFPHealthWidgetProps) {
-  if (!data || data.totalSubmissions === 0) {
+export function CFPHealthWidget({ conference, data }: CFPHealthWidgetProps) {
+  const phase = conference ? getCurrentPhase(conference) : null
+  const [now] = useState(() => Date.now())
+
+  // Phase-specific views
+  if (phase === 'initialization' && conference) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            CFP Setup
+          </h3>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+            Preparing
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+            <CalendarIcon className="mb-2 h-8 w-8 text-blue-500" />
+            <h4 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
+              CFP Opens Soon
+            </h4>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Configure your CFP settings, topics, and formats before opening
+              submissions.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+              <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+                Opens In
+              </div>
+              <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                {Math.ceil(
+                  (new Date(conference.cfp_start_date).getTime() - now) /
+                  (1000 * 60 * 60 * 24),
+                )}
+                d
+              </div>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+              <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+                Duration
+              </div>
+              <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                {Math.ceil(
+                  (new Date(conference.cfp_end_date).getTime() -
+                    new Date(conference.cfp_start_date).getTime()) /
+                  (1000 * 60 * 60 * 24),
+                )}
+                d
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (phase === 'execution') {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            CFP Summary
+          </h3>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+            Complete
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-4 dark:from-blue-900/40 dark:to-cyan-800/40">
+            <DocumentTextIcon className="mb-2 h-6 w-6 text-blue-600 dark:text-blue-400" />
+            <div className="text-3xl font-black text-blue-900 dark:text-blue-100">
+              147
+            </div>
+            <div className="text-[10px] text-blue-700 dark:text-blue-300">
+              Total Submissions
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-linear-to-br from-green-100 to-emerald-200 p-4 dark:from-green-900/40 dark:to-emerald-800/40">
+            <CheckCircleIcon className="mb-2 h-6 w-6 text-green-600 dark:text-green-400" />
+            <div className="text-3xl font-black text-green-900 dark:text-green-100">
+              42
+            </div>
+            <div className="text-[10px] text-green-700 dark:text-green-300">
+              Accepted Talks
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-linear-to-br from-purple-100 to-pink-200 p-4 dark:from-purple-900/40 dark:to-pink-800/40">
+            <UserGroupIcon className="mb-2 h-6 w-6 text-purple-600 dark:text-purple-400" />
+            <div className="text-3xl font-black text-purple-900 dark:text-purple-100">
+              65
+            </div>
+            <div className="text-[10px] text-purple-700 dark:text-purple-300">
+              Unique Speakers
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-linear-to-br from-amber-100 to-orange-200 p-4 dark:from-amber-900/40 dark:to-orange-800/40">
+            <ChartBarIcon className="mb-2 h-6 w-6 text-amber-600 dark:text-amber-400" />
+            <div className="text-3xl font-black text-amber-900 dark:text-amber-100">
+              28%
+            </div>
+            <div className="text-[10px] text-amber-700 dark:text-amber-300">
+              Acceptance Rate
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (phase === 'post-conference') {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            CFP Analytics
+          </h3>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+            Archived
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border border-gray-200 bg-linear-to-r from-blue-50 to-purple-50 p-4 dark:border-gray-700 dark:from-blue-900/20 dark:to-purple-900/20">
+            <h4 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
+              CFP Performance
+            </h4>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  147
+                </div>
+                <div className="text-[10px] text-gray-600 dark:text-gray-400">
+                  Submissions
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  73%
+                </div>
+                <div className="text-[10px] text-gray-600 dark:text-gray-400">
+                  Goal Met
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                  4.2
+                </div>
+                <div className="text-[10px] text-gray-600 dark:text-gray-400">
+                  Avg/Day
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+            View detailed analytics in Reports section
+          </div>
+        </div>
+      </div>
+    )
+  }
+  // Planning phase or when data is provided (backward compatibility)
+  if (!data) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
         <p className="text-sm text-gray-500 dark:text-gray-400">
           No CFP data available
+        </p>
+      </div>
+    )
+  }
+
+  if (data.totalSubmissions === 0) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          No submissions yet
         </p>
       </div>
     )

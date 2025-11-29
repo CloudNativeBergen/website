@@ -37,6 +37,17 @@ export const QUICK_ACTIONS_WIDGET = defineWidget({
     { name: 'wide', colSpan: 6, rowSpan: 3 },
   ],
   tags: ['actions', 'navigation', 'shortcuts'],
+  // Phase configuration - this widget is relevant in all phases
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
 })
 
 /**
@@ -66,6 +77,11 @@ export const REVIEW_PROGRESS_WIDGET = defineWidget({
     { name: 'medium', colSpan: 4, rowSpan: 3 },
   ],
   tags: ['reviews', 'progress', 'proposals'],
+  phaseConfig: {
+    relevantPhases: ['planning', 'execution', 'post-conference'],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
 })
 
 /**
@@ -183,6 +199,16 @@ export const SCHEDULE_BUILDER_WIDGET = defineWidget({
     { name: 'medium', colSpan: 6, rowSpan: 4 },
   ],
   tags: ['schedule', 'program', 'slots'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
 })
 
 /**
@@ -212,6 +238,16 @@ export const TICKET_SALES_WIDGET = defineWidget({
     { name: 'large', colSpan: 8, rowSpan: 5 },
   ],
   tags: ['tickets', 'revenue', 'sales', 'chart'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
 })
 
 /**
@@ -241,6 +277,16 @@ export const SPEAKER_ENGAGEMENT_WIDGET = defineWidget({
     { name: 'wide', colSpan: 6, rowSpan: 3 },
   ],
   tags: ['speakers', 'diversity', 'engagement'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
 })
 
 /**

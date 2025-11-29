@@ -438,56 +438,201 @@ export const getRecentActivity = cache(async (): Promise<ActivityItem[]> => {
   ]
 })
 
-export const getQuickActions = cache(async (): Promise<QuickAction[]> => {
-  await new Promise((resolve) => setTimeout(resolve, 10))
+export const getQuickActions = cache(
+  async (phase?: string): Promise<QuickAction[]> => {
+    await new Promise((resolve) => setTimeout(resolve, 10))
 
-  // Phase-aware quick actions (hardcoded for CFP Review phase)
-  return [
-    {
-      label: 'Review Proposals',
-      shortLabel: 'Proposals',
-      icon: 'ClipboardDocumentCheckIcon',
-      link: '/admin/proposals',
-      badge: 58,
-      variant: 'primary',
-    },
-    {
-      label: 'Manage Speakers',
-      shortLabel: 'Speakers',
-      icon: 'UserGroupIcon',
-      link: '/admin/speakers',
-      badge: 7,
-      variant: 'secondary',
-    },
-    {
-      label: 'Sponsor Pipeline',
-      shortLabel: 'Sponsors',
-      icon: 'CurrencyDollarIcon',
-      link: '/admin/sponsors/crm',
-      badge: 4,
-      variant: 'success',
-    },
-    {
-      label: 'Travel Support',
-      shortLabel: 'Travel',
-      icon: 'GlobeAltIcon',
-      link: '/admin/travel-support',
-      badge: 4,
-      variant: 'warning',
-    },
-    {
-      label: 'Build Schedule',
-      shortLabel: 'Schedule',
-      icon: 'CalendarIcon',
-      link: '/admin/schedule',
-      variant: 'secondary',
-    },
-    {
-      label: 'Settings',
-      shortLabel: 'Settings',
-      icon: 'Cog6ToothIcon',
-      link: '/admin/settings',
-      variant: 'secondary',
-    },
-  ]
-})
+    // Phase-aware quick actions adapt to conference lifecycle
+    const baseActions = {
+      initialization: [
+        {
+          label: 'Configure CFP',
+          shortLabel: 'CFP Setup',
+          icon: 'Cog6ToothIcon',
+          link: '/admin/settings',
+          variant: 'primary' as const,
+        },
+        {
+          label: 'Invite Reviewers',
+          shortLabel: 'Reviewers',
+          icon: 'UserGroupIcon',
+          link: '/admin/settings',
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Setup Sponsors',
+          shortLabel: 'Sponsors',
+          icon: 'CurrencyDollarIcon',
+          link: '/admin/sponsors',
+          variant: 'success' as const,
+        },
+        {
+          label: 'Configure Tickets',
+          shortLabel: 'Tickets',
+          icon: 'Cog6ToothIcon',
+          link: '/admin/tickets',
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Build Schedule',
+          shortLabel: 'Schedule',
+          icon: 'CalendarIcon',
+          link: '/admin/schedule',
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Settings',
+          shortLabel: 'Settings',
+          icon: 'Cog6ToothIcon',
+          link: '/admin/settings',
+          variant: 'secondary' as const,
+        },
+      ],
+      planning: [
+        {
+          label: 'Review Proposals',
+          shortLabel: 'Proposals',
+          icon: 'ClipboardDocumentCheckIcon',
+          link: '/admin/proposals',
+          badge: 58,
+          variant: 'primary' as const,
+        },
+        {
+          label: 'Manage Speakers',
+          shortLabel: 'Speakers',
+          icon: 'UserGroupIcon',
+          link: '/admin/speakers',
+          badge: 7,
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Sponsor Pipeline',
+          shortLabel: 'Sponsors',
+          icon: 'CurrencyDollarIcon',
+          link: '/admin/sponsors/crm',
+          badge: 4,
+          variant: 'success' as const,
+        },
+        {
+          label: 'Travel Support',
+          shortLabel: 'Travel',
+          icon: 'GlobeAltIcon',
+          link: '/admin/travel-support',
+          badge: 4,
+          variant: 'warning' as const,
+        },
+        {
+          label: 'Build Schedule',
+          shortLabel: 'Schedule',
+          icon: 'CalendarIcon',
+          link: '/admin/schedule',
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Settings',
+          shortLabel: 'Settings',
+          icon: 'Cog6ToothIcon',
+          link: '/admin/settings',
+          variant: 'secondary' as const,
+        },
+      ],
+      execution: [
+        {
+          label: 'Finalize Schedule',
+          shortLabel: 'Schedule',
+          icon: 'CalendarIcon',
+          link: '/admin/schedule',
+          badge: 3,
+          variant: 'primary' as const,
+        },
+        {
+          label: 'Speaker Confirmations',
+          shortLabel: 'Speakers',
+          icon: 'UserGroupIcon',
+          link: '/admin/speakers',
+          badge: 5,
+          variant: 'warning' as const,
+        },
+        {
+          label: 'Ticket Sales',
+          shortLabel: 'Tickets',
+          icon: 'Cog6ToothIcon',
+          link: '/admin/tickets',
+          variant: 'success' as const,
+        },
+        {
+          label: 'Workshop Capacity',
+          shortLabel: 'Workshops',
+          icon: 'GlobeAltIcon',
+          link: '/admin/workshops',
+          badge: 2,
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Sponsor Activation',
+          shortLabel: 'Sponsors',
+          icon: 'CurrencyDollarIcon',
+          link: '/admin/sponsors',
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Settings',
+          shortLabel: 'Settings',
+          icon: 'Cog6ToothIcon',
+          link: '/admin/settings',
+          variant: 'secondary' as const,
+        },
+      ],
+      'post-conference': [
+        {
+          label: 'Publish Content',
+          shortLabel: 'Gallery',
+          icon: 'ClipboardDocumentCheckIcon',
+          link: '/admin/gallery',
+          badge: 12,
+          variant: 'primary' as const,
+        },
+        {
+          label: 'Travel Expenses',
+          shortLabel: 'Expenses',
+          icon: 'GlobeAltIcon',
+          link: '/admin/travel-support',
+          badge: 8,
+          variant: 'warning' as const,
+        },
+        {
+          label: 'Speaker Feedback',
+          shortLabel: 'Feedback',
+          icon: 'UserGroupIcon',
+          link: '/admin/speakers',
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Sponsor Reports',
+          shortLabel: 'Sponsors',
+          icon: 'CurrencyDollarIcon',
+          link: '/admin/sponsors',
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Analytics',
+          shortLabel: 'Analytics',
+          icon: 'CalendarIcon',
+          link: '/admin/proposals',
+          variant: 'secondary' as const,
+        },
+        {
+          label: 'Settings',
+          shortLabel: 'Settings',
+          icon: 'Cog6ToothIcon',
+          link: '/admin/settings',
+          variant: 'secondary' as const,
+        },
+      ],
+    }
+
+    // Return actions for the specified phase, default to planning
+    const selectedPhase = (phase || 'planning') as keyof typeof baseActions
+    return baseActions[selectedPhase] || baseActions.planning
+  },
+)

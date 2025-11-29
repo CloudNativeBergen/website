@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import {
   ClipboardDocumentCheckIcon,
@@ -14,6 +14,8 @@ import {
   getQuickActions,
   type QuickAction,
 } from '@/hooks/dashboard/useDashboardData'
+import { getCurrentPhase } from '@/lib/conference/phase'
+import type { Conference } from '@/lib/conference/types'
 
 const iconMap = {
   ClipboardDocumentCheckIcon,
@@ -35,16 +37,27 @@ const variantStyles = {
     'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600',
 }
 
-export function QuickActionsWidget() {
+interface QuickActionsWidgetProps {
+  conference?: Conference
+}
+
+export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
   const [actions, setActions] = useState<QuickAction[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Derive current phase without side effects
+  const currentPhase = useMemo(
+    () => (conference ? getCurrentPhase(conference) : 'planning'),
+    [conference],
+  )
+
   useEffect(() => {
-    getQuickActions().then((data) => {
+    // Fetch phase-specific actions
+    getQuickActions(currentPhase).then((data) => {
       setActions(data)
       setLoading(false)
     })
-  }, [])
+  }, [currentPhase])
 
   if (loading) {
     return (

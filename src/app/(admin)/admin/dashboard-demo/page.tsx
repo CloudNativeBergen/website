@@ -18,7 +18,106 @@ import { SponsorPipelineWidget } from '@/components/admin/dashboard/widgets/Spon
 import { WorkshopCapacityWidget } from '@/components/admin/dashboard/widgets/WorkshopCapacityWidget'
 import { TravelSupportQueueWidget } from '@/components/admin/dashboard/widgets/TravelSupportQueueWidget'
 import { RecentActivityFeedWidget } from '@/components/admin/dashboard/widgets/RecentActivityFeedWidget'
-import { PencilIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import {
+  PencilIcon,
+  ArrowPathIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from '@heroicons/react/24/outline'
+import { Conference } from '@/lib/conference/types'
+import { Format } from '@/lib/proposal/types'
+import {
+  getCurrentPhase,
+  getPhaseName,
+  getPhaseColor,
+} from '@/lib/conference/phase'
+
+// Mock conference creator for phase simulation
+const createMockConference = (
+  phase: 'initialization' | 'planning' | 'execution' | 'post-conference',
+): Conference => {
+  const now = new Date()
+  const addDays = (days: number) =>
+    new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0]
+
+  const baseConference: Partial<Conference> = {
+    _id: `conf-${phase}`,
+    title: `Cloud Native Bergen 2025 (${phase})`,
+    organizer: 'Cloud Native Bergen',
+    city: 'Bergen',
+    country: 'Norway',
+    cfp_email: 'cfp@cloudnativebergen.no',
+    contact_email: 'info@cloudnativebergen.no',
+    registration_enabled: phase === 'execution' || phase === 'post-conference',
+    registration_link:
+      phase === 'execution' || phase === 'post-conference'
+        ? 'https://tickets.cloudnativebergen.no'
+        : undefined,
+    domains: ['2025.cloudnativebergen.no'],
+    formats: [
+      Format.presentation_20,
+      Format.presentation_45,
+      Format.workshop_120,
+    ],
+    topics: [],
+    organizers: [],
+  }
+
+  switch (phase) {
+    case 'initialization':
+      return {
+        ...baseConference,
+        cfp_start_date: addDays(30),
+        cfp_end_date: addDays(120),
+        cfp_notify_date: addDays(135),
+        program_date: addDays(150),
+        start_date: addDays(180),
+        end_date: addDays(181),
+      } as Conference
+
+    case 'planning':
+      return {
+        ...baseConference,
+        cfp_start_date: addDays(-30),
+        cfp_end_date: addDays(30),
+        cfp_notify_date: addDays(45),
+        program_date: addDays(60),
+        start_date: addDays(90),
+        end_date: addDays(91),
+      } as Conference
+
+    case 'execution':
+      return {
+        ...baseConference,
+        cfp_start_date: addDays(-120),
+        cfp_end_date: addDays(-30),
+        cfp_notify_date: addDays(-15),
+        program_date: addDays(-10),
+        start_date: addDays(5),
+        end_date: addDays(6),
+      } as Conference
+
+    case 'post-conference':
+      return {
+        ...baseConference,
+        cfp_start_date: addDays(-210),
+        cfp_end_date: addDays(-120),
+        cfp_notify_date: addDays(-105),
+        program_date: addDays(-100),
+        start_date: addDays(-10),
+        end_date: addDays(-9),
+      } as Conference
+  }
+}
+
+const PHASES = [
+  'initialization',
+  'planning',
+  'execution',
+  'post-conference',
+] as const
 
 const INITIAL_WIDGETS: Widget[] = [
   {
@@ -99,6 +198,10 @@ export default function DashboardDemoPage() {
   const [widgets, setWidgets] = useState<Widget[]>(INITIAL_WIDGETS)
   const [editMode, setEditMode] = useState(true)
   const [columnCount, setColumnCount] = useState(4)
+  const [currentPhaseIndex, setCurrentPhaseIndex] = useState(1) // Start with 'planning'
+  const [mockConference, setMockConference] = useState<Conference>(() =>
+    createMockConference(PHASES[1]),
+  )
 
   useEffect(() => {
     const handleResize = () => {
@@ -111,6 +214,22 @@ export default function DashboardDemoPage() {
 
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  const handlePhaseChange = useCallback((direction: 'prev' | 'next') => {
+    setCurrentPhaseIndex((prev) => {
+      const newIndex =
+        direction === 'next'
+          ? (prev + 1) % PHASES.length
+          : (prev - 1 + PHASES.length) % PHASES.length
+      setMockConference(createMockConference(PHASES[newIndex]))
+      return newIndex
+    })
+  }, [])
+
+  const currentPhase = getCurrentPhase(mockConference)
+  const phaseName = getPhaseName(currentPhase)
+  const phaseColor = getPhaseColor(currentPhase)
+  const phaseLabel = `${PHASES[currentPhaseIndex]} (${phaseName})`
 
   const handleReset = useCallback(() => {
     setWidgets(INITIAL_WIDGETS)
@@ -137,10 +256,10 @@ export default function DashboardDemoPage() {
 
       switch (widget.type) {
         case 'quick-actions':
-          content = <QuickActionsWidget />
+          content = <QuickActionsWidget conference={mockConference} />
           break
         case 'review-progress':
-          content = <ReviewProgressWidget />
+          content = <ReviewProgressWidget conference={mockConference} />
           break
         case 'proposal-pipeline':
           content = (
@@ -161,44 +280,15 @@ export default function DashboardDemoPage() {
           content = <UpcomingDeadlinesWidget />
           break
         case 'cfp-health':
-          content = (
-            <CFPHealthWidget
-              data={{
-                totalSubmissions: 147,
-                submissionGoal: 200,
-                daysRemaining: 12,
-                averagePerDay: 4.2,
-                submissionsPerDay: [
-                  { date: '2024-01-01', count: 2 },
-                  { date: '2024-01-02', count: 3 },
-                  { date: '2024-01-03', count: 5 },
-                  { date: '2024-01-04', count: 4 },
-                  { date: '2024-01-05', count: 6 },
-                  { date: '2024-01-06', count: 8 },
-                  { date: '2024-01-07', count: 7 },
-                  { date: '2024-01-08', count: 9 },
-                  { date: '2024-01-09', count: 11 },
-                  { date: '2024-01-10', count: 10 },
-                  { date: '2024-01-11', count: 12 },
-                  { date: '2024-01-12', count: 14 },
-                  { date: '2024-01-13', count: 13 },
-                  { date: '2024-01-14', count: 15 },
-                ],
-                formatDistribution: [
-                  { format: 'Talk', count: 98 },
-                  { format: 'Workshop', count: 32 },
-                  { format: 'Lightning Talk', count: 17 },
-                ],
-              }}
-            />
-          )
+          content = <CFPHealthWidget conference={mockConference} />
           break
         case 'schedule-status':
-          content = <ScheduleBuilderStatusWidget />
+          content = <ScheduleBuilderStatusWidget conference={mockConference} />
           break
         case 'ticket-sales':
           content = (
             <TicketSalesDashboardWidget
+              conference={mockConference}
               data={{
                 currentSales: 342,
                 capacity: 500,
@@ -213,7 +303,7 @@ export default function DashboardDemoPage() {
           )
           break
         case 'speaker-engagement':
-          content = <SpeakerEngagementWidget />
+          content = <SpeakerEngagementWidget conference={mockConference} />
           break
         case 'sponsor-pipeline':
           content = <SponsorPipelineWidget />
@@ -247,36 +337,66 @@ export default function DashboardDemoPage() {
         </WidgetErrorBoundary>
       )
     },
-    [editMode, columnCount, widgets, handleResize],
+    [editMode, columnCount, widgets, handleResize, mockConference],
   )
 
   return (
     <div className="min-h-screen">
       <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900 dark:text-white">
-          Dashboard
-        </h1>
+        <div>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white">
+            Dashboard
+          </h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Phase simulation enabled - {phaseLabel}
+          </p>
+        </div>
 
         <div className="flex gap-2">
-          <button
-            onClick={() => setEditMode(!editMode)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-              editMode
-                ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
-                : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-            }`}
-          >
-            <PencilIcon className="h-3.5 w-3.5" />
-            {editMode ? 'Exit Edit' : 'Edit'}
-          </button>
+          {/* Phase Selector */}
+          <div className="flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2 py-1 dark:border-gray-600 dark:bg-gray-800">
+            <button
+              onClick={() => handlePhaseChange('prev')}
+              className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-700"
+              title="Previous phase"
+            >
+              <ChevronLeftIcon className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
+            </button>
+            <span
+              className="min-w-[120px] px-2 text-center text-xs font-semibold"
+              style={{ color: phaseColor.text }}
+            >
+              {phaseName}
+            </span>
+            <button
+              onClick={() => handlePhaseChange('next')}
+              className="rounded p-1 hover:bg-gray-100 dark:hover:bg-gray-700"
+              title="Next phase"
+            >
+              <ChevronRightIcon className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
 
-          <button
-            onClick={handleReset}
-            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-          >
-            <ArrowPathIcon className="h-3.5 w-3.5" />
-            Reset
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setEditMode(!editMode)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${editMode
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
+                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                }`}
+            >
+              <PencilIcon className="h-3.5 w-3.5" />
+              {editMode ? 'Exit Edit' : 'Edit'}
+            </button>
+
+            <button
+              onClick={handleReset}
+              className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <ArrowPathIcon className="h-3.5 w-3.5" />
+              Reset
+            </button>
+          </div>
         </div>
       </div>
 

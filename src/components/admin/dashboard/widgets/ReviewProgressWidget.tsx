@@ -3,13 +3,27 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
+  ClipboardDocumentCheckIcon,
+  ChartBarIcon,
+  CheckCircleIcon,
+} from '@heroicons/react/24/outline'
+import {
   getReviewProgressData,
   type ReviewProgressData,
 } from '@/hooks/dashboard/useDashboardData'
+import { getCurrentPhase } from '@/lib/conference/phase'
+import type { Conference } from '@/lib/conference/types'
 
-export function ReviewProgressWidget() {
+interface ReviewProgressWidgetProps {
+  conference?: Conference
+}
+
+export function ReviewProgressWidget({
+  conference,
+}: ReviewProgressWidgetProps) {
   const [data, setData] = useState<ReviewProgressData | null>(null)
   const [loading, setLoading] = useState(true)
+  const phase = conference ? getCurrentPhase(conference) : null
 
   useEffect(() => {
     getReviewProgressData().then((result) => {
@@ -24,6 +38,82 @@ export function ReviewProgressWidget() {
     )
   }
 
+  // Initialization phase: Setup guide
+  if (phase === 'initialization') {
+    return (
+      <div className="flex h-full flex-col p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <ClipboardDocumentCheckIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Review Process Setup
+          </h3>
+        </div>
+        <div className="flex flex-1 flex-col justify-center space-y-3 text-sm text-gray-600 dark:text-gray-400">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
+            <p className="text-xs font-medium text-blue-900 dark:text-blue-300">
+              Prepare for CFP reviews by:
+            </p>
+            <ul className="mt-2 space-y-1 text-xs text-blue-800 dark:text-blue-400">
+              <li>• Setting review criteria and scoring rubric</li>
+              <li>• Inviting reviewers and assigning permissions</li>
+              <li>• Configuring blind review settings</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Post-conference phase: Final statistics
+  if (phase === 'post-conference') {
+    return (
+      <div className="flex h-full flex-col p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <ChartBarIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Review Statistics
+          </h3>
+        </div>
+        {data ? (
+          <div className="flex flex-1 flex-col justify-center space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+                  Total Reviewed
+                </div>
+                <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                  {data.reviewedCount}
+                </div>
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+                <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+                  Avg Score
+                </div>
+                <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                  {data.averageScore.toFixed(1)}
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    /10
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+              <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+              <p className="text-xs text-green-800 dark:text-green-300">
+                Review process completed for this conference
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+            No review data available
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Planning & Execution phases: Active review tracking
   if (!data) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
