@@ -8,8 +8,6 @@ import {
 import { sendIndividualEmail } from '@/lib/email/broadcast'
 import { clientReadUncached } from '@/lib/sanity/client'
 
-export const dynamic = 'force-dynamic'
-
 interface SponsorDiscountEmailRequest {
   sponsorId: string
   discountCode: string

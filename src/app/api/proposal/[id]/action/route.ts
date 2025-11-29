@@ -15,8 +15,6 @@ import { ProposalStatusChangeEvent } from '@/lib/events/types'
 import { ProposalActionSchema } from '@/server/schemas/proposal'
 import '@/lib/events/registry'
 
-export const dynamic = 'force-dynamic'
-
 export const POST = auth(
   async (
     req: NextAuthRequest,

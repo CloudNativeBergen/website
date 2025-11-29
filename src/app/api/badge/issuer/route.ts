@@ -14,8 +14,6 @@ import { createPublicKey } from 'crypto'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { generateErrorResponse } from '@/lib/openbadges'
 
-export const runtime = 'nodejs'
-
 export async function GET(request: Request) {
   try {
     const rsaPublicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY

@@ -5,8 +5,6 @@ import { ReviewBase } from '@/lib/review/types'
 import { createReview, updateReview } from '@/lib/review/sanity'
 import { NextResponse } from 'next/server'
 
-export const dynamic = 'force-dynamic'
-
 export const POST = auth(
   async (
     req: NextAuthRequest,

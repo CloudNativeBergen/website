@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById, getBadgeSVGUrl } from '@/lib/badge/sanity'
 
-export const runtime = 'nodejs'
-
 export async function GET(
   request: NextRequest,
   segmentData: { params: Promise<{ badgeId: string }> },

@@ -4,8 +4,6 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { syncSponsorAudience, Contact } from '@/lib/email/audience'
 import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
 
-export const dynamic = 'force-dynamic'
-
 export const POST = auth(async (req: NextAuthRequest) => {
   const startTime = Date.now()
   const accessError = checkOrganizerAccess(req)

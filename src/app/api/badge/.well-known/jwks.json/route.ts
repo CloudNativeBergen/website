@@ -20,8 +20,6 @@ import { NextResponse } from 'next/server'
 import { createPublicKey } from 'crypto'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
-export const runtime = 'nodejs'
-
 export async function GET(): Promise<NextResponse> {
   try {
     // Load RSA public key from environment

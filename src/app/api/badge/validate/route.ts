@@ -15,8 +15,6 @@ import * as jsonld from 'jsonld'
 import crypto from 'node:crypto'
 import type { SignedCredential } from '@/lib/openbadges/types'
 
-export const runtime = 'nodejs'
-
 interface ValidationCheck {
   name: string
   status: 'success' | 'warning' | 'error'

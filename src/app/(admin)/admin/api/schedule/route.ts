@@ -5,8 +5,6 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { saveScheduleToSanity } from '@/lib/schedule/sanity'
 import { revalidateTag } from 'next/cache'
 
-export const dynamic = 'force-dynamic'
-
 export const POST = auth(async (req: NextAuthRequest) => {
   const accessError = checkOrganizerAccess(req)
   if (accessError) {

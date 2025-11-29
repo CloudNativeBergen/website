@@ -7,8 +7,6 @@ import {
   proposalListResponseError,
 } from '@/lib/proposal/server'
 
-export const dynamic = 'force-dynamic'
-
 export const GET = auth(async (req: NextAuthRequest): Promise<Response> => {
   const accessError = checkOrganizerAccess(req)
   if (accessError) {

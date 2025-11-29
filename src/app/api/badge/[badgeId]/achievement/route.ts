@@ -7,8 +7,6 @@ import {
   isJWTFormat,
 } from '@/lib/openbadges'
 
-export const runtime = 'nodejs'
-
 /**
  * GET /api/badge/[badgeId]/achievement
  * Returns the Achievement (badge class) from the credential

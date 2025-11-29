@@ -9,8 +9,6 @@ import {
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 
-export const dynamic = 'force-dynamic'
-
 export const POST = auth(async (req: NextAuthRequest) => {
   const accessError = checkOrganizerAccess(req)
   if (accessError) {

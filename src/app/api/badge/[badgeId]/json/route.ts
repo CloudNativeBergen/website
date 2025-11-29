@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getBadgeById } from '@/lib/badge/sanity'
 import { generateErrorResponse, isJWTFormat } from '@/lib/openbadges'
 
-export const runtime = 'nodejs'
-
 /**
  * GET /api/badge/[badgeId]/json
  *

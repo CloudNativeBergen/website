@@ -4,8 +4,6 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { fetchNextUnreviewedProposal } from '@/lib/proposal/server'
 import { NextResponse } from 'next/server'
 
-export const dynamic = 'force-dynamic'
-
 export const GET = auth(async (req: NextAuthRequest) => {
   const accessError = checkOrganizerAccess(req)
   if (accessError) {

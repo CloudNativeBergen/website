@@ -2,8 +2,6 @@ import { NextAuthRequest, auth } from '@/lib/auth'
 import { setupEmailRoute } from '@/lib/email/route-helpers'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
 
-export const dynamic = 'force-dynamic'
-
 export const POST = auth(async (req: NextAuthRequest) => {
   const startTime = Date.now()
 

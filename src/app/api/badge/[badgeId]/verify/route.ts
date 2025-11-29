@@ -9,8 +9,6 @@ import {
   isJWTFormat,
 } from '@/lib/openbadges'
 
-export const runtime = 'nodejs'
-
 /**
  * GET /api/badge/[badgeId]/verify
  *

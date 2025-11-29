@@ -6,8 +6,6 @@ import {
   MultiSpeakerEmailRequest,
 } from '@/lib/email/speaker'
 
-export const dynamic = 'force-dynamic'
-
 export const POST = auth(async (req: NextAuthRequest) => {
   const accessError = checkOrganizerAccess(req)
   if (accessError) {

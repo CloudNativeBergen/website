@@ -3,8 +3,6 @@ import { auth } from '@/lib/auth'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
 
-export const dynamic = 'force-dynamic'
-
 export const GET = auth(async (req) => {
   try {
     // Check if user is authenticated and is an organizer
