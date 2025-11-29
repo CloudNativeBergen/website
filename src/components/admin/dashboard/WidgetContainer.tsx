@@ -5,6 +5,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { Widget, GridPosition } from '@/lib/dashboard/types'
 import { GRID_CONFIG } from '@/lib/dashboard/constants'
 import { checkCollision } from '@/lib/dashboard/grid-utils'
+import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
 
 /**
  * WidgetContainer - Wrapper for individual dashboard widgets
@@ -38,8 +39,14 @@ export function WidgetContainer({
   children,
 }: WidgetContainerProps) {
   const [isResizing, setIsResizing] = useState(false)
-  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; position: GridPosition } | null>(null)
-  const [previewPosition, setPreviewPosition] = useState<GridPosition | null>(null)
+  const [resizeStart, setResizeStart] = useState<{
+    x: number
+    y: number
+    position: GridPosition
+  } | null>(null)
+  const [previewPosition, setPreviewPosition] = useState<GridPosition | null>(
+    null,
+  )
   const containerRef = useRef<HTMLDivElement>(null)
 
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
@@ -53,13 +60,15 @@ export function WidgetContainer({
     : false
 
   const style = {
-    gridColumn: columnCount === 1
-      ? '1 / -1'
-      : `${currentPosition.col + 1} / span ${currentPosition.colSpan}`,
+    gridColumn:
+      columnCount === 1
+        ? '1 / -1'
+        : `${currentPosition.col + 1} / span ${currentPosition.colSpan}`,
     gridRow: `${currentPosition.row + 1} / span ${currentPosition.rowSpan}`,
-    transform: transform && !isResizing
-      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
-      : undefined,
+    transform:
+      transform && !isResizing
+        ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+        : undefined,
   }
 
   const handleResizeStart = useCallback(
@@ -89,12 +98,37 @@ export function WidgetContainer({
       const deltaY = e.clientY - resizeStart.y
 
       const cellWithGap = cellWidth + GRID_CONFIG.gap
+      const rowWithGap = GRID_CONFIG.cellSize + GRID_CONFIG.gap
 
       const colSpanDelta = Math.floor(deltaX / cellWithGap + 0.5)
-      const rowSpanDelta = Math.floor(deltaY / cellWithGap + 0.5)
+      const rowSpanDelta = Math.floor(deltaY / rowWithGap + 0.5)
 
-      const newColSpan = Math.max(1, Math.min(columnCount - resizeStart.position.col, resizeStart.position.colSpan + colSpanDelta))
-      const newRowSpan = Math.max(1, resizeStart.position.rowSpan + rowSpanDelta)
+      // Get widget constraints from metadata
+      const metadata = getWidgetMetadata(widget.type)
+      const constraints = metadata?.constraints
+
+      // Calculate new dimensions with constraints
+      let newColSpan = resizeStart.position.colSpan + colSpanDelta
+      let newRowSpan = resizeStart.position.rowSpan + rowSpanDelta
+
+      // Apply min/max constraints if available
+      if (constraints) {
+        newColSpan = Math.max(
+          constraints.minCols,
+          Math.min(constraints.maxCols, newColSpan),
+        )
+        newRowSpan = Math.max(
+          constraints.minRows,
+          Math.min(constraints.maxRows, newRowSpan),
+        )
+      } else {
+        // Fallback to basic constraints
+        newColSpan = Math.max(1, newColSpan)
+        newRowSpan = Math.max(1, newRowSpan)
+      }
+
+      // Ensure doesn't exceed grid boundaries
+      newColSpan = Math.min(columnCount - resizeStart.position.col, newColSpan)
 
       const newPosition: GridPosition = {
         ...resizeStart.position,
@@ -104,7 +138,14 @@ export function WidgetContainer({
 
       setPreviewPosition(newPosition)
     },
-    [isResizing, resizeStart],
+    [
+      isResizing,
+      resizeStart,
+      cellWidth,
+      columnCount,
+      widget.type,
+      setPreviewPosition,
+    ],
   )
 
   const handleResizeEnd = useCallback(
@@ -172,15 +213,23 @@ export function WidgetContainer({
         ...style,
         cursor: editMode && !isResizing ? 'grab' : undefined,
         touchAction: 'none',
+        containerType: 'size',
+        // CSS containment for performance - isolate widgets from affecting each other
+        contain: 'layout style paint',
       }}
       className={`relative rounded-lg border-2 bg-white shadow-sm transition-colors dark:bg-gray-800 ${borderColor}`}
     >
-      <div className="h-full p-3 select-none pointer-events-none">{children}</div>
+      {/* @supports not (container-type: size) fallback handled via CSS cascade */}
+      <div
+        className={`h-full p-2 ${editMode ? 'pointer-events-none select-none' : ''}`}
+      >
+        {children}
+      </div>
 
       {editMode && (
         <div
           onPointerDown={handleResizeStart}
-          className="absolute bottom-0 right-0 h-6 w-6 cursor-nwse-resize pointer-events-auto"
+          className="pointer-events-auto absolute right-0 bottom-0 h-6 w-6 cursor-nwse-resize"
           style={{
             touchAction: 'none',
             background:

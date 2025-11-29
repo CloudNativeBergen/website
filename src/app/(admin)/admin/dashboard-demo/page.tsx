@@ -5,43 +5,93 @@ import { Widget } from '@/lib/dashboard/types'
 import { getColumnCountForWidth } from '@/lib/dashboard/grid-utils'
 import { DashboardGrid } from '@/components/admin/dashboard/DashboardGrid'
 import { WidgetContainer } from '@/components/admin/dashboard/WidgetContainer'
-import { DummyStatsWidget } from '@/components/admin/dashboard/widgets/DummyStatsWidget'
-import { DummyChartWidget } from '@/components/admin/dashboard/widgets/DummyChartWidget'
-import { DummyListWidget } from '@/components/admin/dashboard/widgets/DummyListWidget'
-import { DummyWideWidget } from '@/components/admin/dashboard/widgets/DummyWideWidget'
-import { DummyTallWidget } from '@/components/admin/dashboard/widgets/DummyTallWidget'
+import { WidgetErrorBoundary } from '@/components/admin/dashboard/WidgetErrorBoundary'
+import { QuickActionsWidget } from '@/components/admin/dashboard/widgets/QuickActionsWidget'
+import { ReviewProgressWidget } from '@/components/admin/dashboard/widgets/ReviewProgressWidget'
+import { ProposalPipelineWidget } from '@/components/admin/dashboard/widgets/ProposalPipelineWidget'
+import { UpcomingDeadlinesWidget } from '@/components/admin/dashboard/widgets/UpcomingDeadlinesWidget'
+import { CFPHealthWidget } from '@/components/admin/dashboard/widgets/CFPHealthWidget'
+import { ScheduleBuilderStatusWidget } from '@/components/admin/dashboard/widgets/ScheduleBuilderStatusWidget'
+import { TicketSalesDashboardWidget } from '@/components/admin/dashboard/widgets/TicketSalesDashboardWidget'
+import { SpeakerEngagementWidget } from '@/components/admin/dashboard/widgets/SpeakerEngagementWidget'
+import { SponsorPipelineWidget } from '@/components/admin/dashboard/widgets/SponsorPipelineWidget'
+import { WorkshopCapacityWidget } from '@/components/admin/dashboard/widgets/WorkshopCapacityWidget'
+import { TravelSupportQueueWidget } from '@/components/admin/dashboard/widgets/TravelSupportQueueWidget'
+import { RecentActivityFeedWidget } from '@/components/admin/dashboard/widgets/RecentActivityFeedWidget'
 import { PencilIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 
 const INITIAL_WIDGETS: Widget[] = [
   {
-    id: 'stats-1',
-    type: 'stats',
-    title: 'Stats Widget',
+    id: 'quick-actions',
+    type: 'quick-actions',
+    title: 'Quick Actions',
     position: { row: 0, col: 0, rowSpan: 2, colSpan: 3 },
   },
   {
-    id: 'chart-1',
-    type: 'chart',
-    title: 'Chart Widget',
-    position: { row: 0, col: 3, rowSpan: 4, colSpan: 6 },
+    id: 'review-progress',
+    type: 'review-progress',
+    title: 'Review Progress',
+    position: { row: 0, col: 3, rowSpan: 2, colSpan: 3 },
   },
   {
-    id: 'tall-1',
-    type: 'tall',
-    title: 'Vertical Card',
-    position: { row: 0, col: 9, rowSpan: 4, colSpan: 3 },
+    id: 'upcoming-deadlines',
+    type: 'upcoming-deadlines',
+    title: 'Upcoming Deadlines',
+    position: { row: 0, col: 6, rowSpan: 2, colSpan: 6 },
   },
   {
-    id: 'list-1',
-    type: 'list',
-    title: 'Activity List',
-    position: { row: 2, col: 0, rowSpan: 2, colSpan: 3 },
+    id: 'proposal-pipeline',
+    type: 'proposal-pipeline',
+    title: 'Proposal Pipeline',
+    position: { row: 2, col: 0, rowSpan: 3, colSpan: 6 },
   },
   {
-    id: 'wide-1',
-    type: 'wide',
-    title: 'Wide Banner',
-    position: { row: 4, col: 0, rowSpan: 2, colSpan: 12 },
+    id: 'cfp-health',
+    type: 'cfp-health',
+    title: 'CFP Health',
+    position: { row: 2, col: 6, rowSpan: 3, colSpan: 6 },
+  },
+  {
+    id: 'speaker-engagement',
+    type: 'speaker-engagement',
+    title: 'Speaker Engagement',
+    position: { row: 5, col: 0, rowSpan: 3, colSpan: 4 },
+  },
+  {
+    id: 'workshop-capacity',
+    type: 'workshop-capacity',
+    title: 'Workshop Capacity',
+    position: { row: 5, col: 4, rowSpan: 3, colSpan: 4 },
+  },
+  {
+    id: 'travel-support',
+    type: 'travel-support',
+    title: 'Travel Support',
+    position: { row: 5, col: 8, rowSpan: 3, colSpan: 4 },
+  },
+  {
+    id: 'sponsor-pipeline',
+    type: 'sponsor-pipeline',
+    title: 'Sponsor Pipeline',
+    position: { row: 8, col: 0, rowSpan: 4, colSpan: 8 },
+  },
+  {
+    id: 'schedule-status',
+    type: 'schedule-status',
+    title: 'Schedule Builder',
+    position: { row: 8, col: 8, rowSpan: 4, colSpan: 4 },
+  },
+  {
+    id: 'ticket-sales',
+    type: 'ticket-sales',
+    title: 'Ticket Sales',
+    position: { row: 12, col: 0, rowSpan: 4, colSpan: 8 },
+  },
+  {
+    id: 'recent-activity',
+    type: 'recent-activity',
+    title: 'Recent Activity',
+    position: { row: 12, col: 8, rowSpan: 4, colSpan: 4 },
   },
 ]
 
@@ -73,7 +123,9 @@ export default function DashboardDemoPage() {
   const handleResize = useCallback(
     (widgetId: string, newPosition: Widget['position']) => {
       setWidgets((prev) =>
-        prev.map((w) => (w.id === widgetId ? { ...w, position: newPosition } : w)),
+        prev.map((w) =>
+          w.id === widgetId ? { ...w, position: newPosition } : w,
+        ),
       )
     },
     [],
@@ -84,91 +136,147 @@ export default function DashboardDemoPage() {
       let content: React.ReactNode
 
       switch (widget.type) {
-        case 'stats':
-          content = <DummyStatsWidget />
+        case 'quick-actions':
+          content = <QuickActionsWidget />
           break
-        case 'chart':
-          content = <DummyChartWidget />
+        case 'review-progress':
+          content = <ReviewProgressWidget />
           break
-        case 'list':
-          content = <DummyListWidget />
+        case 'proposal-pipeline':
+          content = (
+            <ProposalPipelineWidget
+              data={{
+                submitted: 147,
+                accepted: 42,
+                rejected: 28,
+                confirmed: 35,
+                total: 147,
+                acceptanceRate: 28.6,
+                pendingDecisions: 77,
+              }}
+            />
+          )
           break
-        case 'wide':
-          content = <DummyWideWidget />
+        case 'upcoming-deadlines':
+          content = <UpcomingDeadlinesWidget />
           break
-        case 'tall':
-          content = <DummyTallWidget />
+        case 'cfp-health':
+          content = (
+            <CFPHealthWidget
+              data={{
+                totalSubmissions: 147,
+                submissionGoal: 200,
+                daysRemaining: 12,
+                averagePerDay: 4.2,
+                submissionsPerDay: [
+                  { date: '2024-01-01', count: 2 },
+                  { date: '2024-01-02', count: 3 },
+                  { date: '2024-01-03', count: 5 },
+                  { date: '2024-01-04', count: 4 },
+                  { date: '2024-01-05', count: 6 },
+                  { date: '2024-01-06', count: 8 },
+                  { date: '2024-01-07', count: 7 },
+                  { date: '2024-01-08', count: 9 },
+                  { date: '2024-01-09', count: 11 },
+                  { date: '2024-01-10', count: 10 },
+                  { date: '2024-01-11', count: 12 },
+                  { date: '2024-01-12', count: 14 },
+                  { date: '2024-01-13', count: 13 },
+                  { date: '2024-01-14', count: 15 },
+                ],
+                formatDistribution: [
+                  { format: 'Talk', count: 98 },
+                  { format: 'Workshop', count: 32 },
+                  { format: 'Lightning Talk', count: 17 },
+                ],
+              }}
+            />
+          )
+          break
+        case 'schedule-status':
+          content = <ScheduleBuilderStatusWidget />
+          break
+        case 'ticket-sales':
+          content = (
+            <TicketSalesDashboardWidget
+              data={{
+                currentSales: 342,
+                capacity: 500,
+                percentage: 68.4,
+                revenue: 85500,
+                daysUntilEvent: 45,
+                salesVelocity: 7.6,
+                salesByDate: [],
+                milestones: [],
+              }}
+            />
+          )
+          break
+        case 'speaker-engagement':
+          content = <SpeakerEngagementWidget />
+          break
+        case 'sponsor-pipeline':
+          content = <SponsorPipelineWidget />
+          break
+        case 'workshop-capacity':
+          content = <WorkshopCapacityWidget />
+          break
+        case 'travel-support':
+          content = <TravelSupportQueueWidget />
+          break
+        case 'recent-activity':
+          content = <RecentActivityFeedWidget />
           break
         default:
-          content = <div>Unknown widget type</div>
+          content = <div>Unknown widget type: {widget.type}</div>
       }
 
       return (
-        <WidgetContainer
-          widget={widget}
-          editMode={editMode}
-          isDragging={isDragging}
-          columnCount={columnCount}
-          cellWidth={cellWidth}
-          allWidgets={widgets}
-          onResize={handleResize}
-        >
-          {content}
-        </WidgetContainer>
+        <WidgetErrorBoundary widgetName={widget.title}>
+          <WidgetContainer
+            widget={widget}
+            editMode={editMode}
+            isDragging={isDragging}
+            columnCount={columnCount}
+            cellWidth={cellWidth}
+            allWidgets={widgets}
+            onResize={handleResize}
+          >
+            {content}
+          </WidgetContainer>
+        </WidgetErrorBoundary>
       )
     },
     [editMode, columnCount, widgets, handleResize],
   )
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 dark:bg-gray-900">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Dashboard Grid Demo
-          </h1>
-          <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-            Phase 0: Drag and resize widgets to customize your dashboard layout
-          </p>
-        </div>
+    <div className="min-h-screen">
+      <div className="mb-3 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-gray-900 dark:text-white">
+          Dashboard
+        </h1>
 
         <div className="flex gap-2">
           <button
             onClick={() => setEditMode(!editMode)}
-            className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${editMode
-              ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
-              : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-              }`}
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              editMode
+                ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
+                : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           >
-            <PencilIcon className="h-4 w-4" />
-            {editMode ? 'Exit Edit Mode' : 'Edit Mode'}
+            <PencilIcon className="h-3.5 w-3.5" />
+            {editMode ? 'Exit Edit' : 'Edit'}
           </button>
 
           <button
             onClick={handleReset}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
           >
-            <ArrowPathIcon className="h-4 w-4" />
-            Reset Layout
+            <ArrowPathIcon className="h-3.5 w-3.5" />
+            Reset
           </button>
-        </div>
-      </div>
-
-      <div className="mb-3 rounded-lg bg-blue-50 px-4 py-2 dark:bg-blue-900/20">
-        <div className="text-xs text-blue-800 dark:text-blue-300">
-          <span className="font-medium">Grid Configuration</span>
-          {' • '}
-          Current viewport: <strong>{columnCount} columns</strong>
-          {' • '}
-          Cell size: <strong>80px</strong>
-          {' • '}
-          Gap: <strong>16px</strong>
-          {editMode && (
-            <>
-              {' • '}
-              <span className="text-xs">Drag widgets by their handle or resize using the bottom-right corner</span>
-            </>
-          )}
         </div>
       </div>
 

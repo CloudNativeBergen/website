@@ -1,5 +1,4 @@
-import { Widget, GridPosition } from './types'
-import { GRID_CONFIG } from './constants'
+import type { Widget, GridPosition } from './types'
 
 /**
  * Builds a map of occupied grid cells for collision detection
@@ -67,18 +66,6 @@ export function checkCollision(
   const targetCells = getCellsForPosition(position)
 
   return targetCells.some((cell) => occupationMap.has(cell))
-}
-
-/**
- * Checks if a position is valid (inverse of checkCollision)
- */
-export function isValidPosition(
-  position: GridPosition,
-  widgets: Widget[],
-  excludeWidgetId?: string,
-  maxCols?: number,
-): boolean {
-  return !checkCollision(position, widgets, excludeWidgetId, maxCols)
 }
 
 /**

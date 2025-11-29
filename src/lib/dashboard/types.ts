@@ -4,6 +4,7 @@ import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 import type { WorkshopStats } from '@/components/cfp/WorkshopStatistics'
 import type { TravelSupportWithExpenses } from '@/lib/travel-support/types'
 import type { BadgeRecord } from '@/lib/badge/types'
+import type { WidgetMetadata } from './widget-metadata'
 
 export interface ConferenceWithSpeakerData {
   conference: Conference
@@ -29,6 +30,8 @@ export interface Widget<TConfig = Record<string, unknown>> {
   position: GridPosition
   title: string
   config?: TConfig
+  /** Optional metadata reference (populated from registry) */
+  metadata?: WidgetMetadata
 }
 
 export interface GridConfig {

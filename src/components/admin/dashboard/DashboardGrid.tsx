@@ -27,7 +27,11 @@ interface DashboardGridProps {
   onWidgetsChange: (widgets: Widget[]) => void
   columnCount: number
   editMode: boolean
-  children: (widget: Widget, isDragging: boolean, cellWidth: number) => React.ReactNode
+  children: (
+    widget: Widget,
+    isDragging: boolean,
+    cellWidth: number,
+  ) => React.ReactNode
 }
 
 export function DashboardGrid({
@@ -62,14 +66,16 @@ export function DashboardGrid({
   }, [gridWidth, columnCount])
 
   const snapModifier: Modifier = useMemo(
-    () => ({ transform }) => {
-      const cellWithGap = cellWidth + GRID_CONFIG.gap
-      return {
-        ...transform,
-        x: Math.round(transform.x / cellWithGap) * cellWithGap,
-        y: Math.round(transform.y / cellWithGap) * cellWithGap,
-      }
-    },
+    () =>
+      ({ transform }) => {
+        const cellWithGap = cellWidth + GRID_CONFIG.gap
+        const rowWithGap = GRID_CONFIG.cellSize + GRID_CONFIG.gap
+        return {
+          ...transform,
+          x: Math.round(transform.x / cellWithGap) * cellWithGap,
+          y: Math.round(transform.y / rowWithGap) * rowWithGap,
+        }
+      },
     [cellWidth],
   )
 
@@ -102,10 +108,11 @@ export function DashboardGrid({
 
       const currentPosition = widget.position
       const cellWithGap = cellWidth + GRID_CONFIG.gap
+      const rowWithGap = GRID_CONFIG.cellSize + GRID_CONFIG.gap
 
       const snapped = snapToGrid(
         currentPosition.col * cellWithGap + delta.x,
-        currentPosition.row * cellWithGap + delta.y,
+        currentPosition.row * rowWithGap + delta.y,
         cellWidth,
         GRID_CONFIG.gap,
         columnCount,
@@ -145,7 +152,9 @@ export function DashboardGrid({
     >
       <div className="relative">
         <div ref={gridRef} style={gridStyle} className="min-h-screen">
-          {widgets.map((widget) => children(widget, widget.id === activeWidgetId, cellWidth))}
+          {widgets.map((widget) =>
+            children(widget, widget.id === activeWidgetId, cellWidth),
+          )}
         </div>
 
         {editMode && (

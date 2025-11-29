@@ -99,18 +99,18 @@ function MyDashboard() {
 
 ```typescript
 interface Widget<TConfig = Record<string, unknown>> {
-  id: string              // Unique identifier
-  type: string            // Widget type (for rendering)
-  position: GridPosition  // Grid coordinates
-  title: string           // Widget title
-  config?: TConfig        // Optional widget-specific configuration
+  id: string // Unique identifier
+  type: string // Widget type (for rendering)
+  position: GridPosition // Grid coordinates
+  title: string // Widget title
+  config?: TConfig // Optional widget-specific configuration
 }
 
 interface GridPosition {
-  row: number      // Starting row (0-indexed)
-  col: number      // Starting column (0-indexed)
-  rowSpan: number  // Number of rows to span
-  colSpan: number  // Number of columns to span
+  row: number // Starting row (0-indexed)
+  col: number // Starting column (0-indexed)
+  rowSpan: number // Number of rows to span
+  colSpan: number // Number of columns to span
 }
 ```
 
@@ -120,8 +120,8 @@ interface GridPosition {
 
 ```typescript
 export const GRID_CONFIG: GridConfig = {
-  cellSize: 80,  // Base cell height in pixels
-  gap: 16,       // Gap between cells
+  cellSize: 80, // Base cell height in pixels
+  gap: 16, // Gap between cells
   breakpoints: {
     desktop: { minWidth: 1024, cols: 12 },
     tablet: { minWidth: 768, cols: 6 },
