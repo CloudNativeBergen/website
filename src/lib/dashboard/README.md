@@ -1,10 +1,23 @@
-# Dashboard Grid System
+# Dashboard 2.0: Strategic Planning & Architecture
 
-A flexible, responsive widget-based dashboard system built with React, TypeScript, and @dnd-kit.
+A phase-aware, widget-based dashboard system for conference management, designed to adapt to the natural lifecycle of conference operations from planning through post-event analytics.
 
-## Conference Management Domains & Phase Matrix
+## Vision
 
-### Core Feature Domains
+The dashboard serves as the central command center for conference organizers, providing contextual insights and actions that evolve as the conference progresses through distinct operational phases. Rather than a static collection of metrics, the dashboard intelligently adapts to show what matters most at each stage of the conference lifecycle.
+
+## Strategic Principles
+
+1. **Phase-Aware Design** - Widgets adapt their content and emphasis based on conference phase (initialization, planning, execution, post-conference)
+2. **Desktop-First Experience** - Optimized for organizer workflows on desktop/laptop environments
+3. **Render-on-Load Data** - Widgets fetch data on mount; no real-time polling or live updates
+4. **Conference-Scoped Context** - All data and widgets are scoped to the active conference
+5. **Flexible Layouts** - Organizers can customize their dashboard layout with drag-and-drop positioning
+6. **Graceful Degradation** - Widgets handle missing data, loading states, and errors independently
+
+---
+
+## Conference Management Domains
 
 Based on the site's admin structure and conference lifecycle, the following core domains have been identified:
 
@@ -19,936 +32,731 @@ Based on the site's admin structure and conference lifecycle, the following core
 9. **Volunteers & Team** - Organizer and volunteer coordination
 10. **Settings & Configuration** - Conference details, dates, and system settings
 
-### Conference Lifecycle Phases
+---
+
+## Conference Lifecycle Phases
 
 Based on date fields in the Conference schema, we identify four distinct operational phases:
 
-#### 1. **Initialization Phase** (Conference Setup → CFP Start)
+### 1. Initialization Phase
 
-- **Timing:** From conference creation until `cfp_start_date`
-- **Focus:** Planning, configuration, and preparation
-- **Key Activities:** Setting up conference details, defining formats/topics, recruiting sponsors, building team
+**Timing:** Conference creation → CFP Start
+**Focus:** Planning, configuration, and preparation
+**Key Activities:** Setting up conference details, defining formats/topics, recruiting sponsors, building team
 
-#### 2. **Planning Phase** (CFP Open → CFP Close)
+### 2. Planning Phase
 
-- **Timing:** From `cfp_start_date` to `cfp_end_date`
-- **Focus:** Accepting submissions, reviewing proposals, engaging community
-- **Key Activities:** CFP promotion, proposal review, speaker communication, sponsor recruitment
+**Timing:** CFP Start → CFP Close
+**Focus:** Accepting submissions, reviewing proposals, engaging community
+**Key Activities:** CFP promotion, proposal review, speaker communication, sponsor recruitment
 
-#### 3. **Execution Phase** (Pre-Conference → Event Days)
+### 3. Execution Phase
 
-- **Timing:** From `program_date` to `start_date` and during `start_date` to `end_date`
-- **Focus:** Final preparations and event delivery
-- **Key Activities:** Schedule finalization, ticket sales, workshop confirmations, speaker logistics, on-site operations
+**Timing:** Program Published → Event End
+**Focus:** Final preparations and event delivery
+**Key Activities:** Schedule finalization, ticket sales, workshop confirmations, speaker logistics, on-site operations
 
-#### 4. **Post-Conference Phase** (After Event)
+### 4. Post-Conference Phase
 
-- **Timing:** After `end_date` (specifically day after conference ends)
-- **Focus:** Wrap-up, content publication, analysis
-- **Key Activities:** Publishing recordings, expense reconciliation, attendee surveys, retrospectives, archival
-
-### Domain × Phase Widget Matrix
-
-This matrix shows which widgets are relevant for each domain during each conference phase. Widgets marked with ✅ are highly relevant, (✅) are somewhat relevant, and blank cells indicate low/no relevance.
-
-| Domain                    | Initialization       | Planning (CFP)                                       | Execution (Pre-Event + Event)                 | Post-Conference                         |
-| ------------------------- | -------------------- | ---------------------------------------------------- | --------------------------------------------- | --------------------------------------- |
-| **CFP & Proposals**       | (✅) Setup goals     | ✅ Health tracking, Review progress, Pipeline status | (✅) Final confirmations                      | (✅) Analytics                          |
-| **Schedule & Program**    |                      | (✅) Capacity planning                               | ✅ Builder status, Session allocation         | ✅ Actual vs planned                    |
-| **Sponsors & Revenue**    | ✅ Pipeline setup    | ✅ Deal tracking, Revenue goals                      | ✅ Contract fulfillment, Activation tracking  | ✅ ROI analysis                         |
-| **Tickets & Attendance**  | (✅) Capacity setup  | (✅) Early bird tracking                             | ✅ Sales dashboard, Capacity monitoring       | ✅ Attendance analysis                  |
-| **Workshops**             |                      | ✅ Proposal review                                   | ✅ Capacity tracking, Registration monitoring | ✅ Attendance stats                     |
-| **Travel Support**        |                      | (✅) Budget setup                                    | ✅ Approval queue, Budget tracking            | ✅ Expense reconciliation               |
-| **Speakers & Engagement** | (✅) Invite keynotes | ✅ Diversity tracking, Response monitoring           | ✅ Confirmation status, Communication logs    | (✅) Feedback collection                |
-| **Marketing & Content**   | (✅) Asset prep      | (✅) CFP promotion                                   | ✅ Social media tracking, Content calendar    | ✅ Video publishing, Gallery management |
-| **Quick Actions**         | ✅ All phases        | ✅ All phases                                        | ✅ All phases                                 | ✅ All phases                           |
-| **Activity Feed**         | ✅ All phases        | ✅ All phases                                        | ✅ All phases                                 | ✅ All phases                           |
-| **Deadlines**             | ✅ All phases        | ✅ All phases                                        | ✅ All phases                                 | (✅) Final tasks                        |
+**Timing:** After Event End
+**Focus:** Wrap-up, content publication, analysis
+**Key Activities:** Publishing recordings, expense reconciliation, attendee surveys, retrospectives, archival
 
 ---
 
-## Deep Dive: CFP & Proposals Domain
+## Implementation Status
 
-This domain represents the core of content curation for the conference. It encompasses the entire lifecycle of talk proposals from submission through acceptance, scheduling, and delivery.
+### Phase 1: Foundation (✅ Complete)
 
-### Phase-Specific Widget Requirements
+**Core Infrastructure:**
 
-#### Initialization Phase
+- ✅ Grid system with responsive breakpoints (12/6/4 columns)
+- ✅ Drag-and-drop positioning with @dnd-kit
+- ✅ Resize capabilities with collision detection
+- ✅ Phase detection utilities (`getCurrentPhase`, `getPhaseContext`)
+- ✅ Widget registry and metadata system (16 widgets)
+- ✅ Widget configuration schema (Zod validation)
+- ✅ Error boundaries per widget
+- ✅ ApexCharts theming for dark mode support
+- ✅ Widget picker with category-based browsing
+- ✅ Smart placement algorithm (auto-positioning)
+- ✅ macOS-style widget controls (remove/configure)
+- ✅ Preset layout system (5 configurations)
 
-**Primary Goal:** Set expectations and prepare infrastructure
+**Implemented Widgets (16):**
 
-**Widgets Needed:**
+**Core Operations (4):**
+1. **Quick Actions** (3×2) - Phase-aware action shortcuts
+2. **Upcoming Deadlines** (6×3) - Timeline management
+3. **Review Progress** (3×3) - CFP review tracking
+4. **Recent Activity Feed** (12×4) - System activity stream
 
-1. **CFP Configuration Widget** (New - Not Yet Implemented)
-   - **Purpose:** Configure submission goals, deadlines, and review criteria
-   - **Metrics Displayed:**
-     - Target submission count
-     - Number of review slots available
-     - Configured formats and topics
-     - Review team size
-   - **Actions:**
-     - Link to settings page
-     - Configure email templates
-     - Set up review criteria
-   - **Size:** Medium (4×3)
-   - **Priority:** Medium - used once during setup
+**Analytics & Insights (4):**
+5. **CFP Health** (6×4) - Submission momentum tracking
+6. **Proposal Pipeline** (6×4) - Status distribution visualization
+7. **Ticket Sales Dashboard** (6×4) - Revenue and capacity tracking
+8. **Content Calendar** (6×3) - Marketing timeline
 
-2. **Quick Actions** (✅ Implemented)
-   - **Purpose:** Navigate to CFP settings and configuration
-   - **Relevant Actions:**
-     - Configure CFP settings
-     - Invite reviewers
-     - Set up email templates
-   - **Size:** Small (3×2)
-   - **Priority:** High - constant navigation hub
+**Operational Management (5):**
+9. **Schedule Builder Status** (6×4) - Program assembly progress
+10. **Speaker Engagement** (4×3) - Communication and diversity tracking
+11. **Sponsor Pipeline** (8×5) - Deal stages and revenue goals
+12. **Workshop Capacity** (4×2) - Registration and waitlist monitoring
+13. **Travel Support Queue** (3×4) - Approval workflow and budget tracking
 
-3. **Upcoming Deadlines** (✅ Implemented)
-   - **Purpose:** Track CFP open date and initial milestones
-   - **Relevant Deadlines:**
-     - CFP opens date
-     - Early bird promotion deadline
-     - First review checkpoint
-   - **Size:** Medium (6×3)
-   - **Priority:** High - critical timeline awareness
+**Engagement & Team (3):**
+14. **Team Status** (3×2) - Organizer activity
+15. **Gallery Management** (4×3) - Media workflow
+16. **Volunteer Shifts** (6×3) - Scheduling coordination
 
-#### Planning Phase (CFP Open)
+**Phase Awareness:** 12 of 16 widgets (75%) adapt based on conference phase.
 
-**Primary Goal:** Maximize quality submissions and efficient review process
+**Widget Management:**
+- ✅ Category-based organization (Core, Analytics, Operations, Engagement)
+- ✅ Visual category color system (blue, purple, green, orange)
+- ✅ Search and filter functionality
+- ✅ Smart auto-placement preventing overlaps
+- ✅ One-click widget removal
+- ✅ Widget-specific configuration (8 widgets with schemas)
 
-**Widgets Needed:**
+### Phase 2A: Data Foundation (In Progress)
 
-1. **CFP Health Widget** (✅ Implemented)
-   - **Purpose:** Monitor submission momentum and progress toward goals
-   - **Metrics Displayed:**
-     - Total submissions vs goal (with progress bar)
-     - Submissions trend over time (area chart)
-     - Average submissions per day
-     - Format distribution (breakdown cards)
-     - Days remaining until CFP close
-   - **Data Sources:** Proposal count queries, filtered by status='submitted'
-   - **Refresh Rate:** Hourly during active CFP period
-   - **Size:** Medium (6×4)
-   - **Priority:** Critical - primary health indicator
+**Objectives:**
 
-2. **Proposal Pipeline Widget** (✅ Implemented)
-   - **Purpose:** Visualize status distribution and decision progress
-   - **Metrics Displayed:**
-     - Horizontal bar chart showing:
-       - Submitted (new, awaiting review)
-       - Under Review (assigned to reviewers)
-       - Accepted (approved, awaiting speaker confirmation)
-       - Rejected (declined with notification sent)
-       - Confirmed (speaker accepted slot)
-     - Acceptance rate percentage
-     - Pending decisions count
-   - **Data Sources:** Proposal status counts, aggregated reviews
-   - **Refresh Rate:** Real-time during active review
-   - **Size:** Medium (6×4)
-   - **Priority:** Critical - main workflow visualization
+- Establish persistent dashboard layouts
+- Replace mock data with real Sanity queries
+- Production-ready widget management UX
+- Enable widget configuration persistence
 
-3. **Review Progress Widget** (✅ Implemented)
-   - **Purpose:** Track review completion and workload
-   - **Metrics Displayed:**
-     - Circular progress indicator (% of proposals reviewed)
-     - Reviews completed count
-     - Average review score
-     - Unreviewed proposals count
-   - **Actions:**
-     - "Review Next" button (routes to next unreviewed proposal)
-   - **Data Sources:** Review completion status, average scores
-   - **Refresh Rate:** Real-time
-   - **Size:** Small (3×3)
-   - **Priority:** High - personal accountability
+**Deliverables:**
 
-4. **Reviewer Workload Widget** (New - Not Yet Implemented)
-   - **Purpose:** Ensure balanced review distribution
-   - **Metrics Displayed:**
-     - List of reviewers with:
-       - Name
-       - Proposals assigned
-       - Reviews completed
-       - Completion percentage
-       - Average review time
-     - Team average completion rate
-   - **Actions:**
-     - Reassign proposals
-     - Send reminder emails
-   - **Data Sources:** Review assignments, completion stats
-   - **Size:** Medium (4×4)
-   - **Priority:** High - prevents bottlenecks
+1. **Persistence Layer**
+   - Sanity schema: `dashboardLayout` document type
+   - tRPC router: `dashboardRouter` with CRUD operations
+   - Per-user, per-conference layout storage
+   - Preset templates (Planning, Execution, Financial, Comprehensive)
 
-5. **Top Rated Proposals Widget** (New - Not Yet Implemented)
-   - **Purpose:** Surface standout submissions for quick decision-making
-   - **Metrics Displayed:**
-     - Top 10 proposals by average score
-     - Format, speaker name, review count
-     - Quick status badges
-   - **Actions:**
-     - Quick accept/schedule button
-     - View full proposal
-   - **Data Sources:** Proposal reviews with aggregated scores
-   - **Size:** Medium (6×4)
-   - **Priority:** Medium - accelerates curation
+2. **Real Data Integration**
+   - tRPC router: `widgetRouter` with data endpoints for all 16 widgets
+   - Sanity queries scoped to active conference
+   - Replace all mock data in `data-hooks.ts`
+   - Type-safe data contracts between frontend/backend
 
-6. **Diversity Insights Widget** (New - Not Yet Implemented)
-   - **Purpose:** Track representation across submissions
-   - **Metrics Displayed:**
-     - Geographic distribution (map or list)
-     - First-time vs returning speakers
-     - Company/organization diversity
-     - Topic coverage heatmap
-   - **Data Sources:** Speaker profiles, proposal metadata
-   - **Size:** Medium (6×3)
-   - **Priority:** Medium - strategic diversity goals
+3. **Widget Management UX (✅ Complete)**
+   - ✅ Widget picker modal with category browsing and search
+   - ✅ Smart placement algorithm preventing overlaps
+   - ✅ macOS-style widget controls (close/configure buttons)
+   - ✅ One-click widget removal
+   - ✅ 5 preset configurations (planning, execution, financial, comprehensive, empty)
+   - ✅ Empty state with call-to-action
 
-7. **Upcoming Deadlines** (✅ Implemented)
-   - **Purpose:** Maintain urgency and timeline awareness
-   - **Relevant Deadlines:**
-     - CFP close date (with countdown)
-     - Speaker notification date
-     - Early decision windows
-   - **Size:** Medium (6×3)
-   - **Priority:** High - time-sensitive decisions
+4. **Configuration Persistence**
+   - Wire `WidgetConfigModal` to existing configuration schemas
+   - Persist widget-specific settings via tRPC
+   - Load saved configurations on dashboard mount
 
-8. **Recent Activity Feed** (✅ Implemented)
-   - **Purpose:** Stay aware of submission and review activity
-   - **Relevant Activities:**
-     - New proposal submissions
-     - Reviews completed
-     - Speaker questions/comments
-     - Status changes
-   - **Size:** Wide (12×4)
-   - **Priority:** Medium - contextual awareness
+**Timeline:** 4-6 weeks
 
-#### Execution Phase (Program Building)
+### Phase 2B: Domain Expansion & Polish
 
-**Primary Goal:** Finalize speaker lineup and confirm participation
+**Objectives:**
 
-**Widgets Needed:**
+- Expand widget coverage beyond CFP to all conference domains
+- Enhance phase-awareness across remaining static widgets
+- Production readiness and testing
+- Performance optimization
 
-1. **Speaker Confirmation Status Widget** (New - Not Yet Implemented)
-   - **Purpose:** Track speaker responses to acceptance notifications
-   - **Metrics Displayed:**
-     - Accepted proposals awaiting confirmation
-     - Confirmed speakers count
-     - Declined speakers (need replacements)
-     - Pending responses with time elapsed
-   - **Actions:**
-     - Send reminder emails
-     - Mark as confirmed
-     - Select backup proposals
-   - **Data Sources:** Proposal status, speaker response timestamps
-   - **Size:** Medium (6×3)
-   - **Priority:** Critical - lineup certainty
+**Deliverables:**
 
-2. **Proposal Pipeline Widget** (✅ Implemented - adapted)
-   - **Purpose:** Finalize remaining decisions and confirmations
-   - **Metrics Displayed:**
-     - Same as planning phase but focused on:
-       - Accepted → Confirmed conversion
-       - Backup proposals ready
-   - **Size:** Medium (6×4)
-   - **Priority:** High - complete the roster
+1. **Domain Coverage Expansion**
+   - **CFP Domain (2 additional widgets)**
+     - Speaker Confirmation Status (6×3) - Track acceptance responses
+     - Reviewer Workload (4×4) - Balance review distribution
 
-3. **Schedule Integration Widget** (New - Not Yet Implemented)
-   - **Purpose:** See which proposals are slotted into the schedule
-   - **Metrics Displayed:**
-     - Confirmed proposals with schedule slots
-     - Unscheduled confirmed proposals
-     - Schedule conflicts or gaps
-   - **Actions:**
-     - Quick link to schedule builder
-     - Drag-drop placeholder assignment
-   - **Data Sources:** Schedule data, confirmed proposals
-   - **Size:** Large (8×4)
-   - **Priority:** High - bridges CFP and schedule domains
+   - **Marketing & Communications (1 widget)**
+     - Social Media Performance (4×3) - Engagement metrics
 
-4. **Speaker Communication Log Widget** (New - Not Yet Implemented)
-   - **Purpose:** Track all speaker correspondence and outstanding items
-   - **Metrics Displayed:**
-     - Recent emails sent/received
-     - Unanswered speaker questions
-     - Missing speaker information
-     - Pending agreements/releases
-   - **Actions:**
-     - Compose email
-     - Mark as resolved
-     - Flag for follow-up
-   - **Data Sources:** Email logs, speaker profile completeness
-   - **Size:** Medium (6×4)
-   - **Priority:** Medium - operational efficiency
+   - **Operations (1 widget)**
+     - Venue & Logistics (6×3) - Room setup, AV, catering status
 
-5. **Upcoming Deadlines** (✅ Implemented)
-   - **Relevant Deadlines:**
-     - Program announcement date
-     - Speaker bio/photo deadline
-     - Final schedule lock
-   - **Size:** Medium (6×3)
-   - **Priority:** High
+2. **Phase Adaptation Enhancement**
+   - Expand phase-awareness to remaining 4 static widgets (target: 100% coverage)
+   - Implement phase-specific widget visibility filtering
+   - Add contextual guidance for initialization phase
+   - Enhance post-conference analytics views
 
-#### Post-Conference Phase
+3. **Testing & Quality**
+   - Widget component test suite (16 widgets)
+   - Smart placement algorithm tests
+   - Preset configuration validation
+   - Phase detection integration tests
+   - Accessibility audit (keyboard navigation, ARIA)
 
-**Primary Goal:** Analyze outcomes and document for future planning
+4. **Performance Optimization**
+   - Widget lazy loading (code splitting)
+   - React Query cache optimization
+   - Grid render performance profiling
+   - Bundle size analysis and reduction
 
-**Widgets Needed:**
+**Timeline:** 6-8 weeks
 
-1. **CFP Performance Analytics Widget** (New - Not Yet Implemented)
-   - **Purpose:** Retrospective analysis of the CFP process
-   - **Metrics Displayed:**
-     - Total submissions vs goal
-     - Acceptance rate comparison to past years
-     - Average review time per proposal
-     - Submission timeline distribution (when did most submit?)
-     - Format popularity
-     - Geographic reach
-   - **Visualizations:**
-     - Line charts (submission timeline)
-     - Bar charts (format/topic distribution)
-     - Comparison tables (year-over-year)
-   - **Data Sources:** Historical proposal data, review logs
-   - **Export:** CSV export for reporting
-   - **Size:** Large (8×5)
-   - **Priority:** Medium - strategic learning
+### Phase 3: Advanced Features (Future)
 
-2. **Talk Attendance Correlation Widget** (New - Not Yet Implemented)
-   - **Purpose:** Correlate proposal metadata with session popularity
-   - **Metrics Displayed:**
-     - Top attended sessions (if attendance tracked)
-     - Correlation between review scores and attendance
-     - Format performance (talk vs workshop attendance)
-   - **Actions:**
-     - Export insights for next year's CFP criteria
-   - **Data Sources:** Attendance data, proposal metadata
-   - **Size:** Medium (6×4)
-   - **Priority:** Low - nice-to-have insights
+**Scope:**
 
-3. **Speaker Feedback Summary Widget** (New - Not Yet Implemented)
-   - **Purpose:** Aggregate post-event speaker satisfaction
-   - **Metrics Displayed:**
-     - Speaker satisfaction scores
-     - Common feedback themes
-     - Net Promoter Score (would they speak again?)
-   - **Data Sources:** Speaker surveys
-   - **Size:** Medium (4×3)
-   - **Priority:** Medium - retention insights
+- **Collaboration Features**
+  - Multi-user layout sharing and role-based presets
+  - Team dashboard templates
+  - Widget commenting and annotations
 
-### Current Widget Coverage: CFP Domain
+- **Enhanced Interactions**
+  - Undo/redo for layout changes (history stack)
+  - Keyboard shortcuts for widget management
+  - Advanced keyboard navigation (arrow keys, tab order)
+  - Widget duplication and templates
+
+- **Data & Insights**
+  - Dashboard usage analytics (widget popularity, interaction patterns)
+  - Custom widget builder (low-code configuration)
+  - Cross-conference comparison widgets
+  - Export dashboard snapshots (PDF/image)
+
+- **Mobile Experience**
+  - Responsive widget grid for tablet/mobile
+  - Touch-optimized drag-drop
+  - Mobile-specific widget variants
+  - Progressive Web App (PWA) capabilities
+
+**Timeline:** 8-12 weeks
+
+---
+
+## Architecture Overview
+
+### Technology Stack
+
+- **Framework:** Next.js 15+ with App Router
+- **UI Components:** React 18+ with TypeScript 5.8+
+- **Drag & Drop:** @dnd-kit (collision detection, grid snapping, modifiers)
+- **Data Layer:** tRPC + React Query + Sanity CMS
+- **Charts:** ApexCharts with custom dark mode theming
+- **Styling:** Tailwind CSS 4+ with container queries
+- **Validation:** Zod schemas for widget configuration
+- **Icons:** Heroicons 24 (outline/solid variants)
+
+### Design System
+
+**Widget Categories & Colors:**
+- **Core Operations** - Blue (`bg-blue-50`, `text-blue-600`)
+- **Analytics & Insights** - Purple (`bg-purple-50`, `text-purple-600`)
+- **Operational Management** - Green (`bg-green-50`, `text-green-600`)
+- **Engagement & Team** - Orange (`bg-orange-50`, `text-orange-600`)
+
+**Widget Controls:**
+- macOS-style window controls (red close, green configure)
+- Title offset in edit mode to prevent button collision
+- Hover-activated control visibility
+- Consistent 3×3 grid dot sizing
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Dashboard Grid                         │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │         Widget Container (Drag/Resize/Error)           │ │
+│  │  ┌──────────────────────────────────────────────────┐  │ │
+│  │  │           Widget Component                       │  │ │
+│  │  │  • Phase Detection (getPhaseContext)            │  │ │
+│  │  │  • Data Fetching (tRPC hooks)                   │  │ │
+│  │  │  • Phase-Specific Rendering                     │  │ │
+│  │  └──────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│                      Data Layer (tRPC)                      │
+│  • dashboardRouter: Layout CRUD operations                  │
+│  • widgetRouter: Conference-scoped data queries             │
+│  • Conference context injection                             │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│                   Sanity CMS Storage                        │
+│  • dashboardLayout: User layouts per conference             │
+│  • Conference: Dates, settings, phase calculation           │
+│  • Proposals, Speakers, Tickets, etc.: Domain data          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Phase-Aware Widget Pattern
+
+Widgets follow a consistent pattern for phase adaptation:
+
+1. **Phase Detection** - Use `getPhaseContext(conference)` to determine current phase
+2. **Conditional Rendering** - Switch component/data based on phase
+3. **Metadata Configuration** - Declare `phaseConfig` in widget registry
+4. **Data Fetching** - Request phase-appropriate data from tRPC endpoints
+
+**Design Decision:** Phase-adaptive single widgets rather than separate widget types per phase.
+
+**Rationale:**
+
+- Reduces code duplication (shared UI patterns, utilities)
+- Smoother user experience (widgets evolve vs disappear)
+- Simpler maintenance (one component to update)
+- Natural fit for conference workflows (phases overlap, gradual transitions)
+
+### Responsive Grid System
+
+- **Desktop** (≥1024px): 12 columns
+- **Tablet** (≥768px): 6 columns
+- **Mobile** (<768px): 4 columns (future enhancement)
+- **Row Height:** 80px fixed
+- **Gap:** 16px
+- **Dynamic Cell Width:** Calculated based on viewport width
+
+**Configuration:** All grid parameters defined in `GRID_CONFIG` constant (single source of truth).
+
+---
+
+## Widget Development Guide
+
+### Creating a New Widget
+
+1. **Define Widget Metadata** in `widget-registry.ts`:
+
+   ```typescript
+   export const MY_WIDGET = defineWidget({
+     type: 'my-widget',
+     displayName: 'My Widget',
+     category: 'analytics',
+     icon: 'ChartBarIcon',
+     constraints: { minCols: 3, minRows: 2 },
+     defaultSize: { cols: 4, rows: 3 },
+     phaseConfig: {
+       relevantPhases: ['planning', 'execution'],
+       hideInIrrelevantPhases: false,
+       isPhaseAdaptive: true,
+     },
+   })
+   ```
+
+2. **Create Widget Component** in `components/admin/dashboard/widgets/`:
+
+   ```typescript
+   export function MyWidget({ conference }: { conference: Conference }) {
+     const phaseContext = getPhaseContext(conference)
+     const data = useWidgetData('my-widget', conference._id)
+
+     if (phaseContext.phase === 'planning') {
+       return <PlanningView data={data} />
+     }
+
+     return <ExecutionView data={data} />
+   }
+   ```
+
+3. **Create Data Hook** in `data-hooks.ts`:
+
+   ```typescript
+   export function useMyWidgetData(conferenceId: string) {
+     return trpc.widget.getMyWidgetData.useQuery({ conferenceId })
+   }
+   ```
+
+4. **Create tRPC Endpoint** in `server/routers/widget.ts`:
+   ```typescript
+   getMyWidgetData: protectedProcedure
+     .input(z.object({ conferenceId: z.string() }))
+     .query(async ({ input, ctx }) => {
+       // Sanity query scoped to conference
+       return await getMyWidgetDataFromSanity(input.conferenceId)
+     })
+   ```
+
+### Widget Configuration Schema
+
+For widgets with user-configurable options:
+
+```typescript
+configSchema: {
+  fields: {
+    targetValue: {
+      type: 'number',
+      label: 'Target Goal',
+      defaultValue: 100,
+      min: 0,
+      schema: z.number().min(0),
+    },
+    showTrend: {
+      type: 'boolean',
+      label: 'Show Trend Line',
+      defaultValue: true,
+      schema: z.boolean(),
+    },
+  },
+  schema: z.object({
+    targetValue: z.number().min(0),
+    showTrend: z.boolean(),
+  }),
+}
+```
+
+---
+
+## Domain Focus: CFP & Proposals
+
+The CFP domain receives priority treatment as the core content curation workflow. See Domain × Phase Matrix for full context.
+
+### CFP Widget Coverage
 
 **✅ Implemented (5 widgets):**
 
 - CFP Health Widget
 - Proposal Pipeline Widget
 - Review Progress Widget
-- Quick Actions (CFP-relevant actions)
+- Quick Actions (CFP-relevant)
 - Upcoming Deadlines (CFP dates)
 
-**🚧 Needed for Complete Coverage (8 widgets):**
+**🚧 Phase 2B Roadmap (6 widgets):**
 
-- CFP Configuration Widget (Initialization)
-- Reviewer Workload Widget (Planning)
-- Top Rated Proposals Widget (Planning)
-- Diversity Insights Widget (Planning)
-- Speaker Confirmation Status Widget (Execution)
-- Schedule Integration Widget (Execution)
-- Speaker Communication Log Widget (Execution)
-- CFP Performance Analytics Widget (Post-Conference)
-- Talk Attendance Correlation Widget (Post-Conference)
-- Speaker Feedback Summary Widget (Post-Conference)
+- CFP Configuration (Initialization)
+- Reviewer Workload (Planning)
+- Top Rated Proposals (Planning)
+- Diversity Insights (Planning)
+- Speaker Confirmation Status (Execution) - **Phase 2A Priority**
+- Schedule Integration (Execution)
+- Speaker Communication Log (Execution)
+- CFP Performance Analytics (Post-Conference)
 
-### Data Sources Required
+### Required Data Sources
 
-For full CFP domain support, the following data must be queryable:
-
-1. **Proposals:** Status, format, topics, speakers, submission timestamp, review scores
-2. **Reviews:** Reviewer ID, completion status, scores, comments, timestamp
-3. **Reviewers:** Name, email, assigned proposals, review history
-4. **Speakers:** Name, profile, diversity data (opt-in), contact info, response timestamps
-5. **Schedule:** Slots assigned to proposals, timing conflicts
-6. **Communications:** Email logs, speaker Q&A threads
-7. **Attendance:** Session attendance counts (if tracked)
-8. **Surveys:** Speaker satisfaction responses
+1. **Proposals:** Status, format, topics, speakers, submission timestamps, review scores
+2. **Reviews:** Reviewer assignments, completion status, scores, timestamps
+3. **Reviewers:** Profiles, workload, completion rates
+4. **Speakers:** Contact info, response timestamps, diversity data (opt-in)
+5. **Schedule:** Slot assignments, conflicts
+6. **Communications:** Email logs, speaker Q&A
 
 ---
 
-## Implementation Strategy: Phase-Aware Widgets
+## Development Roadmap
 
-### The Question: Separate Widgets vs Phase Configuration?
+### Phase 2A: Data Foundation (Current - 4-6 weeks)
 
-After analyzing the existing architecture and use cases, here's the recommended approach:
+**Week 1-2: Persistence Layer**
 
-### ✅ **Recommended: Phase as Configuration (Adaptive Widgets)**
+- [ ] Create `dashboardLayout` Sanity schema
+- [ ] Build `dashboardRouter` tRPC endpoints
+- [ ] Integrate layout persistence in `DashboardGrid`
+- [ ] Default layout templates for each phase
+
+**Week 3-4: Real Data Integration**
+
+- [ ] Create `widgetRouter` with 12 data endpoints
+- [ ] Implement Sanity queries for all widgets
+- [ ] Replace mock data in `data-hooks.ts`
+- [ ] Add conference scoping to all queries
+
+**Week 5-6: Configuration Persistence**
+
+- [ ] Wire configuration modal to 8 existing widget schemas
+- [ ] Persist widget config via tRPC (`updateWidgetConfig` mutation)
+- [ ] Load saved configurations on dashboard mount
+- [ ] Add reset-to-defaults functionality
+
+### Phase 2B: Domain Expansion & Polish (6-8 weeks)
+
+**Weeks 7-9: New Widgets Across Domains**
+
+- [ ] Speaker Confirmation Status widget (CFP/Execution phase)
+- [ ] Reviewer Workload widget (CFP/Planning phase)
+- [ ] Social Media Performance widget (Marketing)
+- [ ] Venue & Logistics widget (Operations/Execution)
+
+**Weeks 10-11: Phase Adaptation Enhancement**
+
+- [ ] Expand phase-awareness to remaining 4 static widgets
+- [ ] Implement phase-specific widget visibility (`shouldShowWidget()`)
+- [ ] Add initialization phase guidance widgets
+- [ ] Enhance post-conference analytics views
+
+**Weeks 12-13: Testing & Quality**
+
+- [ ] Widget component test suite (16 widgets)
+- [ ] Smart placement algorithm tests
+- [ ] Preset configuration validation tests
+- [ ] Phase detection integration tests
+- [ ] Accessibility audit (keyboard, ARIA, screen readers)
+
+**Week 14: Performance & Documentation**
+
+- [ ] Widget lazy loading implementation
+- [ ] React Query cache optimization
+- [ ] Grid render performance profiling
+- [ ] Update widget registry with complete metadata
+- [ ] Document real data requirements per widget
+
+### Phase 3: Advanced Features (Future - 8-12 weeks)
+
+**Collaboration & Sharing:**
+- [ ] Multi-user layout sharing (team templates)
+- [ ] Role-based preset recommendations
+- [ ] Widget commenting and annotations
+- [ ] Export/import layout configurations
+
+**Enhanced Interactions:**
+- [ ] Undo/redo for layout changes (history stack)
+- [ ] Keyboard shortcuts system (customizable)
+- [ ] Advanced keyboard navigation (arrow keys for widget focus)
+- [ ] Widget duplication and template creation
+
+**Data & Analytics:**
+- [ ] Dashboard usage analytics (widget popularity tracking)
+- [ ] Custom widget builder (low-code configuration UI)
+- [ ] Cross-conference comparison widgets
+- [ ] Dashboard snapshot exports (PDF/PNG)
+
+**Mobile & PWA:**
+- [ ] Responsive widget grid for tablet/mobile
+- [ ] Touch-optimized drag-drop gestures
+- [ ] Mobile-specific widget variants (compact views)
+- [ ] Progressive Web App capabilities
+
+---
+
+## Technical Decisions
+
+### Data Fetching Strategy
+
+**Decision:** Render-on-load with no real-time updates.
 
 **Rationale:**
 
-1. **Existing Patterns:** The codebase already uses phase detection extensively:
-   - `src/lib/conference/state.ts` provides helpers: `isCfpOpen()`, `isProgramPublished()`, `isConferenceOver()`
-   - Components like `Hero.tsx` and `QuickActionsWidget.tsx` already adapt based on conference state
-   - This pattern is proven, tested, and understood by the team
+- Dashboard usage patterns: organizers check status periodically, not continuously
+- Reduces server load and complexity (no WebSocket/SSE infrastructure)
+- Simpler error handling and state management
+- Manual refresh available for latest data
 
-2. **Reduced Complexity:** One widget type that adapts is simpler than managing multiple widget variants:
-   - Single registration in widget registry
-   - Single component to maintain
-   - Easier testing (test phases, not separate components)
-   - Less code duplication
+**Implementation:** tRPC queries with React Query caching, no `refetchInterval`.
 
-3. **Flexible Data Layer:** Widgets can request exactly the data they need for the current phase:
+### Layout Persistence
 
-   ```typescript
-   // Inside widget - conditional data fetching
-   const data = await getWidgetData({
-     type: 'cfp-health',
-     phase: getCurrentPhase(conference),
-     conferenceId: conference._id,
-   })
-   ```
+**Decision:** Per-user, per-conference layout storage in Sanity.
 
-4. **Smooth Transitions:** Real conference work doesn't have hard phase boundaries:
-   - CFP might close but reviews continue
-   - Execution phase overlaps with planning
-   - Adaptive widgets handle edge cases naturally
-
-5. **User Experience:** Organizers see widgets evolve with their work rather than appearing/disappearing
-
-### Architecture Design
-
-#### 1. **Extend Widget Type System**
+**Approach:**
 
 ```typescript
-// src/lib/dashboard/types.ts
-
-export type ConferencePhase =
-  | 'initialization'
-  | 'planning'
-  | 'execution'
-  | 'post-conference'
-
-export interface PhaseConfig {
-  /** Phases where this widget is most relevant */
-  relevantPhases: ConferencePhase[]
-  /** Whether widget should be hidden in irrelevant phases */
-  hideInIrrelevantPhases?: boolean
-  /** Whether widget adapts its display based on phase */
-  isPhaseAdaptive?: boolean
-}
-
-export interface Widget<TConfig = Record<string, unknown>> {
-  id: string
-  type: string
-  position: GridPosition
-  title: string
-  config?: TConfig
-  metadata?: WidgetMetadata
-  /** Optional phase configuration for conditional rendering */
-  phaseConfig?: PhaseConfig
+interface DashboardLayout {
+  _id: string
+  userId: string // NextAuth user ID
+  conferenceId: reference('conference')
+  widgets: Array<{
+    id: string
+    type: string
+    position: { row, col, rowSpan, colSpan }
+    config?: Record<string, unknown>
+  }>
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
 }
 ```
 
-#### 2. **Add Phase Detection Utility**
+**Benefits:**
 
-```typescript
-// src/lib/conference/phase.ts
+- Conference-scoped layouts (different layouts for different conferences)
+- User personalization
+- Default templates for new users
+- Audit trail with timestamps
 
-import { Conference } from './types'
-import { isCfpOpen, isProgramPublished, isConferenceOver } from './state'
+### Phase Detection
 
-export type ConferencePhase =
-  | 'initialization'
-  | 'planning'
-  | 'execution'
-  | 'post-conference'
+**Decision:** Calculated from conference date fields, not stored state.
 
-/**
- * Determine current conference phase based on dates and state
- */
-export function getCurrentPhase(conference: Conference): ConferencePhase {
-  // Post-conference: After event ends
-  if (isConferenceOver(conference)) {
-    return 'post-conference'
-  }
+**Rationale:**
 
-  // Execution: Program published until event end
-  if (isProgramPublished(conference)) {
-    return 'execution'
-  }
+- Single source of truth (conference dates)
+- No manual phase transitions needed
+- Handles edge cases (CFP extended, program delayed)
+- Transparent, predictable behavior
 
-  // Planning: CFP open until program published
-  if (isCfpOpen(conference)) {
-    return 'planning'
-  }
+**Implementation:** `getCurrentPhase(conference)` utility with comprehensive test coverage.
 
-  // Check if CFP has closed but program not yet published (still planning/review)
-  const now = new Date()
-  const cfpEnd = conference.cfp_end_date
-    ? new Date(conference.cfp_end_date + 'T23:59:59.999Z')
-    : null
-  const programDate = conference.program_date
-    ? new Date(conference.program_date)
-    : null
+---
 
-  if (cfpEnd && programDate && now > cfpEnd && now < programDate) {
-    return 'planning' // Still in review/selection phase
-  }
+## File Structure
 
-  // Default: Initialization (before CFP opens)
-  return 'initialization'
-}
-
-/**
- * Get phase-specific context for widgets
- */
-export function getPhaseContext(conference: Conference) {
-  const phase = getCurrentPhase(conference)
-  const now = new Date()
-
-  return {
-    phase,
-    isCfpOpen: isCfpOpen(conference),
-    isProgramPublished: isProgramPublished(conference),
-    isConferenceOver: isConferenceOver(conference),
-    daysUntilCfpClose: conference.cfp_end_date
-      ? Math.ceil(
-          (new Date(conference.cfp_end_date).getTime() - now.getTime()) /
-            (1000 * 60 * 60 * 24),
-        )
-      : null,
-    daysUntilConference: conference.start_date
-      ? Math.ceil(
-          (new Date(conference.start_date).getTime() - now.getTime()) /
-            (1000 * 60 * 60 * 24),
-        )
-      : null,
-  }
-}
 ```
+src/lib/dashboard/
+├── README.md                  # This file (strategic overview)
+├── types.ts                   # TypeScript definitions
+├── constants.ts               # Grid configuration
+├── grid-utils.ts              # Collision detection, snapping
+├── placement-utils.ts         # Smart widget auto-placement
+├── data-hooks.ts              # Widget data fetching hooks
+├── widget-registry.ts         # Widget metadata registry (16 widgets)
+├── widget-metadata.ts         # Metadata type definitions
+├── presets.ts                 # Dashboard preset configurations
+└── apexcharts-theme.ts        # Chart theming
 
-#### 3. **Update Widget Metadata**
+src/components/admin/dashboard/
+├── DashboardGrid.tsx          # Main grid container
+├── WidgetContainer.tsx        # Widget wrapper (drag/resize/controls)
+├── WidgetConfigModal.tsx      # Configuration modal
+├── WidgetPicker.tsx           # Category-based widget browser
+├── WidgetErrorBoundary.tsx    # Error isolation per widget
+└── widgets/
+    ├── QuickActionsWidget.tsx
+    ├── ReviewProgressWidget.tsx
+    ├── ProposalPipelineWidget.tsx
+    ├── UpcomingDeadlinesWidget.tsx
+    ├── CFPHealthWidget.tsx
+    ├── ScheduleBuilderStatusWidget.tsx
+    ├── TicketSalesDashboardWidget.tsx
+    ├── SpeakerEngagementWidget.tsx
+    ├── SponsorPipelineWidget.tsx
+    ├── WorkshopCapacityWidget.tsx
+    ├── TravelSupportQueueWidget.tsx
+    ├── RecentActivityFeedWidget.tsx
+    ├── ContentCalendarWidget.tsx
+    ├── TeamStatusWidget.tsx
+    ├── GalleryManagementWidget.tsx
+    └── VolunteerShiftsWidget.tsx
 
-```typescript
-// src/lib/dashboard/widget-registry.ts
+src/lib/conference/
+├── phase.ts                   # Phase detection utilities
+├── state.ts                   # Conference state helpers
+└── types.ts                   # Conference type definitions
 
-export const CFP_HEALTH_WIDGET = defineWidget({
-  type: 'cfp-health',
-  displayName: 'CFP Health',
-  description: 'Call for Papers submission tracking',
-  category: 'analytics',
-  icon: 'DocumentTextIcon',
-  // ... existing constraints and sizes ...
+src/server/routers/
+├── dashboard.ts               # Layout CRUD (Phase 2A)
+└── widget.ts                  # Widget data endpoints (Phase 2A)
 
-  // NEW: Phase configuration
-  phaseConfig: {
-    relevantPhases: ['planning', 'execution', 'post-conference'],
-    hideInIrrelevantPhases: false, // Still visible but shows different data
-    isPhaseAdaptive: true, // Widget content changes by phase
-  },
-  tags: ['cfp', 'submissions', 'analytics', 'chart'],
-})
-```
+sanity/schemaTypes/
+└── dashboardLayout.ts         # Layout persistence schema (Phase 2A)
 
-#### 4. **Phase-Adaptive Widget Implementation**
-
-```typescript
-// src/components/admin/dashboard/widgets/CFPHealthWidget.tsx
-
-'use client'
-
-import { useEffect, useState } from 'react'
-import { getCurrentPhase, getPhaseContext } from '@/lib/conference/phase'
-import { Conference } from '@/lib/conference/types'
-
-interface CFPHealthWidgetProps {
-  conference: Conference
-}
-
-export function CFPHealthWidget({ conference }: CFPHealthWidgetProps) {
-  const [phaseContext, setPhaseContext] = useState(() => getPhaseContext(conference))
-
-  // Recalculate phase context on mount and periodically
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPhaseContext(getPhaseContext(conference))
-    }, 60000) // Check every minute
-
-    return () => clearInterval(interval)
-  }, [conference])
-
-  const { phase } = phaseContext
-
-  // Render different content based on phase
-  switch (phase) {
-    case 'initialization':
-      return <CFPHealthInitialization conference={conference} />
-
-    case 'planning':
-      return <CFPHealthPlanning conference={conference} context={phaseContext} />
-
-    case 'execution':
-      return <CFPHealthExecution conference={conference} />
-
-    case 'post-conference':
-      return <CFPHealthAnalytics conference={conference} />
-
-    default:
-      return <CFPHealthPlanning conference={conference} context={phaseContext} />
-  }
-}
-
-// Phase-specific sub-components
-function CFPHealthInitialization({ conference }: { conference: Conference }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        CFP Not Yet Open
-      </h3>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        Opens {conference.cfp_start_date}
-      </p>
-      <button className="mt-4 text-sm text-blue-600 hover:text-blue-700">
-        Configure CFP Settings →
-      </button>
-    </div>
-  )
-}
-
-// Planning phase shows the full submission tracking UI (existing implementation)
-function CFPHealthPlanning({
-  conference,
-  context
-}: {
-  conference: Conference
-  context: ReturnType<typeof getPhaseContext>
-}) {
-  // Existing CFPHealthWidget implementation here
-  // Shows: submissions trend, format distribution, progress toward goal
-  return <div>... existing implementation ...</div>
-}
-
-// Execution phase emphasizes finalization
-function CFPHealthExecution({ conference }: { conference: Conference }) {
-  return (
-    <div className="flex h-full flex-col">
-      <h3 className="mb-3 text-xs font-semibold">CFP Summary</h3>
-      <div className="space-y-3">
-        <Stat label="Total Submissions" value={147} />
-        <Stat label="Accepted" value={42} change="+5 since last week" />
-        <Stat label="Confirmed" value={38} change="4 pending" />
-      </div>
-      <button className="mt-auto text-sm text-blue-600">
-        View All Proposals →
-      </button>
-    </div>
-  )
-}
-
-// Post-conference shows analytics
-function CFPHealthAnalytics({ conference }: { conference: Conference }) {
-  return (
-    <div className="flex h-full flex-col">
-      <h3 className="mb-3 text-xs font-semibold">CFP Performance</h3>
-      {/* Year-over-year comparison, acceptance rates, etc. */}
-    </div>
-  )
-}
-```
-
-#### 5. **Dashboard Grid Phase Filtering**
-
-```typescript
-// src/components/admin/dashboard/DashboardGrid.tsx
-
-function shouldShowWidget(
-  widget: Widget,
-  currentPhase: ConferencePhase,
-): boolean {
-  if (!widget.phaseConfig) return true // No config = always show
-
-  const { relevantPhases, hideInIrrelevantPhases } = widget.phaseConfig
-
-  if (!hideInIrrelevantPhases) return true // Show but may adapt
-
-  return relevantPhases.includes(currentPhase)
-}
-
-// Inside DashboardGrid component:
-const visibleWidgets = widgets.filter((widget) =>
-  shouldShowWidget(widget, getCurrentPhase(conference)),
-)
-```
-
-### When to Use Separate Widgets Instead
-
-There are rare cases where separate widget types make sense:
-
-1. **Completely Unrelated Functionality:** If "CFP Health" in planning vs post-conference share NO code or UI patterns
-2. **Different Data Sources:** If phases require entirely different backend integrations
-3. **Dramatically Different Sizes:** If one phase needs 3×2 and another needs 12×6 minimum
-
-**For this project:** These cases are rare. Most widgets share significant overlap across phases.
-
-### Benefits Summary
-
-| Aspect            | Phase Config (✅ Recommended) | Separate Widgets            |
-| ----------------- | ----------------------------- | --------------------------- |
-| Code Reuse        | High - shared logic/UI        | Low - duplicate patterns    |
-| Maintainability   | Single source of truth        | Multiple components to sync |
-| User Experience   | Smooth evolution              | Jarring replacements        |
-| Testing           | Test phase logic once         | Test each widget variant    |
-| Registry Size     | Manageable (12 types)         | Large (30+ types)           |
-| Data Fetching     | Optimized per phase           | Duplicate queries           |
-| Existing Patterns | Matches Hero, QuickActions    | New pattern to learn        |
-
-### Implementation Roadmap
-
-1. **Phase 1:** Create phase detection utilities (`src/lib/conference/phase.ts`) ✅ **COMPLETE**
-2. **Phase 2:** Extend widget types with `PhaseConfig` ✅ **COMPLETE**
-3. **Phase 3:** Migrate existing widgets to be phase-aware (starting with QuickActions as prototype)
-4. **Phase 4:** Build new phase-adaptive widgets for gaps identified in CFP domain
-5. **Phase 5:** Add phase filtering to dashboard layout management
-
-### Example: Phase-Adaptive Widget
-
-See the implementation guide in the architecture section above. Key files created:
-
-- `src/lib/conference/phase.ts` - Phase detection and utilities
-- `__tests__/lib/conference/phase.test.ts` - Comprehensive test coverage
-- `src/lib/dashboard/types.ts` - Extended with `PhaseConfig`
-
-### Quick Start: Making a Widget Phase-Aware
-
-```typescript
-// 1. Import phase utilities
-import { getCurrentPhase, getPhaseContext } from '@/lib/conference/phase'
-
-// 2. Add phase detection to your widget
-export function MyWidget({ conference }: { conference: Conference }) {
-  const phaseContext = getPhaseContext(conference)
-
-  // 3. Render different content based on phase
-  if (phaseContext.phase === 'planning') {
-    return <PlanningView data={...} />
-  }
-
-  if (phaseContext.phase === 'execution') {
-    return <ExecutionView data={...} />
-  }
-
-  // ... etc
-}
-
-// 4. Update widget registry with phase config
-export const MY_WIDGET = defineWidget({
-  type: 'my-widget',
-  // ... other metadata ...
-  phaseConfig: {
-    relevantPhases: ['planning', 'execution'],
-    hideInIrrelevantPhases: false,
-    isPhaseAdaptive: true,
-  },
-})
+__tests__/lib/
+├── conference/
+│   └── phase.test.ts          # ✅ Phase detection tests
+└── dashboard/
+    ├── grid-utils.test.ts     # Grid utilities (Phase 2B)
+    └── data-hooks.test.ts     # Data fetching (Phase 2B)
 ```
 
 ---
 
-## Architecture
+## Performance Considerations
 
-### Core Components
+- **Memoization:** `useMemo` for expensive calculations (grid positions, collision maps)
+- **Stable References:** `useCallback` for event handlers passed to children
+- **ResizeObserver:** Dynamic cell sizing without window resize thrashing
+- **Error Boundaries:** Isolated failures prevent cascading crashes
+- **React Query Caching:** Automatic deduplication and cache management
+- **Code Splitting:** Widget components lazy-loaded on demand (future)
 
-- **`DashboardGrid`** - Main grid container managing layout, drag-and-drop, and responsive behavior
-- **`WidgetContainer`** - Wrapper for individual widgets with drag/resize capabilities
-- **Widget Components** - Custom widget implementations (e.g., `DummyStatsWidget`, `DummyChartWidget`)
+---
 
-### Utilities
+## Accessibility Considerations
 
-- **`grid-utils.ts`** - Core grid calculations, collision detection, and snapping logic
-- **`constants.ts`** - Grid configuration (cell size, gaps, breakpoints)
-- **`types.ts`** - TypeScript interfaces for type safety
+**Current State:**
 
-## Key Features
+- Semantic HTML structure
+- Color contrast compliance (WCAG AA)
+- Dark mode support throughout
+- Error messages announced
 
-### 1. Responsive Grid System
+**Phase 3 Enhancements:**
 
-- **Desktop** (≥1024px): 12 columns
-- **Tablet** (≥768px): 6 columns
-- **Mobile** (<768px): 4 columns
-- Fluid layout: columns scale to fill 100% width
-- Fixed row height: 80px
-- Gap: 16px
+- Keyboard navigation for drag-drop
+- ARIA live regions for widget updates
+- Focus management in modals
+- Screen reader announcements for phase changes
+- Keyboard shortcuts for common actions
 
-### 2. Drag and Drop
-
-- Real-time snapping to grid cells during drag
-- Collision detection prevents overlapping widgets
-- Visual feedback during drag operations
-- Smooth, natural drag experience (no ghost/hologram effect)
-
-### 3. Resize Capability
-
-- Resize handle in bottom-right corner (edit mode only)
-- Snaps to grid cell boundaries
-- Respects grid boundaries (can&apos;t exceed column count)
-- Real-time collision detection
-- Visual feedback (red border on collision)
-
-### 4. Dynamic Cell Sizing
-
-- Uses `ResizeObserver` to track grid width
-- Calculates cell width: `(gridWidth - gaps) / columnCount`
-- Drag and resize adapt to current cell size
-- Handles viewport resizing seamlessly
-
-### 5. Edit Mode
-
-- Visual grid overlay when enabled
-- Drag handles (hamburger icon, top-left)
-- Resize handles (triangle, bottom-right)
-- Can be toggled on/off
-
-## Usage Example
-
-```tsx
-import { DashboardGrid } from '@/components/admin/dashboard/DashboardGrid'
-import { WidgetContainer } from '@/components/admin/dashboard/WidgetContainer'
-import { Widget } from '@/lib/dashboard/types'
-
-function MyDashboard() {
-  const [widgets, setWidgets] = useState<Widget[]>([...])
-  const [editMode, setEditMode] = useState(true)
-  const [columnCount, setColumnCount] = useState(12)
-
-  const renderWidget = (widget: Widget, isDragging: boolean, cellWidth: number) => (
-    <WidgetContainer
-      widget={widget}
-      editMode={editMode}
-      isDragging={isDragging}
-      columnCount={columnCount}
-      cellWidth={cellWidth}
-      allWidgets={widgets}
-      onResize={handleResize}
-    >
-      <MyWidgetContent />
-    </WidgetContainer>
-  )
-
-  return (
-    <DashboardGrid
-      widgets={widgets}
-      onWidgetsChange={setWidgets}
-      columnCount={columnCount}
-      editMode={editMode}
-    >
-      {renderWidget}
-    </DashboardGrid>
-  )
-}
-```
-
-## Widget Definition
-
-```typescript
-interface Widget<TConfig = Record<string, unknown>> {
-  id: string // Unique identifier
-  type: string // Widget type (for rendering)
-  position: GridPosition // Grid coordinates
-  title: string // Widget title
-  config?: TConfig // Optional widget-specific configuration
-}
-
-interface GridPosition {
-  row: number // Starting row (0-indexed)
-  col: number // Starting column (0-indexed)
-  rowSpan: number // Number of rows to span
-  colSpan: number // Number of columns to span
-}
-```
-
-## Configuration
-
-### Grid Constants (`constants.ts`)
-
-```typescript
-export const GRID_CONFIG: GridConfig = {
-  cellSize: 80, // Base cell height in pixels
-  gap: 16, // Gap between cells
-  breakpoints: {
-    desktop: { minWidth: 1024, cols: 12 },
-    tablet: { minWidth: 768, cols: 6 },
-    mobile: { minWidth: 0, cols: 4 },
-  },
-}
-```
-
-### Customization
-
-To customize the grid:
-
-1. Modify `GRID_CONFIG` in `constants.ts`
-2. Update breakpoint logic in `getColumnCountForWidth()`
-3. Adjust SVG pattern in `DashboardGrid` if needed
-
-## Single Source of Truth
-
-**CRITICAL**: All grid calculations use `GRID_CONFIG` as the single source of truth.
-
-- Cell size: `GRID_CONFIG.cellSize`
-- Gap: `GRID_CONFIG.gap`
-- Breakpoints: `GRID_CONFIG.breakpoints`
-
-Never hardcode these values elsewhere!
-
-## Future Enhancements (Phase 1+)
-
-- [ ] Widget persistence (Sanity CMS + tRPC)
-- [ ] Real data widgets (proposals, speakers, stats)
-- [ ] Widget library/catalog
-- [ ] Undo/redo functionality
-- [ ] Keyboard shortcuts
-- [ ] Multi-user collaboration
-- [ ] Widget templates/presets
-- [ ] Export/import layouts
-- [ ] Mobile-optimized drag/resize
-- [ ] Accessibility improvements (keyboard navigation)
-
-## Testing
-
-Run tests:
-
-```bash
-pnpm test
-```
+---
 
 ## Browser Support
 
-- Chrome/Edge (latest)
-- Firefox (latest)
-- Safari (latest)
-- Mobile browsers (iOS Safari, Chrome Mobile)
+**Desktop (Primary):**
 
-## Performance Considerations
+- Chrome/Edge 120+
+- Firefox 120+
+- Safari 17+
 
-- `useMemo` for expensive calculations
-- `useCallback` for stable function references
-- `ResizeObserver` instead of window resize events
-- Debouncing resize calculations
-- Efficient collision detection (occupation map)
+**Mobile/Tablet (Future):**
 
-## Troubleshooting
+- iOS Safari 17+
+- Chrome Mobile 120+
+- Touch-optimized drag/resize (Phase 3)
 
-### Grid lines don&apos;t align with widgets
+---
 
-- Ensure `gridAutoRows` uses `GRID_CONFIG.cellSize`
-- Check SVG pattern dimensions match cell+gap size
+## Related Documentation
 
-### Drag/resize feels jumpy
+- tRPC Architecture - Server-side API patterns
+- Widget Metadata System - Registry and configuration
+- Conference Phase Detection - Implementation details
+- Dashboard Demo/admin/dashboard-demo/page.tsx) - Live example with phase simulator
 
-- Verify `snapModifier` uses correct `cellWithGap` calculation
-- Check `cellWidth` is being calculated and passed correctly
+---
 
-### Widgets overlap
+## Contributing
 
-- Check `checkCollision()` is being called before updates
-- Verify occupation map is built correctly
+When adding new widgets or features:
 
-### Grid doesn&apos;t resize
+1. **Strategy First:** Consider which phase(s) the widget serves and how it should adapt
+2. **Data Requirements:** Document required Sanity queries and data structure
+3. **Registry Entry:** Add complete metadata with phase configuration
+4. **Tests:** Cover phase detection, data fetching, and edge cases
+5. **Documentation:** Update this README with strategic context, not implementation details
 
-- Ensure `ResizeObserver` is properly set up in `gridRef`
-- Check `gridWidth` state is updating
-- Verify `cellWidth` calculation includes gaps
+---
+
+## Path Forward
+
+### Immediate Priorities (Next 4-6 Weeks)
+
+1. **Data Layer Foundation**
+   - Build tRPC infrastructure for dashboard persistence
+   - Replace all mock data with real Sanity queries
+   - Establish conference-scoped data contracts
+
+2. **Production Readiness**
+   - Wire configuration modal to existing schemas
+   - Persist widget configs and layouts per user/conference
+   - Load saved state on dashboard mount
+
+3. **Quality Assurance**
+   - Test smart placement algorithm across all presets
+   - Validate phase detection with real conference data
+   - Performance profiling with realistic data volumes
+
+### Strategic Focus
+
+**Current Strengths:**
+- Comprehensive widget coverage (16 widgets across 4 categories)
+- High phase-awareness adoption (75% of widgets)
+- Intuitive widget management UX (picker, placement, presets)
+- Solid architectural foundation (drag-drop, grid system, error handling)
+
+**Next Evolution:**
+- Transition from demo/prototype to production system
+- Real data integration reveals true UX challenges
+- User feedback drives preset refinement
+- Performance optimization with actual query loads
+
+**Long-term Vision:**
+- Dashboard becomes central organizer command center
+- Phase-adaptive intelligence reduces cognitive load
+- Customization enables diverse workflow preferences
+- Analytics inform continuous improvement
+
+---
+
+**Last Updated:** November 2025
+**Current Phase:** 2A (Data Foundation - Widget Management UX Complete)
+**Next Milestone:** Dashboard persistence + real data integration
+**Widget Count:** 16 (12 phase-adaptive, 4 categories)
+**Preset Configurations:** 5 (Planning, Execution, Financial, Comprehensive, Empty)

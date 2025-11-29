@@ -8,12 +8,16 @@ import {
   CurrencyDollarIcon,
   AcademicCapIcon,
   UserIcon,
+  SparklesIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import {
   getRecentActivity,
   type ActivityItem,
 } from '@/hooks/dashboard/useDashboardData'
 import { SwipeablePaginationWidget } from './SwipeablePaginationWidget'
+import { Conference } from '@/lib/conference/types'
+import { getCurrentPhase } from '@/lib/conference/phase'
 
 const activityIcons: Record<
   string,
@@ -37,7 +41,14 @@ const activityColors: Record<string, string> = {
   speaker: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',
 }
 
-export function RecentActivityFeedWidget() {
+interface RecentActivityFeedWidgetProps {
+  conference?: Conference
+}
+
+export function RecentActivityFeedWidget({
+  conference,
+}: RecentActivityFeedWidgetProps) {
+  const phase = conference ? getCurrentPhase(conference) : null
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -47,6 +58,38 @@ export function RecentActivityFeedWidget() {
       setLoading(false)
     })
   }, [])
+
+  // Phase-specific: Initialization - Show welcome message
+  if (phase === 'initialization') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center p-4">
+        <SparklesIcon className="mb-3 h-12 w-12 text-blue-500" />
+        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+          Getting Started
+        </h3>
+        <p className="text-center text-xs text-gray-600 dark:text-gray-400">
+          Begin configuring your conference. Activities will appear here as you
+          work.
+        </p>
+      </div>
+    )
+  }
+
+  // Phase-specific: Post-conference - Show completion message
+  if (phase === 'post-conference' && activities.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center p-4">
+        <CheckCircleIcon className="mb-3 h-12 w-12 text-green-500" />
+        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+          Conference Complete
+        </h3>
+        <p className="text-center text-xs text-gray-600 dark:text-gray-400">
+          All activities archived. Check individual sections for detailed
+          history.
+        </p>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

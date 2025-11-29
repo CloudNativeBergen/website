@@ -63,7 +63,7 @@ export const REVIEW_PROGRESS_WIDGET = defineWidget({
   category: 'core',
   icon: 'ChartPieIcon',
   constraints: {
-    minCols: 3,
+    minCols: 2,
     maxCols: 4,
     minRows: 2,
     maxRows: 4,
@@ -140,6 +140,16 @@ export const PROPOSAL_PIPELINE_WIDGET = defineWidget({
     { name: 'large', colSpan: 8, rowSpan: 5 },
   ],
   tags: ['proposals', 'pipeline', 'analytics', 'chart'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
   configSchema: {
     fields: {
       targetAcceptanceRate: {
@@ -196,6 +206,16 @@ export const UPCOMING_DEADLINES_WIDGET = defineWidget({
     { name: 'wide', colSpan: 12, rowSpan: 3 },
   ],
   tags: ['deadlines', 'calendar', 'timeline'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
   configSchema: {
     fields: {
       urgentThreshold: {
@@ -255,6 +275,16 @@ export const CFP_HEALTH_WIDGET = defineWidget({
     { name: 'large', colSpan: 8, rowSpan: 5 },
   ],
   tags: ['cfp', 'submissions', 'analytics', 'chart'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
   configSchema: {
     fields: {
       submissionTarget: {
@@ -503,6 +533,16 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
     { name: 'full', colSpan: 12, rowSpan: 5 },
   ],
   tags: ['sponsors', 'revenue', 'pipeline', 'crm'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
   configSchema: {
     fields: {
       revenueTarget: {
@@ -567,6 +607,16 @@ export const WORKSHOP_CAPACITY_WIDGET = defineWidget({
     { name: 'wide', colSpan: 6, rowSpan: 3 },
   ],
   tags: ['workshops', 'capacity', 'registration'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
 })
 
 /**
@@ -597,6 +647,16 @@ export const TRAVEL_SUPPORT_WIDGET = defineWidget({
     { name: 'large', colSpan: 4, rowSpan: 5 },
   ],
   tags: ['travel', 'support', 'budget', 'expenses'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
   configSchema: {
     fields: {
       totalBudget: {
@@ -662,6 +722,16 @@ export const RECENT_ACTIVITY_WIDGET = defineWidget({
     { name: 'full', colSpan: 12, rowSpan: 6 },
   ],
   tags: ['activity', 'feed', 'timeline', 'updates'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
   configSchema: {
     fields: {
       maxActivities: {
@@ -705,6 +775,148 @@ export const RECENT_ACTIVITY_WIDGET = defineWidget({
 })
 
 /**
+ * Gallery Management Widget
+ * Photo upload and moderation tracking
+ */
+export const GALLERY_MANAGEMENT_WIDGET = defineWidget({
+  type: 'gallery-management',
+  displayName: 'Gallery Management',
+  description: 'Photo uploads and pending moderation',
+  category: 'engagement',
+  icon: 'PhotoIcon',
+  constraints: {
+    minCols: 3,
+    maxCols: 4,
+    minRows: 2,
+    maxRows: 4,
+  },
+  defaultSize: {
+    name: 'small',
+    colSpan: 4,
+    rowSpan: 3,
+  },
+  availableSizes: [
+    { name: 'compact', colSpan: 3, rowSpan: 2 },
+    { name: 'small', colSpan: 4, rowSpan: 3 },
+    { name: 'medium', colSpan: 4, rowSpan: 4 },
+  ],
+  tags: ['gallery', 'photos', 'media', 'moderation'],
+  phaseConfig: {
+    relevantPhases: ['execution', 'post-conference'],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
+})
+
+/**
+ * Content Calendar Widget
+ * Marketing content planning and scheduling
+ */
+export const CONTENT_CALENDAR_WIDGET = defineWidget({
+  type: 'content-calendar',
+  displayName: 'Content Calendar',
+  description: 'Content marketing schedule and deadlines',
+  category: 'engagement',
+  icon: 'CalendarDaysIcon',
+  constraints: {
+    minCols: 4,
+    maxCols: 8,
+    minRows: 3,
+    maxRows: 5,
+    prefersLandscape: true,
+  },
+  defaultSize: {
+    name: 'medium',
+    colSpan: 6,
+    rowSpan: 3,
+  },
+  availableSizes: [
+    { name: 'small', colSpan: 4, rowSpan: 3 },
+    { name: 'medium', colSpan: 6, rowSpan: 3 },
+    { name: 'large', colSpan: 8, rowSpan: 4 },
+  ],
+  tags: ['content', 'marketing', 'calendar', 'publishing'],
+  phaseConfig: {
+    relevantPhases: ['planning', 'execution', 'post-conference'],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
+})
+
+/**
+ * Team Status Widget
+ * Organizer team activity and task tracking
+ */
+export const TEAM_STATUS_WIDGET = defineWidget({
+  type: 'team-status',
+  displayName: 'Team Status',
+  description: 'Organizer team progress and activity',
+  category: 'operations',
+  icon: 'UserGroupIcon',
+  constraints: {
+    minCols: 3,
+    maxCols: 4,
+    minRows: 3,
+    maxRows: 5,
+  },
+  defaultSize: {
+    name: 'small',
+    colSpan: 4,
+    rowSpan: 3,
+  },
+  availableSizes: [
+    { name: 'small', colSpan: 3, rowSpan: 3 },
+    { name: 'medium', colSpan: 4, rowSpan: 3 },
+    { name: 'large', colSpan: 4, rowSpan: 4 },
+  ],
+  tags: ['team', 'organizers', 'tasks', 'collaboration'],
+  phaseConfig: {
+    relevantPhases: [
+      'initialization',
+      'planning',
+      'execution',
+      'post-conference',
+    ],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: false,
+  },
+})
+
+/**
+ * Volunteer Shifts Widget
+ * Volunteer scheduling and shift coverage
+ */
+export const VOLUNTEER_SHIFTS_WIDGET = defineWidget({
+  type: 'volunteer-shifts',
+  displayName: 'Volunteer Shifts',
+  description: 'Shift coverage and volunteer assignments',
+  category: 'operations',
+  icon: 'UserPlusIcon',
+  constraints: {
+    minCols: 3,
+    maxCols: 4,
+    minRows: 3,
+    maxRows: 5,
+  },
+  defaultSize: {
+    name: 'small',
+    colSpan: 4,
+    rowSpan: 3,
+  },
+  availableSizes: [
+    { name: 'small', colSpan: 3, rowSpan: 3 },
+    { name: 'medium', colSpan: 4, rowSpan: 3 },
+    { name: 'large', colSpan: 4, rowSpan: 4 },
+  ],
+  tags: ['volunteers', 'shifts', 'scheduling', 'coverage'],
+  phaseConfig: {
+    relevantPhases: ['execution', 'post-conference'],
+    hideInIrrelevantPhases: false,
+    isPhaseAdaptive: true,
+  },
+})
+
+/**
  * Widget Registry
  * Maps widget types to their metadata
  */
@@ -721,6 +933,10 @@ export const WIDGET_REGISTRY: Record<string, WidgetMetadata> = {
   'workshop-capacity': WORKSHOP_CAPACITY_WIDGET,
   'travel-support': TRAVEL_SUPPORT_WIDGET,
   'recent-activity': RECENT_ACTIVITY_WIDGET,
+  'gallery-management': GALLERY_MANAGEMENT_WIDGET,
+  'content-calendar': CONTENT_CALENDAR_WIDGET,
+  'team-status': TEAM_STATUS_WIDGET,
+  'volunteer-shifts': VOLUNTEER_SHIFTS_WIDGET,
 }
 
 /**

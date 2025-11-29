@@ -6,7 +6,7 @@ import { Widget, GridPosition } from '@/lib/dashboard/types'
 import { GRID_CONFIG } from '@/lib/dashboard/constants'
 import { checkCollision } from '@/lib/dashboard/grid-utils'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
-import { CogIcon } from '@heroicons/react/24/outline'
+import { CogIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { WidgetConfigModal } from './WidgetConfigModal'
 
 /**
@@ -27,6 +27,7 @@ interface WidgetContainerProps {
   cellWidth: number
   allWidgets: Widget[]
   onResize: (widgetId: string, newPosition: GridPosition) => void
+  onRemove?: (widgetId: string) => void
   onConfigChange?: (widgetId: string, config: Record<string, unknown>) => void
   children: React.ReactNode
 }
@@ -39,6 +40,7 @@ export function WidgetContainer({
   cellWidth,
   allWidgets,
   onResize,
+  onRemove,
   onConfigChange,
   children,
 }: WidgetContainerProps) {
@@ -218,6 +220,14 @@ export function WidgetContainer({
     }
   }
 
+  const handleRemove = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (onRemove) {
+      onRemove(widget.id)
+    }
+  }
+
   return (
     <>
       <div
@@ -240,24 +250,42 @@ export function WidgetContainer({
         }}
         className={`relative rounded-lg border-2 bg-white shadow-sm transition-colors dark:bg-gray-800 ${borderColor}`}
       >
-        {/* Config button - only show in edit mode if widget has config schema */}
-        {editMode && hasConfigSchema && (
-          <button
-            onPointerDown={(e) => {
-              e.stopPropagation()
-            }}
-            onClick={handleConfigClick}
-            className="pointer-events-auto absolute top-2 right-2 z-10 rounded-md bg-white p-1.5 text-gray-600 shadow-sm ring-1 ring-gray-300 hover:bg-gray-50 hover:text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-gray-700 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-100"
-            title="Configure widget"
-            type="button"
-          >
-            <CogIcon className="h-4 w-4" />
-          </button>
+        {/* macOS-style window controls */}
+        {editMode && (
+          <div className="absolute top-2 left-2 z-10 flex gap-1.5">
+            {/* Close/Remove button - red */}
+            <button
+              onPointerDown={(e) => {
+                e.stopPropagation()
+              }}
+              onClick={handleRemove}
+              className="group pointer-events-auto flex h-3 w-3 items-center justify-center rounded-full bg-red-500 shadow-sm transition-all hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700"
+              title="Remove widget"
+              type="button"
+            >
+              <XMarkIcon className="h-2.5 w-2.5 stroke-[2.5] text-red-950 opacity-0 transition-opacity group-hover:opacity-80 dark:text-red-950" />
+            </button>
+
+            {/* Config button - green (only show if widget has config schema) */}
+            {hasConfigSchema && (
+              <button
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                }}
+                onClick={handleConfigClick}
+                className="group pointer-events-auto flex h-3 w-3 items-center justify-center rounded-full bg-green-500 shadow-sm transition-all hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700"
+                title="Configure widget"
+                type="button"
+              >
+                <CogIcon className="h-2.5 w-2.5 stroke-[2.5] text-green-950 opacity-0 transition-opacity group-hover:opacity-80 dark:text-green-950" />
+              </button>
+            )}
+          </div>
         )}
 
         {/* @supports not (container-type: size) fallback handled via CSS cascade */}
         <div
-          className={`h-full p-2 ${editMode ? 'pointer-events-none select-none' : ''}`}
+          className={`h-full p-2 ${editMode ? 'pointer-events-none select-none [&_h3:first-of-type]:ml-10' : ''}`}
         >
           {children}
         </div>

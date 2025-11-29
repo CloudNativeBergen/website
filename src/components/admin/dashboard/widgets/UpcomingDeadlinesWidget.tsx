@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ClockIcon } from '@heroicons/react/24/outline'
+import {
+  ClockIcon,
+  CheckCircleIcon,
+  CalendarIcon,
+} from '@heroicons/react/24/outline'
 import {
   getUpcomingDeadlines,
   type DeadlineData,
 } from '@/hooks/dashboard/useDashboardData'
+import { Conference } from '@/lib/conference/types'
+import { getCurrentPhase } from '@/lib/conference/phase'
 
 const urgencyStyles = {
   high: 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
@@ -21,7 +27,14 @@ const urgencyBadgeStyles = {
   low: 'bg-blue-600 dark:bg-blue-500 text-white',
 }
 
-export function UpcomingDeadlinesWidget() {
+interface UpcomingDeadlinesWidgetProps {
+  conference?: Conference
+}
+
+export function UpcomingDeadlinesWidget({
+  conference,
+}: UpcomingDeadlinesWidgetProps) {
+  const phase = conference ? getCurrentPhase(conference) : null
   const [deadlines, setDeadlines] = useState<DeadlineData[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -31,6 +44,50 @@ export function UpcomingDeadlinesWidget() {
       setLoading(false)
     })
   }, [])
+
+  // Phase-specific: Initialization - Show planning timeline
+  if (phase === 'initialization' && conference) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Upcoming Deadlines
+          </h3>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+            Planning
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-700 dark:bg-blue-800/50">
+            <CalendarIcon className="mb-2 h-6 w-6 text-blue-500" />
+            <h4 className="text-xs font-semibold text-gray-900 dark:text-white">
+              Set Key Dates
+            </h4>
+            <p className="mt-1 text-[11px] text-gray-600 dark:text-gray-400">
+              Configure CFP, speaker notifications, and program publication
+              deadlines.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Phase-specific: Post-conference - Show completion summary
+  if (phase === 'post-conference') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center">
+        <CheckCircleIcon className="mb-3 h-12 w-12 text-green-500" />
+        <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+          All Deadlines Met
+        </h3>
+        <p className="text-center text-xs text-gray-600 dark:text-gray-400">
+          Conference complete. Great work!
+        </p>
+      </div>
+    )
+  }
 
   if (loading) {
     return (

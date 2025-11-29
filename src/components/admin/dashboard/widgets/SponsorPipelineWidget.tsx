@@ -3,11 +3,25 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
+  CurrencyDollarIcon,
+  BuildingOffice2Icon,
+  CheckCircleIcon,
+} from '@heroicons/react/24/outline'
+import {
   getSponsorPipelineData,
   type SponsorPipelineData,
 } from '@/hooks/dashboard/useDashboardData'
+import { Conference } from '@/lib/conference/types'
+import { getCurrentPhase } from '@/lib/conference/phase'
 
-export function SponsorPipelineWidget() {
+interface SponsorPipelineWidgetProps {
+  conference?: Conference
+}
+
+export function SponsorPipelineWidget({
+  conference,
+}: SponsorPipelineWidgetProps) {
+  const phase = conference ? getCurrentPhase(conference) : null
   const [data, setData] = useState<SponsorPipelineData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -17,6 +31,114 @@ export function SponsorPipelineWidget() {
       setLoading(false)
     })
   }, [])
+
+  // Phase-specific: Initialization/Planning - Show prospecting guidance
+  if (
+    (phase === 'initialization' || phase === 'planning') &&
+    (!data || data.wonDeals === 0)
+  ) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Sponsor Pipeline
+          </h3>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+            Prospecting
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-700 dark:bg-green-800/50">
+            <BuildingOffice2Icon className="mb-2 h-8 w-8 text-green-500" />
+            <h4 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
+              Start Sponsorship Outreach
+            </h4>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Identify target sponsors, prepare packages, and begin outreach
+              campaigns.
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+            <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+              Revenue Goal
+            </div>
+            <div className="mt-1 flex items-baseline gap-1">
+              <CurrencyDollarIcon className="h-4 w-4 text-gray-400" />
+              <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                {data ? `${(data.revenueGoal / 1000).toFixed(0)}k` : '—'}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Phase-specific: Post-conference - Show final summary
+  if (phase === 'post-conference' && data) {
+    const finalRevenue = data.totalValue
+    const goalAchieved = (finalRevenue / data.revenueGoal) * 100
+
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Sponsor Pipeline
+          </h3>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+            Complete
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+            <CheckCircleIcon className="mb-2 h-6 w-6 text-green-500" />
+            <div className="text-[10px] font-medium text-green-600 uppercase dark:text-green-400">
+              Total Revenue
+            </div>
+            <div className="mt-1 text-3xl font-bold text-green-900 dark:text-green-100">
+              ${(finalRevenue / 1000).toFixed(0)}k
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+            <div className="text-[10px] font-medium text-blue-600 uppercase dark:text-blue-400">
+              Goal Achieved
+            </div>
+            <div className="mt-1 text-3xl font-bold text-blue-900 dark:text-blue-100">
+              {goalAchieved.toFixed(0)}%
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
+            <div className="text-[10px] font-medium text-purple-600 uppercase dark:text-purple-400">
+              Sponsors
+            </div>
+            <div className="mt-1 text-3xl font-bold text-purple-900 dark:text-purple-100">
+              {data.wonDeals}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+            <div className="text-[10px] font-medium text-gray-600 uppercase dark:text-gray-400">
+              Win Rate
+            </div>
+            <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
+              {data.wonDeals + data.lostDeals > 0
+                ? (
+                    (data.wonDeals / (data.wonDeals + data.lostDeals)) *
+                    100
+                  ).toFixed(0)
+                : 0}
+              %
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -33,6 +155,8 @@ export function SponsorPipelineWidget() {
       </div>
     )
   }
+
+  // Default operational view (execution phase)
 
   const progress = (data.totalValue / data.revenueGoal) * 100
 

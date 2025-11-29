@@ -3,11 +3,25 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
+  AcademicCapIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+} from '@heroicons/react/24/outline'
+import {
   getWorkshopCapacityData,
   type WorkshopCapacityData,
 } from '@/hooks/dashboard/useDashboardData'
+import { Conference } from '@/lib/conference/types'
+import { getCurrentPhase } from '@/lib/conference/phase'
 
-export function WorkshopCapacityWidget() {
+interface WorkshopCapacityWidgetProps {
+  conference?: Conference
+}
+
+export function WorkshopCapacityWidget({
+  conference,
+}: WorkshopCapacityWidgetProps) {
+  const phase = conference ? getCurrentPhase(conference) : null
   const [data, setData] = useState<WorkshopCapacityData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -17,6 +31,120 @@ export function WorkshopCapacityWidget() {
       setLoading(false)
     })
   }, [])
+
+  // Phase-specific: Initialization/Planning - Show workshop planning
+  if (
+    (phase === 'initialization' || phase === 'planning') &&
+    (!data || data.workshops.length === 0)
+  ) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Workshop Capacity
+          </h3>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+            Planning
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-800/50">
+            <AcademicCapIcon className="mb-2 h-8 w-8 text-purple-500" />
+            <h4 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
+              Workshop Planning
+            </h4>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Select workshop proposals and configure capacity settings before
+              opening registration.
+            </p>
+          </div>
+
+          {conference && (
+            <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+              <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+                Registration Opens
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <CalendarIcon className="h-4 w-4 text-gray-400" />
+                <div className="text-sm font-bold text-gray-900 dark:text-white">
+                  {conference.workshop_registration_start
+                    ? new Date(
+                        conference.workshop_registration_start,
+                      ).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'Not set'}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Phase-specific: Post-conference - Show completion summary
+  if (phase === 'post-conference' && data) {
+    const totalAttendees = data.workshops.reduce(
+      (sum, w) => sum + w.confirmed,
+      0,
+    )
+    const totalCapacity = data.workshops.reduce((sum, w) => sum + w.capacity, 0)
+
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Workshop Capacity
+          </h3>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+            Complete
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
+            <CheckCircleIcon className="mb-2 h-6 w-6 text-purple-500" />
+            <div className="text-[10px] font-medium text-purple-600 uppercase dark:text-purple-400">
+              Workshops
+            </div>
+            <div className="mt-1 text-3xl font-bold text-purple-900 dark:text-purple-100">
+              {data.workshops.length}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+            <div className="text-[10px] font-medium text-blue-600 uppercase dark:text-blue-400">
+              Attendees
+            </div>
+            <div className="mt-1 text-3xl font-bold text-blue-900 dark:text-blue-100">
+              {totalAttendees}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+            <div className="text-[10px] font-medium text-green-600 uppercase dark:text-green-400">
+              Avg Fill Rate
+            </div>
+            <div className="mt-1 text-3xl font-bold text-green-900 dark:text-green-100">
+              {data.averageFillRate.toFixed(0)}%
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+            <div className="text-[10px] font-medium text-gray-600 uppercase dark:text-gray-400">
+              Total Capacity
+            </div>
+            <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
+              {totalCapacity}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -33,6 +161,8 @@ export function WorkshopCapacityWidget() {
       </div>
     )
   }
+
+  // Default operational view (execution phase)
 
   return (
     <div className="flex h-full flex-col">

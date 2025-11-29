@@ -2,13 +2,26 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
+import {
+  CurrencyDollarIcon,
+  GlobeAltIcon,
+  CheckCircleIcon,
+} from '@heroicons/react/24/outline'
 import {
   getTravelSupportData,
   type TravelSupportData,
 } from '@/hooks/dashboard/useDashboardData'
+import { Conference } from '@/lib/conference/types'
+import { getCurrentPhase } from '@/lib/conference/phase'
 
-export function TravelSupportQueueWidget() {
+interface TravelSupportQueueWidgetProps {
+  conference?: Conference
+}
+
+export function TravelSupportQueueWidget({
+  conference,
+}: TravelSupportQueueWidgetProps) {
+  const phase = conference ? getCurrentPhase(conference) : null
   const [data, setData] = useState<TravelSupportData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -18,6 +31,112 @@ export function TravelSupportQueueWidget() {
       setLoading(false)
     })
   }, [])
+
+  // Phase-specific: Initialization/Planning - Show setup guidance
+  if (
+    (phase === 'initialization' || phase === 'planning') &&
+    (!data || data.totalRequested === 0)
+  ) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Travel Support
+          </h3>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+            Planning
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-700 dark:bg-cyan-800/50">
+            <GlobeAltIcon className="mb-2 h-8 w-8 text-cyan-500" />
+            <h4 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
+              Travel Support Program
+            </h4>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Set budget allocation and configure travel support policies for
+              speakers.
+            </p>
+          </div>
+
+          {data && (
+            <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
+              <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
+                Budget Allocated
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <CurrencyDollarIcon className="h-4 w-4 text-gray-400" />
+                <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {(data.budgetAllocated / 1000).toFixed(0)}k
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Phase-specific: Post-conference - Show final summary
+  if (phase === 'post-conference' && data) {
+    const budgetUsed = (data.totalApproved / data.budgetAllocated) * 100
+
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Travel Support
+          </h3>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+            Complete
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+            <CheckCircleIcon className="mb-2 h-6 w-6 text-green-500" />
+            <div className="text-[10px] font-medium text-green-600 uppercase dark:text-green-400">
+              Total Approved
+            </div>
+            <div className="mt-1 text-3xl font-bold text-green-900 dark:text-green-100">
+              ${(data.totalApproved / 1000).toFixed(0)}k
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
+            <div className="text-[10px] font-medium text-blue-600 uppercase dark:text-blue-400">
+              Budget Used
+            </div>
+            <div className="mt-1 text-3xl font-bold text-blue-900 dark:text-blue-100">
+              {budgetUsed.toFixed(0)}%
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
+            <div className="text-[10px] font-medium text-purple-600 uppercase dark:text-purple-400">
+              Speakers Supported
+            </div>
+            <div className="mt-1 text-3xl font-bold text-purple-900 dark:text-purple-100">
+              {data.requests.length}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+            <div className="text-[10px] font-medium text-gray-600 uppercase dark:text-gray-400">
+              Avg per Speaker
+            </div>
+            <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
+              $
+              {data.requests.length > 0
+                ? Math.round(data.totalApproved / data.requests.length)
+                : 0}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -34,6 +153,8 @@ export function TravelSupportQueueWidget() {
       </div>
     )
   }
+
+  // Default operational view (execution phase)
 
   const budgetUsed = (data.totalApproved / data.budgetAllocated) * 100
 
