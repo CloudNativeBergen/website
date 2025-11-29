@@ -130,9 +130,21 @@ export function DevTimeControl({ schedules = [] }: DevTimeControlProps) {
     }
 
     const firstSchedule = schedules[0]
+    if (
+      !firstSchedule?.tracks ||
+      !Array.isArray(firstSchedule.tracks) ||
+      firstSchedule.tracks.length === 0
+    ) {
+      return []
+    }
+
     const firstTrack = firstSchedule.tracks[0]
-    const firstTalk = firstTrack?.talks[0]
-    const secondTalk = firstTrack?.talks[1]
+    if (!firstTrack?.talks || !Array.isArray(firstTrack.talks)) {
+      return []
+    }
+
+    const firstTalk = firstTrack.talks[0]
+    const secondTalk = firstTrack.talks[1]
 
     if (!firstTalk) {
       return []

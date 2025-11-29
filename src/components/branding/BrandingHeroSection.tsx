@@ -3,7 +3,7 @@ import { Container } from '@/components/Container'
 
 export function BrandingHeroSection() {
   return (
-    <section className="relative -mt-24 overflow-hidden bg-aqua-gradient pt-36 pb-24 dark:bg-gradient-to-br dark:from-gray-900 dark:via-blue-900/50 dark:to-gray-800">
+    <section className="relative -mt-24 overflow-hidden bg-aqua-gradient pt-36 pb-24 dark:bg-linear-to-br dark:from-gray-900 dark:via-blue-900/50 dark:to-gray-800">
       <CloudNativePattern
         className="absolute inset-0"
         opacity={0.18}

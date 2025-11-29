@@ -113,7 +113,7 @@ export function ProposalAttachmentsPanel({
       {!readonly && !hasAttachments && (
         <div className="mb-4 rounded-lg border-l-4 border-yellow-400 bg-yellow-50 p-3 dark:border-yellow-600 dark:bg-yellow-900/20">
           <div className="flex">
-            <ExclamationTriangleIcon className="h-5 w-5 flex-shrink-0 text-yellow-400 dark:text-yellow-600" />
+            <ExclamationTriangleIcon className="h-5 w-5 shrink-0 text-yellow-400 dark:text-yellow-600" />
             <div className="ml-3">
               <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                 Slides not yet uploaded

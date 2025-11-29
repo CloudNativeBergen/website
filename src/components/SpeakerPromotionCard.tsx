@@ -49,7 +49,7 @@ const variantConfig = {
   },
   featured: {
     containerClass:
-      'group relative flex flex-col h-full overflow-hidden rounded-xl border-2 border-brand-cloud-blue dark:border-brand-cloud-blue bg-gradient-to-br from-brand-cloud-blue/20 via-brand-cloud-blue/10 to-brand-fresh-green/10 dark:from-brand-cloud-blue/30 dark:via-brand-cloud-blue/20 dark:to-brand-fresh-green/20 p-4 sm:p-6 lg:p-8 shadow-md transition-all duration-300 hover:shadow-lg dark:hover:shadow-xl',
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border-2 border-brand-cloud-blue dark:border-brand-cloud-blue bg-linear-to-br from-brand-cloud-blue/20 via-brand-cloud-blue/10 to-brand-fresh-green/10 dark:from-brand-cloud-blue/30 dark:via-brand-cloud-blue/20 dark:to-brand-fresh-green/20 p-4 sm:p-6 lg:p-8 shadow-md transition-all duration-300 hover:shadow-lg dark:hover:shadow-xl',
     titleClass:
       'font-space-grotesk text-xl sm:text-2xl font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue dark:group-hover:text-brand-cloud-blue',
     showFeaturedBadge: true,

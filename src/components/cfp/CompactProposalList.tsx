@@ -188,7 +188,7 @@ export function CompactProposalList({
                 )}
                 {FormatIcon && (
                   <FormatIcon
-                    className={`h-4 w-4 flex-shrink-0 ${formatInfo.color || 'text-gray-500'}`}
+                    className={`h-4 w-4 shrink-0 ${formatInfo.color || 'text-gray-500'}`}
                   />
                 )}
                 <Link
@@ -202,7 +202,7 @@ export function CompactProposalList({
                   {proposal.title}
                 </Link>
               </div>
-              <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 {showFeedback && (
                   <span
                     className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-400"

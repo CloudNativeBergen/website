@@ -47,7 +47,7 @@ export function ErrorDisplay({
   return (
     <div className={`rounded-md border p-4 ${classes.container} ${className}`}>
       <div className="flex">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <ExclamationTriangleIcon className={`h-5 w-5 ${classes.icon}`} />
         </div>
         <div className="ml-3 flex-1">
@@ -83,7 +83,7 @@ export function ErrorBoundaryFallback({
       className={`rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-900/50 dark:bg-red-900/10 ${className}`}
     >
       <div className="flex">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <ExclamationTriangleIcon className="h-6 w-6 text-red-400 dark:text-red-500" />
         </div>
         <div className="ml-3">
@@ -133,7 +133,7 @@ export function NetworkErrorDisplay({
       className={`rounded-lg border border-amber-200 bg-amber-50 p-6 dark:border-amber-900/50 dark:bg-amber-900/10 ${className}`}
     >
       <div className="flex">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <ExclamationTriangleIcon className="h-6 w-6 text-amber-400 dark:text-amber-500" />
         </div>
         <div className="ml-3">

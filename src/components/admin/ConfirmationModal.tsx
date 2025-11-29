@@ -95,7 +95,7 @@ export function ConfirmationModal({
               <DialogPanel className="mx-auto max-w-md rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white p-6 shadow-2xl dark:border-gray-700 dark:bg-gray-900">
                 <div className="flex">
                   <div
-                    className={`mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full ${styles.iconBg}`}
+                    className={`mx-auto flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${styles.iconBg}`}
                   >
                     <ExclamationTriangleIcon
                       className={`h-6 w-6 ${styles.iconColor}`}

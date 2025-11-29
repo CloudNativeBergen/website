@@ -49,7 +49,10 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
   })
 
   const availableFilters = useMemo(() => {
-    const days = schedules.map((s) => s.date).sort()
+    const days = schedules
+      .map((s) => s.date)
+      .filter(Boolean)
+      .sort()
     const tracks = new Set<string>()
     const formats = new Set<Format>()
     const levels = new Set<Level>()
@@ -57,7 +60,11 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
     const topics = new Set<Topic>()
 
     schedules.forEach((schedule) => {
+      if (!schedule.tracks || !Array.isArray(schedule.tracks)) return
+
       schedule.tracks.forEach((track) => {
+        if (!track.talks || !Array.isArray(track.talks)) return
+
         tracks.add(track.trackTitle)
         track.talks.forEach((talk) => {
           if (talk.talk) {
@@ -96,7 +103,11 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
     })[] = []
 
     schedules.forEach((schedule) => {
+      if (!schedule.tracks || !Array.isArray(schedule.tracks)) return
+
       schedule.tracks.forEach((track, trackIndex) => {
+        if (!track.talks || !Array.isArray(track.talks)) return
+
         track.talks.forEach((talk) => {
           talks.push({
             ...talk,
@@ -128,7 +139,7 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
       filteredSchedules = filteredSchedules
         .map((schedule) => ({
           ...schedule,
-          tracks: schedule.tracks.filter(
+          tracks: (schedule.tracks || []).filter(
             (track) => track.trackTitle === filters.selectedTrack,
           ),
         }))
@@ -206,10 +217,10 @@ export function useProgramFilter(schedules: ConferenceSchedule[]) {
     const rebuiltSchedules = filteredSchedules
       .map((schedule) => ({
         ...schedule,
-        tracks: schedule.tracks
+        tracks: (schedule.tracks || [])
           .map((track) => ({
             ...track,
-            talks: track.talks.filter((talk) =>
+            talks: (track.talks || []).filter((talk) =>
               filteredTalks.some(
                 (ft) =>
                   ft.scheduleDate === schedule.date &&

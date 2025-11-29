@@ -14,7 +14,7 @@ import { UserIcon } from '@heroicons/react/24/solid'
 import { sanityImage } from '@/lib/sanity/client'
 import { PortableText } from '@portabletext/react'
 import { portableTextComponents } from '@/lib/portabletext/components'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { BlueskyFeed } from '@/components/BlueskyFeed'
 import { ScrollFadeBlueskyFeed } from '@/components/ScrollFadeBlueskyFeed'
 import { hasBlueskySocial } from '@/lib/bluesky/utils'
@@ -28,6 +28,8 @@ import {
 import { formatConferenceDateLong } from '@/lib/time'
 import { PhotoGallerySection } from '@/components/PhotoGallerySection'
 import { AttachmentDisplay } from '@/components/proposal/AttachmentDisplay'
+import { headers } from 'next/headers'
+import { cacheLife, cacheTag } from 'next/cache'
 
 type Props = {
   params: Promise<{ slug: string }>
@@ -45,9 +47,11 @@ function portableTextToString(value: PortableTextBlock[]): string {
 
 export async function generateMetadata({ params }: Props) {
   const resolvedParams = await params
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
 
   const decodedSlug = decodeURIComponent(resolvedParams.slug)
-  const { conference } = await getConferenceForCurrentDomain()
+  const { conference } = await getConferenceForDomain(domain)
   const { speaker, talks, err } = await getPublicSpeaker(
     conference._id,
     decodedSlug,
@@ -91,15 +95,19 @@ export async function generateMetadata({ params }: Props) {
   }
 }
 
-export default async function Profile({ params }: Props) {
-  const resolvedParams = await params
+async function CachedSpeakerContent({
+  domain,
+  slug,
+}: {
+  domain: string
+  slug: string
+}) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:speaker-detail')
 
-  const decodedSlug = decodeURIComponent(resolvedParams.slug)
-  const { conference } = await getConferenceForCurrentDomain()
-  const { speaker, talks, err } = await getPublicSpeaker(
-    conference._id,
-    decodedSlug,
-  )
+  const { conference } = await getConferenceForDomain(domain)
+  const { speaker, talks, err } = await getPublicSpeaker(conference._id, slug)
 
   if (err) {
     console.error('Error loading speaker:', err)
@@ -387,4 +395,13 @@ export default async function Profile({ params }: Props) {
       </Container>
     </div>
   )
+}
+
+export default async function Profile({ params }: Props) {
+  const resolvedParams = await params
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+  const decodedSlug = decodeURIComponent(resolvedParams.slug)
+
+  return <CachedSpeakerContent domain={domain} slug={decodedSlug} />
 }

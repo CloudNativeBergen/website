@@ -1,18 +1,24 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import VolunteerForm from '@/components/volunteer/VolunteerForm'
 import { UserGroupIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import { Container } from '@/components/Container'
 import { BackgroundImage } from '@/components/BackgroundImage'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
   title: 'Volunteer | Cloud Native Bergen',
   description: 'Join our volunteer team and help make the conference a success',
 }
 
-export default async function VolunteerPage() {
-  const { conference, error } = await getConferenceForCurrentDomain()
+async function CachedVolunteerContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:volunteer')
+
+  const { conference, error } = await getConferenceForDomain(domain)
 
   if (error || !conference?._id) {
     return (
@@ -53,28 +59,28 @@ export default async function VolunteerPage() {
             </div>
             <ul className="mt-4 space-y-2 text-base text-gray-700 dark:text-gray-300">
               <li className="flex items-start">
-                <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+                <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                 <span>
                   <strong>Registration Desk:</strong> Welcome attendees, check
                   them in, and distribute conference materials
                 </span>
               </li>
               <li className="flex items-start">
-                <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+                <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                 <span>
                   <strong>Tech Support:</strong> Assist speakers with AV
                   equipment and help ensure smooth technical operations
                 </span>
               </li>
               <li className="flex items-start">
-                <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+                <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                 <span>
                   <strong>Speaker Liaison:</strong> Support speakers throughout
                   the event, ensuring they have everything they need
                 </span>
               </li>
               <li className="flex items-start">
-                <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+                <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                 <span>
                   <strong>General Assistance:</strong> Help with setup,
                   teardown, and various tasks throughout the conference
@@ -92,25 +98,25 @@ export default async function VolunteerPage() {
             </div>
             <ul className="mt-4 space-y-2 text-base text-gray-700 dark:text-gray-300">
               <li className="flex items-start">
-                <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+                <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                 <span>
                   Free access to the entire conference and all sessions
                 </span>
               </li>
               <li className="flex items-start">
-                <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+                <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                 <span>
                   Networking opportunities with speakers and attendees
                 </span>
               </li>
               <li className="flex items-start">
-                <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+                <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                 <span>
                   Behind-the-scenes experience in conference organization
                 </span>
               </li>
               <li className="flex items-start">
-                <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
+                <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600 dark:bg-blue-400"></span>
                 <span>
                   Exclusive volunteer t-shirt to commemorate your contribution
                 </span>
@@ -137,4 +143,11 @@ export default async function VolunteerPage() {
       </Container>
     </div>
   )
+}
+
+export default async function VolunteerPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedVolunteerContent domain={domain} />
 }

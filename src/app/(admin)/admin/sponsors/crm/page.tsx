@@ -5,9 +5,7 @@ import { BuildingOffice2Icon } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsorsCRM() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({
-      revalidate: 0,
-    })
+    await getConferenceForCurrentDomain({})
 
   if (conferenceError || !conference) {
     return (

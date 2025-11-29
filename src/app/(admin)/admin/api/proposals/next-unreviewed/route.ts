@@ -17,7 +17,7 @@ export const GET = auth(async (req: NextAuthRequest) => {
     req.nextUrl.searchParams.get('currentProposalId') || undefined
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({ revalidate: 0 })
+    await getConferenceForCurrentDomain({})
 
   if (conferenceError || !conference) {
     return NextResponse.json(

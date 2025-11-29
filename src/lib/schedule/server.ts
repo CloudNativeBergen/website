@@ -31,7 +31,6 @@ export async function getScheduleData(): Promise<ScheduleData> {
       await getConferenceForCurrentDomain({
         schedule: true,
         confirmedTalksOnly: false,
-        revalidate: 0,
       })
 
     if (conferenceError || !conference) {

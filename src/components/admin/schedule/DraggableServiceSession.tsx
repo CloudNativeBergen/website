@@ -122,7 +122,7 @@ export function DraggableServiceSession({
     >
       <div className="flex min-h-[16px] items-center gap-1">
         <div
-          className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-200 dark:hover:bg-gray-600"
+          className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-200 dark:hover:bg-gray-600"
           {...listeners}
         >
           <Bars3Icon className="h-3 w-3 text-gray-500 dark:text-gray-400" />
@@ -130,7 +130,7 @@ export function DraggableServiceSession({
 
         <div className="min-w-0 flex-1">{TitleComponent}</div>
 
-        <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
           <ClockIcon
             className={
               sessionSize === 'short' || sessionSize === 'medium'

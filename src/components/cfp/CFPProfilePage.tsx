@@ -19,9 +19,12 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
     refetch: refreshProfile,
   } = api.speaker.getCurrent.useQuery(undefined, {
     initialData: initialSpeaker,
+    staleTime: 5000, // 5 seconds for authenticated data
   })
 
-  const { data: emails } = api.speaker.getEmails.useQuery()
+  const { data: emails } = api.speaker.getEmails.useQuery(undefined, {
+    staleTime: 5000,
+  })
 
   const updateProfileMutation = api.speaker.update.useMutation({
     onSuccess: () => {
@@ -85,7 +88,7 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
 
         <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <ExclamationCircleIcon
                 className="h-6 w-6 text-red-500 dark:text-red-400"
                 aria-hidden="true"
@@ -137,7 +140,7 @@ export function CFPProfilePage({ initialSpeaker }: CFPProfilePageProps) {
           {submitError.length > 0 && (
             <div className="rounded-lg bg-red-50 p-4 ring-1 ring-red-200 dark:bg-red-900/20 dark:ring-red-500/30">
               <div className="flex">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <ExclamationCircleIcon
                     className="h-5 w-5 text-red-400 dark:text-red-500"
                     aria-hidden="true"

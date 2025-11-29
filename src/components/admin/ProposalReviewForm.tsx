@@ -125,7 +125,7 @@ export function ProposalReviewForm({
           </label>
           {scoreCategories.map(({ key, label }) => (
             <div key={key} className="flex items-center justify-between">
-              <span className="w-24 flex-shrink-0 text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span className="w-24 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-300">
                 {label}
               </span>
               <div className="flex items-center space-x-2">

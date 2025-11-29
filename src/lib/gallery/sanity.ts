@@ -358,13 +358,12 @@ export async function getGalleryImageCount(
  */
 export async function getGalleryImages(
   filter?: GalleryImageFilter & { conferenceId?: string },
-  options?: { revalidate?: number; useCache?: boolean },
+  options?: { useCache?: boolean },
 ): Promise<GalleryImageWithSpeakers[]> {
   try {
     const limit = filter?.limit || 100
     const offset = filter?.offset || 0
     const useCache = options?.useCache ?? true
-    const revalidate = options?.revalidate
 
     // For backward compatibility: if images don't have conference field, they'll still be fetched
     // Once conference field is added to images, filtering will work properly
@@ -419,17 +418,8 @@ export async function getGalleryImages(
         : null,
     }
 
-    if (useCache) {
-      return (
-        (await clientReadCached.fetch(
-          query,
-          queryParams,
-          revalidate ? { next: { revalidate } } : undefined,
-        )) || []
-      )
-    } else {
-      return (await clientReadUncached.fetch(query, queryParams)) || []
-    }
+    const client = useCache ? clientReadCached : clientReadUncached
+    return (await client.fetch(query, queryParams)) || []
   } catch (error) {
     logger.error('Error fetching gallery images', {
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -443,12 +433,11 @@ export async function getGalleryImages(
  */
 export async function getFeaturedGalleryImages(
   limit?: number,
-  revalidate?: number,
   conferenceId?: string,
 ): Promise<GalleryImageWithSpeakers[]> {
   return getGalleryImages(
     { featured: true, limit: limit || 1000, conferenceId },
-    { revalidate },
+    { useCache: true },
   )
 }
 

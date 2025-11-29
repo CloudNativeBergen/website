@@ -171,7 +171,7 @@ export function ProposalCoSpeaker({
       {isLightningTalk && (
         <div className="rounded-md border border-orange-200 bg-orange-50 p-4 dark:border-orange-800/50 dark:bg-orange-900/20">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <svg
                 className="h-5 w-5 text-orange-400 dark:text-orange-500"
                 viewBox="0 0 20 20"
@@ -208,7 +208,7 @@ export function ProposalCoSpeaker({
           {inviteSuccess && (
             <div className="rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20">
               <div className="flex">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <CheckCircleIcon
                     className="text-fresh-green h-5 w-5 dark:text-green-400"
                     aria-hidden="true"
@@ -235,7 +235,7 @@ export function ProposalCoSpeaker({
                     className="flex items-center justify-between rounded-lg border bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700"
                   >
                     <div className="flex items-center space-x-3">
-                      <div className="flex-shrink-0">
+                      <div className="shrink-0">
                         {getInvitationStatusIcon(invitation.status)}
                       </div>
                       <div>
@@ -445,7 +445,7 @@ export function ProposalCoSpeaker({
           {totalCoSpeakers >= maxCoSpeakers && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20">
               <div className="flex">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <svg
                     className="h-5 w-5 text-amber-400 dark:text-amber-500"
                     viewBox="0 0 20 20"

@@ -16,8 +16,6 @@ type Props = {
   params: Promise<{ room: string }>
 }
 
-export const revalidate = 300
-
 export default async function StreamRoomPage({ params }: Props) {
   const { room: roomParam } = await params
   const room = decodeURIComponent(roomParam).trim()

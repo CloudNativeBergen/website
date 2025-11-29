@@ -515,7 +515,7 @@ export function EmailModal({
                     </div>
                   )}
                 </div>
-                <div className="flex flex-shrink-0 justify-between border-t border-gray-200 p-6 dark:border-gray-700">
+                <div className="flex shrink-0 justify-between border-t border-gray-200 p-6 dark:border-gray-700">
                   <div className="flex space-x-3">
                     {previewComponent && (
                       <button

@@ -147,7 +147,7 @@ export function BlueskyPostItem({
           />
         ) : (
           <div
-            className={`${size.avatar} flex items-center justify-center rounded-full bg-gradient-to-br from-blue-400 to-blue-600`}
+            className={`${size.avatar} flex items-center justify-center rounded-full bg-linear-to-br from-blue-400 to-blue-600`}
             aria-hidden="true"
           >
             <span className={`${size.avatarText} font-medium text-white`}>

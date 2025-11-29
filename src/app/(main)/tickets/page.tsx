@@ -1,23 +1,30 @@
 import { redirect } from 'next/navigation'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isRegistrationAvailable } from '@/lib/conference/state'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { formatDatesSafe } from '@/lib/time'
 import { CalendarDaysIcon, ClockIcon } from '@heroicons/react/24/outline'
-import Link from 'next/dist/client/link'
+import Link from 'next/link'
+import { headers } from 'next/headers'
+import { cacheLife, cacheTag } from 'next/cache'
 
-export default async function Tickets() {
-  const { conference, error } = await getConferenceForCurrentDomain()
+export const metadata = {
+  title: 'Tickets - Cloud Native Bergen',
+  description: 'Get your tickets for Cloud Native Bergen conference',
+}
+
+async function CachedTicketsContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:tickets')
+
+  const { conference, error } = await getConferenceForDomain(domain)
 
   if (error) {
     console.error('Error fetching conference data:', error)
     return <div>Error loading conference data</div>
-  }
-
-  if (isRegistrationAvailable(conference)) {
-    redirect(conference.registration_link!)
   }
 
   return (
@@ -104,4 +111,18 @@ export default async function Tickets() {
       </Container>
     </div>
   )
+}
+
+export default async function TicketsPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  const { conference } = await getConferenceForDomain(domain)
+
+  // Handle redirect at request time (outside cache)
+  if (isRegistrationAvailable(conference)) {
+    redirect(conference.registration_link!)
+  }
+
+  return <CachedTicketsContent domain={domain} />
 }

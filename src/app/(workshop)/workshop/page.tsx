@@ -115,7 +115,7 @@ export default async function WorkshopPage() {
 
               <div className="mt-8 rounded-lg bg-yellow-50 p-6 dark:bg-yellow-900/20">
                 <div className="flex">
-                  <div className="flex-shrink-0">
+                  <div className="shrink-0">
                     <svg
                       className="h-5 w-5 text-yellow-400"
                       viewBox="0 0 20 20"
@@ -202,7 +202,7 @@ export default async function WorkshopPage() {
           {registrationNotYetOpen && (
             <div className="mt-8 rounded-lg bg-yellow-50 p-4 dark:bg-yellow-900/20">
               <div className="flex">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <svg
                     className="h-5 w-5 text-yellow-400"
                     viewBox="0 0 20 20"
@@ -238,7 +238,7 @@ export default async function WorkshopPage() {
           {registrationClosed && (
             <div className="mt-8 rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
               <div className="flex">
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <svg
                     className="h-5 w-5 text-red-400"
                     viewBox="0 0 20 20"

@@ -15,7 +15,12 @@ export function TRPCProvider({ children }: TRPCProviderProps) {
       new QueryClient({
         defaultOptions: {
           queries: {
+            // Public data: 60 seconds stale time
+            // Authenticated/admin data should override with shorter staleTime (5s)
             staleTime: 60 * 1000,
+            gcTime: 5 * 60 * 1000, // 5 minutes garbage collection
+            refetchOnWindowFocus: false,
+            retry: 1,
           },
         },
       }),

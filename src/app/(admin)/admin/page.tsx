@@ -18,7 +18,7 @@ export default async function AdminDashboard() {
   const currentUserId = session?.speaker?._id
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({ revalidate: 0 })
+    await getConferenceForCurrentDomain({})
 
   let proposals: ProposalExisting[] = []
   if (!conferenceError && conference) {
@@ -436,7 +436,7 @@ export default async function AdminDashboard() {
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500">
             <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <DocumentTextIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
@@ -455,7 +455,7 @@ export default async function AdminDashboard() {
 
           <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500">
             <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <UsersIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
@@ -474,7 +474,7 @@ export default async function AdminDashboard() {
 
           <div className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500">
             <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <CalendarDaysIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">

@@ -164,7 +164,7 @@ export function ProposalForm({
           updateSpeakerMutation.error) && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
             <div className="flex">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <XCircleIcon
                   className="h-6 w-6 text-red-500 dark:text-red-400"
                   aria-hidden="true"

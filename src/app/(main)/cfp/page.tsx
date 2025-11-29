@@ -5,14 +5,25 @@ import {
   ClipboardDocumentCheckIcon,
 } from '@heroicons/react/20/solid'
 import { Button } from '@/components/Button'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { formatDate } from '@/lib/time'
 import { Topic } from '@/lib/topic/types'
 import { formats } from '@/lib/proposal/types'
 import clsx from 'clsx'
 import Link from 'next/link'
-export default async function CFP() {
-  const { conference } = await getConferenceForCurrentDomain({ topics: true })
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
+
+export const metadata = {
+  title: 'Call for Presentations - Cloud Native Bergen',
+  description: 'Submit your talk proposal for Cloud Native Bergen conference',
+}
+
+async function CachedCFPContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('days')
+  cacheTag('content:cfp')
+  const { conference } = await getConferenceForDomain(domain, { topics: true })
   const talkFormats = conference.formats
     .filter((formatId) => !formatId.startsWith('workshop_'))
     .map((formatId) => formats.get(formatId))
@@ -91,7 +102,7 @@ export default async function CFP() {
         ))}
       </dl>
       {hasWorkshops && (
-        <div className="mt-10 rounded-xl bg-gradient-to-br from-brand-sky-mist/80 to-brand-cloud-blue/10 p-1 shadow-lg dark:from-blue-900/50 dark:to-blue-800/20">
+        <div className="mt-10 rounded-xl bg-linear-to-br from-brand-sky-mist/80 to-brand-cloud-blue/10 p-1 shadow-lg dark:from-blue-900/50 dark:to-blue-800/20">
           <div className="rounded-lg bg-white px-6 py-6 sm:p-8 dark:bg-gray-800">
             <h2 className="font-space-grotesk mb-2 flex items-center gap-2 text-2xl font-semibold tracking-tight text-brand-cloud-blue sm:text-3xl dark:text-blue-400">
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-brand-sky-mist text-brand-cloud-blue dark:bg-blue-900/50 dark:text-blue-400">
@@ -220,7 +231,7 @@ export default async function CFP() {
               return (
                 <div
                   key={topic._id}
-                  className={`group overflow-hidden rounded-xl border border-transparent bg-gradient-to-br ${cardGradient} p-1 shadow-2xl transition-all duration-300 ease-in-out ${cardShadow} ${rotationClass}`}
+                  className={`group overflow-hidden rounded-xl border border-transparent bg-linear-to-br ${cardGradient} p-1 shadow-2xl transition-all duration-300 ease-in-out ${cardShadow} ${rotationClass}`}
                 >
                   <div className="h-full rounded-lg bg-slate-800/70 px-4 py-5 backdrop-blur-sm sm:p-6 dark:bg-slate-900/80">
                     <h3 className="flex items-center text-lg font-semibold text-white dark:text-gray-100">
@@ -279,7 +290,7 @@ export default async function CFP() {
             <div
               className={clsx(
                 date.bgColor,
-                'flex w-16 flex-shrink-0 items-center justify-center rounded-l-md text-sm font-medium text-white',
+                'flex w-16 shrink-0 items-center justify-center rounded-l-md text-sm font-medium text-white',
               )}
             >
               <date.icon className="h-5 w-5" aria-hidden="true" />
@@ -323,4 +334,11 @@ export default async function CFP() {
       </div>
     </div>
   )
+}
+
+export default async function CFPPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedCFPContent domain={domain} />
 }

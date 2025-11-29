@@ -5,7 +5,7 @@ import { getWorkshopsByConference } from '@/lib/workshop/sanity'
 
 export default async function WorkshopAdminPage() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({ revalidate: 0 })
+    await getConferenceForCurrentDomain({})
 
   if (conferenceError) {
     return (

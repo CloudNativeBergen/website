@@ -53,16 +53,16 @@ const BUTTON_STYLES = {
 const LAYOUT_CLASSES = {
   container: 'flex h-[calc(100vh-5rem)]',
   sidebar:
-    'border-r border-gray-200 bg-gray-50 flex-shrink-0 dark:border-gray-700 dark:bg-gray-800',
+    'border-r border-gray-200 bg-gray-50 shrink-0 dark:border-gray-700 dark:bg-gray-800',
   mainArea: 'flex flex-1 flex-col min-h-0 min-w-0',
   header:
-    'border-b border-gray-200 bg-white px-4 py-2 flex-shrink-0 dark:border-gray-700 dark:bg-gray-900',
+    'border-b border-gray-200 bg-white px-4 py-2 shrink-0 dark:border-gray-700 dark:bg-gray-900',
   content: 'flex-1 min-h-0 overflow-x-auto px-2 pt-4',
   tracksContainer: 'h-full',
   tracksGrid: 'flex gap-4 h-max',
   emptyState: 'flex flex-1 items-center justify-center',
   errorBanner:
-    'border-b border-red-200 bg-red-50 px-4 py-2 flex-shrink-0 dark:border-red-800 dark:bg-red-900/20',
+    'border-b border-red-200 bg-red-50 px-4 py-2 shrink-0 dark:border-red-800 dark:bg-red-900/20',
 } as const
 
 const HeaderSection = ({
@@ -775,6 +775,7 @@ export function ScheduleEditor({
 
       schedule.tracks.forEach((track, trackIndex) => {
         if (trackIndex === sourceTrackIndex) return
+        if (!track.talks || !Array.isArray(track.talks)) return
 
         const hasConflict = track.talks.some((talk) => {
           const sessionStart = new Date(

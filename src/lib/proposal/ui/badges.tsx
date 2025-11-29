@@ -334,7 +334,7 @@ export function LevelIndicator({
 
   return (
     <span
-      className={`flex flex-shrink-0 items-center font-bold ${sizeClasses[size]} ${className}`}
+      className={`flex shrink-0 items-center font-bold ${sizeClasses[size]} ${className}`}
       style={{ color: config.color }}
       title={config.label}
       aria-label={`Level: ${config.label}`}

@@ -173,7 +173,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
               )}
             >
               <div className="flex items-start gap-4">
-                <div className="relative flex-shrink-0">
+                <div className="relative shrink-0">
                   <Icon className={clsx('mt-0.5 h-6 w-6', styles.icon)} />
                   {notification.count && notification.count > 1 && (
                     <span
@@ -212,7 +212,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
                     </p>
                   )}
                 </div>
-                <div className="flex-shrink-0">
+                <div className="shrink-0">
                   <button
                     className={clsx(
                       'inline-flex rounded-md p-1.5 transition-all duration-200 hover:bg-black/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue dark:hover:bg-white/10',

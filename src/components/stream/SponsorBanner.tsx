@@ -70,7 +70,7 @@ export function SponsorBanner({
         {duplicatedSponsors.map((sponsor, index) => (
           <div
             key={`${sponsor.sponsor._id}-${index}`}
-            className="flex-shrink-0 px-12"
+            className="shrink-0 px-12"
           >
             <a
               href={sponsor.sponsor.website}

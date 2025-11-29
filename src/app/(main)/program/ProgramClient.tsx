@@ -83,10 +83,10 @@ export function ProgramClient({
           totalTalks={schedules.reduce(
             (sum, schedule) =>
               sum +
-              schedule.tracks.reduce(
+              (schedule.tracks || []).reduce(
                 (trackSum, track) =>
                   trackSum +
-                  track.talks.filter(
+                  (track.talks || []).filter(
                     (talk) => talk.talk !== null && talk.talk !== undefined,
                   ).length,
                 0,

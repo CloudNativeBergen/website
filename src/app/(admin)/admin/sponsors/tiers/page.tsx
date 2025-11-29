@@ -10,7 +10,6 @@ export default async function AdminSponsorTiers() {
       sponsors: true,
       sponsorContact: true,
       sponsorTiers: true,
-      revalidate: 0,
     })
 
   if (conferenceError) {

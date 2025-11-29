@@ -1,6 +1,6 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import {
   DocumentTextIcon,
@@ -15,10 +15,22 @@ import {
   GlobeAltIcon,
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
 
-export default async function TermsOfServicePage() {
+export const metadata = {
+  title: 'Terms of Service - Cloud Native Bergen',
+  description:
+    'Terms of Service for Cloud Native Bergen conference and workshop services',
+}
+
+async function CachedTermsContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('max')
+  cacheTag('content:terms')
+
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForDomain(domain)
 
   if (conferenceError) {
     return (
@@ -506,8 +518,9 @@ export default async function TermsOfServicePage() {
   )
 }
 
-export const metadata = {
-  title: 'Terms of Service - Cloud Native Bergen',
-  description:
-    'Terms of Service for Cloud Native Bergen conference and workshop services',
+export default async function TermsPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedTermsContent domain={domain} />
 }

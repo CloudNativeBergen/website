@@ -187,7 +187,7 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
       {showSuccess && (
         <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <CheckCircleIcon
                 className="h-5 w-5 text-green-400"
                 aria-hidden="true"
@@ -215,7 +215,7 @@ export default function VolunteerForm({ conferenceId }: VolunteerFormProps) {
       {submitError && (
         <div className="rounded-lg bg-red-50 p-4 dark:bg-red-900/20">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <XCircleIcon
                 className="h-5 w-5 text-red-400"
                 aria-hidden="true"

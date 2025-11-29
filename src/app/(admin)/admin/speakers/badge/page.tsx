@@ -8,9 +8,7 @@ import { Status, type ProposalExisting } from '@/lib/proposal/types'
 import type { Speaker } from '@/lib/speaker/types'
 
 export default async function AdminBadgePage() {
-  const { conference, error } = await getConferenceForCurrentDomain({
-    revalidate: 0,
-  })
+  const { conference, error } = await getConferenceForCurrentDomain({})
 
   if (error) {
     return (

@@ -72,7 +72,7 @@ function calculateSpeakerStats(
 export default async function AdminSpeakers() {
   try {
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain({ revalidate: 0 })
+      await getConferenceForCurrentDomain({})
 
     if (conferenceError || !conference) {
       return (

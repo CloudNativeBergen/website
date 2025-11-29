@@ -15,38 +15,40 @@ export async function saveScheduleToSanity(
   try {
     console.log('Saving schedule to Sanity:', schedule)
 
-    const sanitizedTracks = schedule.tracks.map((track, trackIndex) => ({
-      _key: generateKey(`track-${trackIndex}`),
-      trackTitle: track.trackTitle,
-      trackDescription: track.trackDescription,
-      talks: track.talks.map((talk, talkIndex) => {
-        const baseKey = `talk-${trackIndex}-${talkIndex}-${talk.startTime.replace(':', '')}`
+    const sanitizedTracks = (schedule.tracks || []).map(
+      (track, trackIndex) => ({
+        _key: generateKey(`track-${trackIndex}`),
+        trackTitle: track.trackTitle,
+        trackDescription: track.trackDescription,
+        talks: (track.talks || []).map((talk, talkIndex) => {
+          const baseKey = `talk-${trackIndex}-${talkIndex}-${talk.startTime.replace(':', '')}`
 
-        if (talk.placeholder) {
+          if (talk.placeholder) {
+            return {
+              _key: generateKey(`${baseKey}-service`),
+              placeholder: talk.placeholder,
+              startTime: talk.startTime,
+              endTime: talk.endTime,
+            }
+          }
+
+          if (talk.talk) {
+            return {
+              _key: generateKey(`${baseKey}-${talk.talk._id}`),
+              talk: createReference(talk.talk._id),
+              startTime: talk.startTime,
+              endTime: talk.endTime,
+            }
+          }
+
           return {
-            _key: generateKey(`${baseKey}-service`),
-            placeholder: talk.placeholder,
+            _key: generateKey(`${baseKey}-fallback`),
             startTime: talk.startTime,
             endTime: talk.endTime,
           }
-        }
-
-        if (talk.talk) {
-          return {
-            _key: generateKey(`${baseKey}-${talk.talk._id}`),
-            talk: createReference(talk.talk._id),
-            startTime: talk.startTime,
-            endTime: talk.endTime,
-          }
-        }
-
-        return {
-          _key: generateKey(`${baseKey}-fallback`),
-          startTime: talk.startTime,
-          endTime: talk.endTime,
-        }
+        }),
       }),
-    }))
+    )
 
     let savedSchedule: ConferenceSchedule
 

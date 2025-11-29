@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * Simple inline SVG renderer
  * Replaces @starefossen/sanity-plugin-inline-svg-input to avoid jsdom dependency

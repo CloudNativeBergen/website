@@ -1,6 +1,6 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
 import {
   ShieldCheckIcon,
@@ -35,10 +35,22 @@ import {
   HandRaisedIcon,
   UserMinusIcon,
 } from '@heroicons/react/24/outline'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
 
-export default async function PrivacyPolicyPage() {
+export const metadata = {
+  title: 'Privacy Policy - Cloud Native Bergen',
+  description:
+    'Privacy policy and data protection information for Cloud Native Bergen conference',
+}
+
+async function CachedPrivacyContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('max')
+  cacheTag('content:privacy')
+
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain()
+    await getConferenceForDomain(domain)
 
   if (conferenceError) {
     return (
@@ -675,7 +687,7 @@ export default async function PrivacyPolicyPage() {
                       <div className="space-y-3">
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
-                            <LockClosedIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <LockClosedIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
                                 Sanity.io
@@ -689,7 +701,7 @@ export default async function PrivacyPolicyPage() {
                         </div>
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
-                            <GlobeAltIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <GlobeAltIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
                                 Vercel.com
@@ -704,7 +716,7 @@ export default async function PrivacyPolicyPage() {
                         </div>
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
-                            <EnvelopeIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <EnvelopeIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
                                 Resend.com
@@ -718,7 +730,7 @@ export default async function PrivacyPolicyPage() {
                         </div>
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
-                            <DocumentTextIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <DocumentTextIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
                                 Checkin.no
@@ -731,7 +743,7 @@ export default async function PrivacyPolicyPage() {
                         </div>
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
-                            <ChartBarIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <ChartBarIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
                                 Pirsch Analytics
@@ -745,7 +757,7 @@ export default async function PrivacyPolicyPage() {
                         </div>
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
-                            <ChatBubbleLeftRightIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <ChatBubbleLeftRightIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
                                 Slack
@@ -767,7 +779,7 @@ export default async function PrivacyPolicyPage() {
                       <div className="space-y-3">
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
-                            <LockClosedIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <LockClosedIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
                                 GitHub/LinkedIn
@@ -781,7 +793,7 @@ export default async function PrivacyPolicyPage() {
                         </div>
                         <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800/50">
                           <div className="flex items-start space-x-3">
-                            <LockClosedIcon className="mt-1 h-4 w-4 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+                            <LockClosedIcon className="mt-1 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-900 dark:text-white">
                                 WorkOS (AuthKit)
@@ -897,7 +909,7 @@ export default async function PrivacyPolicyPage() {
                     <div className="space-y-3">
                       <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
                         <div className="flex items-start space-x-3">
-                          <DocumentTextIcon className="mt-1 h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                          <DocumentTextIcon className="mt-1 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                           <div>
                             <p className="text-sm text-blue-800 dark:text-blue-200">
                               Standard Contractual Clauses (SCCs) with service
@@ -1648,8 +1660,9 @@ export default async function PrivacyPolicyPage() {
   )
 }
 
-export const metadata = {
-  title: 'Privacy Policy - Cloud Native Bergen',
-  description:
-    'Privacy policy and data protection information for Cloud Native Bergen conference',
+export default async function PrivacyPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedPrivacyContent domain={domain} />
 }

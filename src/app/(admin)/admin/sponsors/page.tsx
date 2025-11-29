@@ -14,9 +14,7 @@ import {
 
 export default async function AdminSponsors() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({
-      revalidate: 0,
-    })
+    await getConferenceForCurrentDomain({})
 
   if (conferenceError) {
     return (

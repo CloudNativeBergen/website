@@ -28,7 +28,7 @@ const FILTER_STYLES = {
   searchInput:
     'w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-500 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder:text-gray-400 dark:focus:bg-gray-600',
   filterRow: 'flex items-center gap-2',
-  filterIcon: 'h-4 w-4 text-gray-500 flex-shrink-0 dark:text-gray-400',
+  filterIcon: 'h-4 w-4 text-gray-500 shrink-0 dark:text-gray-400',
   select:
     'flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:bg-gray-600',
   clearButton:

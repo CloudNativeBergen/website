@@ -111,6 +111,14 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 
 - **Array Items:** All array items in Sanity documents must include a `_key` property. When creating or updating documents with arrays, ensure each array item has a unique `_key` field to prevent validation errors and maintain data integrity.
 
+### Cache Components Strategy
+
+- **Next.js Cache Components:** All production public pages use Next.js 16+ Cache Components with the `'use cache'` directive for optimal performance in our multi-tenant architecture.
+- **Wrapper Pattern:** Pages follow a consistent pattern where an outer component reads `headers()` to extract the domain, then passes it to an inner cached component that uses `getConferenceForDomain(domain)`.
+- **Cache Durations:** Use `cacheLife('hours')` for frequently changing content (homepage, program, speakers, tickets), `cacheLife('days')` for stable content (CFP), and `cacheLife('max')` for static pages (conduct, terms, privacy, branding).
+- **Cache Tags:** Every cached component includes a `cacheTag('content:pagename')` for granular invalidation via `revalidateTag()`.
+- **Exclusions:** Authentication flows (`/signin`) and development/testing pages (`/css-test`) are intentionally excluded from caching as they require request-time execution.
+
 ### Admin Interface Development
 
 - **Access Control:** Admin pages are protected by authentication middleware checking for `is_organizer: true` in the user's speaker profile.

@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
-import { revalidatePath } from 'next/cache'
+import { revalidateTag } from 'next/cache'
 import { router, adminProcedure } from '../trpc'
 import {
   TicketSettingsUpdateSchema,
@@ -136,7 +136,7 @@ export const ticketsRouter = router({
           .set(updates)
           .commit()
 
-        revalidatePath('/admin/tickets')
+        revalidateTag('admin:tickets', 'default')
 
         return {
           success: true,
@@ -161,7 +161,7 @@ export const ticketsRouter = router({
       const { conferenceId, capacity } = input
       const result = await updateTicketCapacity(conferenceId, capacity)
 
-      revalidatePath('/admin/tickets')
+      revalidateTag('admin:tickets', 'default')
 
       return result
     }),
@@ -176,7 +176,7 @@ export const ticketsRouter = router({
       const { conferenceId, targets } = input
       const result = await updateTicketTargets(conferenceId, targets)
 
-      revalidatePath('/admin/tickets')
+      revalidateTag('admin:tickets', 'default')
 
       return result
     }),
@@ -200,7 +200,7 @@ export const ticketsRouter = router({
 
       const result = await updateTicketTargets(conferenceId, updatedTargets)
 
-      revalidatePath('/admin/tickets')
+      revalidateTag('admin:tickets', 'default')
 
       return result
     }),
@@ -361,7 +361,7 @@ export const ticketsRouter = router({
           discountValue: 100,
         })
 
-        revalidatePath('/admin/tickets/discount')
+        revalidateTag('admin:tickets', 'default')
 
         return {
           success: true,

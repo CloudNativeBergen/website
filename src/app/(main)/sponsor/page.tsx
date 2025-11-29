@@ -2,9 +2,16 @@ import { CheckIcon } from '@heroicons/react/20/solid'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SponsorTier } from '@/lib/sponsor/types'
 import clsx from 'clsx'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
+
+export const metadata = {
+  title: 'Become a Sponsor - Cloud Native Bergen',
+  description: 'Sponsorship opportunities for Cloud Native Bergen conference',
+}
 
 function PriceFormat({
   price,
@@ -19,11 +26,16 @@ function PriceFormat({
   )
 }
 
-export default async function Sponsor() {
-  const { conference, error } = await getConferenceForCurrentDomain({
+async function CachedSponsorContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:sponsor')
+
+  const { conference, error } = await getConferenceForDomain(domain, {
     sponsorTiers: true,
   })
-  if (error) {
+
+  if (error || !conference) {
     console.error('Failed to load conference data:', error)
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4">
@@ -41,7 +53,39 @@ export default async function Sponsor() {
     )
   }
 
-  const allSponsorTiers = conference?.sponsor_tiers || []
+  const allSponsorTiers = conference.sponsor_tiers || []
+
+  // Show a message if no sponsor tiers are configured
+  if (allSponsorTiers.length === 0) {
+    return (
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
+        <BackgroundImage className="-top-36 -bottom-14" />
+        <Container className="relative">
+          <div className="mx-auto max-w-xl text-center lg:max-w-4xl lg:px-12">
+            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
+              Become a Sponsor
+            </h1>
+            <p className="font-display mt-6 text-2xl tracking-tight text-blue-900 dark:text-blue-300">
+              Sponsorship opportunities for {conference.title} will be announced
+              soon. Please check back later or contact us at{' '}
+              <a
+                href={`mailto:${conference.contact_email}`}
+                className="text-blue-600 hover:underline dark:text-blue-400"
+              >
+                {conference.contact_email}
+              </a>{' '}
+              for more information.
+            </p>
+            <div className="mt-8">
+              <Button href="/" variant="primary">
+                Return to Home
+              </Button>
+            </div>
+          </div>
+        </Container>
+      </div>
+    )
+  }
 
   const standardSponsorTiers = allSponsorTiers
     .filter((tier) => tier.tier_type === 'standard')
@@ -254,4 +298,11 @@ export default async function Sponsor() {
       </div>
     </>
   )
+}
+
+export default async function SponsorPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedSponsorContent domain={domain} />
 }

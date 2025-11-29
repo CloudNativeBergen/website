@@ -294,7 +294,7 @@ export default function NextTalkDisplay({
             <h2 className="font-space-grotesk text-4xl font-medium text-brand-slate-gray dark:text-gray-200">
               {talk.placeholder || 'Service Session'}
             </h2>
-            <div className="flex flex-shrink-0 items-center text-2xl text-gray-600 dark:text-gray-400">
+            <div className="flex shrink-0 items-center text-2xl text-gray-600 dark:text-gray-400">
               <ClockIcon className="mr-3 h-7 w-7" />
               <span className="font-mono">
                 {talk.startTime} - {talk.endTime}
@@ -314,7 +314,7 @@ export default function NextTalkDisplay({
               <span className="inline-flex items-center rounded-full bg-brand-cloud-blue px-5 py-2 text-base font-semibold text-white">
                 UP NEXT
               </span>
-              <div className="flex flex-shrink-0 items-center text-2xl text-gray-600 dark:text-gray-400">
+              <div className="flex shrink-0 items-center text-2xl text-gray-600 dark:text-gray-400">
                 <ClockIcon className="mr-3 h-7 w-7" />
                 <span className="font-mono">
                   {nextSession.talk.startTime} - {nextSession.talk.endTime}

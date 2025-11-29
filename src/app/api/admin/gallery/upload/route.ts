@@ -29,9 +29,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { conference } = await getConferenceForCurrentDomain({
-      revalidate: 0,
-    })
+    const { conference } = await getConferenceForCurrentDomain({})
     if (!conference) {
       return NextResponse.json(
         { error: 'Conference not found for current domain' },

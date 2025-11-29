@@ -142,7 +142,11 @@ export function getTalkStatusMap(
   const statusMap = new Map<string, TalkStatus>()
 
   schedules.forEach((schedule) => {
+    if (!schedule.tracks || !Array.isArray(schedule.tracks)) return
+
     schedule.tracks.forEach((track, trackIndex) => {
+      if (!track.talks || !Array.isArray(track.talks)) return
+
       track.talks.forEach((talk) => {
         const key = getTalkStatusKey(
           schedule.date,

@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { router, publicProcedure, adminProcedure } from '@/server/trpc'
 import { TRPCError } from '@trpc/server'
-import { revalidatePath } from 'next/cache'
+import { revalidateTag } from 'next/cache'
+import { clientWrite } from '@/lib/sanity/client'
 import {
   workshopListInputSchema,
   workshopAvailabilitySchema,
@@ -233,8 +234,8 @@ export const workshopRouter = router({
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
         }).catch(() => {})
 
-        revalidatePath('/workshop')
-        revalidatePath('/admin/workshops')
+        revalidateTag('content:workshops', 'default')
+        revalidateTag('admin:workshops', 'default')
 
         return {
           success: true,
@@ -271,7 +272,7 @@ export const workshopRouter = router({
 
         await cancelWorkshopSignup(input.signupId)
 
-        revalidatePath('/workshop')
+        revalidateTag('content:workshops', 'default')
 
         return {
           success: true,
@@ -384,8 +385,8 @@ export const workshopRouter = router({
           }
         }
 
-        revalidatePath('/admin/workshops')
-        revalidatePath('/workshop')
+        revalidateTag('admin:workshops', 'default')
+        revalidateTag('content:workshops', 'default')
 
         return {
           success: true,
@@ -469,8 +470,8 @@ export const workshopRouter = router({
           ).length
         }
 
-        revalidatePath('/workshop')
-        revalidatePath('/admin/workshops')
+        revalidateTag('content:workshops', 'default')
+        revalidateTag('admin:workshops', 'default')
 
         return {
           success: true,
@@ -527,8 +528,8 @@ export const workshopRouter = router({
         const succeeded = results.filter((r) => r.status === 'fulfilled').length
         const failed = results.filter((r) => r.status === 'rejected').length
 
-        revalidatePath('/admin/workshops')
-        revalidatePath('/workshop')
+        revalidateTag('admin:workshops', 'default')
+        revalidateTag('content:workshops', 'default')
 
         return {
           success: true,
@@ -559,8 +560,8 @@ export const workshopRouter = router({
         const succeeded = results.filter((r) => r.status === 'fulfilled').length
         const failed = results.filter((r) => r.status === 'rejected').length
 
-        revalidatePath('/admin/workshops')
-        revalidatePath('/workshop')
+        revalidateTag('admin:workshops', 'default')
+        revalidateTag('content:workshops', 'default')
 
         return {
           success: true,
@@ -588,8 +589,8 @@ export const workshopRouter = router({
 
         await deleteWorkshopSignup(input.signupId)
 
-        revalidatePath('/admin/workshops')
-        revalidatePath('/workshop')
+        revalidateTag('admin:workshops', 'default')
+        revalidateTag('content:workshops', 'default')
 
         return {
           success: true,
@@ -675,8 +676,8 @@ export const workshopRouter = router({
           workshopTime: (signup.workshop as { startTime?: string })?.startTime,
         }).catch(() => {})
 
-        revalidatePath('/workshop')
-        revalidatePath('/admin/workshops')
+        revalidateTag('content:workshops', 'default')
+        revalidateTag('admin:workshops', 'default')
 
         return {
           success: true,
@@ -689,6 +690,56 @@ export const workshopRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to add participant to workshop',
+          cause: error,
+        })
+      }
+    }),
+
+  updateRegistrationTimes: adminProcedure
+    .input(
+      z.object({
+        conferenceId: z.string().min(1, 'Conference ID is required'),
+        startDate: z.string().nullable(),
+        endDate: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const { conferenceId, startDate, endDate } = input
+
+        // Validate dates
+        if (startDate && endDate && new Date(startDate) >= new Date(endDate)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'End date must be after start date',
+          })
+        }
+
+        await clientWrite
+          .patch(conferenceId)
+          .set({
+            workshop_registration_start: startDate
+              ? new Date(startDate).toISOString()
+              : null,
+            workshop_registration_end: endDate
+              ? new Date(endDate).toISOString()
+              : null,
+          })
+          .commit()
+
+        revalidateTag('admin:settings', 'default')
+        revalidateTag(`sanity:conference-${conferenceId}`, 'default')
+
+        return {
+          success: true,
+          message: 'Workshop registration times updated successfully',
+        }
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update workshop registration times',
           cause: error,
         })
       }

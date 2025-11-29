@@ -12,13 +12,13 @@ import { SpeedInsights } from '@vercel/speed-insights/next'
 import Script from 'next/script'
 import clsx from 'clsx'
 import { headers } from 'next/headers'
+import { Suspense } from 'react'
 
 import '@/styles/tailwind.css'
-import { SessionProvider } from 'next-auth/react'
-import { auth } from '@/lib/auth'
 import { DevBanner } from '@/components/DevBanner'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import { TRPCProvider } from '@/components/providers/TRPCProvider'
+import { SessionProviderWrapper } from '@/components/providers/SessionProviderWrapper'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -77,22 +77,11 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await auth()
-  if (session?.user) {
-    // TODO: Look into https://react.dev/reference/react/experimental_taintObjectReference
-
-    session.user = {
-      name: session.user.name,
-      email: session.user.email,
-      picture: session.user.picture,
-    }
-  }
-
   return (
     <html
       lang="en"
@@ -139,7 +128,9 @@ export default async function RootLayout({
           <TRPCProvider>
             <div className="flex w-full flex-col">
               <DevBanner />
-              <SessionProvider session={session}>{children}</SessionProvider>
+              <Suspense>
+                <SessionProviderWrapper>{children}</SessionProviderWrapper>
+              </Suspense>
             </div>
           </TRPCProvider>
         </ThemeProvider>

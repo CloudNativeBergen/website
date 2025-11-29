@@ -2,6 +2,7 @@ import { Metadata } from 'next'
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
 import Image from 'next/image'
+import { cacheLife } from 'next/cache'
 
 // Import cloud native icons for the pattern examples
 import KubernetesIcon from '@/images/icons/kubernetes-icon-white.svg'
@@ -71,17 +72,22 @@ import {
   Audience,
 } from '@/lib/proposal/types'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
   title: 'Brand Guidelines - Cloud Native Day Bergen',
   description: 'Brand guidelines and design system for Cloud Native Day Bergen',
 }
 
-export default async function BrandingPage() {
-  const { conference, domain } = await getConferenceForCurrentDomain({
+async function CachedBrandingContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('max')
+
+  const conferenceData = await getConferenceForDomain(domain, {
     featuredSpeakers: true,
   })
+  const { conference } = conferenceData
 
   // Helper to create mock ProposalExisting objects for design examples
   function mockTalk(params: {
@@ -254,25 +260,25 @@ export default async function BrandingPage() {
                 </h3>
                 <ul className="space-y-3">
                   <li className="flex items-center">
-                    <DiamondIcon className="mr-3 h-5 w-5 flex-shrink-0 text-brand-fresh-green" />
+                    <DiamondIcon className="mr-3 h-5 w-5 shrink-0 text-brand-fresh-green" />
                     <span className="font-inter text-brand-slate-gray">
                       Open Source Spirit
                     </span>
                   </li>
                   <li className="flex items-center">
-                    <DiamondIcon className="mr-3 h-5 w-5 flex-shrink-0 text-brand-fresh-green" />
+                    <DiamondIcon className="mr-3 h-5 w-5 shrink-0 text-brand-fresh-green" />
                     <span className="font-inter text-brand-slate-gray">
                       Technical Excellence
                     </span>
                   </li>
                   <li className="flex items-center">
-                    <DiamondIcon className="mr-3 h-5 w-5 flex-shrink-0 text-brand-fresh-green" />
+                    <DiamondIcon className="mr-3 h-5 w-5 shrink-0 text-brand-fresh-green" />
                     <span className="font-inter text-brand-slate-gray">
                       Community First
                     </span>
                   </li>
                   <li className="flex items-center">
-                    <DiamondIcon className="mr-3 h-5 w-5 flex-shrink-0 text-brand-fresh-green" />
+                    <DiamondIcon className="mr-3 h-5 w-5 shrink-0 text-brand-fresh-green" />
                     <span className="font-inter text-brand-slate-gray">
                       Accessibility & Inclusion
                     </span>
@@ -533,15 +539,15 @@ export default async function BrandingPage() {
                   </h5>
                   <ul className="font-inter space-y-2 text-brand-slate-gray">
                     <li className="flex items-start">
-                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span className="mt-2 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
                       Hero sections and primary call-to-actions
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span className="mt-2 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
                       Section dividers and visual breaks
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span className="mt-2 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
                       Digital badges and highlighting
                     </li>
                   </ul>
@@ -552,15 +558,15 @@ export default async function BrandingPage() {
                   </h5>
                   <ul className="font-inter space-y-2 text-brand-slate-gray">
                     <li className="flex items-start">
-                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-2 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       Content sections and cards
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-2 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       UI components and interactive elements
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-2 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-2 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       Status indicators and alerts
                     </li>
                   </ul>
@@ -952,15 +958,15 @@ export default async function BrandingPage() {
                     </h4>
                     <ul className="font-inter space-y-2 text-sm text-brand-slate-gray dark:text-gray-300">
                       <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                         Content sections: 15-35px icons
                       </li>
                       <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                         Hero sections: 25-70px icons
                       </li>
                       <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                         Background fills: 20-50px icons
                       </li>
                     </ul>
@@ -971,15 +977,15 @@ export default async function BrandingPage() {
                     </h4>
                     <ul className="font-inter space-y-2 text-sm text-brand-slate-gray dark:text-gray-300">
                       <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                         Subtle: 10-30 icons for content backgrounds
                       </li>
                       <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                         Balanced: 30-60 icons for hero sections
                       </li>
                       <li className="flex items-start">
-                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                        <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                         Dense: 60-120 icons for dramatic effects
                       </li>
                     </ul>
@@ -991,36 +997,36 @@ export default async function BrandingPage() {
                   </h4>
                   <ul className="font-inter mb-4 space-y-2 text-sm text-brand-slate-gray dark:text-gray-300">
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       Small icons (20-30px): High opacity, vibrant colors, sharp
                       focus
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       Medium icons (30-50px): Balanced opacity and slight blur
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       Large icons (50-70px): Lower opacity, subtle colors, soft
                       blur
                     </li>
                   </ul>
                   <ul className="font-inter space-y-2 text-sm text-brand-slate-gray dark:text-gray-300">
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple dark:bg-purple-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-nordic-purple dark:bg-purple-400"></span>
                       Adjust opacity (0.08-0.15) based on content readability
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple dark:bg-purple-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-nordic-purple dark:bg-purple-400"></span>
                       Use slow movement animation for engaging backgrounds
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple dark:bg-purple-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-nordic-purple dark:bg-purple-400"></span>
                       Disable animation for static contexts or better
                       performance
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-nordic-purple dark:bg-purple-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-nordic-purple dark:bg-purple-400"></span>
                       Combine with gradient backgrounds for optimal contrast
                     </li>
                   </ul>
@@ -1959,35 +1965,35 @@ export default async function BrandingPage() {
                   </h4>
                   <ul className="font-inter space-y-3 text-brand-slate-gray">
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       <span>
                         <strong>Featured Layout:</strong> Compact yet impactful
                         design for keynote speakers and main announcements
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       <span>
                         <strong>3-Speaker Grid:</strong> Perfect for homepage
                         highlights and featured speaker sections
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       <span>
                         <strong>6-Speaker Grid:</strong> Ideal for complete
                         conference lineups and speaker pages
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       <span>
                         <strong>Compact Format:</strong> Use for agenda pages
                         and speaker directories
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       <span>
                         <strong>Speaker Share Images:</strong> Branded 4:5 ratio
                         images for speakers to share &ldquo;I&rsquo;m speaking
@@ -1995,7 +2001,7 @@ export default async function BrandingPage() {
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue"></span>
                       <span>
                         <strong>Speaker Spotlight Images:</strong>{' '}
                         Conference-branded 4:5 ratio promotional images with QR
@@ -2011,35 +2017,35 @@ export default async function BrandingPage() {
                   </h4>
                   <ul className="font-inter space-y-3 text-brand-slate-gray">
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
                       <span>
                         <strong>Name:</strong> Primary focus with largest text
                         size
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
                       <span>
                         <strong>Title & Company:</strong> Secondary information
                         for context
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
                       <span>
                         <strong>Talk Information:</strong> Shows format badges
                         and talk titles when available
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
                       <span>
                         <strong>Biography:</strong> Included in featured and
                         card layouts for depth
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
                       <span>
                         <strong>Keynote Badge:</strong> Special highlighting for
                         keynote speakers
@@ -2343,7 +2349,7 @@ export default async function BrandingPage() {
                       </h5>
                       <ul className="font-inter space-y-3 text-brand-slate-gray dark:text-gray-300">
                         <li className="flex items-start">
-                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                          <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                           <span>
                             <strong>Modular Structure:</strong> Separated
                             TalkHeader, TalkBody, and TalkFooter components for
@@ -2351,7 +2357,7 @@ export default async function BrandingPage() {
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                          <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                           <span>
                             <strong>Guaranteed Footer Positioning:</strong> Uses
                             flexbox with{' '}
@@ -2362,7 +2368,7 @@ export default async function BrandingPage() {
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                          <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                           <span>
                             <strong>Grid Integration:</strong> Works seamlessly
                             with{' '}
@@ -2373,7 +2379,7 @@ export default async function BrandingPage() {
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                          <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                           <span>
                             <strong>TypeScript Support:</strong> Full type
                             safety with comprehensive prop interfaces
@@ -2387,28 +2393,28 @@ export default async function BrandingPage() {
                       </h5>
                       <ul className="font-inter space-y-3 text-brand-slate-gray dark:text-gray-300">
                         <li className="flex items-start">
-                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                          <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                           <span>
                             <strong>Default:</strong> Balanced presentation with
                             full talk information and description
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                          <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                           <span>
                             <strong>Featured:</strong> Enhanced styling with
                             larger text and prominent visual treatment
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                          <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                           <span>
                             <strong>Compact:</strong> Space-efficient design for
                             listings and dense grids
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                          <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                           <span>
                             <strong>Consistent Styling:</strong> All variants
                             maintain footer alignment and responsive behavior
@@ -2463,7 +2469,7 @@ export default async function BrandingPage() {
               </h3>
               <div className="bg-opacity-20 rounded-lg border border-accent-yellow bg-brand-sunbeam-yellow p-6">
                 <div className="flex items-start">
-                  <DiamondIcon className="mt-1 mr-3 h-6 w-6 flex-shrink-0 text-brand-sunbeam-yellow" />
+                  <DiamondIcon className="mt-1 mr-3 h-6 w-6 shrink-0 text-brand-sunbeam-yellow" />
                   <div>
                     <h4 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray">
                       Early Bird Special Ending Soon!
@@ -2598,7 +2604,7 @@ export default async function BrandingPage() {
                   </h4>
                   <ul className="font-inter space-y-2 text-brand-slate-gray dark:text-gray-300">
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm dark:bg-gray-800 dark:text-gray-200">
                           isOrganizers
@@ -2607,7 +2613,7 @@ export default async function BrandingPage() {
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm dark:bg-gray-800 dark:text-gray-200">
                           title
@@ -2616,7 +2622,7 @@ export default async function BrandingPage() {
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm dark:bg-gray-800 dark:text-gray-200">
                           description
@@ -2625,7 +2631,7 @@ export default async function BrandingPage() {
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm dark:bg-gray-800 dark:text-gray-200">
                           showSpeakerSubmission
@@ -2634,7 +2640,7 @@ export default async function BrandingPage() {
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm dark:bg-gray-800 dark:text-gray-200">
                           showTicketReservation
@@ -2650,25 +2656,25 @@ export default async function BrandingPage() {
                   </h4>
                   <ul className="font-inter space-y-2 text-brand-slate-gray dark:text-gray-300">
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>Gradient background with brand colors</span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>
                         Responsive button layout (stacked to horizontal)
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>Accessible ARIA labels and semantic markup</span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>Icons from Heroicons for visual clarity</span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>Conditional urgency messaging</span>
                     </li>
                   </ul>
@@ -3561,14 +3567,14 @@ export default async function BrandingPage() {
                   </h5>
                   <ul className="font-inter space-y-3 text-brand-slate-gray dark:text-gray-300">
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <strong>Secure Tokens:</strong> HMAC-SHA256 signed
                         tokens with 14-day expiration for invitation security
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <strong>Email Verification:</strong> Case-insensitive
                         email matching ensures invitations reach the correct
@@ -3576,14 +3582,14 @@ export default async function BrandingPage() {
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <strong>One-Time Use:</strong> Tokens become invalid
                         after response to prevent replay attacks
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-cloud-blue dark:bg-blue-400"></span>
                       <span>
                         <strong>Test Mode:</strong> Development environment
                         supports testing without sending actual emails
@@ -3598,28 +3604,28 @@ export default async function BrandingPage() {
                   </h5>
                   <ul className="font-inter space-y-3 text-brand-slate-gray dark:text-gray-300">
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>
                         <strong>Clear Context:</strong> Invitations include full
                         proposal details and inviter information
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>
                         <strong>Expiration Awareness:</strong> Real-time
                         expiration checking with countdown displays
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>
                         <strong>Response Feedback:</strong> Immediate
                         confirmation and next steps for both parties
                       </span>
                     </li>
                     <li className="flex items-start">
-                      <span className="mt-1.5 mr-3 h-2 w-2 flex-shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
+                      <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green dark:bg-green-400"></span>
                       <span>
                         <strong>Mobile Optimized:</strong> Responsive design
                         ensures accessibility across all devices
@@ -4155,4 +4161,11 @@ export default async function BrandingPage() {
       </section>
     </div>
   )
+}
+
+export default async function BrandingPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedBrandingContent domain={domain} />
 }

@@ -367,7 +367,7 @@ export default function SponsorTierManagement({
                         </div>
 
                         <div className="flex items-start space-x-4">
-                          <div className="flex-shrink-0">
+                          <div className="shrink-0">
                             {sponsor.logo ? (
                               <SponsorLogo
                                 logo={sponsor.logo}

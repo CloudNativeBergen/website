@@ -513,7 +513,7 @@ export function SpeakerTable({
                   >
                     <td className="px-4 py-3">
                       <div className="flex min-w-0 items-center">
-                        <div className="h-8 w-8 flex-shrink-0">
+                        <div className="h-8 w-8 shrink-0">
                           {speaker.image ? (
                             <img
                               className="h-8 w-8 rounded-full object-cover"
@@ -552,7 +552,7 @@ export function SpeakerTable({
                     {columnVisibility.email && (
                       <td className="px-4 py-3">
                         <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
-                          <EnvelopeIcon className="mr-2 h-4 w-4 flex-shrink-0 text-gray-400 dark:text-gray-500" />
+                          <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
                           <a
                             href={`mailto:${speaker.email}`}
                             className="truncate hover:text-blue-600 dark:hover:text-blue-400"
@@ -568,7 +568,7 @@ export function SpeakerTable({
                       <td className="px-4 py-3">
                         {linkedinLink ? (
                           <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
-                            <div className="mr-2 h-4 w-4 flex-shrink-0">
+                            <div className="mr-2 h-4 w-4 shrink-0">
                               {iconForLink(
                                 linkedinLink,
                                 'h-4 w-4 text-gray-400 dark:text-gray-500',
@@ -595,7 +595,7 @@ export function SpeakerTable({
                       <td className="px-4 py-3">
                         {blueskyLink ? (
                           <div className="flex min-w-0 items-center text-sm text-gray-900 dark:text-white">
-                            <div className="mr-2 h-4 w-4 flex-shrink-0">
+                            <div className="mr-2 h-4 w-4 shrink-0">
                               {iconForLink(
                                 blueskyLink,
                                 'h-4 w-4 text-gray-400 dark:text-gray-500',
@@ -644,7 +644,7 @@ export function SpeakerTable({
                                 {proposal.title}
                               </span>
                               <span
-                                className="flex-shrink-0 text-gray-500 dark:text-gray-400"
+                                className="shrink-0 text-gray-500 dark:text-gray-400"
                                 title={`${formats.get(proposal.format)} in ${languages.get(proposal.language)}`}
                               >
                                 {getCompactFormat(proposal.format)} •{' '}

@@ -1,15 +1,19 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { ProgramClient } from './ProgramClient'
 import { Sponsors } from '@/components/Sponsors'
 import { DevTimeProvider } from '@/components/program/DevTimeProvider'
 import { DevTimeControl } from '@/components/program/DevTimeControl'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
 
-export const revalidate = 300
+async function CachedProgramContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:program')
 
-export default async function Program() {
-  const { conference, error } = await getConferenceForCurrentDomain({
+  const { conference, error } = await getConferenceForDomain(domain, {
     organizers: false,
     schedule: true,
     topics: true,
@@ -82,4 +86,11 @@ export default async function Program() {
       </Container>
     </div>
   )
+}
+
+export default async function Program() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedProgramContent domain={domain} />
 }

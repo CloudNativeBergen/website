@@ -325,9 +325,7 @@ export const proposalRouter = router({
                 : null
 
           if (conferenceId) {
-            const { conference } = await getConferenceForCurrentDomain({
-              revalidate: 0,
-            })
+            const { conference } = await getConferenceForCurrentDomain({})
             if (conference && conference._id === conferenceId) {
               const { isConferenceOver, isCfpOpen } =
                 await import('@/lib/conference/state')
@@ -394,7 +392,7 @@ export const proposalRouter = router({
           conference,
           domain,
           error: confError,
-        } = await getConferenceForCurrentDomain({ revalidate: 0 })
+        } = await getConferenceForCurrentDomain({})
 
         if (confError || !conference) {
           throw new TRPCError({

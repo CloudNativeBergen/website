@@ -58,7 +58,7 @@ export function MetadataRow({
 }: MetadataRowProps) {
   return (
     <div className={`flex items-center text-sm text-gray-500 ${className}`}>
-      {Icon && <Icon className="mr-1 h-4 w-4 flex-shrink-0" />}
+      {Icon && <Icon className="mr-1 h-4 w-4 shrink-0" />}
       <span className="truncate">{children}</span>
     </div>
   )

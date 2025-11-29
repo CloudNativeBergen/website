@@ -3,7 +3,7 @@ import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { NextResponse } from 'next/server'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { saveScheduleToSanity } from '@/lib/schedule/sanity'
-import { revalidatePath } from 'next/cache'
+import { revalidateTag } from 'next/cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +24,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
     }
 
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain({ revalidate: 0 })
+      await getConferenceForCurrentDomain()
 
     if (conferenceError || !conference) {
       return NextResponse.json(
@@ -43,8 +43,9 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    revalidatePath('/admin/schedule')
-    revalidatePath('/program')
+    revalidateTag('content:program', 'default')
+    revalidateTag('content:conferences', 'default')
+    revalidateTag(`sanity:conference-${conference._id}`, 'default')
 
     return NextResponse.json({ schedule: savedSchedule })
   } catch (error) {

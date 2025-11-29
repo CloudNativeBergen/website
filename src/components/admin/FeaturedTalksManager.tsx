@@ -221,7 +221,7 @@ export function FeaturedTalksManager({
                             </p>
                           )}
                         </div>
-                        <div className="ml-3 flex flex-shrink-0 items-center space-x-2">
+                        <div className="ml-3 flex shrink-0 items-center space-x-2">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${getStatusColor(talk.status)}`}
                           >

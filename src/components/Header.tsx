@@ -15,15 +15,16 @@ import {
   isConferenceOver,
 } from '@/lib/conference/state'
 import { formatDatesSafe } from '@/lib/time'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 
 export function Header({ c }: { c: Conference }) {
   const { data: session } = useSession()
-  const [isClient] = useState(() => typeof window !== 'undefined')
+  const [isPast, setIsPast] = useState(false)
 
-  // Compute isPast directly from conference data
-  const isPast = isClient ? isConferenceOver(c) : false
+  useEffect(() => {
+    setIsPast(isConferenceOver(c))
+  }, [c])
 
   const currentDomain = c.domains?.[0] ?? 'cloudnativebergen.dev'
   const currentYear = parseInt(currentDomain.split('.')[0])
@@ -39,54 +40,33 @@ export function Header({ c }: { c: Conference }) {
           </Link>
         </div>
         <div className="font-jetbrains order-first -mx-4 flex flex-auto basis-full overflow-x-auto border-b border-brand-cloud-blue/10 py-4 text-sm whitespace-nowrap sm:-mx-6 lg:order-0 lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
-          {isClient ? (
-            <div
-              className={`mx-auto flex items-center gap-4 px-4 ${
-                isPast ? 'text-brand-cloud-gray' : 'text-brand-cloud-blue'
-              }`}
+          <div
+            className={`mx-auto flex items-center gap-4 px-4 ${
+              isPast ? 'text-brand-cloud-gray' : 'text-brand-cloud-blue'
+            }`}
+          >
+            <p>
+              <time dateTime={c.start_date}>
+                {formatDatesSafe(c.start_date, c.end_date)}
+              </time>
+            </p>
+            <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
+            <p>
+              {c.city}, {c.country}
+            </p>
+            {isPast && (
+              <span className="ml-2 rounded-full bg-brand-cloud-gray/20 px-2 py-0.5 text-sm font-semibold text-brand-cloud-gray">
+                Past Event
+              </span>
+            )}
+            <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
+            <a
+              href={`https://${previousDomain}`}
+              className="text-brand-cloud-blue hover:text-brand-slate-gray"
             >
-              <p>
-                <time dateTime={c.start_date}>
-                  {formatDatesSafe(c.start_date, c.end_date)}
-                </time>
-              </p>
-              <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
-              <p>
-                {c.city}, {c.country}
-              </p>
-              {isPast && (
-                <span className="ml-2 rounded-full bg-brand-cloud-gray/20 px-2 py-0.5 text-sm font-semibold text-brand-cloud-gray">
-                  Past Event
-                </span>
-              )}
-              <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
-              <a
-                href={`https://${previousDomain}`}
-                className="text-brand-cloud-blue hover:text-brand-slate-gray"
-              >
-                {previousYear} Conference
-              </a>
-            </div>
-          ) : (
-            <div className="mx-auto flex items-center gap-4 px-4 text-brand-cloud-blue">
-              <p>
-                <time dateTime={c.start_date}>
-                  {formatDatesSafe(c.start_date, c.end_date)}
-                </time>
-              </p>
-              <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
-              <p>
-                {c.city}, {c.country}
-              </p>
-              <DiamondIcon className="h-1.5 w-1.5 overflow-visible fill-current stroke-current" />
-              <a
-                href={`https://${previousDomain}`}
-                className="text-brand-cloud-blue hover:text-brand-slate-gray"
-              >
-                {previousYear} Conference
-              </a>
-            </div>
-          )}
+              {previousYear} Conference
+            </a>
+          </div>
         </div>
         <div className="hidden whitespace-nowrap sm:mt-10 sm:flex lg:mt-0 lg:grow lg:basis-0 lg:justify-end">
           {isRegistrationAvailable(c) && (

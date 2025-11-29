@@ -218,7 +218,7 @@ export function ImageCarousel({
                 key={image._id}
                 onClick={() => goToIndex(index)}
                 className={cn(
-                  'relative h-20 w-32 flex-shrink-0 overflow-hidden rounded',
+                  'relative h-20 w-32 shrink-0 overflow-hidden rounded',
                   'transition-all hover:opacity-100',
                   index === currentIndex
                     ? 'ring-2 ring-brand-cloud-blue ring-offset-2'

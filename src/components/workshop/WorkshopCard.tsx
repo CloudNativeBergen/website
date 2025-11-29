@@ -293,7 +293,7 @@ export default function WorkshopCard({
                   <div className="flex items-center gap-3">
                     <Link
                       href={`/speaker/${workshop.speakers[0].slug}`}
-                      className="flex-shrink-0"
+                      className="shrink-0"
                     >
                       {workshop.speakers[0]?.image ? (
                         <img
@@ -518,7 +518,7 @@ export default function WorkshopCard({
         {hasTimeConflict && !actuallySignedUp && (
           <div className="mb-4 rounded-lg bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
             <div className="flex items-start gap-2">
-              <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 flex-shrink-0" />
+              <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
                 <p className="font-medium">Time Conflict</p>
                 <p className="mt-1 text-xs">

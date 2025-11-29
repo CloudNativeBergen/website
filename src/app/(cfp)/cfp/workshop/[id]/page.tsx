@@ -21,8 +21,6 @@ import {
   getOperatingSystemLabel,
 } from '@/lib/workshop/utils'
 
-export const dynamic = 'force-dynamic'
-
 interface WorkshopDetailsPageProps {
   params: Promise<{ id: string }>
 }

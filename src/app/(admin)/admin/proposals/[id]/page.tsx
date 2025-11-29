@@ -28,7 +28,6 @@ export default async function ProposalDetailPage({
 
   try {
     const { conference, domain } = await getConferenceForCurrentDomain({
-      revalidate: 0,
       topics: true,
     })
     const { proposal, proposalError } = await getProposalSanity({
@@ -84,7 +83,7 @@ export default async function ProposalDetailPage({
           </div>
         </div>
 
-        <div className="w-full lg:w-96 lg:flex-shrink-0">
+        <div className="w-full lg:w-96 lg:shrink-0">
           <div className="space-y-4 p-4 lg:p-4">
             <ProposalPublishedContent
               proposalId={proposal._id}

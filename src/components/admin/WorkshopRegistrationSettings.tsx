@@ -7,7 +7,7 @@ import {
   CheckIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
-import { updateWorkshopRegistrationTimes } from '@/app/(admin)/admin/settings/actions'
+import { api } from '@/lib/trpc/client'
 
 interface WorkshopRegistrationSettingsProps {
   conferenceId: string
@@ -21,7 +21,6 @@ export function WorkshopRegistrationSettings({
   workshopRegistrationEnd,
 }: WorkshopRegistrationSettingsProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [startDate, setStartDate] = useState(
     workshopRegistrationStart
@@ -34,25 +33,25 @@ export function WorkshopRegistrationSettings({
       : '',
   )
 
+  const updateRegistrationTimes =
+    api.workshop.updateRegistrationTimes.useMutation({
+      onSuccess: () => {
+        setIsEditing(false)
+        setError(null)
+        window.location.reload()
+      },
+      onError: (error) => {
+        setError(error.message || 'Failed to update')
+      },
+    })
+
   const handleSave = async () => {
-    setIsSaving(true)
     setError(null)
-
-    const result = await updateWorkshopRegistrationTimes(
+    updateRegistrationTimes.mutate({
       conferenceId,
-      startDate || null,
-      endDate || null,
-    )
-
-    setIsSaving(false)
-
-    if (result.success) {
-      setIsEditing(false)
-      // Reload to show updated values
-      window.location.reload()
-    } else {
-      setError(result.error || 'Failed to update')
-    }
+      startDate: startDate || null,
+      endDate: endDate || null,
+    })
   }
 
   const handleCancel = () => {
@@ -159,15 +158,15 @@ export function WorkshopRegistrationSettings({
           <div className="flex gap-2">
             <button
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={updateRegistrationTimes.isPending}
               className="flex items-center gap-1 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 dark:bg-green-500 dark:hover:bg-green-600"
             >
               <CheckIcon className="h-4 w-4" />
-              {isSaving ? 'Saving...' : 'Save'}
+              {updateRegistrationTimes.isPending ? 'Saving...' : 'Save'}
             </button>
             <button
               onClick={handleCancel}
-              disabled={isSaving}
+              disabled={updateRegistrationTimes.isPending}
               className="flex items-center gap-1 rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             >
               <XMarkIcon className="h-4 w-4" />

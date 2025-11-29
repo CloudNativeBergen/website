@@ -45,7 +45,11 @@ function extractSpeakersFromSchedules(
   const speakersMap = new Map<string, SpeakerWithTalks>()
 
   schedules.forEach((schedule) => {
+    if (!schedule.tracks || !Array.isArray(schedule.tracks)) return
+
     schedule.tracks.forEach((track) => {
+      if (!track.talks || !Array.isArray(track.talks)) return
+
       track.talks.forEach((slot) => {
         if (slot.talk?.speakers && slot.talk.status === 'confirmed') {
           slot.talk.speakers.forEach((speaker) => {
@@ -80,7 +84,11 @@ function selectFeaturedTalks(
 ): { featured: TrackTalk[]; regular: TrackTalk[]; usedTalkIds: Set<string> } {
   const talks: TrackTalk[] = []
   schedules.forEach((schedule) => {
+    if (!schedule.tracks || !Array.isArray(schedule.tracks)) return
+
     schedule.tracks.forEach((t) => {
+      if (!t.talks || !Array.isArray(t.talks)) return
+
       t.talks.forEach((slot) => {
         if (
           slot.talk &&
@@ -251,9 +259,13 @@ function calculateProgramStats(
   let trackCount = 0
 
   schedules.forEach((schedule) => {
+    if (!schedule.tracks || !Array.isArray(schedule.tracks)) return
+
     trackCount = Math.max(trackCount, schedule.tracks.length)
 
     schedule.tracks.forEach((track) => {
+      if (!track.talks || !Array.isArray(track.talks)) return
+
       track.talks.forEach((slot) => {
         if (slot.talk && slot.talk.status === 'confirmed') {
           allTalks.push(slot)
@@ -511,7 +523,7 @@ export function ProgramHighlights({
         {(todaysFeaturedTalk || todaysFeaturedSpeaker) && (
           <div className="mt-20">
             <div className="mb-12 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cloud-blue to-brand-fresh-green">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl bg-linear-to-br from-brand-cloud-blue to-brand-fresh-green">
                 <StarIcon className="h-8 w-8 text-white" />
               </div>
               <h3 className="font-space-grotesk mt-4 text-3xl font-bold text-brand-slate-gray dark:text-white">

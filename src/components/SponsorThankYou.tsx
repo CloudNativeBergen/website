@@ -220,7 +220,7 @@ export async function SponsorThankYou({
 
   return (
     <div
-      className={`group @container relative overflow-hidden rounded-2xl bg-gradient-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
+      className={`group @container relative overflow-hidden rounded-2xl bg-linear-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
       style={{ aspectRatio: '16/9' }}
     >
       {showCloudNativePattern && (
@@ -237,7 +237,7 @@ export async function SponsorThankYou({
 
       <div className="relative flex h-full text-white">
         <div className="flex flex-1 flex-col justify-between p-[3cqw] pr-[1cqw] @xs:p-[4cqw] @xs:pr-[1.5cqw] @md:p-[5cqw] @md:pr-[2cqw] @xl:p-[6cqw] @xl:pr-[2.5cqw]">
-          <header className="flex-shrink-0">
+          <header className="shrink-0">
             <div className="mb-[1cqw] flex items-center gap-[2cqw] @xs:mb-[1.5cqw] @xs:gap-[2.5cqw] @md:mb-[2cqw] @md:gap-[3cqw]">
               <Icon className="h-[5cqw] w-[5cqw] @xs:h-[5.5cqw] @xs:w-[5.5cqw] @md:h-[6cqw] @md:w-[6cqw] @xl:h-[7cqw] @xl:w-[7cqw]" />
               <span className="font-inter text-[3.5cqw] leading-tight font-bold @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]">
@@ -254,7 +254,7 @@ export async function SponsorThankYou({
             )}
           </header>
 
-          <footer className="flex-shrink-0">
+          <footer className="shrink-0">
             <p className="font-inter text-[2.5cqw] leading-tight font-medium @xs:text-[3cqw] @md:text-[3.5cqw] @xl:text-[4cqw]">
               {config.footerText}
             </p>
@@ -264,18 +264,14 @@ export async function SponsorThankYou({
         <div className="flex w-[50%] flex-col justify-between p-[3cqw] @xs:p-[4cqw] @md:p-[5cqw] @xl:p-[6cqw]">
           <div className="flex-[0.8]"></div>
           <div className="flex flex-1 items-center justify-center">
-            <SponsorLogo
-              sponsor={sponsor}
-              size={45}
-              className="flex-shrink-0"
-            />
+            <SponsorLogo sponsor={sponsor} size={45} className="shrink-0" />
           </div>
           <div className="flex-[1.2]"></div>
-          <div className="flex flex-shrink-0 flex-col items-center gap-[2cqw]">
+          <div className="flex shrink-0 flex-col items-center gap-[2cqw]">
             <QRCodeDisplay
               qrCodeUrl={qrCodeUrl}
               size={12}
-              className="flex-shrink-0"
+              className="shrink-0"
             />
             <div className="flex items-center justify-center gap-[1cqw] @xs:gap-[1.5cqw] @md:gap-[2cqw]">
               <QrCodeIcon className="h-[2.5cqw] w-[2.5cqw] @xs:h-[3cqw] @xs:w-[3cqw] @md:h-[3.5cqw] @md:w-[3.5cqw]" />

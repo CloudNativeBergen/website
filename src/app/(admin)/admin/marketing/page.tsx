@@ -134,14 +134,14 @@ export default async function MarketingPage() {
   }
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({ revalidate: 0, sponsors: true })
+    await getConferenceForCurrentDomain({ sponsors: true })
 
   if (conferenceError || !conference) {
     console.error('Error loading conference:', conferenceError)
     return <ErrorDisplay message="Error loading conference data" />
   }
 
-  const featuredPhotos = await getFeaturedGalleryImages(100, 0, conference._id)
+  const featuredPhotos = await getFeaturedGalleryImages(100, conference._id)
 
   const { proposals: allProposals, proposalsError } = await getProposals({
     conferenceId: conference._id,

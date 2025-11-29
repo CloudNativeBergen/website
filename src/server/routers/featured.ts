@@ -1,5 +1,5 @@
 import { TRPCError } from '@trpc/server'
-import { revalidatePath } from 'next/cache'
+import { revalidateTag } from 'next/cache'
 import { router, adminProcedure } from '../trpc'
 import {
   FeaturedSpeakerInputSchema,
@@ -113,9 +113,9 @@ export const featuredRouter = router({
           })
         }
 
-        revalidatePath('/')
-        revalidatePath('/speaker')
-        revalidatePath('/program')
+        revalidateTag('content:featured', 'default')
+        revalidateTag('content:conferences', 'default')
+        revalidateTag(`sanity:conference-${conference._id}`, 'default')
 
         return { success: true }
       } catch (error) {
@@ -155,9 +155,9 @@ export const featuredRouter = router({
           })
         }
 
-        revalidatePath('/')
-        revalidatePath('/speaker')
-        revalidatePath('/program')
+        revalidateTag('content:featured', 'default')
+        revalidateTag('content:conferences', 'default')
+        revalidateTag(`sanity:conference-${conference._id}`, 'default')
 
         return { success: true }
       } catch (error) {
@@ -197,9 +197,10 @@ export const featuredRouter = router({
           })
         }
 
-        revalidatePath('/')
-        revalidatePath('/speaker')
-        revalidatePath('/program')
+        revalidateTag('content:featured', 'default')
+        revalidateTag('content:conferences', 'default')
+        revalidateTag('content:program', 'default')
+        revalidateTag(`sanity:conference-${conference._id}`, 'default')
 
         return { success: true }
       } catch (error) {
@@ -239,9 +240,10 @@ export const featuredRouter = router({
           })
         }
 
-        revalidatePath('/')
-        revalidatePath('/speaker')
-        revalidatePath('/program')
+        revalidateTag('content:featured', 'default')
+        revalidateTag('content:conferences', 'default')
+        revalidateTag('content:program', 'default')
+        revalidateTag(`sanity:conference-${conference._id}`, 'default')
 
         return { success: true }
       } catch (error) {

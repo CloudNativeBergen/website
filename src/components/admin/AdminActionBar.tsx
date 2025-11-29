@@ -149,7 +149,7 @@ export function AdminActionBar({
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 flex-wrap items-center gap-4">
-          <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
               Status:
             </span>
@@ -170,7 +170,7 @@ export function AdminActionBar({
           </div>
 
           {proposal.reviews && proposal.reviews.length > 0 && (
-            <div className="flex flex-shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Reviews:
               </span>
@@ -194,7 +194,7 @@ export function AdminActionBar({
           )}
 
           {speakers.length > 0 && (
-            <div className="flex flex-shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 Speaker:
               </span>
@@ -244,7 +244,7 @@ export function AdminActionBar({
           )}
         </div>
 
-        <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={handleEditProposal}
             className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"

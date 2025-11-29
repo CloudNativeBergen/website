@@ -159,7 +159,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                           value={proposal}
                           className="group flex cursor-default items-center px-4 py-2 select-none data-focus:bg-indigo-600 data-focus:text-white data-focus:outline-hidden dark:data-focus:bg-indigo-500"
                         >
-                          <div className="flex-shrink-0">
+                          <div className="shrink-0">
                             {proposal.speakers &&
                             Array.isArray(proposal.speakers) &&
                             proposal.speakers.length > 0 ? (

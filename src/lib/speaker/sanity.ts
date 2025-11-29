@@ -8,6 +8,7 @@ import { groq } from 'next-sanity'
 import { v4 as randomUUID } from 'uuid'
 import { Account, User } from 'next-auth'
 import { ProposalExisting, Status } from '../proposal/types'
+import { cacheLife, cacheTag } from 'next/cache'
 export function providerAccount(
   provider: string,
   providerAccountId: string,
@@ -45,7 +46,6 @@ async function findSpeakerByProvider(
       "image": image.asset->url
     }`,
       { id },
-      { cache: 'no-store' },
     )
   } catch (error) {
     err = error as Error
@@ -68,7 +68,6 @@ async function findSpeakerByEmail(
       "image": image.asset->url
     }`,
       { email },
-      { cache: 'no-store' },
     )
   } catch (error) {
     err = error as Error
@@ -288,6 +287,13 @@ export async function getSpeakers(
   speakers: (Speaker & { proposals: ProposalExisting[] })[]
   err: Error | null
 }> {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:speakers')
+  if (conferenceId) {
+    cacheTag(`sanity:conference-${conferenceId}`)
+  }
+
   let speakers: (Speaker & { proposals: ProposalExisting[] })[] = []
   let err = null
 

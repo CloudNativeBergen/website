@@ -27,12 +27,14 @@ export function FeaturedSpeakersManager({
     data: featuredSpeakers = [],
     isLoading: featuredLoading,
     refetch: refetchFeatured,
-  } = api.featured.featuredSpeakers.useQuery()
+  } = api.featured.featuredSpeakers.useQuery(undefined, {
+    staleTime: 5000, // 5 seconds for admin data
+  })
 
   const { data: availableSpeakers = [], isLoading: searchLoading } =
     api.speakers.search.useQuery(
       { query: searchQuery },
-      { enabled: showSearch && searchQuery.length > 0 },
+      { enabled: showSearch && searchQuery.length > 0, staleTime: 5000 },
     )
 
   const addSpeakerMutation = api.featured.addSpeaker.useMutation({

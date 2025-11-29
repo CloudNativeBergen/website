@@ -49,7 +49,7 @@ export function CompactPhotoStrip({
             <button
               key={image._id}
               onClick={() => handleImageClick(index)}
-              className="group relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200 transition-transform hover:scale-105 dark:bg-gray-700"
+              className="group relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-gray-200 transition-transform hover:scale-105 dark:bg-gray-700"
             >
               {image.image && (
                 <img
@@ -72,7 +72,7 @@ export function CompactPhotoStrip({
                 setSelectedIndex(6)
                 setIsModalOpen(true)
               }}
-              className="flex h-20 w-20 flex-shrink-0 flex-col items-center justify-center rounded-lg bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+              className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
             >
               <PhotoIcon className="h-6 w-6" />
               <span className="mt-1 text-xs font-medium">

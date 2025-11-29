@@ -16,8 +16,6 @@ import { headers } from 'next/headers'
 import { getSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
-export const dynamic = 'force-dynamic'
-
 export default async function ProposalPage({
   params,
   searchParams,
@@ -191,7 +189,7 @@ export default async function ProposalPage({
       {loadingError && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-800/50 dark:bg-blue-900/20">
           <div className="flex">
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <XCircleIcon
                 className="h-6 w-6 text-blue-600 dark:text-blue-400"
                 aria-hidden="true"
@@ -225,7 +223,7 @@ export default async function ProposalPage({
             </div>
           </div>
 
-          <div className="hidden w-80 flex-shrink-0 lg:block">
+          <div className="hidden w-80 shrink-0 lg:block">
             <ProposalGuidanceSidebar conference={conference} />
           </div>
         </div>

@@ -87,7 +87,7 @@ export default async function SpeakerDashboard() {
             speakerId,
             conferenceId: conference._id,
           },
-          { useCache: true, revalidate: 300 },
+          { useCache: true },
         ),
         getWorkshopSignupStatisticsBySpeaker(speakerId, conference._id).catch(
           () => [],

@@ -27,7 +27,7 @@ export function PatternExample({
   const backgroundClass = isLight
     ? 'border-2 border-brand-frosted-steel bg-white'
     : variant === 'dark'
-      ? 'bg-gradient-to-br from-slate-900 to-blue-900'
+      ? 'bg-linear-to-br from-slate-900 to-blue-900'
       : 'bg-brand-gradient'
 
   return (

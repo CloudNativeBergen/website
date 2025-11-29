@@ -87,7 +87,6 @@ export default async function AdminTickets() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       sponsors: true,
-      revalidate: 0,
     })
 
   if (
@@ -548,7 +547,7 @@ export default async function AdminTickets() {
             className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <ShoppingBagIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
@@ -567,7 +566,7 @@ export default async function AdminTickets() {
             className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <CreditCardIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">
@@ -586,7 +585,7 @@ export default async function AdminTickets() {
             className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
           >
             <div className="flex items-center space-x-3">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 <HomeIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
               </div>
               <div className="min-w-0 flex-1">

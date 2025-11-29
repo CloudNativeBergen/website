@@ -63,7 +63,7 @@ export function SpeakerShareWrapper({
       eventName={eventName}
     >
       <div
-        className={`group @container relative aspect-square w-full overflow-hidden rounded-2xl bg-gradient-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
+        className={`group @container relative aspect-square w-full overflow-hidden rounded-2xl bg-linear-to-br ${backgroundStyle} border border-gray-200 transition-all duration-300 hover:shadow-xl ${className}`}
       >
         {showCloudNativePattern && (
           <CloudNativePattern
@@ -92,7 +92,7 @@ export function SpeakerShareWrapper({
 
           <section className="mb-[2cqw] shrink-0 @xs:mb-[3cqw] @md:mb-[4cqw]">
             <div className="flex items-center justify-center gap-[7cqw] @xs:gap-[8cqw] @md:gap-[12cqw] @xl:gap-[15cqw]">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 {image ? (
                   <img
                     src={sanityImage(image)
@@ -118,7 +118,7 @@ export function SpeakerShareWrapper({
               </div>
 
               <div
-                className="h-[25cqw] w-[25cqw] flex-shrink-0 rounded-[1.5cqw] bg-white shadow-lg @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @xl:h-[40cqw] @xl:w-[40cqw]"
+                className="h-[25cqw] w-[25cqw] shrink-0 rounded-[1.5cqw] bg-white shadow-lg @xs:h-[28cqw] @xs:w-[28cqw] @md:h-[35cqw] @md:w-[35cqw] @xl:h-[40cqw] @xl:w-[40cqw]"
                 style={{ padding: '0.8cqw' }}
                 data-qr-code="true"
               >

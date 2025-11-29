@@ -1,6 +1,8 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
 
 export const metadata = {
   title: 'Code of Conduct - Cloud Native Bergen',
@@ -8,8 +10,12 @@ export const metadata = {
     'Community Code of Conduct for Cloud Native Bergen events and activities.',
 }
 
-export default async function CodeOfConduct() {
-  const { conference } = await getConferenceForCurrentDomain()
+async function CachedConductContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('max')
+  cacheTag('content:conduct')
+
+  const { conference } = await getConferenceForDomain(domain)
   const organizerName = conference?.organizer || 'Cloud Native Bergen'
 
   return (
@@ -301,4 +307,11 @@ export default async function CodeOfConduct() {
       </div>
     </>
   )
+}
+
+export default async function ConductPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedConductContent domain={domain} />
 }

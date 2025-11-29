@@ -2,13 +2,17 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { getSpeakers } from '@/lib/speaker/sanity'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { SpeakerWithTalks } from '@/lib/speaker/types'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
 
-export const revalidate = 3600
+async function CachedSpeakersContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:speakers')
 
-export default async function Speakers() {
-  const { conference } = await getConferenceForCurrentDomain()
+  const { conference } = await getConferenceForDomain(domain)
 
   const { speakers, err } = await getSpeakers(conference._id)
   if (err) {
@@ -52,4 +56,11 @@ export default async function Speakers() {
       </div>
     </>
   )
+}
+
+export default async function Speakers() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedSpeakersContent domain={domain} />
 }

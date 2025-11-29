@@ -163,7 +163,7 @@ function FieldRow({
                   className="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-500 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
                 >
                   <span className="max-w-sm truncate">{link as string}</span>
-                  <LinkIcon className="ml-1 h-3 w-3 flex-shrink-0" />
+                  <LinkIcon className="ml-1 h-3 w-3 shrink-0" />
                 </a>
               </div>
             ))}
@@ -266,7 +266,6 @@ export default async function AdminSettings() {
     sponsors: true,
     sponsorTiers: true,
     topics: true,
-    revalidate: 0,
   })
 
   if (error) {

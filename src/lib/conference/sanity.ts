@@ -1,10 +1,23 @@
 import { clientWrite } from '../sanity/client'
 import { Conference } from './types'
 import { headers } from 'next/headers'
+import { cacheLife, cacheTag } from 'next/cache'
 import {
   getFeaturedGalleryImages,
   getGalleryImages,
 } from '@/lib/gallery/sanity'
+
+async function fetchConferenceData(
+  domain: string,
+  wildcardSubdomain: string,
+  query: string,
+) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:conferences')
+  cacheTag(`domain:${domain}`)
+  return clientWrite.fetch(query, { domain, wildcardSubdomain })
+}
 
 export async function getConferenceForCurrentDomain({
   organizers = false,
@@ -17,7 +30,6 @@ export async function getConferenceForCurrentDomain({
   featuredTalks = false,
   confirmedTalksOnly = true,
   gallery = false,
-  revalidate = 3600,
 }: {
   organizers?: boolean
   schedule?: boolean
@@ -35,7 +47,6 @@ export async function getConferenceForCurrentDomain({
         limit?: number
         featuredOnly?: boolean
       }
-  revalidate?: number
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -55,7 +66,6 @@ export async function getConferenceForCurrentDomain({
       featuredTalks,
       confirmedTalksOnly,
       gallery,
-      revalidate,
     })
   } catch (err) {
     const error = err as Error
@@ -77,7 +87,6 @@ export async function getConferenceForDomain(
     featuredTalks = false,
     confirmedTalksOnly = true,
     gallery = false,
-    revalidate = 3600,
   }: {
     organizers?: boolean
     schedule?: boolean
@@ -95,7 +104,6 @@ export async function getConferenceForDomain(
           limit?: number
           featuredOnly?: boolean
         }
-    revalidate?: number
   } = {},
 ): Promise<{ conference: Conference; domain: string; error: Error | null }> {
   let conference = {} as Conference
@@ -275,15 +283,11 @@ export async function getConferenceForDomain(
       }
     }`
 
-    // Fetch conference data first
-    const conferenceData = await clientWrite.fetch(
+    // Fetch conference data with caching
+    const conferenceData = await fetchConferenceData(
+      domain,
+      wildcardSubdomain,
       query,
-      { domain, wildcardSubdomain },
-      {
-        next: {
-          revalidate: revalidate,
-        },
-      },
     )
 
     if (conferenceData) {
@@ -301,7 +305,6 @@ export async function getConferenceForDomain(
         if (featuredOnly) {
           const featuredGalleryImages = await getFeaturedGalleryImages(
             galleryOptions.featuredLimit,
-            revalidate,
             conference._id,
           )
           conference.featuredGalleryImages = featuredGalleryImages
@@ -309,16 +312,12 @@ export async function getConferenceForDomain(
           const [featuredGalleryImages, galleryImages] = await Promise.all([
             getFeaturedGalleryImages(
               galleryOptions.featuredLimit ?? 8,
-              revalidate,
               conference._id,
             ),
-            getGalleryImages(
-              {
-                limit: galleryOptions.limit ?? 50,
-                conferenceId: conference._id,
-              },
-              { revalidate },
-            ),
+            getGalleryImages({
+              limit: galleryOptions.limit ?? 50,
+              conferenceId: conference._id,
+            }),
           ])
 
           conference.featuredGalleryImages = featuredGalleryImages
@@ -342,19 +341,12 @@ export async function getConferenceForDomain(
         if (featuredOnly) {
           const featuredGalleryImages = await getFeaturedGalleryImages(
             galleryOptions.featuredLimit,
-            revalidate,
           )
           conference.featuredGalleryImages = featuredGalleryImages
         } else {
           const [featuredGalleryImages, galleryImages] = await Promise.all([
-            getFeaturedGalleryImages(
-              galleryOptions.featuredLimit ?? 8,
-              revalidate,
-            ),
-            getGalleryImages(
-              { limit: galleryOptions.limit ?? 50 },
-              { revalidate },
-            ),
+            getFeaturedGalleryImages(galleryOptions.featuredLimit ?? 8),
+            getGalleryImages({ limit: galleryOptions.limit ?? 50 }),
           ])
 
           conference.featuredGalleryImages = featuredGalleryImages

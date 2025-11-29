@@ -417,7 +417,7 @@ export function ImageMetadataModal({
                                     date: newDate,
                                   }))
                                 }}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:scheme-dark dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                                 required
                               />
                             </div>
@@ -444,7 +444,7 @@ export function ImageMetadataModal({
                                     ),
                                   }))
                                 }}
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:[color-scheme:dark] dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
+                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:scheme-dark dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                                 required
                               />
                             </div>
@@ -544,7 +544,7 @@ export function ImageMetadataModal({
                                     {({ selected, active }) => (
                                       <div className="flex items-center gap-3">
                                         {speaker.image ? (
-                                          <div className="relative h-8 w-8 flex-shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                          <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                                             <img
                                               src={`${speaker.image}?w=64&h=64&q=85&auto=format&fit=crop`}
                                               alt={speaker.name}
@@ -553,7 +553,7 @@ export function ImageMetadataModal({
                                           </div>
                                         ) : (
                                           <div
-                                            className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${active ? 'bg-indigo-700' : 'bg-gray-200 dark:bg-gray-700'}`}
+                                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${active ? 'bg-indigo-700' : 'bg-gray-200 dark:bg-gray-700'}`}
                                           >
                                             <span
                                               className={`text-xs font-medium ${active ? 'text-white' : 'text-gray-600 dark:text-gray-300'}`}
@@ -589,7 +589,7 @@ export function ImageMetadataModal({
                                         </div>
                                         {selected && (
                                           <CheckIcon
-                                            className={`h-5 w-5 flex-shrink-0 ${active ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`}
+                                            className={`h-5 w-5 shrink-0 ${active ? 'text-white' : 'text-indigo-600 dark:text-indigo-400'}`}
                                           />
                                         )}
                                       </div>
@@ -609,7 +609,7 @@ export function ImageMetadataModal({
                                 className="inline-flex items-center gap-x-2 rounded-full bg-indigo-100 py-1 pr-2 pl-1 text-xs font-medium text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400"
                               >
                                 {speaker.image ? (
-                                  <div className="relative h-5 w-5 flex-shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                                  <div className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                                     <img
                                       src={`${speaker.image}?w=40&h=40&q=85&auto=format&fit=crop`}
                                       alt={speaker.name}
@@ -617,7 +617,7 @@ export function ImageMetadataModal({
                                     />
                                   </div>
                                 ) : (
-                                  <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-200 dark:bg-indigo-500/20">
+                                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-200 dark:bg-indigo-500/20">
                                     <span className="text-[10px] font-medium text-indigo-700 dark:text-indigo-400">
                                       {speaker.name.charAt(0).toUpperCase()}
                                     </span>

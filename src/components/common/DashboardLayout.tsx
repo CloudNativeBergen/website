@@ -353,7 +353,7 @@ export function DashboardLayout({
                   className="flex w-full max-w-lg items-center gap-x-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-500 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 hover:text-gray-700 focus:ring-2 focus:ring-indigo-600 focus:outline-none focus:ring-inset lg:max-w-xs dark:bg-gray-900 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-300 dark:focus:ring-indigo-500"
                 >
                   <MagnifyingGlassIcon
-                    className="h-5 w-5 flex-shrink-0"
+                    className="h-5 w-5 shrink-0"
                     aria-hidden="true"
                   />
                   <span className="flex-1 text-left">Search proposals...</span>

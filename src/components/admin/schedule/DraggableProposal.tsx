@@ -207,12 +207,12 @@ export function DraggableProposal({
 
     const titleContent = isWithdrawnOrRejected ? (
       <span className="flex items-center gap-1">
-        <ExclamationTriangleIcon className="h-3 w-3 flex-shrink-0 text-red-500 dark:text-red-400" />
+        <ExclamationTriangleIcon className="h-3 w-3 shrink-0 text-red-500 dark:text-red-400" />
         <span className="truncate">{proposal.title}</span>
       </span>
     ) : isAcceptedButNotConfirmed ? (
       <span className="flex items-center gap-1">
-        <ExclamationTriangleIcon className="h-3 w-3 flex-shrink-0 text-amber-600 dark:text-amber-300" />
+        <ExclamationTriangleIcon className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-300" />
         <span className="truncate">{proposal.title}</span>
       </span>
     ) : (
@@ -250,7 +250,7 @@ export function DraggableProposal({
 
     return (
       <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
-        <UserIcon className="h-3 w-3 flex-shrink-0" />
+        <UserIcon className="h-3 w-3 shrink-0" />
         <span className="truncate">{speakerInfo}</span>
       </div>
     )
@@ -263,7 +263,7 @@ export function DraggableProposal({
 
     return (
       <div className="flex items-center gap-1">
-        <UserGroupIcon className="h-3 w-3 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+        <UserGroupIcon className="h-3 w-3 shrink-0 text-gray-500 dark:text-gray-400" />
         <span
           className="text-xs font-medium text-gray-600 dark:text-gray-400"
           title={`Primary: ${audiences.get(proposal.audiences?.[0])}${
@@ -289,12 +289,12 @@ export function DraggableProposal({
 
     return (
       <div className="flex items-center gap-1">
-        <TagIcon className="h-3 w-3 flex-shrink-0 text-gray-500 dark:text-gray-400" />
+        <TagIcon className="h-3 w-3 shrink-0 text-gray-500 dark:text-gray-400" />
         <div className="flex items-center gap-1">
           {displayTopics.map((topic, index) => (
             <span
               key={topic._id || index}
-              className="h-3 w-3 flex-shrink-0 rounded-sm"
+              className="h-3 w-3 shrink-0 rounded-sm"
               style={{ backgroundColor: formatColor(topic.color) }}
               title={topic.title}
             />
@@ -380,7 +380,7 @@ export function DraggableProposal({
       >
         <div className="flex min-h-[16px] items-center gap-1">
           <div
-            className="flex-shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
             {...listeners}
           >
             <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
@@ -391,13 +391,13 @@ export function DraggableProposal({
             {levelConfig && (
               <LevelIndicator
                 level={proposal.level}
-                className="flex-shrink-0"
+                className="shrink-0"
                 size="xs"
               />
             )}
           </div>
 
-          <div className="flex flex-shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
             <ClockIcon
               className={
                 talkSize === 'short' || talkSize === 'very-short'

@@ -25,7 +25,7 @@ export function CompactWorkshopStats({ stats }: CompactWorkshopStatsProps) {
             className="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm transition-colors hover:bg-gray-100 dark:bg-gray-900/50 dark:hover:bg-gray-800"
           >
             <div className="flex min-w-0 items-center gap-2">
-              <CheckCircleIcon className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />
+              <CheckCircleIcon className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
               <span className="truncate font-medium text-gray-900 dark:text-white">
                 {stat.workshopTitle}
               </span>

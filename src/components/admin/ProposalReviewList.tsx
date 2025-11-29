@@ -77,7 +77,7 @@ export function ProposalReviewList({
           >
             {/* Reviewer Info */}
             <div className="mb-3 flex items-start space-x-3">
-              <div className="flex-shrink-0">
+              <div className="shrink-0">
                 {reviewer?.image ? (
                   <img
                     src={sanityImage(reviewer.image)

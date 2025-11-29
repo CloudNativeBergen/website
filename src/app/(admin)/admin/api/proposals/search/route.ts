@@ -28,7 +28,7 @@ export const GET = auth(async (req: NextAuthRequest): Promise<Response> => {
   }
 
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({ revalidate: 0 })
+    await getConferenceForCurrentDomain({})
 
   if (conferenceError) {
     return proposalListResponseError(

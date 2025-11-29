@@ -19,7 +19,7 @@ export function createLocalhostWarning(
   return (
     <div className="rounded-md bg-yellow-50 p-4 dark:bg-yellow-900/30">
       <div className="flex">
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <BellIcon
             className="h-5 w-5 text-yellow-400 dark:text-yellow-300"
             aria-hidden="true"

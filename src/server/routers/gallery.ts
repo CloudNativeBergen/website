@@ -21,9 +21,7 @@ export const galleryRouter = router({
     .input(galleryImageFilterSchema)
     .query(async ({ input }) => {
       try {
-        const { conference } = await getConferenceForCurrentDomain({
-          revalidate: 0,
-        })
+        const { conference } = await getConferenceForCurrentDomain({})
         if (!conference) {
           throw new TRPCError({
             code: 'NOT_FOUND',
@@ -128,9 +126,7 @@ export const galleryRouter = router({
     .input(galleryImageFilterSchema)
     .query(async ({ input }) => {
       try {
-        const { conference } = await getConferenceForCurrentDomain({
-          revalidate: 0,
-        })
+        const { conference } = await getConferenceForCurrentDomain({})
         if (!conference) {
           throw new TRPCError({
             code: 'NOT_FOUND',

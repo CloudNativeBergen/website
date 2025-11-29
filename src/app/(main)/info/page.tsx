@@ -1,9 +1,16 @@
 import { formatDate } from '@/lib/time'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Container } from '@/components/Container'
 import { InfoContent } from '@/components/info/InfoContent'
 import type { ConferenceSchedule } from '@/lib/conference/types'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
+
+export const metadata = {
+  title: 'Practical Information - Cloud Native Bergen',
+  description: 'Essential details for attending Cloud Native Bergen conference',
+}
 
 function getScheduleDayInfo(schedules: ConferenceSchedule[] | undefined) {
   if (!schedules || schedules.length === 0) {
@@ -58,8 +65,14 @@ function getScheduleDayInfo(schedules: ConferenceSchedule[] | undefined) {
   }
 }
 
-export default async function Info() {
-  const { conference } = await getConferenceForCurrentDomain({ schedule: true })
+async function CachedInfoContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:info')
+
+  const { conference } = await getConferenceForDomain(domain, {
+    schedule: true,
+  })
 
   if (!conference) {
     return null
@@ -231,4 +244,11 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
       <InfoContent faqs={faqs} />
     </>
   )
+}
+
+export default async function InfoPage() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedInfoContent domain={domain} />
 }

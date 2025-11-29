@@ -394,21 +394,21 @@ export function CloudNativePattern({
     if (variant === 'light') {
       return {
         deep: 'bg-gradient-to-r from-blue-50/5 via-purple-50/8 to-cyan-50/5',
-        mid: 'bg-gradient-to-br from-cyan-50/6 via-transparent to-indigo-50/6',
+        mid: 'bg-linear-to-br from-cyan-50/6 via-transparent to-indigo-50/6',
         foreground:
           'bg-gradient-to-t from-transparent via-transparent to-blue-50/3',
       }
     } else if (variant === 'dark') {
       return {
         deep: 'bg-gradient-to-r from-blue-950/10 via-purple-950/12 to-cyan-950/10',
-        mid: 'bg-gradient-to-br from-cyan-950/8 via-transparent to-indigo-950/8',
+        mid: 'bg-linear-to-br from-cyan-950/8 via-transparent to-indigo-950/8',
         foreground:
           'bg-gradient-to-t from-transparent via-slate-950/5 to-blue-950/6',
       }
     } else {
       return {
         deep: 'bg-gradient-to-r from-blue-900/15 via-purple-900/20 to-cyan-900/15',
-        mid: 'bg-gradient-to-br from-cyan-900/12 via-transparent to-indigo-900/12',
+        mid: 'bg-linear-to-br from-cyan-900/12 via-transparent to-indigo-900/12',
         foreground:
           'bg-gradient-to-t from-transparent via-transparent to-blue-900/8',
       }

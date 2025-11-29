@@ -2,19 +2,22 @@ import { Hero } from '@/components/Hero'
 import { ProgramHighlights } from '@/components/ProgramHighlights'
 import { Sponsors } from '@/components/Sponsors'
 import { ImageGallery } from '@/components/ImageGallery'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getConferenceForDomain } from '@/lib/conference/sanity'
+import { cacheLife, cacheTag } from 'next/cache'
+import { headers } from 'next/headers'
 
-export const revalidate = 300
+async function CachedHomeContent({ domain }: { domain: string }) {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('content:homepage')
 
-export default async function Home() {
-  const { conference, error } = await getConferenceForCurrentDomain({
+  const { conference, error } = await getConferenceForDomain(domain, {
     organizers: true,
+    sponsors: true,
     featuredSpeakers: true,
     featuredTalks: true,
     schedule: true,
-    sponsors: true,
     gallery: { featuredOnly: true },
-    revalidate,
   })
 
   if (error) {
@@ -40,4 +43,11 @@ export default async function Home() {
       <Sponsors sponsors={conference.sponsors || []} />
     </>
   )
+}
+
+export default async function Home() {
+  const headersList = await headers()
+  const domain = headersList.get('host') || ''
+
+  return <CachedHomeContent domain={domain} />
 }

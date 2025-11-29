@@ -95,7 +95,7 @@ export function ProposalReviewPanel({
   }, [proposalId])
   return (
     <>
-      <div className="w-full lg:w-96 lg:flex-shrink-0 lg:overflow-y-auto">
+      <div className="w-full lg:w-96 lg:shrink-0 lg:overflow-y-auto">
         <div className="space-y-4 p-4 lg:p-4">
           <ProposalReviewSummary reviews={reviews} />
 

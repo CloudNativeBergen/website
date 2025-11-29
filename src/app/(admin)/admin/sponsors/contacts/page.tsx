@@ -18,7 +18,6 @@ export default async function AdminSponsorContacts() {
       await getConferenceForCurrentDomain({
         sponsors: true,
         sponsorContact: true,
-        revalidate: 0,
       })
 
     if (conferenceError || !conference || !conference.sponsors) {

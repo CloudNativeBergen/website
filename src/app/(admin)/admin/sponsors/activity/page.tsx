@@ -4,9 +4,7 @@ import { ClipboardDocumentListIcon } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsorActivity() {
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({
-      revalidate: 0,
-    })
+    await getConferenceForCurrentDomain({})
 
   if (conferenceError) {
     return (
