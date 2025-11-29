@@ -12,8 +12,15 @@ import {
 import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 
+interface CFPHealthConfig {
+  submissionTarget?: number
+  showTrend?: boolean
+  showFormatBreakdown?: boolean
+}
+
 interface CFPHealthWidgetProps {
   conference?: Conference
+  config?: CFPHealthConfig
   data?: {
     totalSubmissions: number
     submissionGoal: number
@@ -24,9 +31,18 @@ interface CFPHealthWidgetProps {
   }
 }
 
-export function CFPHealthWidget({ conference, data }: CFPHealthWidgetProps) {
+export function CFPHealthWidget({
+  conference,
+  config,
+  data,
+}: CFPHealthWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [now] = useState(() => Date.now())
+
+  // Apply config defaults
+  const submissionTarget = config?.submissionTarget ?? 100
+  const showTrend = config?.showTrend ?? true
+  const showFormatBreakdown = config?.showFormatBreakdown ?? true
 
   // Phase-specific views
   if (phase === 'initialization' && conference) {
@@ -61,7 +77,7 @@ export function CFPHealthWidget({ conference, data }: CFPHealthWidgetProps) {
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.ceil(
                   (new Date(conference.cfp_start_date).getTime() - now) /
-                  (1000 * 60 * 60 * 24),
+                    (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -74,7 +90,7 @@ export function CFPHealthWidget({ conference, data }: CFPHealthWidgetProps) {
                 {Math.ceil(
                   (new Date(conference.cfp_end_date).getTime() -
                     new Date(conference.cfp_start_date).getTime()) /
-                  (1000 * 60 * 60 * 24),
+                    (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -198,9 +214,17 @@ export function CFPHealthWidget({ conference, data }: CFPHealthWidgetProps) {
   if (!data) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No CFP data available
-        </p>
+        <div>
+          <DocumentTextIcon className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No CFP data available
+          </p>
+          {config && (
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Target: {submissionTarget} submissions
+            </p>
+          )}
+        </div>
       </div>
     )
   }
@@ -208,14 +232,22 @@ export function CFPHealthWidget({ conference, data }: CFPHealthWidgetProps) {
   if (data.totalSubmissions === 0) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No submissions yet
-        </p>
+        <div>
+          <ClockIcon className="mx-auto mb-2 h-12 w-12 text-gray-400" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No submissions yet
+          </p>
+          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            Goal: {data.submissionGoal || submissionTarget} submissions
+          </p>
+        </div>
       </div>
     )
   }
 
-  const progress = (data.totalSubmissions / data.submissionGoal) * 100
+  // Use configured target or data target
+  const effectiveGoal = data.submissionGoal || submissionTarget
+  const progress = (data.totalSubmissions / effectiveGoal) * 100
   const maxSubmissions = Math.max(
     ...data.submissionsPerDay.map((d) => d.count),
     1,
@@ -245,7 +277,7 @@ export function CFPHealthWidget({ conference, data }: CFPHealthWidgetProps) {
               {data.totalSubmissions}
             </div>
             <div className="text-[10px] text-blue-600 dark:text-blue-300">
-              of {data.submissionGoal} goal
+              of {effectiveGoal} goal
             </div>
           </div>
           <DocumentTextIcon className="absolute -right-2 -bottom-2 h-16 w-16 text-blue-300/40 @[400px]:h-20 @[400px]:w-20 dark:text-blue-600/30" />
@@ -285,54 +317,58 @@ export function CFPHealthWidget({ conference, data }: CFPHealthWidgetProps) {
       </div>
 
       {/* Minimal chart - Sparkline style */}
-      <div className="mb-2">
-        <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-          Submissions Trend
-        </h4>
-        <div className="flex h-8 items-end gap-0.5 @[400px]:h-10">
-          {data.submissionsPerDay.map((day, index) => {
-            const height = (day.count / maxSubmissions) * 100
-            return (
-              <div
-                key={index}
-                className="flex-1 rounded-t bg-blue-500 transition-all hover:bg-blue-600 dark:bg-blue-400 dark:hover:bg-blue-300"
-                style={{ height: `${height}%`, minHeight: '3px' }}
-                title={`${day.date}: ${day.count}`}
-              />
-            )
-          })}
+      {showTrend && data.submissionsPerDay.length > 0 && (
+        <div className="mb-2">
+          <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+            Submissions Trend
+          </h4>
+          <div className="flex h-8 items-end gap-0.5 @[400px]:h-10">
+            {data.submissionsPerDay.map((day, index) => {
+              const height = (day.count / maxSubmissions) * 100
+              return (
+                <div
+                  key={index}
+                  className="flex-1 rounded-t bg-blue-500 transition-all hover:bg-blue-600 dark:bg-blue-400 dark:hover:bg-blue-300"
+                  style={{ height: `${height}%`, minHeight: '3px' }}
+                  title={`${day.date}: ${day.count}`}
+                />
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Format Distribution - Compact bars */}
-      <div className="min-h-0 flex-1">
-        <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-          Format Distribution
-        </h4>
-        <div className="space-y-1.5">
-          {data.formatDistribution.map((format) => {
-            const percentage = (format.count / data.totalSubmissions) * 100
-            return (
-              <div key={format.format}>
-                <div className="mb-0.5 flex items-center justify-between">
-                  <span className="text-[11px] text-gray-700 dark:text-gray-300">
-                    {format.format}
-                  </span>
-                  <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
-                    {format.count}
-                  </span>
+      {showFormatBreakdown && data.formatDistribution.length > 0 && (
+        <div className="min-h-0 flex-1">
+          <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+            Format Distribution
+          </h4>
+          <div className="space-y-1.5">
+            {data.formatDistribution.map((format) => {
+              const percentage = (format.count / data.totalSubmissions) * 100
+              return (
+                <div key={format.format}>
+                  <div className="mb-0.5 flex items-center justify-between">
+                    <span className="text-[11px] text-gray-700 dark:text-gray-300">
+                      {format.format}
+                    </span>
+                    <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
+                      {format.count}
+                    </span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div
+                      className="h-full rounded-full bg-blue-500 transition-all duration-500 dark:bg-blue-400"
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                  <div
-                    className="h-full rounded-full bg-blue-500 transition-all duration-500 dark:bg-blue-400"
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

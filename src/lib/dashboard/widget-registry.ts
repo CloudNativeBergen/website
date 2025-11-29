@@ -6,6 +6,8 @@
  */
 
 import { defineWidget, type WidgetMetadata } from './widget-metadata'
+import { z } from 'zod'
+import type { WidgetConfigSchema } from './types'
 
 /**
  * Quick Actions Widget
@@ -82,6 +84,32 @@ export const REVIEW_PROGRESS_WIDGET = defineWidget({
     hideInIrrelevantPhases: false,
     isPhaseAdaptive: true,
   },
+  configSchema: {
+    fields: {
+      targetReviewsPerDay: {
+        type: 'number',
+        label: 'Target Reviews Per Day',
+        description: 'Goal number of reviews to complete daily',
+        defaultValue: 5,
+        min: 1,
+        max: 50,
+        step: 1,
+        unit: 'reviews/day',
+        schema: z.number().min(1).max(50),
+      },
+      showAverageScore: {
+        type: 'boolean',
+        label: 'Show Average Score',
+        description: 'Display average review score',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+    },
+    schema: z.object({
+      targetReviewsPerDay: z.number().min(1).max(50),
+      showAverageScore: z.boolean(),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**
@@ -112,6 +140,32 @@ export const PROPOSAL_PIPELINE_WIDGET = defineWidget({
     { name: 'large', colSpan: 8, rowSpan: 5 },
   ],
   tags: ['proposals', 'pipeline', 'analytics', 'chart'],
+  configSchema: {
+    fields: {
+      targetAcceptanceRate: {
+        type: 'number',
+        label: 'Target Acceptance Rate',
+        description: 'Goal acceptance rate percentage',
+        defaultValue: 30,
+        min: 1,
+        max: 100,
+        step: 5,
+        unit: '%',
+        schema: z.number().min(1).max(100),
+      },
+      showPercentages: {
+        type: 'boolean',
+        label: 'Show Percentages',
+        description: 'Display percentages on pipeline bars',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+    },
+    schema: z.object({
+      targetAcceptanceRate: z.number().min(1).max(100),
+      showPercentages: z.boolean(),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**
@@ -142,6 +196,36 @@ export const UPCOMING_DEADLINES_WIDGET = defineWidget({
     { name: 'wide', colSpan: 12, rowSpan: 3 },
   ],
   tags: ['deadlines', 'calendar', 'timeline'],
+  configSchema: {
+    fields: {
+      urgentThreshold: {
+        type: 'number',
+        label: 'Urgent Threshold',
+        description: 'Days before deadline to show as urgent',
+        defaultValue: 7,
+        min: 1,
+        max: 30,
+        step: 1,
+        unit: 'days',
+        schema: z.number().min(1).max(30),
+      },
+      maxDeadlines: {
+        type: 'number',
+        label: 'Maximum Deadlines',
+        description: 'Number of deadlines to display',
+        defaultValue: 5,
+        min: 3,
+        max: 10,
+        step: 1,
+        unit: 'items',
+        schema: z.number().min(3).max(10),
+      },
+    },
+    schema: z.object({
+      urgentThreshold: z.number().min(1).max(30),
+      maxDeadlines: z.number().min(3).max(10),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**
@@ -171,6 +255,40 @@ export const CFP_HEALTH_WIDGET = defineWidget({
     { name: 'large', colSpan: 8, rowSpan: 5 },
   ],
   tags: ['cfp', 'submissions', 'analytics', 'chart'],
+  configSchema: {
+    fields: {
+      submissionTarget: {
+        type: 'number',
+        label: 'Submission Target',
+        description: 'Goal number of submissions for this CFP',
+        defaultValue: 100,
+        min: 1,
+        max: 1000,
+        step: 10,
+        unit: 'submissions',
+        schema: z.number().min(1).max(1000),
+      },
+      showTrend: {
+        type: 'boolean',
+        label: 'Show Trend Chart',
+        description: 'Display submission trend over time',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+      showFormatBreakdown: {
+        type: 'boolean',
+        label: 'Show Format Breakdown',
+        description: 'Display breakdown by talk format',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+    },
+    schema: z.object({
+      submissionTarget: z.number().min(1).max(1000),
+      showTrend: z.boolean(),
+      showFormatBreakdown: z.boolean(),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**
@@ -248,6 +366,44 @@ export const TICKET_SALES_WIDGET = defineWidget({
     hideInIrrelevantPhases: false,
     isPhaseAdaptive: true,
   },
+  configSchema: {
+    fields: {
+      capacityTarget: {
+        type: 'number',
+        label: 'Capacity Target',
+        description: 'Total ticket capacity for the event',
+        defaultValue: 500,
+        min: 50,
+        max: 10000,
+        step: 50,
+        unit: 'tickets',
+        schema: z.number().min(50).max(10000),
+      },
+      revenueTarget: {
+        type: 'number',
+        label: 'Revenue Target',
+        description: 'Target revenue in local currency',
+        defaultValue: 100000,
+        min: 1000,
+        max: 10000000,
+        step: 1000,
+        unit: 'NOK',
+        schema: z.number().min(1000).max(10000000),
+      },
+      showTrend: {
+        type: 'boolean',
+        label: 'Show Sales Trend',
+        description: 'Display sales trend chart',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+    },
+    schema: z.object({
+      capacityTarget: z.number().min(50).max(10000),
+      revenueTarget: z.number().min(1000).max(10000000),
+      showTrend: z.boolean(),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**
@@ -287,6 +443,36 @@ export const SPEAKER_ENGAGEMENT_WIDGET = defineWidget({
     hideInIrrelevantPhases: false,
     isPhaseAdaptive: true,
   },
+  configSchema: {
+    fields: {
+      showDiversityMetrics: {
+        type: 'boolean',
+        label: 'Show Diversity Metrics',
+        description: 'Display diversity statistics',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+      showGeography: {
+        type: 'boolean',
+        label: 'Show Geographic Distribution',
+        description: 'Display speaker locations',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+      showFirstTimers: {
+        type: 'boolean',
+        label: 'Show First-Time Speakers',
+        description: 'Highlight first-time speakers',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+    },
+    schema: z.object({
+      showDiversityMetrics: z.boolean(),
+      showGeography: z.boolean(),
+      showFirstTimers: z.boolean(),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**
@@ -317,6 +503,40 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
     { name: 'full', colSpan: 12, rowSpan: 5 },
   ],
   tags: ['sponsors', 'revenue', 'pipeline', 'crm'],
+  configSchema: {
+    fields: {
+      revenueTarget: {
+        type: 'number',
+        label: 'Sponsorship Revenue Target',
+        description: 'Target sponsorship revenue',
+        defaultValue: 500000,
+        min: 10000,
+        max: 10000000,
+        step: 10000,
+        unit: 'NOK',
+        schema: z.number().min(10000).max(10000000),
+      },
+      showPipeline: {
+        type: 'boolean',
+        label: 'Show Pipeline Stages',
+        description: 'Display deals by pipeline stage',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+      showContractStatus: {
+        type: 'boolean',
+        label: 'Show Contract Status',
+        description: 'Display contract signing status',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+    },
+    schema: z.object({
+      revenueTarget: z.number().min(10000).max(10000000),
+      showPipeline: z.boolean(),
+      showContractStatus: z.boolean(),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**
@@ -377,6 +597,40 @@ export const TRAVEL_SUPPORT_WIDGET = defineWidget({
     { name: 'large', colSpan: 4, rowSpan: 5 },
   ],
   tags: ['travel', 'support', 'budget', 'expenses'],
+  configSchema: {
+    fields: {
+      totalBudget: {
+        type: 'number',
+        label: 'Total Travel Budget',
+        description: 'Total budget allocated for travel support',
+        defaultValue: 100000,
+        min: 1000,
+        max: 1000000,
+        step: 1000,
+        unit: 'NOK',
+        schema: z.number().min(1000).max(1000000),
+      },
+      showPendingRequests: {
+        type: 'boolean',
+        label: 'Show Pending Requests',
+        description: 'Display pending approval requests',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+      showBudgetUtilization: {
+        type: 'boolean',
+        label: 'Show Budget Utilization',
+        description: 'Display budget usage percentage',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+    },
+    schema: z.object({
+      totalBudget: z.number().min(1000).max(1000000),
+      showPendingRequests: z.boolean(),
+      showBudgetUtilization: z.boolean(),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**
@@ -408,6 +662,46 @@ export const RECENT_ACTIVITY_WIDGET = defineWidget({
     { name: 'full', colSpan: 12, rowSpan: 6 },
   ],
   tags: ['activity', 'feed', 'timeline', 'updates'],
+  configSchema: {
+    fields: {
+      maxActivities: {
+        type: 'number',
+        label: 'Maximum Activities',
+        description: 'Number of activity items to display',
+        defaultValue: 10,
+        min: 5,
+        max: 50,
+        step: 5,
+        unit: 'items',
+        schema: z.number().min(5).max(50),
+      },
+      activityTypes: {
+        type: 'select',
+        label: 'Activity Types',
+        description: 'Types of activities to show',
+        defaultValue: 'all',
+        options: [
+          { value: 'all', label: 'All Activities' },
+          { value: 'proposals', label: 'Proposals Only' },
+          { value: 'reviews', label: 'Reviews Only' },
+          { value: 'speakers', label: 'Speaker Actions' },
+        ],
+        schema: z.enum(['all', 'proposals', 'reviews', 'speakers']),
+      },
+      showTimestamps: {
+        type: 'boolean',
+        label: 'Show Timestamps',
+        description: 'Display relative time for each activity',
+        defaultValue: true,
+        schema: z.boolean(),
+      },
+    },
+    schema: z.object({
+      maxActivities: z.number().min(5).max(50),
+      activityTypes: z.enum(['all', 'proposals', 'reviews', 'speakers']),
+      showTimestamps: z.boolean(),
+    }),
+  } satisfies WidgetConfigSchema,
 })
 
 /**

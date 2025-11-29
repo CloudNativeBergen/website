@@ -6,6 +6,7 @@
  */
 
 import type { ConferencePhase } from '@/lib/conference/phase'
+import type { WidgetConfigSchema } from './types'
 
 export interface WidgetSizePreset {
   /** Preset name for UI display */
@@ -74,6 +75,8 @@ export interface WidgetMetadata {
   tags?: string[]
   /** Optional phase configuration for adaptive behavior */
   phaseConfig?: WidgetPhaseConfig
+  /** Optional configuration schema for widget settings */
+  configSchema?: WidgetConfigSchema
 }
 
 /**

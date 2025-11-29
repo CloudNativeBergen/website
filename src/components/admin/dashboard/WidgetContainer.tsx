@@ -6,6 +6,8 @@ import { Widget, GridPosition } from '@/lib/dashboard/types'
 import { GRID_CONFIG } from '@/lib/dashboard/constants'
 import { checkCollision } from '@/lib/dashboard/grid-utils'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
+import { CogIcon } from '@heroicons/react/24/outline'
+import { WidgetConfigModal } from './WidgetConfigModal'
 
 /**
  * WidgetContainer - Wrapper for individual dashboard widgets
@@ -25,6 +27,7 @@ interface WidgetContainerProps {
   cellWidth: number
   allWidgets: Widget[]
   onResize: (widgetId: string, newPosition: GridPosition) => void
+  onConfigChange?: (widgetId: string, config: Record<string, unknown>) => void
   children: React.ReactNode
 }
 
@@ -36,6 +39,7 @@ export function WidgetContainer({
   cellWidth,
   allWidgets,
   onResize,
+  onConfigChange,
   children,
 }: WidgetContainerProps) {
   const [isResizing, setIsResizing] = useState(false)
@@ -47,7 +51,10 @@ export function WidgetContainer({
   const [previewPosition, setPreviewPosition] = useState<GridPosition | null>(
     null,
   )
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  const metadata = getWidgetMetadata(widget.type)
 
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: widget.id,
@@ -104,7 +111,6 @@ export function WidgetContainer({
       const rowSpanDelta = Math.floor(deltaY / rowWithGap + 0.5)
 
       // Get widget constraints from metadata
-      const metadata = getWidgetMetadata(widget.type)
       const constraints = metadata?.constraints
 
       // Calculate new dimensions with constraints
@@ -143,7 +149,7 @@ export function WidgetContainer({
       resizeStart,
       cellWidth,
       columnCount,
-      widget.type,
+      metadata?.constraints,
       setPreviewPosition,
     ],
   )
@@ -198,45 +204,86 @@ export function WidgetContainer({
       ? 'border-blue-500 dark:border-blue-400'
       : 'border-gray-200 dark:border-gray-700'
 
+  const hasConfigSchema = Boolean(metadata?.configSchema)
+
+  const handleConfigClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsConfigModalOpen(true)
+  }
+
+  const handleConfigSave = (config: Record<string, unknown>) => {
+    if (onConfigChange) {
+      onConfigChange(widget.id, config)
+    }
+  }
+
   return (
-    <div
-      key={widget.id}
-      ref={(node) => {
-        setNodeRef(node)
-        if (containerRef.current !== node) {
-          containerRef.current = node
-        }
-      }}
-      {...attributes}
-      {...listeners}
-      style={{
-        ...style,
-        cursor: editMode && !isResizing ? 'grab' : undefined,
-        touchAction: 'none',
-        containerType: 'size',
-        // CSS containment for performance - isolate widgets from affecting each other
-        contain: 'layout style paint',
-      }}
-      className={`relative rounded-lg border-2 bg-white shadow-sm transition-colors dark:bg-gray-800 ${borderColor}`}
-    >
-      {/* @supports not (container-type: size) fallback handled via CSS cascade */}
+    <>
       <div
-        className={`h-full p-2 ${editMode ? 'pointer-events-none select-none' : ''}`}
+        key={widget.id}
+        ref={(node) => {
+          setNodeRef(node)
+          if (containerRef.current !== node) {
+            containerRef.current = node
+          }
+        }}
+        {...attributes}
+        {...listeners}
+        style={{
+          ...style,
+          cursor: editMode && !isResizing ? 'grab' : undefined,
+          touchAction: 'none',
+          containerType: 'size',
+          // CSS containment for performance - isolate widgets from affecting each other
+          contain: 'layout style paint',
+        }}
+        className={`relative rounded-lg border-2 bg-white shadow-sm transition-colors dark:bg-gray-800 ${borderColor}`}
       >
-        {children}
+        {/* Config button - only show in edit mode if widget has config schema */}
+        {editMode && hasConfigSchema && (
+          <button
+            onPointerDown={(e) => {
+              e.stopPropagation()
+            }}
+            onClick={handleConfigClick}
+            className="pointer-events-auto absolute top-2 right-2 z-10 rounded-md bg-white p-1.5 text-gray-600 shadow-sm ring-1 ring-gray-300 hover:bg-gray-50 hover:text-gray-900 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:bg-gray-700 dark:text-gray-400 dark:ring-gray-600 dark:hover:bg-gray-600 dark:hover:text-gray-100"
+            title="Configure widget"
+            type="button"
+          >
+            <CogIcon className="h-4 w-4" />
+          </button>
+        )}
+
+        {/* @supports not (container-type: size) fallback handled via CSS cascade */}
+        <div
+          className={`h-full p-2 ${editMode ? 'pointer-events-none select-none' : ''}`}
+        >
+          {children}
+        </div>
+
+        {editMode && (
+          <div
+            onPointerDown={handleResizeStart}
+            className="pointer-events-auto absolute right-0 bottom-0 h-6 w-6 cursor-nwse-resize"
+            style={{
+              touchAction: 'none',
+              background:
+                'linear-gradient(135deg, transparent 0%, transparent 50%, rgb(59, 130, 246) 50%, rgb(59, 130, 246) 100%)',
+            }}
+          />
+        )}
       </div>
 
-      {editMode && (
-        <div
-          onPointerDown={handleResizeStart}
-          className="pointer-events-auto absolute right-0 bottom-0 h-6 w-6 cursor-nwse-resize"
-          style={{
-            touchAction: 'none',
-            background:
-              'linear-gradient(135deg, transparent 0%, transparent 50%, rgb(59, 130, 246) 50%, rgb(59, 130, 246) 100%)',
-          }}
-        />
-      )}
-    </div>
+      {/* Config Modal */}
+      <WidgetConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        widgetType={widget.type}
+        widgetDisplayName={metadata?.displayName || widget.type}
+        currentConfig={widget.config}
+        onSave={handleConfigSave}
+      />
+    </>
   )
 }

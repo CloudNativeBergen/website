@@ -51,14 +51,14 @@ Based on date fields in the Conference schema, we identify four distinct operati
 
 This matrix shows which widgets are relevant for each domain during each conference phase. Widgets marked with ✅ are highly relevant, (✅) are somewhat relevant, and blank cells indicate low/no relevance.
 
-| Domain                    | Initialization      | Planning (CFP)                                      | Execution (Pre-Event + Event)                | Post-Conference                        |
-| ------------------------- | ------------------- | --------------------------------------------------- | -------------------------------------------- | -------------------------------------- |
+| Domain                    | Initialization       | Planning (CFP)                                       | Execution (Pre-Event + Event)                 | Post-Conference                         |
+| ------------------------- | -------------------- | ---------------------------------------------------- | --------------------------------------------- | --------------------------------------- |
 | **CFP & Proposals**       | (✅) Setup goals     | ✅ Health tracking, Review progress, Pipeline status | (✅) Final confirmations                      | (✅) Analytics                          |
-| **Schedule & Program**    |                     | (✅) Capacity planning                               | ✅ Builder status, Session allocation         | ✅ Actual vs planned                    |
+| **Schedule & Program**    |                      | (✅) Capacity planning                               | ✅ Builder status, Session allocation         | ✅ Actual vs planned                    |
 | **Sponsors & Revenue**    | ✅ Pipeline setup    | ✅ Deal tracking, Revenue goals                      | ✅ Contract fulfillment, Activation tracking  | ✅ ROI analysis                         |
 | **Tickets & Attendance**  | (✅) Capacity setup  | (✅) Early bird tracking                             | ✅ Sales dashboard, Capacity monitoring       | ✅ Attendance analysis                  |
-| **Workshops**             |                     | ✅ Proposal review                                   | ✅ Capacity tracking, Registration monitoring | ✅ Attendance stats                     |
-| **Travel Support**        |                     | (✅) Budget setup                                    | ✅ Approval queue, Budget tracking            | ✅ Expense reconciliation               |
+| **Workshops**             |                      | ✅ Proposal review                                   | ✅ Capacity tracking, Registration monitoring | ✅ Attendance stats                     |
+| **Travel Support**        |                      | (✅) Budget setup                                    | ✅ Approval queue, Budget tracking            | ✅ Expense reconciliation               |
 | **Speakers & Engagement** | (✅) Invite keynotes | ✅ Diversity tracking, Response monitoring           | ✅ Confirmation status, Communication logs    | (✅) Feedback collection                |
 | **Marketing & Content**   | (✅) Asset prep      | (✅) CFP promotion                                   | ✅ Social media tracking, Content calendar    | ✅ Video publishing, Gallery management |
 | **Quick Actions**         | ✅ All phases        | ✅ All phases                                        | ✅ All phases                                 | ✅ All phases                           |
@@ -687,14 +687,14 @@ There are rare cases where separate widget types make sense:
 ### Benefits Summary
 
 | Aspect            | Phase Config (✅ Recommended) | Separate Widgets            |
-| ----------------- | ---------------------------- | --------------------------- |
-| Code Reuse        | High - shared logic/UI       | Low - duplicate patterns    |
-| Maintainability   | Single source of truth       | Multiple components to sync |
-| User Experience   | Smooth evolution             | Jarring replacements        |
-| Testing           | Test phase logic once        | Test each widget variant    |
-| Registry Size     | Manageable (12 types)        | Large (30+ types)           |
-| Data Fetching     | Optimized per phase          | Duplicate queries           |
-| Existing Patterns | Matches Hero, QuickActions   | New pattern to learn        |
+| ----------------- | ----------------------------- | --------------------------- |
+| Code Reuse        | High - shared logic/UI        | Low - duplicate patterns    |
+| Maintainability   | Single source of truth        | Multiple components to sync |
+| User Experience   | Smooth evolution              | Jarring replacements        |
+| Testing           | Test phase logic once         | Test each widget variant    |
+| Registry Size     | Manageable (12 types)         | Large (30+ types)           |
+| Data Fetching     | Optimized per phase           | Duplicate queries           |
+| Existing Patterns | Matches Hero, QuickActions    | New pattern to learn        |
 
 ### Implementation Roadmap
 

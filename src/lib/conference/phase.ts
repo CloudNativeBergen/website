@@ -76,44 +76,44 @@ export function getPhaseContext(conference: Conference) {
     // Countdown timers (in days)
     daysUntilCfpStart: conference.cfp_start_date
       ? Math.ceil(
-        (new Date(conference.cfp_start_date).getTime() - now.getTime()) /
-        (1000 * 60 * 60 * 24),
-      )
+          (new Date(conference.cfp_start_date).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : null,
 
     daysUntilCfpClose: conference.cfp_end_date
       ? Math.ceil(
-        (new Date(conference.cfp_end_date).getTime() - now.getTime()) /
-        (1000 * 60 * 60 * 24),
-      )
+          (new Date(conference.cfp_end_date).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : null,
 
     daysUntilNotification: conference.cfp_notify_date
       ? Math.ceil(
-        (new Date(conference.cfp_notify_date).getTime() - now.getTime()) /
-        (1000 * 60 * 60 * 24),
-      )
+          (new Date(conference.cfp_notify_date).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : null,
 
     daysUntilProgramRelease: conference.program_date
       ? Math.ceil(
-        (new Date(conference.program_date).getTime() - now.getTime()) /
-        (1000 * 60 * 60 * 24),
-      )
+          (new Date(conference.program_date).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : null,
 
     daysUntilConference: conference.start_date
       ? Math.ceil(
-        (new Date(conference.start_date).getTime() - now.getTime()) /
-        (1000 * 60 * 60 * 24),
-      )
+          (new Date(conference.start_date).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : null,
 
     daysSinceConference: conference.end_date
       ? Math.ceil(
-        (now.getTime() - new Date(conference.end_date).getTime()) /
-        (1000 * 60 * 60 * 24),
-      )
+          (now.getTime() - new Date(conference.end_date).getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : null,
   }
 }
