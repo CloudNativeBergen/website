@@ -155,14 +155,14 @@ export async function GET(request: NextRequest) {
         categories: statistics.categoryBreakdown,
         targetAnalysis: analysis
           ? {
-            enabled: true,
-            capacity: analysis.capacity,
-            currentTargetPercentage: analysis.performance.targetPercentage,
-            actualPercentage: analysis.performance.currentPercentage,
-            variance: analysis.performance.variance,
-            isOnTrack: analysis.performance.isOnTrack,
-            nextMilestone: analysis.performance.nextMilestone,
-          }
+              enabled: true,
+              capacity: analysis.capacity,
+              currentTargetPercentage: analysis.performance.targetPercentage,
+              actualPercentage: analysis.performance.currentPercentage,
+              variance: analysis.performance.variance,
+              isOnTrack: analysis.performance.isOnTrack,
+              nextMilestone: analysis.performance.nextMilestone,
+            }
           : null,
         lastUpdated: new Date().toISOString(),
       },
