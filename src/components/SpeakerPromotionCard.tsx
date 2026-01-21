@@ -20,7 +20,7 @@ import { memo, useMemo } from 'react'
 interface SpeakerPromotionCardProps {
   speaker: SpeakerWithTalks
 
-  variant?: 'default' | 'featured' | 'compact'
+  variant?: 'default' | 'featured' | 'compact' | 'organizer'
 
   className?: string
 
@@ -63,6 +63,14 @@ const variantConfig = {
     showFeaturedBadge: false,
     showCloudNativePattern: false,
   },
+  organizer: {
+    containerClass:
+      'group relative flex flex-col h-full overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 transition-all duration-300 hover:border-gray-300 dark:hover:border-gray-600 hover:shadow-lg dark:hover:shadow-xl',
+    titleClass:
+      'font-space-grotesk text-xl font-bold text-brand-slate-gray dark:text-white transition-colors group-hover:text-brand-cloud-blue dark:group-hover:text-brand-cloud-blue',
+    showFeaturedBadge: false,
+    showCloudNativePattern: false,
+  },
 } as const
 
 const deriveExpertise = (talks: SpeakerWithTalks['talks']): string[] => {
@@ -102,6 +110,20 @@ const deriveCompany = (title: string | undefined): string | undefined => {
   }
 
   return company
+}
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const stripCompanyFromTitle = (
+  title: string | undefined,
+  company: string | undefined,
+): string | undefined => {
+  if (!title || !company) return title
+
+  const pattern = new RegExp(`\\s+(at|@)\\s+${escapeRegex(company)}\\s*$`, 'i')
+  if (!pattern.test(title)) return title
+
+  return title.replace(pattern, '').trim()
 }
 
 function computeSpeakerData(speaker: SpeakerWithTalks): ComputedSpeakerData {
@@ -172,6 +194,11 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
     [speaker],
   )
 
+  const displayTitle = useMemo(
+    () => stripCompanyFromTitle(speaker.title, company),
+    [speaker.title, company],
+  )
+
   const finalCtaText = ctaText || (isFeatured ? 'View Speaker' : 'View Profile')
   const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug}`
 
@@ -197,7 +224,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
         <div className="relative flex h-8 items-center space-x-2 rounded-full border border-brand-cloud-blue/30 bg-brand-cloud-blue/15 px-3 backdrop-blur-sm sm:px-4">
           <UserIcon className="h-3 w-3 text-brand-cloud-blue sm:h-4 sm:w-4" />
           <span className="font-inter text-xs font-medium text-brand-cloud-blue sm:text-sm">
-            Speaker
+            {variant === 'organizer' ? 'Organizer' : 'Speaker'}
           </span>
         </div>
 
@@ -274,8 +301,16 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
           <SpeakerImage
             image={image}
             name={name}
-            size={variant === 'featured' ? 96 : variant === 'compact' ? 60 : 70}
-            className={`${variant === 'featured' ? 'rounded-2xl border-4 border-white/50 shadow-xl' : 'rounded-full'} shadow-lg`}
+            size={
+              variant === 'featured'
+                ? 96
+                : variant === 'organizer'
+                  ? 140
+                  : variant === 'compact'
+                    ? 60
+                    : 70
+            }
+            className={`${variant === 'featured' ? 'rounded-2xl border-4 border-white/50 shadow-xl' : variant === 'organizer' ? 'rounded-full border-4 border-white/60 shadow-xl' : 'rounded-full'} shadow-lg`}
           />
         </div>
 
@@ -284,12 +319,12 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
         >
           <h3 className={`mb-3 ${variantSettings.titleClass}`}>{name}</h3>
 
-          {title && (
+          {displayTitle && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-700 dark:text-gray-300">
               <span
                 className={`font-inter line-clamp-2 font-semibold ${variant === 'featured' ? 'text-lg' : ''}`}
               >
-                {title}
+                {displayTitle}
               </span>
             </div>
           )}
@@ -305,12 +340,12 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
         </div>
       </div>
 
-      {bio && variant !== 'compact' && (
+      {bio && variant !== 'compact' && variant !== 'featured' && variant !== 'organizer' && (
         <div
-          className={`mb-6 rounded-xl border border-white/20 bg-white/60 backdrop-blur-sm dark:border-gray-600/20 dark:bg-gray-700/60 ${variant === 'featured' ? 'p-5' : 'p-3'}`}
+          className={`mb-6 rounded-xl border border-white/20 bg-white/60 backdrop-blur-sm dark:border-gray-600/20 dark:bg-gray-700/60 p-3`}
         >
           <p
-            className={`font-inter text-gray-700 dark:text-gray-300 ${variant === 'featured' ? 'line-clamp-2 text-base leading-relaxed' : 'line-clamp-3 text-sm'}`}
+            className={`font-inter text-gray-700 dark:text-gray-300 line-clamp-3 text-sm`}
           >
             {bio}
           </p>
@@ -399,7 +434,7 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
     <div className={`${variantSettings.containerClass} ${className}`}>
       {speakerHeader}
       {speakerBody}
-      {speakerFooter}
+      {variant !== 'organizer' && speakerFooter}
     </div>
   )
 })
