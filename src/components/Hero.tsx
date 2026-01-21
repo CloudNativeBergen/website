@@ -53,21 +53,21 @@ function ActionButtons({ conference }: { conference: Conference }) {
     label: string
     href: string
     variant:
-      | 'primary'
-      | 'secondary'
-      | 'success'
-      | 'warning'
-      | 'info'
-      | 'outline'
+    | 'primary'
+    | 'secondary'
+    | 'success'
+    | 'warning'
+    | 'info'
+    | 'outline'
     icon: React.ComponentType<{ className?: string }>
   }> = [
-    {
-      label: 'Practical Info',
-      href: '/info',
-      variant: 'outline',
-      icon: InformationCircleIcon,
-    },
-  ]
+      {
+        label: 'Practical Info',
+        href: '/info',
+        variant: 'outline',
+        icon: InformationCircleIcon,
+      },
+    ]
 
   if (isSeekingSponsors(conference)) {
     buttons.push({
@@ -210,28 +210,11 @@ export function Hero({ conference }: { conference: Conference }) {
             {conference.tagline}
           </h1>
           <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
-            <p>
-              Cloud Native Day Bergen is the nerdiest tech conference in Bergen.
-              Join us to learn about the latest trends, best practices, and
-              experience reports from local and international cloud-native
-              experts.
-            </p>
-            {isProgramPublished(conference) ? (
-              <p>
-                <strong>The program is now live!</strong> Explore workshops,
-                presentations, and lightning talks from industry experts
-                covering containerization, orchestration, microservices, and
-                more. Whether you&apos;re a beginner or a 10x&apos;er,
-                there&apos;s something for everyone.
-              </p>
-            ) : (
-              <p>
-                Our speakers will share their insights and experiences, covering
-                topics such as containerization, orchestration, microservices,
-                and more. Whether you&apos;re a beginner or an 10x&apos;er,
-                there&apos;s something for everyone at Cloud Native Day Bergen.
-              </p>
-            )}
+            {conference.description &&
+              typeof conference.description === 'string' &&
+              conference.description.split('\n').map((line, index) => (
+                <p key={index}>{line}</p>
+              ))}
           </div>
 
           <ActionButtons conference={conference} />
