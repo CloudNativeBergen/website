@@ -112,7 +112,8 @@ const deriveCompany = (title: string | undefined): string | undefined => {
   return company
 }
 
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const stripCompanyFromTitle = (
   title: string | undefined,
@@ -340,17 +341,20 @@ export const SpeakerPromotionCard = memo(function SpeakerPromotionCard({
         </div>
       </div>
 
-      {bio && variant !== 'compact' && variant !== 'featured' && variant !== 'organizer' && (
-        <div
-          className={`mb-6 rounded-xl border border-white/20 bg-white/60 backdrop-blur-sm dark:border-gray-600/20 dark:bg-gray-700/60 p-3`}
-        >
-          <p
-            className={`font-inter text-gray-700 dark:text-gray-300 line-clamp-3 text-sm`}
+      {bio &&
+        variant !== 'compact' &&
+        variant !== 'featured' &&
+        variant !== 'organizer' && (
+          <div
+            className={`mb-6 rounded-xl border border-white/20 bg-white/60 p-3 backdrop-blur-sm dark:border-gray-600/20 dark:bg-gray-700/60`}
           >
-            {bio}
-          </p>
-        </div>
-      )}
+            <p
+              className={`font-inter line-clamp-3 text-sm text-gray-700 dark:text-gray-300`}
+            >
+              {bio}
+            </p>
+          </div>
+        )}
 
       {expertise.length > 0 &&
         variant !== 'compact' &&

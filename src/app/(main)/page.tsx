@@ -29,9 +29,11 @@ async function CachedHomeContent({ domain }: { domain: string }) {
 
   const hasSchedule = conference.schedules && conference.schedules.length > 0
   const sortedOrganizers =
-    conference.organizers?.slice().sort((a, b) =>
-      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-    ) || []
+    conference.organizers
+      ?.slice()
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+      ) || []
 
   return (
     <>

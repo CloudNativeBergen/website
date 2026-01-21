@@ -58,8 +58,8 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                 Our sponsors
               </h2>
               <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
-                Meet our sponsors who are fueling the cluster and keeping the pods
-                running!
+                Meet our sponsors who are fueling the cluster and keeping the
+                pods running!
               </p>
             </div>
           </div>

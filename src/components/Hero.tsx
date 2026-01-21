@@ -53,21 +53,21 @@ function ActionButtons({ conference }: { conference: Conference }) {
     label: string
     href: string
     variant:
-    | 'primary'
-    | 'secondary'
-    | 'success'
-    | 'warning'
-    | 'info'
-    | 'outline'
+      | 'primary'
+      | 'secondary'
+      | 'success'
+      | 'warning'
+      | 'info'
+      | 'outline'
     icon: React.ComponentType<{ className?: string }>
   }> = [
-      {
-        label: 'Practical Info',
-        href: '/info',
-        variant: 'outline',
-        icon: InformationCircleIcon,
-      },
-    ]
+    {
+      label: 'Practical Info',
+      href: '/info',
+      variant: 'outline',
+      icon: InformationCircleIcon,
+    },
+  ]
 
   if (isSeekingSponsors(conference)) {
     buttons.push({
@@ -212,9 +212,9 @@ export function Hero({ conference }: { conference: Conference }) {
           <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
             {conference.description &&
               typeof conference.description === 'string' &&
-              conference.description.split('\n').map((line, index) => (
-                <p key={index}>{line}</p>
-              ))}
+              conference.description
+                .split('\n')
+                .map((line, index) => <p key={index}>{line}</p>)}
           </div>
 
           <ActionButtons conference={conference} />
