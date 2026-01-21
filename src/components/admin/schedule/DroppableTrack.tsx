@@ -1040,4 +1040,3 @@ function DroppableTrack({
 
 export const MemoizedDroppableTrack = React.memo(DroppableTrack)
 MemoizedDroppableTrack.displayName = 'MemoizedDroppableTrack'
-export { MemoizedDroppableTrack as DroppableTrack }
