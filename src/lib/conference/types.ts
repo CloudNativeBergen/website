@@ -42,6 +42,10 @@ export interface Conference {
   venue_address?: string
   tagline?: string
   description?: string
+  logo_bright?: string
+  logo_dark?: string
+  logomark_bright?: string
+  logomark_dark?: string
   announcement?: TypedObject[]
   start_date: string
   end_date: string

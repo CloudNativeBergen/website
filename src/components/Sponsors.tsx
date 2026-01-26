@@ -2,7 +2,9 @@
 
 import { Container } from '@/components/Container'
 import { SponsorLogo } from '@/components/SponsorLogo'
+import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ConferenceSponsor } from '@/lib/sponsor/types'
+import { Conference } from '@/lib/conference/types'
 import {
   groupSponsorsByTier,
   getDailySeed,
@@ -11,7 +13,13 @@ import {
 } from '@/lib/sponsor/utils'
 import Link from 'next/link'
 
-export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
+export function Sponsors({
+  sponsors,
+  conference,
+}: {
+  sponsors: ConferenceSponsor[]
+  conference: Conference
+}) {
   const hasSponsors = sponsors && sponsors.length > 0
 
   const groupedSponsors = hasSponsors ? groupSponsorsByTier(sponsors) : {}
@@ -87,7 +95,7 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
                       {tierSponsors.map((sponsor, i) => (
                         <div
                           key={`${sponsor.sponsor.name}-${i}`}
-                          className="-mr-px -mb-px flex min-h-[100px] items-center justify-center border-2 border-dashed border-gray-400 bg-white p-6 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-transparent dark:hover:bg-gray-800/30"
+                          className="-mr-px -mb-px flex min-h-25 items-center justify-center border-2 border-dashed border-gray-400 bg-white p-6 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-transparent dark:hover:bg-gray-800/30"
                         >
                           <a
                             href={sponsor.sponsor.website}
@@ -115,20 +123,31 @@ export function Sponsors({ sponsors }: { sponsors: ConferenceSponsor[] }) {
 
         <div className="mt-20 text-center">
           <div className="rounded-2xl bg-brand-sky-mist px-8 py-12 sm:px-12 dark:bg-gray-800/60">
-            <h3 className="font-display mb-4 text-2xl font-bold tracking-tight text-brand-cloud-blue dark:text-blue-400">
-              Become a Sponsor
-            </h3>
-            <p className="mx-auto mb-8 max-w-2xl text-lg text-brand-slate-gray dark:text-gray-300">
-              Join our community of sponsors and showcase your brand to
-              Bergen&apos;s cloud-native community. We have flexible sponsorship
-              packages to match your goals and budget.
-            </p>
-            <Link
-              href="/sponsor"
-              className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
-            >
-              View Sponsorship Packages
-            </Link>
+            <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:text-left">
+              <div className="shrink-0">
+                <ConferenceLogo
+                  conference={conference}
+                  variant="mark"
+                  className="h-72 w-72 text-brand-cloud-blue/20 dark:text-white/20"
+                />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-display mb-4 text-2xl font-bold tracking-tight text-brand-cloud-blue dark:text-blue-400">
+                  Become a Sponsor
+                </h3>
+                <p className="mx-auto mb-8 max-w-2xl text-lg text-brand-slate-gray sm:mx-0 dark:text-gray-300">
+                  Level up your brand&apos;s visibility among Kubernetes
+                  enthusiasts, container wranglers, and cloud architects. We
+                  have sponsorship tiers for every cluster size.
+                </p>
+                <Link
+                  href="/sponsor"
+                  className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
+                >
+                  View Sponsorship Packages
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </Container>

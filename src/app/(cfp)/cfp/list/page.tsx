@@ -270,6 +270,7 @@ export default async function SpeakerDashboard() {
               speaker={speakerWithTalks}
               talkTitle={talkTitle}
               eventName={eventName}
+              baseDomain={domain}
             />
           )}
           <DashboardSidebar />

@@ -81,7 +81,10 @@ async function CachedProgramContent({ domain }: { domain: string }) {
         />
 
         <div className="print:hidden">
-          <Sponsors sponsors={conference.sponsors || []} />
+          <Sponsors
+            sponsors={conference.sponsors || []}
+            conference={conference}
+          />
         </div>
       </Container>
     </div>

@@ -216,7 +216,7 @@ export function BaseEmailTemplate({
                           fontWeight: '600',
                         }}
                       >
-                        Follow Cloud Native Bergen:
+                        Follow {eventName}:
                       </p>
                       <div>
                         {socialLinks.map((link, index) => {
@@ -250,9 +250,7 @@ export function BaseEmailTemplate({
                   <div style={footerStyle}>
                     <p style={footerTextStyle}>
                       This email was sent by{' '}
-                      <strong style={{ color: '#1D4ED8' }}>
-                        Cloud Native Bergen
-                      </strong>
+                      <strong style={{ color: '#1D4ED8' }}>{eventName}</strong>
                       .<br />
                       {unsubscribeUrl ? (
                         <a

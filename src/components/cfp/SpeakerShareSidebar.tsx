@@ -7,16 +7,20 @@ interface SpeakerShareSidebarProps {
   speaker: SpeakerWithTalks
   talkTitle: string
   eventName: string
+  baseDomain?: string
 }
 
 export async function SpeakerShareSidebar({
   speaker,
   talkTitle,
   eventName,
+  baseDomain,
 }: SpeakerShareSidebarProps) {
   const speakerUrl = `/speaker/${speaker.slug}`
-  const fullSpeakerUrl = `https://cloudnativebergen.dev${speakerUrl}`
-  const qrCodeUrl = await generateQRCode(speakerUrl, 512)
+  const fullSpeakerUrl = baseDomain
+    ? `https://${baseDomain}${speakerUrl}`
+    : speakerUrl
+  const qrCodeUrl = await generateQRCode(speakerUrl, 512, baseDomain)
 
   return (
     <div className="space-y-4 lg:sticky lg:top-4">

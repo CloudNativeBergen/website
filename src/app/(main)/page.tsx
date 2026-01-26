@@ -76,7 +76,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
           </Container>
         </section>
       ) : null}
-      <Sponsors sponsors={conference.sponsors || []} />
+      <Sponsors sponsors={conference.sponsors || []} conference={conference} />
     </>
   )
 }

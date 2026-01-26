@@ -18,7 +18,10 @@ export async function checkWorkshopEligibility(params: {
   userEmail: string
   customerId: number
   eventId: number
+  contactEmail?: string
 }): Promise<WorkshopEligibilityResult> {
+  const contactEmail = params.contactEmail || 'contact@cloudnativebergen.dev'
+
   try {
     const tickets = await fetchEventTickets(params.customerId, params.eventId)
 
@@ -36,8 +39,7 @@ export async function checkWorkshopEligibility(params: {
         isEligible: false,
         tickets: userTickets,
         eligibleTickets: [],
-        reason:
-          'No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at contact@cloudnativebergen.dev if you believe this is an error.',
+        reason: `No valid workshop ticket found. Please upgrade your ticket to include workshop access, or contact us at ${contactEmail} if you believe this is an error.`,
       }
     }
 
@@ -46,8 +48,7 @@ export async function checkWorkshopEligibility(params: {
         isEligible: false,
         tickets: [],
         eligibleTickets: [],
-        reason:
-          'No ticket found for your email address. Please purchase a workshop ticket to access workshops, or contact us at contact@cloudnativebergen.dev if you have any questions.',
+        reason: `No ticket found for your email address. Please purchase a workshop ticket to access workshops, or contact us at ${contactEmail} if you have any questions.`,
       }
     }
 
@@ -62,8 +63,7 @@ export async function checkWorkshopEligibility(params: {
       isEligible: false,
       tickets: [],
       eligibleTickets: [],
-      reason:
-        'Unable to verify workshop ticket at this time. Please try again later or contact us at contact@cloudnativebergen.dev for assistance.',
+      reason: `Unable to verify workshop ticket at this time. Please try again later or contact us at ${contactEmail} for assistance.`,
     }
   }
 }

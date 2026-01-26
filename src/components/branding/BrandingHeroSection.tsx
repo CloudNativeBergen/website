@@ -1,7 +1,14 @@
 import { CloudNativePattern } from '@/components/CloudNativePattern'
 import { Container } from '@/components/Container'
+import { Conference } from '@/lib/conference/types'
 
-export function BrandingHeroSection() {
+interface BrandingHeroSectionProps {
+  conference?: Conference
+}
+
+export function BrandingHeroSection({ conference }: BrandingHeroSectionProps) {
+  const title = conference?.title || 'Cloud Native Days'
+
   return (
     <section className="relative -mt-24 overflow-hidden bg-aqua-gradient pt-36 pb-24 dark:bg-linear-to-br dark:from-gray-900 dark:via-blue-900/50 dark:to-gray-800">
       <CloudNativePattern
@@ -16,7 +23,7 @@ export function BrandingHeroSection() {
       <Container className="relative z-20">
         <div className="text-center">
           <h1 className="font-jetbrains mb-6 text-5xl font-bold text-white">
-            Cloud Native Day Bergen
+            {title}
           </h1>
           <p className="font-space-grotesk mx-auto mb-8 max-w-3xl text-xl text-white">
             Brand Guidelines & Design System

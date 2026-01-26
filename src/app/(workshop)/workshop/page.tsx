@@ -96,6 +96,7 @@ export default async function WorkshopPage() {
       userEmail: user.email,
       customerId: conference.checkin_customer_id,
       eventId: conference.checkin_event_id,
+      contactEmail: conference.contact_email,
     })
 
     if (!eligibility.isEligible) {
@@ -151,7 +152,7 @@ export default async function WorkshopPage() {
 
               <div className="mt-8">
                 <Button
-                  href="mailto:contact@cloudnativebergen.dev"
+                  href={`mailto:${conference.contact_email || 'contact@cloudnativebergen.dev'}`}
                   variant="outline"
                 >
                   <EnvelopeIcon className="mr-2 h-5 w-5" />

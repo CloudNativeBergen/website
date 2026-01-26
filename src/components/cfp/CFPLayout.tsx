@@ -12,15 +12,17 @@ import { AppEnvironment } from '@/lib/environment/config'
 import {
   DashboardLayout,
   NavigationItem,
+  ConferenceLogos,
 } from '@/components/common/DashboardLayout'
 import { Flags } from '@/lib/speaker/types'
 import { useImpersonateQueryString } from '@/lib/impersonation'
 
 interface CFPLayoutProps {
   children: React.ReactNode
+  conferenceLogos?: ConferenceLogos
 }
 
-export function CFPLayout({ children }: CFPLayoutProps) {
+export function CFPLayout({ children, conferenceLogos }: CFPLayoutProps) {
   const { data: session } = useSession()
   const impersonateQuery = useImpersonateQueryString()
 
@@ -72,6 +74,7 @@ export function CFPLayout({ children }: CFPLayoutProps) {
       mode="speaker"
       navigation={navigation}
       title="Speaker Dashboard"
+      conferenceLogos={conferenceLogos}
     >
       {children}
     </DashboardLayout>

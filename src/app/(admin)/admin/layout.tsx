@@ -1,5 +1,6 @@
 import { AdminLayout } from '@/components/admin'
 import { getAuthSession } from '@/lib/auth'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export default async function AdminRootLayout({
   children,
@@ -15,5 +16,15 @@ export default async function AdminRootLayout({
     )
   }
 
-  return <AdminLayout>{children}</AdminLayout>
+  const { conference } = await getConferenceForCurrentDomain({})
+  const conferenceLogos = conference
+    ? {
+        logo_bright: conference.logo_bright,
+        logo_dark: conference.logo_dark,
+        logomark_bright: conference.logomark_bright,
+        logomark_dark: conference.logomark_dark,
+      }
+    : undefined
+
+  return <AdminLayout conferenceLogos={conferenceLogos}>{children}</AdminLayout>
 }

@@ -300,7 +300,15 @@ export default async function MarketingPage() {
       >
         {/* Meme Generator Tab */}
         <div>
-          <MemeGeneratorWithDownload conferenceTitle={conference.title} />
+          <MemeGeneratorWithDownload
+            conferenceTitle={conference.title}
+            conferenceLogos={{
+              logo_bright: conference.logo_bright,
+              logo_dark: conference.logo_dark,
+              logomark_bright: conference.logomark_bright,
+              logomark_dark: conference.logomark_dark,
+            }}
+          />
         </div>
 
         {/* Conference Promotional Tab */}
@@ -407,6 +415,12 @@ export default async function MarketingPage() {
               photos={featuredPhotos}
               qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
               conferenceTitle={conference.title || 'Cloud Native Bergen'}
+              conferenceLogos={{
+                logo_bright: conference.logo_bright,
+                logo_dark: conference.logo_dark,
+                logomark_bright: conference.logomark_bright,
+                logomark_dark: conference.logomark_dark,
+              }}
             />
           )}
         </div>

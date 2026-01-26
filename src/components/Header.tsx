@@ -3,7 +3,7 @@
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { DiamondIcon } from '@/components/DiamondIcon'
-import { Logo } from '@/components/Logo'
+import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useSession, signOut } from 'next-auth/react'
 import Image from 'next/image'
@@ -36,7 +36,11 @@ export function Header({ c }: { c: Conference }) {
       <Container className="flex flex-wrap items-center justify-center sm:justify-between lg:flex-nowrap">
         <div className="mt-10 lg:mt-0">
           <Link href="/">
-            <Logo className="h-12 w-auto text-brand-slate-gray dark:text-white" />
+            <ConferenceLogo
+              conference={c}
+              variant="horizontal"
+              className="h-14 w-auto text-brand-slate-gray dark:text-white"
+            />
           </Link>
         </div>
         <div className="font-jetbrains order-first -mx-4 flex flex-auto basis-full overflow-x-auto border-b border-brand-cloud-blue/10 py-4 text-sm whitespace-nowrap sm:-mx-6 lg:order-0 lg:mx-0 lg:basis-auto lg:border-0 lg:py-0">
