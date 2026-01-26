@@ -18,6 +18,7 @@ async function CachedProgramContent({ domain }: { domain: string }) {
     schedule: true,
     topics: true,
     sponsors: true,
+    sponsorTiers: true,
     confirmedTalksOnly: false,
   })
 

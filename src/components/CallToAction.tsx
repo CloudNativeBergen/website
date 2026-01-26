@@ -43,7 +43,7 @@ export function CallToAction({
   }
 
   return (
-    <div className="rounded-2xl bg-gradient-to-r from-brand-cloud-blue/10 to-brand-fresh-green/10 p-8 md:p-12">
+    <div className="rounded-2xl bg-linear-to-r from-brand-cloud-blue/10 to-brand-fresh-green/10 p-8 md:p-12">
       <div className="text-center">
         <h2 className="font-space-grotesk mb-4 text-2xl font-bold text-brand-slate-gray md:text-3xl">
           {title || defaultTitle}

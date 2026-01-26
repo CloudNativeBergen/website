@@ -122,7 +122,7 @@ export function Sponsors({
         )}
 
         <div className="mt-20 text-center">
-          <div className="rounded-2xl bg-brand-sky-mist px-8 py-12 sm:px-12 dark:bg-gray-800/60">
+          <div className="rounded-2xl bg-linear-to-r from-brand-cloud-blue/10 to-brand-fresh-green/10 p-8 md:p-12">
             <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center sm:text-left">
               <div className="shrink-0">
                 <ConferenceLogo
@@ -132,20 +132,30 @@ export function Sponsors({
                 />
               </div>
               <div className="flex-1">
-                <h3 className="font-display mb-4 text-2xl font-bold tracking-tight text-brand-cloud-blue dark:text-blue-400">
+                <h3 className="font-space-grotesk mb-4 text-2xl font-bold tracking-tight text-brand-slate-gray md:text-3xl">
                   Become a Sponsor
                 </h3>
-                <p className="mx-auto mb-8 max-w-2xl text-lg text-brand-slate-gray sm:mx-0 dark:text-gray-300">
+                <p className="font-inter mx-auto mb-8 max-w-2xl text-lg text-brand-slate-gray sm:mx-0">
                   Level up your brand&apos;s visibility among Kubernetes
                   enthusiasts, container wranglers, and cloud architects. We
                   have sponsorship tiers for every cluster size.
                 </p>
-                <Link
-                  href="/sponsor"
-                  className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
-                >
-                  View Sponsorship Packages
-                </Link>
+                {conference.sponsor_tiers &&
+                  conference.sponsor_tiers.length > 0 ? (
+                  <Link
+                    href="/sponsor"
+                    className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
+                  >
+                    View Sponsorship Packages
+                  </Link>
+                ) : (
+                  <a
+                    href={`mailto:${conference.sponsor_email}?subject=Sponsorship Inquiry`}
+                    className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"
+                  >
+                    Contact Us About Sponsoring
+                  </a>
+                )}
               </div>
             </div>
           </div>

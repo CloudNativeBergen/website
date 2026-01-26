@@ -16,6 +16,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
   const { conference, error } = await getConferenceForDomain(domain, {
     organizers: true,
     sponsors: true,
+    sponsorTiers: true,
     featuredSpeakers: true,
     featuredTalks: true,
     schedule: true,
