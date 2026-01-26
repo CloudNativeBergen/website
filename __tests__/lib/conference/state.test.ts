@@ -36,6 +36,7 @@ const baseConference: Conference = {
   registration_enabled: true,
   registration_link: 'https://tickets.test.com',
   contact_email: 'info@test.com',
+  sponsor_email: 'sponsors@test.com',
   organizers: [],
   domains: ['test.example.com'],
   formats: [],

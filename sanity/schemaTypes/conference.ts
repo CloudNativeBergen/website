@@ -375,6 +375,14 @@ export default defineType({
       validation: (Rule) => Rule.required().email(),
     }),
     defineField({
+      name: 'sponsor_email',
+      title: 'Sponsor Email',
+      type: 'string',
+      fieldset: 'communication',
+      description: 'Email address used for sponsor communications',
+      validation: (Rule) => Rule.required().email(),
+    }),
+    defineField({
       name: 'social_links',
       title: 'Social Links',
       type: 'array',

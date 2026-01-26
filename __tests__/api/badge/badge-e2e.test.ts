@@ -49,6 +49,7 @@ describe('Badge System E2E', () => {
     program_date: '2025-05-01',
     registration_enabled: true,
     contact_email: 'hello@example.com',
+    sponsor_email: 'sponsors@example.com',
     domains: [TEST_HOST],
     organizers: [],
     formats: [],
