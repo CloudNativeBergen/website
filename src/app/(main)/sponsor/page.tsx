@@ -69,10 +69,10 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
               Sponsorship opportunities for {conference.title} will be announced
               soon. Please check back later or contact us at{' '}
               <a
-                href={`mailto:${conference.contact_email}`}
+                href={`mailto:${conference.sponsor_email}?subject=Sponsorship Inquiry`}
                 className="text-blue-600 hover:underline dark:text-blue-400"
               >
-                {conference.contact_email}
+                {conference.sponsor_email}
               </a>{' '}
               for more information.
             </p>
@@ -201,7 +201,7 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
                   </div>
                   {!tier.sold_out ? (
                     <Button
-                      href={`mailto:${conference.contact_email}?subject=Interested in sponsoring ${conference.title}&body=We are interested in the ${tier.title} sponsorship tier.`}
+                      href={`mailto:${conference.sponsor_email}?subject=Interested in sponsoring ${conference.title}&body=We are interested in the ${tier.title} sponsorship tier.`}
                       aria-describedby={`tier-${index}`}
                       variant={tier.most_popular ? 'success' : 'outline'}
                       className="mt-8 w-full"
@@ -281,7 +281,7 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
 
                       <div className="mt-8">
                         <Button
-                          href={`mailto:${conference.contact_email}?subject=Interested in ${tier.title} partnership&body=We are interested in learning more about the ${tier.title} partnership opportunity.`}
+                          href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} partnership&body=We are interested in learning more about the ${tier.title} partnership opportunity.`}
                           variant="outline"
                           className="w-full"
                         >
