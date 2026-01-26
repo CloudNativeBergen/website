@@ -76,8 +76,9 @@ import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
-  title: 'Brand Guidelines - Cloud Native Day Bergen',
-  description: 'Brand guidelines and design system for Cloud Native Day Bergen',
+  title: 'Brand Guidelines - Cloud Native Days',
+  description:
+    'Brand guidelines and design system for Cloud Native Days conferences',
 }
 
 async function CachedBrandingContent({ domain }: { domain: string }) {
@@ -86,8 +87,15 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
 
   const conferenceData = await getConferenceForDomain(domain, {
     featuredSpeakers: true,
+    organizers: true,
   })
   const { conference } = conferenceData
+
+  // Use featured speakers if available, otherwise fall back to organizers
+  const displaySpeakers =
+    conference?.featured_speakers && conference.featured_speakers.length > 0
+      ? conference.featured_speakers
+      : (conference?.organizers ?? [])
 
   // Helper to create mock ProposalExisting objects for design examples
   function mockTalk(params: {
@@ -120,21 +128,21 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
       title: params.title,
       description: params.description
         ? [
-            {
-              _type: 'block',
-              _key: `b-${params.id}`,
-              style: 'normal',
-              children: [
-                {
-                  _type: 'span',
-                  _key: `s-${params.id}`,
-                  text: params.description,
-                  marks: [],
-                },
-              ],
-              markDefs: [],
-            },
-          ]
+          {
+            _type: 'block',
+            _key: `b-${params.id}`,
+            style: 'normal',
+            children: [
+              {
+                _type: 'span',
+                _key: `s-${params.id}`,
+                text: params.description,
+                marks: [],
+              },
+            ],
+            markDefs: [],
+          },
+        ]
         : [],
       language: Language.english,
       format: params.format,
@@ -150,7 +158,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
   return (
     <div className="bg-brand-glacier-white dark:bg-gray-900">
       {/* Hero Section */}
-      <BrandingHeroSection />
+      <BrandingHeroSection conference={conference} />
 
       {/* Navigation Menu */}
       <nav className="sticky top-0 z-50 border-b border-brand-cloud-blue/20 bg-white/95 backdrop-blur-sm dark:border-gray-600/20 dark:bg-gray-800/95">
@@ -238,15 +246,14 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
             <div className="grid grid-cols-1 items-center gap-12 md:grid-cols-2">
               <div>
                 <p className="font-inter mb-6 text-lg leading-relaxed text-brand-slate-gray dark:text-gray-300">
-                  Cloud Native Day Bergen embodies the spirit of Norway&apos;s
-                  tech community: innovative yet grounded, collaborative yet
+                  Cloud Native Days embodies the spirit of the global tech
+                  community: innovative yet grounded, collaborative yet
                   independent, modern yet respectful of tradition.
                 </p>
                 <p className="font-inter mb-6 text-lg leading-relaxed text-brand-slate-gray dark:text-gray-300">
-                  Our visual identity draws inspiration from Bergen&apos;s
-                  dramatic landscapes—the meeting of mountains and sea, the
-                  interplay of mist and clarity, the harmony of natural and
-                  urban elements.
+                  Our visual identity draws inspiration from Nordic
+                  landscapes—the meeting of mountains and sea, the interplay of
+                  mist and clarity, the harmony of natural and urban elements.
                 </p>
                 <p className="font-atkinson text-lg leading-relaxed text-brand-slate-gray dark:text-gray-300">
                   We celebrate the &quot;nerdy and proud&quot; developer culture
@@ -354,9 +361,9 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
               Color Palette
             </h2>
             <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray dark:text-gray-300">
-              Our colors reflect Bergen&apos;s natural beauty—from the deep
-              blues of Norwegian fjords to the fresh greens of nordic forests,
-              balanced with modern tech-inspired accents.
+              Our colors reflect Nordic natural beauty—from the deep blues of
+              Norwegian fjords to the fresh greens of nordic forests, balanced
+              with modern tech-inspired accents.
             </p>
           </div>
 
@@ -1452,7 +1459,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
             </p>
           </div>
 
-          <BrandingExampleHeroSection />
+          <BrandingExampleHeroSection conference={conference} />
         </Container>
       </section>
 
@@ -1476,46 +1483,435 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
 
           <div className="space-y-20">
             {/* Featured Speaker */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length > 0 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
-                      Featured Speaker
-                    </h3>
-                    <p className="font-inter text-gray-600 dark:text-gray-300">
-                      Streamlined presentation for featured speakers with
-                      essential information and clean visual design. Perfect for
-                      homepage highlights and key announcements.
-                    </p>
-                  </div>
-
-                  <SpeakerPromotionCard
-                    speaker={conference.featured_speakers[0]}
-                    isFeatured={true}
-                    variant="featured"
-                    ctaText="View Speaker"
-                  />
+            {displaySpeakers.length > 0 && (
+              <div>
+                <div className="mb-8">
+                  <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
+                    Featured Speaker
+                  </h3>
+                  <p className="font-inter text-gray-600 dark:text-gray-300">
+                    Streamlined presentation for featured speakers with
+                    essential information and clean visual design. Perfect for
+                    homepage highlights and key announcements.
+                  </p>
                 </div>
-              )}
+
+                <SpeakerPromotionCard
+                  speaker={displaySpeakers[0]}
+                  isFeatured={true}
+                  variant="featured"
+                  ctaText="View Speaker"
+                />
+              </div>
+            )}
 
             {/* Three Featured Speakers */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 3 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
-                      Three Featured Speakers
-                    </h3>
-                    <p className="font-inter text-gray-600 dark:text-gray-300">
-                      Perfect for highlighting key speakers with balanced visual
-                      weight. Ideal for homepage features and conference
-                      announcements.
+            {displaySpeakers.length >= 3 && (
+              <div>
+                <div className="mb-8">
+                  <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
+                    Three Featured Speakers
+                  </h3>
+                  <p className="font-inter text-gray-600 dark:text-gray-300">
+                    Perfect for highlighting key speakers with balanced visual
+                    weight. Ideal for homepage features and conference
+                    announcements.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {displaySpeakers.slice(0, 3).map((speaker) => (
+                    <SpeakerPromotionCard
+                      key={speaker._id}
+                      speaker={speaker}
+                      variant="default"
+                      ctaText="View Profile"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Compact Speaker List */}
+            {displaySpeakers.length >= 4 && (
+              <div>
+                <div className="mb-8">
+                  <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
+                    Compact Speaker List
+                  </h3>
+                  <p className="font-inter text-gray-600 dark:text-gray-300">
+                    Space-efficient format for agenda pages and speaker
+                    directories. Shows essential information with talk details
+                    prominently featured.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {displaySpeakers.slice(0, 6).map((speaker, index) => (
+                    <SpeakerPromotionCard
+                      key={speaker._id}
+                      speaker={speaker}
+                      isFeatured={index === 0}
+                      variant="compact"
+                      ctaText="View Details"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Speaker Share Component Showcase */}
+            {displaySpeakers.length >= 2 && (
+              <div>
+                <div className="mb-8">
+                  <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
+                    Speaker Share Component Showcase
+                  </h3>
+                  <p className="font-inter text-gray-600 dark:text-gray-300">
+                    The SpeakerShare component creates branded social media
+                    cards that speakers can use to promote their participation.
+                    Features QR codes for easy profile access, responsive
+                    design, and optional Cloud Native pattern backgrounds.
+                  </p>
+                  <div className="mt-4 rounded-lg bg-blue-50 p-4 dark:border dark:border-blue-500/30 dark:bg-blue-900/20">
+                    <p className="font-inter text-sm text-blue-800 dark:text-blue-200">
+                      <strong className="flex items-center space-x-2 text-brand-cloud-blue dark:text-blue-400">
+                        <LightBulbIcon className="h-4 w-4" />
+                        <span>Interactive Download Feature!</span>
+                      </strong>
+                      <br />
+                      Click &ldquo;Download as PNG&rdquo; below any speaker card
+                      to save high-quality social media images. The download may
+                      take a few seconds to process as it waits for all content
+                      (including QR codes) to load properly.
                     </p>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {conference.featured_speakers.slice(0, 3).map((speaker) => (
+                {/* Full Size Variants - Speaker Share vs Speaker Spotlight */}
+                <div className="mb-16">
+                  <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
+                    Component Variants (Full Size)
+                  </h4>
+                  <p className="font-inter mb-8 text-gray-600 dark:text-gray-300">
+                    Compare the two main variants: speaker-share for speakers to
+                    promote themselves, and speaker-spotlight for conference
+                    organizers to highlight speakers.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 xl:gap-16">
+                    {/* Speaker Share Variant */}
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="text-center">
+                        <h5 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
+                          Speaker Share
+                        </h5>
+                        <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
+                          &ldquo;I&apos;m speaking at&rdquo; message
+                        </p>
+                      </div>
+                      <DownloadSpeakerImage
+                        filename={`${displaySpeakers[0]?.slug}-speaker-share`}
+                      >
+                        <SpeakerShare
+                          speaker={displaySpeakers[0]}
+                          variant="speaker-share"
+                          eventName={conference.title}
+                          className="h-80 w-80"
+                        />
+                      </DownloadSpeakerImage>
+                    </div>
+
+                    {/* Speaker Spotlight Variant */}
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="text-center">
+                        <h5 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
+                          Speaker Spotlight
+                        </h5>
+                        <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
+                          &ldquo;Featured Speaker&rdquo; message
+                        </p>
+                      </div>
+                      <DownloadSpeakerImage
+                        filename={`${displaySpeakers[0]?.slug}-speaker-spotlight`}
+                      >
+                        <SpeakerShare
+                          speaker={displaySpeakers[0]}
+                          variant="speaker-spotlight"
+                          isFeatured={true}
+                          eventName={conference.title}
+                          className="h-80 w-80"
+                          showCloudNativePattern={true}
+                        />
+                      </DownloadSpeakerImage>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Size Variations */}
+                <div className="mb-16">
+                  <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
+                    Size Variations & Responsive Design
+                  </h4>
+                  <p className="font-inter mb-8 text-gray-600 dark:text-gray-300">
+                    The component uses container queries to maintain perfect
+                    square proportions and readability across all sizes. Always
+                    maintains aspect ratio for optimal social media sharing.
+                  </p>
+
+                  {/* Large Grid */}
+                  <div className="mb-12">
+                    <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
+                      Large (For Feature Sections)
+                    </h5>
+                    <div className="grid grid-cols-2 gap-6 md:grid-cols-3">
+                      <SpeakerShare
+                        speaker={displaySpeakers[0]}
+                        variant="speaker-share"
+                        eventName={conference.title}
+                        className="aspect-square w-full"
+                      />
+                      <SpeakerShare
+                        speaker={displaySpeakers[1]}
+                        variant="speaker-spotlight"
+                        isFeatured={true}
+                        eventName={conference.title}
+                        className="aspect-square w-full"
+                      />
+                      <SpeakerShare
+                        speaker={displaySpeakers[2] || displaySpeakers[0]}
+                        variant="speaker-share"
+                        showCloudNativePattern={true}
+                        eventName={conference.title}
+                        className="aspect-square w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Small Grid */}
+                  <div className="mb-12">
+                    <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
+                      Small (For Compact Grids)
+                    </h5>
+                    <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6">
+                      {displaySpeakers.slice(0, 6).map((speaker, index) => (
+                        <SpeakerShare
+                          key={speaker._id}
+                          speaker={speaker}
+                          variant={
+                            index % 2 === 0
+                              ? 'speaker-share'
+                              : 'speaker-spotlight'
+                          }
+                          showCloudNativePattern={index % 3 === 0}
+                          isFeatured={index === 0}
+                          eventName={conference.title}
+                          className="aspect-square w-full"
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Extra Small Grid */}
+                  <div>
+                    <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
+                      Extra Small (Thumbnail Size)
+                    </h5>
+                    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
+                      {displaySpeakers.slice(0, 10).map((speaker, index) => (
+                        <SpeakerShare
+                          key={speaker._id}
+                          speaker={speaker}
+                          variant={
+                            index % 2 === 0
+                              ? 'speaker-share'
+                              : 'speaker-spotlight'
+                          }
+                          showCloudNativePattern={index % 4 === 0}
+                          isFeatured={false}
+                          eventName="CNB 2025"
+                          className="aspect-square w-full"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Technical Features */}
+                <div className="rounded-xl bg-brand-sky-mist p-8">
+                  <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
+                    Technical Features & Capabilities
+                  </h4>
+
+                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                      <h5 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
+                        QR Code Integration
+                      </h5>
+                      <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                        <li>• Automatically generated for each speaker</li>
+                        <li>• Links to speaker profile page</li>
+                        <li>• High contrast for reliable scanning</li>
+                        <li>• Optimized for mobile cameras</li>
+                        <li>• Error correction for damaged prints</li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h5 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
+                        Responsive Design
+                      </h5>
+                      <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                        <li>• Container queries for perfect scaling</li>
+                        <li>• Fluid typography and spacing</li>
+                        <li>• Aspect ratio preservation</li>
+                        <li>• Optimized for social media platforms</li>
+                        <li>• Works from thumbnails to hero images</li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h5 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
+                        Cloud Native Pattern
+                      </h5>
+                      <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
+                        <li>• 50+ authentic project logos</li>
+                        <li>• Intelligent depth layering</li>
+                        <li>• Smooth animations and movement</li>
+                        <li>• Performance optimized</li>
+                        <li>• Works with both variants</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 rounded-lg bg-white/50 p-6">
+                    <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                      Usage Guidelines
+                    </h5>
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div>
+                        <h6 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+                          Speaker Share Variant
+                        </h6>
+                        <ul className="font-inter space-y-1 text-sm text-brand-slate-gray">
+                          <li>
+                            • For speakers to share on their own social media
+                          </li>
+                          <li>
+                            • &ldquo;I&apos;m speaking at&rdquo; messaging
+                          </li>
+                          <li>• Personal branding focus</li>
+                          <li>• Include speaker&apos;s primary talk</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <h6 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
+                          Speaker Spotlight Variant
+                        </h6>
+                        <ul className="font-inter space-y-1 text-sm text-brand-slate-gray">
+                          <li>
+                            • For conference organizers to promote speakers
+                          </li>
+                          <li>• &ldquo;Featured Speaker&rdquo; messaging</li>
+                          <li>• Conference branding focus</li>
+                          <li>• Highlight keynote and featured speakers</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 rounded-lg bg-brand-cloud-blue/10 p-6">
+                    <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
+                      Development API
+                    </h5>
+                    <div className="space-y-4">
+                      <div>
+                        <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
+                          Basic Usage
+                        </h6>
+                        <code className="font-jetbrains block rounded bg-white p-3 text-sm text-gray-800">
+                          {`<SpeakerShare
+  speaker={speaker}
+  variant="speaker-share"
+  eventName={conference.title}
+/>`}
+                        </code>
+                      </div>
+                      <div>
+                        <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
+                          With Cloud Native Pattern
+                        </h6>
+                        <code className="font-jetbrains block rounded bg-white p-3 text-sm text-gray-800">
+                          {`<SpeakerShare
+  speaker={speaker}
+  variant="speaker-spotlight"
+  showCloudNativePattern={true}
+  isFeatured={true}
+  eventName={conference.title}
+/>`}
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Speaker Directory */}
+            {displaySpeakers.length >= 8 && (
+              <div>
+                <div className="mb-8">
+                  <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                    Speaker Directory
+                  </h3>
+                  <p className="font-inter text-gray-600">
+                    Comprehensive speaker listing for conference programs and
+                    attendee guides. Maximizes information density while
+                    maintaining readability.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {displaySpeakers.slice(0, 10).map((speaker) => (
+                    <SpeakerPromotionCard
+                      key={speaker._id}
+                      speaker={speaker}
+                      variant="compact"
+                      ctaText="View"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Mixed Layout Example */}
+            {displaySpeakers.length >= 6 && (
+              <div>
+                <div className="mb-8">
+                  <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
+                    Mixed Layout
+                  </h3>
+                  <p className="font-inter text-gray-600">
+                    Combines different speaker presentation styles for dynamic,
+                    engaging layouts. Perfect for conference websites that need
+                    visual variety and clear hierarchy.
+                  </p>
+                </div>
+
+                <div className="space-y-8">
+                  {/* Featured speaker at top */}
+                  <div className="mb-8">
+                    <SpeakerPromotionCard
+                      speaker={displaySpeakers[0]}
+                      isFeatured={true}
+                      variant="featured"
+                      ctaText="View Speaker"
+                    />
+                  </div>
+
+                  {/* Three card speakers */}
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    {displaySpeakers.slice(1, 4).map((speaker) => (
                       <SpeakerPromotionCard
                         key={speaker._id}
                         speaker={speaker}
@@ -1524,433 +1920,21 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                       />
                     ))}
                   </div>
-                </div>
-              )}
 
-            {/* Compact Speaker List */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 4 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
-                      Compact Speaker List
-                    </h3>
-                    <p className="font-inter text-gray-600 dark:text-gray-300">
-                      Space-efficient format for agenda pages and speaker
-                      directories. Shows essential information with talk details
-                      prominently featured.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                    {conference.featured_speakers
-                      .slice(0, 6)
-                      .map((speaker, index) => (
-                        <SpeakerPromotionCard
-                          key={speaker._id}
-                          speaker={speaker}
-                          isFeatured={index === 0}
-                          variant="compact"
-                          ctaText="View Details"
-                        />
-                      ))}
-                  </div>
-                </div>
-              )}
-
-            {/* Speaker Share Component Showcase */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 2 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
-                      Speaker Share Component Showcase
-                    </h3>
-                    <p className="font-inter text-gray-600 dark:text-gray-300">
-                      The SpeakerShare component creates branded social media
-                      cards that speakers can use to promote their
-                      participation. Features QR codes for easy profile access,
-                      responsive design, and optional Cloud Native pattern
-                      backgrounds.
-                    </p>
-                    <div className="mt-4 rounded-lg bg-blue-50 p-4 dark:border dark:border-blue-500/30 dark:bg-blue-900/20">
-                      <p className="font-inter text-sm text-blue-800 dark:text-blue-200">
-                        <strong className="flex items-center space-x-2 text-brand-cloud-blue dark:text-blue-400">
-                          <LightBulbIcon className="h-4 w-4" />
-                          <span>Interactive Download Feature!</span>
-                        </strong>
-                        <br />
-                        Click &ldquo;Download as PNG&rdquo; below any speaker
-                        card to save high-quality social media images. The
-                        download may take a few seconds to process as it waits
-                        for all content (including QR codes) to load properly.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Full Size Variants - Speaker Share vs Speaker Spotlight */}
-                  <div className="mb-16">
-                    <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
-                      Component Variants (Full Size)
-                    </h4>
-                    <p className="font-inter mb-8 text-gray-600 dark:text-gray-300">
-                      Compare the two main variants: speaker-share for speakers
-                      to promote themselves, and speaker-spotlight for
-                      conference organizers to highlight speakers.
-                    </p>
-
-                    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2 xl:gap-16">
-                      {/* Speaker Share Variant */}
-                      <div className="flex flex-col items-center space-y-4">
-                        <div className="text-center">
-                          <h5 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
-                            Speaker Share
-                          </h5>
-                          <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
-                            &ldquo;I&apos;m speaking at&rdquo; message
-                          </p>
-                        </div>
-                        <DownloadSpeakerImage
-                          filename={`${conference.featured_speakers[0]?.slug}-speaker-share`}
-                        >
-                          <SpeakerShare
-                            speaker={conference.featured_speakers[0]}
-                            variant="speaker-share"
-                            eventName="Cloud Native Bergen 2025"
-                            className="h-80 w-80"
-                          />
-                        </DownloadSpeakerImage>
-                      </div>
-
-                      {/* Speaker Spotlight Variant */}
-                      <div className="flex flex-col items-center space-y-4">
-                        <div className="text-center">
-                          <h5 className="font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
-                            Speaker Spotlight
-                          </h5>
-                          <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
-                            &ldquo;Featured Speaker&rdquo; message
-                          </p>
-                        </div>
-                        <DownloadSpeakerImage
-                          filename={`${conference.featured_speakers[0]?.slug}-speaker-spotlight`}
-                        >
-                          <SpeakerShare
-                            speaker={conference.featured_speakers[0]}
-                            variant="speaker-spotlight"
-                            isFeatured={true}
-                            eventName="Cloud Native Bergen 2025"
-                            className="h-80 w-80"
-                            showCloudNativePattern={true}
-                          />
-                        </DownloadSpeakerImage>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Size Variations */}
-                  <div className="mb-16">
-                    <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
-                      Size Variations & Responsive Design
-                    </h4>
-                    <p className="font-inter mb-8 text-gray-600 dark:text-gray-300">
-                      The component uses container queries to maintain perfect
-                      square proportions and readability across all sizes.
-                      Always maintains aspect ratio for optimal social media
-                      sharing.
-                    </p>
-
-                    {/* Large Grid */}
-                    <div className="mb-12">
-                      <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-gray-200">
-                        Large (For Feature Sections)
-                      </h5>
-                      <div className="grid grid-cols-2 gap-6 md:grid-cols-3">
-                        <SpeakerShare
-                          speaker={conference.featured_speakers[0]}
-                          variant="speaker-share"
-                          eventName="Cloud Native Bergen 2025"
-                          className="aspect-square w-full"
-                        />
-                        <SpeakerShare
-                          speaker={conference.featured_speakers[1]}
-                          variant="speaker-spotlight"
-                          isFeatured={true}
-                          eventName="Cloud Native Bergen 2025"
-                          className="aspect-square w-full"
-                        />
-                        <SpeakerShare
-                          speaker={
-                            conference.featured_speakers[2] ||
-                            conference.featured_speakers[0]
-                          }
-                          variant="speaker-share"
-                          showCloudNativePattern={true}
-                          eventName="Cloud Native Bergen 2025"
-                          className="aspect-square w-full"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Small Grid */}
-                    <div className="mb-12">
-                      <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
-                        Small (For Compact Grids)
-                      </h5>
-                      <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6">
-                        {conference.featured_speakers
-                          .slice(0, 6)
-                          .map((speaker, index) => (
-                            <SpeakerShare
-                              key={speaker._id}
-                              speaker={speaker}
-                              variant={
-                                index % 2 === 0
-                                  ? 'speaker-share'
-                                  : 'speaker-spotlight'
-                              }
-                              showCloudNativePattern={index % 3 === 0}
-                              isFeatured={index === 0}
-                              eventName="Cloud Native Bergen 2025"
-                              className="aspect-square w-full"
-                            />
-                          ))}
-                      </div>
-                    </div>
-
-                    {/* Extra Small Grid */}
-                    <div>
-                      <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
-                        Extra Small (Thumbnail Size)
-                      </h5>
-                      <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
-                        {conference.featured_speakers
-                          .slice(0, 10)
-                          .map((speaker, index) => (
-                            <SpeakerShare
-                              key={speaker._id}
-                              speaker={speaker}
-                              variant={
-                                index % 2 === 0
-                                  ? 'speaker-share'
-                                  : 'speaker-spotlight'
-                              }
-                              showCloudNativePattern={index % 4 === 0}
-                              isFeatured={false}
-                              eventName="CNB 2025"
-                              className="aspect-square w-full"
-                            />
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Technical Features */}
-                  <div className="rounded-xl bg-brand-sky-mist p-8">
-                    <h4 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue">
-                      Technical Features & Capabilities
-                    </h4>
-
-                    <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-                      <div>
-                        <h5 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
-                          QR Code Integration
-                        </h5>
-                        <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
-                          <li>• Automatically generated for each speaker</li>
-                          <li>• Links to speaker profile page</li>
-                          <li>• High contrast for reliable scanning</li>
-                          <li>• Optimized for mobile cameras</li>
-                          <li>• Error correction for damaged prints</li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <h5 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
-                          Responsive Design
-                        </h5>
-                        <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
-                          <li>• Container queries for perfect scaling</li>
-                          <li>• Fluid typography and spacing</li>
-                          <li>• Aspect ratio preservation</li>
-                          <li>• Optimized for social media platforms</li>
-                          <li>• Works from thumbnails to hero images</li>
-                        </ul>
-                      </div>
-
-                      <div>
-                        <h5 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray">
-                          Cloud Native Pattern
-                        </h5>
-                        <ul className="font-inter space-y-2 text-sm text-brand-slate-gray">
-                          <li>• 50+ authentic project logos</li>
-                          <li>• Intelligent depth layering</li>
-                          <li>• Smooth animations and movement</li>
-                          <li>• Performance optimized</li>
-                          <li>• Works with both variants</li>
-                        </ul>
-                      </div>
-                    </div>
-
-                    <div className="mt-8 rounded-lg bg-white/50 p-6">
-                      <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
-                        Usage Guidelines
-                      </h5>
-                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                        <div>
-                          <h6 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
-                            Speaker Share Variant
-                          </h6>
-                          <ul className="font-inter space-y-1 text-sm text-brand-slate-gray">
-                            <li>
-                              • For speakers to share on their own social media
-                            </li>
-                            <li>
-                              • &ldquo;I&apos;m speaking at&rdquo; messaging
-                            </li>
-                            <li>• Personal branding focus</li>
-                            <li>• Include speaker&apos;s primary talk</li>
-                          </ul>
-                        </div>
-                        <div>
-                          <h6 className="font-space-grotesk mb-2 text-sm font-semibold text-brand-slate-gray">
-                            Speaker Spotlight Variant
-                          </h6>
-                          <ul className="font-inter space-y-1 text-sm text-brand-slate-gray">
-                            <li>
-                              • For conference organizers to promote speakers
-                            </li>
-                            <li>• &ldquo;Featured Speaker&rdquo; messaging</li>
-                            <li>• Conference branding focus</li>
-                            <li>• Highlight keynote and featured speakers</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 rounded-lg bg-brand-cloud-blue/10 p-6">
-                      <h5 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
-                        Development API
-                      </h5>
-                      <div className="space-y-4">
-                        <div>
-                          <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
-                            Basic Usage
-                          </h6>
-                          <code className="font-jetbrains block rounded bg-white p-3 text-sm text-gray-800">
-                            {`<SpeakerShare
-  speaker={speaker}
-  variant="speaker-share"
-  eventName="Cloud Native Bergen 2025"
-/>`}
-                          </code>
-                        </div>
-                        <div>
-                          <h6 className="font-inter mb-2 text-sm font-semibold text-brand-slate-gray">
-                            With Cloud Native Pattern
-                          </h6>
-                          <code className="font-jetbrains block rounded bg-white p-3 text-sm text-gray-800">
-                            {`<SpeakerShare
-  speaker={speaker}
-  variant="speaker-spotlight"
-  showCloudNativePattern={true}
-  isFeatured={true}
-  eventName="Cloud Native Bergen 2025"
-/>`}
-                          </code>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            {/* Speaker Directory */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 8 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
-                      Speaker Directory
-                    </h3>
-                    <p className="font-inter text-gray-600">
-                      Comprehensive speaker listing for conference programs and
-                      attendee guides. Maximizes information density while
-                      maintaining readability.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {conference.featured_speakers
-                      .slice(0, 10)
-                      .map((speaker) => (
-                        <SpeakerPromotionCard
-                          key={speaker._id}
-                          speaker={speaker}
-                          variant="compact"
-                          ctaText="View"
-                        />
-                      ))}
-                  </div>
-                </div>
-              )}
-
-            {/* Mixed Layout Example */}
-            {conference?.featured_speakers &&
-              conference.featured_speakers.length >= 6 && (
-                <div>
-                  <div className="mb-8">
-                    <h3 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray">
-                      Mixed Layout
-                    </h3>
-                    <p className="font-inter text-gray-600">
-                      Combines different speaker presentation styles for
-                      dynamic, engaging layouts. Perfect for conference websites
-                      that need visual variety and clear hierarchy.
-                    </p>
-                  </div>
-
-                  <div className="space-y-8">
-                    {/* Featured speaker at top */}
-                    <div className="mb-8">
+                  {/* Compact list for additional speakers */}
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {displaySpeakers.slice(4, 10).map((speaker) => (
                       <SpeakerPromotionCard
-                        speaker={conference.featured_speakers[0]}
-                        isFeatured={true}
-                        variant="featured"
-                        ctaText="View Speaker"
+                        key={speaker._id}
+                        speaker={speaker}
+                        variant="compact"
+                        ctaText="View Details"
                       />
-                    </div>
-
-                    {/* Three card speakers */}
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                      {conference.featured_speakers
-                        .slice(1, 4)
-                        .map((speaker) => (
-                          <SpeakerPromotionCard
-                            key={speaker._id}
-                            speaker={speaker}
-                            variant="default"
-                            ctaText="View Profile"
-                          />
-                        ))}
-                    </div>
-
-                    {/* Compact list for additional speakers */}
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {conference.featured_speakers
-                        .slice(4, 10)
-                        .map((speaker) => (
-                          <SpeakerPromotionCard
-                            key={speaker._id}
-                            speaker={speaker}
-                            variant="compact"
-                            ctaText="View Details"
-                          />
-                        ))}
-                    </div>
+                    ))}
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
             {/* Design Guidelines */}
             <div className="rounded-xl bg-brand-sky-mist p-8">
@@ -2531,7 +2515,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   conference={conference}
                   isOrganizers={true}
                   title="Join Our Community"
-                  description="Whether you're looking to share your expertise or learn from the best, we'd love to have you at Cloud Native Bergen."
+                  description="Whether you're looking to share your expertise or learn from the best, we'd love to have you join us."
                 />
               </div>
             </div>
@@ -2549,7 +2533,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 <CallToAction
                   conference={conference}
                   title="Share Your Expertise"
-                  description="Join our community of cloud native experts and share your knowledge with the Bergen tech community."
+                  description="Join our community of cloud native experts and share your knowledge with the local tech community."
                   showTicketReservation={false}
                 />
               </div>
@@ -2568,7 +2552,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 <CallToAction
                   conference={conference}
                   title="Secure Your Spot"
-                  description="Don't miss this opportunity to learn from industry experts and connect with the Bergen cloud native community."
+                  description="Don't miss this opportunity to learn from industry experts and connect with your local cloud native community."
                   showSpeakerSubmission={false}
                 />
               </div>
@@ -2587,7 +2571,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 <CallToAction
                   conference={conference}
                   title="Early Bird Special"
-                  description="Register now and save 40% on your conference ticket. Limited time offer for the Bergen cloud native community."
+                  description="Register now and save 40% on your conference ticket. Limited time offer for the cloud native community."
                 />
               </div>
             </div>
@@ -3783,12 +3767,12 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 previewHeight={600}
                 emailFrom={conference.contact_email}
                 emailTo="recipient@example.com"
-                emailSubject="Welcome to Cloud Native Bergen"
+                emailSubject={`Welcome to ${conference.title}`}
                 emailTime="1 week ago 3:15 PM"
               >
                 <BaseEmailTemplate
                   eventName={conference.title}
-                  title="Welcome to Cloud Native Bergen"
+                  title={`Welcome to ${conference.title}`}
                   speakerName="Taylor Johnson"
                   proposalTitle="Getting Started with Cloud Native Development"
                   eventLocation={`${conference.city}, ${conference.country}`}
