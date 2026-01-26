@@ -20,7 +20,7 @@ export async function checkWorkshopEligibility(params: {
   eventId: number
   contactEmail?: string
 }): Promise<WorkshopEligibilityResult> {
-  const contactEmail = params.contactEmail || 'contact@cloudnativebergen.dev'
+  const contactEmail = params.contactEmail || 'contact@cloudnativedays.no'
 
   try {
     const tickets = await fetchEventTickets(params.customerId, params.eventId)

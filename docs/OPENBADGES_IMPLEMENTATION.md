@@ -283,7 +283,7 @@ Badges are sent from conference-specific addresses:
 
 - Format: `{organizer} <{contact_email}>`
 - Fallback: `{organizer} <noreply@{domain}>`
-- Default: `noreply@cloudnativebergen.dev`
+- Default: `noreply@cloudnativedays.no`
 
 ---
 

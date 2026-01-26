@@ -152,7 +152,7 @@ export default async function WorkshopPage() {
 
               <div className="mt-8">
                 <Button
-                  href={`mailto:${conference.contact_email || 'contact@cloudnativebergen.dev'}`}
+                  href={`mailto:${conference.contact_email || 'contact@cloudnativedays.no'}`}
                   variant="outline"
                 >
                   <EnvelopeIcon className="mr-2 h-5 w-5" />

@@ -379,5 +379,5 @@ This implementation follows security best practices:
 
 For security concerns or to report vulnerabilities:
 
-- Email: [security@cloudnativebergen.no]
+- Email: [security@cloudnativedays.no]
 - Create a private security advisory on GitHub

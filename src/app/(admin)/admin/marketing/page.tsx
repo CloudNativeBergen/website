@@ -343,7 +343,7 @@ export default async function MarketingPage() {
                     <span className="font-inter text-lg">
                       {conference.city && conference.country
                         ? `${conference.city}, ${conference.country}`
-                        : 'Bergen, Norway'}
+                        : 'Location TBA'}
                     </span>
                   </div>
                 </div>
@@ -414,7 +414,7 @@ export default async function MarketingPage() {
             <PhotoGalleryWithDownload
               photos={featuredPhotos}
               qrCodeUrl={`https://${conferenceDomain}${programUrl}`}
-              conferenceTitle={conference.title || 'Cloud Native Bergen'}
+              conferenceTitle={conference.title || 'Cloud Native Days'}
               conferenceLogos={{
                 logo_bright: conference.logo_bright,
                 logo_dark: conference.logo_dark,
@@ -455,9 +455,7 @@ export default async function MarketingPage() {
                         }}
                         variant="speaker-spotlight"
                         isFeatured={true}
-                        eventName={
-                          conference.title || 'Cloud Native Bergen 2025'
-                        }
+                        eventName={conference.title || 'Cloud Native Days'}
                         className="h-full w-full"
                         showCloudNativePattern={true}
                       />
@@ -510,7 +508,7 @@ export default async function MarketingPage() {
                           sponsor={sponsor}
                           tier={tier}
                           variant={variant}
-                          eventName={conference.title || 'Cloud Native Bergen'}
+                          eventName={conference.title || 'Cloud Native Days'}
                           eventDate={eventDate}
                           showCloudNativePattern={true}
                           className="h-full w-full"

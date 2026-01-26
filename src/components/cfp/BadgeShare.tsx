@@ -50,7 +50,7 @@ export function BadgeShare({
       'organizer' in badge.conference &&
       badge.conference.organizer
         ? badge.conference.organizer
-        : 'Cloud Native Bergen'
+        : 'Cloud Native Days'
 
     addToLinkedInProfile({
       name: `${eventName} ${badgeTypeName} Badge`,

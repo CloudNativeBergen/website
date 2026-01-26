@@ -26,10 +26,10 @@ export function Header({ c }: { c: Conference }) {
     setIsPast(isConferenceOver(c))
   }, [c])
 
-  const currentDomain = c.domains?.[0] ?? 'cloudnativebergen.dev'
+  const currentDomain = c.domains?.[0] ?? 'cloudnativedays.no'
   const currentYear = parseInt(currentDomain.split('.')[0])
   const previousYear = currentYear - 1
-  const previousDomain = `${previousYear}.cloudnativebergen.dev`
+  const previousDomain = `${previousYear}.cloudnativedays.no`
 
   return (
     <header className="relative z-50 flex-none lg:pt-11">

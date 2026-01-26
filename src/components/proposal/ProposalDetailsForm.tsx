@@ -346,7 +346,7 @@ export function ProposalDetailsForm({
           <div className="col-span-full">
             <Checkbox
               name="tos"
-              label="I agree to the Cloud Native Bergen Code of Conduct"
+              label="I agree to the Code of Conduct"
               value={tos}
               setValue={setTos}
             >
@@ -356,7 +356,7 @@ export function ProposalDetailsForm({
                   href="/conduct"
                   className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover"
                 >
-                  Cloud Native Bergen Code of Conduct
+                  Code of Conduct
                 </Link>{' '}
                 to submit your presentation.
               </HelpText>

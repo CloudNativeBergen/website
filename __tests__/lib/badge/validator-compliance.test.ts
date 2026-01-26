@@ -25,7 +25,7 @@ import type { BadgeGenerationParams } from '@/lib/badge/types'
 import type { Credential } from '@/lib/openbadges/types'
 import goldenHeader from '@/lib/openbadges/data/credential-jwt-header.json'
 
-const TEST_HOST = 'test.cloudnativebergen.dev'
+const TEST_HOST = 'test.example.com'
 
 describe('OpenBadges 3.0 Validator Compliance', () => {
   // Test configuration using test keys

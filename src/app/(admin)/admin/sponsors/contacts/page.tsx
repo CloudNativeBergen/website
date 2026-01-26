@@ -82,7 +82,7 @@ export default async function AdminSponsorContacts() {
           actions={
             <SponsorContactActions
               sponsorsWithContactsCount={sponsorsWithContactPersons.length}
-              fromEmail={`Cloud Native Bergen <${conference.contact_email}>`}
+              fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.contact_email}>`}
               conference={conference}
             />
           }

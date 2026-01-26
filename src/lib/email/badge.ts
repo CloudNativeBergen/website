@@ -51,7 +51,7 @@ export async function sendBadgeEmail({
       ? `${conference.organizer} <${conference.contact_email}>`
       : conference.domains?.[0]
         ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Bergen <contact@cloudnativebergen.dev>'
+        : 'Cloud Native Days <contact@cloudnativedays.org>'
 
     // Send email using Resend
     const { data, error } = await resend.emails.send({

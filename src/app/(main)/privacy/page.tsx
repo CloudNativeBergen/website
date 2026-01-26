@@ -62,8 +62,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
   }
 
   const lastUpdated = 'October 31, 2025'
-  const contactEmail =
-    conference.contact_email || 'contact@cloudnativebergen.dev'
+  const contactEmail = conference.contact_email || 'contact@cloudnativedays.no'
   const organizationName = 'Cloud Native Bergen'
 
   return (

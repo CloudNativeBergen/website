@@ -129,7 +129,7 @@ export async function createBadgeConfiguration(
     conference.contact_email ||
     (conference.domains?.[0]
       ? `contact@${conference.domains[0]}`
-      : 'contact@cloudnativebergen.dev')
+      : 'contact@cloudnativedays.no')
 
   const issuerDescription =
     conference.description ||
@@ -189,7 +189,7 @@ export function createTestConfiguration(
     )
   }
 
-  const baseUrl = 'https://test.cloudnativebergen.dev'
+  const baseUrl = 'https://test.cloudnativedays.no'
 
   const defaultConfig: BadgeConfiguration = {
     baseUrl,
@@ -197,7 +197,7 @@ export function createTestConfiguration(
       id: `${baseUrl}/api/badge/issuer`,
       name: 'Test Organization',
       url: baseUrl,
-      email: 'test@cloudnativebergen.dev',
+      email: 'test@cloudnativedays.no',
       description: 'Test organization for OpenBadges compliance testing',
       imageUrl: `${baseUrl}/og/base.png`,
     },

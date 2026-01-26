@@ -47,7 +47,10 @@ export async function sendVolunteerApprovalEmail(
     }
 
     const eventName = conference.title
-    const eventLocation = `${conference.city || 'Bergen'}, ${conference.country || 'Norway'}`
+    const eventLocation =
+      conference.city && conference.country
+        ? `${conference.city}, ${conference.country}`
+        : 'Location TBA'
     const eventDate = conference.start_date
       ? formatConferenceDateLong(conference.start_date)
       : 'TBD'
@@ -56,7 +59,7 @@ export async function sendVolunteerApprovalEmail(
 
     const result = await retryWithBackoff(async () => {
       const response = await resend.emails.send({
-        from: `${conference.organizer || 'Cloud Native Bergen'} <${fromEmail}>`,
+        from: `${conference.organizer || 'Cloud Native Days'} <${fromEmail}>`,
         to: volunteer.email!,
         subject,
         react: VolunteerApprovalTemplate({

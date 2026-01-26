@@ -436,7 +436,7 @@ describe('Verification - Edge Cases', () => {
       ],
       issuer: {
         type: ['Profile'],
-        url: 'https://cloudnativebergen.dev/',
+        url: 'https://example.com/',
         name: 'Cloud Native Bergen',
         id: 'did:key:z6MkvRQ7bnwBVzwozkkbasYzntpfnWJBsHfB1EfWFeFErgoy',
         otherIdentifier: [
@@ -446,7 +446,7 @@ describe('Verification - Edge Cases', () => {
             type: 'IdentifierEntry',
           },
         ],
-        email: 'hans@cloudnativebergen.dev',
+        email: 'hans@example.com',
       },
       credentialStatus: {
         id: 'https://openbadgefactory.com/obv3/revoked/T5EFVQa25J64aLH8/T5EFYFaNXGXaD13',

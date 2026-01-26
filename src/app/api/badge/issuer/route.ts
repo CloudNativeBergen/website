@@ -66,7 +66,7 @@ export async function GET(request: Request) {
         conference.contact_email ||
         (conference.domains?.[0]
           ? `contact@${conference.domains[0]}`
-          : 'contact@cloudnativebergen.dev'),
+          : 'contact@cloudnativedays.no'),
       description: conference.description || conference.tagline || '',
       image: {
         id: `${baseUrl}/og/base.png`,

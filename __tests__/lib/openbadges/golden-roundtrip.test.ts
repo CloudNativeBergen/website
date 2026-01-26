@@ -68,7 +68,7 @@ describe('Golden Data Round-Trip - Create and Validate', () => {
           id: 'https://cloudnativebergen.no/issuer',
           name: 'Cloud Native Bergen',
           url: 'https://cloudnativebergen.no',
-          email: 'hello@cloudnativebergen.no',
+          email: 'hello@example.com',
           description:
             'Cloud Native Bergen is a community for cloud native enthusiasts.',
           image: {

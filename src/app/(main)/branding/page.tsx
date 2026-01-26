@@ -128,21 +128,21 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
       title: params.title,
       description: params.description
         ? [
-          {
-            _type: 'block',
-            _key: `b-${params.id}`,
-            style: 'normal',
-            children: [
-              {
-                _type: 'span',
-                _key: `s-${params.id}`,
-                text: params.description,
-                marks: [],
-              },
-            ],
-            markDefs: [],
-          },
-        ]
+            {
+              _type: 'block',
+              _key: `b-${params.id}`,
+              style: 'normal',
+              children: [
+                {
+                  _type: 'span',
+                  _key: `s-${params.id}`,
+                  text: params.description,
+                  marks: [],
+                },
+              ],
+              markDefs: [],
+            },
+          ]
         : [],
       language: Language.english,
       format: params.format,

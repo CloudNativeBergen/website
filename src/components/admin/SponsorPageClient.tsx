@@ -145,7 +145,7 @@ export default function SponsorPageClient({
         onSyncContacts={handleSyncContacts}
         recipientCount={sponsorsWithContacts.length}
         recipientType="sponsors"
-        fromEmail={`Cloud Native Bergen <${conference.contact_email}>`}
+        fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.contact_email}>`}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
         eventDate={formatConferenceDateLong(conference.start_date)}

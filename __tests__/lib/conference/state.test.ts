@@ -37,7 +37,7 @@ const baseConference: Conference = {
   registration_link: 'https://tickets.test.com',
   contact_email: 'info@test.com',
   organizers: [],
-  domains: ['test.cloudnativebergen.dev'],
+  domains: ['test.example.com'],
   formats: [],
   topics: [],
 }

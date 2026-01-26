@@ -8,7 +8,7 @@ export const STREAM_CONFIG = {
   },
 
   blueskyFeed: {
-    handle: 'cloudnativebergen.dev',
+    handle: 'cloudnativedays.no',
     compact: true,
     title: 'Social Stream',
     speed: 180,

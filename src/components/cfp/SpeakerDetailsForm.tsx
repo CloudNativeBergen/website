@@ -423,7 +423,7 @@ export function SpeakerDetailsForm({
               >
                 <HelpText>
                   {isProfileMode
-                    ? "I'm based in or near Bergen"
+                    ? "I'm based locally or nearby"
                     : 'Please indicate if you are a local speaker to help us promote local talent.'}
                 </HelpText>
               </Checkbox>
@@ -561,7 +561,7 @@ export function SpeakerDetailsForm({
               >
                 <HelpText>
                   You can unsubscribe at any time. We&rsquo;ll only send
-                  relevant information about Cloud Native Bergen events.
+                  relevant information about Cloud Native Days events.
                 </HelpText>
               </Checkbox>
             </div>

@@ -54,8 +54,8 @@ export const BadgeEmailTemplate = ({
     </p>
 
     <p style="color: #8898aa; font-size: 12px; line-height: 16px; padding: 0 48px; margin-top: 32px;">
-      Cloud Native Bergen<br>
-      Building the cloud native community in Bergen, Norway
+      Cloud Native Days<br>
+      Building the cloud native community
     </p>
   </div>
 </body>
