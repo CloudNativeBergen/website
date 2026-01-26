@@ -53,6 +53,7 @@ import { colorPalette, typography } from '@/lib/branding/data'
 import { TalkPromotionCard } from '@/components/TalkPromotionCard'
 import { SpeakerPromotionCard } from '@/components/SpeakerPromotionCard'
 import { SpeakerShare } from '@/components/SpeakerShare'
+import { TypewriterEffect } from '@/components/TypewriterEffect'
 import {
   ProposalAcceptTemplate,
   ProposalRejectTemplate,
@@ -182,6 +183,12 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue dark:text-gray-300 dark:hover:text-blue-400"
               >
                 Typography
+              </a>
+              <a
+                href="#typewriter-effect"
+                className="font-inter text-sm font-medium text-brand-slate-gray transition-colors hover:text-brand-cloud-blue dark:text-gray-300 dark:hover:text-blue-400"
+              >
+                Typewriter
               </a>
               <a
                 href="#icon-library"
@@ -620,6 +627,195 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
               {typography.secondary.map((font) => (
                 <TypographyShowcase key={font.name} font={font} />
               ))}
+            </div>
+          </div>
+        </Container>
+      </section>
+
+      {/* Typewriter Effect */}
+      <section
+        id="typewriter-effect"
+        className="bg-white py-20 dark:bg-gray-900"
+      >
+        <Container>
+          <div className="mb-16 text-center">
+            <h2 className="font-space-grotesk mb-6 text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
+              Typewriter Effect
+            </h2>
+            <p className="font-inter mx-auto max-w-3xl text-xl text-brand-slate-gray dark:text-gray-300">
+              An accessible animated typing effect for hero taglines. Cycles
+              through words with a blinking cursor, respecting user motion
+              preferences.
+            </p>
+          </div>
+
+          <div className="mx-auto max-w-4xl space-y-12">
+            {/* Live Demo */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
+                Live Demo
+              </h3>
+              <div className="rounded-xl bg-brand-glacier-white p-8 dark:bg-gray-800">
+                <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-5xl">
+                  <TypewriterEffect
+                    prefix="Real "
+                    words={['Cases.', 'People.', 'Cloud Native.']}
+                    animation={true}
+                    typingSpeed={100}
+                    deletingSpeed={50}
+                    pauseDuration={2000}
+                  />
+                </h1>
+              </div>
+            </div>
+
+            {/* Speed Variations */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
+                Speed Variations
+              </h3>
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="rounded-xl bg-brand-glacier-white p-6 dark:bg-gray-800">
+                  <p className="font-inter mb-3 text-sm text-brand-cloud-gray">
+                    Fast (60ms typing)
+                  </p>
+                  <h2 className="font-jetbrains text-2xl font-bold tracking-tighter text-brand-cloud-blue sm:text-3xl">
+                    <TypewriterEffect
+                      prefix="Real "
+                      words={['Cases.', 'People.', 'Cloud Native.']}
+                      animation={true}
+                      typingSpeed={60}
+                      deletingSpeed={30}
+                      pauseDuration={1500}
+                    />
+                  </h2>
+                </div>
+                <div className="rounded-xl bg-brand-glacier-white p-6 dark:bg-gray-800">
+                  <p className="font-inter mb-3 text-sm text-brand-cloud-gray">
+                    Slow (150ms typing)
+                  </p>
+                  <h2 className="font-jetbrains text-2xl font-bold tracking-tighter text-brand-cloud-blue sm:text-3xl">
+                    <TypewriterEffect
+                      prefix="Real "
+                      words={['Cases.', 'People.', 'Cloud Native.']}
+                      animation={true}
+                      typingSpeed={150}
+                      deletingSpeed={75}
+                      pauseDuration={3000}
+                    />
+                  </h2>
+                </div>
+              </div>
+            </div>
+
+            {/* Static (Animation Disabled) */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
+                Animation Disabled
+              </h3>
+              <div className="rounded-xl bg-brand-glacier-white p-6 dark:bg-gray-800">
+                <p className="font-inter mb-3 text-sm text-brand-cloud-gray">
+                  animation=false (or prefers-reduced-motion)
+                </p>
+                <h2 className="font-jetbrains text-2xl font-bold tracking-tighter text-brand-cloud-blue sm:text-3xl">
+                  <TypewriterEffect
+                    prefix="Real "
+                    words={['Cases.', 'People.', 'Cloud Native.']}
+                    animation={false}
+                  />
+                </h2>
+              </div>
+            </div>
+
+            {/* Accessibility Features */}
+            <div className="rounded-xl bg-brand-sky-mist p-8 dark:bg-gray-800">
+              <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-brand-cloud-blue dark:text-blue-400">
+                Accessibility Features
+              </h3>
+              <ul className="font-inter space-y-3 text-brand-slate-gray dark:text-gray-300">
+                <li className="flex items-start">
+                  <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
+                  <span>
+                    <strong>Screen readers:</strong> Full text always available
+                    via aria-label and sr-only span
+                  </span>
+                </li>
+                <li className="flex items-start">
+                  <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
+                  <span>
+                    <strong>SEO:</strong> Complete text in DOM from the start
+                    for crawlers
+                  </span>
+                </li>
+                <li className="flex items-start">
+                  <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
+                  <span>
+                    <strong>Reduced motion:</strong> Automatically respects
+                    prefers-reduced-motion preference
+                  </span>
+                </li>
+                <li className="flex items-start">
+                  <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-brand-fresh-green"></span>
+                  <span>
+                    <strong>Animation toggle:</strong> Can be disabled via
+                    animation=false prop
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            {/* UX Considerations */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 dark:border-amber-700 dark:bg-amber-900/20">
+              <h3 className="font-space-grotesk mb-6 text-xl font-semibold text-amber-800 dark:text-amber-200">
+                UX Considerations
+              </h3>
+              <ul className="font-inter space-y-3 text-amber-900 dark:text-amber-100">
+                <li className="flex items-start">
+                  <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-amber-600"></span>
+                  Keep words short - users don&apos;t wait for long sentences
+                </li>
+                <li className="flex items-start">
+                  <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-amber-600"></span>
+                  Don&apos;t rely on the effect alone - support with static
+                  content
+                </li>
+                <li className="flex items-start">
+                  <span className="mt-1.5 mr-3 h-2 w-2 shrink-0 rounded-full bg-amber-600"></span>
+                  Consider if animation adds value or is just decoration
+                </li>
+              </ul>
+            </div>
+
+            {/* Code Example */}
+            <div>
+              <h3 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-blue-400">
+                Usage
+              </h3>
+              <div className="rounded-xl bg-gray-900 p-6">
+                <pre className="font-jetbrains overflow-x-auto text-sm text-gray-100">
+                  {`<TypewriterEffect
+  prefix="Real "
+  words={['Cases.', 'People.', 'Cloud Native.']}
+  animation={true}     // Enable/disable animation
+  typingSpeed={100}    // ms per character typed
+  deletingSpeed={50}   // ms per character deleted
+  pauseDuration={2000} // ms to pause after word complete
+/>`}
+                </pre>
+              </div>
+            </div>
+
+            {/* Auto-detection Note */}
+            <div className="rounded-xl bg-brand-cloud-blue/10 p-6 dark:bg-blue-900/30">
+              <h4 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-cloud-blue dark:text-blue-400">
+                Auto-detection in Hero
+              </h4>
+              <p className="font-inter text-brand-slate-gray dark:text-gray-300">
+                The Hero component automatically uses the typewriter effect when
+                the conference tagline starts with &ldquo;Real &rdquo;. This
+                allows easy toggling by simply changing the tagline in Sanity
+                CMS.
+              </p>
             </div>
           </div>
         </Container>

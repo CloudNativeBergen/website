@@ -2,6 +2,7 @@ import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
 import { iconForLink } from '@/components/SocialIcons'
+import { TypewriterEffect } from '@/components/TypewriterEffect'
 import {
   InformationCircleIcon,
   UserGroupIcon,
@@ -207,7 +208,18 @@ export function Hero({ conference }: { conference: Conference }) {
             )}
           <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
             <span className="sr-only">{conference.title} - </span>
-            {conference.tagline}
+            {conference.tagline?.startsWith('Real ') ? (
+              <TypewriterEffect
+                prefix="Real "
+                words={['Cases.', 'People.', 'Cloud Native.']}
+                animation={true}
+                typingSpeed={100}
+                deletingSpeed={50}
+                pauseDuration={2000}
+              />
+            ) : (
+              conference.tagline
+            )}
           </h1>
           <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
             {conference.description &&
