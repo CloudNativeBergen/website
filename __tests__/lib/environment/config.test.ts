@@ -23,7 +23,7 @@ describe('AppEnvironment', () => {
       if (env[key] === undefined) {
         delete process.env[key]
       } else {
-        ; (process.env as any)[key] = env[key]
+        ;(process.env as any)[key] = env[key]
       }
     })
   }
