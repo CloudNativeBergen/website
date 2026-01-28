@@ -4,6 +4,7 @@ import { Speaker, Flags } from '@/lib/speaker/types'
 import { ProposalExisting } from '@/lib/proposal/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { getSpeakersWithAcceptedTalks } from '@/lib/speaker/sanity'
+import { unstable_noStore as noStore } from 'next/cache'
 
 function hasPreviousAcceptedTalks(
   speaker: Speaker & { proposals: ProposalExisting[] },
@@ -70,6 +71,7 @@ function calculateSpeakerStats(
 }
 
 export default async function AdminSpeakers() {
+  noStore()
   try {
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({})

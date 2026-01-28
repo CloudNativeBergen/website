@@ -1,8 +1,10 @@
 import { CalendarIcon } from '@heroicons/react/24/outline'
 import { ScheduleEditor } from '@/components/admin/schedule/ScheduleEditor'
 import { getScheduleData } from '@/lib/schedule/server'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export default async function AdminSchedule() {
+  noStore()
   const { schedules, conference, proposals, error } = await getScheduleData()
 
   if (error) {

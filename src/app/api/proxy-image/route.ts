@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export async function GET(request: NextRequest) {
+  noStore()
   try {
     const session = await auth()
     if (!session?.user || !session?.speaker) {

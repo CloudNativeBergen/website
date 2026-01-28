@@ -11,8 +11,10 @@ import {
 } from '@/lib/sponsor/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import Link from 'next/link'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export default async function AdminSponsorContacts() {
+  noStore()
   try {
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({

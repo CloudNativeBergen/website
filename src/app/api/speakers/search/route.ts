@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { clientReadUncached as clientRead } from '@/lib/sanity/client'
 import { Speaker } from '@/lib/speaker/types'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export async function GET(request: NextRequest) {
+  noStore()
   try {
     const { searchParams } = new URL(request.url)
     const searchQuery = searchParams.get('q')

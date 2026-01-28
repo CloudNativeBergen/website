@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { list } from '@vercel/blob'
 import { cleanupOrphanedBlob } from '@/lib/attachment/blob'
+import { unstable_noStore as noStore } from 'next/cache'
 
 /**
  * Blob retention period in hours before cleanup.
@@ -12,6 +13,7 @@ import { cleanupOrphanedBlob } from '@/lib/attachment/blob'
 const BLOB_RETENTION_HOURS = 24
 
 export async function GET(request: NextRequest) {
+  noStore()
   try {
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET

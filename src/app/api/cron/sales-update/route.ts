@@ -10,8 +10,10 @@ import { isConferenceOver } from '@/lib/conference/state'
 import { getOrganizerCount } from '@/lib/speaker/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export async function GET(request: NextRequest) {
+  noStore()
   try {
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
@@ -155,14 +157,14 @@ export async function GET(request: NextRequest) {
         categories: statistics.categoryBreakdown,
         targetAnalysis: analysis
           ? {
-              enabled: true,
-              capacity: analysis.capacity,
-              currentTargetPercentage: analysis.performance.targetPercentage,
-              actualPercentage: analysis.performance.currentPercentage,
-              variance: analysis.performance.variance,
-              isOnTrack: analysis.performance.isOnTrack,
-              nextMilestone: analysis.performance.nextMilestone,
-            }
+            enabled: true,
+            capacity: analysis.capacity,
+            currentTargetPercentage: analysis.performance.targetPercentage,
+            actualPercentage: analysis.performance.currentPercentage,
+            variance: analysis.performance.variance,
+            isOnTrack: analysis.performance.isOnTrack,
+            nextMilestone: analysis.performance.nextMilestone,
+          }
           : null,
         lastUpdated: new Date().toISOString(),
       },
