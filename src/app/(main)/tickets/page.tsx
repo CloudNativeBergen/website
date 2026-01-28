@@ -32,26 +32,26 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
       <BackgroundImage className="-top-24 -bottom-24" />
       <Container className="relative py-12 sm:py-16 lg:py-20">
         <div className="mx-auto max-w-3xl">
-          <div className="overflow-hidden rounded-2xl bg-white/95 shadow-xl ring-1 ring-brand-cloud-blue/10 backdrop-blur-sm">
+          <div className="overflow-hidden rounded-2xl bg-white/95 shadow-xl ring-1 ring-brand-cloud-blue/10 backdrop-blur-sm dark:bg-gray-800/95 dark:ring-gray-700">
             <div className="px-6 py-8 sm:px-10 sm:py-12">
               <div className="text-center">
-                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-sky-mist">
-                  <CalendarDaysIcon className="h-8 w-8 text-brand-cloud-blue" />
+                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-brand-sky-mist dark:bg-blue-900/50">
+                  <CalendarDaysIcon className="h-8 w-8 text-brand-cloud-blue dark:text-blue-400" />
                 </div>
 
-                <h1 className="font-space-grotesk mb-4 text-3xl font-bold text-brand-slate-gray">
+                <h1 className="font-space-grotesk mb-4 text-3xl font-bold text-brand-slate-gray dark:text-white">
                   Tickets Coming Soon
                 </h1>
 
-                <p className="font-inter mb-8 text-lg text-brand-slate-gray">
+                <p className="font-inter mb-8 text-lg text-brand-slate-gray dark:text-gray-300">
                   Tickets for {conference.title} are not yet available.
                   We&apos;re working hard to bring you an amazing conference
                   experience!
                 </p>
 
                 {conference.start_date && (
-                  <div className="mb-6 flex items-center justify-center text-brand-slate-gray">
-                    <ClockIcon className="mr-2 h-5 w-5 text-brand-cloud-blue" />
+                  <div className="mb-6 flex items-center justify-center text-brand-slate-gray dark:text-gray-300">
+                    <ClockIcon className="mr-2 h-5 w-5 text-brand-cloud-blue dark:text-blue-400" />
                     <span className="font-inter text-base">
                       Conference Dates:{' '}
                       <time dateTime={conference.start_date}>
@@ -64,11 +64,11 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
                   </div>
                 )}
 
-                <div className="mb-8 rounded-xl bg-brand-sky-mist p-6">
-                  <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-cloud-blue">
+                <div className="mb-8 rounded-xl bg-brand-sky-mist p-6 dark:bg-blue-900/50">
+                  <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-cloud-blue dark:text-blue-400">
                     Get Notified
                   </h3>
-                  <p className="font-inter text-sm text-brand-slate-gray">
+                  <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
                     Want to be the first to know when tickets become available?
                     Follow us on social media or check back here regularly for
                     updates.
@@ -93,12 +93,12 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
                   </Button>
                 </div>
 
-                <div className="mt-8 border-t border-brand-cloud-blue/20 pt-6">
-                  <p className="font-inter text-sm text-brand-slate-gray">
+                <div className="mt-8 border-t border-brand-cloud-blue/20 pt-6 dark:border-gray-700">
+                  <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
                     Have questions?{' '}
                     <Link
                       href={`mailto:${conference.contact_email}`}
-                      className="text-brand-cloud-blue transition-colors hover:text-brand-fresh-green"
+                      className="text-brand-cloud-blue transition-colors hover:text-brand-fresh-green dark:text-blue-400 dark:hover:text-brand-fresh-green"
                     >
                       Contact us
                     </Link>
