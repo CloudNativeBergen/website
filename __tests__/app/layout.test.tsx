@@ -12,12 +12,12 @@ describe('RootLayout metadata generation logic', () => {
     return {
       metadataBase,
       title: {
-        template: '%s - Cloud Native Day Bergen',
+        template: '%s - Cloud Native Days Norway',
         default:
-          'Cloud Native Day Bergen - A community-driven Kubernetes and Cloud conference',
+          'Cloud Native Days Norway - A community-driven Kubernetes and Cloud conference',
       },
       description:
-        'At Cloud Native Day Bergen, we bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
+        'At Cloud Native Days Norway, we bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
     }
   }
 
@@ -26,12 +26,12 @@ describe('RootLayout metadata generation logic', () => {
 
     expect(metadata.metadataBase?.toString()).toBe('http://localhost:3000/')
     expect(metadata.title).toEqual({
-      template: '%s - Cloud Native Day Bergen',
+      template: '%s - Cloud Native Days Norway',
       default:
-        'Cloud Native Day Bergen - A community-driven Kubernetes and Cloud conference',
+        'Cloud Native Days Norway - A community-driven Kubernetes and Cloud conference',
     })
     expect(metadata.description).toBe(
-      'At Cloud Native Day Bergen, we bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
+      'At Cloud Native Days Norway, we bring together the community to share knowledge and experience on Kubernetes, Cloud Native, and related technologies.',
     )
   })
 

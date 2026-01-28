@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(imageUrl, {
       headers: {
-        'User-Agent': 'Cloud Native Bergen Website/1.0',
+        'User-Agent': 'Cloud Native Days Norway Website/1.0',
         Accept: 'image/*',
       },
       signal: controller.signal,

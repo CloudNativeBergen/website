@@ -15,8 +15,9 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
 export const metadata = {
-  title: 'Call for Presentations - Cloud Native Bergen',
-  description: 'Submit your talk proposal for Cloud Native Bergen conference',
+  title: 'Call for Presentations - Cloud Native Days Norway',
+  description:
+    'Submit your talk proposal for Cloud Native Days Norway conference',
 }
 
 async function CachedCFPContent({ domain }: { domain: string }) {
@@ -66,10 +67,9 @@ async function CachedCFPContent({ domain }: { domain: string }) {
           insights and perspectives.
         </p>
         <p>
-          Cloud Native Day Bergen is the premier local conference for all things
-          cloud and Kubernetes. Join us to learn about the latest trends, best
-          practices, and cutting-edge technologies in the cloud-native
-          ecosystem.
+          {conference.title} is the premier conference for all things cloud and
+          Kubernetes. Join us to learn about the latest trends, best practices,
+          and cutting-edge technologies in the cloud-native ecosystem.
         </p>
       </div>
 
@@ -138,10 +138,9 @@ async function CachedCFPContent({ domain }: { domain: string }) {
           experience, from first-time presenters to seasoned experts.
         </p>
         <p>
-          Cloud Native Day Bergen is a diverse and inclusive event, and we
-          encourage submissions from speakers of all backgrounds and identities.
-          We are committed to creating a safe and welcoming environment for
-          everyone.
+          {conference.title} is a diverse and inclusive event, and we encourage
+          submissions from speakers of all backgrounds and identities. We are
+          committed to creating a safe and welcoming environment for everyone.
         </p>
         <p>
           We are especially interested in content that covers the following
@@ -313,16 +312,16 @@ async function CachedCFPContent({ domain }: { domain: string }) {
 
       <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
         <p>
-          Cloud Native Day Bergen is committed to creating a diverse and
-          inclusive event that welcomes speakers and attendees of all
-          backgrounds and identities. We believe that diversity is a strength
-          and that everyone has something valuable to contribute.
+          {conference.title} is committed to creating a diverse and inclusive
+          event that welcomes speakers and attendees of all backgrounds and
+          identities. We believe that diversity is a strength and that everyone
+          has something valuable to contribute.
         </p>
         <p>
-          We are enforcing a strict code of conduct to ensure that Cloud Native
-          Day Bergen is a safe and welcoming environment for everyone. We do not
-          tolerate harassment or discrimination of any kind, and we will take
-          appropriate action against anyone who violates our{' '}
+          We are enforcing a strict code of conduct to ensure that{' '}
+          {conference.title} is a safe and welcoming environment for everyone.
+          We do not tolerate harassment or discrimination of any kind, and we
+          will take appropriate action against anyone who violates our{' '}
           <Link
             href="/conduct"
             className="text-indigo-500 underline hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"

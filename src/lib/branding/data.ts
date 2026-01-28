@@ -119,7 +119,7 @@ export const typography = {
         'A monospaced font made for developers. Playful, readable, and distinctly "dev culture."',
       tone: 'Developer-native, playful, authentic',
       usage: 'Hero text, quotes, session titles, code examples',
-      example: 'Cloud Native Days 2025',
+      example: 'Cloud Native Days Norway',
     },
     {
       name: 'Space Grotesk',

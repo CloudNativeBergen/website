@@ -182,12 +182,12 @@ export default async function SpeakerDashboard() {
 
   // Prepare data for speaker share wrapper
   const primaryTalk = confirmedTalks[0]
-  const talkTitle = primaryTalk?.title || 'Cloud Native Bergen'
+  const talkTitle = primaryTalk?.title || 'Cloud Native Days Norway'
   const eventName = primaryTalk
     ? activeConferences.find((c) =>
         c.proposals.some((p) => p._id === primaryTalk._id),
-      )?.conference.title || 'Cloud Native Bergen'
-    : 'Cloud Native Bergen'
+      )?.conference.title || 'Cloud Native Days Norway'
+    : 'Cloud Native Days Norway'
 
   // Determine what to show in sidebar: latest badge takes priority over confirmed talk
   const showBadgeInSidebar = latestBadge
@@ -199,7 +199,8 @@ export default async function SpeakerDashboard() {
     const badgeConference = activeConferences.find((c) =>
       c.badges.some((b) => b._id === latestBadge._id),
     )
-    badgeEventName = badgeConference?.conference.title || 'Cloud Native Bergen'
+    badgeEventName =
+      badgeConference?.conference.title || 'Cloud Native Days Norway'
   }
 
   if (activeConferences.length === 0) {
@@ -261,7 +262,7 @@ export default async function SpeakerDashboard() {
           {showBadgeInSidebar && latestBadge ? (
             <BadgeShare
               badge={latestBadge}
-              eventName={badgeEventName || 'Cloud Native Bergen'}
+              eventName={badgeEventName || 'Cloud Native Days Norway'}
               domain={domain}
               className="w-full"
             />

@@ -1925,7 +1925,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                           }
                           showCloudNativePattern={index % 4 === 0}
                           isFeatured={false}
-                          eventName="CNB 2025"
+                          eventName="Cloud Native Days Norway"
                           className="aspect-square w-full"
                         />
                       ))}

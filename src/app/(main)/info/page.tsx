@@ -8,8 +8,9 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
 export const metadata = {
-  title: 'Practical Information - Cloud Native Bergen',
-  description: 'Essential details for attending Cloud Native Bergen conference',
+  title: 'Practical Information - Cloud Native Days Norway',
+  description:
+    'Essential details for attending Cloud Native Days Norway conference',
 }
 
 function getScheduleDayInfo(schedules: ConferenceSchedule[] | undefined) {

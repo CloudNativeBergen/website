@@ -19,14 +19,14 @@ import { SpeakerShare } from '@/components/SpeakerShare'
 // Basic speaker sharing card
 <SpeakerShare
   speaker={speakerWithTalks}
-  eventName="Cloud Native Bergen 2025"
+  eventName="Cloud Native Days Norway"
   variant="speaker-share"
 />
 
 // Speaker spotlight card
 <SpeakerShare
   speaker={speakerWithTalks}
-  eventName="Cloud Native Bergen 2025"
+  eventName="Cloud Native Days Norway"
   variant="speaker-spotlight"
   isFeatured={true}
 />
@@ -34,14 +34,14 @@ import { SpeakerShare } from '@/components/SpeakerShare'
 
 ## Props
 
-| Prop         | Type                                     | Default                 | Description                                          |
-| ------------ | ---------------------------------------- | ----------------------- | ---------------------------------------------------- |
-| `speaker`    | `SpeakerWithTalks`                       | Required                | Speaker data including talks and profile information |
-| `variant`    | `'speaker-share' \| 'speaker-spotlight'` | `'speaker-share'`       | Visual variant for different sharing contexts        |
-| `className`  | `string`                                 | `''`                    | Additional CSS classes                               |
-| `isFeatured` | `boolean`                                | `false`                 | Whether to show as a featured speaker                |
-| `ctaUrl`     | `string`                                 | Auto-generated          | Custom URL for QR code generation                    |
-| `eventName`  | `string`                                 | `'Cloud Native Bergen'` | Conference/event name displayed in header            |
+| Prop         | Type                                     | Default                      | Description                                          |
+| ------------ | ---------------------------------------- | ---------------------------- | ---------------------------------------------------- |
+| `speaker`    | `SpeakerWithTalks`                       | Required                     | Speaker data including talks and profile information |
+| `variant`    | `'speaker-share' \| 'speaker-spotlight'` | `'speaker-share'`            | Visual variant for different sharing contexts        |
+| `className`  | `string`                                 | `''`                         | Additional CSS classes                               |
+| `isFeatured` | `boolean`                                | `false`                      | Whether to show as a featured speaker                |
+| `ctaUrl`     | `string`                                 | Auto-generated               | Custom URL for QR code generation                    |
+| `eventName`  | `string`                                 | `'Cloud Native Days Norway'` | Conference/event name displayed in header            |
 
 ## Variants
 

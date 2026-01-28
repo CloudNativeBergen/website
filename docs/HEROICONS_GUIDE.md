@@ -1,8 +1,8 @@
-# Heroicons for Cloud Native Day Bergen
+# Heroicons for Cloud Native Days Norway
 
 ## Why Heroicons?
 
-Heroicons is the perfect icon library for Cloud Native Day Bergen because:
+Heroicons is the perfect icon library for Cloud Native Days Norway because:
 
 - **Tailwind Integration**: Created by the Tailwind CSS team, seamless integration
 - **Clean Aesthetic**: Stroke-based design matches our brand perfectly

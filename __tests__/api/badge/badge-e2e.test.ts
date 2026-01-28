@@ -34,7 +34,7 @@ describe('Badge System E2E', () => {
 
   const testConference: Conference = {
     _id: 'test-conference-2025',
-    title: 'Cloud Native Day Bergen 2025',
+    title: 'Cloud Native Days Norway 2025',
     organizer: 'Cloud Native Bergen',
     city: 'Bergen',
     country: 'Norway',

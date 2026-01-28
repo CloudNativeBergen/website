@@ -1,6 +1,6 @@
-# Cloud Native Bergen Docs
+# Cloud Native Days Norway Docs
 
-This is a documentation for how to use the Cloud Native Bergen conference website. It provides information about the event, speakers, and sessions.
+This is a documentation for how to use the Cloud Native Days Norway conference website. It provides information about the event, speakers, and sessions.
 
 ## Technical Overview
 
@@ -14,7 +14,7 @@ This project is built using a modern web stack:
 - **Deployment:** [Vercel](https://vercel.com/)
 - **Email Notifications:** [SendGrid](https://sendgrid.com/)
 
-It's designed as a **multi-tenant** application. This means the same codebase can serve different conferences or events, each potentially hosted on its own subdomain (e.g., `conference2025.cloudnative.no`, `conference2026.cloudnative.no`).
+It's designed as a **multi-tenant** application. This means the same codebase can serve different conferences or events, each potentially hosted on its own subdomain (e.g., `2025.cloudnativedays.no`, `2026.cloudnativedays.no`).
 
 All conference-specific content (details, schedule, sponsors, etc.) is stored in Sanity.io. The website automatically fetches the correct content based on the domain name it's accessed from. This logic is encapsulated within the `getConferenceForCurrentDomain` function found in `@/lib/conference/sanity.ts`.
 

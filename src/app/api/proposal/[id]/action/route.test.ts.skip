@@ -209,7 +209,7 @@ describe('POST /api/proposal/[id]/action', () => {
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
-        title: 'Cloud Native Day Bergen 2024',
+        title: 'Cloud Native Days Norway 2024',
         organizer: 'Cloud Native Bergen',
         city: 'Bergen',
         country: 'Norway',
@@ -267,7 +267,7 @@ describe('POST /api/proposal/[id]/action', () => {
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
-        title: 'Cloud Native Day Bergen 2024',
+        title: 'Cloud Native Days Norway 2024',
         organizer: 'Cloud Native Bergen',
         city: 'Bergen',
         country: 'Norway',
@@ -336,7 +336,7 @@ describe('POST /api/proposal/[id]/action', () => {
             event: expect.objectContaining({
               location: 'Kvarteret, Bergen, Norway',
               date: '30 October 2024',
-              name: 'Cloud Native Day Bergen 2024',
+              name: 'Cloud Native Days Norway 2024',
             }),
             comment: 'this is the comment',
           }),
@@ -349,7 +349,7 @@ describe('POST /api/proposal/[id]/action', () => {
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
-        title: 'Cloud Native Day Bergen 2024',
+        title: 'Cloud Native Days Norway 2024',
         organizer: 'Cloud Native Bergen',
         city: 'Bergen',
         country: 'Norway',
@@ -418,7 +418,7 @@ describe('POST /api/proposal/[id]/action', () => {
             event: expect.objectContaining({
               location: 'Kvarteret, Bergen, Norway',
               date: '30 October 2024',
-              name: 'Cloud Native Day Bergen 2024',
+              name: 'Cloud Native Days Norway 2024',
             }),
             comment: 'this is the comment',
           }),

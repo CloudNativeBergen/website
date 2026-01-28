@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Cloud Native Bergen website features a comprehensive email system built on Resend that handles various types of email communications including proposal notifications, speaker emails, and audience management. The system is designed for production use with rate limiting, retry logic, comprehensive error handling, and a modern Gmail-style composition interface.
+The Cloud Native Days Norway website features a comprehensive email system built on Resend that handles various types of email communications including proposal notifications, speaker emails, and audience management. The system is designed for production use with rate limiting, retry logic, comprehensive error handling, and a modern Gmail-style composition interface.
 
 ## Architecture
 

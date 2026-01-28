@@ -1,6 +1,6 @@
-# Cloud Native Bergen
+# Cloud Native Days Norway
 
-Official website for Cloud Native Bergen and Cloud Native Day Bergen.
+Official website for Cloud Native Days in Norway.
 
 ## Getting started
 

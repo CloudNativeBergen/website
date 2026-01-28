@@ -41,7 +41,7 @@ For each group, list typical data, purpose, legal basis, retention.
 - Legal bases: contract (ticketing), legitimate interests (security/ops), consent (newsletter).
 - Retention: registration records 3–5 years; accounting 5 years per Norwegian bookkeeping rules; check‑in logs ≤ 12 months; marketing consent until withdrawn; photos/recordings per media policy below.
 
-Note: CNB does not share attendee lists with sponsors and does not provide lead‑scanning services.
+Note: The conference does not share attendee lists with sponsors and does not provide lead‑scanning services.
 
 ### B) Speakers
 
@@ -57,7 +57,7 @@ Note: CNB does not share attendee lists with sponsors and does not provide lead�
 - Legal bases: contract, legitimate interests (ops), legal obligation (finance).
 - Retention: contract and invoicing 5 years.
 
-Note: CNB does not offer attendee lead‑scanning or attendee list sharing. Sponsors who collect personal data directly at their booths act as independent controllers and must provide their own notices and collect any required consents.
+Note: The conference does not offer attendee lead‑scanning or attendee list sharing. Sponsors who collect personal data directly at their booths act as independent controllers and must provide their own notices and collect any required consents.
 
 ### D) Volunteers
 
@@ -112,7 +112,7 @@ Note: CNB does not offer attendee lead‑scanning or attendee list sharing. Spon
 ### 3.3 Post‑event
 
 - Publish content: review recordings for removals/blur requests; add video descriptions/metadata with privacy info and contact; consider disabling precise location and moderate comments.
-- Video embeds: when embedding videos on the CNB website, use privacy-preserving embed modes:
+- Video embeds: when embedding videos on the website, use privacy-preserving embed modes:
   - YouTube: use `youtube-nocookie.com` domain which does not set tracking cookies until the user plays the video
   - Vimeo: include `dnt=1` (Do Not Track) parameter to disable tracking
   - These measures reduce passive tracking while preserving full video functionality
@@ -224,17 +224,17 @@ Long‑form poster (link via QR): see Appendix B/C references.
 
 ### Appendix B: Speaker media release (core terms)
 
-- Grant: Speaker grants CNB the right to record, edit, and publish the talk (video, audio, slides) on CNB channels, including official online video platforms.
-- License: Non‑exclusive, worldwide, perpetual license to host and share the recording for educational and promotional purposes related to CNB events.
+- Grant: Speaker grants the conference the right to record, edit, and publish the talk (video, audio, slides) on conference channels, including official online video platforms.
+- License: Non‑exclusive, worldwide, perpetual license to host and share the recording for educational and promotional purposes related to events.
 - Moral rights: Credit will be given; speaker retains underlying IP in their materials.
 - Warranties: Speaker confirms they have rights to present included material.
 - Optional consents: Speaker may opt‑in to broader promotional use (e.g., short social clips).
-- Takedown: CNB will consider reasonable takedown or redaction requests, balancing freedom of expression and documentation interests.
+- Takedown: we will consider reasonable takedown or redaction requests, balancing freedom of expression and documentation interests.
 - Data and privacy: Processing details and contact for queries.
 
 Include checkboxes in the CFP/acceptance flow:
 
-- [ ] I agree that my talk will be recorded and published on CNB’s official online video channels/platforms.
+- [ ] I agree that my talk will be recorded and published on the conference’s official online video channels/platforms.
 - [ ] I consent to the creation of short promotional clips from my talk.
 
 ### Appendix C: Data subject request (DSR) intake form
@@ -262,7 +262,7 @@ Submit to: [privacy@cloudnativedays.no](mailto:privacy@cloudnativedays.no)
 ### Appendix E: Transfer Impact Assessment (TIA) — Third‑party video platform (outline)
 
 - Description: Publication of conference talk recordings to a third‑party video platform channel; public content; viewers worldwide.
-- Roles: CNB as controller for creation/upload; the platform provider as an independent controller for hosting/publication.
+- Roles: The conference as controller for creation/upload; the platform provider as an independent controller for hosting/publication.
 - Data: personal data in videos (speakers; incidental attendees); channel/account metadata.
 - Transfer: outside the EEA (e.g., to the US); SCCs where applicable; public availability may reduce some transfer risk; assess third‑country law access risks; document residual risk and mitigations (minimize audience capture, opt‑outs, blur on request).
 - Public interest/freedom of expression: balance where applicable.

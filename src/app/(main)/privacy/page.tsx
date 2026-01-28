@@ -39,9 +39,9 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
 export const metadata = {
-  title: 'Privacy Policy - Cloud Native Bergen',
+  title: 'Privacy Policy - Cloud Native Days Norway',
   description:
-    'Privacy policy and data protection information for Cloud Native Bergen conference',
+    'Privacy policy and data protection information for Cloud Native Days Norway conference',
 }
 
 async function CachedPrivacyContent({ domain }: { domain: string }) {
@@ -63,7 +63,7 @@ async function CachedPrivacyContent({ domain }: { domain: string }) {
 
   const lastUpdated = 'October 31, 2025'
   const contactEmail = conference.contact_email || 'contact@cloudnativedays.no'
-  const organizationName = 'Cloud Native Bergen'
+  const organizationName = 'Cloud Native Days Norway'
 
   return (
     <>

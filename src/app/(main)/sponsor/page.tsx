@@ -9,8 +9,9 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
 export const metadata = {
-  title: 'Become a Sponsor - Cloud Native Bergen',
-  description: 'Sponsorship opportunities for Cloud Native Bergen conference',
+  title: 'Become a Sponsor - Cloud Native Days Norway',
+  description:
+    'Sponsorship opportunities for Cloud Native Days Norway conference',
 }
 
 function PriceFormat({

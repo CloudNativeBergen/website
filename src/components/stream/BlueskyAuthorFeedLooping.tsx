@@ -40,6 +40,7 @@ async function fetchBlueskyPosts(handle: string): Promise<BlueskyPost[]> {
           fetchOptions,
         ),
         // 3. Posts with hashtag #cndb2025
+        // @TODO make this configurable per event
         fetch(
           `https://public.api.bsky.app/xrpc/app.bsky.feed.searchPosts?q=${encodeURIComponent('#cndb2025')}&limit=30&sort=latest`,
           fetchOptions,

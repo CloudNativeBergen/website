@@ -15,7 +15,7 @@ A React Context Provider that manages notification state and renders notificatio
 - **Multiple notification types**: success, error, warning, info
 - **Auto-dismiss**: Configurable duration (default: 5 seconds)
 - **Manual dismiss**: Click the X button to remove notifications
-- **Branded styling**: Uses Cloud Native Bergen brand colors and fonts
+- **Branded styling**: Uses Cloud Native Days Norway brand colors and fonts
 - **Smooth animations**: Slide-in from right with fade effects
 - **Stacked display**: Multiple notifications stack vertically
 
@@ -61,7 +61,7 @@ A branded confirmation dialog component to replace browser `confirm()` dialogs.
 
 #### Confirmation Features
 
-- **Branded styling**: Matches Cloud Native Bergen design system
+- **Branded styling**: Matches Cloud Native Days Norway design system
 - **Multiple variants**: danger, warning, info
 - **Loading states**: Shows loading spinner during async operations
 - **Customizable content**: Title, message, and button text
@@ -173,7 +173,7 @@ The system uses React Context to provide notification functionality throughout t
 
 ### Styling
 
-- **Brand-compliant design system**: Uses Cloud Native Bergen color palette
+- **Brand-compliant design system**: Uses Cloud Native Days Norway color palette
 - **Consistent typography**: Space Grotesk for titles, Inter for body text
 - **Enhanced visual hierarchy**: Larger icons, better spacing, refined borders
 - **Subtle gradients**: Gradient backgrounds with brand colors for visual appeal

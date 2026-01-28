@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Cloud Native Bergen website uses tRPC to provide type-safe, end-to-end APIs with React Query integration. This document outlines the architecture, patterns, and best practices for implementing tRPC routes.
+The Cloud Native Days Norway website uses tRPC to provide type-safe, end-to-end APIs with React Query integration. This document outlines the architecture, patterns, and best practices for implementing tRPC routes.
 
 ## Architecture
 

@@ -18,7 +18,7 @@ interface ImageHotspotEditorProps {
 }
 
 /**
- * Bounding box hotspot editor with Cloud Native Bergen branding.
+ * Bounding box hotspot editor with Cloud Native Days Norway branding.
  * Drag to create a rectangular area that defines the focal region.
  * The selected area will be preserved when images are cropped.
  */

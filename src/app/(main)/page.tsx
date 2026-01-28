@@ -58,7 +58,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
                 Meet Our Organizers
               </h2>
               <p className="font-inter mt-4 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
-                The passionate team driving Cloud Native Bergen
+                The passionate team driving {conference.title}
               </p>
             </div>
 
