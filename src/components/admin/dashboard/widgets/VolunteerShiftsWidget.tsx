@@ -12,12 +12,10 @@ import {
   getVolunteerShiftsData,
   type VolunteerShiftsData,
 } from '@/hooks/dashboard/useDashboardData'
-import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-interface VolunteerShiftsWidgetProps {
-  conference?: Conference
-}
+type VolunteerShiftsWidgetProps = BaseWidgetProps
 
 export function VolunteerShiftsWidget({
   conference,

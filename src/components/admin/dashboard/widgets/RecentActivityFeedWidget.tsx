@@ -16,8 +16,8 @@ import {
   type ActivityItem,
 } from '@/hooks/dashboard/useDashboardData'
 import { SwipeablePaginationWidget } from './SwipeablePaginationWidget'
-import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
 const activityIcons: Record<
   string,
@@ -41,9 +41,7 @@ const activityColors: Record<string, string> = {
   speaker: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',
 }
 
-interface RecentActivityFeedWidgetProps {
-  conference?: Conference
-}
+type RecentActivityFeedWidgetProps = BaseWidgetProps
 
 export function RecentActivityFeedWidget({
   conference,

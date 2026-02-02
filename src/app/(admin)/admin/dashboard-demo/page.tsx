@@ -521,22 +521,10 @@ export default function DashboardDemoPage() {
           content = <ReviewProgressWidget conference={mockConference} />
           break
         case 'proposal-pipeline':
-          content = (
-            <ProposalPipelineWidget
-              data={{
-                submitted: 147,
-                accepted: 42,
-                rejected: 28,
-                confirmed: 35,
-                total: 147,
-                acceptanceRate: 28.6,
-                pendingDecisions: 77,
-              }}
-            />
-          )
+          content = <ProposalPipelineWidget conference={mockConference} />
           break
         case 'upcoming-deadlines':
-          content = <UpcomingDeadlinesWidget />
+          content = <UpcomingDeadlinesWidget conference={mockConference} />
           break
         case 'cfp-health':
           content = (
@@ -556,21 +544,7 @@ export default function DashboardDemoPage() {
           content = <ScheduleBuilderStatusWidget conference={mockConference} />
           break
         case 'ticket-sales':
-          content = (
-            <TicketSalesDashboardWidget
-              conference={mockConference}
-              data={{
-                currentSales: 342,
-                capacity: 500,
-                percentage: 68.4,
-                revenue: 85500,
-                daysUntilEvent: 45,
-                salesVelocity: 7.6,
-                salesByDate: [],
-                milestones: [],
-              }}
-            />
-          )
+          content = <TicketSalesDashboardWidget conference={mockConference} />
           break
         case 'speaker-engagement':
           content = <SpeakerEngagementWidget conference={mockConference} />
@@ -708,10 +682,11 @@ export default function DashboardDemoPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setEditMode(!editMode)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${editMode
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                editMode
                   ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                   : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                }`}
+              }`}
             >
               <PencilIcon className="h-3.5 w-3.5" />
               {editMode ? 'Exit Edit' : 'Edit'}

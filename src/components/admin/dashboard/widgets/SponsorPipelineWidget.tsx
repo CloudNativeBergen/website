@@ -11,12 +11,10 @@ import {
   getSponsorPipelineData,
   type SponsorPipelineData,
 } from '@/hooks/dashboard/useDashboardData'
-import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-interface SponsorPipelineWidgetProps {
-  conference?: Conference
-}
+type SponsorPipelineWidgetProps = BaseWidgetProps
 
 export function SponsorPipelineWidget({
   conference,

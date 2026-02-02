@@ -1,20 +1,20 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore, useState, useEffect } from 'react'
 import type { ApexOptions } from 'apexcharts'
-import {
-  CurrencyDollarIcon,
-  CheckCircleIcon,
-  Cog6ToothIcon,
-} from '@heroicons/react/24/outline'
+import { CheckCircleIcon } from '@heroicons/react/24/outline'
 import {
   getRadialBarChartOptions,
   getLineChartOptions,
   getThemeColors,
 } from '@/lib/dashboard/chart-theme'
 import { getCurrentPhase } from '@/lib/conference/phase'
-import type { Conference } from '@/lib/conference/types'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
+import {
+  getTicketSalesData,
+  TicketSalesData,
+} from '@/hooks/dashboard/useDashboardData'
 
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false })
 
@@ -28,30 +28,27 @@ function getSnapshotDarkMode() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-interface TicketSalesDashboardWidgetProps {
-  conference?: Conference
-  data: {
-    currentSales: number
-    capacity: number
-    percentage: number
-    revenue: number
-    salesByDate: { date: string; sales: number; target: number }[]
-    milestones: { name: string; target: number; reached: boolean }[]
-    daysUntilEvent: number
-    salesVelocity: number
-  }
-}
+type TicketSalesDashboardWidgetProps = BaseWidgetProps
 
 export function TicketSalesDashboardWidget({
   conference,
-  data,
 }: TicketSalesDashboardWidgetProps) {
+  const [data, setData] = useState<TicketSalesData | null>(null)
+  const [loading, setLoading] = useState(true)
+
   const isDark = useSyncExternalStore(
     subscribeDarkMode,
     getSnapshotDarkMode,
     () => false,
   )
   const phase = conference ? getCurrentPhase(conference) : null
+
+  useEffect(() => {
+    getTicketSalesData().then((result) => {
+      setData(result)
+      setLoading(false)
+    })
+  }, [])
 
   const gaugeOptions: ApexOptions = useMemo(() => {
     const themeColors = getThemeColors(isDark)
@@ -109,17 +106,25 @@ export function TicketSalesDashboardWidget({
     [data?.salesByDate],
   )
 
+  if (loading) {
+    return (
+      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+    )
+  }
+
   // Initialization phase: Setup guide
   if (phase === 'initialization') {
     return (
-      <div className="flex h-full flex-col p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Cog6ToothIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Ticket Sales Setup
+            Ticket Sales
           </h3>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+            Setup
+          </span>
         </div>
-        <div className="flex flex-1 flex-col justify-center space-y-3 text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex min-h-0 flex-1 flex-col justify-center space-y-3 overflow-y-auto text-sm text-gray-600 dark:text-gray-400">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
             <p className="text-xs font-medium text-blue-900 dark:text-blue-300">
               Configure ticket sales system:
@@ -155,14 +160,16 @@ export function TicketSalesDashboardWidget({
     }
 
     return (
-      <div className="flex h-full flex-col p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <CurrencyDollarIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Final Sales Report
+            Ticket Sales
           </h3>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+            Complete
+          </span>
         </div>
-        <div className="flex flex-1 flex-col justify-center space-y-3">
+        <div className="flex min-h-0 flex-1 flex-col justify-center space-y-3 overflow-y-auto">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
               <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
@@ -208,7 +215,7 @@ export function TicketSalesDashboardWidget({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex shrink-0 items-center justify-between">
         <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
           Ticket Sales
         </h3>
@@ -220,102 +227,104 @@ export function TicketSalesDashboardWidget({
         </a>
       </div>
 
-      <div className="mb-3 grid grid-cols-3 gap-2 @[200px]:grid-cols-1 @[400px]:grid-cols-3">
-        <div className="rounded-lg bg-blue-50 p-2.5 dark:bg-blue-900/20">
-          <div className="text-[11px] text-blue-600 dark:text-blue-400">
-            Sold
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="mb-3 grid shrink-0 grid-cols-3 gap-2 @[200px]:grid-cols-1 @[400px]:grid-cols-3">
+          <div className="rounded-lg bg-blue-50 p-2.5 dark:bg-blue-900/20">
+            <div className="text-[11px] text-blue-600 dark:text-blue-400">
+              Sold
+            </div>
+            <div className="mt-0.5 text-lg font-bold text-blue-900 dark:text-blue-100">
+              {data.currentSales}
+            </div>
+            <div className="mt-0.5 text-[11px] text-blue-600 dark:text-blue-400">
+              of {data.capacity}
+            </div>
           </div>
-          <div className="mt-0.5 text-lg font-bold text-blue-900 dark:text-blue-100">
-            {data.currentSales}
+          <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
+            <div className="text-[11px] text-green-600 dark:text-green-400">
+              Revenue
+            </div>
+            <div className="mt-0.5 text-lg font-bold text-green-900 dark:text-green-100">
+              ${(data.revenue / 1000).toFixed(0)}k
+            </div>
           </div>
-          <div className="mt-0.5 text-[11px] text-blue-600 dark:text-blue-400">
-            of {data.capacity}
+          <div className="rounded-lg bg-purple-50 p-2.5 dark:bg-purple-900/20">
+            <div className="text-[11px] text-purple-600 dark:text-purple-400">
+              Velocity
+            </div>
+            <div className="mt-0.5 text-lg font-bold text-purple-900 dark:text-purple-100">
+              {data.salesVelocity.toFixed(1)}/d
+            </div>
           </div>
         </div>
-        <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
-          <div className="text-[11px] text-green-600 dark:text-green-400">
-            Revenue
-          </div>
-          <div className="mt-0.5 text-lg font-bold text-green-900 dark:text-green-100">
-            ${(data.revenue / 1000).toFixed(0)}k
-          </div>
-        </div>
-        <div className="rounded-lg bg-purple-50 p-2.5 dark:bg-purple-900/20">
-          <div className="text-[11px] text-purple-600 dark:text-purple-400">
-            Velocity
-          </div>
-          <div className="mt-0.5 text-lg font-bold text-purple-900 dark:text-purple-100">
-            {data.salesVelocity.toFixed(1)}/d
-          </div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3 @[200px]:grid-cols-1 @[500px]:grid-cols-2">
-        <div>
+        <div className="grid shrink-0 grid-cols-2 gap-3 @[200px]:grid-cols-1 @[500px]:grid-cols-2">
+          <div>
+            <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+              Capacity
+            </h4>
+            <div className="h-32 @[400px]:h-36">
+              <Chart
+                options={gaugeOptions}
+                series={gaugeSeries}
+                type="radialBar"
+                height="100%"
+              />
+            </div>
+          </div>
+
+          <div className="hidden @[400px]:block">
+            <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+              Milestones
+            </h4>
+            <div className="space-y-1.5">
+              {data.milestones.map((milestone) => (
+                <div
+                  key={milestone.name}
+                  className="flex items-center justify-between rounded-lg bg-gray-50 p-2 dark:bg-gray-800"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        milestone.reached
+                          ? 'bg-green-500 dark:bg-green-400'
+                          : 'bg-gray-300 dark:bg-gray-600'
+                      }`}
+                    />
+                    <span className="truncate text-[11px] leading-tight font-medium text-gray-700 dark:text-gray-200">
+                      {milestone.name}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                    {milestone.target}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3 shrink-0">
           <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-            Capacity
+            Sales vs Target
           </h4>
-          <div className="h-32 @[400px]:h-36">
+          <div className="h-24 @[400px]:h-28">
             <Chart
-              options={gaugeOptions}
-              series={gaugeSeries}
-              type="radialBar"
+              options={trendOptions}
+              series={trendSeries}
+              type="line"
               height="100%"
             />
           </div>
         </div>
 
-        <div className="hidden @[400px]:block">
-          <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-            Milestones
-          </h4>
-          <div className="space-y-1.5">
-            {data.milestones.map((milestone) => (
-              <div
-                key={milestone.name}
-                className="flex items-center justify-between rounded-lg bg-gray-50 p-2 dark:bg-gray-800"
-              >
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      milestone.reached
-                        ? 'bg-green-500 dark:bg-green-400'
-                        : 'bg-gray-300 dark:bg-gray-600'
-                    }`}
-                  />
-                  <span className="truncate text-[11px] leading-tight font-medium text-gray-700 dark:text-gray-200">
-                    {milestone.name}
-                  </span>
-                </div>
-                <span className="text-[11px] text-gray-500 dark:text-gray-400">
-                  {milestone.target}
-                </span>
-              </div>
-            ))}
+        <div className="mt-3 shrink-0 rounded-lg bg-blue-50 p-2.5 text-center dark:bg-blue-900/20">
+          <div className="text-[11px] text-blue-600 dark:text-blue-400">
+            Days Until Event
           </div>
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-          Sales vs Target
-        </h4>
-        <div className="h-24 @[400px]:h-28">
-          <Chart
-            options={trendOptions}
-            series={trendSeries}
-            type="line"
-            height="100%"
-          />
-        </div>
-      </div>
-
-      <div className="mt-3 rounded-lg bg-blue-50 p-2.5 text-center dark:bg-blue-900/20">
-        <div className="text-[11px] text-blue-600 dark:text-blue-400">
-          Days Until Event
-        </div>
-        <div className="mt-0.5 text-2xl font-bold text-blue-900 dark:text-blue-100">
-          {data.daysUntilEvent}
+          <div className="mt-0.5 text-2xl font-bold text-blue-900 dark:text-blue-100">
+            {data.daysUntilEvent}
+          </div>
         </div>
       </div>
     </div>

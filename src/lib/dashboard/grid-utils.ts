@@ -72,7 +72,8 @@ export function checkCollision(
  * Converts pixel coordinates to grid coordinates with snapping
  * @param pixelX - X coordinate in pixels
  * @param pixelY - Y coordinate in pixels
- * @param cellSize - Size of each grid cell
+ * @param cellWidth - Width of each grid cell
+ * @param cellHeight - Height of each grid cell
  * @param gap - Gap between cells
  * @param maxCols - Maximum columns to clamp to
  * @returns Grid coordinates {row, col}
@@ -80,13 +81,16 @@ export function checkCollision(
 export function snapToGrid(
   pixelX: number,
   pixelY: number,
-  cellSize: number,
+  cellWidth: number,
+  cellHeight: number,
   gap: number,
   maxCols?: number,
 ): { row: number; col: number } {
-  const cellWithGap = cellSize + gap
-  let col = Math.max(0, Math.round(pixelX / cellWithGap))
-  const row = Math.max(0, Math.round(pixelY / cellWithGap))
+  const colWidthWithGap = cellWidth + gap
+  const rowHeightWithGap = cellHeight + gap
+
+  let col = Math.max(0, Math.round(pixelX / colWidthWithGap))
+  const row = Math.max(0, Math.round(pixelY / rowHeightWithGap))
 
   if (maxCols !== undefined) {
     col = Math.min(col, maxCols - 1)

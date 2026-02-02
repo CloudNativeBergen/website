@@ -114,6 +114,7 @@ export function DashboardGrid({
         currentPosition.col * cellWithGap + delta.x,
         currentPosition.row * rowWithGap + delta.y,
         cellWidth,
+        GRID_CONFIG.cellSize,
         GRID_CONFIG.gap,
         columnCount,
       )

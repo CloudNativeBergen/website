@@ -180,7 +180,103 @@ export interface QuickAction {
   variant: 'primary' | 'secondary' | 'success' | 'warning'
 }
 
+export interface TicketSalesData {
+  currentSales: number
+  capacity: number
+  percentage: number
+  revenue: number
+  salesByDate: { date: string; sales: number; target: number }[]
+  milestones: { name: string; target: number; reached: boolean }[]
+  daysUntilEvent: number
+  salesVelocity: number
+}
+
+export interface CFPHealthData {
+  totalSubmissions: number
+  submissionGoal: number
+  submissionsPerDay: { date: string; count: number }[]
+  formatDistribution: { format: string; count: number }[]
+  daysRemaining: number
+  averagePerDay: number
+}
+
+export interface ProposalPipelineData {
+  submitted: number
+  accepted: number
+  rejected: number
+  confirmed: number
+  total: number
+  acceptanceRate: number
+  pendingDecisions: number
+}
+
 // Cached data fetching functions with hardcoded mock data
+
+export const getTicketSalesData = cache(async (): Promise<TicketSalesData> => {
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  return {
+    currentSales: 342,
+    capacity: 500,
+    percentage: 68.4,
+    revenue: 85500,
+    daysUntilEvent: 45,
+    salesVelocity: 7.6,
+    salesByDate: [
+      { date: '2025-10-01', sales: 45, target: 50 },
+      { date: '2025-10-15', sales: 120, target: 100 },
+      { date: '2025-11-01', sales: 210, target: 200 },
+      { date: '2025-11-15', sales: 280, target: 250 },
+      { date: '2025-12-01', sales: 342, target: 300 },
+    ],
+    milestones: [
+      { name: 'Early Bird', target: 100, reached: true },
+      { name: 'Break Even', target: 250, reached: true },
+      { name: 'Sell Out', target: 500, reached: false },
+    ],
+  }
+})
+
+export const getCFPHealthData = cache(async (): Promise<CFPHealthData> => {
+  await new Promise((resolve) => setTimeout(resolve, 10))
+
+  return {
+    totalSubmissions: 147,
+    submissionGoal: 200,
+    daysRemaining: 12,
+    averagePerDay: 4.2,
+    submissionsPerDay: [
+      { date: '2025-11-01', count: 5 },
+      { date: '2025-11-02', count: 8 },
+      { date: '2025-11-03', count: 12 },
+      { date: '2025-11-04', count: 7 },
+      { date: '2025-11-05', count: 15 },
+      { date: '2025-11-06', count: 22 },
+      { date: '2025-11-07', count: 18 },
+    ],
+    formatDistribution: [
+      { format: 'Presentation (20min)', count: 45 },
+      { format: 'Presentation (45min)', count: 82 },
+      { format: 'Workshop', count: 20 },
+    ],
+  }
+})
+
+export const getProposalPipelineData = cache(
+  async (): Promise<ProposalPipelineData> => {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    return {
+      submitted: 147,
+      accepted: 42,
+      rejected: 28,
+      confirmed: 35,
+      total: 147,
+      acceptanceRate: 28.6,
+      pendingDecisions: 77,
+    }
+  },
+)
 
 export const getReviewProgressData = cache(
   async (): Promise<ReviewProgressData> => {

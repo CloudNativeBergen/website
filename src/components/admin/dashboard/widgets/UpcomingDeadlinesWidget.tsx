@@ -11,8 +11,8 @@ import {
   getUpcomingDeadlines,
   type DeadlineData,
 } from '@/hooks/dashboard/useDashboardData'
-import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
 const urgencyStyles = {
   high: 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
@@ -27,9 +27,7 @@ const urgencyBadgeStyles = {
   low: 'bg-blue-600 dark:bg-blue-500 text-white',
 }
 
-interface UpcomingDeadlinesWidgetProps {
-  conference?: Conference
-}
+type UpcomingDeadlinesWidgetProps = BaseWidgetProps
 
 export function UpcomingDeadlinesWidget({
   conference,

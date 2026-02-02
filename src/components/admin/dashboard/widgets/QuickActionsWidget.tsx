@@ -15,7 +15,7 @@ import {
   type QuickAction,
 } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
-import type { Conference } from '@/lib/conference/types'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
 const iconMap = {
   ClipboardDocumentCheckIcon,
@@ -37,9 +37,7 @@ const variantStyles = {
     'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600',
 }
 
-interface QuickActionsWidgetProps {
-  conference?: Conference
-}
+type QuickActionsWidgetProps = BaseWidgetProps
 
 export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
   const [actions, setActions] = useState<QuickAction[]>([])

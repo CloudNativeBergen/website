@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   DocumentTextIcon,
   ChartBarIcon,
@@ -9,8 +9,12 @@ import {
   CalendarIcon,
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
-import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
+import {
+  getCFPHealthData,
+  CFPHealthData,
+} from '@/hooks/dashboard/useDashboardData'
 
 interface CFPHealthConfig {
   submissionTarget?: number
@@ -18,46 +22,46 @@ interface CFPHealthConfig {
   showFormatBreakdown?: boolean
 }
 
-interface CFPHealthWidgetProps {
-  conference?: Conference
-  config?: CFPHealthConfig
-  data?: {
-    totalSubmissions: number
-    submissionGoal: number
-    submissionsPerDay: { date: string; count: number }[]
-    formatDistribution: { format: string; count: number }[]
-    daysRemaining: number
-    averagePerDay: number
-  }
-}
+type CFPHealthWidgetProps = BaseWidgetProps<CFPHealthConfig>
 
-export function CFPHealthWidget({
-  conference,
-  config,
-  data,
-}: CFPHealthWidgetProps) {
+export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [now] = useState(() => Date.now())
+  const [data, setData] = useState<CFPHealthData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getCFPHealthData().then((result) => {
+      setData(result)
+      setLoading(false)
+    })
+  }, [])
 
   // Apply config defaults
   const submissionTarget = config?.submissionTarget ?? 100
   const showTrend = config?.showTrend ?? true
   const showFormatBreakdown = config?.showFormatBreakdown ?? true
 
+  if (loading) {
+    return (
+      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+    )
+  }
+
   // Phase-specific views
   if (phase === 'initialization' && conference) {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            CFP Setup
+            CFP Health
           </h3>
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
             Preparing
           </span>
         </div>
 
-        <div className="space-y-3">
+        <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto">
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
             <CalendarIcon className="mb-2 h-8 w-8 text-blue-500" />
             <h4 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">
@@ -104,16 +108,16 @@ export function CFPHealthWidget({
   if (phase === 'execution') {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            CFP Summary
+            CFP Health
           </h3>
           <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
             Complete
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto">
           <div className="rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-4 dark:from-blue-900/40 dark:to-cyan-800/40">
             <DocumentTextIcon className="mb-2 h-6 w-6 text-blue-600 dark:text-blue-400" />
             <div className="text-3xl font-black text-blue-900 dark:text-blue-100">
@@ -161,16 +165,16 @@ export function CFPHealthWidget({
   if (phase === 'post-conference') {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            CFP Analytics
+            CFP Health
           </h3>
           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
             Archived
           </span>
         </div>
 
-        <div className="space-y-3">
+        <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto">
           <div className="rounded-lg border border-gray-200 bg-linear-to-r from-blue-50 to-purple-50 p-4 dark:border-gray-700 dark:from-blue-900/20 dark:to-purple-900/20">
             <h4 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white">
               CFP Performance

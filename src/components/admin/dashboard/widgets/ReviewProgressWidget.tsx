@@ -2,21 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import {
-  ClipboardDocumentCheckIcon,
-  ChartBarIcon,
-  CheckCircleIcon,
-} from '@heroicons/react/24/outline'
+import { CheckCircleIcon } from '@heroicons/react/24/outline'
 import {
   getReviewProgressData,
   type ReviewProgressData,
 } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
-import type { Conference } from '@/lib/conference/types'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-interface ReviewProgressWidgetProps {
-  conference?: Conference
-}
+type ReviewProgressWidgetProps = BaseWidgetProps
 
 export function ReviewProgressWidget({
   conference,
@@ -41,14 +35,16 @@ export function ReviewProgressWidget({
   // Initialization phase: Setup guide
   if (phase === 'initialization') {
     return (
-      <div className="flex h-full flex-col p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <ClipboardDocumentCheckIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Review Process Setup
+            Review Progress
           </h3>
+          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
+            Setup
+          </span>
         </div>
-        <div className="flex flex-1 flex-col justify-center space-y-3 text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex min-h-0 flex-1 flex-col justify-center space-y-3 overflow-y-auto text-sm text-gray-600 dark:text-gray-400">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
             <p className="text-xs font-medium text-blue-900 dark:text-blue-300">
               Prepare for CFP reviews by:
@@ -67,15 +63,17 @@ export function ReviewProgressWidget({
   // Post-conference phase: Final statistics
   if (phase === 'post-conference') {
     return (
-      <div className="flex h-full flex-col p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <ChartBarIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Review Statistics
+            Review Progress
           </h3>
+          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
+            Complete
+          </span>
         </div>
         {data ? (
-          <div className="flex flex-1 flex-col justify-center space-y-3">
+          <div className="flex min-h-0 flex-1 flex-col justify-center space-y-3 overflow-y-auto">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
                 <div className="text-[10px] font-medium text-gray-500 uppercase dark:text-gray-400">
@@ -131,12 +129,12 @@ export function ReviewProgressWidget({
 
   return (
     <div className="flex h-full flex-col">
-      <h3 className="mb-2 text-xs font-semibold text-gray-900 dark:text-gray-100">
+      <h3 className="mb-2 shrink-0 text-xs font-semibold text-gray-900 dark:text-gray-100">
         Review Progress
       </h3>
 
       {/* Vertical layout by default, horizontal when wide enough */}
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 @[400px]:flex-row @[400px]:items-center @[400px]:justify-around">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-hidden @[400px]:flex-row @[400px]:items-center @[400px]:justify-around">
         {/* Circle visualization */}
         <div className="relative flex shrink-0 items-center justify-center">
           <svg
@@ -176,7 +174,7 @@ export function ReviewProgressWidget({
         </div>
 
         {/* Stats section - shows horizontally when widget is wide */}
-        <div className="flex flex-col gap-2 text-center @[400px]:flex-1 @[400px]:text-left">
+        <div className="flex min-w-0 flex-col gap-2 text-center @[400px]:flex-1 @[400px]:text-left">
           {/* Average score */}
           <div>
             <div className="text-[10px] text-gray-500 @[200px]:text-xs dark:text-gray-400">
@@ -196,7 +194,7 @@ export function ReviewProgressWidget({
               <div className="text-[10px] text-gray-500 dark:text-gray-400">
                 Reviewed
               </div>
-              <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              <div className="truncate text-lg font-bold text-gray-900 dark:text-gray-100">
                 {data.reviewedCount}
               </div>
             </div>
@@ -204,7 +202,7 @@ export function ReviewProgressWidget({
               <div className="text-[10px] text-gray-500 dark:text-gray-400">
                 Remaining
               </div>
-              <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
+              <div className="truncate text-lg font-bold text-gray-900 dark:text-gray-100">
                 {data.totalProposals - data.reviewedCount}
               </div>
             </div>
@@ -215,7 +213,7 @@ export function ReviewProgressWidget({
             <div className="@[400px]:mt-auto">
               <Link
                 href={`/admin/proposals/${data.nextUnreviewed.id}`}
-                className="block rounded-lg bg-blue-50 px-3 py-1.5 text-center text-[10px] text-blue-700 transition-colors hover:bg-blue-100 @[250px]:text-xs dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                className="block truncate rounded-lg bg-blue-50 px-3 py-1.5 text-center text-[10px] text-blue-700 transition-colors hover:bg-blue-100 @[250px]:text-xs dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
               >
                 Review next →
               </Link>

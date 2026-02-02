@@ -30,6 +30,7 @@ const baseConference: Conference = {
   cfp_end_date: '2025-03-31',
   cfp_notify_date: '2025-04-15',
   cfp_email: 'cfp@test.com',
+  sponsor_email: 'sponsor@test.com',
   program_date: '2025-05-01',
   registration_enabled: true,
   registration_link: 'https://tickets.test.com',

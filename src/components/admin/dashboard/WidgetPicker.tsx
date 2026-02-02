@@ -143,10 +143,11 @@ export function WidgetPicker({ onSelect, onClose }: WidgetPickerProps) {
           <div className="flex gap-2">
             <button
               onClick={() => setSelectedCategory(null)}
-              className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${selectedCategory === null
+              className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+                selectedCategory === null
                   ? 'bg-blue-600 text-white dark:bg-blue-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                }`}
+              }`}
             >
               All
             </button>
@@ -157,10 +158,11 @@ export function WidgetPicker({ onSelect, onClose }: WidgetPickerProps) {
                 <button
                   key={category}
                   onClick={() => setSelectedCategory(category)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${selectedCategory === category
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                    selectedCategory === category
                       ? `${colors.bg} ${colors.text} shadow-sm`
                       : 'bg-white text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                    }`}
+                  }`}
                 >
                   {CATEGORY_LABELS[category]}
                   <span className="ml-1.5 opacity-75">({count})</span>

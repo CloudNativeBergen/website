@@ -11,12 +11,10 @@ import {
   getWorkshopCapacityData,
   type WorkshopCapacityData,
 } from '@/hooks/dashboard/useDashboardData'
-import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-interface WorkshopCapacityWidgetProps {
-  conference?: Conference
-}
+type WorkshopCapacityWidgetProps = BaseWidgetProps
 
 export function WorkshopCapacityWidget({
   conference,

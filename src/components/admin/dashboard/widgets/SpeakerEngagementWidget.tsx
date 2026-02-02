@@ -15,11 +15,9 @@ import {
   type SpeakerEngagementData,
 } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
-import type { Conference } from '@/lib/conference/types'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-interface SpeakerEngagementWidgetProps {
-  conference?: Conference
-}
+type SpeakerEngagementWidgetProps = BaseWidgetProps
 
 export function SpeakerEngagementWidget({
   conference,

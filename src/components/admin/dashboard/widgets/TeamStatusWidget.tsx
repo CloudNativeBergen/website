@@ -11,11 +11,9 @@ import {
   getTeamStatusData,
   type TeamStatusData,
 } from '@/hooks/dashboard/useDashboardData'
-import { Conference } from '@/lib/conference/types'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-interface TeamStatusWidgetProps {
-  conference?: Conference
-}
+type TeamStatusWidgetProps = BaseWidgetProps
 
 export function TeamStatusWidget({}: TeamStatusWidgetProps) {
   const [data, setData] = useState<TeamStatusData | null>(null)

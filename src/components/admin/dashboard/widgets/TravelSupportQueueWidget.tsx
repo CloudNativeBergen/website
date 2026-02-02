@@ -11,12 +11,10 @@ import {
   getTravelSupportData,
   type TravelSupportData,
 } from '@/hooks/dashboard/useDashboardData'
-import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-interface TravelSupportQueueWidgetProps {
-  conference?: Conference
-}
+type TravelSupportQueueWidgetProps = BaseWidgetProps
 
 export function TravelSupportQueueWidget({
   conference,

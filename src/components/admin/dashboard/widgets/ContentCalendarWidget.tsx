@@ -14,8 +14,8 @@ import {
   getContentCalendarData,
   type ContentCalendarData,
 } from '@/hooks/dashboard/useDashboardData'
-import { Conference } from '@/lib/conference/types'
 import { getCurrentPhase } from '@/lib/conference/phase'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
 const contentIcons = {
   blog: DocumentTextIcon,
@@ -31,9 +31,7 @@ const statusColors = {
     'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
 }
 
-interface ContentCalendarWidgetProps {
-  conference?: Conference
-}
+type ContentCalendarWidgetProps = BaseWidgetProps
 
 export function ContentCalendarWidget({
   conference,

@@ -8,6 +8,18 @@ import type { WidgetMetadata } from './widget-metadata'
 import type { ConferencePhase } from '@/lib/conference/phase'
 import { z } from 'zod'
 
+/**
+ * Standard props that all widgets should implement
+ */
+export interface BaseWidgetProps<TConfig = Record<string, unknown>> {
+  /** The conference context for the widget */
+  conference?: Conference
+  /** Configuration for the widget */
+  config?: TConfig
+  /** Optional class name for styling */
+  className?: string
+}
+
 export interface ConferenceWithSpeakerData {
   conference: Conference
   proposals: ProposalExisting[]

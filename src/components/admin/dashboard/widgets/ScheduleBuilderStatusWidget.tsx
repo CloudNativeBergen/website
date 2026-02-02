@@ -12,11 +12,9 @@ import {
   type ScheduleStatusData,
 } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
-import type { Conference } from '@/lib/conference/types'
+import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-interface ScheduleBuilderStatusWidgetProps {
-  conference?: Conference
-}
+type ScheduleBuilderStatusWidgetProps = BaseWidgetProps
 
 export function ScheduleBuilderStatusWidget({
   conference,
