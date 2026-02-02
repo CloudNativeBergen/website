@@ -42,6 +42,10 @@ export interface Conference {
   venue_address?: string
   tagline?: string
   description?: string
+  logo_bright?: string
+  logo_dark?: string
+  logomark_bright?: string
+  logomark_dark?: string
   announcement?: TypedObject[]
   start_date: string
   end_date: string
@@ -49,6 +53,7 @@ export interface Conference {
   cfp_end_date: string
   cfp_notify_date: string
   cfp_email: string
+  sponsor_email: string
   program_date: string
   registration_link?: string
   registration_enabled: boolean

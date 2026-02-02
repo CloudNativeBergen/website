@@ -82,7 +82,7 @@ export const SpeakerCreateSchema = SpeakerInputBaseSchema.extend({
 )
 
 // Partial update schema
-export const SpeakerUpdateSchema = SpeakerInputSchema.partial()
+export const SpeakerUpdateSchema = SpeakerInputBaseSchema.partial()
 
 // ID parameter schema (re-exported from common)
 export const IdParamSchema = CommonIdParamSchema

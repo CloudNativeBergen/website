@@ -47,11 +47,19 @@ const navigation: NavigationItem[] = [
   { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
 ]
 
-interface AdminLayoutProps {
-  children: React.ReactNode
+interface ConferenceLogos {
+  logo_bright?: string
+  logo_dark?: string
+  logomark_bright?: string
+  logomark_dark?: string
 }
 
-export function AdminLayout({ children }: AdminLayoutProps) {
+interface AdminLayoutProps {
+  children: React.ReactNode
+  conferenceLogos?: ConferenceLogos
+}
+
+export function AdminLayout({ children, conferenceLogos }: AdminLayoutProps) {
   const [searchModalOpen, setSearchModalOpen] = useState(false)
 
   return (
@@ -60,6 +68,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         mode="admin"
         navigation={navigation}
         title="Admin Dashboard"
+        conferenceLogos={conferenceLogos}
         onSearch={() => setSearchModalOpen(true)}
         searchComponent={
           <SearchModal

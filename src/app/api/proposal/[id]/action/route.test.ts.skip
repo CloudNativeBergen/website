@@ -209,7 +209,7 @@ describe('POST /api/proposal/[id]/action', () => {
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
-        title: 'Cloud Native Day Bergen 2024',
+        title: 'Cloud Native Days Norway 2024',
         organizer: 'Cloud Native Bergen',
         city: 'Bergen',
         country: 'Norway',
@@ -220,10 +220,10 @@ describe('POST /api/proposal/[id]/action', () => {
         cfp_start_date: '2024-07-01',
         cfp_end_date: '2024-09-15',
         cfp_notify_date: '2024-09-30',
-        cfp_email: 'cfp@cloudnativebergen.dev',
+        cfp_email: 'cfp@example.com',
         program_date: '2024-10-15',
         registration_enabled: true,
-        contact_email: 'contact@cloudnativebergen.dev',
+        contact_email: 'contact@example.com',
         organizers: [],
         domains: ['cloudnativeday.no'],
         formats: [],
@@ -267,7 +267,7 @@ describe('POST /api/proposal/[id]/action', () => {
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
-        title: 'Cloud Native Day Bergen 2024',
+        title: 'Cloud Native Days Norway 2024',
         organizer: 'Cloud Native Bergen',
         city: 'Bergen',
         country: 'Norway',
@@ -278,10 +278,10 @@ describe('POST /api/proposal/[id]/action', () => {
         cfp_start_date: '2024-07-01',
         cfp_end_date: '2024-09-15',
         cfp_notify_date: '2024-09-30',
-        cfp_email: 'cfp@cloudnativebergen.dev',
+        cfp_email: 'cfp@example.com',
         program_date: '2024-10-15',
         registration_enabled: true,
-        contact_email: 'contact@cloudnativebergen.dev',
+        contact_email: 'contact@example.com',
         organizers: [],
         domains: ['cloudnativeday.no'],
         formats: [],
@@ -336,7 +336,7 @@ describe('POST /api/proposal/[id]/action', () => {
             event: expect.objectContaining({
               location: 'Kvarteret, Bergen, Norway',
               date: '30 October 2024',
-              name: 'Cloud Native Day Bergen 2024',
+              name: 'Cloud Native Days Norway 2024',
             }),
             comment: 'this is the comment',
           }),
@@ -349,7 +349,7 @@ describe('POST /api/proposal/[id]/action', () => {
     mockGetConferenceForCurrentDomain.mockResolvedValue({
       conference: {
         _id: 'conference-2024',
-        title: 'Cloud Native Day Bergen 2024',
+        title: 'Cloud Native Days Norway 2024',
         organizer: 'Cloud Native Bergen',
         city: 'Bergen',
         country: 'Norway',
@@ -360,10 +360,10 @@ describe('POST /api/proposal/[id]/action', () => {
         cfp_start_date: '2024-07-01',
         cfp_end_date: '2024-09-15',
         cfp_notify_date: '2024-09-30',
-        cfp_email: 'cfp@cloudnativebergen.dev',
+        cfp_email: 'cfp@example.com',
         program_date: '2024-10-15',
         registration_enabled: true,
-        contact_email: 'contact@cloudnativebergen.dev',
+        contact_email: 'contact@example.com',
         organizers: [],
         domains: ['cloudnativeday.no'],
         formats: [],
@@ -418,7 +418,7 @@ describe('POST /api/proposal/[id]/action', () => {
             event: expect.objectContaining({
               location: 'Kvarteret, Bergen, Norway',
               date: '30 October 2024',
-              name: 'Cloud Native Day Bergen 2024',
+              name: 'Cloud Native Days Norway 2024',
             }),
             comment: 'this is the comment',
           }),

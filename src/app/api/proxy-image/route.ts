@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export async function GET(request: NextRequest) {
+  noStore()
   try {
     const session = await auth()
     if (!session?.user || !session?.speaker) {
@@ -42,7 +44,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(imageUrl, {
       headers: {
-        'User-Agent': 'Cloud Native Bergen Website/1.0',
+        'User-Agent': 'Cloud Native Days Norway Website/1.0',
         Accept: 'image/*',
       },
       signal: controller.signal,

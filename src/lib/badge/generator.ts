@@ -72,7 +72,7 @@ export async function generateBadgeCredential(
     achievement: {
       id: `${config.baseUrl}/api/badge/${badgeId}/achievement`,
       name: `${badgeType === 'speaker' ? 'Speaker' : 'Organizer'} at ${conferenceTitle}`,
-      description: `This badge recognizes ${speakerName} as ${badgeType === 'speaker' ? 'a speaker' : 'an organizer'} at ${conferenceTitle}, demonstrating their contribution to the cloud native community in Bergen, Norway.`,
+      description: `This badge recognizes ${speakerName} as ${badgeType === 'speaker' ? 'a speaker' : 'an organizer'} at ${conferenceTitle}, demonstrating their contribution to the cloud native community.`,
       image: {
         id: `${config.baseUrl}/api/badge/${badgeId}/image`,
         type: 'Image',

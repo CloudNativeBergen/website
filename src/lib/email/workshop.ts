@@ -39,10 +39,10 @@ export async function sendBasicWorkshopConfirmation({
       ? `${conference.organizer} <${conference.contact_email}>`
       : conference?.domains?.[0]
         ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Bergen <contact@cloudnativebergen.dev>'
+        : 'Cloud Native Days <contact@cloudnativedays.org>'
 
     const contactEmail =
-      conference?.contact_email || 'contact@cloudnativebergen.dev'
+      conference?.contact_email || 'contact@cloudnativedays.org'
 
     const subject = `Workshop Confirmation: ${workshopTitle}`
 
@@ -92,12 +92,12 @@ export async function sendBasicWorkshopConfirmation({
 
                     <p style="margin: 32px 0 16px 0; font-size: 14px; line-height: 20px; color: #334155;">If you have any questions, please contact us at <a href="mailto:${contactEmail}" style="color: #1D4ED8; text-decoration: none;">${contactEmail}</a>.</p>
 
-                    <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference?.organizer || 'Cloud Native Bergen'}</strong></p>
+                    <p style="margin: 24px 0 0 0; font-size: 16px; line-height: 24px; color: #334155;">Best regards,<br><strong>${conference?.organizer || 'Cloud Native Days'}</strong></p>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 24px 40px; background-color: #F9FAFB; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;">
-                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${conference?.organizer || 'Cloud Native Bergen'}. All rights reserved.</p>
+                    <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748B; text-align: center;">© ${new Date().getFullYear()} ${conference?.organizer || 'Cloud Native Days'}. All rights reserved.</p>
                   </td>
                 </tr>
               </table>
@@ -149,14 +149,14 @@ export async function sendWorkshopSignupInstructions({
       ? `${conference.organizer} <${conference.contact_email}>`
       : conference.domains?.[0]
         ? `${conference.organizer} <contact@${conference.domains[0]}>`
-        : 'Cloud Native Bergen <contact@cloudnativebergen.dev>'
+        : 'Cloud Native Days <contact@cloudnativedays.org>'
 
     const contactEmail =
-      conference.contact_email || 'contact@cloudnativebergen.dev'
+      conference.contact_email || 'contact@cloudnativedays.org'
 
     const workshopUrl = conference.domains?.[0]
       ? `https://${conference.domains[0]}/workshop`
-      : 'https://cloudnativebergen.no/workshop'
+      : 'https://cloudnativedays.org/workshop'
 
     const subject = `Workshop Signup Available - ${conference.title}`
 

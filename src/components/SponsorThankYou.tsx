@@ -109,7 +109,7 @@ const variantConfig: Record<SponsorVariant, VariantConfig> = {
 async function generateQRCode(url: string, size = 256): Promise<string> {
   const fullUrl = url.startsWith('http')
     ? url
-    : `https://cloudnativebergen.dev${url}`
+    : `https://cloudnativedays.no${url}`
   const cacheKey = `${fullUrl}_${size}`
 
   if (qrCodeCache.has(cacheKey)) {
@@ -205,7 +205,7 @@ export async function SponsorThankYou({
   sponsor,
   variant = 'code-heroes',
   className = '',
-  eventName = 'Cloud Native Bergen',
+  eventName = 'Cloud Native Days',
   eventDate,
   showCloudNativePattern = false,
   ctaUrl,

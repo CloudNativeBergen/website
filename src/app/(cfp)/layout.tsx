@@ -1,6 +1,7 @@
 import { CFPLayout } from '@/components/cfp/CFPLayout'
 import { ImpersonationBanner } from '@/components/ImpersonationBanner'
 import { getAuthSession } from '@/lib/auth'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 
@@ -17,6 +18,16 @@ export default async function CFPGroupLayout({
     redirect('/api/auth/signin?callbackUrl=/cfp')
   }
 
+  const { conference } = await getConferenceForCurrentDomain({})
+  const conferenceLogos = conference
+    ? {
+        logo_bright: conference.logo_bright,
+        logo_dark: conference.logo_dark,
+        logomark_bright: conference.logomark_bright,
+        logomark_dark: conference.logomark_dark,
+      }
+    : undefined
+
   return (
     <>
       {session.isImpersonating && session.realAdmin && (
@@ -25,7 +36,7 @@ export default async function CFPGroupLayout({
           realAdmin={session.realAdmin}
         />
       )}
-      <CFPLayout>{children}</CFPLayout>
+      <CFPLayout conferenceLogos={conferenceLogos}>{children}</CFPLayout>
     </>
   )
 }

@@ -41,7 +41,7 @@ For each group, list typical data, purpose, legal basis, retention.
 - Legal bases: contract (ticketing), legitimate interests (security/ops), consent (newsletter).
 - Retention: registration records 3–5 years; accounting 5 years per Norwegian bookkeeping rules; check‑in logs ≤ 12 months; marketing consent until withdrawn; photos/recordings per media policy below.
 
-Note: CNB does not share attendee lists with sponsors and does not provide lead‑scanning services.
+Note: The conference does not share attendee lists with sponsors and does not provide lead‑scanning services.
 
 ### B) Speakers
 
@@ -57,7 +57,7 @@ Note: CNB does not share attendee lists with sponsors and does not provide lead�
 - Legal bases: contract, legitimate interests (ops), legal obligation (finance).
 - Retention: contract and invoicing 5 years.
 
-Note: CNB does not offer attendee lead‑scanning or attendee list sharing. Sponsors who collect personal data directly at their booths act as independent controllers and must provide their own notices and collect any required consents.
+Note: The conference does not offer attendee lead‑scanning or attendee list sharing. Sponsors who collect personal data directly at their booths act as independent controllers and must provide their own notices and collect any required consents.
 
 ### D) Volunteers
 
@@ -112,7 +112,7 @@ Note: CNB does not offer attendee lead‑scanning or attendee list sharing. Spon
 ### 3.3 Post‑event
 
 - Publish content: review recordings for removals/blur requests; add video descriptions/metadata with privacy info and contact; consider disabling precise location and moderate comments.
-- Video embeds: when embedding videos on the CNB website, use privacy-preserving embed modes:
+- Video embeds: when embedding videos on the website, use privacy-preserving embed modes:
   - YouTube: use `youtube-nocookie.com` domain which does not set tracking cookies until the user plays the video
   - Vimeo: include `dnt=1` (Do Not Track) parameter to disable tracking
   - These measures reduce passive tracking while preserving full video functionality
@@ -138,7 +138,7 @@ Adjust as needed; document exceptions.
 
 ## 5) Data subject requests (DSR) SOP
 
-- Intake: use the template in Appendix C (web form/email alias like [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev)). Accept access/erasure/rectification/objection/portability/restriction requests.
+- Intake: use the template in Appendix C (web form/email alias like [privacy@cloudnativedays.no](mailto:privacy@cloudnativedays.no)). Accept access/erasure/rectification/objection/portability/restriction requests.
 - Verify identity: email challenge to registered address, or reasonable verification for other channels.
 - Triage: log request, category, deadline (30 days), systems to search (ticketing, email/CRM, file storage, video platform).
 - Evaluate exceptions: legal obligations (accounting), freedom of expression and information for published content, overriding legitimate interests.
@@ -214,27 +214,27 @@ See Appendices G and H for a sample onboarding questionnaire and a lightweight R
 
 English:
 
-“We are recording photo and video at this event. Talks will be published on our official video channels/platforms. By entering, you acknowledge this. If you prefer not to be recorded, please speak to staff for seating options and a no‑filming area. Privacy contact: [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev).”
+“We are recording photo and video at this event. Talks will be published on our official video channels/platforms. By entering, you acknowledge this. If you prefer not to be recorded, please speak to staff for seating options and a no‑filming area. Privacy contact: [privacy@cloudnativedays.no](mailto:privacy@cloudnativedays.no).”
 
 Norwegian (draft – localize as needed):
 
-“Vi tar bilder og gjør opptak av foredrag under arrangementet. Foredrag publiseres på våre offisielle videokanaler/plattformer. Ved å gå inn godtar du dette. Gi beskjed til våre frivillige hvis du ikke ønsker å bli filmet; vi har egne soner uten filming. Kontakt for personvern: [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev).”
+“Vi tar bilder og gjør opptak av foredrag under arrangementet. Foredrag publiseres på våre offisielle videokanaler/plattformer. Ved å gå inn godtar du dette. Gi beskjed til våre frivillige hvis du ikke ønsker å bli filmet; vi har egne soner uten filming. Kontakt for personvern: [privacy@cloudnativedays.no](mailto:privacy@cloudnativedays.no).”
 
 Long‑form poster (link via QR): see Appendix B/C references.
 
 ### Appendix B: Speaker media release (core terms)
 
-- Grant: Speaker grants CNB the right to record, edit, and publish the talk (video, audio, slides) on CNB channels, including official online video platforms.
-- License: Non‑exclusive, worldwide, perpetual license to host and share the recording for educational and promotional purposes related to CNB events.
+- Grant: Speaker grants the conference the right to record, edit, and publish the talk (video, audio, slides) on conference channels, including official online video platforms.
+- License: Non‑exclusive, worldwide, perpetual license to host and share the recording for educational and promotional purposes related to events.
 - Moral rights: Credit will be given; speaker retains underlying IP in their materials.
 - Warranties: Speaker confirms they have rights to present included material.
 - Optional consents: Speaker may opt‑in to broader promotional use (e.g., short social clips).
-- Takedown: CNB will consider reasonable takedown or redaction requests, balancing freedom of expression and documentation interests.
+- Takedown: we will consider reasonable takedown or redaction requests, balancing freedom of expression and documentation interests.
 - Data and privacy: Processing details and contact for queries.
 
 Include checkboxes in the CFP/acceptance flow:
 
-- [ ] I agree that my talk will be recorded and published on CNB’s official online video channels/platforms.
+- [ ] I agree that my talk will be recorded and published on the conference’s official online video channels/platforms.
 - [ ] I consent to the creation of short promotional clips from my talk.
 
 ### Appendix C: Data subject request (DSR) intake form
@@ -246,7 +246,7 @@ Include checkboxes in the CFP/acceptance flow:
 - Details:
 - Identity verification method:
 
-Submit to: [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev)
+Submit to: [privacy@cloudnativedays.no](mailto:privacy@cloudnativedays.no)
 
 ### Appendix D: Subprocessor register template
 
@@ -262,7 +262,7 @@ Submit to: [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev)
 ### Appendix E: Transfer Impact Assessment (TIA) — Third‑party video platform (outline)
 
 - Description: Publication of conference talk recordings to a third‑party video platform channel; public content; viewers worldwide.
-- Roles: CNB as controller for creation/upload; the platform provider as an independent controller for hosting/publication.
+- Roles: The conference as controller for creation/upload; the platform provider as an independent controller for hosting/publication.
 - Data: personal data in videos (speakers; incidental attendees); channel/account metadata.
 - Transfer: outside the EEA (e.g., to the US); SCCs where applicable; public availability may reduce some transfer risk; assess third‑country law access risks; document residual risk and mitigations (minimize audience capture, opt‑outs, blur on request).
 - Public interest/freedom of expression: balance where applicable.
@@ -311,6 +311,6 @@ Use this to collect key facts before signing.
 
 ## Public‑facing privacy notice — suggested clause for recordings and online publication
 
-“Recordings and publication. We record conference sessions and publish talks on our official online video channels/platforms. The legal basis for speakers is our speaking agreement and our legitimate interest in documenting and sharing the event. For attendees, our legitimate interest allows incidental capture; we provide no‑filming areas and will honor reasonable requests for removal or blurring where feasible. Publication on third‑party platforms may involve transfers outside the EEA; we rely on standard contractual clauses and have assessed transfer risks. You can read more in our Privacy Operations Playbook and contact us at [privacy@cloudnativebergen.dev](mailto:privacy@cloudnativebergen.dev).”
+“Recordings and publication. We record conference sessions and publish talks on our official online video channels/platforms. The legal basis for speakers is our speaking agreement and our legitimate interest in documenting and sharing the event. For attendees, our legitimate interest allows incidental capture; we provide no‑filming areas and will honor reasonable requests for removal or blurring where feasible. Publication on third‑party platforms may involve transfers outside the EEA; we rely on standard contractual clauses and have assessed transfer risks. You can read more in our Privacy Operations Playbook and contact us at [privacy@cloudnativedays.no](mailto:privacy@cloudnativedays.no).”
 
 Add a link to this playbook from your website privacy page.

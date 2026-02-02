@@ -9,7 +9,7 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
-  title: 'Volunteer | Cloud Native Bergen',
+  title: 'Volunteer | Cloud Native Days Norway',
   description: 'Join our volunteer team and help make the conference a success',
 }
 

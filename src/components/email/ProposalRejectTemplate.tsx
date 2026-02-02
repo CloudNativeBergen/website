@@ -51,7 +51,7 @@ export function ProposalRejectTemplate({
         <EmailSectionHeader color="white">💡 Keep in touch!</EmailSectionHeader>
         <EmailText color="white">
           We encourage you to submit proposals for future events and stay
-          connected with the Cloud Native Bergen community.
+          connected with the {eventName} community.
         </EmailText>
       </EmailSection>
 

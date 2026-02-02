@@ -18,7 +18,7 @@ export function CompactConferenceHeader({
   data,
 }: CompactConferenceHeaderProps) {
   const { conference, proposals, galleryImages, workshopStats, isOver } = data
-  const domain = conference.domains?.[0] || 'cloudnativebergen.dev'
+  const domain = conference.domains?.[0] || 'cloudnativedays.no'
 
   return (
     <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

@@ -19,6 +19,7 @@ interface SpeakerShareProps {
   isFeatured?: boolean
   ctaUrl?: string
   eventName?: string
+  baseDomain?: string
   showCloudNativePattern?: boolean
 }
 
@@ -51,10 +52,13 @@ const variantConfig: Record<
 export async function generateQRCode(
   url: string,
   size: number = 256,
+  baseDomain?: string,
 ): Promise<string> {
   const fullUrl = url.startsWith('http')
     ? url
-    : `https://cloudnativebergen.dev${url}`
+    : baseDomain
+      ? `https://${baseDomain}${url}`
+      : url
 
   const cacheKey = `${fullUrl}_${size}`
   if (qrCodeCache.has(cacheKey)) {
@@ -216,7 +220,8 @@ export async function SpeakerShare({
   className = '',
   isFeatured = false,
   ctaUrl,
-  eventName = 'Cloud Native Bergen',
+  eventName,
+  baseDomain,
   showCloudNativePattern = false,
 }: SpeakerShareProps) {
   const config = variantConfig[variant]
@@ -224,7 +229,7 @@ export async function SpeakerShare({
 
   const finalCtaUrl = ctaUrl || `/speaker/${speaker.slug}`
 
-  const qrCodeUrl = await generateQRCode(finalCtaUrl, 512)
+  const qrCodeUrl = await generateQRCode(finalCtaUrl, 512, baseDomain)
 
   const primaryTalk =
     speaker.talks && speaker.talks.length > 0 ? speaker.talks[0] : null

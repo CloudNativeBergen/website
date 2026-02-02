@@ -77,7 +77,7 @@ export function BadgeDisplay({
     const issueDate = new Date(badge.issued_at)
     addToLinkedInProfile({
       name: `${conference.title} ${badgeTypeName} Badge`,
-      organizationName: conference.organizer || 'Cloud Native Bergen',
+      organizationName: conference.organizer || 'Cloud Native Days',
       issueYear: issueDate.getFullYear(),
       issueMonth: issueDate.getMonth() + 1,
       certUrl: fullBadgeUrl,

@@ -29,6 +29,10 @@ const config = {
     strategy: 'jwt',
   },
 
+  pages: {
+    signIn: '/signin',
+  },
+
   callbacks: {
     async session({ session, token }) {
       const speaker = token.speaker

@@ -29,9 +29,10 @@ export function CallToAction({
     ? 'Join Our Community'
     : 'Ready to Join the Cloud Native Journey?'
 
+  const conferenceName = conference.title || conference.organizer
   const defaultDescription = isOrganizers
-    ? "Whether you're looking to share your expertise or learn from the best, we'd love to have you at Cloud Native Bergen."
-    : "Don't miss this opportunity to learn from industry experts and connect with the Bergen cloud native community."
+    ? `Whether you&apos;re looking to share your expertise or learn from the best, we&apos;d love to have you at ${conferenceName}.`
+    : `Don&apos;t miss this opportunity to learn from industry experts and connect with the ${conference.city || 'local'} cloud native community.`
 
   const showTickets =
     showTicketReservation && isRegistrationAvailable(conference)
@@ -42,7 +43,7 @@ export function CallToAction({
   }
 
   return (
-    <div className="rounded-2xl bg-gradient-to-r from-brand-cloud-blue/10 to-brand-fresh-green/10 p-8 md:p-12">
+    <div className="rounded-2xl bg-linear-to-r from-brand-cloud-blue/10 to-brand-fresh-green/10 p-8 md:p-12">
       <div className="text-center">
         <h2 className="font-space-grotesk mb-4 text-2xl font-bold text-brand-slate-gray md:text-3xl">
           {title || defaultTitle}

@@ -11,8 +11,10 @@ import {
 } from '@/lib/sponsor/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import Link from 'next/link'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export default async function AdminSponsorContacts() {
+  noStore()
   try {
     const { conference, error: conferenceError } =
       await getConferenceForCurrentDomain({
@@ -82,7 +84,7 @@ export default async function AdminSponsorContacts() {
           actions={
             <SponsorContactActions
               sponsorsWithContactsCount={sponsorsWithContactPersons.length}
-              fromEmail={`Cloud Native Bergen <${conference.contact_email}>`}
+              fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.sponsor_email}>`}
               conference={conference}
             />
           }

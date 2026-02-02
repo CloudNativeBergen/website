@@ -8,7 +8,7 @@ import { AppEnvironment } from '@/lib/environment'
 import { DevBanner } from '@/components/DevBanner'
 
 export const metadata: Metadata = {
-  title: 'Co-Speaker Invitation | Cloud Native Bergen',
+  title: 'Co-Speaker Invitation | Cloud Native Days Norway',
   description: 'Respond to your co-speaker invitation',
 }
 

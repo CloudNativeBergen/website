@@ -1,10 +1,10 @@
-# Agent Instructions for Cloud Native Bergen Website
+# Agent Instructions for Cloud Native Days Norway Website
 
 ## Project Overview
 
-This project is the official website for Cloud Native Bergen. It serves as the main information hub for the community, including details about upcoming conferences, event schedules, and a Call for Papers (CFP) system for potential speakers.
+This project is the official website for Cloud Native Days Norway. It serves as the main information hub for the community, including details about upcoming conferences, event schedules, and a Call for Papers (CFP) system for potential speakers.
 
-The site is multi-tenant, meaning it can be used for multiple events or conferences under the Cloud Native Bergen umbrella each running on its own subdomain. The website is designed to be user-friendly, informative, and visually appealing, with a focus on providing a seamless experience for both attendees and speakers.
+The site is multi-tenant, meaning it can be used for multiple events or conferences under the Cloud Native Days Norway umbrella each running on its own subdomain. The website is designed to be user-friendly, informative, and visually appealing, with a focus on providing a seamless experience for both attendees and speakers.
 
 ## Tech Stack
 
@@ -22,7 +22,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 
 ## Key Features & Functionality
 
-- Display general information about Cloud Native Bergen.
+- Display general information about Cloud Native Days Norway.
 - Showcase upcoming conference details.
 - Present the event schedule.
 - Implement a Call for Papers (CFP) section where speakers can:

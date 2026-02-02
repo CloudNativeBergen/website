@@ -23,7 +23,7 @@ import {
   MagnifyingGlassIcon,
   BellIcon,
 } from '@heroicons/react/24/outline'
-import { Logomark } from '@/components/Logo'
+import { ConferenceLogo } from '@/components/ConferenceLogo'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import clsx from 'clsx'
 
@@ -40,11 +40,19 @@ export interface NavigationItem {
 
 type DashboardMode = 'admin' | 'speaker'
 
+export interface ConferenceLogos {
+  logo_bright?: string
+  logo_dark?: string
+  logomark_bright?: string
+  logomark_dark?: string
+}
+
 interface DashboardLayoutProps {
   children: React.ReactNode
   navigation: NavigationItem[]
   mode: DashboardMode
   title: string
+  conferenceLogos?: ConferenceLogos
   onSearch?: () => void
   searchComponent?: React.ReactNode
 }
@@ -104,6 +112,7 @@ export function DashboardLayout({
   navigation,
   mode,
   title,
+  conferenceLogos,
   onSearch,
   searchComponent,
 }: DashboardLayoutProps) {
@@ -209,9 +218,13 @@ export function DashboardLayout({
                 )}
               >
                 <div className="flex h-16 shrink-0 items-center">
-                  <Logomark
+                  <ConferenceLogo
+                    conference={conferenceLogos}
+                    variant="mark"
                     className="h-8 w-auto text-white"
-                    variant={mode === 'speaker' ? 'monochrome' : 'gradient'}
+                    fallbackVariant={
+                      mode === 'speaker' ? 'monochrome' : 'gradient'
+                    }
                   />
                 </div>
                 <nav className="flex flex-1 flex-col">
@@ -254,9 +267,11 @@ export function DashboardLayout({
             )}
           >
             <div className="flex h-16 shrink-0 items-center justify-center">
-              <Logomark
+              <ConferenceLogo
+                conference={conferenceLogos}
+                variant="mark"
                 className="h-8 w-auto text-white"
-                variant={mode === 'speaker' ? 'monochrome' : 'gradient'}
+                fallbackVariant={mode === 'speaker' ? 'monochrome' : 'gradient'}
               />
             </div>
             <nav className="flex flex-1 flex-col">

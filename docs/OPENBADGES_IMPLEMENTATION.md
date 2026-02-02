@@ -1,6 +1,6 @@
 # OpenBadges 3.0 Implementation
 
-This document provides a high-level architectural overview of the OpenBadges 3.0 implementation for the Cloud Native Bergen website.
+This document provides a high-level architectural overview of the OpenBadges 3.0 implementation for the Cloud Native Days Norway website.
 
 ## Overview
 
@@ -283,7 +283,7 @@ Badges are sent from conference-specific addresses:
 
 - Format: `{organizer} <{contact_email}>`
 - Fallback: `{organizer} <noreply@{domain}>`
-- Default: `noreply@cloudnativebergen.dev`
+- Default: `noreply@cloudnativedays.no`
 
 ---
 

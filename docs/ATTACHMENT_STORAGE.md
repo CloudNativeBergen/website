@@ -1,6 +1,6 @@
 # Attachment Storage Architecture
 
-This document describes the architecture for handling file attachments in the Cloud Native Bergen website, specifically for proposal attachments (slides, resources, recordings).
+This document describes the architecture for handling file attachments in the Cloud Native Days Norway website, specifically for proposal attachments (slides, resources, recordings).
 
 ## Overview
 

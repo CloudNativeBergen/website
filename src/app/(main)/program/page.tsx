@@ -18,6 +18,7 @@ async function CachedProgramContent({ domain }: { domain: string }) {
     schedule: true,
     topics: true,
     sponsors: true,
+    sponsorTiers: true,
     confirmedTalksOnly: false,
   })
 
@@ -81,7 +82,10 @@ async function CachedProgramContent({ domain }: { domain: string }) {
         />
 
         <div className="print:hidden">
-          <Sponsors sponsors={conference.sponsors || []} />
+          <Sponsors
+            sponsors={conference.sponsors || []}
+            conference={conference}
+          />
         </div>
       </Container>
     </div>

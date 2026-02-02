@@ -214,10 +214,10 @@ export async function sendInvitationEmail(
     const proposalAbstract =
       'Please view the full proposal details for more information.'
 
-    const eventName = conference?.title || 'Cloud Native Bergen'
+    const eventName = conference?.title || 'Cloud Native Days'
     const eventLocation = conference?.city
       ? `${conference.city}, ${conference.country || 'Norway'}`
-      : 'Bergen, Norway'
+      : 'Location TBA'
     const eventDate = conference?.start_date
       ? formatDate(conference.start_date)
       : 'TBD'

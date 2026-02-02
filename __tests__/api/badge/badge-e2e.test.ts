@@ -34,7 +34,7 @@ describe('Badge System E2E', () => {
 
   const testConference: Conference = {
     _id: 'test-conference-2025',
-    title: 'Cloud Native Day Bergen 2025',
+    title: 'Cloud Native Days Norway 2025',
     organizer: 'Cloud Native Bergen',
     city: 'Bergen',
     country: 'Norway',
@@ -45,10 +45,11 @@ describe('Badge System E2E', () => {
     cfp_start_date: '2025-01-01',
     cfp_end_date: '2025-03-31',
     cfp_notify_date: '2025-04-15',
-    cfp_email: 'cfp@cloudnativebergen.no',
+    cfp_email: 'cfp@example.com',
     program_date: '2025-05-01',
     registration_enabled: true,
-    contact_email: 'hello@cloudnativebergen.no',
+    contact_email: 'hello@example.com',
+    sponsor_email: 'sponsors@example.com',
     domains: [TEST_HOST],
     organizers: [],
     formats: [],

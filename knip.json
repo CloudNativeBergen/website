@@ -37,7 +37,8 @@
   "ignoreDependencies": [
     "eslint-config-next",
     "postcss",
-    "jest-environment-jsdom"
+    "jest-environment-jsdom",
+    "ts-node"
   ],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": true

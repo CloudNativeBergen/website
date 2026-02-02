@@ -5,9 +5,9 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
 export const metadata = {
-  title: 'Code of Conduct - Cloud Native Bergen',
+  title: 'Code of Conduct - Cloud Native Days Norway',
   description:
-    'Community Code of Conduct for Cloud Native Bergen events and activities.',
+    'Community Code of Conduct for Cloud Native Days Norway events and activities.',
 }
 
 async function CachedConductContent({ domain }: { domain: string }) {
@@ -16,7 +16,7 @@ async function CachedConductContent({ domain }: { domain: string }) {
   cacheTag('content:conduct')
 
   const { conference } = await getConferenceForDomain(domain)
-  const organizerName = conference?.organizer || 'Cloud Native Bergen'
+  const organizerName = conference?.organizer || 'Cloud Native Days Norway'
 
   return (
     <>
@@ -250,9 +250,9 @@ async function CachedConductContent({ domain }: { domain: string }) {
               </h2>
               <div className="font-inter text-brand-slate-gray dark:text-gray-300 print:text-black">
                 <p className="print:leading-relaxed">
-                  Upon review and investigation of a reported incident, the
-                  Cloud Native Bergen organizing team will determine what action
-                  is appropriate based on this Code of Conduct and its related
+                  Upon review and investigation of a reported incident, the{' '}
+                  {organizerName} organizing team will determine what action is
+                  appropriate based on this Code of Conduct and its related
                   documentation.
                 </p>
 

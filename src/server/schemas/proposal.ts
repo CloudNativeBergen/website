@@ -84,7 +84,7 @@ export const ProposalAdminCreateSchema = ProposalInputBaseSchema.extend({
 )
 
 // Proposal update schema
-export const ProposalUpdateSchema = ProposalInputSchema.partial()
+export const ProposalUpdateSchema = ProposalInputBaseSchema.partial()
 
 // Admin update schema with speaker IDs
 export const ProposalAdminUpdateSchema =

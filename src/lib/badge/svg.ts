@@ -18,10 +18,11 @@ export interface BadgeSVGOptions {
 }
 
 export function generateBadgeSVG(options: BadgeSVGOptions): string {
-  const { conferenceDate, badgeType, centerGraphicSvg } = options
+  const { conferenceTitle, conferenceDate, badgeType, centerGraphicSvg } =
+    options
 
   const badgeTypeText = badgeType === 'speaker' ? 'SPEAKER' : 'ORGANIZER'
-  const topText = 'CLOUD NATIVE DAY BERGEN'
+  const topText = conferenceTitle?.toUpperCase() || 'CLOUD NATIVE DAYS'
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 920 920" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 100%; height: auto;">

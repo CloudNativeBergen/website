@@ -11,7 +11,9 @@ import {
   ArrowsPointingOutIcon,
   QrCodeIcon,
 } from '@heroicons/react/24/outline'
+import { ConferenceLogo } from '../ConferenceLogo'
 import { Logo } from '../Logo'
+import type { ConferenceLogos } from '../common/DashboardLayout'
 import QRCodeStyling from 'qr-code-styling'
 import {
   CANVAS_SIZE,
@@ -41,6 +43,7 @@ import {
 } from './meme-generator-config'
 
 interface MemeGeneratorProps {
+  conferenceLogos?: ConferenceLogos
   wrapPreview?: (node: React.ReactNode) => React.ReactNode
 }
 
@@ -152,7 +155,10 @@ const ToggleButton = ({
   </button>
 )
 
-export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
+export function MemeGenerator({
+  conferenceLogos,
+  wrapPreview,
+}: MemeGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const exportCanvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
@@ -460,6 +466,9 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
   const logoAspectRatio = 970 / 234
   const logoHeight = (size: number) => size / logoAspectRatio
 
+  // Check if conference has custom logos
+  const hasCustomLogo = Boolean(conferenceLogos?.logo_bright)
+
   const renderLogo = (scale: number = 1) => (
     <div
       className="pointer-events-none absolute"
@@ -472,7 +481,20 @@ export function MemeGenerator({ wrapPreview }: MemeGeneratorProps) {
         padding: 0,
       }}
     >
-      <Logo variant={logoVariant} className="h-full w-full" style={logoStyle} />
+      {hasCustomLogo ? (
+        <ConferenceLogo
+          conference={conferenceLogos}
+          variant="horizontal"
+          className="h-full w-full"
+          style={logoStyle}
+        />
+      ) : (
+        <Logo
+          variant={logoVariant}
+          className="h-full w-full"
+          style={logoStyle}
+        />
+      )}
     </div>
   )
 

@@ -666,7 +666,7 @@ export function ProgramHighlights({
             <CallToAction
               conference={conference}
               title="Ready to Join the Cloud Native Journey?"
-              description="Don't miss this opportunity to learn from industry experts, discover the latest trends, and connect with the Bergen cloud native community."
+              description="Don't miss this opportunity to learn from industry experts, discover the latest trends, and connect with the local cloud native community."
               showSpeakerSubmission={false}
               showTicketReservation={tickets_enabled}
             />

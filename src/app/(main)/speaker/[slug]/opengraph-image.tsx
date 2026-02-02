@@ -196,7 +196,7 @@ const renderSponsorLogo = (
 ) => createSponsorLogo(logoSvg, logoBrightSvg, sponsorName, size === 'large')
 
 export const runtime = 'edge'
-export const alt = 'Cloud Native Bergen Speaker Profile'
+export const alt = 'Cloud Native Days Norway Speaker Profile'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -402,7 +402,7 @@ export default async function Image({
   }
 
   const conferenceData = {
-    title: conference?.title || 'Cloud Native Bergen',
+    title: conference?.title || 'Cloud Native Days Norway',
     startDate: conference?.start_date,
     endDate: conference?.end_date,
     city: conference?.city,

@@ -10,8 +10,10 @@ import { isConferenceOver } from '@/lib/conference/state'
 import { getOrganizerCount } from '@/lib/speaker/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
+import { unstable_noStore as noStore } from 'next/cache'
 
 export async function GET(request: NextRequest) {
+  noStore()
   try {
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET

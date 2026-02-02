@@ -11,7 +11,7 @@ export class AppEnvironment {
 
   static readonly testUser = {
     id: 'test-user-id',
-    email: 'test@cloudnativebergen.no',
+    email: 'test@cloudnativedays.no',
     name: 'Test User',
     speakerId: 'test-speaker-id',
     picture: 'https://placehold.co/192x192/4f46e5/fff/png?text=TS',
@@ -50,7 +50,7 @@ export class AppEnvironment {
     return {
       user: {
         name: 'Test User',
-        email: 'test@cloudnativebergen.no',
+        email: 'test@cloudnativedays.no',
         picture: 'https://placehold.co/64x64/d1fae5/374151?text=TU',
       },
       expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -61,7 +61,7 @@ export class AppEnvironment {
         _updatedAt: new Date().toISOString(),
         name: 'Test User',
         slug: 'test-user',
-        email: 'test@cloudnativebergen.no',
+        email: 'test@cloudnativedays.no',
         is_organizer: true,
         flags: [Flags.requiresTravelFunding],
       },

@@ -1,6 +1,6 @@
-# Cloud Native Day Bergen - Branding Guide
+# Cloud Native Days Norway - Branding Guide
 
-This document outlines the comprehensive brand system for Cloud Native Day Bergen, including colors, typography, icons, patterns, and component examples.
+This document outlines the comprehensive brand system for Cloud Native Days Norway, including colors, typography, icons, patterns, and component examples.
 
 **📖 For a comprehensive interactive brand guide with live examples, visit: [/branding](/branding)**
 
@@ -20,7 +20,7 @@ The live branding page includes:
 
 ## Brand Story & Design Principles
 
-Cloud Native Day Bergen embodies the spirit of Norway's tech community: innovative yet grounded, collaborative yet independent, modern yet respectful of tradition. Our visual identity draws inspiration from Bergen's dramatic landscapes—the meeting of mountains and sea, the interplay of mist and clarity, the harmony of natural and urban elements.
+Cloud Native Days Norway embodies the spirit of Norway's tech community: innovative yet grounded, collaborative yet independent, modern yet respectful of tradition. Our visual identity draws inspiration from Bergen's dramatic landscapes—the meeting of mountains and sea, the interplay of mist and clarity, the harmony of natural and urban elements.
 
 ### Design Principles
 
@@ -330,9 +330,7 @@ The branding page showcases real implementations of key components:
 
 ```html
 <section class="bg-aqua-gradient">
-  <h1 class="font-jetbrains text-5xl text-white">
-    Cloud Native Day Bergen 2025
-  </h1>
+  <h1 class="font-jetbrains text-5xl text-white">Cloud Native Days Norway</h1>
   <p class="font-inter text-brand-glacier-white">
     A community-driven conference for cloud native technologies
   </p>

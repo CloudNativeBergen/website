@@ -10,7 +10,8 @@ import {
   AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline'
 import QRCodeStyling from 'qr-code-styling'
-import { Logo } from '../Logo'
+import { ConferenceLogo } from '../ConferenceLogo'
+import type { ConferenceLogos } from '../common/DashboardLayout'
 import { sanityImage } from '@/lib/sanity/client'
 import type { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 
@@ -18,6 +19,7 @@ interface PhotoGalleryBuilderProps {
   photos: GalleryImageWithSpeakers[]
   qrCodeUrl?: string
   conferenceTitle: string
+  conferenceLogos?: ConferenceLogos
   wrapPreview?: (node: React.ReactNode) => React.ReactNode
 }
 
@@ -458,6 +460,7 @@ const AsymmetricLayout = ({ photos, scale = 1 }: LayoutRendererProps) => {
 export function PhotoGalleryBuilder({
   photos: initialPhotos,
   qrCodeUrl,
+  conferenceLogos,
   wrapPreview,
 }: PhotoGalleryBuilderProps) {
   const [layout, setLayout] = useState<LayoutType>('mosaic-6')
@@ -547,8 +550,10 @@ export function PhotoGalleryBuilder({
             filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))',
           }}
         >
-          <Logo
-            variant="monochrome"
+          <ConferenceLogo
+            conference={conferenceLogos}
+            variant="horizontal"
+            fallbackVariant="monochrome"
             className="h-auto w-full"
             style={{ color: '#FFFFFF' }}
           />
