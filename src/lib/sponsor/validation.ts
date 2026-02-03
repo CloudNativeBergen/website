@@ -29,14 +29,14 @@ export function validateSponsorTier(
     })
   }
 
-  if (!data.tier_type || !['standard', 'special'].includes(data.tier_type)) {
+  if (!data.tier_type || !['standard', 'special', 'addon'].includes(data.tier_type)) {
     errors.push({
       field: 'tier_type',
-      message: 'Tier type must be standard or special',
+      message: 'Tier type must be standard, special, or addon',
     })
   }
 
-  if (data.tier_type === 'standard') {
+  if (data.tier_type === 'standard' || data.tier_type === 'addon') {
     if (!data.price || data.price.length === 0) {
       errors.push({
         field: 'price',
@@ -63,7 +63,7 @@ export function validateSponsorTier(
     }
   }
 
-  if (data.tier_type === 'standard') {
+  if (data.tier_type === 'standard' || data.tier_type === 'addon') {
     if (!data.perks || data.perks.length === 0) {
       errors.push({
         field: 'perks',

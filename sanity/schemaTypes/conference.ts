@@ -501,6 +501,66 @@ export default defineType({
         },
       ],
     }),
+    defineField({
+      name: 'sponsorship_customization',
+      title: 'Sponsorship Page Customization',
+      type: 'object',
+      fieldset: 'sponsorship',
+      options: { collapsible: true, collapsed: true },
+      fields: [
+        defineField({
+          name: 'hero_headline',
+          type: 'string',
+          title: 'Hero Headline',
+          initialValue: 'No Sales Pitches. Just Code & Culture.',
+        }),
+        defineField({
+          name: 'hero_subheadline',
+          type: 'text',
+          title: 'Hero Subheadline',
+          initialValue:
+            'We prioritize engineering value over marketing fluff. Our audience builds the platforms Norway runs on. Join us in powering the voyage.',
+        }),
+        defineField({
+          name: 'package_section_title',
+          type: 'string',
+          title: 'Package Section Title',
+          initialValue: 'The Base Image',
+        }),
+        defineField({
+          name: 'addon_section_title',
+          type: 'string',
+          title: 'Addon Section Title',
+          initialValue: 'Custom Resource Definitions (CRDs)',
+        }),
+        defineField({
+          name: 'philosophy_title',
+          type: 'string',
+          title: 'Philosophy Title',
+          initialValue: "We Don't Sell Booths. We Build Credibility.",
+        }),
+        defineField({
+          name: 'philosophy_description',
+          type: 'text',
+          title: 'Philosophy Description',
+          initialValue:
+            "We intentionally do not have a traditional Expo Hall. Why? Because the best engineers don't like being sold to in a booth. Instead, we integrate your brand into the fabric of the event through digital hype, on-site signage, and our curated 'Wall of Opportunities'.",
+        }),
+        defineField({
+          name: 'closing_quote',
+          type: 'string',
+          title: 'Closing Quote',
+          initialValue:
+            "The best engineers don't apply to job ads; they work for companies they respect.",
+        }),
+        defineField({
+          name: 'closing_cta_text',
+          type: 'string',
+          title: 'Closing CTA Text',
+          initialValue: 'git commit -m "Support the Community"',
+        }),
+      ],
+    }),
 
     // === People & Sponsors ===
     defineField({

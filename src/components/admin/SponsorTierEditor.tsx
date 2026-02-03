@@ -63,6 +63,16 @@ function SponsorTierModal({
     onSuccess: (createdTier) => {
       if (createdTier) {
         onSave(createdTier)
+        setFormData({
+          title: '',
+          tagline: '',
+          tier_type: 'standard',
+          price: [{ amount: 0, currency: 'NOK' }],
+          perks: [{ label: '', description: '' }],
+          sold_out: false,
+          most_popular: false,
+          max_quantity: undefined,
+        })
         onClose()
       }
     },
@@ -117,6 +127,7 @@ function SponsorTierModal({
         })) || [{ label: '', description: '' }],
         sold_out: tier.sold_out,
         most_popular: tier.most_popular,
+        max_quantity: tier.max_quantity,
       })
     } else {
       setFormData({
@@ -127,6 +138,7 @@ function SponsorTierModal({
         perks: [{ label: '', description: '' }],
         sold_out: false,
         most_popular: false,
+        max_quantity: undefined,
       })
     }
   }, [tier])

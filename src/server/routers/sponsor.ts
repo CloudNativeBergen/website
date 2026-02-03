@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
+import { revalidateTag } from 'next/cache'
 import { router, adminProcedure } from '../trpc'
 import {
   SponsorInputSchema,
@@ -404,6 +405,9 @@ export const sponsorRouter = router({
           })
         }
 
+        revalidateTag('content:sponsor', 'page')
+        revalidateTag('content:conferences', 'page')
+
         return sponsorTier
       }),
 
@@ -449,6 +453,9 @@ export const sponsorRouter = router({
             })
           }
 
+          revalidateTag('content:sponsor', 'page')
+          revalidateTag('content:conferences', 'page')
+
           return sponsorTier
         } else {
           const { sponsorTier } = await getSponsorTier(input.id)
@@ -468,10 +475,11 @@ export const sponsorRouter = router({
       if (error) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to delete sponsor tier',
-          cause: error,
         })
       }
+
+      revalidateTag('content:sponsor', 'page')
+      revalidateTag('content:conferences', 'page')
 
       return { success: true }
     }),

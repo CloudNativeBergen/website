@@ -38,6 +38,17 @@ export interface SponsorBenefit {
   icon?: string
 }
 
+export interface SponsorshipCustomization {
+  hero_headline?: string
+  hero_subheadline?: string
+  package_section_title?: string
+  addon_section_title?: string
+  philosophy_title?: string
+  philosophy_description?: string
+  closing_quote?: string
+  closing_cta_text?: string
+}
+
 export interface Conference {
   _id: string
   title: string
@@ -80,6 +91,7 @@ export interface Conference {
   sponsors?: ConferenceSponsor[] | ConferenceSponsorWithContact[]
   sponsor_tiers?: SponsorTier[]
   sponsor_benefits?: SponsorBenefit[]
+  sponsorship_customization?: SponsorshipCustomization
   schedules?: ConferenceSchedule[]
   vanity_metrics?: ConferenceVanityMetric[]
   features?: string[]

@@ -101,11 +101,21 @@ export default defineType({
       validation: (Rule) =>
         Rule.custom((perks, context) => {
           const tierType = context.document?.tier_type
-          if (tierType === 'standard' && (!perks || perks.length === 0)) {
-            return 'Perks are required for standard sponsor tiers'
+          if (
+            (tierType === 'standard' || tierType === 'addon') &&
+            (!perks || perks.length === 0)
+          ) {
+            return `Perks are required for ${tierType} sponsor tiers`
           }
           return true
         }),
+    }),
+    defineField({
+      name: 'max_quantity',
+      title: 'Max Quantity',
+      type: 'number',
+      description: 'Maximum number of available spots (leave empty for unlimited). 1 = Exclusive.',
+      validation: (Rule) => Rule.min(1),
     }),
     defineField({
       name: 'conference',
