@@ -49,6 +49,11 @@ export default defineType({
       options: { collapsible: true, collapsed: true },
     },
     {
+      name: 'sponsorship',
+      title: 'Sponsorship Prospectus',
+      options: { collapsible: true, collapsed: true },
+    },
+    {
       name: 'relations',
       title: 'People & Sponsors',
       options: { collapsible: true, collapsed: true },
@@ -459,6 +464,42 @@ export default defineType({
         },
       ],
       validation: (Rule) => Rule.required().min(1).unique(),
+    }),
+
+    // === Sponsorship Prospectus ===
+    defineField({
+      name: 'sponsor_benefits',
+      title: 'Sponsor Benefits',
+      type: 'array',
+      fieldset: 'sponsorship',
+      description:
+        'Key benefits displayed in the "Why Sponsor" section on the website.',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'title',
+              title: 'Title',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'description',
+              title: 'Description',
+              type: 'text',
+              rows: 3,
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'icon',
+              title: 'Icon Name',
+              type: 'string',
+              description: 'Heroicon name (e.g. "UserGroupIcon")',
+            }),
+          ],
+        },
+      ],
     }),
 
     // === People & Sponsors ===

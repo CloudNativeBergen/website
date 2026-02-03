@@ -47,7 +47,7 @@ export const SponsorTierPerkSchema = z.object({
 export const SponsorTierInputSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   tagline: z.string().min(1, 'Tagline is required'),
-  tier_type: z.enum(['standard', 'special']),
+  tier_type: z.enum(['standard', 'special', 'addon']),
   price: z.array(SponsorTierPriceSchema).optional(),
   perks: z.array(SponsorTierPerkSchema).optional(),
   sold_out: z.boolean(),

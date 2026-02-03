@@ -28,6 +28,7 @@ export default defineType({
             title: 'Special Sponsor (Media, Community, etc.)',
             value: 'special',
           },
+          { title: 'Add-on (Booth, Dinner, etc.)', value: 'addon' },
         ],
         layout: 'radio',
       },

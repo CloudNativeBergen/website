@@ -46,6 +46,29 @@ export default defineType({
       },
     }),
     defineField({
+      name: 'addons',
+      title: 'Add-ons',
+      type: 'array',
+      description: 'Additional purchasable items (e.g., booth upgrades)',
+      of: [
+        {
+          type: 'reference',
+          to: [{ type: 'sponsorTier' }],
+          options: {
+            filter: ({ document }: { document: any }) => {
+              if (!document?.conference?._ref) return {}
+
+              return {
+                filter:
+                  'conference._ref == $conferenceId && tier_type == "addon"',
+                params: { conferenceId: document.conference._ref },
+              }
+            },
+          },
+        },
+      ],
+    }),
+    defineField({
       name: 'contract_status',
       title: 'Contract Status',
       type: 'string',

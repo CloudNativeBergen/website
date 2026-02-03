@@ -1,4 +1,6 @@
 import { CheckIcon } from '@heroicons/react/20/solid'
+import * as HeroIcons from '@heroicons/react/24/outline'
+import type { ElementType } from 'react'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
 import { Container } from '@/components/Container'
@@ -25,6 +27,19 @@ function PriceFormat({
       {price[0].currency}
     </span>
   )
+}
+
+// Helper to dynamically render HeroIcons
+function DynamicIcon({
+  name,
+  className,
+}: {
+  name: string
+  className?: string
+}) {
+  const IconComponent = (HeroIcons as Record<string, ElementType>)[name]
+  if (!IconComponent) return null
+  return <IconComponent className={className} aria-hidden="true" />
 }
 
 async function CachedSponsorContent({ domain }: { domain: string }) {
@@ -55,9 +70,10 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
   }
 
   const allSponsorTiers = conference.sponsor_tiers || []
+  const sponsorBenefits = conference.sponsor_benefits || []
 
   // Show a message if no sponsor tiers are configured
-  if (allSponsorTiers.length === 0) {
+  if (allSponsorTiers.length === 0 && sponsorBenefits.length === 0) {
     return (
       <div className="relative py-20 sm:pt-36 sm:pb-24">
         <BackgroundImage className="-top-36 -bottom-14" />
@@ -108,6 +124,19 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
       return getMaxPrice(b) - getMaxPrice(a)
     })
 
+  const addonSponsorTiers = allSponsorTiers
+    .filter(
+      (tier) =>
+        (tier.tier_type as 'standard' | 'special' | 'addon') === 'addon',
+    )
+    .sort((a, b) => {
+      const getMaxPrice = (tier: SponsorTier) => {
+        if (!tier.price || tier.price.length === 0) return 0
+        return Math.max(...tier.price.map((p) => p.amount))
+      }
+      return getMaxPrice(b) - getMaxPrice(a)
+    })
+
   return (
     <>
       <div className="relative py-20 sm:pt-36 sm:pb-24">
@@ -133,6 +162,55 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
             </div>
           </div>
         </Container>
+
+        {/* Why Sponsor Section */}
+        {sponsorBenefits.length > 0 && (
+          <Container className="mt-16 sm:mt-24">
+            <div className="mx-auto max-w-2xl lg:max-w-none">
+              <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+                {sponsorBenefits.map((benefit, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-col rounded-2xl bg-white/50 p-8 shadow-sm ring-1 ring-gray-200 backdrop-blur-sm sm:p-10 dark:bg-white/5 dark:ring-gray-700"
+                  >
+                    {benefit.icon && (
+                      <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white dark:bg-blue-500">
+                        <DynamicIcon name={benefit.icon} className="h-6 w-6" />
+                      </div>
+                    )}
+                    <h3 className="text-xl font-semibold leading-7 text-gray-900 dark:text-white">
+                      {benefit.title}
+                    </h3>
+                    <p className="mt-4 text-base leading-7 text-gray-600 dark:text-gray-400">
+                      {benefit.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Container>
+        )}
+
+        {/* Vanity Metrics Section */}
+        {conference.vanity_metrics && conference.vanity_metrics.length > 0 && (
+          <Container className="mt-16 sm:mt-24">
+            <dl className="grid grid-cols-1 gap-x-8 gap-y-16 text-center lg:grid-cols-3">
+              {conference.vanity_metrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className="mx-auto flex max-w-xs flex-col gap-y-4"
+                >
+                  <dt className="text-base leading-7 text-gray-600 dark:text-gray-400">
+                    {metric.label}
+                  </dt>
+                  <dd className="order-first text-3xl font-semibold tracking-tight text-gray-900 sm:text-5xl dark:text-white">
+                    {metric.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Container>
+        )}
 
         <Container>
           {standardSponsorTiers.length > 0 && (
@@ -216,6 +294,93 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Add-ons Section */}
+          {addonSponsorTiers.length > 0 && (
+            <div className="mt-20">
+              <div className="mx-auto max-w-2xl text-center">
+                <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl dark:text-white">
+                  Add-on Opportunities
+                </h2>
+                <p className="mt-4 text-lg leading-8 text-gray-600 dark:text-gray-300">
+                  Enhance your sponsorship with these additional opportunities
+                </p>
+              </div>
+
+              <div className="mx-auto mt-12 grid max-w-lg grid-cols-1 gap-8 lg:max-w-4xl lg:grid-cols-3">
+                {addonSponsorTiers.map((tier) => (
+                  <div
+                    key={tier._id}
+                    className="flex flex-col rounded-2xl border border-gray-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:shadow-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold leading-8 text-gray-900 dark:text-white">
+                          {tier.title}
+                        </h3>
+                        {tier.sold_out && (
+                          <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                            Sold Out
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
+                        {tier.tagline}
+                      </p>
+
+                      {tier.price && tier.price.length > 0 && (
+                        <p className="mt-4 flex items-baseline gap-x-1">
+                          <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+                            <PriceFormat price={tier.price} />
+                          </span>
+                        </p>
+                      )}
+
+                      {tier.perks && tier.perks.length > 0 && (
+                        <ul role="list" className="mt-6 space-y-3">
+                          {tier.perks.map((perk, perkIndex) => (
+                            <li
+                              key={`addon-perk-${perkIndex}`}
+                              className="flex gap-x-3"
+                            >
+                              <CheckIcon
+                                className="h-5 w-4 flex-none text-blue-600"
+                                aria-hidden="true"
+                              />
+                              <span className="text-sm leading-6 text-gray-600 dark:text-gray-400">
+                                {perk.label && perk.description ? (
+                                  <>
+                                    <span className="font-medium">
+                                      {perk.label}:
+                                    </span>{' '}
+                                    {perk.description}
+                                  </>
+                                ) : (
+                                  perk.label || perk.description
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {!tier.sold_out && (
+                      <div className="mt-8">
+                        <Button
+                          href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} add-on&body=We are interested in adding the ${tier.title} to our sponsorship.`}
+                          variant="outline"
+                          className="w-full text-sm"
+                        >
+                          Add {tier.title}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

@@ -32,6 +32,12 @@ export interface ConferenceVanityMetric {
   value: string
 }
 
+export interface SponsorBenefit {
+  title: string
+  description: string
+  icon?: string
+}
+
 export interface Conference {
   _id: string
   title: string
@@ -73,6 +79,7 @@ export interface Conference {
   topics: Topic[]
   sponsors?: ConferenceSponsor[] | ConferenceSponsorWithContact[]
   sponsor_tiers?: SponsorTier[]
+  sponsor_benefits?: SponsorBenefit[]
   schedules?: ConferenceSchedule[]
   vanity_metrics?: ConferenceVanityMetric[]
   features?: string[]

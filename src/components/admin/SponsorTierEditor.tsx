@@ -339,7 +339,8 @@ function SponsorTierModal({
                               ...prev,
                               tier_type: e.target.value as
                                 | 'standard'
-                                | 'special',
+                                | 'special'
+                                | 'addon',
                             }))
                           }
                           disabled={isLoading}
@@ -347,6 +348,7 @@ function SponsorTierModal({
                         >
                           <option value="standard">Standard</option>
                           <option value="special">Special</option>
+                          <option value="addon">Add-on</option>
                         </select>
                         <ChevronDownIcon
                           aria-hidden="true"
