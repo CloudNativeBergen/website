@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+
 export function createSvgDataUrl(svgString: string): string | null {
   if (!svgString?.trim()) return null
 
@@ -97,23 +100,16 @@ export function formatDateRange(
 /**
  * Loads brand fonts from local files for use in OG images.
  * Fonts are self-hosted in /public/fonts/ to avoid external HTTP requests.
+ * Uses fs.readFile for reliable loading in Node.js runtime (per Next.js docs).
  * Returns an array of font objects compatible with @vercel/og ImageResponse.
  */
 export async function loadBrandFonts() {
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
+  const fontsDir = join(process.cwd(), 'public', 'fonts')
 
   const [spaceGroteskFont, jetbrainsMonoFont, interFont] = await Promise.all([
-    fetch(`${baseUrl}/fonts/SpaceGrotesk-Bold.ttf`).then((res) =>
-      res.arrayBuffer(),
-    ),
-    fetch(`${baseUrl}/fonts/JetBrainsMono-Bold.ttf`).then((res) =>
-      res.arrayBuffer(),
-    ),
-    fetch(`${baseUrl}/fonts/Inter-SemiBold.ttf`).then((res) =>
-      res.arrayBuffer(),
-    ),
+    readFile(join(fontsDir, 'SpaceGrotesk-Bold.ttf')),
+    readFile(join(fontsDir, 'JetBrainsMono-Bold.ttf')),
+    readFile(join(fontsDir, 'Inter-SemiBold.ttf')),
   ])
 
   return [
