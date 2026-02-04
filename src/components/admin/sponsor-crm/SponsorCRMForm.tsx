@@ -360,7 +360,7 @@ export function SponsorCRMForm({
                           }
                           helperText={
                             !formData.contractValue ||
-                              parseFloat(formData.contractValue) === 0
+                            parseFloat(formData.contractValue) === 0
                               ? '(No cost)'
                               : undefined
                           }

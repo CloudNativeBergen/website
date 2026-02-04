@@ -167,8 +167,8 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
       ? sponsors
       : currentView === 'invoice'
         ? sponsors.filter(
-          (s) => s.status === 'closed-won' && s.contract_value != null,
-        )
+            (s) => s.status === 'closed-won' && s.contract_value != null,
+          )
         : sponsors.filter((s) => s.status === 'closed-won')
 
   // Calculate active filter count
