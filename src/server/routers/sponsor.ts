@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
+import { revalidateTag } from 'next/cache'
 import { router, adminProcedure } from '../trpc'
 import {
   SponsorInputSchema,
@@ -95,7 +96,8 @@ async function getAllSponsorTiers(conferenceId?: string): Promise<{
           description
         },
         sold_out,
-        most_popular
+        most_popular,
+        max_quantity
       }`,
       params,
     )
@@ -404,6 +406,9 @@ export const sponsorRouter = router({
           })
         }
 
+        revalidateTag('content:sponsor', 'default')
+        revalidateTag('content:conferences', 'default')
+
         return sponsorTier
       }),
 
@@ -422,6 +427,7 @@ export const sponsorRouter = router({
           const mergedData = { ...existingTier, ...input.data }
           const validationErrors = validateSponsorTier(mergedData)
           if (validationErrors.length > 0) {
+            console.error('Sponsor tier validation errors:', validationErrors)
             throw new TRPCError({
               code: 'BAD_REQUEST',
               message: 'Sponsor tier contains invalid fields',
@@ -449,6 +455,9 @@ export const sponsorRouter = router({
             })
           }
 
+          revalidateTag('content:sponsor', 'default')
+          revalidateTag('content:conferences', 'default')
+
           return sponsorTier
         } else {
           const { sponsorTier } = await getSponsorTier(input.id)
@@ -472,6 +481,9 @@ export const sponsorRouter = router({
           cause: error,
         })
       }
+
+      revalidateTag('content:sponsor', 'default')
+      revalidateTag('content:conferences', 'default')
 
       return { success: true }
     }),

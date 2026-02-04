@@ -49,6 +49,11 @@ export default defineType({
       options: { collapsible: true, collapsed: true },
     },
     {
+      name: 'sponsorship',
+      title: 'Sponsorship Prospectus',
+      options: { collapsible: true, collapsed: true },
+    },
+    {
       name: 'relations',
       title: 'People & Sponsors',
       options: { collapsible: true, collapsed: true },
@@ -459,6 +464,137 @@ export default defineType({
         },
       ],
       validation: (Rule) => Rule.required().min(1).unique(),
+    }),
+
+    // === Sponsorship Prospectus ===
+    defineField({
+      name: 'sponsor_benefits',
+      title: 'Sponsor Benefits',
+      type: 'array',
+      fieldset: 'sponsorship',
+      description:
+        'Key benefits displayed in the "Why Sponsor" section on the website.',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'title',
+              title: 'Title',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'description',
+              title: 'Description',
+              type: 'text',
+              rows: 3,
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'icon',
+              title: 'Icon',
+              type: 'string',
+              options: {
+                list: [
+                  { title: 'User Group', value: 'UserGroupIcon' },
+                  { title: 'Megaphone', value: 'MegaphoneIcon' },
+                  { title: 'Sparkles', value: 'SparklesIcon' },
+                  { title: 'Rocket Launch', value: 'RocketLaunchIcon' },
+                  { title: 'Building Office', value: 'BuildingOfficeIcon' },
+                  { title: 'Globe', value: 'GlobeAltIcon' },
+                  { title: 'Heart', value: 'HeartIcon' },
+                  { title: 'Trophy', value: 'TrophyIcon' },
+                  { title: 'Star', value: 'StarIcon' },
+                  { title: 'Light Bulb', value: 'LightBulbIcon' },
+                  { title: 'Chart Bar', value: 'ChartBarIcon' },
+                  { title: 'Briefcase', value: 'BriefcaseIcon' },
+                  { title: 'Chat Bubble', value: 'ChatBubbleLeftRightIcon' },
+                  { title: 'Academic Cap', value: 'AcademicCapIcon' },
+                  { title: 'Command Line', value: 'CommandLineIcon' },
+                  { title: 'CPU Chip', value: 'CpuChipIcon' },
+                  { title: 'Code Bracket', value: 'CodeBracketIcon' },
+                  { title: 'Signal', value: 'SignalIcon' },
+                  { title: 'Camera', value: 'CameraIcon' },
+                  { title: 'Microphone', value: 'MicrophoneIcon' },
+                  { title: 'Presentation Chart', value: 'PresentationChartBarIcon' },
+                  { title: 'Newspaper', value: 'NewspaperIcon' },
+                  { title: 'Hand Raised', value: 'HandRaisedIcon' },
+                  { title: 'Handshake (Thumb Up)', value: 'HandThumbUpIcon' },
+                  { title: 'Check Badge', value: 'CheckBadgeIcon' },
+                ],
+              },
+            }),
+          ],
+        },
+      ],
+    }),
+    defineField({
+      name: 'sponsorship_customization',
+      title: 'Sponsorship Page Customization',
+      type: 'object',
+      fieldset: 'sponsorship',
+      options: { collapsible: true, collapsed: true },
+      fields: [
+        defineField({
+          name: 'hero_headline',
+          type: 'string',
+          title: 'Hero Headline',
+          initialValue: 'No Sales Pitches. Just Code & Culture.',
+        }),
+        defineField({
+          name: 'hero_subheadline',
+          type: 'text',
+          title: 'Hero Subheadline',
+          initialValue:
+            'We prioritize engineering value over marketing fluff. Our audience builds the platforms Norway runs on. Join us in powering the voyage.',
+        }),
+        defineField({
+          name: 'package_section_title',
+          type: 'string',
+          title: 'Package Section Title',
+          initialValue: 'The Base Image',
+        }),
+        defineField({
+          name: 'addon_section_title',
+          type: 'string',
+          title: 'Addon Section Title',
+          initialValue: 'Custom Resource Definitions (CRDs)',
+        }),
+        defineField({
+          name: 'philosophy_title',
+          type: 'string',
+          title: 'Philosophy Title',
+          initialValue: "We Don't Sell Booths. We Build Credibility.",
+        }),
+        defineField({
+          name: 'philosophy_description',
+          type: 'text',
+          title: 'Philosophy Description',
+          initialValue:
+            "We intentionally do not have a traditional Expo Hall. Why? Because the best engineers don't like being sold to in a booth. Instead, we integrate your brand into the fabric of the event through digital hype, on-site signage, and our curated 'Wall of Opportunities'.",
+        }),
+        defineField({
+          name: 'closing_quote',
+          type: 'string',
+          title: 'Closing Quote',
+          initialValue:
+            "The best engineers don't apply to job ads; they work for companies they respect.",
+        }),
+        defineField({
+          name: 'closing_cta_text',
+          type: 'string',
+          title: 'Closing CTA Text',
+          initialValue: 'git commit -m "Support the Community"',
+        }),
+        defineField({
+          name: 'prospectus_url',
+          type: 'url',
+          title: 'Prospectus PDF/Link',
+          description:
+            'Optional link to a PDF or external page with the full sponsorship prospectus',
+        }),
+      ],
     }),
 
     // === People & Sponsors ===

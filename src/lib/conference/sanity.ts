@@ -41,12 +41,12 @@ export async function getConferenceForCurrentDomain({
   featuredTalks?: boolean
   confirmedTalksOnly?: boolean
   gallery?:
-    | boolean
-    | {
-        featuredLimit?: number
-        limit?: number
-        featuredOnly?: boolean
-      }
+  | boolean
+  | {
+    featuredLimit?: number
+    limit?: number
+    featuredOnly?: boolean
+  }
 } = {}): Promise<{
   conference: Conference
   domain: string
@@ -98,12 +98,12 @@ export async function getConferenceForDomain(
     featuredTalks?: boolean
     confirmedTalksOnly?: boolean
     gallery?:
-      | boolean
-      | {
-          featuredLimit?: number
-          limit?: number
-          featuredOnly?: boolean
-        }
+    | boolean
+    | {
+      featuredLimit?: number
+      limit?: number
+      featuredOnly?: boolean
+    }
   } = {},
 ): Promise<{ conference: Conference; domain: string; error: Error | null }> {
   let conference = {} as Conference
@@ -115,18 +115,16 @@ export async function getConferenceForDomain(
   try {
     const query = `*[ _type == "conference" && ($domain in domains || $wildcardSubdomain in domains)][0]{
       ...,
-      ${
-        organizers
-          ? `organizers[]->{
+      ${organizers
+        ? `organizers[]->{
       ...,
       "slug": slug.current,
       "image": image.asset->url
       },`
-          : ''
+        : ''
       }
-      ${
-        featuredSpeakers
-          ? `featured_speakers[]->{
+      ${featuredSpeakers
+        ? `featured_speakers[]->{
       ...,
       "slug": slug.current,
       "image": image.asset->url,
@@ -138,11 +136,10 @@ export async function getConferenceForDomain(
       status
       }
       },`
-          : ''
+        : ''
       }
-      ${
-        featuredTalks
-          ? `featured_talks[]->{
+      ${featuredTalks
+        ? `featured_talks[]->{
       _id,
       title,
       description,
@@ -165,11 +162,10 @@ export async function getConferenceForDomain(
         "image": image.asset->url
       }
       },`
-          : ''
+        : ''
       }
-      ${
-        schedule
-          ? `schedules[]-> {
+      ${schedule
+        ? `schedules[]-> {
       ...,
       tracks[]{
         trackTitle,
@@ -204,19 +200,17 @@ export async function getConferenceForDomain(
         }
       }
       } | order(date asc),`
-          : ''
+        : ''
       }
-      ${
-        sponsors
-          ? `sponsors[] | order(tier->tier_type asc, tier->price[0].amount desc, tier->title asc){
+      ${sponsors
+        ? `sponsors[] | order(tier->tier_type asc, tier->price[0].amount desc, tier->title asc){
       sponsor->{
         _id,
         name,
         website,
         logo,
-        logo_bright,${
-          sponsorContact
-            ? `
+        logo_bright,${sponsorContact
+          ? `
         org_number,
         contact_persons[]{
           _key,
@@ -230,7 +224,7 @@ export async function getConferenceForDomain(
           reference,
           comments
         },`
-            : ''
+          : ''
         }
       },
       tier->{
@@ -244,11 +238,10 @@ export async function getConferenceForDomain(
         }
       }
       },`
-          : ''
+        : ''
       }
-      ${
-        sponsorTiers
-          ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id] | order(tier_type asc, title asc, price[0].amount desc){
+      ${sponsorTiers
+        ? `"sponsor_tiers": *[_type == "sponsorTier" && conference._ref == ^._id] | order(tier_type asc, title asc, price[0].amount desc){
       _id,
       _createdAt,
       _updatedAt,
@@ -266,20 +259,20 @@ export async function getConferenceForDomain(
         description
       },
       sold_out,
-      most_popular
+      most_popular,
+      max_quantity
       },`
-          : ''
+        : ''
       }
-      ${
-        topics
-          ? `topics[]->{
+      ${topics
+        ? `topics[]->{
       _id,
       title,
       description,
       color,
       "slug": slug.current
       },`
-          : ''
+        : ''
       }
     }`
 

@@ -32,6 +32,24 @@ export interface ConferenceVanityMetric {
   value: string
 }
 
+export interface SponsorBenefit {
+  title: string
+  description: string
+  icon?: string
+}
+
+export interface SponsorshipCustomization {
+  hero_headline?: string
+  hero_subheadline?: string
+  package_section_title?: string
+  addon_section_title?: string
+  philosophy_title?: string
+  philosophy_description?: string
+  closing_quote?: string
+  closing_cta_text?: string
+  prospectus_url?: string
+}
+
 export interface Conference {
   _id: string
   title: string
@@ -73,6 +91,8 @@ export interface Conference {
   topics: Topic[]
   sponsors?: ConferenceSponsor[] | ConferenceSponsorWithContact[]
   sponsor_tiers?: SponsorTier[]
+  sponsor_benefits?: SponsorBenefit[]
+  sponsorship_customization?: SponsorshipCustomization
   schedules?: ConferenceSchedule[]
   vanity_metrics?: ConferenceVanityMetric[]
   features?: string[]

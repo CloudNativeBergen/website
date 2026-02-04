@@ -28,6 +28,7 @@ export default defineType({
             title: 'Special Sponsor (Media, Community, etc.)',
             value: 'special',
           },
+          { title: 'Add-on (Booth, Dinner, etc.)', value: 'addon' },
         ],
         layout: 'radio',
       },
@@ -105,6 +106,13 @@ export default defineType({
           }
           return true
         }),
+    }),
+    defineField({
+      name: 'max_quantity',
+      title: 'Max Quantity',
+      type: 'number',
+      description: 'Maximum number of available spots (leave empty for unlimited). 1 = Exclusive.',
+      validation: (Rule) => Rule.min(1),
     }),
     defineField({
       name: 'conference',

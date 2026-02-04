@@ -12,7 +12,7 @@ export interface SponsorTier {
   _updatedAt: string
   title: string
   tagline: string
-  tier_type: 'standard' | 'special'
+  tier_type: 'standard' | 'special' | 'addon'
   price?: Array<{
     _key: string
     amount: number
@@ -25,12 +25,13 @@ export interface SponsorTier {
   }>
   sold_out: boolean
   most_popular: boolean
+  max_quantity?: number
 }
 
 export interface SponsorTierInput {
   title: string
   tagline: string
-  tier_type: 'standard' | 'special'
+  tier_type: 'standard' | 'special' | 'addon'
   price?: Array<{
     _key?: string
     amount: number
@@ -43,6 +44,7 @@ export interface SponsorTierInput {
   }>
   sold_out: boolean
   most_popular: boolean
+  max_quantity?: number
 }
 
 export type SponsorTierExisting = SponsorTier
@@ -58,7 +60,7 @@ export interface ConferenceSponsor {
   tier: {
     title: string
     tagline: string
-    tier_type?: 'standard' | 'special'
+    tier_type?: 'standard' | 'special' | 'addon'
     price?: Array<{
       _key: string
       amount: number
@@ -81,7 +83,7 @@ export interface ConferenceSponsorWithContact {
   tier: {
     title: string
     tagline: string
-    tier_type?: 'standard' | 'special'
+    tier_type?: 'standard' | 'special' | 'addon'
     price?: Array<{
       _key: string
       amount: number
