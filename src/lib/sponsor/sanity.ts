@@ -22,13 +22,11 @@ export async function createSponsorTier(
       title: data.title,
       tagline: data.tagline,
       tier_type: data.tier_type,
-      price:
-        data.tier_type === 'standard'
-          ? prepareArrayWithKeys(data.price, 'price')
-          : undefined,
+      price: prepareArrayWithKeys(data.price, 'price'),
       perks: prepareArrayWithKeys(data.perks, 'perk'),
       sold_out: data.sold_out,
       most_popular: data.most_popular,
+      max_quantity: data.max_quantity,
       conference: createReference(data.conference),
     })
 
@@ -43,6 +41,7 @@ export async function createSponsorTier(
       perks: sponsorTier.perks,
       sold_out: sponsorTier.sold_out,
       most_popular: sponsorTier.most_popular,
+      max_quantity: sponsorTier.max_quantity,
     }
 
     return { sponsorTier: result }
@@ -62,13 +61,11 @@ export async function updateSponsorTier(
         title: data.title,
         tagline: data.tagline,
         tier_type: data.tier_type,
-        price:
-          data.tier_type === 'standard'
-            ? prepareArrayWithKeys(data.price, 'price')
-            : undefined,
+        price: prepareArrayWithKeys(data.price, 'price'),
         perks: prepareArrayWithKeys(data.perks, 'perk'),
         sold_out: data.sold_out,
         most_popular: data.most_popular,
+        max_quantity: data.max_quantity,
       })
       .commit()
 
@@ -83,6 +80,7 @@ export async function updateSponsorTier(
       perks: sponsorTier.perks,
       sold_out: sponsorTier.sold_out,
       most_popular: sponsorTier.most_popular,
+      max_quantity: sponsorTier.max_quantity,
     }
 
     return { sponsorTier: result }
@@ -125,7 +123,8 @@ export async function getSponsorTier(
           description
         },
         sold_out,
-        most_popular
+        most_popular,
+        max_quantity
       }`,
       { id },
     )

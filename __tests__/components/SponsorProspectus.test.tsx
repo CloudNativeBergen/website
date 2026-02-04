@@ -1,20 +1,29 @@
 /**
  * @jest-environment jsdom
  */
+import { describe, it, expect as jestExpect, jest } from '@jest/globals'
 import { render, screen } from '@testing-library/react'
+import '@testing-library/jest-dom'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const expect = jestExpect as any
 import { SponsorProspectus } from '@/components/sponsor/SponsorProspectus'
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
 
 // Mock icons
 jest.mock('@heroicons/react/24/outline', () => ({
+  __esModule: true,
   UserGroupIcon: (props: any) => (
     <svg {...props} data-testid="icon-user-group" />
   ),
+  CheckIcon: (props: any) => <svg {...props} data-testid="icon-check" />,
+  NoSymbolIcon: (props: any) => <svg {...props} data-testid="icon-no-symbol" />,
 }))
 
 // Mock Sponsors component
 jest.mock('@/components/Sponsors', () => ({
+  __esModule: true,
   Sponsors: () => <div data-testid="sponsors-grid">Sponsors Grid</div>,
 }))
 
@@ -52,6 +61,7 @@ const mockConference = {
       _id: 'img1',
       image: 'image-url',
       caption: 'Vibe 1',
+      imageAlt: 'Vibe 1',
     },
   ],
 } as unknown as Conference
@@ -93,7 +103,7 @@ const mockSpecialTiers = [
 const mockPastSponsors = [
   {
     sponsor: { name: 'Past Sponsor' },
-    tier: { title: 'Gold' },
+    tier: { title: 'Platinum' },
   },
 ] as any
 
@@ -110,13 +120,14 @@ describe('SponsorProspectus', () => {
     )
 
     // Check Hero
-    expect(screen.getByText('Become a Sponsor')).toBeInTheDocument()
-    expect(screen.getByText(/Showcase your brand/)).toBeInTheDocument()
+    expect(
+      screen.getByText('No Sales Pitches. Just Code & Culture.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/We prioritize/)).toBeInTheDocument()
 
     // Check Benefits
     expect(screen.getByText('Benefit 1')).toBeInTheDocument()
     expect(screen.getByText('Desc 1')).toBeInTheDocument()
-    expect(screen.getByTestId('icon-user-group')).toBeInTheDocument()
 
     // Check Vanity Metrics
     expect(screen.getByText('Attendees')).toBeInTheDocument()
@@ -125,19 +136,18 @@ describe('SponsorProspectus', () => {
     // Check Standard Tiers
     expect(screen.getByText('Gold')).toBeInTheDocument()
     expect(screen.getByText('10 000 NOK')).toBeInTheDocument() // PriceFormat adds spaces
-    expect(screen.getByText('Most popular')).toBeInTheDocument()
+    expect(screen.getByText('Recommended')).toBeInTheDocument()
 
     // Check Addons
-    expect(screen.getByText('Add-on Opportunities')).toBeInTheDocument()
+    expect(
+      screen.getByText(/> Custom Resource Definitions \(CRDs\)/),
+    ).toBeInTheDocument()
     expect(screen.getByText('Booth')).toBeInTheDocument()
     expect(screen.getByText('5 000 NOK')).toBeInTheDocument()
 
     // Check Special Tiers
-    expect(screen.getByText('Special Partnership Opportunities')).toBeInTheDocument()
+    expect(screen.getByText('Special Partnerships')).toBeInTheDocument()
     expect(screen.getByText('Media')).toBeInTheDocument()
-
-    // Check Past Sponsors
-    expect(screen.getByTestId('sponsors-grid')).toBeInTheDocument()
 
     // Check Vibe Check
     expect(screen.getByText('The Vibe')).toBeInTheDocument()

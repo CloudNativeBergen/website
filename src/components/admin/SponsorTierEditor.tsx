@@ -155,7 +155,7 @@ function SponsorTierModal({
       } else {
         await createMutation.mutateAsync(formData)
       }
-    } catch {}
+    } catch { }
   }
 
   const handleDelete = async () => {
@@ -168,7 +168,7 @@ function SponsorTierModal({
     if (confirmed) {
       try {
         await deleteMutation.mutateAsync({ id: tier._id })
-      } catch {}
+      } catch { }
     }
   }
 
@@ -226,6 +226,50 @@ function SponsorTierModal({
           i === index ? { ...perk, [field]: value } : perk,
         ) || [],
     }))
+  }
+
+  const handlePerkPaste = (
+    e: React.ClipboardEvent<HTMLInputElement>,
+    index: number,
+  ) => {
+    const pastedText = e.clipboardData.getData('text')
+    const lines = pastedText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+
+    if (lines.length > 1) {
+      e.preventDefault()
+
+      const newPerks = lines.map((line) => {
+        const colonIndex = line.indexOf(':')
+        if (colonIndex > 0) {
+          return {
+            label: line.substring(0, colonIndex).trim(),
+            description: line.substring(colonIndex + 1).trim(),
+          }
+        }
+        return { label: '', description: line }
+      })
+
+      setFormData((prev) => {
+        const existingPerks = prev.perks || []
+        const perksBeforeIndex = existingPerks.slice(0, index)
+        const perksAfterIndex = existingPerks.slice(index + 1)
+        const currentPerk = existingPerks[index]
+
+        if (currentPerk?.label || currentPerk?.description) {
+          return {
+            ...prev,
+            perks: [...perksBeforeIndex, currentPerk, ...newPerks, ...perksAfterIndex],
+          }
+        }
+        return {
+          ...prev,
+          perks: [...perksBeforeIndex, ...newPerks, ...perksAfterIndex],
+        }
+      })
+    }
   }
 
   const isLoading =
@@ -334,7 +378,7 @@ function SponsorTierModal({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <div>
                       <label
                         htmlFor="tier_type"
@@ -365,6 +409,34 @@ function SponsorTierModal({
                         <ChevronDownIcon
                           aria-hidden="true"
                           className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="max_quantity"
+                        className="block text-sm/6 font-medium text-gray-900 dark:text-white"
+                      >
+                        Capacity
+                      </label>
+                      <div className="mt-2">
+                        <input
+                          type="number"
+                          id="max_quantity"
+                          value={formData.max_quantity ?? ''}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              max_quantity: e.target.value
+                                ? parseInt(e.target.value)
+                                : undefined,
+                            }))
+                          }
+                          min="1"
+                          disabled={isLoading}
+                          className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+                          placeholder="Unlimited"
                         />
                       </div>
                     </div>
@@ -466,7 +538,7 @@ function SponsorTierModal({
                           key={index}
                           className="flex items-center space-x-3"
                         >
-                          <div className="flex-1">
+                          <div className="w-40">
                             <input
                               type="number"
                               value={price.amount}
@@ -547,9 +619,10 @@ function SponsorTierModal({
                               onChange={(e) =>
                                 updatePerk(index, 'label', e.target.value)
                               }
+                              onPaste={(e) => handlePerkPaste(e, index)}
                               disabled={isLoading}
                               className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
-                              placeholder="Perk title"
+                              placeholder="Perk title (paste multi-line to bulk add)"
                             />
                           </div>
                           <div className="sm:col-span-2">
@@ -564,6 +637,7 @@ function SponsorTierModal({
                                     e.target.value,
                                   )
                                 }
+                                onPaste={(e) => handlePerkPaste(e, index)}
                                 disabled={isLoading}
                                 className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 disabled:bg-gray-50 disabled:text-gray-500 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500 dark:disabled:bg-white/5 dark:disabled:text-gray-400"
                                 placeholder="Perk description"
@@ -728,6 +802,11 @@ export default function SponsorTierEditor({
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {sponsorTiers
             .sort((a, b) => {
+              const tierTypeOrder = { standard: 0, special: 1, addon: 2 }
+              const typeOrderA = tierTypeOrder[a.tier_type] ?? 3
+              const typeOrderB = tierTypeOrder[b.tier_type] ?? 3
+              if (typeOrderA !== typeOrderB) return typeOrderA - typeOrderB
+
               const getMaxPrice = (tier: SponsorTierExisting) => {
                 if (!tier.price || tier.price.length === 0) return 0
                 return Math.max(...tier.price.map((p) => p.amount))
@@ -738,10 +817,15 @@ export default function SponsorTierEditor({
               <div
                 key={tier._id}
                 className={clsx(
-                  'group relative rounded-lg border border-gray-300 bg-white p-6 shadow-sm hover:border-gray-400 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20',
+                  'group relative overflow-hidden rounded-lg border border-gray-300 bg-white p-6 shadow-sm hover:border-gray-400 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20',
                   tier.most_popular && 'ring-2 ring-indigo-500',
                 )}
               >
+                {tier.max_quantity === 1 && (
+                  <div className="absolute -right-8 top-4 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
+                    Exclusive
+                  </div>
+                )}
                 {tier.most_popular && (
                   <div className="absolute -top-2 left-1/2 -translate-x-1/2">
                     <span className="inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-medium text-white">
@@ -789,24 +873,29 @@ export default function SponsorTierEditor({
                   </div>
                 )}
 
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="flex space-x-2">
-                    <span
-                      className={clsx(
-                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                        tier.tier_type === 'special'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-blue-100 text-blue-800',
-                      )}
-                    >
-                      {tier.tier_type}
-                    </span>
-                    {tier.sold_out && (
-                      <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                        Sold Out
-                      </span>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span
+                    className={clsx(
+                      'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                      tier.tier_type === 'standard'
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                        : tier.tier_type === 'special'
+                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+                          : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
                     )}
-                  </div>
+                  >
+                    {tier.tier_type}
+                  </span>
+                  {tier.max_quantity && tier.max_quantity > 1 && (
+                    <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                      Limit: {tier.max_quantity}
+                    </span>
+                  )}
+                  {tier.sold_out && (
+                    <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                      Sold Out
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

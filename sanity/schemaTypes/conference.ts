@@ -559,6 +559,13 @@ export default defineType({
           title: 'Closing CTA Text',
           initialValue: 'git commit -m "Support the Community"',
         }),
+        defineField({
+          name: 'prospectus_url',
+          type: 'url',
+          title: 'Prospectus PDF/Link',
+          description:
+            'Optional link to a PDF or external page with the full sponsorship prospectus',
+        }),
       ],
     }),
 

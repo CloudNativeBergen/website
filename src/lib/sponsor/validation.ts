@@ -1,5 +1,4 @@
 import { SponsorTierInput, SponsorInput } from './types'
-import isSvg from 'is-svg'
 
 export interface ValidationError {
   field: string
@@ -44,10 +43,14 @@ export function validateSponsorTier(
       })
     } else {
       data.price.forEach((price, index) => {
-        if (!price.amount || price.amount <= 0) {
+        if (
+          price.amount === undefined ||
+          price.amount === null ||
+          price.amount < 0
+        ) {
           errors.push({
             field: `price.${index}.amount`,
-            message: 'Price amount must be greater than 0',
+            message: 'Price amount must be 0 or greater',
           })
         }
         if (
@@ -63,7 +66,7 @@ export function validateSponsorTier(
     }
   }
 
-  if (data.tier_type === 'standard' || data.tier_type === 'addon') {
+  if (data.tier_type === 'standard') {
     if (!data.perks || data.perks.length === 0) {
       errors.push({
         field: 'perks',
@@ -139,7 +142,7 @@ export function validateSponsor(data: SponsorInput): ValidationError[] {
 
   if (!data.logo || data.logo.trim().length === 0) {
     errors.push({ field: 'logo', message: 'Logo is required' })
-  } else if (!isSvg(data.logo)) {
+  } else if (!data.logo.trim().toLowerCase().includes('<svg')) {
     errors.push({ field: 'logo', message: 'Logo must be valid SVG content' })
   }
 

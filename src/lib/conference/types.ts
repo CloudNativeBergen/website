@@ -47,6 +47,7 @@ export interface SponsorshipCustomization {
   philosophy_description?: string
   closing_quote?: string
   closing_cta_text?: string
+  prospectus_url?: string
 }
 
 export interface Conference {
