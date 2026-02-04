@@ -5,6 +5,10 @@
   "packageManager": "pnpm@10.24.0",
   "scripts": {
     "dev": "next dev --turbopack",
+    "agekey": "op inject -i ~/.config/sops/age/keys.txt.tpl -o ~/.config/sops/age/keys.txt",
+    "decryptsecrets": "sops -d ../cndsecrets/.env.local.enc > .env.local",
+    "deletesecrets": "rm ~/.config/sops/age/keys.txt && rm .env.local",
+    "opdev": "npm run agekey && npm run decryptsecrets && npm run dev && npm run deletesecrets",
     "build": "next build",
     "build:clean": "rm -rf .next && pnpm run build",
     "start": "next start",
