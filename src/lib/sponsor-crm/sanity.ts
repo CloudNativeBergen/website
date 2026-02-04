@@ -83,7 +83,7 @@ export async function createSponsorForConference(
       conference: { _type: 'reference', _ref: data.conference },
       tier: data.tier ? { _type: 'reference', _ref: data.tier } : undefined,
       addons: data.addons?.length
-        ? data.addons.map((id) => ({
+        ? [...new Set(data.addons)].map((id) => ({
             _type: 'reference',
             _ref: id,
             _key: id,
@@ -139,7 +139,7 @@ export async function updateSponsorForConference(
     }
     if (data.addons !== undefined) {
       updates.addons = data.addons.length
-        ? data.addons.map((id) => ({
+        ? [...new Set(data.addons)].map((id) => ({
             _type: 'reference',
             _ref: id,
             _key: id,
@@ -455,19 +455,10 @@ export async function importAllHistoricSponsors(
       existingSponsors.map((s) => s.sponsor._ref),
     )
 
-    // Priority for determining best historical outcome
-    const statusPriority: Record<SponsorStatus, number> = {
-      'closed-won': 5,
-      negotiating: 4,
-      contacted: 3,
-      prospect: 2,
-      'closed-lost': 1,
-    }
-
-    // Group by unique sponsor and determine best historical status
+    // Group by unique sponsor and track historical outcomes
     const sponsorHistory = new Map<
       string,
-      { bestStatus: SponsorStatus; hasWon: boolean; allLost: boolean }
+      { hasWon: boolean; allLost: boolean }
     >()
 
     for (const record of historicSponsors) {
@@ -476,17 +467,10 @@ export async function importAllHistoricSponsors(
 
       if (!existing) {
         sponsorHistory.set(sponsorId, {
-          bestStatus: record.status,
           hasWon: record.status === 'closed-won',
           allLost: record.status === 'closed-lost',
         })
       } else {
-        const currentPriority = statusPriority[existing.bestStatus]
-        const newPriority = statusPriority[record.status]
-
-        if (newPriority > currentPriority) {
-          existing.bestStatus = record.status
-        }
         if (record.status === 'closed-won') {
           existing.hasWon = true
         }
