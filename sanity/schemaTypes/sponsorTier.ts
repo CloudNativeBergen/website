@@ -111,7 +111,8 @@ export default defineType({
       name: 'max_quantity',
       title: 'Max Quantity',
       type: 'number',
-      description: 'Maximum number of available spots (leave empty for unlimited). 1 = Exclusive.',
+      description:
+        'Maximum number of available spots (leave empty for unlimited). 1 = Exclusive.',
       validation: (Rule) => Rule.min(1),
     }),
     defineField({

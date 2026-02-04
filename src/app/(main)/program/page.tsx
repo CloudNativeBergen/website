@@ -8,6 +8,14 @@ import { DevTimeControl } from '@/components/program/DevTimeControl'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
+export const metadata = {
+  title: 'Program',
+  description: 'Conference program and schedule',
+  twitter: {
+    card: 'summary_large_image',
+  },
+}
+
 async function CachedProgramContent({ domain }: { domain: string }) {
   'use cache'
   cacheLife('hours')

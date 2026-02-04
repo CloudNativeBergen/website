@@ -2,86 +2,19 @@ import React from 'react'
 import { ImageResponse } from '@vercel/og'
 import { getPublicSpeaker } from '@/lib/speaker/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { formatConferenceDateLong } from '@/lib/time'
 import { sanityImage } from '@/lib/sanity/client'
-
-const USER_ICON_SVG =
-  'data:image/svg+xml;base64,' +
-  Buffer.from(
-    `<svg width="24" height="24" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd"/></svg>`,
-  ).toString('base64')
-
-const MICROPHONE_ICON_SVG =
-  'data:image/svg+xml;base64,' +
-  Buffer.from(
-    `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" xmlns="http://www.w3.org/2000/svg"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>`,
-  ).toString('base64')
-
-const LIGHTBULB_ICON_SVG =
-  'data:image/svg+xml;base64,' +
-  Buffer.from(
-    `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M15 14c.5-1 .875-2.5.875-4a3.875 3.875 0 0 0-7.75 0c0 1.5.375 3 .875 4"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`,
-  ).toString('base64')
-
-const UserIcon = ({ size }: { size: number }) => (
-  <img
-    src={USER_ICON_SVG}
-    alt=""
-    width={size}
-    height={size}
-    style={{ color: 'white' }}
-  />
-)
-
-const MicrophoneIcon = ({ size }: { size: number }) => (
-  <img
-    src={MICROPHONE_ICON_SVG}
-    alt=""
-    width={size}
-    height={size}
-    style={{ color: 'white' }}
-  />
-)
-
-const LightBulbIcon = ({ size }: { size: number }) => (
-  <img
-    src={LIGHTBULB_ICON_SVG}
-    alt=""
-    width={size}
-    height={size}
-    style={{ color: 'white' }}
-  />
-)
-
-const STYLES = {
-  gradient: 'linear-gradient(135deg, #1e40af, #10b981)',
-  fontFamily: 'system-ui, -apple-system, sans-serif',
-  borderRadius: {
-    large: '28px',
-    medium: '24px',
-    small: '12px',
-    tiny: '8px',
-  },
-  spacing: {
-    large: '40px',
-    medium: '32px',
-    small: '16px',
-    tiny: '8px',
-  },
-  colors: {
-    white: 'white',
-    whiteTransparent: 'rgba(255, 255, 255, 0.9)',
-    whiteLight: 'rgba(255, 255, 255, 0.2)',
-    whiteVeryLight: 'rgba(255, 255, 255, 0.1)',
-    blackTransparent: 'rgba(0, 0, 0, 0.3)',
-    blue: '#1e40af',
-  },
-  shadow: {
-    text: '0 4px 8px rgba(0, 0, 0, 0.3)',
-    textSmall: '0 2px 4px rgba(0, 0, 0, 0.2)',
-    box: '0 20px 40px rgba(0, 0, 0, 0.1)',
-  },
-} as const
+import { STYLES, OG_IMAGE_SIZE } from '@/lib/og/styles'
+import {
+  createSvgDataUrl,
+  formatDateRange,
+  loadBrandFonts,
+} from '@/lib/og/helpers'
+import {
+  BackgroundPatterns,
+  UserIcon,
+  MicrophoneIcon,
+  LightBulbIcon,
+} from '@/lib/og/components'
 
 const createSponsorLogo = (
   logoSvg: string | null,
@@ -130,64 +63,6 @@ const createSponsorLogo = (
   }
 }
 
-function createSvgDataUrl(svgString: string): string | null {
-  if (!svgString?.trim()) return null
-
-  const trimmed = svgString.trim()
-  if (!trimmed.includes('<svg')) return null
-
-  try {
-    let cleanSvg = trimmed
-
-    cleanSvg = cleanSvg.replace(/^<\?xml[^>]*\?>\s*/, '')
-    cleanSvg = cleanSvg.replace(/<!DOCTYPE[^>]*>\s*/i, '')
-    if (!cleanSvg.includes('xmlns=')) {
-      cleanSvg = cleanSvg.replace(
-        '<svg',
-        '<svg xmlns="http://www.w3.org/2000/svg"',
-      )
-    }
-
-    if (cleanSvg.includes('<image')) {
-      cleanSvg = cleanSvg.replace(
-        /<image[^>]*xlink:href="data:[^"]*"[^>]*>/gi,
-        '',
-      )
-      cleanSvg = cleanSvg.replace(/<image[^>]*>/gi, '')
-    }
-
-    cleanSvg = cleanSvg.replace(/<mask[^>]*>[\s\S]*?<\/mask>/gi, '')
-    cleanSvg = cleanSvg.replace(/<clipPath[^>]*>[\s\S]*?<\/clipPath>/gi, '')
-    cleanSvg = cleanSvg.replace(/mask="[^"]*"/gi, '')
-    cleanSvg = cleanSvg.replace(/clip-path="[^"]*"/gi, '')
-
-    cleanSvg = cleanSvg.replace(/<filter[^>]*>[\s\S]*?<\/filter>/gi, '')
-    cleanSvg = cleanSvg.replace(/filter="[^"]*"/gi, '')
-
-    cleanSvg = cleanSvg.replace(/<defs[^>]*>[\s\S]*?<\/defs>/gi, '')
-
-    cleanSvg = cleanSvg.replace(/style="mix-blend-mode:[^"]*"/gi, '')
-
-    const base64 = Buffer.from(cleanSvg).toString('base64')
-    const dataUrl = `data:image/svg+xml;base64,${base64}`
-
-    if (base64.length < 10) {
-      console.error('SVG processing failed: empty or invalid content')
-      return null
-    }
-
-    return dataUrl
-  } catch (error) {
-    console.error(
-      'SVG processing error:',
-      error,
-      'SVG:',
-      svgString?.slice(0, 100),
-    )
-    return null
-  }
-}
-
 const renderSponsorLogo = (
   logoSvg: string | null,
   logoBrightSvg: string | null,
@@ -195,55 +70,9 @@ const renderSponsorLogo = (
   size: 'small' | 'large' = 'small',
 ) => createSponsorLogo(logoSvg, logoBrightSvg, sponsorName, size === 'large')
 
-export const runtime = 'edge'
 export const alt = 'Cloud Native Days Norway Speaker Profile'
-export const size = { width: 1200, height: 630 }
+export const size = OG_IMAGE_SIZE
 export const contentType = 'image/png'
-
-const BackgroundPatterns = () => (
-  <>
-    <div
-      style={{
-        position: 'absolute',
-        top: '-50px',
-        right: '-50px',
-        width: '400px',
-        height: '400px',
-        borderRadius: '50%',
-        background: 'rgba(255, 255, 255, 0.1)',
-        display: 'flex',
-      }}
-    />
-    <div
-      style={{
-        position: 'absolute',
-        bottom: '-100px',
-        left: '-100px',
-        width: '300px',
-        height: '300px',
-        borderRadius: '50%',
-        background: 'rgba(255, 255, 255, 0.03)',
-        display: 'flex',
-      }}
-    />
-    <div
-      style={{
-        position: 'absolute',
-        top: '0',
-        left: '0',
-        width: '100%',
-        height: '100%',
-        opacity: 0.02,
-        backgroundImage: `
-          linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
-        `,
-        backgroundSize: '40px 40px',
-        display: 'flex',
-      }}
-    />
-  </>
-)
 
 const SpeakerImage = ({
   imageUrl,
@@ -288,15 +117,15 @@ const SpeakerImage = ({
       style={{
         width: '280px',
         height: '280px',
-        borderRadius: '28px',
-        background: `linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1))`,
+        borderRadius: STYLES.borderRadius.large,
+        background: `linear-gradient(145deg, ${STYLES.colors.whiteLight}, ${STYLES.colors.whiteVeryLight})`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: '28px',
         color: 'white',
-        border: `3px solid rgba(255, 255, 255, 0.2)`,
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
+        border: `3px solid ${STYLES.colors.whiteLight}`,
+        boxShadow: STYLES.shadow.box,
       }}
     >
       <UserIcon size={120} />
@@ -308,11 +137,11 @@ const TalkCard = ({ title }: { title: string }) => (
     style={{
       display: 'flex',
       flexDirection: 'column',
-      background: `linear-gradient(145deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1))`,
-      borderRadius: '24px',
-      padding: '32px',
+      background: `linear-gradient(145deg, ${STYLES.colors.whiteLight}, ${STYLES.colors.whiteVeryLight})`,
+      borderRadius: STYLES.borderRadius.medium,
+      padding: STYLES.spacing.medium,
       border: `2px solid rgba(255, 255, 255, 0.15)`,
-      boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
+      boxShadow: STYLES.shadow.box,
       backdropFilter: 'blur(10px)',
       position: 'relative',
     }}
@@ -338,7 +167,7 @@ const TalkCard = ({ title }: { title: string }) => (
         fontWeight: '600',
         marginBottom: '12px',
         opacity: 0.9,
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: STYLES.fontFamily,
       }}
     >
       <div style={{ display: 'flex', marginRight: '8px' }}>
@@ -353,8 +182,8 @@ const TalkCard = ({ title }: { title: string }) => (
         margin: 0,
         lineHeight: 1.1,
         maxWidth: '100%',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+        fontFamily: STYLES.fontFamily,
+        textShadow: STYLES.shadow.textSmall,
         display: 'flex',
       }}
     >
@@ -368,6 +197,7 @@ export default async function Image({
 }: {
   params: Promise<{ slug: string }>
 }) {
+  const fonts = await loadBrandFonts()
   const { slug } = await params
   // URL-decode to handle Norwegian characters (æ, ø, å)
   const decodedSlug = decodeURIComponent(slug)
@@ -388,16 +218,16 @@ export default async function Image({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #1e40af, #10b981)',
+          background: STYLES.gradient,
           color: 'white',
           fontSize: 48,
           fontWeight: 'bold',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fontFamily: STYLES.fontFamily,
         }}
       >
         Speaker not found
       </div>,
-      size,
+      { ...size, fonts },
     )
   }
 
@@ -438,10 +268,10 @@ export default async function Image({
         height: '100%',
         display: 'flex',
         flexDirection: 'row',
-        background: 'linear-gradient(135deg, #1e40af, #10b981)',
+        background: STYLES.gradient,
         color: 'white',
         padding: '40px 40px 80px 40px',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontFamily: STYLES.fontFamily,
         position: 'relative',
         overflow: 'hidden',
       }}
@@ -467,39 +297,13 @@ export default async function Image({
               fontSize: '18px',
               fontWeight: '700',
               color: 'white',
-              fontFamily: 'system-ui, -apple-system, sans-serif',
-              textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+              fontFamily: STYLES.fontFamily,
+              textShadow: STYLES.shadow.text,
               display: 'flex',
               whiteSpace: 'nowrap',
             }}
           >
-            {(() => {
-              if (conferenceData.startDate && conferenceData.endDate) {
-                const startDate = new Date(conferenceData.startDate)
-                const endDate = new Date(conferenceData.endDate)
-
-                if (startDate.toDateString() === endDate.toDateString()) {
-                  return startDate.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })
-                }
-
-                if (
-                  startDate.getMonth() === endDate.getMonth() &&
-                  startDate.getFullYear() === endDate.getFullYear()
-                ) {
-                  return `${startDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} - ${endDate.getDate()}, ${endDate.getFullYear()}`
-                }
-
-                return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-              }
-
-              const singleDate =
-                conferenceData.startDate || conferenceData.endDate
-              return formatConferenceDateLong(singleDate)
-            })()}
+            {formatDateRange(conferenceData.startDate, conferenceData.endDate)}
           </div>
         )}
         {(conferenceData.city || conferenceData.country) && (
@@ -508,8 +312,8 @@ export default async function Image({
               fontSize: '18px',
               fontWeight: '700',
               color: 'white',
-              fontFamily: 'system-ui, -apple-system, sans-serif',
-              textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+              fontFamily: STYLES.fontFamily,
+              textShadow: STYLES.shadow.text,
               display: 'flex',
               whiteSpace: 'nowrap',
             }}
@@ -524,8 +328,8 @@ export default async function Image({
             fontSize: '18px',
             fontWeight: '700',
             color: 'white',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            textShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+            fontFamily: STYLES.fontFamily,
+            textShadow: STYLES.shadow.text,
             display: 'flex',
             whiteSpace: 'nowrap',
           }}
@@ -790,6 +594,6 @@ export default async function Image({
         </div>
       )}
     </div>,
-    size,
+    { ...size, fonts },
   )
 }

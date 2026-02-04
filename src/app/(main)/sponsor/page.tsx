@@ -11,6 +11,9 @@ export const metadata = {
   title: 'Become a Sponsor - Cloud Native Days Norway',
   description:
     'Sponsorship opportunities for Cloud Native Days Norway conference',
+  twitter: {
+    card: 'summary_large_image',
+  },
 }
 
 async function CachedSponsorContent({ domain }: { domain: string }) {

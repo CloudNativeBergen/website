@@ -517,7 +517,10 @@ export default defineType({
                   { title: 'Signal', value: 'SignalIcon' },
                   { title: 'Camera', value: 'CameraIcon' },
                   { title: 'Microphone', value: 'MicrophoneIcon' },
-                  { title: 'Presentation Chart', value: 'PresentationChartBarIcon' },
+                  {
+                    title: 'Presentation Chart',
+                    value: 'PresentationChartBarIcon',
+                  },
                   { title: 'Newspaper', value: 'NewspaperIcon' },
                   { title: 'Hand Raised', value: 'HandRaisedIcon' },
                   { title: 'Handshake (Thumb Up)', value: 'HandThumbUpIcon' },

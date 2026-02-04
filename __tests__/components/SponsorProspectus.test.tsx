@@ -22,9 +22,7 @@ jest.mock('@heroicons/react/24/outline', () => ({
   DocumentArrowDownIcon: (props: any) => (
     <svg {...props} data-testid="icon-document-arrow-down" />
   ),
-  SparklesIcon: (props: any) => (
-    <svg {...props} data-testid="icon-sparkles" />
-  ),
+  SparklesIcon: (props: any) => <svg {...props} data-testid="icon-sparkles" />,
 }))
 
 // Mock Sponsors component
@@ -163,7 +161,12 @@ describe('SponsorProspectus', () => {
   it('hides sections when data is missing', () => {
     render(
       <SponsorProspectus
-        conference={{ ...mockConference, sponsor_benefits: [], vanity_metrics: [], featuredGalleryImages: [] }}
+        conference={{
+          ...mockConference,
+          sponsor_benefits: [],
+          vanity_metrics: [],
+          featuredGalleryImages: [],
+        }}
         standardTiers={[]}
         specialTiers={[]}
         addonTiers={[]}
@@ -174,7 +177,9 @@ describe('SponsorProspectus', () => {
     expect(screen.queryByText('Benefit 1')).not.toBeInTheDocument()
     expect(screen.queryByText('Attendees')).not.toBeInTheDocument()
     expect(screen.queryByText('Add-on Opportunities')).not.toBeInTheDocument()
-    expect(screen.queryByText('Special Partnership Opportunities')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Special Partnership Opportunities'),
+    ).not.toBeInTheDocument()
     expect(screen.queryByTestId('sponsors-grid')).not.toBeInTheDocument()
     expect(screen.queryByText('The Vibe')).not.toBeInTheDocument()
   })

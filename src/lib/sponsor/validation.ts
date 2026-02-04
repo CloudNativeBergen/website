@@ -28,7 +28,10 @@ export function validateSponsorTier(
     })
   }
 
-  if (!data.tier_type || !['standard', 'special', 'addon'].includes(data.tier_type)) {
+  if (
+    !data.tier_type ||
+    !['standard', 'special', 'addon'].includes(data.tier_type)
+  ) {
     errors.push({
       field: 'tier_type',
       message: 'Tier type must be standard, special, or addon',

@@ -1,8 +1,6 @@
-import { describe, it, expect, jest } from '@jest/globals'
+import { describe, it, expect } from '@jest/globals'
 import { validateSponsorTier } from '@/lib/sponsor/validation'
 import { SponsorTierInput } from '@/lib/sponsor/types'
-
-jest.mock('is-svg', () => () => true)
 
 describe('validateSponsorTier', () => {
   const baseTier: SponsorTierInput = {
@@ -24,17 +22,13 @@ describe('validateSponsorTier', () => {
     it('fails without price', () => {
       const tier = { ...baseTier, price: [] }
       const errors = validateSponsorTier(tier)
-      expect(errors).toContainEqual(
-        expect.objectContaining({ field: 'price' }),
-      )
+      expect(errors).toContainEqual(expect.objectContaining({ field: 'price' }))
     })
 
     it('fails without perks', () => {
       const tier = { ...baseTier, perks: [] }
       const errors = validateSponsorTier(tier)
-      expect(errors).toContainEqual(
-        expect.objectContaining({ field: 'perks' }),
-      )
+      expect(errors).toContainEqual(expect.objectContaining({ field: 'perks' }))
     })
   })
 
@@ -67,9 +61,7 @@ describe('validateSponsorTier', () => {
     it('fails without price array', () => {
       const tier = { ...addonTier, price: [] }
       const errors = validateSponsorTier(tier)
-      expect(errors).toContainEqual(
-        expect.objectContaining({ field: 'price' }),
-      )
+      expect(errors).toContainEqual(expect.objectContaining({ field: 'price' }))
     })
   })
 
