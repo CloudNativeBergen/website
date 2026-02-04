@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo, useRef } from 'react'
-import Image from 'next/image'
+import Image, { type StaticImageData } from 'next/image'
 
 import KubernetesIcon from '@/images/icons/kubernetes-icon-white.svg'
 import HelmIcon from '@/images/icons/helm-icon-white.svg'
@@ -40,7 +40,7 @@ type IconCategory = 'popular' | 'moderate' | 'specialized'
 type Variant = 'dark' | 'light' | 'brand'
 
 interface BaseIcon {
-  icon: string
+  icon: StaticImageData
   name: string
   weight: number
 }

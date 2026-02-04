@@ -16,6 +16,8 @@ import {
   LightBulbIcon,
 } from '@/lib/og/components'
 
+export const dynamic = 'force-dynamic'
+
 const createSponsorLogo = (
   logoSvg: string | null,
   logoBrightSvg: string | null,
