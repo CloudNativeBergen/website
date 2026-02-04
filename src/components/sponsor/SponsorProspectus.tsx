@@ -101,15 +101,27 @@ export function SponsorProspectus({
           <Container className="relative z-10 mt-16">
             <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">
               <div className="grid grid-cols-1 gap-1 sm:grid-cols-3">
-                {conference.vanity_metrics.map((metric) => (
+                {conference.vanity_metrics.map((metric, index) => (
                   <div
                     key={metric.label}
-                    className="flex flex-col items-center justify-center rounded-lg bg-gray-100 py-8 px-4 dark:bg-gray-800"
+                    className={clsx(
+                      'relative flex flex-col items-center justify-center overflow-hidden rounded-lg py-8 px-4',
+                      index === 0 && 'bg-blue-50 dark:bg-blue-950/30',
+                      index === 1 && 'bg-cyan-50 dark:bg-cyan-950/30',
+                      index === 2 && 'bg-indigo-50 dark:bg-indigo-950/30',
+                      index > 2 && 'bg-gray-100 dark:bg-gray-800',
+                    )}
                   >
                     <dt className="font-mono text-xs uppercase tracking-widest text-gray-600 dark:text-gray-300">
                       {metric.label}
                     </dt>
-                    <dd className="mt-2 font-display text-4xl font-bold tracking-tight text-blue-600 dark:text-white">
+                    <dd className={clsx(
+                      'mt-2 font-display text-4xl font-bold tracking-tight',
+                      index === 0 && 'text-blue-600 dark:text-blue-400',
+                      index === 1 && 'text-cyan-600 dark:text-cyan-400',
+                      index === 2 && 'text-indigo-600 dark:text-indigo-400',
+                      index > 2 && 'text-blue-600 dark:text-white',
+                    )}>
                       {metric.value}
                     </dd>
                   </div>
@@ -127,19 +139,34 @@ export function SponsorProspectus({
                 {sponsorBenefits.map((benefit, index) => (
                   <div
                     key={index}
-                    className="flex flex-col rounded-2xl bg-white p-8 shadow-lg ring-1 ring-gray-200 sm:p-10 dark:bg-gray-800 dark:ring-gray-700"
+                    className="relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700"
                   >
-                    {benefit.icon && (
-                      <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white dark:bg-blue-500 dark:text-white">
-                        <DynamicIcon name={benefit.icon} className="h-6 w-6" />
-                      </div>
-                    )}
-                    <h3 className="text-xl font-semibold leading-7 text-gray-900 dark:text-white">
-                      {benefit.title}
-                    </h3>
-                    <p className="mt-4 text-base leading-7 text-gray-700 dark:text-gray-200">
-                      {benefit.description}
-                    </p>
+                    <div className={clsx(
+                      'h-1',
+                      index === 0 && 'bg-linear-to-r from-blue-500 to-cyan-500',
+                      index === 1 && 'bg-linear-to-r from-cyan-500 to-emerald-500',
+                      index === 2 && 'bg-linear-to-r from-indigo-500 to-purple-500',
+                      index > 2 && 'bg-linear-to-r from-blue-500 to-indigo-500',
+                    )} />
+                    <div className="p-8 sm:p-10">
+                      {benefit.icon && (
+                        <div className={clsx(
+                          'mb-6 flex h-10 w-10 items-center justify-center rounded-lg text-white',
+                          index === 0 && 'bg-linear-to-br from-blue-500 to-cyan-600',
+                          index === 1 && 'bg-linear-to-br from-cyan-500 to-emerald-600',
+                          index === 2 && 'bg-linear-to-br from-indigo-500 to-purple-600',
+                          index > 2 && 'bg-blue-600',
+                        )}>
+                          <DynamicIcon name={benefit.icon} className="h-6 w-6" />
+                        </div>
+                      )}
+                      <h3 className="text-xl font-semibold leading-7 text-gray-900 dark:text-white">
+                        {benefit.title}
+                      </h3>
+                      <p className="mt-4 text-base leading-7 text-gray-700 dark:text-gray-200">
+                        {benefit.description}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -150,11 +177,11 @@ export function SponsorProspectus({
         {/* Base Image Packages */}
         <Container className="relative z-10 mt-32">
           <div className="mb-12 flex items-center gap-4">
-            <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+            <div className="h-px flex-1 bg-linear-to-r from-transparent via-blue-500/50 to-transparent" />
             <h2 className="font-mono text-xl font-bold tracking-tight text-gray-900 uppercase dark:text-white">
               &gt; {packageTitle}
             </h2>
-            <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+            <div className="h-px flex-1 bg-linear-to-r from-transparent via-blue-500/50 to-transparent" />
           </div>
 
           <div
@@ -295,11 +322,11 @@ export function SponsorProspectus({
         {addonTiers.length > 0 && (
           <Container className="relative z-10 mt-32">
             <div className="mb-12 flex items-center gap-4">
-              <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+              <div className="h-px flex-1 bg-linear-to-r from-transparent via-cyan-500/50 to-transparent" />
               <h2 className="font-mono text-xl font-bold tracking-tight text-gray-900 uppercase dark:text-white">
                 &gt; {addonTitle}
               </h2>
-              <div className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+              <div className="h-px flex-1 bg-linear-to-r from-transparent via-cyan-500/50 to-transparent" />
             </div>
 
             <div
@@ -312,17 +339,23 @@ export function SponsorProspectus({
                     : 'lg:grid-cols-3',
               )}
             >
-              {addonTiers.map((tier) => (
+              {addonTiers.map((tier, index) => (
                 <div
                   key={tier._id}
-                  className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-white p-8 shadow-lg ring-1 ring-gray-200 transition-all hover:ring-blue-500 hover:shadow-xl dark:bg-gray-800 dark:ring-gray-700 dark:hover:ring-blue-400"
+                  className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-gray-200 transition-all hover:ring-cyan-500 hover:shadow-xl dark:bg-gray-800 dark:ring-gray-700 dark:hover:ring-cyan-400"
                 >
+                  <div className={clsx(
+                    'h-1',
+                    index % 3 === 0 && 'bg-linear-to-r from-cyan-500 to-blue-500',
+                    index % 3 === 1 && 'bg-linear-to-r from-blue-500 to-indigo-500',
+                    index % 3 === 2 && 'bg-linear-to-r from-indigo-500 to-purple-500',
+                  )} />
                   {tier.max_quantity === 1 && (
                     <div className="absolute -right-8 top-4 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
                       Exclusive
                     </div>
                   )}
-                  <div>
+                  <div className="p-8">
                     <div className="flex items-center justify-between">
                       <h3 className="font-mono text-lg font-semibold leading-8 text-gray-900 dark:text-white">
                         {tier.title}
@@ -356,7 +389,7 @@ export function SponsorProspectus({
                             key={`addon-perk-${perkIndex}`}
                             className="flex gap-x-3"
                           >
-                            <span className="font-mono text-blue-600 dark:text-blue-400">
+                            <span className="font-mono text-cyan-600 dark:text-cyan-400">
                               &gt;
                             </span>
                             {perk.description}
@@ -364,20 +397,20 @@ export function SponsorProspectus({
                         ))}
                       </ul>
                     )}
-                  </div>
 
-                  {!tier.sold_out ? (
-                    <a
-                      href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} add-on`}
-                      className="font-mono mt-8 block rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-center text-sm font-semibold text-gray-900 hover:border-blue-500 hover:bg-blue-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:hover:border-blue-400 dark:hover:bg-gray-600"
-                    >
-                      git add {tier.title}
-                    </a>
-                  ) : (
-                    <span className="font-mono mt-8 inline-flex items-center justify-center rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10 dark:bg-red-400/10 dark:text-red-400">
-                      Sold Out
-                    </span>
-                  )}
+                    {!tier.sold_out ? (
+                      <a
+                        href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} add-on`}
+                        className="font-mono mt-8 block rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-center text-sm font-semibold text-gray-900 hover:border-cyan-500 hover:bg-cyan-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:hover:border-cyan-400 dark:hover:bg-gray-600"
+                      >
+                        git add {tier.title}
+                      </a>
+                    ) : (
+                      <span className="font-mono mt-8 inline-flex items-center justify-center rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10 dark:bg-red-400/10 dark:text-red-400">
+                        Sold Out
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -396,8 +429,8 @@ export function SponsorProspectus({
               </p>
             </div>
             <div className="mt-10 flex shrink-0 transform items-center justify-center lg:mt-0 lg:ml-8 lg:rotate-6">
-              <div className="flex h-32 w-32 items-center justify-center rounded-full bg-white/10 backdrop-blur-xl">
-                <HeroIcons.SparklesIcon className="h-16 w-16 text-white" />
+              <div className="flex h-32 w-32 items-center justify-center rounded-full bg-linear-to-br from-blue-500/20 to-cyan-500/20 ring-1 ring-white/20 backdrop-blur-xl">
+                <HeroIcons.SparklesIcon className="h-16 w-16 text-cyan-400" />
               </div>
             </div>
           </div>
