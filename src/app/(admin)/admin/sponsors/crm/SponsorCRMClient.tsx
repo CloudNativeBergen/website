@@ -8,6 +8,7 @@ import type {
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
+import { ImportHistoricSponsorsButton } from '@/components/admin/sponsor-crm/ImportHistoricSponsorsButton'
 import {
   BoardViewSwitcher,
   type BoardView,
@@ -166,8 +167,8 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
       ? sponsors
       : currentView === 'invoice'
         ? sponsors.filter(
-            (s) => s.status === 'closed-won' && s.contract_value != null,
-          )
+          (s) => s.status === 'closed-won' && s.contract_value != null,
+        )
         : sponsors.filter((s) => s.status === 'closed-won')
 
   // Calculate active filter count
@@ -183,6 +184,7 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
     'high-priority',
     'needs-follow-up',
     'multi-year-potential',
+    'previously-declined',
   ]
 
   // Group sponsors by status, contract status, or invoice status
@@ -339,10 +341,18 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
           )}
         </div>
 
-        <BoardViewSwitcher
-          currentView={currentView}
-          onViewChange={setCurrentView}
-        />
+        <div className="flex items-center gap-2">
+          <ImportHistoricSponsorsButton
+            conferenceId={conferenceId}
+            onSuccess={() => {
+              utils.sponsor.crm.list.invalidate()
+            }}
+          />
+          <BoardViewSwitcher
+            currentView={currentView}
+            onViewChange={setCurrentView}
+          />
+        </div>
       </div>
 
       {/* Board Columns */}

@@ -8,6 +8,10 @@ import type {
   SponsorForConferenceInput,
   CopySponsorsParams,
   CopySponsorsResult,
+  ImportAllHistoricSponsorsParams,
+  ImportAllHistoricSponsorsResult,
+  SponsorStatus,
+  SponsorTag,
 } from './types'
 
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
@@ -331,6 +335,176 @@ export async function copySponsorsFromPreviousYear(
         contract_currency: sourceSponsor.contract_currency || 'NOK',
         invoice_status: 'not-sent' as const,
         tags: sourceSponsor.tags,
+      }
+
+      await clientWrite.create(newDoc)
+      result.created++
+    }
+
+    return { result }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+/**
+ * Import all sponsors from all previous conferences into the target conference's Prospect column.
+ * Tags sponsors based on their historical status: 'returning-sponsor' for closed-won,
+ * 'previously-declined' for closed-lost.
+ */
+export async function importAllHistoricSponsors(
+  params: ImportAllHistoricSponsorsParams,
+): Promise<{
+  result?: ImportAllHistoricSponsorsResult
+  error?: Error
+}> {
+  try {
+    const { targetConferenceId } = params
+
+    // Get target conference start date
+    const targetConference = await clientRead.fetch<{
+      _id: string
+      start_date: string
+    }>(
+      `*[_type == "conference" && _id == $conferenceId][0]{
+        _id,
+        start_date
+      }`,
+      { conferenceId: targetConferenceId },
+    )
+
+    if (!targetConference) {
+      return { error: new Error('Target conference not found') }
+    }
+
+    // Get all conferences before the target conference
+    const previousConferences = await clientRead.fetch<Array<{ _id: string }>>(
+      `*[_type == "conference" && start_date < $targetStartDate] | order(start_date desc) {
+        _id
+      }`,
+      { targetStartDate: targetConference.start_date },
+    )
+
+    if (previousConferences.length === 0) {
+      return {
+        result: {
+          created: 0,
+          skipped: 0,
+          taggedAsReturning: 0,
+          taggedAsDeclined: 0,
+          sourceConferencesCount: 0,
+        },
+      }
+    }
+
+    const previousConferenceIds = previousConferences.map((c) => c._id)
+
+    // Get all sponsors from previous conferences
+    const historicSponsors = await clientRead.fetch<
+      Array<{
+        sponsor: { _ref: string }
+        status: SponsorStatus
+        conference: { _ref: string }
+      }>
+    >(
+      `*[_type == "sponsorForConference" && conference._ref in $conferenceIds]{
+        sponsor,
+        status,
+        conference
+      }`,
+      { conferenceIds: previousConferenceIds },
+    )
+
+    // Get existing sponsors in target conference
+    const existingSponsors = await clientRead.fetch<
+      Array<{ sponsor: { _ref: string } }>
+    >(
+      `*[_type == "sponsorForConference" && conference._ref == $conferenceId]{
+        sponsor
+      }`,
+      { conferenceId: targetConferenceId },
+    )
+
+    const existingSponsorIds = new Set(
+      existingSponsors.map((s) => s.sponsor._ref),
+    )
+
+    // Priority for determining best historical outcome
+    const statusPriority: Record<SponsorStatus, number> = {
+      'closed-won': 5,
+      negotiating: 4,
+      contacted: 3,
+      prospect: 2,
+      'closed-lost': 1,
+    }
+
+    // Group by unique sponsor and determine best historical status
+    const sponsorHistory = new Map<
+      string,
+      { bestStatus: SponsorStatus; hasWon: boolean; allLost: boolean }
+    >()
+
+    for (const record of historicSponsors) {
+      const sponsorId = record.sponsor._ref
+      const existing = sponsorHistory.get(sponsorId)
+
+      if (!existing) {
+        sponsorHistory.set(sponsorId, {
+          bestStatus: record.status,
+          hasWon: record.status === 'closed-won',
+          allLost: record.status === 'closed-lost',
+        })
+      } else {
+        const currentPriority = statusPriority[existing.bestStatus]
+        const newPriority = statusPriority[record.status]
+
+        if (newPriority > currentPriority) {
+          existing.bestStatus = record.status
+        }
+        if (record.status === 'closed-won') {
+          existing.hasWon = true
+        }
+        if (record.status !== 'closed-lost') {
+          existing.allLost = false
+        }
+      }
+    }
+
+    const result: ImportAllHistoricSponsorsResult = {
+      created: 0,
+      skipped: 0,
+      taggedAsReturning: 0,
+      taggedAsDeclined: 0,
+      sourceConferencesCount: previousConferences.length,
+    }
+
+    // Create new sponsorForConference records
+    for (const [sponsorId, history] of sponsorHistory) {
+      // Skip if already exists in target conference
+      if (existingSponsorIds.has(sponsorId)) {
+        result.skipped++
+        continue
+      }
+
+      // Determine tags based on history
+      const tags: SponsorTag[] = []
+      if (history.hasWon) {
+        tags.push('returning-sponsor')
+        result.taggedAsReturning++
+      } else if (history.allLost) {
+        tags.push('previously-declined')
+        result.taggedAsDeclined++
+      }
+
+      const newDoc = {
+        _type: 'sponsorForConference',
+        sponsor: { _type: 'reference', _ref: sponsorId },
+        conference: { _type: 'reference', _ref: targetConferenceId },
+        status: 'prospect' as const,
+        contract_status: 'none' as const,
+        contract_currency: 'NOK',
+        invoice_status: 'not-sent' as const,
+        tags: tags.length > 0 ? tags : undefined,
       }
 
       await clientWrite.create(newDoc)

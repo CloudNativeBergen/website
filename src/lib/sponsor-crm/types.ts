@@ -36,6 +36,7 @@ export type SponsorTag =
   | 'high-priority'
   | 'needs-follow-up'
   | 'multi-year-potential'
+  | 'previously-declined'
 
 export interface SponsorForConference {
   _id: string
@@ -181,4 +182,16 @@ export interface CopySponsorsResult {
   created: number
   skipped: number
   warnings: string[]
+}
+
+export interface ImportAllHistoricSponsorsParams {
+  targetConferenceId: string
+}
+
+export interface ImportAllHistoricSponsorsResult {
+  created: number
+  skipped: number
+  taggedAsReturning: number
+  taggedAsDeclined: number
+  sourceConferencesCount: number
 }

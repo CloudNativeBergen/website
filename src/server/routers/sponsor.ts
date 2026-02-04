@@ -47,6 +47,7 @@ import {
   getSponsorForConference,
   listSponsorsForConference,
   copySponsorsFromPreviousYear,
+  importAllHistoricSponsors,
 } from '@/lib/sponsor-crm/sanity'
 import {
   logStageChange,
@@ -60,6 +61,7 @@ import {
   MoveStageSchema,
   UpdateInvoiceStatusSchema,
   CopySponsorsSchema,
+  ImportAllHistoricSponsorsSchema,
 } from '@/server/schemas/sponsorForConference'
 import {
   listActivitiesForSponsor,
@@ -883,6 +885,22 @@ export const sponsorRouter = router({
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to copy sponsors from previous year',
+            cause: error,
+          })
+        }
+
+        return result
+      }),
+
+    importAllHistoric: adminProcedure
+      .input(ImportAllHistoricSponsorsSchema)
+      .mutation(async ({ input }) => {
+        const { result, error } = await importAllHistoricSponsors(input)
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to import historic sponsors',
             cause: error,
           })
         }

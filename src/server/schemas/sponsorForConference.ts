@@ -31,6 +31,7 @@ export const SponsorTagSchema = z.enum([
   'high-priority',
   'needs-follow-up',
   'multi-year-potential',
+  'previously-declined',
 ])
 
 export const CurrencySchema = z.enum(['NOK', 'USD', 'EUR', 'GBP'])
@@ -86,5 +87,9 @@ export const UpdateInvoiceStatusSchema = z.object({
 
 export const CopySponsorsSchema = z.object({
   sourceConferenceId: z.string().min(1, 'Source conference ID is required'),
+  targetConferenceId: z.string().min(1, 'Target conference ID is required'),
+})
+
+export const ImportAllHistoricSponsorsSchema = z.object({
   targetConferenceId: z.string().min(1, 'Target conference ID is required'),
 })
