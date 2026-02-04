@@ -8,6 +8,12 @@ import { Container } from '@/components/Container'
 import { cacheLife, cacheTag } from 'next/cache'
 import { headers } from 'next/headers'
 
+export const metadata = {
+  twitter: {
+    card: 'summary_large_image',
+  },
+}
+
 async function CachedHomeContent({ domain }: { domain: string }) {
   'use cache'
   cacheLife('hours')

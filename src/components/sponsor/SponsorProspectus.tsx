@@ -27,7 +27,7 @@ function QuantityBadge({ max_quantity }: { max_quantity?: number }) {
   if (!max_quantity || max_quantity === 1) return null
 
   return (
-    <span className="inline-flex items-center whitespace-nowrap rounded-md bg-yellow-400/10 px-2 py-1 text-xs font-medium text-yellow-400 ring-1 ring-inset ring-yellow-400/30">
+    <span className="inline-flex items-center rounded-md bg-yellow-400/10 px-2 py-1 text-xs font-medium whitespace-nowrap text-yellow-400 ring-1 ring-yellow-400/30 ring-inset">
       Limited&nbsp;to&nbsp;{max_quantity}
     </span>
   )
@@ -82,13 +82,13 @@ export function SponsorProspectus({
             <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
               {heroHeadline}
             </h1>
-            <p className="font-mono mt-8 text-lg leading-8 text-gray-600 dark:text-gray-300">
+            <p className="mt-8 font-mono text-lg leading-8 text-gray-600 dark:text-gray-300">
               {heroSubheadline}
             </p>
             {prospectusUrl && (
               <div className="mt-8">
                 <Button href={prospectusUrl} target="_blank" rel="noopener">
-                  <HeroIcons.DocumentArrowDownIcon className="-ml-1 mr-2 h-5 w-5" />
+                  <HeroIcons.DocumentArrowDownIcon className="mr-2 -ml-1 h-5 w-5" />
                   Download Prospectus
                 </Button>
               </div>
@@ -105,23 +105,25 @@ export function SponsorProspectus({
                   <div
                     key={metric.label}
                     className={clsx(
-                      'relative flex flex-col items-center justify-center overflow-hidden rounded-lg py-8 px-4',
+                      'relative flex flex-col items-center justify-center overflow-hidden rounded-lg px-4 py-8',
                       index === 0 && 'bg-blue-50 dark:bg-blue-950/30',
                       index === 1 && 'bg-cyan-50 dark:bg-cyan-950/30',
                       index === 2 && 'bg-indigo-50 dark:bg-indigo-950/30',
                       index > 2 && 'bg-gray-100 dark:bg-gray-800',
                     )}
                   >
-                    <dt className="font-mono text-xs uppercase tracking-widest text-gray-600 dark:text-gray-300">
+                    <dt className="font-mono text-xs tracking-widest text-gray-600 uppercase dark:text-gray-300">
                       {metric.label}
                     </dt>
-                    <dd className={clsx(
-                      'mt-2 font-display text-4xl font-bold tracking-tight',
-                      index === 0 && 'text-blue-600 dark:text-blue-400',
-                      index === 1 && 'text-cyan-600 dark:text-cyan-400',
-                      index === 2 && 'text-indigo-600 dark:text-indigo-400',
-                      index > 2 && 'text-blue-600 dark:text-white',
-                    )}>
+                    <dd
+                      className={clsx(
+                        'font-display mt-2 text-4xl font-bold tracking-tight',
+                        index === 0 && 'text-blue-600 dark:text-blue-400',
+                        index === 1 && 'text-cyan-600 dark:text-cyan-400',
+                        index === 2 && 'text-indigo-600 dark:text-indigo-400',
+                        index > 2 && 'text-blue-600 dark:text-white',
+                      )}
+                    >
                       {metric.value}
                     </dd>
                   </div>
@@ -141,26 +143,40 @@ export function SponsorProspectus({
                     key={index}
                     className="relative flex flex-col overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700"
                   >
-                    <div className={clsx(
-                      'h-1',
-                      index === 0 && 'bg-linear-to-r from-blue-500 to-cyan-500',
-                      index === 1 && 'bg-linear-to-r from-cyan-500 to-emerald-500',
-                      index === 2 && 'bg-linear-to-r from-indigo-500 to-purple-500',
-                      index > 2 && 'bg-linear-to-r from-blue-500 to-indigo-500',
-                    )} />
+                    <div
+                      className={clsx(
+                        'h-1',
+                        index === 0 &&
+                          'bg-linear-to-r from-blue-500 to-cyan-500',
+                        index === 1 &&
+                          'bg-linear-to-r from-cyan-500 to-emerald-500',
+                        index === 2 &&
+                          'bg-linear-to-r from-indigo-500 to-purple-500',
+                        index > 2 &&
+                          'bg-linear-to-r from-blue-500 to-indigo-500',
+                      )}
+                    />
                     <div className="p-8 sm:p-10">
                       {benefit.icon && (
-                        <div className={clsx(
-                          'mb-6 flex h-10 w-10 items-center justify-center rounded-lg text-white',
-                          index === 0 && 'bg-linear-to-br from-blue-500 to-cyan-600',
-                          index === 1 && 'bg-linear-to-br from-cyan-500 to-emerald-600',
-                          index === 2 && 'bg-linear-to-br from-indigo-500 to-purple-600',
-                          index > 2 && 'bg-blue-600',
-                        )}>
-                          <DynamicIcon name={benefit.icon} className="h-6 w-6" />
+                        <div
+                          className={clsx(
+                            'mb-6 flex h-10 w-10 items-center justify-center rounded-lg text-white',
+                            index === 0 &&
+                              'bg-linear-to-br from-blue-500 to-cyan-600',
+                            index === 1 &&
+                              'bg-linear-to-br from-cyan-500 to-emerald-600',
+                            index === 2 &&
+                              'bg-linear-to-br from-indigo-500 to-purple-600',
+                            index > 2 && 'bg-blue-600',
+                          )}
+                        >
+                          <DynamicIcon
+                            name={benefit.icon}
+                            className="h-6 w-6"
+                          />
                         </div>
                       )}
-                      <h3 className="text-xl font-semibold leading-7 text-gray-900 dark:text-white">
+                      <h3 className="text-xl leading-7 font-semibold text-gray-900 dark:text-white">
                         {benefit.title}
                       </h3>
                       <p className="mt-4 text-base leading-7 text-gray-700 dark:text-gray-200">
@@ -188,9 +204,9 @@ export function SponsorProspectus({
             className={clsx(
               'isolate mx-auto grid grid-cols-1 gap-8 lg:mx-0 lg:max-w-none',
               standardTiers.length === 1
-                ? 'lg:grid-cols-1 max-w-4xl'
+                ? 'max-w-4xl lg:grid-cols-1'
                 : standardTiers.length === 2
-                  ? 'lg:grid-cols-2 max-w-6xl'
+                  ? 'max-w-6xl lg:grid-cols-2'
                   : 'lg:grid-cols-3',
             )}
           >
@@ -208,17 +224,17 @@ export function SponsorProspectus({
                 <div
                   className={clsx(
                     standardTiers.length <= 2 &&
-                    'flex flex-col justify-between',
+                      'flex flex-col justify-between',
                   )}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-x-4">
-                      <h3 className="font-mono text-lg font-semibold leading-8 text-white">
+                      <h3 className="font-mono text-lg leading-8 font-semibold text-white">
                         {tier.title}
                       </h3>
                       <div className="flex gap-2">
                         {tier.most_popular ? (
-                          <span className="inline-flex items-center rounded-md bg-blue-400/10 px-2 py-1 text-xs font-medium text-blue-400 ring-1 ring-inset ring-blue-400/30">
+                          <span className="inline-flex items-center rounded-md bg-blue-400/10 px-2 py-1 text-xs font-medium text-blue-400 ring-1 ring-blue-400/30 ring-inset">
                             Recommended
                           </span>
                         ) : null}
@@ -253,14 +269,14 @@ export function SponsorProspectus({
                         tier.most_popular
                           ? 'bg-blue-500 text-white hover:bg-blue-400 focus-visible:outline-blue-500'
                           : 'bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white',
-                        'font-mono mt-8 block w-full rounded-md px-3 py-3 text-center text-sm font-semibold shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2',
+                        'mt-8 block w-full rounded-md px-3 py-3 text-center font-mono text-sm font-semibold shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2',
                       )}
                     >
                       Deploy {tier.title}
                     </a>
                   )}
                   {standardTiers.length <= 2 && tier.sold_out && (
-                    <p className="font-mono mt-8 text-center text-sm leading-6 font-semibold text-gray-500">
+                    <p className="mt-8 text-center font-mono text-sm leading-6 font-semibold text-gray-500">
                       // Sold out
                     </p>
                   )}
@@ -302,14 +318,14 @@ export function SponsorProspectus({
                       tier.most_popular
                         ? 'bg-blue-500 text-white hover:bg-blue-400 focus-visible:outline-blue-500'
                         : 'bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white',
-                      'font-mono mt-8 block rounded-md px-3 py-2 text-center text-sm font-semibold shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2',
+                      'mt-8 block rounded-md px-3 py-2 text-center font-mono text-sm font-semibold shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2',
                     )}
                   >
                     Deploy {tier.title}
                   </a>
                 )}
                 {standardTiers.length > 2 && tier.sold_out && (
-                  <p className="font-mono mt-8 text-center text-sm leading-6 font-semibold text-gray-500">
+                  <p className="mt-8 text-center font-mono text-sm leading-6 font-semibold text-gray-500">
                     // Sold out
                   </p>
                 )}
@@ -333,31 +349,36 @@ export function SponsorProspectus({
               className={clsx(
                 'mx-auto grid grid-cols-1 gap-6 lg:max-w-none',
                 addonTiers.length === 1
-                  ? 'lg:grid-cols-1 max-w-3xl'
+                  ? 'max-w-3xl lg:grid-cols-1'
                   : addonTiers.length === 2
-                    ? 'lg:grid-cols-2 max-w-6xl'
+                    ? 'max-w-6xl lg:grid-cols-2'
                     : 'lg:grid-cols-3',
               )}
             >
               {addonTiers.map((tier, index) => (
                 <div
                   key={tier._id}
-                  className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-gray-200 transition-all hover:ring-cyan-500 hover:shadow-xl dark:bg-gray-800 dark:ring-gray-700 dark:hover:ring-cyan-400"
+                  className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-gray-200 transition-all hover:shadow-xl hover:ring-cyan-500 dark:bg-gray-800 dark:ring-gray-700 dark:hover:ring-cyan-400"
                 >
-                  <div className={clsx(
-                    'h-1',
-                    index % 3 === 0 && 'bg-linear-to-r from-cyan-500 to-blue-500',
-                    index % 3 === 1 && 'bg-linear-to-r from-blue-500 to-indigo-500',
-                    index % 3 === 2 && 'bg-linear-to-r from-indigo-500 to-purple-500',
-                  )} />
+                  <div
+                    className={clsx(
+                      'h-1',
+                      index % 3 === 0 &&
+                        'bg-linear-to-r from-cyan-500 to-blue-500',
+                      index % 3 === 1 &&
+                        'bg-linear-to-r from-blue-500 to-indigo-500',
+                      index % 3 === 2 &&
+                        'bg-linear-to-r from-indigo-500 to-purple-500',
+                    )}
+                  />
                   {tier.max_quantity === 1 && (
-                    <div className="absolute -right-8 top-4 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
+                    <div className="absolute top-4 -right-8 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
                       Exclusive
                     </div>
                   )}
                   <div className="p-8">
                     <div className="flex items-center justify-between">
-                      <h3 className="font-mono text-lg font-semibold leading-8 text-gray-900 dark:text-white">
+                      <h3 className="font-mono text-lg leading-8 font-semibold text-gray-900 dark:text-white">
                         {tier.title}
                       </h3>
                       <div className="flex gap-2">
@@ -401,12 +422,12 @@ export function SponsorProspectus({
                     {!tier.sold_out ? (
                       <a
                         href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} add-on`}
-                        className="font-mono mt-8 block rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-center text-sm font-semibold text-gray-900 hover:border-cyan-500 hover:bg-cyan-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:hover:border-cyan-400 dark:hover:bg-gray-600"
+                        className="mt-8 block rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-center font-mono text-sm font-semibold text-gray-900 hover:border-cyan-500 hover:bg-cyan-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:hover:border-cyan-400 dark:hover:bg-gray-600"
                       >
                         git add {tier.title}
                       </a>
                     ) : (
-                      <span className="font-mono mt-8 inline-flex items-center justify-center rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/10 dark:bg-red-400/10 dark:text-red-400">
+                      <span className="mt-8 inline-flex items-center justify-center rounded-md bg-red-100 px-2 py-1 font-mono text-xs font-medium text-red-700 ring-1 ring-red-600/10 ring-inset dark:bg-red-400/10 dark:text-red-400">
                         Sold Out
                       </span>
                     )}
@@ -453,7 +474,7 @@ export function SponsorProspectus({
                   key={tier._id}
                   className="flex flex-col rounded-2xl border border-gray-200 bg-white p-8 shadow-lg dark:border-gray-700 dark:bg-gray-800"
                 >
-                  <h3 className="text-xl font-semibold leading-8 text-gray-900 dark:text-white">
+                  <h3 className="text-xl leading-8 font-semibold text-gray-900 dark:text-white">
                     {tier.title}
                   </h3>
                   <p className="mt-4 text-base leading-7 text-gray-700 dark:text-gray-200">
@@ -520,15 +541,15 @@ export function SponsorProspectus({
         {/* Closing Commit */}
         <Container className="relative z-10 mt-32 mb-24 text-center">
           <div className="mx-auto max-w-3xl">
-            <h2 className="font-display text-3xl font-bold italic tracking-tight text-gray-900 sm:text-4xl dark:text-white">
+            <h2 className="font-display text-3xl font-bold tracking-tight text-gray-900 italic sm:text-4xl dark:text-white">
               &quot;{closingQuote}&quot;
             </h2>
             <div className="mt-10 flex justify-center">
               <div className="group relative inline-flex">
-                <div className="transition-all duration-1000 group-hover:-inset-1 group-hover:duration-200 animate-tilt absolute -inset-0.5 rounded-lg bg-linear-to-r from-pink-600 to-purple-600 opacity-75 blur-sm filter"></div>
+                <div className="animate-tilt absolute -inset-0.5 rounded-lg bg-linear-to-r from-pink-600 to-purple-600 opacity-75 blur-sm filter transition-all duration-1000 group-hover:-inset-1 group-hover:duration-200"></div>
                 <a
                   href={`mailto:${conference.sponsor_email}`}
-                  className="font-mono relative inline-flex items-center justify-center rounded-lg bg-black px-8 py-4 text-lg font-bold text-white transition-all duration-200 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:outline-none"
+                  className="relative inline-flex items-center justify-center rounded-lg bg-black px-8 py-4 font-mono text-lg font-bold text-white transition-all duration-200 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:outline-none"
                 >
                   <span className="mr-2">&gt;</span> {closingCta}
                   <span className="ml-2 animate-pulse">_</span>

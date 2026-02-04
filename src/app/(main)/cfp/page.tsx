@@ -18,6 +18,9 @@ export const metadata = {
   title: 'Call for Presentations - Cloud Native Days Norway',
   description:
     'Submit your talk proposal for Cloud Native Days Norway conference',
+  twitter: {
+    card: 'summary_large_image',
+  },
 }
 
 async function CachedCFPContent({ domain }: { domain: string }) {

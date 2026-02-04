@@ -13,6 +13,9 @@ import { cacheLife, cacheTag } from 'next/cache'
 export const metadata = {
   title: 'Tickets - Cloud Native Days Norway',
   description: 'Get your tickets for Cloud Native Days Norway conference',
+  twitter: {
+    card: 'summary_large_image',
+  },
 }
 
 async function CachedTicketsContent({ domain }: { domain: string }) {

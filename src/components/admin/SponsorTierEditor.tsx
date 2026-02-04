@@ -155,7 +155,7 @@ function SponsorTierModal({
       } else {
         await createMutation.mutateAsync(formData)
       }
-    } catch { }
+    } catch {}
   }
 
   const handleDelete = async () => {
@@ -168,7 +168,7 @@ function SponsorTierModal({
     if (confirmed) {
       try {
         await deleteMutation.mutateAsync({ id: tier._id })
-      } catch { }
+      } catch {}
     }
   }
 
@@ -261,7 +261,12 @@ function SponsorTierModal({
         if (currentPerk?.label || currentPerk?.description) {
           return {
             ...prev,
-            perks: [...perksBeforeIndex, currentPerk, ...newPerks, ...perksAfterIndex],
+            perks: [
+              ...perksBeforeIndex,
+              currentPerk,
+              ...newPerks,
+              ...perksAfterIndex,
+            ],
           }
         }
         return {
@@ -822,7 +827,7 @@ export default function SponsorTierEditor({
                 )}
               >
                 {tier.max_quantity === 1 && (
-                  <div className="absolute -right-8 top-4 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
+                  <div className="absolute top-4 -right-8 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
                     Exclusive
                   </div>
                 )}
