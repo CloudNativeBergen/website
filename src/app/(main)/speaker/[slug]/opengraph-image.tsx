@@ -1,7 +1,5 @@
 import React from 'react'
-import { ImageResponse } from '@vercel/og'
-import { getPublicSpeaker } from '@/lib/speaker/sanity'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { ImageResponse } from 'next/og'
 import { sanityImage } from '@/lib/sanity/client'
 import { STYLES, OG_IMAGE_SIZE } from '@/lib/og/styles'
 import {
@@ -15,6 +13,9 @@ import {
   MicrophoneIcon,
   LightBulbIcon,
 } from '@/lib/og/components'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { getPublicSpeaker } from '@/lib/speaker/sanity'
+import type { ConferenceSponsor } from '@/lib/sponsor/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -199,13 +200,22 @@ export default async function Image({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  const fonts = await loadBrandFonts()
   const { slug } = await params
   // URL-decode to handle Norwegian characters (æ, ø, å)
   const decodedSlug = decodeURIComponent(slug)
-  const { conference, domain } = await getConferenceForCurrentDomain({
-    sponsors: true,
-  })
+
+  const {
+    conference,
+    domain,
+    error: confError,
+  } = await getConferenceForCurrentDomain({ sponsors: true })
+  if (confError || !conference) {
+    return new Response(`Conference not found for domain: ${domain}`, {
+      status: 404,
+    })
+  }
+
+  const fonts = await loadBrandFonts(domain)
   const { speaker, talks, err } = await getPublicSpeaker(
     conference._id,
     decodedSlug,
@@ -239,7 +249,7 @@ export default async function Image({
     endDate: conference?.end_date,
     city: conference?.city,
     country: conference?.country,
-    sponsors: conference?.sponsors || [],
+    sponsors: (conference?.sponsors || []) as ConferenceSponsor[],
   }
 
   const speakerData = {

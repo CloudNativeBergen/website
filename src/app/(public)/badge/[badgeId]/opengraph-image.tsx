@@ -1,5 +1,5 @@
 import React from 'react'
-import { ImageResponse } from '@vercel/og'
+import { ImageResponse } from 'next/og'
 import { getBadgeById, getBadgeSVGUrl } from '@/lib/badge/sanity'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { notFound } from 'next/navigation'

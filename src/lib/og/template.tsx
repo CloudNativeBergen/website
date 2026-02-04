@@ -1,9 +1,9 @@
 import React from 'react'
-import { ImageResponse } from '@vercel/og'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { ImageResponse } from 'next/og'
 import { STYLES, OG_IMAGE_SIZE } from './styles'
 import { BackgroundPatterns, ConferenceLogo } from './components'
 import { formatDateRange, loadBrandFonts } from './helpers'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 
 export interface OGImageConfig {
   headline: string | ((conference: ConferenceData) => string)
@@ -45,9 +45,9 @@ export async function generateOGImage(
   config: OGImageConfig,
 ): Promise<Response> {
   try {
-    const { conference, domain, error } = await getConferenceForCurrentDomain(
-      {},
-    )
+    const { conference, domain, error } = await getConferenceForCurrentDomain({
+      sponsors: false,
+    })
 
     if (error || !conference) {
       console.error('Error fetching conference data for OG image:', error)
@@ -82,7 +82,7 @@ export async function generateOGImage(
       detailRight = detail.right
     }
 
-    const fonts = await loadBrandFonts()
+    const fonts = await loadBrandFonts(domain)
 
     return new ImageResponse(
       <div
