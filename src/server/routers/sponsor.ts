@@ -406,8 +406,8 @@ export const sponsorRouter = router({
           })
         }
 
-        revalidateTag('content:sponsor', 'page')
-        revalidateTag('content:conferences', 'page')
+        revalidateTag('content:sponsor', 'default')
+        revalidateTag('content:conferences', 'default')
 
         return sponsorTier
       }),
@@ -455,8 +455,8 @@ export const sponsorRouter = router({
             })
           }
 
-          revalidateTag('content:sponsor', 'page')
-          revalidateTag('content:conferences', 'page')
+          revalidateTag('content:sponsor', 'default')
+          revalidateTag('content:conferences', 'default')
 
           return sponsorTier
         } else {
@@ -477,11 +477,13 @@ export const sponsorRouter = router({
       if (error) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete sponsor tier',
+          cause: error,
         })
       }
 
-      revalidateTag('content:sponsor', 'page')
-      revalidateTag('content:conferences', 'page')
+      revalidateTag('content:sponsor', 'default')
+      revalidateTag('content:conferences', 'default')
 
       return { success: true }
     }),

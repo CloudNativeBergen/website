@@ -19,6 +19,12 @@ jest.mock('@heroicons/react/24/outline', () => ({
   ),
   CheckIcon: (props: any) => <svg {...props} data-testid="icon-check" />,
   NoSymbolIcon: (props: any) => <svg {...props} data-testid="icon-no-symbol" />,
+  DocumentArrowDownIcon: (props: any) => (
+    <svg {...props} data-testid="icon-document-arrow-down" />
+  ),
+  SparklesIcon: (props: any) => (
+    <svg {...props} data-testid="icon-sparkles" />
+  ),
 }))
 
 // Mock Sponsors component
