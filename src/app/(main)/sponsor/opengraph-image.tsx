@@ -1,6 +1,7 @@
 import { generateOGImage } from '@/lib/og/template'
 import { OG_IMAGE_SIZE } from '@/lib/og/styles'
 
+export const dynamic = 'force-dynamic'
 export const alt = 'Become a Sponsor - Cloud Native Days Norway'
 export const size = OG_IMAGE_SIZE
 export const contentType = 'image/png'
