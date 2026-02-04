@@ -1,5 +1,6 @@
 export { StatusListbox } from './StatusListbox'
 export { SponsorCombobox } from './SponsorCombobox'
 export { TierRadioGroup } from './TierRadioGroup'
+export { AddonsCheckboxGroup } from './AddonsCheckboxGroup'
 export { OrganizerCombobox } from './OrganizerCombobox'
 export { ContractValueInput } from './ContractValueInput'

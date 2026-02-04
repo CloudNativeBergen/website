@@ -40,6 +40,7 @@ export const SponsorForConferenceInputSchema = z.object({
   sponsor: z.string().min(1, 'Sponsor ID is required'),
   conference: z.string().min(1, 'Conference ID is required'),
   tier: z.string().optional(),
+  addons: z.array(z.string()).optional(),
   contract_status: ContractStatusSchema,
   status: SponsorStatusSchema,
   assigned_to: z.string().optional(),
@@ -57,6 +58,7 @@ export const SponsorForConferenceInputSchema = z.object({
 export const SponsorForConferenceUpdateSchema = z.object({
   id: z.string().min(1, 'ID is required'),
   tier: z.string().optional(),
+  addons: z.array(z.string()).optional(),
   contract_status: ContractStatusSchema.optional(),
   status: SponsorStatusSchema.optional(),
   assigned_to: z.string().nullable().optional(),

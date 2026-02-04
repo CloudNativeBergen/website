@@ -94,6 +94,16 @@ export interface SponsorForConferenceExpanded {
       currency: string
     }>
   }
+  addons?: Array<{
+    _id: string
+    title: string
+    tier_type: 'addon'
+    price?: Array<{
+      _key: string
+      amount: number
+      currency: string
+    }>
+  }>
   contract_status: ContractStatus
   status: SponsorStatus
   assigned_to?: {
@@ -145,6 +155,7 @@ export interface SponsorForConferenceInput {
   sponsor: string
   conference: string
   tier?: string
+  addons?: string[]
   contract_status: ContractStatus
   status: SponsorStatus
   assigned_to?: string

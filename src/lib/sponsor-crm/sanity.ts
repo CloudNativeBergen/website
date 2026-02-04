@@ -41,6 +41,16 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
       currency
     }
   },
+  addons[]->{
+    _id,
+    title,
+    tier_type,
+    price[]{
+      _key,
+      amount,
+      currency
+    }
+  },
   status,
   contract_status,
   assigned_to->{
@@ -72,6 +82,13 @@ export async function createSponsorForConference(
       sponsor: { _type: 'reference', _ref: data.sponsor },
       conference: { _type: 'reference', _ref: data.conference },
       tier: data.tier ? { _type: 'reference', _ref: data.tier } : undefined,
+      addons: data.addons?.length
+        ? data.addons.map((id) => ({
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
+        : undefined,
       status: data.status,
       assigned_to: data.assigned_to
         ? { _type: 'reference', _ref: data.assigned_to }
@@ -119,6 +136,15 @@ export async function updateSponsorForConference(
 
     if (data.tier !== undefined) {
       updates.tier = data.tier ? { _type: 'reference', _ref: data.tier } : null
+    }
+    if (data.addons !== undefined) {
+      updates.addons = data.addons.length
+        ? data.addons.map((id) => ({
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
+        : []
     }
     if (data.status !== undefined) updates.status = data.status
     if (data.contract_status !== undefined)

@@ -3,6 +3,7 @@
 interface Tier {
   _id: string
   title: string
+  tier_type?: 'standard' | 'special' | 'addon'
 }
 
 interface TierRadioGroupProps {
