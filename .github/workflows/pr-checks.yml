@@ -134,3 +134,4 @@ jobs:
           NODE_ENV: production
           NEXTAUTH_SECRET: ci-build-secret-not-for-production
           NEXTAUTH_URL: http://localhost:3000
+          RESEND_API_KEY: re_ci_build_key_not_for_production
