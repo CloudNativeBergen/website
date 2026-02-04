@@ -36,6 +36,7 @@ export type SponsorTag =
   | 'high-priority'
   | 'needs-follow-up'
   | 'multi-year-potential'
+  | 'previously-declined'
 
 export interface SponsorForConference {
   _id: string
@@ -93,6 +94,16 @@ export interface SponsorForConferenceExpanded {
       currency: string
     }>
   }
+  addons?: Array<{
+    _id: string
+    title: string
+    tier_type: 'addon'
+    price?: Array<{
+      _key: string
+      amount: number
+      currency: string
+    }>
+  }>
   contract_status: ContractStatus
   status: SponsorStatus
   assigned_to?: {
@@ -144,6 +155,7 @@ export interface SponsorForConferenceInput {
   sponsor: string
   conference: string
   tier?: string
+  addons?: string[]
   contract_status: ContractStatus
   status: SponsorStatus
   assigned_to?: string
@@ -181,4 +193,16 @@ export interface CopySponsorsResult {
   created: number
   skipped: number
   warnings: string[]
+}
+
+export interface ImportAllHistoricSponsorsParams {
+  targetConferenceId: string
+}
+
+export interface ImportAllHistoricSponsorsResult {
+  created: number
+  skipped: number
+  taggedAsReturning: number
+  taggedAsDeclined: number
+  sourceConferencesCount: number
 }

@@ -68,4 +68,5 @@ export const TAGS: Array<{ value: SponsorTag; label: string }> = [
   { value: 'high-priority', label: 'High Priority' },
   { value: 'needs-follow-up', label: 'Needs Follow-up' },
   { value: 'multi-year-potential', label: 'Multi-year Potential' },
+  { value: 'previously-declined', label: 'Previously Declined' },
 ]

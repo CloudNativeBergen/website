@@ -8,6 +8,10 @@ import type {
   SponsorForConferenceInput,
   CopySponsorsParams,
   CopySponsorsResult,
+  ImportAllHistoricSponsorsParams,
+  ImportAllHistoricSponsorsResult,
+  SponsorStatus,
+  SponsorTag,
 } from './types'
 
 const SPONSOR_FOR_CONFERENCE_FIELDS = `
@@ -30,6 +34,16 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     _id,
     title,
     tagline,
+    tier_type,
+    price[]{
+      _key,
+      amount,
+      currency
+    }
+  },
+  addons[]->{
+    _id,
+    title,
     tier_type,
     price[]{
       _key,
@@ -68,6 +82,13 @@ export async function createSponsorForConference(
       sponsor: { _type: 'reference', _ref: data.sponsor },
       conference: { _type: 'reference', _ref: data.conference },
       tier: data.tier ? { _type: 'reference', _ref: data.tier } : undefined,
+      addons: data.addons?.length
+        ? [...new Set(data.addons)].map((id) => ({
+            _type: 'reference',
+            _ref: id,
+            _key: id,
+          }))
+        : undefined,
       status: data.status,
       assigned_to: data.assigned_to
         ? { _type: 'reference', _ref: data.assigned_to }
@@ -115,6 +136,15 @@ export async function updateSponsorForConference(
 
     if (data.tier !== undefined) {
       updates.tier = data.tier ? { _type: 'reference', _ref: data.tier } : null
+    }
+    if (data.addons !== undefined) {
+      updates.addons = data.addons.length
+        ? [...new Set(data.addons)].map((id) => ({
+            _type: 'reference',
+            _ref: id,
+            _key: id,
+          }))
+        : []
     }
     if (data.status !== undefined) updates.status = data.status
     if (data.contract_status !== undefined)
@@ -331,6 +361,160 @@ export async function copySponsorsFromPreviousYear(
         contract_currency: sourceSponsor.contract_currency || 'NOK',
         invoice_status: 'not-sent' as const,
         tags: sourceSponsor.tags,
+      }
+
+      await clientWrite.create(newDoc)
+      result.created++
+    }
+
+    return { result }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+/**
+ * Import all sponsors from all previous conferences into the target conference's Prospect column.
+ * Tags sponsors based on their historical status: 'returning-sponsor' for closed-won,
+ * 'previously-declined' for closed-lost.
+ */
+export async function importAllHistoricSponsors(
+  params: ImportAllHistoricSponsorsParams,
+): Promise<{
+  result?: ImportAllHistoricSponsorsResult
+  error?: Error
+}> {
+  try {
+    const { targetConferenceId } = params
+
+    // Get target conference start date
+    const targetConference = await clientRead.fetch<{
+      _id: string
+      start_date: string
+    }>(
+      `*[_type == "conference" && _id == $conferenceId][0]{
+        _id,
+        start_date
+      }`,
+      { conferenceId: targetConferenceId },
+    )
+
+    if (!targetConference) {
+      return { error: new Error('Target conference not found') }
+    }
+
+    // Get all conferences before the target conference
+    const previousConferences = await clientRead.fetch<Array<{ _id: string }>>(
+      `*[_type == "conference" && start_date < $targetStartDate] | order(start_date desc) {
+        _id
+      }`,
+      { targetStartDate: targetConference.start_date },
+    )
+
+    if (previousConferences.length === 0) {
+      return {
+        result: {
+          created: 0,
+          skipped: 0,
+          taggedAsReturning: 0,
+          taggedAsDeclined: 0,
+          sourceConferencesCount: 0,
+        },
+      }
+    }
+
+    const previousConferenceIds = previousConferences.map((c) => c._id)
+
+    // Get all sponsors from previous conferences
+    const historicSponsors = await clientRead.fetch<
+      Array<{
+        sponsor: { _ref: string }
+        status: SponsorStatus
+        conference: { _ref: string }
+      }>
+    >(
+      `*[_type == "sponsorForConference" && conference._ref in $conferenceIds]{
+        sponsor,
+        status,
+        conference
+      }`,
+      { conferenceIds: previousConferenceIds },
+    )
+
+    // Get existing sponsors in target conference
+    const existingSponsors = await clientRead.fetch<
+      Array<{ sponsor: { _ref: string } }>
+    >(
+      `*[_type == "sponsorForConference" && conference._ref == $conferenceId]{
+        sponsor
+      }`,
+      { conferenceId: targetConferenceId },
+    )
+
+    const existingSponsorIds = new Set(
+      existingSponsors.map((s) => s.sponsor._ref),
+    )
+
+    // Group by unique sponsor and track historical outcomes
+    const sponsorHistory = new Map<
+      string,
+      { hasWon: boolean; allLost: boolean }
+    >()
+
+    for (const record of historicSponsors) {
+      const sponsorId = record.sponsor._ref
+      const existing = sponsorHistory.get(sponsorId)
+
+      if (!existing) {
+        sponsorHistory.set(sponsorId, {
+          hasWon: record.status === 'closed-won',
+          allLost: record.status === 'closed-lost',
+        })
+      } else {
+        if (record.status === 'closed-won') {
+          existing.hasWon = true
+        }
+        if (record.status !== 'closed-lost') {
+          existing.allLost = false
+        }
+      }
+    }
+
+    const result: ImportAllHistoricSponsorsResult = {
+      created: 0,
+      skipped: 0,
+      taggedAsReturning: 0,
+      taggedAsDeclined: 0,
+      sourceConferencesCount: previousConferences.length,
+    }
+
+    // Create new sponsorForConference records
+    for (const [sponsorId, history] of sponsorHistory) {
+      // Skip if already exists in target conference
+      if (existingSponsorIds.has(sponsorId)) {
+        result.skipped++
+        continue
+      }
+
+      // Determine tags based on history
+      const tags: SponsorTag[] = []
+      if (history.hasWon) {
+        tags.push('returning-sponsor')
+        result.taggedAsReturning++
+      } else if (history.allLost) {
+        tags.push('previously-declined')
+        result.taggedAsDeclined++
+      }
+
+      const newDoc = {
+        _type: 'sponsorForConference',
+        sponsor: { _type: 'reference', _ref: sponsorId },
+        conference: { _type: 'reference', _ref: targetConferenceId },
+        status: 'prospect' as const,
+        contract_status: 'none' as const,
+        contract_currency: 'NOK',
+        invoice_status: 'not-sent' as const,
+        tags: tags.length > 0 ? tags : undefined,
       }
 
       await clientWrite.create(newDoc)

@@ -8,6 +8,7 @@ const SPONSOR_TAGS = [
   'high-priority',
   'needs-follow-up',
   'multi-year-potential',
+  'previously-declined',
 ] as const
 
 export default defineType({

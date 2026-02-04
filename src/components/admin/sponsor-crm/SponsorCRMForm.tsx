@@ -24,6 +24,7 @@ import {
   StatusListbox,
   SponsorCombobox,
   TierRadioGroup,
+  AddonsCheckboxGroup,
   OrganizerCombobox,
   ContractValueInput,
 } from './form'
@@ -57,6 +58,7 @@ export function SponsorCRMForm({
   const [formData, setFormData] = useState({
     sponsorId: '',
     tierId: '',
+    addonIds: [] as string[],
     contractStatus: 'none' as ContractStatus,
     status: 'prospect' as SponsorStatus,
     invoiceStatus: 'not-sent' as InvoiceStatus,
@@ -82,6 +84,13 @@ export function SponsorCRMForm({
     )
 
   const sortedSponsorTiers = sortSponsorTiersByValue(sponsorTiers)
+
+  const regularTiers = sortedSponsorTiers.filter(
+    (tier) => tier.tier_type !== 'addon',
+  )
+  const addonTiers = sortedSponsorTiers.filter(
+    (tier) => tier.tier_type === 'addon',
+  )
 
   const { data: organizers = [] } = api.sponsor.crm.listOrganizers.useQuery(
     undefined,
@@ -148,6 +157,7 @@ export function SponsorCRMForm({
         setFormData({
           sponsorId: sponsor.sponsor._id,
           tierId: sponsor.tier?._id || '',
+          addonIds: sponsor.addons?.map((a) => a._id) || [],
           contractStatus: sponsor.contract_status,
           status: sponsor.status,
           invoiceStatus: sponsor.invoice_status,
@@ -161,6 +171,7 @@ export function SponsorCRMForm({
         setFormData({
           sponsorId: '',
           tierId: '',
+          addonIds: [],
           contractStatus: 'none',
           status: 'prospect',
           invoiceStatus: 'not-sent',
@@ -200,6 +211,7 @@ export function SponsorCRMForm({
       await updateMutation.mutateAsync({
         id: sponsor._id,
         tier: formData.tierId || undefined,
+        addons: formData.addonIds,
         contract_status: formData.contractStatus,
         status: formData.status,
         invoice_status: formData.invoiceStatus,
@@ -220,6 +232,7 @@ export function SponsorCRMForm({
         sponsor: formData.sponsorId,
         conference: conferenceId,
         tier: formData.tierId || undefined,
+        addons: formData.addonIds.length > 0 ? formData.addonIds : undefined,
         contract_status: formData.contractStatus,
         status: formData.status,
         invoice_status: formData.invoiceStatus,
@@ -293,10 +306,19 @@ export function SponsorCRMForm({
 
                     {/* Tier Selection */}
                     <TierRadioGroup
-                      tiers={sortedSponsorTiers}
+                      tiers={regularTiers}
                       value={formData.tierId}
                       onChange={(value) =>
                         setFormData({ ...formData, tierId: value })
+                      }
+                    />
+
+                    {/* Addons Selection */}
+                    <AddonsCheckboxGroup
+                      addons={addonTiers}
+                      value={formData.addonIds}
+                      onChange={(value) =>
+                        setFormData({ ...formData, addonIds: value })
                       }
                     />
 

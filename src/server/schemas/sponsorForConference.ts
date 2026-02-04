@@ -31,6 +31,7 @@ export const SponsorTagSchema = z.enum([
   'high-priority',
   'needs-follow-up',
   'multi-year-potential',
+  'previously-declined',
 ])
 
 export const CurrencySchema = z.enum(['NOK', 'USD', 'EUR', 'GBP'])
@@ -39,6 +40,17 @@ export const SponsorForConferenceInputSchema = z.object({
   sponsor: z.string().min(1, 'Sponsor ID is required'),
   conference: z.string().min(1, 'Conference ID is required'),
   tier: z.string().optional(),
+  addons: z
+    .array(z.string().min(1, 'Addon ID cannot be empty'))
+    .optional()
+    .refine(
+      (addons) => {
+        if (!addons || addons.length === 0) return true
+        const unique = new Set(addons)
+        return unique.size === addons.length
+      },
+      { message: 'Addon IDs must be unique' },
+    ),
   contract_status: ContractStatusSchema,
   status: SponsorStatusSchema,
   assigned_to: z.string().optional(),
@@ -56,6 +68,17 @@ export const SponsorForConferenceInputSchema = z.object({
 export const SponsorForConferenceUpdateSchema = z.object({
   id: z.string().min(1, 'ID is required'),
   tier: z.string().optional(),
+  addons: z
+    .array(z.string().min(1, 'Addon ID cannot be empty'))
+    .optional()
+    .refine(
+      (addons) => {
+        if (!addons || addons.length === 0) return true
+        const unique = new Set(addons)
+        return unique.size === addons.length
+      },
+      { message: 'Addon IDs must be unique' },
+    ),
   contract_status: ContractStatusSchema.optional(),
   status: SponsorStatusSchema.optional(),
   assigned_to: z.string().nullable().optional(),
@@ -86,5 +109,9 @@ export const UpdateInvoiceStatusSchema = z.object({
 
 export const CopySponsorsSchema = z.object({
   sourceConferenceId: z.string().min(1, 'Source conference ID is required'),
+  targetConferenceId: z.string().min(1, 'Target conference ID is required'),
+})
+
+export const ImportAllHistoricSponsorsSchema = z.object({
   targetConferenceId: z.string().min(1, 'Target conference ID is required'),
 })
