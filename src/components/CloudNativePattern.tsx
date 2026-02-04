@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo, useRef } from 'react'
-import Image from 'next/image'
+import Image, { type StaticImageData } from 'next/image'
 
 import KubernetesIcon from '@/images/icons/kubernetes-icon-white.svg'
 import HelmIcon from '@/images/icons/helm-icon-white.svg'
@@ -40,7 +40,7 @@ type IconCategory = 'popular' | 'moderate' | 'specialized'
 type Variant = 'dark' | 'light' | 'brand'
 
 interface BaseIcon {
-  icon: string
+  icon: StaticImageData
   name: string
   weight: number
 }
@@ -180,40 +180,40 @@ const createDepthLayers = (
   baseSize: number,
   variant: Variant,
 ): DepthLayer[] => [
-  {
-    name: 'background',
-    zIndex: 1,
-    sizeRange: [baseSize * 0.5, baseSize * 0.7],
-    opacityMultiplier:
-      variant === 'light' ? 0.5 : variant === 'dark' ? 0.4 : 0.5,
-    blur: 2.0,
-    frequency: 0.5,
-    animationSpeedMultiplier: 1.5,
-    brightness: variant === 'light' ? 1.0 : variant === 'dark' ? 0.8 : 0.9,
-  },
-  {
-    name: 'midground',
-    zIndex: 10,
-    sizeRange: [baseSize * 0.8, baseSize * 1.2],
-    opacityMultiplier:
-      variant === 'light' ? 0.7 : variant === 'dark' ? 0.6 : 0.8,
-    blur: 0.8,
-    frequency: 0.35,
-    animationSpeedMultiplier: 1.0,
-    brightness: variant === 'light' ? 1.1 : variant === 'dark' ? 0.9 : 1.1,
-  },
-  {
-    name: 'foreground',
-    zIndex: 20,
-    sizeRange: [baseSize * 1.3, baseSize * 1.6],
-    opacityMultiplier:
-      variant === 'light' ? 0.9 : variant === 'dark' ? 0.8 : 1.2,
-    blur: 0,
-    frequency: 0.15,
-    animationSpeedMultiplier: 0.7,
-    brightness: variant === 'light' ? 1.2 : variant === 'dark' ? 1.0 : 1.3,
-  },
-]
+    {
+      name: 'background',
+      zIndex: 1,
+      sizeRange: [baseSize * 0.5, baseSize * 0.7],
+      opacityMultiplier:
+        variant === 'light' ? 0.5 : variant === 'dark' ? 0.4 : 0.5,
+      blur: 2.0,
+      frequency: 0.5,
+      animationSpeedMultiplier: 1.5,
+      brightness: variant === 'light' ? 1.0 : variant === 'dark' ? 0.8 : 0.9,
+    },
+    {
+      name: 'midground',
+      zIndex: 10,
+      sizeRange: [baseSize * 0.8, baseSize * 1.2],
+      opacityMultiplier:
+        variant === 'light' ? 0.7 : variant === 'dark' ? 0.6 : 0.8,
+      blur: 0.8,
+      frequency: 0.35,
+      animationSpeedMultiplier: 1.0,
+      brightness: variant === 'light' ? 1.1 : variant === 'dark' ? 0.9 : 1.1,
+    },
+    {
+      name: 'foreground',
+      zIndex: 20,
+      sizeRange: [baseSize * 1.3, baseSize * 1.6],
+      opacityMultiplier:
+        variant === 'light' ? 0.9 : variant === 'dark' ? 0.8 : 1.2,
+      blur: 0,
+      frequency: 0.15,
+      animationSpeedMultiplier: 0.7,
+      brightness: variant === 'light' ? 1.2 : variant === 'dark' ? 1.0 : 1.3,
+    },
+  ]
 
 interface CloudNativePatternProps {
   className?: string
@@ -257,8 +257,8 @@ export function CloudNativePattern({
     const computedSeed =
       seed ??
       iconCount +
-        baseSize +
-        (variant === 'light' ? 1000 : variant === 'dark' ? 2000 : 3000)
+      baseSize +
+      (variant === 'light' ? 1000 : variant === 'dark' ? 2000 : 3000)
     const seededRandom = new SeededRandom(computedSeed)
 
     const createDistributedPositions = (count: number) => {
@@ -279,7 +279,7 @@ export function CloudNativePattern({
 
       for (let i = gridCells.length - 1; i > 0; i--) {
         const j = Math.floor(seededRandom.next() * (i + 1))
-        ;[gridCells[i], gridCells[j]] = [gridCells[j], gridCells[i]]
+          ;[gridCells[i], gridCells[j]] = [gridCells[j], gridCells[i]]
       }
 
       for (let i = 0; i < count && i < gridCells.length; i++) {
