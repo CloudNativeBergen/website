@@ -1,12 +1,10 @@
 'use client'
 
-interface Addon {
-  _id: string
-  title: string
-}
+import { formatTierLabel } from '../utils'
+import { SponsorTier } from '@/lib/sponsor/types'
 
 interface AddonsCheckboxGroupProps {
-  addons: Addon[]
+  addons: SponsorTier[]
   value: string[]
   onChange: (value: string[]) => void
 }
@@ -52,7 +50,7 @@ export function AddonsCheckboxGroup({
               className="absolute inset-0 appearance-none focus:outline-none"
             />
             <span className="whitespace-nowrap text-gray-900 group-has-checked:text-emerald-600 dark:text-white dark:group-has-checked:text-emerald-400">
-              {addon.title}
+              {formatTierLabel(addon)}
             </span>
           </label>
         ))}

@@ -16,6 +16,10 @@ import {
 } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { SponsorBoardColumn } from '@/components/admin/sponsor-crm/SponsorBoardColumn'
 import { SponsorBulkActions } from '@/components/admin/sponsor-crm/SponsorBulkActions'
+import {
+  sortSponsorTiers,
+  formatTierLabel,
+} from '@/components/admin/sponsor-crm/utils'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { XMarkIcon, CheckIcon, PlusIcon } from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
@@ -348,7 +352,6 @@ export function SponsorCRMClient({
       {/* Filters and View Switcher */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Tier Filter */}
           <FilterDropdown
             label="Tier"
             activeCount={tiersFilter.length}
@@ -360,14 +363,14 @@ export function SponsorCRMClient({
                 No tiers available
               </div>
             ) : (
-              tiers.map((tier) => (
+              sortSponsorTiers(tiers).map((tier) => (
                 <FilterOption
                   key={tier._id}
                   onClick={() => toggleTierFilter(tier._id)}
                   checked={tiersFilter.includes(tier._id)}
                   keepOpen
                 >
-                  {tier.title}
+                  {formatTierLabel(tier)}
                 </FilterOption>
               ))
             )}

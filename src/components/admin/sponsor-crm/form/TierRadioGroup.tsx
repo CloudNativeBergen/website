@@ -1,13 +1,10 @@
 'use client'
 
-interface Tier {
-  _id: string
-  title: string
-  tier_type?: 'standard' | 'special' | 'addon'
-}
+import { formatTierLabel } from '../utils'
+import { SponsorTier } from '@/lib/sponsor/types'
 
 interface TierRadioGroupProps {
-  tiers: Tier[]
+  tiers: SponsorTier[]
   value: string
   onChange: (value: string) => void
 }
@@ -38,7 +35,7 @@ export function TierRadioGroup({
               className="absolute inset-0 appearance-none focus:outline-none"
             />
             <span className="whitespace-nowrap text-gray-900 group-has-checked:text-indigo-600 dark:text-white dark:group-has-checked:text-indigo-400">
-              {tier.title}
+              {formatTierLabel(tier)}
             </span>
           </label>
         ))}

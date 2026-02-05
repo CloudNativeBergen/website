@@ -13,6 +13,7 @@ export default async function AdminSponsorsCRM() {
       sponsors: true,
       sponsorContact: true,
       sponsorTiers: true,
+      organizers: true,
     })
 
   if (conferenceError || !conference) {

@@ -17,7 +17,7 @@ import type {
   ContractStatus,
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
-import { sortSponsorTiersByValue } from '@/lib/sponsor/utils'
+import { sortSponsorTiers } from '@/components/admin/sponsor-crm/utils'
 import {
   XMarkIcon,
   ChevronLeftIcon,
@@ -106,7 +106,7 @@ export function SponsorCRMForm({
       { enabled: isOpen },
     )
 
-  const sortedSponsorTiers = sortSponsorTiersByValue(sponsorTiers)
+  const sortedSponsorTiers = sortSponsorTiers(sponsorTiers)
 
   const regularTiers = sortedSponsorTiers.filter(
     (tier) => tier.tier_type !== 'addon',
