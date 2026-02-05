@@ -53,7 +53,7 @@ export const SponsorForConferenceInputSchema = z.object({
     ),
   contract_status: ContractStatusSchema,
   status: SponsorStatusSchema,
-  assigned_to: z.string().optional(),
+  assigned_to: z.string().nullable().optional(),
   contact_initiated_at: z.string().optional(),
   contract_signed_at: z.string().optional(),
   contract_value: z.number().min(0).optional(),

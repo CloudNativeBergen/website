@@ -669,12 +669,22 @@ export const sponsorRouter = router({
 
     create: adminProcedure
       .input(SponsorForConferenceInputSchema)
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
+        const userId = ctx.speaker._id
+        const data = {
+          ...input,
+          assigned_to:
+            input.assigned_to === null ? undefined : input.assigned_to,
+          tags: input.tags as SponsorTag[] | undefined,
+        }
+
+        // Auto-assign to current user if not provided
+        if (!data.assigned_to && userId) {
+          data.assigned_to = userId
+        }
+
         const { sponsorForConference, error } =
-          await createSponsorForConference({
-            ...input,
-            tags: input.tags as SponsorTag[] | undefined,
-          })
+          await createSponsorForConference(data as SponsorForConferenceInput)
 
         if (error) {
           throw new TRPCError({

@@ -158,7 +158,7 @@ export interface SponsorForConferenceInput {
   addons?: string[]
   contract_status: ContractStatus
   status: SponsorStatus
-  assigned_to?: string
+  assigned_to?: string | null
   contact_initiated_at?: string
   contract_signed_at?: string
   contract_value?: number

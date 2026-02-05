@@ -10,6 +10,7 @@ import {
 } from '@headlessui/react'
 import { ChevronUpDownIcon, CheckIcon } from '@heroicons/react/20/solid'
 import { api } from '@/lib/trpc/client'
+import { useNotification } from '@/components/admin/NotificationProvider'
 
 interface Sponsor {
   _id: string
@@ -44,6 +45,7 @@ export function SponsorCombobox({
     website: '',
   })
 
+  const { showNotification } = useNotification()
   const utils = api.useUtils()
 
   const createSponsorMutation = api.sponsor.create.useMutation({
@@ -55,6 +57,22 @@ export function SponsorCombobox({
       setIsCreatingNew(false)
       setNewSponsorData({ name: '', website: '' })
       utils.sponsor.list.invalidate()
+      showNotification({
+        type: 'success',
+        title: 'Sponsor created',
+        message: 'The new sponsor has been added to the database.',
+      })
+    },
+    onError: (error) => {
+      const message = error.message.includes('validationErrors')
+        ? 'Please check that all fields are valid.'
+        : error.message
+
+      showNotification({
+        type: 'error',
+        title: 'Failed to create sponsor',
+        message,
+      })
     },
   })
 

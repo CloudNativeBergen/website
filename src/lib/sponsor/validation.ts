@@ -143,10 +143,10 @@ export function validateSponsor(data: SponsorInput): ValidationError[] {
     }
   }
 
-  if (!data.logo || data.logo.trim().length === 0) {
-    errors.push({ field: 'logo', message: 'Logo is required' })
-  } else if (!data.logo.trim().toLowerCase().includes('<svg')) {
-    errors.push({ field: 'logo', message: 'Logo must be valid SVG content' })
+  if (data.logo && data.logo.trim().length > 0) {
+    if (!data.logo.trim().toLowerCase().includes('<svg')) {
+      errors.push({ field: 'logo', message: 'Logo must be valid SVG content' })
+    }
   }
 
   if (data.contact_persons) {
