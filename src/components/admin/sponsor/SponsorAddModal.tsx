@@ -64,8 +64,8 @@ export default function SponsorAddModal({
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
     website: '',
-    logo: '',
-    logo_bright: '',
+    logo: null,
+    logo_bright: null,
     tierId: preselectedTierId || '',
     org_number: '',
     contact_persons: [],
@@ -120,8 +120,8 @@ export default function SponsorAddModal({
         setFormData({
           name: editingSponsor.sponsor.name,
           website: editingSponsor.sponsor.website || '',
-          logo: editingSponsor.sponsor.logo || '',
-          logo_bright: editingSponsor.sponsor.logo_bright || '',
+          logo: editingSponsor.sponsor.logo || null,
+          logo_bright: editingSponsor.sponsor.logo_bright || null,
           tierId: tierMatch?._id || '',
           org_number: editingSponsor.sponsor.org_number || '',
           contact_persons:
@@ -142,8 +142,8 @@ export default function SponsorAddModal({
         setFormData({
           name: '',
           website: '',
-          logo: '',
-          logo_bright: '',
+          logo: null,
+          logo_bright: null,
           tierId: preselectedTierId || '',
           org_number: '',
           contact_persons: [],
@@ -182,8 +182,8 @@ export default function SponsorAddModal({
       const sponsorData: SponsorInput = {
         name: formData.name,
         website: formData.website,
-        logo: formData.logo,
-        logo_bright: formData.logo_bright || undefined,
+        logo: formData.logo || null,
+        logo_bright: formData.logo_bright || null,
         org_number: formData.org_number || undefined,
         contact_persons: formData.contact_persons?.map((contact) => ({
           ...contact,
@@ -369,8 +369,8 @@ export default function SponsorAddModal({
       ...prev,
       name: query,
       website: '',
-      logo: '',
-      logo_bright: '',
+      logo: null,
+      logo_bright: null,
       org_number: '',
       contact_persons: [],
       billing: { email: '', reference: '', comments: '' },

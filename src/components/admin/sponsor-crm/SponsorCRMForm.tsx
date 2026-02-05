@@ -34,6 +34,7 @@ import {
   OrganizerCombobox,
   ContractValueInput,
   TagCombobox,
+  SponsorGlobalInfoFields,
 } from './form'
 import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
 import { useNotification } from '@/components/admin/NotificationProvider'
@@ -65,13 +66,14 @@ export function SponsorCRMForm({
     'pipeline' | 'contacts' | 'logo' | 'history'
   >('pipeline')
   const { showNotification } = useNotification()
+  const [userHasEditedValue, setUserHasEditedValue] = useState(false)
 
   const [formData, setFormData] = useState({
     sponsorId: sponsor?.sponsor._id || '',
     name: sponsor?.sponsor.name || '',
     website: sponsor?.sponsor.website || '',
-    logo: sponsor?.sponsor.logo || '',
-    logo_bright: sponsor?.sponsor.logo_bright || '',
+    logo: (sponsor?.sponsor.logo || null) as string | null,
+    logo_bright: (sponsor?.sponsor.logo_bright || null) as string | null,
     tierId: sponsor?.tier?._id || '',
     addonIds: sponsor?.addons?.map((a) => a._id) || ([] as string[]),
     contractStatus: (sponsor?.contract_status || 'none') as ContractStatus,
@@ -222,7 +224,7 @@ export function SponsorCRMForm({
       total += getPrice(addon)
     })
 
-    if (total > 0) {
+    if (total > 0 && !userHasEditedValue) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData((prev) => ({
         ...prev,
@@ -237,6 +239,7 @@ export function SponsorCRMForm({
     addonTiers,
     isOpen,
     sponsorTiers.length,
+    userHasEditedValue,
   ])
 
   // CMD+S / CTRL+S keyboard shortcut to save the form
@@ -278,7 +281,7 @@ export function SponsorCRMForm({
           data: {
             name: formData.name,
             website: formData.website,
-            logo: formData.logo,
+            logo: formData.logo || null,
             logo_bright: formData.logo_bright || null,
           },
         })
@@ -504,56 +507,16 @@ export function SponsorCRMForm({
                             )}
 
                             {sponsor && (
-                              <>
-                                <div className="sm:col-span-2">
-                                  <label
-                                    htmlFor="name"
-                                    className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                                  >
-                                    Company Name *
-                                  </label>
-                                  <div className="mt-1">
-                                    <input
-                                      type="text"
-                                      id="name"
-                                      value={formData.name}
-                                      onChange={(e) =>
-                                        setFormData({
-                                          ...formData,
-                                          name: e.target.value,
-                                        })
-                                      }
-                                      required
-                                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                      placeholder="Acme Corp"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="sm:col-span-2">
-                                  <label
-                                    htmlFor="website"
-                                    className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                                  >
-                                    Website *
-                                  </label>
-                                  <div className="mt-1">
-                                    <input
-                                      type="url"
-                                      id="website"
-                                      value={formData.website}
-                                      onChange={(e) =>
-                                        setFormData({
-                                          ...formData,
-                                          website: e.target.value,
-                                        })
-                                      }
-                                      required
-                                      className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                      placeholder="https://example.com"
-                                    />
-                                  </div>
-                                </div>
-                              </>
+                              <SponsorGlobalInfoFields
+                                name={formData.name}
+                                website={formData.website}
+                                onNameChange={(name) =>
+                                  setFormData({ ...formData, name })
+                                }
+                                onWebsiteChange={(website) =>
+                                  setFormData({ ...formData, website })
+                                }
+                              />
                             )}
 
                             {/* Tier Selection */}
@@ -642,12 +605,13 @@ export function SponsorCRMForm({
                               <ContractValueInput
                                 value={formData.contractValue}
                                 currency={formData.contractCurrency}
-                                onValueChange={(value) =>
+                                onValueChange={(value) => {
                                   setFormData({
                                     ...formData,
                                     contractValue: value,
                                   })
-                                }
+                                  setUserHasEditedValue(true)
+                                }}
                                 onCurrencyChange={(value) =>
                                   setFormData({
                                     ...formData,

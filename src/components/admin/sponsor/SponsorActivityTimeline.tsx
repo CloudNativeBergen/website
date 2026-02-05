@@ -82,24 +82,12 @@ export function SponsorActivityTimeline({
   limit = 6,
   showHeaderFooter = true,
 }: SponsorActivityTimelineProps) {
-  const conferenceActivities =
-    api.sponsor.crm.activities.listForConference.useQuery(
-      { conferenceId, limit },
-      { enabled: !sponsorForConferenceId },
-    )
-
-  const sponsorActivities = api.sponsor.crm.activities.list.useQuery(
-    { sponsorForConferenceId: sponsorForConferenceId! },
-    { enabled: !!sponsorForConferenceId },
-  )
-
-  const activities = sponsorForConferenceId
-    ? sponsorActivities.data || []
-    : conferenceActivities.data || []
-
-  const isLoading = sponsorForConferenceId
-    ? sponsorActivities.isLoading
-    : conferenceActivities.isLoading
+  const { data: activities = [], isLoading } =
+    api.sponsor.crm.activities.list.useQuery({
+      conferenceId: sponsorForConferenceId ? undefined : conferenceId,
+      sponsorForConferenceId,
+      limit,
+    })
 
   if (isLoading) {
     return (

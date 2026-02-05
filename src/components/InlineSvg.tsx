@@ -5,6 +5,8 @@
  * Replaces @starefossen/sanity-plugin-inline-svg-input to avoid jsdom dependency
  */
 
+import { sanitizeSvg } from '@/lib/svg'
+
 interface InlineSvgProps {
   value: string
   className?: string
@@ -16,7 +18,7 @@ export function InlineSvg({ value, className, style }: InlineSvgProps) {
     return null
   }
 
-  let svgContent = value
+  let svgContent = sanitizeSvg(value)
 
   // Add className to the <svg> tag if provided
   if (className) {

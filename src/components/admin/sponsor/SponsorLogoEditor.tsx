@@ -5,14 +5,18 @@ import { InlineSvg } from '@/components/InlineSvg'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { downloadSvg } from '@/lib/sponsor/utils'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { sanitizeSvg } from '@/lib/svg'
 
 const LOGO_PREVIEW_SIZE = { width: '100px', height: '100px' }
 
 interface SponsorLogoEditorProps {
-  logo: string
-  logoBright?: string
+  logo: string | null
+  logoBright?: string | null
   name: string
-  onChange: (updates: { logo?: string; logo_bright?: string }) => void
+  onChange: (updates: {
+    logo?: string | null
+    logo_bright?: string | null
+  }) => void
   className?: string
 }
 
@@ -32,7 +36,7 @@ export function SponsorLogoEditor({
       const reader = new FileReader()
       reader.onload = (e) => {
         const svgContent = e.target?.result as string
-        onChange({ logo: svgContent })
+        onChange({ logo: sanitizeSvg(svgContent) })
       }
       reader.readAsText(file)
     } else {
@@ -48,7 +52,7 @@ export function SponsorLogoEditor({
       const reader = new FileReader()
       reader.onload = (e) => {
         const svgContent = e.target?.result as string
-        onChange({ logo_bright: svgContent })
+        onChange({ logo_bright: sanitizeSvg(svgContent) })
       }
       reader.readAsText(file)
     } else {
@@ -94,7 +98,7 @@ export function SponsorLogoEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onChange({ logo: '' })}
+                    onClick={() => onChange({ logo: null })}
                     className="cursor-pointer text-sm font-medium text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                   >
                     Remove
@@ -142,7 +146,7 @@ export function SponsorLogoEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onChange({ logo_bright: '' })}
+                    onClick={() => onChange({ logo_bright: null })}
                     className="cursor-pointer text-sm font-medium text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                   >
                     Remove

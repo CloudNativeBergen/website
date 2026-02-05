@@ -803,9 +803,14 @@ export const sponsorRouter = router({
           ) {
             let assigneeName: string | null = null
             if (updateData.assigned_to) {
-              const { getSpeaker } = await import('@/lib/speaker/sanity')
-              const { speaker } = await getSpeaker(updateData.assigned_to)
-              assigneeName = speaker?.name || updateData.assigned_to
+              try {
+                const { getSpeaker } = await import('@/lib/speaker/sanity')
+                const { speaker } = await getSpeaker(updateData.assigned_to)
+                assigneeName = speaker?.name || updateData.assigned_to
+              } catch (lookupError) {
+                console.error('Failed to lookup assignee name:', lookupError)
+                assigneeName = updateData.assigned_to
+              }
             }
             await logAssignmentChange(id, assigneeName, userId)
           }
@@ -995,45 +1000,49 @@ export const sponsorRouter = router({
 
     activities: router({
       list: adminProcedure
-        .input(z.object({ sponsorForConferenceId: z.string().min(1) }))
-        .query(async ({ input }) => {
-          const { activities, error } = await listActivitiesForSponsor(
-            input.sponsorForConferenceId,
-          )
-
-          if (error) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to list activities',
-              cause: error,
-            })
-          }
-
-          return activities || []
-        }),
-
-      listForConference: adminProcedure
         .input(
           z.object({
-            conferenceId: z.string().min(1),
+            conferenceId: z.string().optional(),
+            sponsorForConferenceId: z.string().optional(),
             limit: z.number().optional(),
           }),
         )
         .query(async ({ input }) => {
-          const { activities, error } = await listActivitiesForConference(
-            input.conferenceId,
-            input.limit,
-          )
+          if (input.sponsorForConferenceId) {
+            const { activities, error } = await listActivitiesForSponsor(
+              input.sponsorForConferenceId,
+              input.limit,
+            )
 
-          if (error) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to list conference activities',
-              cause: error,
-            })
+            if (error) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to list activities',
+                cause: error,
+              })
+            }
+
+            return activities || []
           }
 
-          return activities || []
+          if (input.conferenceId) {
+            const { activities, error } = await listActivitiesForConference(
+              input.conferenceId,
+              input.limit,
+            )
+
+            if (error) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to list conference activities',
+                cause: error,
+              })
+            }
+
+            return activities || []
+          }
+
+          return []
         }),
     }),
   }),
