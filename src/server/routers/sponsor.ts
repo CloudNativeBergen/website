@@ -53,6 +53,8 @@ import {
   logStageChange,
   logInvoiceStatusChange,
   logContractStatusChange,
+  logSponsorCreated,
+  logAssignmentChange,
 } from '@/lib/sponsor-crm/activity'
 import {
   SponsorForConferenceInputSchema,
@@ -700,6 +702,10 @@ export const sponsorRouter = router({
           })
         }
 
+        if (sponsorForConference && userId) {
+          await logSponsorCreated(sponsorForConference._id, userId)
+        }
+
         return sponsorForConference
       }),
 
@@ -787,6 +793,19 @@ export const sponsorRouter = router({
               updateData.contract_status,
               userId,
             )
+          }
+
+          if (
+            updateData.assigned_to !== undefined &&
+            updateData.assigned_to !== (existing.assigned_to?._id || null)
+          ) {
+            let assigneeName: string | null = null
+            if (updateData.assigned_to) {
+              const { getSpeaker } = await import('@/lib/speaker/sanity')
+              const { speaker } = await getSpeaker(updateData.assigned_to)
+              assigneeName = speaker?.name || updateData.assigned_to
+            }
+            await logAssignmentChange(id, assigneeName, userId)
           }
         }
 

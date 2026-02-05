@@ -356,13 +356,19 @@ export default function SponsorTierManagement({
 
                         <div className="flex items-start space-x-4">
                           <div className="shrink-0">
-                            <SponsorLogo
-                              logo={sponsor.logo}
-                              logoBright={sponsor.logo_bright}
-                              name={sponsor.name}
-                              style={ADMIN_LOGO_SIZE}
-                              className="flex h-12 w-12 items-center justify-center"
-                            />
+                            {sponsor.logo ? (
+                              <SponsorLogo
+                                logo={sponsor.logo}
+                                logoBright={sponsor.logo_bright}
+                                name={sponsor.name}
+                                style={ADMIN_LOGO_SIZE}
+                                className="flex h-12 w-12 items-center justify-center"
+                              />
+                            ) : (
+                              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 p-1 text-center text-[10px] font-bold break-words text-gray-400 uppercase dark:bg-gray-700">
+                                {sponsor.name}
+                              </div>
+                            )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <h4 className="text-sm font-medium text-gray-900 sm:truncate dark:text-white">
