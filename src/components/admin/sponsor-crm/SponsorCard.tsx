@@ -18,6 +18,7 @@ import clsx from 'clsx'
 interface SponsorCardProps {
   sponsor: SponsorForConferenceExpanded
   isSelected?: boolean
+  isSelectionMode?: boolean
   onToggleSelect?: (e: React.MouseEvent) => void
   onEdit: () => void
   onDelete: () => void
@@ -27,6 +28,7 @@ interface SponsorCardProps {
 export function SponsorCard({
   sponsor,
   isSelected = false,
+  isSelectionMode = false,
   onToggleSelect,
   onEdit,
   onDelete,
@@ -54,6 +56,14 @@ export function SponsorCard({
     onToggleSelect?.(e)
   }
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (isSelectionMode) {
+      onToggleSelect?.(e)
+    } else {
+      onEdit()
+    }
+  }
+
   return (
     <div
       className={clsx(
@@ -62,7 +72,7 @@ export function SponsorCard({
           ? 'border-indigo-500 bg-indigo-50/30 shadow-sm ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-900/20'
           : 'border-gray-200 bg-white',
       )}
-      onClick={onEdit}
+      onClick={handleCardClick}
     >
       {/* Selection Checkbox */}
       <div

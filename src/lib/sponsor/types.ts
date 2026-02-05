@@ -53,7 +53,7 @@ export interface ConferenceSponsor {
   sponsor: {
     _id: string
     name: string
-    website?: string
+    website: string
     logo?: string
     logo_bright?: string
   }
@@ -73,7 +73,7 @@ export interface ConferenceSponsorWithContact {
   sponsor: {
     _id: string
     name: string
-    website?: string
+    website: string
     logo?: string
     logo_bright?: string
     org_number?: string
@@ -108,7 +108,7 @@ export interface BillingInfo {
 
 export interface SponsorInput {
   name: string
-  website?: string
+  website: string
   logo?: string
   logo_bright?: string
   org_number?: string
@@ -122,7 +122,7 @@ export interface SponsorExisting {
   _createdAt: string
   _updatedAt: string
   name: string
-  website?: string
+  website: string
   logo?: string
   logo_bright?: string
 }

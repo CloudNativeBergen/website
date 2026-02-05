@@ -47,15 +47,14 @@ export function SponsorCRMClient({
   const tiersFilter =
     searchParams.get('tiers')?.split(',').filter(Boolean) || []
   const assignedToFilter = searchParams.get('assigned_to') || undefined
-  const tagsFilter = searchParams.get('tags')?.split(',').filter(Boolean) as
-    | SponsorTag[]
-    | undefined
+  const tagsFilter = (searchParams.get('tags')?.split(',').filter(Boolean) ||
+    []) as SponsorTag[]
 
   // Fetch with filters
   const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({
     conferenceId,
     assigned_to: assignedToFilter,
-    tags: tagsFilter,
+    tags: tagsFilter.length > 0 ? tagsFilter : undefined,
     tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
   })
 
@@ -137,14 +136,20 @@ export function SponsorCRMClient({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear selection when view/filters change
     handleClearSelection()
-  }, [tiersFilter.length, assignedToFilter, tagsFilter?.length, currentView])
+  }, [tiersFilter.length, assignedToFilter, tagsFilter.length, currentView])
 
-  // CMD+O / CTRL+O keyboard shortcut to open new sponsor form
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // CMD+O / CTRL+O: Open form (edit selected or new)
       if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
         e.preventDefault()
         handleOpenForm()
+      }
+      // CMD+N / CTRL+N: Create new sponsor
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault()
+        handleCreateNew()
       }
     }
 
@@ -206,9 +211,9 @@ export function SponsorCRMClient({
   }
 
   const toggleTagFilter = (tag: SponsorTag) => {
-    const newTags = tagsFilter?.includes(tag)
+    const newTags = tagsFilter.includes(tag)
       ? tagsFilter.filter((t) => t !== tag)
-      : [...(tagsFilter || []), tag]
+      : [...tagsFilter, tag]
     updateFilters('tags', newTags.length > 0 ? newTags.join(',') : null)
   }
 
@@ -230,7 +235,7 @@ export function SponsorCRMClient({
 
   // Calculate active filter count
   const activeFilterCount =
-    tiersFilter.length + (assignedToFilter ? 1 : 0) + (tagsFilter?.length || 0)
+    tiersFilter.length + (assignedToFilter ? 1 : 0) + tagsFilter.length
 
   // Available tags
   const availableTags: SponsorTag[] = [
@@ -397,7 +402,7 @@ export function SponsorCRMClient({
           {/* Tags Filter */}
           <FilterDropdown
             label="Tags"
-            activeCount={tagsFilter?.length || 0}
+            activeCount={tagsFilter.length}
             position="left"
             width="wide"
           >
@@ -405,7 +410,7 @@ export function SponsorCRMClient({
               <FilterOption
                 key={tag}
                 onClick={() => toggleTagFilter(tag)}
-                checked={tagsFilter?.includes(tag) || false}
+                checked={tagsFilter.includes(tag)}
                 keepOpen
               >
                 {tag
@@ -441,9 +446,9 @@ export function SponsorCRMClient({
         <div className="flex items-center gap-2">
           <button
             onClick={handleCreateNew}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-indigo-500 dark:hover:bg-indigo-400"
           >
-            <PlusIcon className="-ml-0.5 h-5 w-5" aria-hidden="true" />
+            <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
             Create New
           </button>
           <ImportHistoricSponsorsButton
@@ -482,6 +487,7 @@ export function SponsorCRMClient({
               sponsors={columnSponsors}
               isLoading={isLoading}
               selectedIds={selectedIds}
+              isSelectionMode={selectedIds.length > 0}
               onSponsorClick={handleOpenForm}
               onSponsorDelete={handleDelete}
               onSponsorEmail={handleOpenEmail}
