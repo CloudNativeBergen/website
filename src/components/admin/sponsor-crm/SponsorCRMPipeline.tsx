@@ -479,6 +479,16 @@ export function SponsorCRMPipeline({
             </FilterDropdown>
           </div>
 
+          {selectedIds.length === 0 &&
+            (activeFilterCount > 0 || searchQuery) && (
+              <button
+                onClick={handleSelectAllFiltered}
+                className="flex h-9 items-center justify-center rounded-lg bg-white px-3 text-xs font-medium text-indigo-600 ring-1 ring-gray-300 transition-all ring-inset hover:bg-indigo-50 dark:bg-white/5 dark:text-indigo-400 dark:ring-white/10 dark:hover:bg-indigo-900/20"
+              >
+                Select all {filteredSponsors.length}
+              </button>
+            )}
+
           {(activeFilterCount > 0 || searchQuery) && (
             <button
               onClick={() => {
@@ -523,18 +533,6 @@ export function SponsorCRMPipeline({
           onClearSelection={handleClearSelection}
           onSuccess={() => utils.sponsor.crm.list.invalidate()}
         />
-      )}
-
-      {/* Selection Utility Hint (Only if filters active and nothing selected) */}
-      {selectedIds.length === 0 && (activeFilterCount > 0 || searchQuery) && (
-        <div className="flex justify-end px-1">
-          <button
-            onClick={handleSelectAllFiltered}
-            className="text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-          >
-            Select all {filteredSponsors.length} filtered results
-          </button>
-        </div>
       )}
 
       {/* Board Columns */}
