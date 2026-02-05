@@ -41,7 +41,7 @@ import {
 } from './form/constants'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
-import { SponsorWithContactInfo } from '@/lib/sponsor/types'
+import { SponsorWithContactInfo, SponsorTier } from '@/lib/sponsor/types'
 import { SponsorIndividualEmailModal } from '../SponsorIndividualEmailModal'
 import { Conference } from '@/lib/conference/types'
 
@@ -109,10 +109,10 @@ export function SponsorCRMForm({
   const sortedSponsorTiers = sortSponsorTiers(sponsorTiers)
 
   const regularTiers = sortedSponsorTiers.filter(
-    (tier) => tier.tier_type !== 'addon',
+    (tier: SponsorTier) => tier.tier_type !== 'addon',
   )
   const addonTiers = sortedSponsorTiers.filter(
-    (tier) => tier.tier_type === 'addon',
+    (tier: SponsorTier) => tier.tier_type === 'addon',
   )
 
   const { data: organizers = [] } = api.sponsor.crm.listOrganizers.useQuery(

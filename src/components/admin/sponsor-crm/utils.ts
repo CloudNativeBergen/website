@@ -3,7 +3,7 @@ import type {
   SponsorForConferenceExpanded,
   ActivityType,
 } from '@/lib/sponsor-crm/types'
-import type { SponsorTier } from '@/lib/sponsor/types'
+export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
 import {
   ExclamationTriangleIcon,
   ClockIcon,
@@ -17,32 +17,6 @@ import {
   PhoneIcon,
   CalendarIcon,
 } from '@heroicons/react/24/outline'
-
-// Tier Utilities
-export function sortSponsorTiers(tiers: SponsorTier[]): SponsorTier[] {
-  const typeOrder = { standard: 0, special: 1, addon: 2 }
-
-  return [...tiers].sort((a, b) => {
-    const aOrder = typeOrder[a.tier_type as keyof typeof typeOrder] ?? 99
-    const bOrder = typeOrder[b.tier_type as keyof typeof typeOrder] ?? 99
-
-    if (aOrder !== bOrder) return aOrder - bOrder
-
-    // Sort by price descending within same type
-    const aPrice = a.price?.[0]?.amount ?? 0
-    const bPrice = b.price?.[0]?.amount ?? 0
-    if (aPrice !== bPrice) return bPrice - aPrice
-
-    return a.title.localeCompare(b.title)
-  })
-}
-
-export function formatTierLabel(tier: SponsorTier): string {
-  if (tier.tier_type === 'addon') {
-    return `${tier.title} (addon)`
-  }
-  return tier.title
-}
 
 // Invoice Status Utilities
 export function getInvoiceStatusColor(status: InvoiceStatus): string {

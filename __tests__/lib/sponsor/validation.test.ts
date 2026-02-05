@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals'
-import { validateSponsorTier } from '@/lib/sponsor/validation'
-import { SponsorTierInput } from '@/lib/sponsor/types'
+import { validateSponsorTier, validateSponsor } from '@/lib/sponsor/validation'
+import { SponsorTierInput, SponsorInput } from '@/lib/sponsor/types'
 
 describe('validateSponsorTier', () => {
   const baseTier: SponsorTierInput = {
@@ -77,5 +77,42 @@ describe('validateSponsorTier', () => {
       const errors = validateSponsorTier(specialTier)
       expect(errors).toHaveLength(0)
     })
+  })
+})
+
+describe('validateSponsor', () => {
+  const baseSponsor: SponsorInput = {
+    name: 'Acme Corp',
+    website: 'https://acme.com',
+    logo: '<svg>...</svg>',
+  }
+
+  it('passes with valid data', () => {
+    const errors = validateSponsor(baseSponsor)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('passes with missing logo (quick creation)', () => {
+    const sponsor = { ...baseSponsor, logo: '' }
+    const errors = validateSponsor(sponsor)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('fails with invalid website URL', () => {
+    const sponsor = { ...baseSponsor, website: 'not-a-url' }
+    const errors = validateSponsor(sponsor)
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'website' }))
+  })
+
+  it('fails with empty name', () => {
+    const sponsor = { ...baseSponsor, name: '' }
+    const errors = validateSponsor(sponsor)
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'name' }))
+  })
+
+  it('fails with non-SVG logo content if provided', () => {
+    const sponsor = { ...baseSponsor, logo: 'not-an-svg' }
+    const errors = validateSponsor(sponsor)
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'logo' }))
   })
 })

@@ -16,6 +16,7 @@ const config: Config = {
     '@noble/ed25519': '<rootDir>/__tests__/mocks/noble-ed25519.ts',
     'next-auth': '<rootDir>/__tests__/mocks/next-auth.ts',
     'next-sanity': '<rootDir>/__tests__/mocks/sanity-client.ts',
+    '@sanity/image-url': '<rootDir>/__tests__/mocks/sanity-image-url.ts',
     '^uuid$': '<rootDir>/__tests__/mocks/uuid.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
   },

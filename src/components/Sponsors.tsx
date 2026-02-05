@@ -1,4 +1,4 @@
-'use client'
+
 
 import { Container } from '@/components/Container'
 import { SponsorLogo } from '@/components/SponsorLogo'
@@ -9,7 +9,7 @@ import {
   groupSponsorsByTier,
   getDailySeed,
   deterministicShuffle,
-  getTierMaxPrice,
+  sortTierNamesByValue,
 } from '@/lib/sponsor/utils'
 import Link from 'next/link'
 
@@ -36,27 +36,10 @@ export function Sponsors({
     )
   })
 
-  const sortedTierNames = Object.keys(groupedSponsors).sort((a, b) => {
-    if (a === 'SPECIAL' && b !== 'SPECIAL') return 1
-    if (b === 'SPECIAL' && a !== 'SPECIAL') return -1
-    if (a === 'SPECIAL' && b === 'SPECIAL') return 0
-
-    const aTierSponsors = groupedSponsors[a]
-    const bTierSponsors = groupedSponsors[b]
-
-    const aMaxPrice = Math.max(
-      ...aTierSponsors.map((s) => getTierMaxPrice(s.tier)),
-    )
-    const bMaxPrice = Math.max(
-      ...bTierSponsors.map((s) => getTierMaxPrice(s.tier)),
-    )
-
-    if (aMaxPrice !== bMaxPrice) {
-      return bMaxPrice - aMaxPrice
-    }
-
-    return a.localeCompare(b)
-  })
+  const sortedTierNames = sortTierNamesByValue(
+    Object.keys(groupedSponsors),
+    conference.sponsor_tiers || [],
+  )
 
   return (
     <section id="sponsors" aria-label="Sponsors" className="py-20 sm:py-32">
@@ -144,7 +127,7 @@ export function Sponsors({
                     have sponsorship tiers for every cluster size.
                   </p>
                   {conference.sponsor_tiers &&
-                  conference.sponsor_tiers.length > 0 ? (
+                    conference.sponsor_tiers.length > 0 ? (
                     <Link
                       href="/sponsor"
                       className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"

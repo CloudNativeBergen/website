@@ -23,6 +23,7 @@ import {
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { XMarkIcon, CheckIcon, PlusIcon } from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
+import { SponsorTier } from '@/lib/sponsor/types'
 
 interface SponsorCRMClientProps {
   conferenceId: string
@@ -363,7 +364,7 @@ export function SponsorCRMClient({
                 No tiers available
               </div>
             ) : (
-              sortSponsorTiers(tiers).map((tier) => (
+              sortSponsorTiers(tiers).map((tier: SponsorTier) => (
                 <FilterOption
                   key={tier._id}
                   onClick={() => toggleTierFilter(tier._id)}

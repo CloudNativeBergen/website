@@ -147,18 +147,12 @@ export function SponsorCard({
 
       {/* Logo */}
       <div className="mb-1.5 flex h-8 items-center justify-center overflow-hidden">
-        {sponsor.sponsor.logo ? (
-          <SponsorLogo
-            logo={sponsor.sponsor.logo}
-            logoBright={sponsor.sponsor.logo_bright}
-            name={sponsor.sponsor.name}
-            className="max-h-full w-auto max-w-20 object-contain"
-          />
-        ) : (
-          <span className="px-1 text-center text-[10px] font-bold break-words text-gray-400 uppercase">
-            {sponsor.sponsor.name}
-          </span>
-        )}
+        <SponsorLogo
+          logo={sponsor.sponsor.logo}
+          logoBright={sponsor.sponsor.logo_bright}
+          name={sponsor.sponsor.name}
+          className="max-h-full w-auto max-w-20 object-contain"
+        />
       </div>
 
       {/* Priority Tags */}

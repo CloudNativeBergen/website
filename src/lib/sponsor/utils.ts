@@ -1,32 +1,38 @@
 import type { SponsorTier, ConferenceSponsor } from './types'
 
 /**
- * Sorts sponsor tiers by value (highest to lowest), with special tiers at the end
+ * Sorts sponsor tiers by type (standard, special, addon) and then by value (highest to lowest)
  */
-export function sortSponsorTiersByValue(tiers: SponsorTier[]): SponsorTier[] {
-  return [...tiers].sort((a, b) => {
-    // Special tiers go to the end
-    if (a.tier_type === 'special' && b.tier_type !== 'special') return 1
-    if (b.tier_type === 'special' && a.tier_type !== 'special') return -1
-    if (a.tier_type === 'special' && b.tier_type === 'special') {
-      return a.title.localeCompare(b.title)
-    }
+export function sortSponsorTiers(tiers: SponsorTier[]): SponsorTier[] {
+  const typeOrder = { standard: 0, special: 1, addon: 2 }
 
-    // Sort by highest price (descending)
+  return [...tiers].sort((a, b) => {
+    const aOrder = typeOrder[a.tier_type as keyof typeof typeOrder] ?? 99
+    const bOrder = typeOrder[b.tier_type as keyof typeof typeOrder] ?? 99
+
+    if (aOrder !== bOrder) return aOrder - bOrder
+
+    // Sort by highest price (descending) within same type
     const maxPriceA = a.price ? Math.max(...a.price.map((p) => p.amount)) : 0
     const maxPriceB = b.price ? Math.max(...b.price.map((p) => p.amount)) : 0
-    return maxPriceB - maxPriceA
+
+    if (maxPriceA !== maxPriceB) return maxPriceB - maxPriceA
+
+    // Fallback to title
+    return a.title.localeCompare(b.title)
   })
 }
 
 /**
- * Gets the maximum price value for a sponsor tier
+ * Formats a tier label, appending "(addon)" for addon tiers
  */
-export function getTierMaxPrice(
-  tier: SponsorTier | ConferenceSponsor['tier'],
-): number {
-  if (!tier.price || tier.price.length === 0) return 0
-  return Math.max(...tier.price.map((p) => p.amount))
+export function formatTierLabel(
+  tier: SponsorTier | { title: string; tier_type?: string },
+): string {
+  if (tier.tier_type === 'addon') {
+    return `${tier.title} (addon)`
+  }
+  return tier.title
 }
 
 /**
@@ -92,18 +98,25 @@ export function sortTierNamesByValue(
   tierNames: string[],
   sponsorTiers: SponsorTier[],
 ): string[] {
+  const typeOrder = { standard: 0, special: 1, addon: 2 }
+
   return [...tierNames].sort((a, b) => {
     if (a === 'No Tier') return 1
     if (b === 'No Tier') return -1
+    if (a === 'SPECIAL') return 1 // Put aggregated SPECIAL at the end
+    if (b === 'SPECIAL') return -1
 
     const tierA = sponsorTiers.find((tier) => tier.title === a)
     const tierB = sponsorTiers.find((tier) => tier.title === b)
 
-    if (tierA?.tier_type === 'special' && tierB?.tier_type === 'special') {
-      return a.localeCompare(b)
-    }
-    if (tierA?.tier_type === 'special') return 1
-    if (tierB?.tier_type === 'special') return -1
+    const aOrder = tierA
+      ? (typeOrder[tierA.tier_type as keyof typeof typeOrder] ?? 99)
+      : 99
+    const bOrder = tierB
+      ? (typeOrder[tierB.tier_type as keyof typeof typeOrder] ?? 99)
+      : 99
+
+    if (aOrder !== bOrder) return aOrder - bOrder
 
     const maxPriceA = tierA?.price
       ? Math.max(...tierA.price.map((p) => p.amount))
@@ -112,6 +125,27 @@ export function sortTierNamesByValue(
       ? Math.max(...tierB.price.map((p) => p.amount))
       : 0
 
-    return maxPriceB - maxPriceA
+    if (maxPriceA !== maxPriceB) return maxPriceB - maxPriceA
+
+    return a.localeCompare(b)
   })
+}
+
+/**
+ * Utility to download SVG content as a file
+ */
+export function downloadSvg(svgContent: string, fileName: string) {
+  const blob = new Blob([svgContent], { type: 'image/svg+xml' })
+  const url = URL.createObjectURL(blob)
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName.endsWith('.svg') ? fileName : `${fileName}.svg`
+  link.style.display = 'none'
+
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+
+  setTimeout(() => URL.revokeObjectURL(url), 100)
 }

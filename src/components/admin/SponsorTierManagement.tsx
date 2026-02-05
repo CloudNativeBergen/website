@@ -18,6 +18,7 @@ import {
   SponsorTierExisting,
 } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
+import { formatTierLabel, downloadSvg } from '@/lib/sponsor/utils'
 import { useNotification } from './NotificationProvider'
 import { ConfirmationModal } from './ConfirmationModal'
 import SponsorAddModal from './SponsorAddModal'
@@ -227,21 +228,8 @@ export default function SponsorTierManagement({
   }
 
   const handleDownloadSvg = (sponsorName: string, svgContent: string) => {
-    const blob = new Blob([svgContent], { type: 'image/svg+xml' })
-    const url = URL.createObjectURL(blob)
-
-    const link = document.createElement('a')
     const fileName = `${sponsorName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-logo.svg`
-
-    link.href = url
-    link.download = fileName
-    link.style.display = 'none'
-
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    setTimeout(() => URL.revokeObjectURL(url), 100)
+    downloadSvg(svgContent, fileName)
   }
 
   return (
@@ -294,7 +282,7 @@ export default function SponsorTierManagement({
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:space-x-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-md font-medium text-gray-900 dark:text-white">
-                        {tierName}
+                        {tier ? formatTierLabel(tier) : tierName}
                       </h3>
                       <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-200">
                         {tierSponsors.length} sponsor
@@ -368,19 +356,13 @@ export default function SponsorTierManagement({
 
                         <div className="flex items-start space-x-4">
                           <div className="shrink-0">
-                            {sponsor.logo ? (
-                              <SponsorLogo
-                                logo={sponsor.logo}
-                                logoBright={sponsor.logo_bright}
-                                name={sponsor.name}
-                                style={ADMIN_LOGO_SIZE}
-                                className="flex h-12 w-12 items-center justify-center"
-                              />
-                            ) : (
-                              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">
-                                <BuildingOffice2Icon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-                              </div>
-                            )}
+                            <SponsorLogo
+                              logo={sponsor.logo}
+                              logoBright={sponsor.logo_bright}
+                              name={sponsor.name}
+                              style={ADMIN_LOGO_SIZE}
+                              className="flex h-12 w-12 items-center justify-center"
+                            />
                           </div>
                           <div className="min-w-0 flex-1">
                             <h4 className="text-sm font-medium text-gray-900 sm:truncate dark:text-white">
