@@ -3,6 +3,8 @@
 import React, { useRef } from 'react'
 import { InlineSvg } from '@/components/InlineSvg'
 import { SponsorLogo } from '@/components/SponsorLogo'
+import { downloadSvg } from '@/lib/sponsor/utils'
+import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 
 const LOGO_PREVIEW_SIZE = { width: '100px', height: '100px' }
 
@@ -81,13 +83,23 @@ export function SponsorLogoEditor({
                 <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
                   <InlineSvg value={logo} style={LOGO_PREVIEW_SIZE} />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onChange({ logo: '' })}
-                  className="ml-3 cursor-pointer text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  Remove
-                </button>
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => downloadSvg(logo, `${name}-logo`)}
+                    className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  >
+                    <ArrowDownTrayIcon className="h-4 w-4" />
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ logo: '' })}
+                    className="cursor-pointer text-sm font-medium text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -117,13 +129,25 @@ export function SponsorLogoEditor({
                 <div className="inline-block rounded-lg border border-gray-200 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
                   <InlineSvg value={logoBright} style={LOGO_PREVIEW_SIZE} />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onChange({ logo_bright: '' })}
-                  className="ml-3 cursor-pointer text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  Remove
-                </button>
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadSvg(logoBright, `${name}-logo-bright`)
+                    }
+                    className="inline-flex cursor-pointer items-center gap-1 text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                  >
+                    <ArrowDownTrayIcon className="h-4 w-4" />
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ logo_bright: '' })}
+                    className="cursor-pointer text-sm font-medium text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             )}
           </div>

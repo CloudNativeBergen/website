@@ -5,10 +5,10 @@ import type {
   SponsorForConferenceExpanded,
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
-import { ImportHistoricSponsorsButton } from '@/components/admin/sponsor-crm/ImportHistoricSponsorsButton'
 import { SponsorIndividualEmailModal } from '@/components/admin/SponsorIndividualEmailModal'
 import {
   BoardViewSwitcher,
@@ -21,23 +21,28 @@ import {
   formatTierLabel,
 } from '@/components/admin/sponsor-crm/utils'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
-import { XMarkIcon, CheckIcon, PlusIcon } from '@heroicons/react/20/solid'
+import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
+import clsx from 'clsx'
 
 interface SponsorCRMClientProps {
   conferenceId: string
   conference: Conference
   domain: string
+  externalNewTrigger?: number
 }
 
 export function SponsorCRMClient({
   conferenceId,
   conference,
   domain,
+  externalNewTrigger = 0,
 }: SponsorCRMClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { data: session } = useSession()
+  const hasDefaultedRef = useRef(false)
 
   const [selectedSponsor, setSelectedSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
@@ -47,37 +52,7 @@ export function SponsorCRMClient({
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [currentView, setCurrentView] = useState<BoardView>('pipeline')
-
-  // Parse filters from URL
-  const tiersFilter =
-    searchParams.get('tiers')?.split(',').filter(Boolean) || []
-  const assignedToFilter = searchParams.get('assigned_to') || undefined
-  const tagsFilter = (searchParams.get('tags')?.split(',').filter(Boolean) ||
-    []) as SponsorTag[]
-
-  // Fetch with filters
-  const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({
-    conferenceId,
-    assigned_to: assignedToFilter,
-    tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-    tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
-  })
-
-  // Fetch tiers for filters
-  const { data: tiers = [] } = api.sponsor.tiers.listByConference.useQuery({
-    conferenceId,
-  })
-
-  // Use organizers from conference data, sorted alphabetically
-  const organizers =
-    [...(conference.organizers || [])]
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((o) => ({
-        _id: o._id,
-        name: o.name,
-        email: o.email,
-        avatar: o.image,
-      })) || []
+  const [searchQuery, setSearchQuery] = useState('')
 
   const utils = api.useUtils()
 
@@ -87,18 +62,7 @@ export function SponsorCRMClient({
     },
   })
 
-  const handleDelete = async (sponsorId: string) => {
-    if (
-      !confirm(
-        'Are you sure you want to remove this sponsor from the pipeline?',
-      )
-    ) {
-      return
-    }
-
-    await deleteMutation.mutateAsync({ id: sponsorId })
-  }
-
+  // Handlers
   const handleOpenForm = (sponsor?: SponsorForConferenceExpanded) => {
     setSelectedSponsor(sponsor || null)
     setIsFormOpen(true)
@@ -139,42 +103,103 @@ export function SponsorCRMClient({
     setSelectedIds(allFilteredIds)
   }
 
-  // Clear selection when filters change to avoid accidental bulk updates on hidden items
+  // Handle external trigger for new sponsor
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear selection when view/filters change
+    if (externalNewTrigger > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      handleCreateNew()
+    }
+  }, [externalNewTrigger])
+
+  // Parse filters from URL
+  const tiersFilter =
+    searchParams.get('tiers')?.split(',').filter(Boolean) || []
+  const assignedToFilter = searchParams.get('assigned_to') || undefined
+  const tagsFilter = (searchParams.get('tags')?.split(',').filter(Boolean) ||
+    []) as SponsorTag[]
+
+  // Default to current user's assigned sponsors if no assignedTo filter is set
+  useEffect(() => {
+    if (hasDefaultedRef.current) return
+    if (!session?.speaker?._id) return
+
+    if (!searchParams.has('assigned_to')) {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('assigned_to', session.speaker._id)
+      router.replace(`?${params.toString()}`, { scroll: false })
+    }
+    hasDefaultedRef.current = true
+  }, [session?.speaker?._id, searchParams, router])
+
+  // Fetch with filters
+  const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({
+    conferenceId,
+    assigned_to:
+      assignedToFilter === 'unassigned' ? undefined : assignedToFilter,
+    unassigned_only: assignedToFilter === 'unassigned',
+    tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+    tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
+  })
+
+  // Fetch tiers for filters
+  const { data: tiers = [] } = api.sponsor.tiers.listByConference.useQuery({
+    conferenceId,
+  })
+
+  // Use organizers from conference data
+  const organizers =
+    [...(conference.organizers || [])]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((o) => ({
+        _id: o._id,
+        name: o.name,
+        email: o.email,
+        avatar: o.image,
+      })) || []
+
+  const handleDelete = async (sponsorId: string) => {
+    if (
+      !confirm(
+        'Are you sure you want to remove this sponsor from the pipeline?',
+      )
+    ) {
+      return
+    }
+    await deleteMutation.mutateAsync({ id: sponsorId })
+  }
+
+  // Clear selection when filters change
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     handleClearSelection()
   }, [tiersFilter.length, assignedToFilter, tagsFilter.length, currentView])
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // CMD+O / CTRL+O: Open form (edit selected or new)
       if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
         e.preventDefault()
         handleOpenForm()
       }
-      // CMD+N / CTRL+N: Create new sponsor
       if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
         e.preventDefault()
         handleCreateNew()
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Handle sponsor query parameter to auto-open form
+  // Handle sponsor query parameter
   useEffect(() => {
     const sponsorId = searchParams.get('sponsor')
     if (sponsorId && sponsors.length > 0 && !isFormOpen) {
       const sponsor = sponsors.find((s) => s._id === sponsorId)
       if (sponsor) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional sync from URL params
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedSponsor(sponsor)
-
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsFormOpen(true)
-        // Remove the sponsor param from URL after opening
         const params = new URLSearchParams(searchParams.toString())
         params.delete('sponsor')
         router.replace(
@@ -185,14 +210,7 @@ export function SponsorCRMClient({
         )
       }
     }
-  }, [
-    searchParams,
-    sponsors,
-    isFormOpen,
-    router,
-    setSelectedSponsor,
-    setIsFormOpen,
-  ])
+  }, [searchParams, sponsors, isFormOpen, router])
 
   // Update URL with filters
   const updateFilters = (key: string, value: string | null) => {
@@ -228,10 +246,8 @@ export function SponsorCRMClient({
     router.push(window.location.pathname, { scroll: false })
   }
 
-  // Filter sponsors based on current view (filters already applied server-side)
-  // Contract and Invoice boards only show closed-won sponsors
-  // Invoice board also requires a contract value
-  const filteredSponsors =
+  // Filter logic
+  let filteredSponsors =
     currentView === 'pipeline'
       ? sponsors
       : currentView === 'invoice'
@@ -240,11 +256,16 @@ export function SponsorCRMClient({
           )
         : sponsors.filter((s) => s.status === 'closed-won')
 
-  // Calculate active filter count
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase().trim()
+    filteredSponsors = filteredSponsors.filter((s) =>
+      s.sponsor.name.toLowerCase().includes(q),
+    )
+  }
+
   const activeFilterCount =
     tiersFilter.length + (assignedToFilter ? 1 : 0) + tagsFilter.length
 
-  // Available tags
   const availableTags: SponsorTag[] = [
     'warm-lead',
     'returning-sponsor',
@@ -256,7 +277,6 @@ export function SponsorCRMClient({
     'previously-declined',
   ]
 
-  // Group sponsors by status, contract status, or invoice status
   const groupedSponsors = filteredSponsors.reduce(
     (acc, sponsor) => {
       let key: string
@@ -267,7 +287,6 @@ export function SponsorCRMClient({
       } else {
         key = sponsor.invoice_status
       }
-
       if (!acc[key]) {
         acc[key] = []
       }
@@ -277,35 +296,29 @@ export function SponsorCRMClient({
     {} as Record<string, SponsorForConferenceExpanded[]>,
   )
 
-  // Define columns based on view
-  const getColumns = (): Array<{ key: string; label: string }> => {
-    if (currentView === 'pipeline') {
-      return [
-        { key: 'prospect', label: 'Prospect' },
-        { key: 'contacted', label: 'Contacted' },
-        { key: 'negotiating', label: 'Negotiating' },
-        { key: 'closed-won', label: 'Closed - Won' },
-        { key: 'closed-lost', label: 'Closed - Lost' },
-      ]
-    } else if (currentView === 'contract') {
-      return [
-        { key: 'none', label: 'No Contract' },
-        { key: 'verbal-agreement', label: 'Verbal Agreement' },
-        { key: 'contract-sent', label: 'Contract Sent' },
-        { key: 'contract-signed', label: 'Contract Signed' },
-      ]
-    } else {
-      return [
-        { key: 'not-sent', label: 'Not Sent' },
-        { key: 'sent', label: 'Sent' },
-        { key: 'overdue', label: 'Overdue' },
-        { key: 'paid', label: 'Paid' },
-        { key: 'cancelled', label: 'Cancelled' },
-      ]
-    }
-  }
-
-  const columns = getColumns()
+  const columns =
+    currentView === 'pipeline'
+      ? [
+          { key: 'prospect', label: 'Prospect' },
+          { key: 'contacted', label: 'Contacted' },
+          { key: 'negotiating', label: 'Negotiating' },
+          { key: 'closed-won', label: 'Closed - Won' },
+          { key: 'closed-lost', label: 'Closed - Lost' },
+        ]
+      : currentView === 'contract'
+        ? [
+            { key: 'none', label: 'No Contract' },
+            { key: 'verbal-agreement', label: 'Verbal Agreement' },
+            { key: 'contract-sent', label: 'Contract Sent' },
+            { key: 'contract-signed', label: 'Contract Signed' },
+          ]
+        : [
+            { key: 'not-sent', label: 'Not Sent' },
+            { key: 'sent', label: 'Sent' },
+            { key: 'overdue', label: 'Overdue' },
+            { key: 'paid', label: 'Paid' },
+            { key: 'cancelled', label: 'Cancelled' },
+          ]
 
   if (!conferenceId) {
     return (
@@ -316,10 +329,11 @@ export function SponsorCRMClient({
   }
 
   return (
-    <div className="mt-8 space-y-4">
-      {/* Form Modal */}
+    <div className="space-y-4">
+      {/* Modals */}
       {isFormOpen && (
         <SponsorCRMForm
+          key={selectedSponsor?._id || 'new'}
           conferenceId={conferenceId}
           sponsor={selectedSponsor}
           isOpen={isFormOpen}
@@ -332,7 +346,6 @@ export function SponsorCRMClient({
         />
       )}
 
-      {/* Email Modal */}
       {emailSponsor && conference && (
         <SponsorIndividualEmailModal
           isOpen={isEmailModalOpen}
@@ -351,146 +364,198 @@ export function SponsorCRMClient({
         />
       )}
 
-      {/* Filters and View Switcher */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterDropdown
-            label="Tier"
-            activeCount={tiersFilter.length}
-            position="left"
-            width="wide"
-          >
-            {tiers.length === 0 ? (
-              <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
-                No tiers available
-              </div>
-            ) : (
-              sortSponsorTiers(tiers).map((tier: SponsorTier) => (
-                <FilterOption
-                  key={tier._id}
-                  onClick={() => toggleTierFilter(tier._id)}
-                  checked={tiersFilter.includes(tier._id)}
-                  keepOpen
-                >
-                  {formatTierLabel(tier)}
-                </FilterOption>
-              ))
-            )}
-          </FilterDropdown>
-
-          {/* Organizer Filter */}
-          <FilterDropdown
-            label="Assigned To"
-            activeCount={assignedToFilter ? 1 : 0}
-            position="left"
-            width="wide"
-          >
-            <FilterOption
-              onClick={() => setOrganizerFilter(null)}
-              checked={!assignedToFilter}
-              type="radio"
-            >
-              All Organizers
-            </FilterOption>
-            {organizers.map((organizer) => (
-              <FilterOption
-                key={organizer._id}
-                onClick={() => setOrganizerFilter(organizer._id)}
-                checked={assignedToFilter === organizer._id}
-                type="radio"
-              >
-                {organizer.name}
-              </FilterOption>
-            ))}
-          </FilterDropdown>
-
-          {/* Tags Filter */}
-          <FilterDropdown
-            label="Tags"
-            activeCount={tagsFilter.length}
-            position="left"
-            width="wide"
-          >
-            {availableTags.map((tag) => (
-              <FilterOption
-                key={tag}
-                onClick={() => toggleTagFilter(tag)}
-                checked={tagsFilter.includes(tag)}
-                keepOpen
-              >
-                {tag
-                  .split('-')
-                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                  .join(' ')}
-              </FilterOption>
-            ))}
-          </FilterDropdown>
-
-          {/* Clear Filters */}
-          {activeFilterCount > 0 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={clearAllFilters}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-gray-100 px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-              >
-                <XMarkIcon className="h-4 w-4" />
-                Clear {activeFilterCount}{' '}
-                {activeFilterCount === 1 ? 'filter' : 'filters'}
-              </button>
-              <button
-                onClick={handleSelectAllFiltered}
-                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
-              >
-                <CheckIcon className="h-4 w-4" />
-                Select all filtered ({filteredSponsors.length})
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCreateNew}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-indigo-500 dark:hover:bg-indigo-400"
-          >
-            <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
-            Create New
-          </button>
-          <ImportHistoricSponsorsButton
-            conferenceId={conferenceId}
-            onSuccess={() => {
-              utils.sponsor.crm.list.invalidate()
-            }}
-          />
+      {/* THE UNIFIED CLEAN TOOLBAR - SINGLE LINE */}
+      <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        {/* Navigation */}
+        <div className="flex-shrink-0">
           <BoardViewSwitcher
             currentView={currentView}
             onViewChange={setCurrentView}
           />
         </div>
+
+        <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
+
+        {/* Search */}
+        <div className="group relative max-w-sm flex-grow">
+          <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search sponsors..."
+            className="h-9 w-full rounded-lg bg-gray-50 pr-8 pl-9 text-sm ring-1 ring-gray-300 transition-all ring-inset focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:ring-inset dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus:bg-white/10"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            >
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
+
+        {/* Filters */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <FilterDropdown
+              label="Tier"
+              activeCount={tiersFilter.length}
+              position="left"
+              size="sm"
+            >
+              {tiers.length === 0 ? (
+                <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                  No tiers available
+                </div>
+              ) : (
+                sortSponsorTiers(tiers).map((tier: SponsorTier) => (
+                  <FilterOption
+                    key={tier._id}
+                    onClick={() => toggleTierFilter(tier._id)}
+                    checked={tiersFilter.includes(tier._id)}
+                    keepOpen
+                  >
+                    {formatTierLabel(tier)}
+                  </FilterOption>
+                ))
+              )}
+            </FilterDropdown>
+
+            <FilterDropdown
+              label="Owner"
+              activeCount={assignedToFilter ? 1 : 0}
+              position="left"
+              size="sm"
+            >
+              <FilterOption
+                onClick={() => setOrganizerFilter(null)}
+                checked={!assignedToFilter}
+                type="radio"
+              >
+                All Owners
+              </FilterOption>
+              <FilterOption
+                onClick={() => setOrganizerFilter('unassigned')}
+                checked={assignedToFilter === 'unassigned'}
+                type="radio"
+              >
+                Unassigned
+              </FilterOption>
+              <div className="my-1 border-t border-gray-100 dark:border-gray-700" />
+              {organizers.map((organizer) => (
+                <FilterOption
+                  key={organizer._id}
+                  onClick={() => setOrganizerFilter(organizer._id)}
+                  checked={assignedToFilter === organizer._id}
+                  type="radio"
+                >
+                  {organizer.name}
+                </FilterOption>
+              ))}
+            </FilterDropdown>
+
+            <FilterDropdown
+              label="Tags"
+              activeCount={tagsFilter.length}
+              position="left"
+              size="sm"
+            >
+              {availableTags.map((tag) => (
+                <FilterOption
+                  key={tag}
+                  onClick={() => toggleTagFilter(tag)}
+                  checked={tagsFilter.includes(tag)}
+                  keepOpen
+                >
+                  {tag
+                    .split('-')
+                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ')}
+                </FilterOption>
+              ))}
+            </FilterDropdown>
+          </div>
+
+          {(activeFilterCount > 0 || searchQuery) && (
+            <button
+              onClick={() => {
+                clearAllFilters()
+                setSearchQuery('')
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-gray-400 ring-1 ring-gray-300 transition-all ring-inset hover:bg-red-50 hover:text-red-500 hover:ring-red-200 dark:bg-white/5 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-red-900/20 dark:hover:ring-red-900/30"
+              title="Clear all filters"
+            >
+              <XMarkIcon className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+
+        {/* Selection / Count */}
+        <div className="ml-auto flex items-center gap-3 pl-4">
+          <div className="flex flex-col items-end">
+            <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
+              {filteredSponsors.length}
+            </span>
+            <span className="text-[10px] tracking-wider text-gray-500 uppercase dark:text-gray-400">
+              Sponsors
+            </span>
+          </div>
+          {selectedIds.length > 0 && (
+            <div className="flex flex-col items-end border-l border-gray-200 pl-3 dark:border-gray-700">
+              <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                {selectedIds.length}
+              </span>
+              <span className="text-[10px] tracking-wider text-indigo-500/70 uppercase dark:text-indigo-400/70">
+                Selected
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Bulk Actions Bar */}
-      <SponsorBulkActions
-        selectedIds={selectedIds}
-        onClearSelection={handleClearSelection}
-        onSuccess={() => {
-          utils.sponsor.crm.list.invalidate()
-        }}
-      />
+      {/* Bulk Actions (Overlay style when items selected) */}
+      {selectedIds.length > 0 && (
+        <SponsorBulkActions
+          selectedIds={selectedIds}
+          onClearSelection={handleClearSelection}
+          onSuccess={() => utils.sponsor.crm.list.invalidate()}
+        />
+      )}
+
+      {/* Selection Utility Hint (Only if filters active and nothing selected) */}
+      {selectedIds.length === 0 && (activeFilterCount > 0 || searchQuery) && (
+        <div className="flex justify-end px-1">
+          <button
+            onClick={handleSelectAllFiltered}
+            className="text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+          >
+            Select all {filteredSponsors.length} filtered results
+          </button>
+        </div>
+      )}
 
       {/* Board Columns */}
       <div
-        className={`grid grid-cols-1 gap-4 ${currentView === 'pipeline' ? 'lg:grid-cols-5' : currentView === 'invoice' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
+        className={clsx(
+          'grid grid-cols-1 gap-4',
+          currentView === 'pipeline' && 'lg:grid-cols-5',
+          currentView === 'invoice' && 'lg:grid-cols-5',
+          currentView === 'contract' && 'lg:grid-cols-4',
+        )}
       >
         {columns.map((column) => {
           const columnSponsors = groupedSponsors[column.key] || []
-
           return (
             <SponsorBoardColumn
               key={column.key}
               title={column.label}
               sponsors={columnSponsors}
               isLoading={isLoading}
+              currentView={currentView}
               selectedIds={selectedIds}
               isSelectionMode={selectedIds.length > 0}
               onSponsorClick={handleOpenForm}

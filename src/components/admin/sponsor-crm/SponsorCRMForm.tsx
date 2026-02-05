@@ -67,21 +67,25 @@ export function SponsorCRMForm({
   const { showNotification } = useNotification()
 
   const [formData, setFormData] = useState({
-    sponsorId: '',
-    name: '',
-    website: '',
-    logo: '',
-    logo_bright: '',
-    tierId: '',
-    addonIds: [] as string[],
-    contractStatus: 'none' as ContractStatus,
-    status: 'prospect' as SponsorStatus,
-    invoiceStatus: 'not-sent' as InvoiceStatus,
-    contractValue: '',
-    contractCurrency: 'NOK',
-    notes: '',
-    tags: [] as SponsorTag[],
-    assignedTo: '',
+    sponsorId: sponsor?.sponsor._id || '',
+    name: sponsor?.sponsor.name || '',
+    website: sponsor?.sponsor.website || '',
+    logo: sponsor?.sponsor.logo || '',
+    logo_bright: sponsor?.sponsor.logo_bright || '',
+    tierId: sponsor?.tier?._id || '',
+    addonIds: sponsor?.addons?.map((a) => a._id) || ([] as string[]),
+    contractStatus: (sponsor?.contract_status || 'none') as ContractStatus,
+    status: (sponsor?.status || 'prospect') as SponsorStatus,
+    invoiceStatus: (sponsor?.invoice_status || 'not-sent') as InvoiceStatus,
+    contractValue: sponsor?.contract_value?.toString() || '',
+    contractCurrency: (sponsor?.contract_currency || 'NOK') as
+      | 'NOK'
+      | 'USD'
+      | 'EUR'
+      | 'GBP',
+    notes: sponsor?.notes || '',
+    tags: sponsor?.tags || ([] as SponsorTag[]),
+    assignedTo: sponsor?.assigned_to?._id || '',
   })
 
   const { data: allSponsors = [] } = api.sponsor.list.useQuery({
@@ -188,46 +192,51 @@ export function SponsorCRMForm({
       // Reset mutation states when modal opens
       resetCreateMutation()
       resetUpdateMutation()
-
-      if (sponsor) {
-        setFormData({
-          sponsorId: sponsor.sponsor._id,
-          name: sponsor.sponsor.name,
-          website: sponsor.sponsor.website || '',
-          logo: sponsor.sponsor.logo || '',
-          logo_bright: sponsor.sponsor.logo_bright || '',
-          tierId: sponsor.tier?._id || '',
-          addonIds: sponsor.addons?.map((a) => a._id) || [],
-          contractStatus: sponsor.contract_status,
-          status: sponsor.status,
-          invoiceStatus: sponsor.invoice_status,
-          contractValue: sponsor.contract_value?.toString() || '',
-          contractCurrency: sponsor.contract_currency || 'NOK',
-          notes: sponsor.notes || '',
-          tags: sponsor.tags || [],
-          assignedTo: sponsor.assigned_to?._id || '',
-        })
-      } else {
-        setFormData({
-          sponsorId: '',
-          name: '',
-          website: '',
-          logo: '',
-          logo_bright: '',
-          tierId: '',
-          addonIds: [],
-          contractStatus: 'none',
-          status: 'prospect',
-          invoiceStatus: 'not-sent',
-          contractValue: '',
-          contractCurrency: 'NOK',
-          notes: '',
-          tags: [],
-          assignedTo: '',
-        })
-      }
     }
-  }, [sponsor, isOpen, resetCreateMutation, resetUpdateMutation])
+  }, [isOpen, resetCreateMutation, resetUpdateMutation])
+
+  // Auto-fill contract value when package changes
+  useEffect(() => {
+    if (!isOpen || !sponsorTiers.length) return
+
+    const selectedTier = regularTiers.find((t) => t._id === formData.tierId)
+    const selectedAddons = addonTiers.filter((t) =>
+      formData.addonIds.includes(t._id),
+    )
+
+    let total = 0
+
+    // Helper to get price for currency
+    const getPrice = (tier: SponsorTier) => {
+      return (
+        tier.price?.find((p) => p.currency === formData.contractCurrency)
+          ?.amount || 0
+      )
+    }
+
+    if (selectedTier) {
+      total += getPrice(selectedTier)
+    }
+
+    selectedAddons.forEach((addon) => {
+      total += getPrice(addon)
+    })
+
+    if (total > 0) {
+      setFormData((prev) => ({
+        ...prev,
+        contractValue: total.toString(),
+      }))
+    }
+  }, [
+    formData.tierId,
+    formData.addonIds,
+    formData.contractCurrency,
+    regularTiers,
+    addonTiers,
+    isOpen,
+    sponsorTiers.length,
+  ])
 
   // CMD+S / CTRL+S keyboard shortcut to save the form
   useEffect(() => {
@@ -641,7 +650,11 @@ export function SponsorCRMForm({
                                 onCurrencyChange={(value) =>
                                   setFormData({
                                     ...formData,
-                                    contractCurrency: value,
+                                    contractCurrency: value as
+                                      | 'NOK'
+                                      | 'USD'
+                                      | 'EUR'
+                                      | 'GBP',
                                   })
                                 }
                               />

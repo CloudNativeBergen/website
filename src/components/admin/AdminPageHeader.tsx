@@ -89,9 +89,9 @@ export function AdminPageHeader({
   }
 
   return (
-    <div className="pb-6">
+    <div className="pb-4">
       {backLink && (
-        <div className="mb-4">
+        <div className="mb-2">
           <Link
             href={backLink.href}
             className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"

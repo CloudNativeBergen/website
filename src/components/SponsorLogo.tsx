@@ -16,11 +16,14 @@ export function SponsorLogo({
   className,
   style,
 }: SponsorLogoProps) {
-  if (!logo) {
+  if (!logo && !logoBright) {
     return null
   }
 
-  const hasResponsiveBehavior = Boolean(logoBright)
+  const effectiveLogo = logo || logoBright
+  const effectiveLogoBright = logoBright || logo
+
+  const hasResponsiveBehavior = logo && logoBright
 
   return (
     <div className="relative">
@@ -28,12 +31,16 @@ export function SponsorLogo({
         className={hasResponsiveBehavior ? 'block dark:hidden' : 'block'}
         aria-label={name}
       >
-        <InlineSvg value={logo} className={className} style={style} />
+        <InlineSvg value={effectiveLogo!} className={className} style={style} />
       </div>
 
-      {logoBright && (
+      {hasResponsiveBehavior && (
         <div className="hidden dark:block" aria-label={name}>
-          <InlineSvg value={logoBright} className={className} style={style} />
+          <InlineSvg
+            value={effectiveLogoBright!}
+            className={className}
+            style={style}
+          />
         </div>
       )}
     </div>

@@ -227,6 +227,7 @@ export async function listSponsorsForConference(
     status?: string[]
     invoice_status?: string[]
     assigned_to?: string
+    unassigned_only?: boolean
     tags?: string[]
     tiers?: string[]
   },
@@ -243,7 +244,9 @@ export async function listSponsorsForConference(
     if (filters?.invoice_status && filters.invoice_status.length > 0) {
       filterQuery += ` && invoice_status in $invoiceStatuses`
     }
-    if (filters?.assigned_to) {
+    if (filters?.unassigned_only) {
+      filterQuery += ` && !defined(assigned_to)`
+    } else if (filters?.assigned_to) {
       filterQuery += ` && assigned_to._ref == $assignedTo`
     }
     if (filters?.tags && filters.tags.length > 0) {
