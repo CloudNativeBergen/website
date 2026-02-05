@@ -427,15 +427,11 @@ export default function SponsorAddModal({
     if (!formData.tierId) return false
 
     if (isCreatingNew) {
-      return (
-        formData.name.trim() && formData.website.trim() && formData.logo.trim()
-      )
+      return !!formData.name.trim()
     }
 
     if (editingSponsor || selectedExistingSponsor) {
-      return (
-        formData.name.trim() && formData.website.trim() && formData.logo.trim()
-      )
+      return !!formData.name.trim()
     }
 
     return false

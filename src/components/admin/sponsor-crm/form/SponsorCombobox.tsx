@@ -59,11 +59,11 @@ export function SponsorCombobox({
   })
 
   const handleCreateNewSponsor = async () => {
-    if (!newSponsorData.name.trim()) return
+    if (!newSponsorData.name.trim() || !newSponsorData.website.trim()) return
 
     await createSponsorMutation.mutateAsync({
       name: newSponsorData.name,
-      website: newSponsorData.website || '',
+      website: newSponsorData.website,
       logo: '',
     })
   }
@@ -121,7 +121,7 @@ export function SponsorCombobox({
         <button
           type="button"
           onClick={() => setIsCreatingNew(true)}
-          className="mt-2 text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+          className="mt-2 cursor-pointer text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
         >
           + Create new sponsor
         </button>
@@ -148,7 +148,7 @@ export function SponsorCombobox({
           </div>
           <div>
             <label className="block text-left text-sm font-medium text-gray-900 dark:text-white">
-              Website
+              Website *
             </label>
             <input
               type="url"
@@ -168,9 +168,11 @@ export function SponsorCombobox({
               type="button"
               onClick={handleCreateNewSponsor}
               disabled={
-                createSponsorMutation.isPending || !newSponsorData.name.trim()
+                createSponsorMutation.isPending ||
+                !newSponsorData.name.trim() ||
+                !newSponsorData.website.trim()
               }
-              className="inline-flex items-center justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:bg-gray-400 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-gray-600"
+              className="inline-flex cursor-pointer items-center justify-center rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:bg-gray-400 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-gray-600"
             >
               {createSponsorMutation.isPending ? 'Creating...' : 'Create'}
             </button>

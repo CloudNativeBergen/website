@@ -25,8 +25,8 @@ import type { EventDiscountWithUsage } from '@/lib/discounts/types'
 interface SponsorWithTierInfo {
   id: string
   name: string
-  website: string
-  logo: string
+  website?: string
+  logo?: string
   tier: {
     title: string
     tagline: string

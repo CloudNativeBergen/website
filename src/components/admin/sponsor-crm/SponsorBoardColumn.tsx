@@ -10,8 +10,12 @@ interface SponsorBoardColumnProps {
   title: string
   sponsors: SponsorForConferenceExpanded[]
   isLoading?: boolean
+  selectedIds?: string[]
+  isSelectionMode?: boolean
   onSponsorClick: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorDelete: (sponsorId: string) => void
+  onSponsorEmail?: (sponsor: SponsorForConferenceExpanded) => void
+  onSponsorToggleSelect?: (id: string) => void
   onAddClick: () => void
   emptyMessage?: string
 }
@@ -20,8 +24,12 @@ export function SponsorBoardColumn({
   title,
   sponsors,
   isLoading = false,
+  selectedIds = [],
+  isSelectionMode = false,
   onSponsorClick,
   onSponsorDelete,
+  onSponsorEmail,
+  onSponsorToggleSelect,
   onAddClick,
   emptyMessage = 'No sponsors',
 }: SponsorBoardColumnProps) {
@@ -79,15 +87,21 @@ export function SponsorBoardColumn({
               <SponsorCard
                 key={sponsor._id}
                 sponsor={sponsor}
+                isSelected={selectedIds.includes(sponsor._id)}
+                isSelectionMode={isSelectionMode}
+                onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
                 onEdit={() => onSponsorClick(sponsor)}
                 onDelete={() => onSponsorDelete(sponsor._id)}
+                onEmail={
+                  onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
+                }
               />
             ))}
 
           {sponsors.length === 0 && (
             <button
               onClick={onAddClick}
-              className="w-full rounded-lg border-2 border-dashed border-gray-300 bg-transparent p-4 text-center text-sm text-gray-500 transition-all hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-500 dark:hover:text-blue-400"
+              className="w-full cursor-pointer rounded-lg border-2 border-dashed border-gray-300 bg-transparent p-4 text-center text-sm text-gray-500 transition-all hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-500 dark:hover:text-blue-400"
             >
               {emptyMessage}
             </button>
@@ -96,7 +110,7 @@ export function SponsorBoardColumn({
           {sponsors.length > 0 && (
             <button
               onClick={onAddClick}
-              className="group w-full rounded-lg border-2 border-dashed border-gray-300 bg-transparent p-3 text-center text-sm text-gray-500 transition-all hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-500 dark:hover:text-blue-400"
+              className="group w-full cursor-pointer rounded-lg border-2 border-dashed border-gray-300 bg-transparent p-3 text-center text-sm text-gray-500 transition-all hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-500 dark:hover:text-blue-400"
             >
               <PlusIcon className="mx-auto mb-1 h-5 w-5" />
               Add sponsor

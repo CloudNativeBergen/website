@@ -4,6 +4,8 @@ import {
   SponsorForConferenceUpdateSchema,
   SponsorTagSchema,
   ImportAllHistoricSponsorsSchema,
+  BulkUpdateSponsorCRMSchema,
+  BulkDeleteSponsorCRMSchema,
 } from '@/server/schemas/sponsorForConference'
 
 describe('SponsorForConferenceInputSchema', () => {
@@ -177,6 +179,56 @@ describe('ImportAllHistoricSponsorsSchema', () => {
 
   it('fails without target conference ID', () => {
     const result = ImportAllHistoricSponsorsSchema.safeParse({})
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('BulkUpdateSponsorCRMSchema', () => {
+  it('passes with valid ids and status', () => {
+    const result = BulkUpdateSponsorCRMSchema.safeParse({
+      ids: ['id-1', 'id-2'],
+      status: 'negotiating',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('passes with add_tags', () => {
+    const result = BulkUpdateSponsorCRMSchema.safeParse({
+      ids: ['id-1'],
+      add_tags: ['high-priority', 'returning-sponsor'],
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('fails with empty ids array', () => {
+    const result = BulkUpdateSponsorCRMSchema.safeParse({
+      ids: [],
+      status: 'closed-won',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('fails with invalid status', () => {
+    const result = BulkUpdateSponsorCRMSchema.safeParse({
+      ids: ['id-1'],
+      status: 'invalid',
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('BulkDeleteSponsorCRMSchema', () => {
+  it('passes with valid ids', () => {
+    const result = BulkDeleteSponsorCRMSchema.safeParse({
+      ids: ['id-1', 'id-2'],
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('fails with empty ids', () => {
+    const result = BulkDeleteSponsorCRMSchema.safeParse({
+      ids: [],
+    })
     expect(result.success).toBe(false)
   })
 })

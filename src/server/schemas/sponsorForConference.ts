@@ -112,6 +112,25 @@ export const CopySponsorsSchema = z.object({
   targetConferenceId: z.string().min(1, 'Target conference ID is required'),
 })
 
+export const BulkUpdateSponsorCRMSchema = z.object({
+  ids: z
+    .array(z.string().min(1))
+    .min(1, 'At least one sponsor must be selected'),
+  status: SponsorStatusSchema.optional(),
+  contract_status: ContractStatusSchema.optional(),
+  invoice_status: InvoiceStatusSchema.optional(),
+  assigned_to: z.string().nullable().optional(),
+  tags: z.array(SponsorTagSchema).optional(),
+  add_tags: z.array(SponsorTagSchema).optional(),
+  remove_tags: z.array(SponsorTagSchema).optional(),
+})
+
+export const BulkDeleteSponsorCRMSchema = z.object({
+  ids: z
+    .array(z.string().min(1))
+    .min(1, 'At least one sponsor must be selected'),
+})
+
 export const ImportAllHistoricSponsorsSchema = z.object({
   targetConferenceId: z.string().min(1, 'Target conference ID is required'),
 })

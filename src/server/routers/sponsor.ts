@@ -62,11 +62,14 @@ import {
   UpdateInvoiceStatusSchema,
   CopySponsorsSchema,
   ImportAllHistoricSponsorsSchema,
+  BulkUpdateSponsorCRMSchema,
+  BulkDeleteSponsorCRMSchema,
 } from '@/server/schemas/sponsorForConference'
 import {
   listActivitiesForSponsor,
   listActivitiesForConference,
 } from '@/lib/sponsor-crm/activities'
+import { bulkUpdateSponsors, bulkDeleteSponsors } from '@/lib/sponsor-crm/bulk'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -139,26 +142,33 @@ export const sponsorRouter = router({
     }
   }),
 
-  getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
-    const { sponsor, error } = await getSponsor(input.id)
+  getById: adminProcedure
+    .input(
+      IdParamSchema.extend({ includeContactInfo: z.boolean().default(false) }),
+    )
+    .query(async ({ input }) => {
+      const { sponsor, error } = await getSponsor(
+        input.id,
+        input.includeContactInfo,
+      )
 
-    if (error) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch sponsor',
-        cause: error,
-      })
-    }
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch sponsor',
+          cause: error,
+        })
+      }
 
-    if (!sponsor) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Sponsor not found',
-      })
-    }
+      if (!sponsor) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Sponsor not found',
+        })
+      }
 
-    return sponsor
-  }),
+      return sponsor
+    }),
 
   create: adminProcedure
     .input(SponsorInputSchema)
@@ -858,6 +868,44 @@ export const sponsorRouter = router({
         }
 
         return sponsorForConference
+      }),
+
+    bulkUpdate: adminProcedure
+      .input(BulkUpdateSponsorCRMSchema)
+      .mutation(async ({ input, ctx }) => {
+        const userId = ctx.speaker._id
+        if (!userId) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'User ID not found in session',
+          })
+        }
+
+        try {
+          return await bulkUpdateSponsors(input, userId)
+        } catch (error) {
+          console.error('Bulk update error:', error)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to perform bulk update',
+            cause: error,
+          })
+        }
+      }),
+
+    bulkDelete: adminProcedure
+      .input(BulkDeleteSponsorCRMSchema)
+      .mutation(async ({ input }) => {
+        try {
+          return await bulkDeleteSponsors(input.ids)
+        } catch (error) {
+          console.error('Bulk delete error:', error)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to perform bulk delete',
+            cause: error,
+          })
+        }
       }),
 
     delete: adminProcedure
