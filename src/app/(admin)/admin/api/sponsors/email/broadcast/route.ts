@@ -1,6 +1,11 @@
 import { NextAuthRequest, auth } from '@/lib/auth'
 import { setupEmailRoute } from '@/lib/email/route-helpers'
 import { sendBroadcastEmail } from '@/lib/email/broadcast'
+import { logBulkEmailSent } from '@/lib/sponsor-crm/activity'
+import {
+  clientWrite,
+  clientReadUncached as clientRead,
+} from '@/lib/sanity/client'
 
 export const POST = auth(async (req: NextAuthRequest) => {
   const startTime = Date.now()
@@ -16,8 +21,10 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return error
     }
 
+    const { conference } = context!
+
     const result = await sendBroadcastEmail({
-      conference: context!.conference,
+      conference,
       subject: context!.subject,
       messagePortableText: context!.messagePortableText,
       audienceType: 'sponsors',
@@ -31,6 +38,44 @@ export const POST = auth(async (req: NextAuthRequest) => {
         error: errorData,
         durationMs: duration,
       })
+      return result
+    }
+
+    // CRM Tracking Logic for Broadcast
+    try {
+      const userId = req.auth?.speaker?._id
+
+      // Fetch all sponsor-for-conference relationships for this conference
+      const sponsors = await clientRead.fetch<
+        Array<{ _id: string; status: string }>
+      >(
+        `*[_type == "sponsorForConference" && conference._ref == $conferenceId]{_id, status}`,
+        { conferenceId: conference._id },
+      )
+
+      if (sponsors.length > 0 && userId) {
+        const sponsorIds = sponsors.map((s) => s._id)
+
+        // 1. Log the broadcast for everyone
+        await logBulkEmailSent(sponsorIds, context!.subject, userId)
+
+        // 2. Transition 'prospect' to 'contacted'
+        const prospectIds = sponsors
+          .filter((s) => s.status === 'prospect')
+          .map((s) => s._id)
+
+        if (prospectIds.length > 0) {
+          const transaction = clientWrite.transaction()
+          for (const id of prospectIds) {
+            transaction.patch(id, { set: { status: 'contacted' } })
+            // We'll skip individual activity logs here to avoid blowing up the transaction size
+            // and because the broadcast log is already there
+          }
+          await transaction.commit()
+        }
+      }
+    } catch (crmError) {
+      console.warn('[SponsorBroadcast] CRM tracking failed:', crmError)
     }
 
     return result

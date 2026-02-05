@@ -39,6 +39,16 @@ export async function bulkUpdateSponsors(
   const transaction = clientWrite.transaction()
   let updatedCount = 0
 
+  // Fetch the new assignee's name if we're assigning someone
+  let assigneeName = ''
+  if (input.assigned_to) {
+    const assignee = await clientWrite.fetch<{ name: string }>(
+      `*[_type == "speaker" && _id == $id][0]{name}`,
+      { id: input.assigned_to },
+    )
+    assigneeName = assignee?.name || input.assigned_to
+  }
+
   interface CRMUpdates {
     status?: SponsorStatus
     contract_status?: ContractStatus
@@ -129,7 +139,7 @@ export async function bulkUpdateSponsors(
           },
           activity_type: 'note',
           description: input.assigned_to
-            ? `Assigned via bulk update`
+            ? `Assigned to ${assigneeName} via bulk update`
             : 'Unassigned via bulk update',
           created_by: { _type: 'reference', _ref: userId },
           created_at: getCurrentDateTime(),

@@ -8,6 +8,11 @@ import {
 } from '@/lib/email/route-helpers'
 import { resend, retryWithBackoff } from '@/lib/email/config'
 import { getSponsor } from '@/lib/sponsor/sanity'
+import { logEmailSent, logStageChange } from '@/lib/sponsor-crm/activity'
+import {
+  clientWrite,
+  clientReadUncached as clientRead,
+} from '@/lib/sanity/client'
 
 export const POST = auth(async (req: NextAuthRequest) => {
   try {
@@ -76,6 +81,32 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     if (result.error) {
       return createEmailErrorResponse(result.error.message, 500)
+    }
+
+    // CRM Tracking Logic
+    try {
+      const userId = req.auth?.speaker?._id
+
+      // Find the sponsor-for-conference relationship
+      const sfc = await clientRead.fetch<{ _id: string; status: string }>(
+        `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{_id, status}`,
+        { sponsorId, conferenceId: conference._id },
+      )
+
+      if (sfc && userId) {
+        // 1. Log the interaction
+        await logEmailSent(sfc._id, subject, userId)
+
+        // 2. Automatically move to 'contacted' if currently in 'prospect'
+        if (sfc.status === 'prospect') {
+          await clientWrite.patch(sfc._id).set({ status: 'contacted' }).commit()
+
+          await logStageChange(sfc._id, 'prospect', 'contacted', userId)
+        }
+      }
+    } catch (crmError) {
+      console.warn('[SponsorIndividualEmail] CRM tracking failed:', crmError)
+      // We don't fail the request if tracking fails, as the email was already sent
     }
 
     return createEmailSuccessResponse({

@@ -103,3 +103,55 @@ export async function logContractStatusChange(
     },
   )
 }
+
+export async function logEmailSent(
+  sponsorForConferenceId: string,
+  subject: string,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'email',
+    `Email sent: ${subject}`,
+    createdBy,
+    {
+      additional_data: subject,
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}
+
+export async function logBulkEmailSent(
+  sponsorForConferenceIds: string[],
+  subject: string,
+  createdBy: string,
+): Promise<{ success: boolean; error?: Error }> {
+  try {
+    const transaction = clientWrite.transaction()
+    const timestamp = getCurrentDateTime()
+
+    for (const id of sponsorForConferenceIds) {
+      transaction.create({
+        _type: 'sponsorActivity',
+        sponsor_for_conference: {
+          _type: 'reference',
+          _ref: id,
+        },
+        activity_type: 'email',
+        description: `Broadcast email sent: ${subject}`,
+        metadata: {
+          additional_data: subject,
+          timestamp,
+        },
+        created_by: { _type: 'reference', _ref: createdBy },
+        created_at: timestamp,
+      })
+    }
+
+    await transaction.commit()
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to log bulk email activities:', error)
+    return { success: false, error: error as Error }
+  }
+}
