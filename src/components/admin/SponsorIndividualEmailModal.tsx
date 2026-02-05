@@ -106,6 +106,7 @@ export function SponsorIndividualEmailModal({
         title: 'Email sent successfully',
         message: `Sent to ${result.recipientCount} contact${result.recipientCount > 1 ? 's' : ''} for ${sponsorForConference.sponsor.name}`,
       })
+      onClose()
     } catch (err) {
       showNotification({
         type: 'error',
