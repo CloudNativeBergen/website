@@ -99,6 +99,11 @@ export function EmailModal({
     isOpen,
   })
 
+  const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1')
+
   useEffect(() => {
     const currentStorageKey = storageKey || 'email-modal-default'
     const isCurrentKeyInitialized =
@@ -549,7 +554,11 @@ export function EmailModal({
                       disabled={
                         isLoading ||
                         !subject.trim() ||
-                        !getCurrentMessage().trim()
+                        !getCurrentMessage().trim() ||
+                        isLocalhost
+                      }
+                      title={
+                        isLocalhost ? 'Sending is disabled on localhost' : ''
                       }
                       className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
                     >
