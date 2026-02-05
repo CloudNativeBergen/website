@@ -38,7 +38,11 @@ import type {
 } from '@/lib/sponsor/types'
 import type {
   SponsorTag,
+  SponsorForConference,
   SponsorForConferenceInput,
+  SponsorStatus,
+  ContractStatus,
+  InvoiceStatus,
 } from '@/lib/sponsor-crm/types'
 import {
   createSponsorForConference,
@@ -62,11 +66,14 @@ import {
   UpdateInvoiceStatusSchema,
   CopySponsorsSchema,
   ImportAllHistoricSponsorsSchema,
+  BulkUpdateSponsorCRMSchema,
+  BulkDeleteSponsorCRMSchema,
 } from '@/server/schemas/sponsorForConference'
 import {
   listActivitiesForSponsor,
   listActivitiesForConference,
 } from '@/lib/sponsor-crm/activities'
+import { formatStatusName } from '@/components/admin/sponsor-crm/utils'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -139,26 +146,33 @@ export const sponsorRouter = router({
     }
   }),
 
-  getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
-    const { sponsor, error } = await getSponsor(input.id)
+  getById: adminProcedure
+    .input(
+      IdParamSchema.extend({ includeContactInfo: z.boolean().default(false) }),
+    )
+    .query(async ({ input }) => {
+      const { sponsor, error } = await getSponsor(
+        input.id,
+        input.includeContactInfo,
+      )
 
-    if (error) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch sponsor',
-        cause: error,
-      })
-    }
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch sponsor',
+          cause: error,
+        })
+      }
 
-    if (!sponsor) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: 'Sponsor not found',
-      })
-    }
+      if (!sponsor) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Sponsor not found',
+        })
+      }
 
-    return sponsor
-  }),
+      return sponsor
+    }),
 
   create: adminProcedure
     .input(SponsorInputSchema)
@@ -858,6 +872,170 @@ export const sponsorRouter = router({
         }
 
         return sponsorForConference
+      }),
+
+    bulkUpdate: adminProcedure
+      .input(BulkUpdateSponsorCRMSchema)
+      .mutation(async ({ input, ctx }) => {
+        const userId = ctx.speaker._id
+        if (!userId) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'User ID not found in session',
+          })
+        }
+
+        try {
+          // Fetch all target sponsors in one query
+          const sponsors = await clientWrite.fetch<SponsorForConference[]>(
+            `*[_type == "sponsorForConference" && _id in $ids]`,
+            { ids: input.ids },
+          )
+
+          const transaction = clientWrite.transaction()
+          let updatedCount = 0
+
+          interface CRMUpdates {
+            status?: SponsorStatus
+            contract_status?: ContractStatus
+            invoice_status?: InvoiceStatus
+            assigned_to?: { _type: 'reference'; _ref: string } | null
+            tags?: SponsorTag[]
+          }
+
+          for (const existing of sponsors) {
+            const updates: CRMUpdates = {}
+            if (input.status !== undefined) updates.status = input.status
+            if (input.contract_status !== undefined)
+              updates.contract_status = input.contract_status
+            if (input.invoice_status !== undefined)
+              updates.invoice_status = input.invoice_status
+            if (input.assigned_to !== undefined) {
+              updates.assigned_to =
+                input.assigned_to === null
+                  ? null
+                  : { _type: 'reference', _ref: input.assigned_to }
+            }
+
+            // Handle tags
+            let currentTags = existing.tags || []
+            let tagsChanged = false
+
+            if (input.tags !== undefined) {
+              currentTags = input.tags as SponsorTag[]
+              tagsChanged = true
+            }
+            if (input.add_tags) {
+              const newTags = [...new Set([...currentTags, ...input.add_tags])]
+              if (newTags.length !== currentTags.length) {
+                currentTags = newTags as SponsorTag[]
+                tagsChanged = true
+              }
+            }
+            if (input.remove_tags) {
+              const newTags = currentTags.filter(
+                (t) => !input.remove_tags?.includes(t),
+              )
+              if (newTags.length !== currentTags.length) {
+                currentTags = newTags as SponsorTag[]
+                tagsChanged = true
+              }
+            }
+
+            if (tagsChanged) {
+              updates.tags = currentTags
+            }
+
+            if (Object.keys(updates).length > 0) {
+              transaction.patch(existing._id, { set: updates })
+              updatedCount++
+
+              // Prepare activity logs
+              if (input.status && input.status !== existing.status) {
+                const activityId = `activity-status-${existing._id}-${Date.now()}`
+                transaction.create({
+                  _id: activityId,
+                  _type: 'sponsorActivity',
+                  sponsor_for_conference: {
+                    _type: 'reference',
+                    _ref: existing._id,
+                  },
+                  activity_type: 'stage_change',
+                  description: `Status changed from ${formatStatusName(existing.status)} to ${formatStatusName(input.status)}`,
+                  metadata: {
+                    old_value: existing.status,
+                    new_value: input.status,
+                    timestamp: getCurrentDateTime(),
+                  },
+                  created_by: { _type: 'reference', _ref: userId },
+                  created_at: getCurrentDateTime(),
+                })
+              }
+
+              if (
+                input.assigned_to !== undefined &&
+                input.assigned_to !== (existing.assigned_to?._ref || null)
+              ) {
+                const activityId = `activity-assign-${existing._id}-${Date.now()}`
+                transaction.create({
+                  _id: activityId,
+                  _type: 'sponsorActivity',
+                  sponsor_for_conference: {
+                    _type: 'reference',
+                    _ref: existing._id,
+                  },
+                  activity_type: 'note',
+                  description: input.assigned_to
+                    ? `Assigned via bulk update`
+                    : 'Unassigned via bulk update',
+                  created_by: { _type: 'reference', _ref: userId },
+                  created_at: getCurrentDateTime(),
+                })
+              }
+            }
+          }
+
+          if (updatedCount > 0) {
+            await transaction.commit()
+          }
+
+          return {
+            success: true,
+            updatedCount,
+            totalCount: input.ids.length,
+          }
+        } catch (error) {
+          console.error('Bulk update error:', error)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to perform bulk update',
+            cause: error,
+          })
+        }
+      }),
+
+    bulkDelete: adminProcedure
+      .input(BulkDeleteSponsorCRMSchema)
+      .mutation(async ({ input }) => {
+        try {
+          const transaction = clientWrite.transaction()
+          for (const id of input.ids) {
+            transaction.delete(id)
+          }
+          await transaction.commit()
+          return {
+            success: true,
+            deletedCount: input.ids.length,
+            totalCount: input.ids.length,
+          }
+        } catch (error) {
+          console.error('Bulk delete error:', error)
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to perform bulk delete',
+            cause: error,
+          })
+        }
       }),
 
     delete: adminProcedure

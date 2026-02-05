@@ -18,7 +18,12 @@ import type {
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
 import { sortSponsorTiersByValue } from '@/lib/sponsor/utils'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import {
+  XMarkIcon,
+  ChevronLeftIcon,
+  UserGroupIcon,
+  EnvelopeIcon,
+} from '@heroicons/react/24/outline'
 import clsx from 'clsx'
 import {
   StatusListbox,
@@ -35,9 +40,15 @@ import {
   TAGS,
 } from './form/constants'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
+import { SponsorWithContactInfo } from '@/lib/sponsor/types'
+import { SponsorIndividualEmailModal } from '../SponsorIndividualEmailModal'
+import { Conference } from '@/lib/conference/types'
 
 interface SponsorCRMFormProps {
   conferenceId: string
+  conference: Conference
+  domain: string
   sponsor: SponsorForConferenceExpanded | null
   isOpen: boolean
   onClose: () => void
@@ -47,12 +58,16 @@ interface SponsorCRMFormProps {
 
 export function SponsorCRMForm({
   conferenceId,
+  conference,
+  domain,
   sponsor,
   isOpen,
   onClose,
   onSuccess,
   existingSponsorsInCRM = [],
 }: SponsorCRMFormProps) {
+  const [view, setView] = useState<'pipeline' | 'contacts'>('pipeline')
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const { showNotification } = useNotification()
 
   const [formData, setFormData] = useState({
@@ -70,8 +85,16 @@ export function SponsorCRMForm({
   })
 
   const { data: allSponsors = [] } = api.sponsor.list.useQuery({
-    includeContactInfo: false,
+    includeContactInfo: true,
   })
+
+  // Get the full sponsor object if editing, including contacts
+  const editingFullSponsor =
+    sponsor && allSponsors.length > 0
+      ? (allSponsors.find(
+          (s) => s._id === sponsor.sponsor._id,
+        ) as SponsorWithContactInfo)
+      : null
 
   const availableSponsors = sponsor
     ? allSponsors
@@ -97,6 +120,16 @@ export function SponsorCRMForm({
     { enabled: isOpen },
   )
 
+  const handleClose = () => {
+    setView('pipeline')
+    onClose()
+  }
+
+  const handleSuccess = () => {
+    onSuccess()
+    handleClose()
+  }
+
   const createMutation = api.sponsor.crm.create.useMutation({
     onSuccess: async () => {
       // Invalidate all sponsor queries to ensure fresh data
@@ -107,8 +140,7 @@ export function SponsorCRMForm({
         message: 'Sponsor added to pipeline',
         type: 'success',
       })
-      onSuccess()
-      onClose()
+      handleSuccess()
     },
     onError: (error) => {
       showNotification({
@@ -129,8 +161,7 @@ export function SponsorCRMForm({
         message: 'Sponsor updated successfully',
         type: 'success',
       })
-      onSuccess()
-      onClose()
+      handleSuccess()
     },
     onError: (error) => {
       showNotification({
@@ -148,9 +179,11 @@ export function SponsorCRMForm({
 
   useEffect(() => {
     if (isOpen) {
-      // Reset mutation states when modal opens
+      // Reset mutation states and view when modal opens
       resetCreateMutation()
       resetUpdateMutation()
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset view to pipeline when opening
+      setView('pipeline')
 
       if (sponsor) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from sponsor data
@@ -187,7 +220,7 @@ export function SponsorCRMForm({
 
   // CMD+S / CTRL+S keyboard shortcut to save the form
   useEffect(() => {
-    if (!isOpen) return
+    if (!isOpen || view === 'contacts') return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -202,7 +235,7 @@ export function SponsorCRMForm({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, createMutation.isPending, updateMutation.isPending])
+  }, [isOpen, view, createMutation.isPending, updateMutation.isPending])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -252,241 +285,343 @@ export function SponsorCRMForm({
   }
 
   return (
-    <Transition show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
-        <TransitionChild
-          as={Fragment}
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-gray-500/75 transition-opacity dark:bg-gray-900/75" />
-        </TransitionChild>
+    <>
+      <Transition show={isOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={handleClose}>
+          <TransitionChild
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-gray-500/75 transition-opacity dark:bg-gray-900/75" />
+          </TransitionChild>
 
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <TransitionChild
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-              enterTo="opacity-100 translate-y-0 sm:scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-              leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            >
-              <DialogPanel className="max-h-[90vh] w-full max-w-3xl transform overflow-hidden rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white p-4 shadow-2xl transition-all dark:border-gray-700 dark:bg-gray-900">
-                <div className="absolute top-0 right-0 pt-4 pr-4">
-                  <button
-                    onClick={onClose}
-                    className="rounded-md text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:text-gray-500 dark:hover:text-gray-400"
-                  >
-                    <span className="sr-only">Close</span>
-                    <XMarkIcon className="h-6 w-6" />
-                  </button>
-                </div>
-
-                <DialogTitle className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
-                  {sponsor ? 'Edit Sponsor' : 'Add Sponsor to Pipeline'}
-                </DialogTitle>
-
-                <form onSubmit={handleSubmit} className="mt-3">
-                  <div className="space-y-3">
-                    {/* Sponsor Selection */}
-                    <SponsorCombobox
-                      value={formData.sponsorId}
-                      onChange={(value) =>
-                        setFormData({ ...formData, sponsorId: value })
-                      }
-                      availableSponsors={availableSponsors}
-                      disabled={!!sponsor}
-                    />
-
-                    {/* Tier Selection */}
-                    <TierRadioGroup
-                      tiers={regularTiers}
-                      value={formData.tierId}
-                      onChange={(value) =>
-                        setFormData({ ...formData, tierId: value })
-                      }
-                    />
-
-                    {/* Addons Selection */}
-                    <AddonsCheckboxGroup
-                      addons={addonTiers}
-                      value={formData.addonIds}
-                      onChange={(value) =>
-                        setFormData({ ...formData, addonIds: value })
-                      }
-                    />
-
-                    {/* Status, Contract Status, and Invoice Status */}
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <div>
-                        <StatusListbox
-                          label="Status *"
-                          value={formData.status}
-                          onChange={(value) =>
-                            setFormData({ ...formData, status: value })
-                          }
-                          options={STATUSES}
-                        />
-                      </div>
-
-                      <div>
-                        <StatusListbox
-                          label="Contract Status *"
-                          value={formData.contractStatus}
-                          onChange={(value) =>
-                            setFormData({ ...formData, contractStatus: value })
-                          }
-                          options={CONTRACT_STATUSES}
-                        />
-                      </div>
-
-                      <div>
-                        <StatusListbox
-                          label="Invoice Status *"
-                          value={formData.invoiceStatus}
-                          onChange={(value) =>
-                            setFormData({ ...formData, invoiceStatus: value })
-                          }
-                          options={INVOICE_STATUSES}
-                          disabled={
-                            !formData.contractValue ||
-                            parseFloat(formData.contractValue) === 0
-                          }
-                          helperText={
-                            !formData.contractValue ||
-                            parseFloat(formData.contractValue) === 0
-                              ? '(No cost)'
-                              : undefined
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    {/* Assigned To and Contract Value */}
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <OrganizerCombobox
-                        value={formData.assignedTo}
-                        onChange={(value) =>
-                          setFormData({ ...formData, assignedTo: value })
-                        }
-                        organizers={organizers}
-                      />
-
-                      <ContractValueInput
-                        value={formData.contractValue}
-                        currency={formData.contractCurrency}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, contractValue: value })
-                        }
-                        onCurrencyChange={(value) =>
-                          setFormData({ ...formData, contractCurrency: value })
-                        }
-                      />
-                    </div>
-
-                    {/* Tags */}
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                          Tags
-                        </label>
-                        <div className="mt-1.5">
-                          <FilterDropdown
-                            label="Select tags"
-                            activeCount={formData.tags.length}
-                            keepOpen
-                            fixedWidth
-                            forceDropUp
+          <div className="fixed inset-0 z-10 overflow-y-auto">
+            <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+              <TransitionChild
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                enterTo="opacity-100 translate-y-0 sm:scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+                leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+              >
+                <DialogPanel className="relative max-h-[90vh] w-full max-w-3xl transform overflow-hidden rounded-2xl border border-brand-frosted-steel bg-brand-glacier-white p-6 shadow-2xl transition-all dark:border-gray-700 dark:bg-gray-900">
+                  <div className="flex items-start justify-between">
+                    <div className="text-left">
+                      <div className="flex items-center gap-2">
+                        {view === 'contacts' && (
+                          <button
+                            onClick={() => setView('pipeline')}
+                            className="-ml-1.5 cursor-pointer rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-indigo-600 dark:hover:bg-gray-800 dark:hover:text-indigo-400"
+                            title="Back to Pipeline"
                           >
-                            {TAGS.map((tag) => (
-                              <FilterOption
-                                key={tag.value}
-                                checked={formData.tags.includes(tag.value)}
-                                onClick={() => {
-                                  if (formData.tags.includes(tag.value)) {
-                                    setFormData({
-                                      ...formData,
-                                      tags: formData.tags.filter(
-                                        (t) => t !== tag.value,
-                                      ),
-                                    })
-                                  } else {
-                                    setFormData({
-                                      ...formData,
-                                      tags: [...formData.tags, tag.value],
-                                    })
-                                  }
-                                }}
-                                keepOpen
-                              >
-                                {tag.label}
-                              </FilterOption>
-                            ))}
-                          </FilterDropdown>
-                        </div>
+                            <ChevronLeftIcon className="h-6 w-6" />
+                          </button>
+                        )}
+                        <DialogTitle className="text-lg leading-6 font-semibold text-gray-900 dark:text-white">
+                          {view === 'contacts'
+                            ? 'Manage Contacts'
+                            : sponsor
+                              ? 'Edit Sponsor'
+                              : 'Add Sponsor to Pipeline'}
+                        </DialogTitle>
                       </div>
+                      {sponsor && view === 'pipeline' && (
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          {sponsor.sponsor.name}
+                        </p>
+                      )}
                     </div>
 
-                    {/* Notes */}
-                    <div>
-                      <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                        Notes
-                      </label>
-                      <textarea
-                        value={formData.notes}
-                        onChange={(e) =>
-                          setFormData({ ...formData, notes: e.target.value })
-                        }
-                        rows={2}
-                        className="mt-1.5 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
+                    <div className="flex items-center gap-2">
+                      {sponsor && (
+                        <button
+                          type="button"
+                          onClick={() => setIsEmailModalOpen(true)}
+                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700"
+                          title="Email sponsor contacts"
+                        >
+                          <EnvelopeIcon className="h-4 w-4" />
+                          <span className="hidden sm:inline">Email</span>
+                        </button>
+                      )}
+                      {sponsor && view === 'pipeline' && (
+                        <button
+                          type="button"
+                          onClick={() => setView('contacts')}
+                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700"
+                          title="Manage contact persons"
+                        >
+                          <UserGroupIcon className="h-4 w-4" />
+                          <span className="hidden sm:inline">Contacts</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={handleClose}
+                        className="cursor-pointer rounded-md text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:text-gray-500 dark:hover:text-gray-400"
+                      >
+                        <span className="sr-only">Close</span>
+                        <XMarkIcon className="h-6 w-6" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-left">
+                    {view === 'contacts' && editingFullSponsor ? (
+                      <SponsorContactEditor
+                        sponsor={editingFullSponsor}
+                        onSuccess={() => {
+                          utils.sponsor.list.invalidate()
+                          setView('pipeline') // Return to pipeline view on save
+                        }}
+                        onCancel={() => setView('pipeline')}
                       />
-                    </div>
-                  </div>
+                    ) : (
+                      <form onSubmit={handleSubmit}>
+                        <div className="space-y-3">
+                          {/* Sponsor Selection - Only show when adding new */}
+                          {!sponsor && (
+                            <SponsorCombobox
+                              value={formData.sponsorId}
+                              onChange={(value) =>
+                                setFormData({ ...formData, sponsorId: value })
+                              }
+                              availableSponsors={availableSponsors}
+                              disabled={!!sponsor}
+                            />
+                          )}
 
-                  <div className="mt-4 flex flex-row-reverse gap-3">
-                    <button
-                      type="submit"
-                      disabled={
-                        createMutation.isPending || updateMutation.isPending
-                      }
-                      className={clsx(
-                        'inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
-                        createMutation.isPending || updateMutation.isPending
-                          ? 'bg-gray-400 dark:bg-gray-600'
-                          : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
-                      )}
-                    >
-                      {createMutation.isPending || updateMutation.isPending ? (
-                        'Saving...'
-                      ) : (
-                        <>
-                          {sponsor ? 'Update' : 'Add'}
-                          <kbd className="rounded bg-white/20 px-1.5 py-0.5 font-mono text-xs">
-                            ⌘S
-                          </kbd>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="inline-flex justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-white/10 dark:text-white dark:ring-white/10 dark:hover:bg-white/20"
-                    >
-                      Cancel
-                    </button>
+                          {/* Tier Selection */}
+                          <TierRadioGroup
+                            tiers={regularTiers}
+                            value={formData.tierId}
+                            onChange={(value) =>
+                              setFormData({ ...formData, tierId: value })
+                            }
+                          />
+
+                          {/* Addons Selection */}
+                          <AddonsCheckboxGroup
+                            addons={addonTiers}
+                            value={formData.addonIds}
+                            onChange={(value) =>
+                              setFormData({ ...formData, addonIds: value })
+                            }
+                          />
+
+                          {/* Status, Contract Status, and Invoice Status */}
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div>
+                              <StatusListbox
+                                label="Status *"
+                                value={formData.status}
+                                onChange={(value) =>
+                                  setFormData({ ...formData, status: value })
+                                }
+                                options={STATUSES}
+                              />
+                            </div>
+
+                            <div>
+                              <StatusListbox
+                                label="Contract Status *"
+                                value={formData.contractStatus}
+                                onChange={(value) =>
+                                  setFormData({
+                                    ...formData,
+                                    contractStatus: value,
+                                  })
+                                }
+                                options={CONTRACT_STATUSES}
+                              />
+                            </div>
+
+                            <div>
+                              <StatusListbox
+                                label="Invoice Status *"
+                                value={formData.invoiceStatus}
+                                onChange={(value) =>
+                                  setFormData({
+                                    ...formData,
+                                    invoiceStatus: value,
+                                  })
+                                }
+                                options={INVOICE_STATUSES}
+                                disabled={
+                                  !formData.contractValue ||
+                                  parseFloat(formData.contractValue) === 0
+                                }
+                                helperText={
+                                  !formData.contractValue ||
+                                  parseFloat(formData.contractValue) === 0
+                                    ? '(No cost)'
+                                    : undefined
+                                }
+                              />
+                            </div>
+                          </div>
+
+                          {/* Assigned To and Contract Value */}
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <OrganizerCombobox
+                              value={formData.assignedTo}
+                              onChange={(value) =>
+                                setFormData({ ...formData, assignedTo: value })
+                              }
+                              organizers={organizers}
+                            />
+
+                            <ContractValueInput
+                              value={formData.contractValue}
+                              currency={formData.contractCurrency}
+                              onValueChange={(value) =>
+                                setFormData({
+                                  ...formData,
+                                  contractValue: value,
+                                })
+                              }
+                              onCurrencyChange={(value) =>
+                                setFormData({
+                                  ...formData,
+                                  contractCurrency: value,
+                                })
+                              }
+                            />
+                          </div>
+
+                          {/* Tags */}
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                              <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
+                                Tags
+                              </label>
+                              <div className="mt-1.5">
+                                <FilterDropdown
+                                  label="Select tags"
+                                  activeCount={formData.tags.length}
+                                  keepOpen
+                                  fixedWidth
+                                  forceDropUp
+                                >
+                                  {TAGS.map((tag) => (
+                                    <FilterOption
+                                      key={tag.value}
+                                      checked={formData.tags.includes(
+                                        tag.value,
+                                      )}
+                                      onClick={() => {
+                                        if (formData.tags.includes(tag.value)) {
+                                          setFormData({
+                                            ...formData,
+                                            tags: formData.tags.filter(
+                                              (t) => t !== tag.value,
+                                            ),
+                                          })
+                                        } else {
+                                          setFormData({
+                                            ...formData,
+                                            tags: [...formData.tags, tag.value],
+                                          })
+                                        }
+                                      }}
+                                      keepOpen
+                                    >
+                                      {tag.label}
+                                    </FilterOption>
+                                  ))}
+                                </FilterDropdown>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Notes */}
+                          <div>
+                            <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
+                              Notes
+                            </label>
+                            <textarea
+                              value={formData.notes}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  notes: e.target.value,
+                                })
+                              }
+                              rows={2}
+                              className="mt-1.5 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-row-reverse gap-3">
+                          <button
+                            type="submit"
+                            disabled={
+                              createMutation.isPending ||
+                              updateMutation.isPending
+                            }
+                            className={clsx(
+                              'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
+                              createMutation.isPending ||
+                                updateMutation.isPending
+                                ? 'bg-gray-400 dark:bg-gray-600'
+                                : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
+                            )}
+                          >
+                            {createMutation.isPending ||
+                            updateMutation.isPending ? (
+                              'Saving...'
+                            ) : (
+                              <>
+                                {sponsor ? 'Update' : 'Add'}
+                                <kbd className="ml-1 rounded bg-white/20 px-1.5 py-0.5 font-mono text-xs">
+                                  ⌘S
+                                </kbd>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleClose}
+                            className="inline-flex cursor-pointer justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-white/10 dark:text-white dark:ring-white/10 dark:hover:bg-white/20"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </div>
-                </form>
-              </DialogPanel>
-            </TransitionChild>
+                </DialogPanel>
+              </TransitionChild>
+            </div>
           </div>
-        </div>
-      </Dialog>
-    </Transition>
+        </Dialog>
+      </Transition>
+
+      {/* Email Modal */}
+      {sponsor && (
+        <SponsorIndividualEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={() => setIsEmailModalOpen(false)}
+          sponsorForConference={sponsor}
+          domain={domain}
+          fromEmail={conference?.sponsor_email || ''}
+          conference={{
+            title: conference?.title || '',
+            city: conference?.city || '',
+            country: conference?.country || '',
+            start_date: conference?.start_date || '',
+            domains: conference?.domains || [domain],
+            social_links: conference?.social_links,
+          }}
+        />
+      )}
+    </>
   )
 }

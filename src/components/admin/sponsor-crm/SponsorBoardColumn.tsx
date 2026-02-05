@@ -10,8 +10,11 @@ interface SponsorBoardColumnProps {
   title: string
   sponsors: SponsorForConferenceExpanded[]
   isLoading?: boolean
+  selectedIds?: string[]
   onSponsorClick: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorDelete: (sponsorId: string) => void
+  onSponsorEmail?: (sponsor: SponsorForConferenceExpanded) => void
+  onSponsorToggleSelect?: (id: string) => void
   onAddClick: () => void
   emptyMessage?: string
 }
@@ -20,8 +23,11 @@ export function SponsorBoardColumn({
   title,
   sponsors,
   isLoading = false,
+  selectedIds = [],
   onSponsorClick,
   onSponsorDelete,
+  onSponsorEmail,
+  onSponsorToggleSelect,
   onAddClick,
   emptyMessage = 'No sponsors',
 }: SponsorBoardColumnProps) {
@@ -79,8 +85,13 @@ export function SponsorBoardColumn({
               <SponsorCard
                 key={sponsor._id}
                 sponsor={sponsor}
+                isSelected={selectedIds.includes(sponsor._id)}
+                onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
                 onEdit={() => onSponsorClick(sponsor)}
                 onDelete={() => onSponsorDelete(sponsor._id)}
+                onEmail={
+                  onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
+                }
               />
             ))}
 

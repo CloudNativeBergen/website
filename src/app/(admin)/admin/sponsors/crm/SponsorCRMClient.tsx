@@ -9,25 +9,38 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
 import { ImportHistoricSponsorsButton } from '@/components/admin/sponsor-crm/ImportHistoricSponsorsButton'
+import { SponsorIndividualEmailModal } from '@/components/admin/SponsorIndividualEmailModal'
 import {
   BoardViewSwitcher,
   type BoardView,
 } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { SponsorBoardColumn } from '@/components/admin/sponsor-crm/SponsorBoardColumn'
+import { SponsorBulkActions } from '@/components/admin/sponsor-crm/SponsorBulkActions'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
-import { XMarkIcon } from '@heroicons/react/20/solid'
+import { XMarkIcon, CheckIcon } from '@heroicons/react/20/solid'
+import { Conference } from '@/lib/conference/types'
 
 interface SponsorCRMClientProps {
   conferenceId: string
+  conference: Conference
+  domain: string
 }
 
-export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
+export function SponsorCRMClient({
+  conferenceId,
+  conference,
+  domain,
+}: SponsorCRMClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
 
   const [selectedSponsor, setSelectedSponsor] =
     useState<SponsorForConferenceExpanded | null>(null)
+  const [emailSponsor, setEmailSponsor] =
+    useState<SponsorForConferenceExpanded | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [currentView, setCurrentView] = useState<BoardView>('pipeline')
 
   // Parse filters from URL
@@ -81,6 +94,37 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
     setSelectedSponsor(null)
     setIsFormOpen(false)
   }
+
+  const handleOpenEmail = (sponsor: SponsorForConferenceExpanded) => {
+    setEmailSponsor(sponsor)
+    setIsEmailModalOpen(true)
+  }
+
+  const handleCloseEmail = () => {
+    setEmailSponsor(null)
+    setIsEmailModalOpen(false)
+  }
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+    )
+  }
+
+  const handleClearSelection = () => {
+    setSelectedIds([])
+  }
+
+  const handleSelectAllFiltered = () => {
+    const allFilteredIds = filteredSponsors.map((s) => s._id)
+    setSelectedIds(allFilteredIds)
+  }
+
+  // Clear selection when filters change to avoid accidental bulk updates on hidden items
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear selection when view/filters change
+    handleClearSelection()
+  }, [tiersFilter.length, assignedToFilter, tagsFilter?.length, currentView])
 
   // CMD+O / CTRL+O keyboard shortcut to open new sponsor form
   useEffect(() => {
@@ -238,19 +282,50 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
 
   const columns = getColumns()
 
+  if (!conferenceId) {
+    return (
+      <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+        <p className="text-gray-500">No conference selected</p>
+      </div>
+    )
+  }
+
   return (
     <div className="mt-8 space-y-4">
       {/* Form Modal */}
-      <SponsorCRMForm
-        conferenceId={conferenceId}
-        sponsor={selectedSponsor}
-        isOpen={isFormOpen}
-        onClose={handleCloseForm}
-        onSuccess={() => {
-          utils.sponsor.crm.list.invalidate()
-        }}
-        existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
-      />
+      {isFormOpen && (
+        <SponsorCRMForm
+          conferenceId={conferenceId}
+          conference={conference}
+          domain={domain}
+          sponsor={selectedSponsor}
+          isOpen={isFormOpen}
+          onClose={handleCloseForm}
+          onSuccess={() => {
+            utils.sponsor.crm.list.invalidate()
+          }}
+          existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
+        />
+      )}
+
+      {/* Email Modal */}
+      {emailSponsor && conference && (
+        <SponsorIndividualEmailModal
+          isOpen={isEmailModalOpen}
+          onClose={handleCloseEmail}
+          sponsorForConference={emailSponsor}
+          domain={domain}
+          fromEmail={conference.sponsor_email || ''}
+          conference={{
+            title: conference.title || '',
+            city: conference.city || '',
+            country: conference.country || '',
+            start_date: conference.start_date || '',
+            domains: conference.domains || [domain],
+            social_links: conference.social_links,
+          }}
+        />
+      )}
 
       {/* Filters and View Switcher */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -330,14 +405,23 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
 
           {/* Clear Filters */}
           {activeFilterCount > 0 && (
-            <button
-              onClick={clearAllFilters}
-              className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-            >
-              <XMarkIcon className="h-4 w-4" />
-              Clear {activeFilterCount}{' '}
-              {activeFilterCount === 1 ? 'filter' : 'filters'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={clearAllFilters}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-gray-100 px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                <XMarkIcon className="h-4 w-4" />
+                Clear {activeFilterCount}{' '}
+                {activeFilterCount === 1 ? 'filter' : 'filters'}
+              </button>
+              <button
+                onClick={handleSelectAllFiltered}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50"
+              >
+                <CheckIcon className="h-4 w-4" />
+                Select all filtered ({filteredSponsors.length})
+              </button>
+            </div>
           )}
         </div>
 
@@ -355,6 +439,15 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
         </div>
       </div>
 
+      {/* Bulk Actions Bar */}
+      <SponsorBulkActions
+        selectedIds={selectedIds}
+        onClearSelection={handleClearSelection}
+        onSuccess={() => {
+          utils.sponsor.crm.list.invalidate()
+        }}
+      />
+
       {/* Board Columns */}
       <div
         className={`grid grid-cols-1 gap-4 ${currentView === 'pipeline' ? 'lg:grid-cols-5' : currentView === 'invoice' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
@@ -368,8 +461,11 @@ export function SponsorCRMClient({ conferenceId }: SponsorCRMClientProps) {
               title={column.label}
               sponsors={columnSponsors}
               isLoading={isLoading}
+              selectedIds={selectedIds}
               onSponsorClick={handleOpenForm}
               onSponsorDelete={handleDelete}
+              onSponsorEmail={handleOpenEmail}
+              onSponsorToggleSelect={handleToggleSelect}
               onAddClick={() => handleOpenForm()}
               emptyMessage="No sponsors"
             />

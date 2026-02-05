@@ -2,10 +2,18 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { SponsorCRMClient } from './SponsorCRMClient'
 import { BuildingOffice2Icon } from '@heroicons/react/24/outline'
+import { headers } from 'next/headers'
 
 export default async function AdminSponsorsCRM() {
+  const headerList = await headers()
+  const domain = headerList.get('host') || 'localhost:3000'
+
   const { conference, error: conferenceError } =
-    await getConferenceForCurrentDomain({})
+    await getConferenceForCurrentDomain({
+      sponsors: true,
+      sponsorContact: true,
+      sponsorTiers: true,
+    })
 
   if (conferenceError || !conference) {
     return (
@@ -27,7 +35,11 @@ export default async function AdminSponsorsCRM() {
         backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
       />
 
-      <SponsorCRMClient conferenceId={conference._id} />
+      <SponsorCRMClient
+        conferenceId={conference._id}
+        conference={conference}
+        domain={domain}
+      />
     </div>
   )
 }
