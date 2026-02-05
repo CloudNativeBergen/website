@@ -1,7 +1,7 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { SponsorCRMClient } from './SponsorCRMClient'
-import { BuildingOffice2Icon } from '@heroicons/react/24/outline'
+import { RectangleStackIcon } from '@heroicons/react/24/outline'
 import { headers } from 'next/headers'
 
 export default async function AdminSponsorsCRM() {
@@ -28,7 +28,7 @@ export default async function AdminSponsorsCRM() {
   return (
     <div className="mx-auto max-w-7xl">
       <AdminPageHeader
-        icon={<BuildingOffice2Icon />}
+        icon={<RectangleStackIcon />}
         title="Sponsor Pipeline"
         description="Manage sponsor relationships and track deals for"
         contextHighlight={conference.title}

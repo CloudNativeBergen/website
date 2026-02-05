@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, Fragment } from 'react'
-import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import {
   Dialog,
   DialogPanel,
@@ -32,13 +31,9 @@ import {
   AddonsCheckboxGroup,
   OrganizerCombobox,
   ContractValueInput,
+  TagCombobox,
 } from './form'
-import {
-  STATUSES,
-  INVOICE_STATUSES,
-  CONTRACT_STATUSES,
-  TAGS,
-} from './form/constants'
+import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
 import { useNotification } from '@/components/admin/NotificationProvider'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
 import { SponsorWithContactInfo, SponsorTier } from '@/lib/sponsor/types'
@@ -116,7 +111,7 @@ export function SponsorCRMForm({
   )
 
   const { data: organizers = [] } = api.sponsor.crm.listOrganizers.useQuery(
-    undefined,
+    { conferenceId },
     { enabled: isOpen },
   )
 
@@ -182,7 +177,6 @@ export function SponsorCRMForm({
       // Reset mutation states and view when modal opens
       resetCreateMutation()
       resetUpdateMutation()
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset view to pipeline when opening
       setView('pipeline')
 
       if (sponsor) {
@@ -497,46 +491,13 @@ export function SponsorCRMForm({
 
                           {/* Tags */}
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <div>
-                              <label className="block text-left text-sm/6 font-medium text-gray-900 dark:text-white">
-                                Tags
-                              </label>
-                              <div className="mt-1.5">
-                                <FilterDropdown
-                                  label="Select tags"
-                                  activeCount={formData.tags.length}
-                                  keepOpen
-                                  fixedWidth
-                                  forceDropUp
-                                >
-                                  {TAGS.map((tag) => (
-                                    <FilterOption
-                                      key={tag.value}
-                                      checked={formData.tags.includes(
-                                        tag.value,
-                                      )}
-                                      onClick={() => {
-                                        if (formData.tags.includes(tag.value)) {
-                                          setFormData({
-                                            ...formData,
-                                            tags: formData.tags.filter(
-                                              (t) => t !== tag.value,
-                                            ),
-                                          })
-                                        } else {
-                                          setFormData({
-                                            ...formData,
-                                            tags: [...formData.tags, tag.value],
-                                          })
-                                        }
-                                      }}
-                                      keepOpen
-                                    >
-                                      {tag.label}
-                                    </FilterOption>
-                                  ))}
-                                </FilterDropdown>
-                              </div>
+                            <div className="col-span-full">
+                              <TagCombobox
+                                value={formData.tags}
+                                onChange={(tags) =>
+                                  setFormData({ ...formData, tags })
+                                }
+                              />
                             </div>
                           </div>
 

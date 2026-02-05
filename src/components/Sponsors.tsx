@@ -1,5 +1,3 @@
-
-
 import { Container } from '@/components/Container'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { ConferenceLogo } from '@/components/ConferenceLogo'
@@ -127,7 +125,7 @@ export function Sponsors({
                     have sponsorship tiers for every cluster size.
                   </p>
                   {conference.sponsor_tiers &&
-                    conference.sponsor_tiers.length > 0 ? (
+                  conference.sponsor_tiers.length > 0 ? (
                     <Link
                       href="/sponsor"
                       className="inline-flex items-center justify-center rounded-lg bg-brand-cloud-blue px-8 py-3 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus:ring-2 focus:ring-brand-cloud-blue focus:ring-offset-2 focus:outline-none dark:bg-brand-cloud-blue dark:hover:bg-brand-cloud-blue-hover dark:focus:ring-offset-gray-800"

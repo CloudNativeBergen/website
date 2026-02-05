@@ -22,6 +22,7 @@ import { ChevronDownIcon, CheckIcon } from '@heroicons/react/16/solid'
 import clsx from 'clsx'
 import { SponsorTierInput, SponsorTierExisting } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
+import { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
 import { api } from '@/lib/trpc/client'
 
 interface SponsorTierProps {
@@ -321,7 +322,7 @@ function SponsorTierModal({
                   <button
                     onClick={onClose}
                     disabled={isLoading}
-                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200"
+                    className="cursor-pointer rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200"
                   >
                     <span className="sr-only">Close</span>
                     <XMarkIcon className="h-6 w-6" />
@@ -531,7 +532,7 @@ function SponsorTierModal({
                         type="button"
                         onClick={addPrice}
                         disabled={isLoading}
-                        className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+                        className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
                       >
                         <PlusIcon className="mr-1.5 h-3 w-3" />
                         Add Price
@@ -586,7 +587,7 @@ function SponsorTierModal({
                               type="button"
                               onClick={() => removePrice(index)}
                               disabled={isLoading}
-                              className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                              className="cursor-pointer rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
                             >
                               <TrashIcon className="h-4 w-4" />
                             </button>
@@ -605,7 +606,7 @@ function SponsorTierModal({
                         type="button"
                         onClick={addPerk}
                         disabled={isLoading}
-                        className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+                        className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
                       >
                         <PlusIcon className="mr-1.5 h-3 w-3" />
                         Add Perk
@@ -652,7 +653,7 @@ function SponsorTierModal({
                                   type="button"
                                   onClick={() => removePerk(index)}
                                   disabled={isLoading}
-                                  className="rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
+                                  className="cursor-pointer rounded-md bg-red-50 p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50"
                                 >
                                   <TrashIcon className="h-4 w-4" />
                                 </button>
@@ -671,7 +672,7 @@ function SponsorTierModal({
                           type="button"
                           onClick={handleDelete}
                           disabled={isLoading}
-                          className="inline-flex items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:bg-red-500 dark:shadow-none dark:focus-visible:outline-red-500"
+                          className="inline-flex cursor-pointer items-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-red-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:opacity-50 dark:bg-red-500 dark:shadow-none dark:focus-visible:outline-red-500"
                         >
                           <ExclamationTriangleIcon className="mr-1.5 h-4 w-4" />
                           {deleteMutation.isPending
@@ -685,14 +686,14 @@ function SponsorTierModal({
                         type="button"
                         onClick={onClose}
                         disabled={isLoading}
-                        className="text-sm/6 font-semibold whitespace-nowrap text-gray-900 disabled:opacity-50 dark:text-white"
+                        className="cursor-pointer text-sm/6 font-semibold whitespace-nowrap text-gray-900 disabled:opacity-50 dark:text-white"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+                        className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
                       >
                         {createMutation.isPending || updateMutation.isPending
                           ? 'Saving...'
@@ -777,7 +778,7 @@ export default function SponsorTierEditor({
         </div>
         <button
           onClick={openCreateModal}
-          className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+          className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
         >
           <PlusIcon className="mr-1.5 h-4 w-4" />
           Create Tier
@@ -796,7 +797,7 @@ export default function SponsorTierEditor({
           <div className="mt-6">
             <button
               onClick={openCreateModal}
-              className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+              className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
             >
               <PlusIcon className="mr-1.5 h-4 w-4" />
               Create Tier
@@ -805,105 +806,92 @@ export default function SponsorTierEditor({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {sponsorTiers
-            .sort((a, b) => {
-              const tierTypeOrder = { standard: 0, special: 1, addon: 2 }
-              const typeOrderA = tierTypeOrder[a.tier_type] ?? 3
-              const typeOrderB = tierTypeOrder[b.tier_type] ?? 3
-              if (typeOrderA !== typeOrderB) return typeOrderA - typeOrderB
-
-              const getMaxPrice = (tier: SponsorTierExisting) => {
-                if (!tier.price || tier.price.length === 0) return 0
-                return Math.max(...tier.price.map((p) => p.amount))
-              }
-              return getMaxPrice(b) - getMaxPrice(a)
-            })
-            .map((tier) => (
-              <div
-                key={tier._id}
-                className={clsx(
-                  'group relative overflow-hidden rounded-lg border border-gray-300 bg-white p-6 shadow-sm hover:border-gray-400 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20',
-                  tier.most_popular && 'ring-2 ring-indigo-500',
-                )}
-              >
-                {tier.max_quantity === 1 && (
-                  <div className="absolute top-4 -right-8 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
-                    Exclusive
-                  </div>
-                )}
-                {tier.most_popular && (
-                  <div className="absolute -top-2 left-1/2 -translate-x-1/2">
-                    <span className="inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-medium text-white">
-                      <StarIcon className="mr-1 h-3 w-3" />
-                      Most Popular
-                    </span>
-                  </div>
-                )}
-
-                <div className="absolute top-4 right-4 opacity-0 transition-opacity group-hover:opacity-100">
-                  <div className="flex space-x-1">
-                    <button
-                      onClick={() => openEditModal(tier)}
-                      className="rounded-md bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100"
-                    >
-                      <PencilIcon className="h-4 w-4" />
-                    </button>
-                  </div>
+          {sortSponsorTiers(sponsorTiers).map((tier) => (
+            <div
+              key={tier._id}
+              className={clsx(
+                'group relative overflow-hidden rounded-lg border border-gray-300 bg-white p-6 shadow-sm hover:border-gray-400 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20',
+                tier.most_popular && 'ring-2 ring-indigo-500',
+              )}
+            >
+              {tier.max_quantity === 1 && (
+                <div className="absolute top-4 -right-8 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
+                  Exclusive
                 </div>
-
-                <div className="flex items-center">
-                  <TagIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-                  <h4 className="ml-3 text-lg font-medium text-gray-900 dark:text-white">
-                    {tier.title}
-                  </h4>
-                </div>
-
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  {tier.tagline}
-                </p>
-
-                {tier.price && tier.price.length > 0 && (
-                  <div className="mt-4">
-                    <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatCurrency(
-                        Math.max(...tier.price.map((p) => p.amount)),
-                        tier.price[0].currency,
-                      )}
-                    </div>
-                    {tier.price.length > 1 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Starting from above price
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span
-                    className={clsx(
-                      'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                      tier.tier_type === 'standard'
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                        : tier.tier_type === 'special'
-                          ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
-                          : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-                    )}
-                  >
-                    {tier.tier_type}
+              )}
+              {tier.most_popular && (
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2">
+                  <span className="inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-medium text-white">
+                    <StarIcon className="mr-1 h-3 w-3" />
+                    Most Popular
                   </span>
-                  {tier.max_quantity && tier.max_quantity > 1 && (
-                    <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                      Limit: {tier.max_quantity}
-                    </span>
-                  )}
-                  {tier.sold_out && (
-                    <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                      Sold Out
-                    </span>
-                  )}
+                </div>
+              )}
+
+              <div className="absolute top-4 right-4 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex space-x-1">
+                  <button
+                    onClick={() => openEditModal(tier)}
+                    className="cursor-pointer rounded-md bg-indigo-50 p-1.5 text-indigo-600 hover:bg-indigo-100"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
-            ))}
+
+              <div className="flex items-center">
+                <TagIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+                <h4 className="ml-3 text-lg font-medium text-gray-900 dark:text-white">
+                  {formatTierLabel(tier)}
+                </h4>
+              </div>
+
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                {tier.tagline}
+              </p>
+
+              {tier.price && tier.price.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {formatCurrency(
+                      Math.max(...tier.price.map((p) => p.amount)),
+                      tier.price[0].currency,
+                    )}
+                  </div>
+                  {tier.price.length > 1 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Starting from above price
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span
+                  className={clsx(
+                    'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
+                    tier.tier_type === 'standard'
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                      : tier.tier_type === 'special'
+                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+                        : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+                  )}
+                >
+                  {tier.tier_type}
+                </span>
+                {tier.max_quantity && tier.max_quantity > 1 && (
+                  <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                    Limit: {tier.max_quantity}
+                  </span>
+                )}
+                {tier.sold_out && (
+                  <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                    Sold Out
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

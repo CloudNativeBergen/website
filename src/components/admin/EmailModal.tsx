@@ -367,7 +367,7 @@ export function EmailModal({
                             {storage.hasStoredData && !storage.isSaving && (
                               <button
                                 onClick={handleClearDraft}
-                                className="ml-1 rounded p-0.5 hover:bg-blue-100 dark:hover:bg-blue-800/50"
+                                className="ml-1 cursor-pointer rounded p-0.5 hover:bg-blue-100 dark:hover:bg-blue-800/50"
                                 title="Clear draft"
                               >
                                 <TrashIcon className="h-3 w-3" />
@@ -385,7 +385,7 @@ export function EmailModal({
                   <button
                     onClick={handleClose}
                     disabled={isLoading}
-                    className="rounded-xl p-2 transition-colors duration-200 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
+                    className="cursor-pointer rounded-xl p-2 transition-colors duration-200 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
                   >
                     <XMarkIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </button>
@@ -404,7 +404,7 @@ export function EmailModal({
                         <button
                           type="button"
                           onClick={() => setShowPreview(false)}
-                          className="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:border-gray-600 dark:text-white dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400"
+                          className="inline-flex cursor-pointer items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 dark:border-gray-600 dark:text-white dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400"
                         >
                           <span className="hidden sm:inline">Back to Edit</span>
                           <span className="sm:hidden">Cancel</span>
@@ -526,7 +526,7 @@ export function EmailModal({
                           !subject.trim() ||
                           !getCurrentMessage().trim()
                         }
-                        className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:text-white dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400 ${showPreview ? 'border border-indigo-500 bg-indigo-100 text-indigo-700 dark:border-indigo-500 dark:bg-indigo-900/30 dark:text-indigo-300' : 'border border-gray-300 dark:border-gray-600'}`}
+                        className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-500 disabled:opacity-50 dark:text-white dark:hover:bg-gray-800 dark:focus-visible:outline-gray-400 ${showPreview ? 'border border-indigo-500 bg-indigo-100 text-indigo-700 dark:border-indigo-500 dark:bg-indigo-900/30 dark:text-indigo-300' : 'border border-gray-300 dark:border-gray-600'}`}
                       >
                         <EyeIcon className="h-4 w-4" />
                         <span className="hidden sm:inline">Preview Email</span>
@@ -539,7 +539,7 @@ export function EmailModal({
                       type="button"
                       onClick={handleClose}
                       disabled={isLoading}
-                      className="text-sm/6 font-semibold whitespace-nowrap text-gray-900 disabled:opacity-50 dark:text-white"
+                      className="cursor-pointer text-sm/6 font-semibold whitespace-nowrap text-gray-900 disabled:opacity-50 dark:text-white"
                     >
                       <span className="hidden sm:inline">Cancel</span>
                       <span className="sm:hidden">Cancel</span>
@@ -551,8 +551,9 @@ export function EmailModal({
                         !subject.trim() ||
                         !getCurrentMessage().trim()
                       }
-                      className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
+                      className="inline-flex cursor-pointer items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
                     >
+                      {' '}
                       {isLoading ? (
                         <div className="flex items-center gap-2">
                           <div className="h-4 w-4 animate-pulse rounded bg-white/30" />

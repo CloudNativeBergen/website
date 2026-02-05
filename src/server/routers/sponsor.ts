@@ -591,27 +591,33 @@ export const sponsorRouter = router({
     }),
 
   crm: router({
-    listOrganizers: adminProcedure.query(async () => {
-      const { getOrganizers } = await import('@/lib/speaker/sanity')
-      const { speakers, err } = await getOrganizers()
+    listOrganizers: adminProcedure
+      .input(z.object({ conferenceId: z.string().optional() }).optional())
+      .query(async ({ input }) => {
+        const { getOrganizers, getOrganizersByConference } =
+          await import('@/lib/speaker/sanity')
 
-      if (err) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to list organizers',
-          cause: err,
-        })
-      }
+        const { speakers, err } = input?.conferenceId
+          ? await getOrganizersByConference(input.conferenceId)
+          : await getOrganizers()
 
-      return (
-        speakers?.map((s) => ({
-          _id: s._id,
-          name: s.name,
-          email: s.email,
-          avatar: s.image,
-        })) || []
-      )
-    }),
+        if (err) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to list organizers',
+            cause: err,
+          })
+        }
+
+        return (
+          speakers?.map((s) => ({
+            _id: s._id,
+            name: s.name,
+            email: s.email,
+            avatar: s.image,
+          })) || []
+        )
+      }),
 
     list: adminProcedure
       .input(

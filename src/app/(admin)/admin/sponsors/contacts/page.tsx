@@ -4,7 +4,11 @@ import {
   SponsorContactTable,
   SponsorContactActions,
 } from '@/components/admin'
-import { UserGroupIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline'
+import {
+  UserGroupIcon,
+  BuildingOffice2Icon,
+  ChartBarIcon,
+} from '@heroicons/react/24/outline'
 import {
   SponsorWithContactInfo,
   ConferenceSponsorWithContact,
@@ -120,7 +124,7 @@ export default async function AdminSponsorContacts() {
               className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
             >
               <div className="rounded-full bg-green-100 p-3 dark:bg-green-900/20">
-                <BuildingOffice2Icon className="h-6 w-6 text-green-600 dark:text-green-400" />
+                <ChartBarIcon className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div>
                 <p className="font-medium text-gray-900 dark:text-white">

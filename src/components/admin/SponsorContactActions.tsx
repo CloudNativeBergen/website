@@ -51,7 +51,7 @@ export function SponsorContactActions({
         <button
           onClick={exportSponsorContacts}
           disabled={sponsorsWithContactsCount === 0 || isExporting}
-          className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <DocumentArrowDownIcon className="h-4 w-4" />
           {isExporting ? 'Exporting...' : 'Export Contacts'}
@@ -60,7 +60,7 @@ export function SponsorContactActions({
         <button
           onClick={() => setIsBroadcastModalOpen(true)}
           disabled={sponsorsWithContactsCount === 0}
-          className="inline-flex items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-cloud-blue/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-cloud-blue/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <EnvelopeIcon className="h-4 w-4" />
           Send Broadcast ({sponsorsWithContactsCount})

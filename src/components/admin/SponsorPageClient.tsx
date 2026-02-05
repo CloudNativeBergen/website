@@ -5,9 +5,9 @@ import { GeneralBroadcastModal } from '@/components/admin'
 import SponsorTierEditor from '@/components/admin/SponsorTierEditor'
 import SponsorTierManagement from '@/components/admin/SponsorTierManagement'
 import {
-  BuildingOffice2Icon,
   GlobeAltIcon,
   UserGroupIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
@@ -50,7 +50,7 @@ export default function SponsorPageClient({
     <>
       <div className="mx-auto max-w-7xl">
         <AdminPageHeader
-          icon={<BuildingOffice2Icon />}
+          icon={<ChartBarIcon />}
           title="Sponsor Tiers"
           description="Configure sponsorship tiers and manage sponsor assignments for"
           contextHighlight={conference.title}
@@ -80,58 +80,52 @@ export default function SponsorPageClient({
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Link
               href="/admin/sponsors/contacts"
-              className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+              className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700/50"
             >
-              <div className="flex items-center space-x-3">
-                <div className="shrink-0">
-                  <UserGroupIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    Sponsor Contacts
-                  </p>
-                  <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                    Manage sponsor contact information
-                  </p>
-                </div>
+              <div className="rounded-full bg-blue-100 p-3 dark:bg-blue-900/20">
+                <UserGroupIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Sponsor Contacts
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Manage contact information
+                </p>
               </div>
             </Link>
 
             <Link
               href="/admin/tickets/discount"
-              className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+              className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700/50"
             >
-              <div className="flex items-center space-x-3">
-                <div className="shrink-0">
-                  <TicketIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    Sponsor Discount Codes
-                  </p>
-                  <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                    Manage and distribute ticket discount codes
-                  </p>
-                </div>
+              <div className="rounded-full bg-amber-100 p-3 dark:bg-amber-900/20">
+                <TicketIcon className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Sponsor Discount Codes
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Manage ticket discount codes
+                </p>
               </div>
             </Link>
 
             <Link
               href="/sponsor"
-              className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+              className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-700/50"
             >
-              <div className="flex items-center space-x-3">
-                <div className="shrink-0">
-                  <GlobeAltIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    View Sponsor Page
-                  </p>
-                  <p className="truncate text-sm text-gray-500 dark:text-gray-400">
-                    See the public sponsorship information
-                  </p>
-                </div>
+              <div className="rounded-full bg-indigo-100 p-3 dark:bg-indigo-900/20">
+                <GlobeAltIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  View Sponsor Page
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Public sponsorship info
+                </p>
               </div>
             </Link>
           </div>

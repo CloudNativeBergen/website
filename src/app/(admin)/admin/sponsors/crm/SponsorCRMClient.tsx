@@ -68,14 +68,16 @@ export function SponsorCRMClient({
     conferenceId,
   })
 
-  // Use organizers from conference data
+  // Use organizers from conference data, sorted alphabetically
   const organizers =
-    conference.organizers?.map((o) => ({
-      _id: o._id,
-      name: o.name,
-      email: o.email,
-      avatar: o.image,
-    })) || []
+    [...(conference.organizers || [])]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((o) => ({
+        _id: o._id,
+        name: o.name,
+        email: o.email,
+        avatar: o.image,
+      })) || []
 
   const utils = api.useUtils()
 

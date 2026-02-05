@@ -50,7 +50,7 @@ const CopyEmailButton = ({ email }: { email: string }) => {
   return (
     <button
       onClick={() => copyToClipboard(email)}
-      className="ml-2 p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+      className="ml-2 cursor-pointer p-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
       title={copied ? 'Copied!' : 'Copy email'}
     >
       {copied ? (
@@ -173,7 +173,7 @@ export function SponsorContactTable({
                     </DialogTitle>
                     <button
                       onClick={handleCloseEdit}
-                      className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                      className="cursor-pointer rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
                     >
                       <XMarkIcon className="h-6 w-6" />
                     </button>
@@ -358,7 +358,7 @@ export function SponsorContactTable({
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => handleStartEdit(row.sponsor)}
-                        className="inline-flex items-center rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                        className="inline-flex cursor-pointer items-center rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                         title="Manage contacts"
                       >
                         <PencilIcon className="h-4 w-4" />

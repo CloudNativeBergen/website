@@ -397,3 +397,30 @@ export async function getOrganizers(): Promise<{
 
   return { speakers, err }
 }
+
+export async function getOrganizersByConference(conferenceId: string): Promise<{
+  speakers: Speaker[]
+  err: Error | null
+}> {
+  let speakers: Speaker[] = []
+  let err = null
+
+  try {
+    // Fetch organizers directly from the conference document's organizers array
+    const query = groq`*[_type == "conference" && _id == $conferenceId][0].organizers[]-> {
+      ...,
+      "slug": slug.current,
+      "image": image.asset->url
+    } | order(name asc)`
+
+    speakers = await clientRead.fetch(
+      query,
+      { conferenceId },
+      { cache: 'no-store' },
+    )
+  } catch (error) {
+    err = error as Error
+  }
+
+  return { speakers: speakers || [], err }
+}
