@@ -1,5 +1,8 @@
 import type { SponsorForConferenceExpanded } from './types'
-import type { ActionItemType } from '@/components/admin/sponsor-crm/utils'
+import {
+  type ActionItemType,
+  calculateSponsorValue,
+} from '@/components/admin/sponsor-crm/utils'
 
 export interface ActionItem {
   id: string
@@ -45,6 +48,42 @@ export function generateActionItems(
         },
         description: `Invoice is overdue for ${sponsor.sponsor.name}`,
         priority: 1,
+        link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
+      })
+    }
+
+    // Priority 1.5: High-priority sponsors not yet contacted
+    if (
+      sponsor.status === 'prospect' &&
+      sponsor.tags?.includes('high-priority')
+    ) {
+      actions.push({
+        id: `${sponsor._id}-high-priority`,
+        type: 'high-priority',
+        title: 'Urgent Prospect',
+        sponsor: {
+          id: sponsor._id,
+          name: sponsor.sponsor.name,
+        },
+        description: `${sponsor.sponsor.name} is a high-priority prospect not yet contacted`,
+        priority: 1.5,
+        link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
+      })
+    }
+
+    // Priority 1.7: High-value prospects not yet contacted
+    const { value, currency } = calculateSponsorValue(sponsor)
+    if (sponsor.status === 'prospect' && currency === 'NOK' && value >= 50000) {
+      actions.push({
+        id: `${sponsor._id}-high-value`,
+        type: 'high-priority',
+        title: 'High Value Prospect',
+        sponsor: {
+          id: sponsor._id,
+          name: sponsor.sponsor.name,
+        },
+        description: `${sponsor.sponsor.name} is a high-value prospect (${value.toLocaleString()} NOK) not yet contacted`,
+        priority: 1.7,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
       })
     }
@@ -107,6 +146,22 @@ export function generateActionItems(
             ? `Contract sent, awaiting signature from ${sponsor.sponsor.name}`
             : `Contract status: ${sponsor.contract_status.replace('-', ' ')} for ${sponsor.sponsor.name}`,
         priority: 4,
+        link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
+      })
+    }
+
+    // Priority 4.5: Sponsors needing follow-up
+    if (sponsor.tags?.includes('needs-follow-up')) {
+      actions.push({
+        id: `${sponsor._id}-follow-up`,
+        type: 'follow-up',
+        title: 'Follow-up Needed',
+        sponsor: {
+          id: sponsor._id,
+          name: sponsor.sponsor.name,
+        },
+        description: `Sponsor ${sponsor.sponsor.name} is marked for follow-up`,
+        priority: 4.5,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
       })
     }

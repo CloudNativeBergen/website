@@ -16,6 +16,8 @@ import {
   ChatBubbleLeftIcon,
   PhoneIcon,
   CalendarIcon,
+  FireIcon,
+  ArrowPathRoundedSquareIcon,
 } from '@heroicons/react/24/outline'
 
 // Invoice Status Utilities
@@ -100,6 +102,8 @@ export type ActionItemType =
   | 'needs-invoice'
   | 'missing-contract'
   | 'stale'
+  | 'high-priority'
+  | 'follow-up'
 
 export function getActionItemIcon(type: ActionItemType) {
   switch (type) {
@@ -114,6 +118,10 @@ export function getActionItemIcon(type: ActionItemType) {
       return DocumentTextIcon
     case 'stale':
       return CheckCircleIcon
+    case 'high-priority':
+      return FireIcon
+    case 'follow-up':
+      return ArrowPathRoundedSquareIcon
   }
 }
 
@@ -130,6 +138,10 @@ export function getActionItemColor(type: ActionItemType): string {
       return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20'
     case 'stale':
       return 'text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-gray-700'
+    case 'high-priority':
+      return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
+    case 'follow-up':
+      return 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-900/20'
   }
 }
 
