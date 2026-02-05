@@ -29,7 +29,7 @@ import {
 } from '@/lib/sponsor/types'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 import { api } from '@/lib/trpc/client'
-import { SponsorLogoEditor } from '@/components/admin'
+import { SponsorLogoEditor } from './SponsorLogoEditor'
 
 interface SponsorAddModalProps {
   isOpen: boolean

@@ -19,8 +19,7 @@ import {
 } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
 import { formatTierLabel, downloadSvg } from '@/lib/sponsor/utils'
-import { useNotification } from './NotificationProvider'
-import { ConfirmationModal } from './ConfirmationModal'
+import { useNotification, ConfirmationModal } from '@/components/admin'
 import SponsorAddModal from './SponsorAddModal'
 import { api } from '@/lib/trpc/client'
 

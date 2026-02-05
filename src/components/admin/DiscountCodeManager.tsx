@@ -17,8 +17,8 @@ import {
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
+  SponsorDiscountEmailModal,
 } from '@/components/admin'
-import { SponsorDiscountEmailModal } from './SponsorDiscountEmailModal'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import type { EventDiscountWithUsage } from '@/lib/discounts/types'
 

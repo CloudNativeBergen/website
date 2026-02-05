@@ -2,22 +2,22 @@
 
 import React from 'react'
 import { AdminPageHeader } from '@/components/admin'
-import { SponsorCRMClient } from './SponsorCRMClient'
+import { SponsorCRMPipeline } from './SponsorCRMPipeline'
 import { RectangleStackIcon } from '@heroicons/react/24/outline'
 import { PlusIcon } from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
 import { ImportHistoricSponsorsButton } from '@/components/admin/sponsor-crm/ImportHistoricSponsorsButton'
 import { api } from '@/lib/trpc/client'
 
-interface SponsorCRMPageWrapperProps {
+interface SponsorCRMPageClientProps {
   conference: Conference
   domain: string
 }
 
-export function SponsorCRMPageWrapper({
+export function SponsorCRMPageClient({
   conference,
   domain,
-}: SponsorCRMPageWrapperProps) {
+}: SponsorCRMPageClientProps) {
   const utils = api.useUtils()
   // Control hook to trigger form from header
   const [triggerNew, setTriggerNew] = React.useState(0)
@@ -54,7 +54,7 @@ export function SponsorCRMPageWrapper({
       />
 
       <div className="-mt-2">
-        <SponsorCRMClient
+        <SponsorCRMPipeline
           conferenceId={conference._id}
           conference={conference}
           domain={domain}

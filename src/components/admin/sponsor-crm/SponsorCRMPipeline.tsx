@@ -9,7 +9,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
-import { SponsorIndividualEmailModal } from '@/components/admin/SponsorIndividualEmailModal'
+import { SponsorIndividualEmailModal } from '@/components/admin'
 import {
   BoardViewSwitcher,
   type BoardView,
@@ -26,19 +26,19 @@ import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
 import clsx from 'clsx'
 
-interface SponsorCRMClientProps {
+interface SponsorCRMPipelineProps {
   conferenceId: string
   conference: Conference
   domain: string
   externalNewTrigger?: number
 }
 
-export function SponsorCRMClient({
+export function SponsorCRMPipeline({
   conferenceId,
   conference,
   domain,
   externalNewTrigger = 0,
-}: SponsorCRMClientProps) {
+}: SponsorCRMPipelineProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { data: session } = useSession()
@@ -198,7 +198,6 @@ export function SponsorCRMClient({
       if (sponsor) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedSponsor(sponsor)
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsFormOpen(true)
         const params = new URLSearchParams(searchParams.toString())
         params.delete('sponsor')

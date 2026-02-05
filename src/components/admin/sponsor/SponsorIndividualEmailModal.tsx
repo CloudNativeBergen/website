@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useNotification } from './NotificationProvider'
-import { EmailModal } from './EmailModal'
+import { useNotification, EmailModal } from '@/components/admin'
 import { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { SponsorWithContactInfo } from '@/lib/sponsor/types'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'

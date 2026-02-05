@@ -1,9 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useNotification } from './NotificationProvider'
+import { useNotification, EmailModal } from '@/components/admin'
 import { formatConferenceDateLong } from '@/lib/time'
-import { EmailModal } from './EmailModal'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'

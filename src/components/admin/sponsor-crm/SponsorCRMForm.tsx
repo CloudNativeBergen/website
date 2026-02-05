@@ -223,6 +223,7 @@ export function SponsorCRMForm({
     })
 
     if (total > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData((prev) => ({
         ...prev,
         contractValue: total.toString(),

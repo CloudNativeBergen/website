@@ -1,6 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ErrorDisplay } from '@/components/admin'
-import { SponsorCRMPageWrapper } from './SponsorCRMPageWrapper'
+import { SponsorCRMPageClient } from '@/components/admin/sponsor-crm'
 import { headers } from 'next/headers'
 
 export default async function AdminSponsorsCRM() {
@@ -24,5 +24,5 @@ export default async function AdminSponsorsCRM() {
     )
   }
 
-  return <SponsorCRMPageWrapper conference={conference} domain={domain} />
+  return <SponsorCRMPageClient conference={conference} domain={domain} />
 }
