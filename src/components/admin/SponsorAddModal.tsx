@@ -21,8 +21,6 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import { ChevronDownIcon as ChevronDownIconSmall } from '@heroicons/react/16/solid'
-import { InlineSvg } from '@/components/InlineSvg'
-import { SponsorLogo } from '@/components/SponsorLogo'
 import {
   ConferenceSponsorWithContact,
   SponsorTierExisting,
@@ -31,8 +29,7 @@ import {
 } from '@/lib/sponsor/types'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 import { api } from '@/lib/trpc/client'
-
-const LOGO_PREVIEW_SIZE = { width: '100px', height: '100px' }
+import { SponsorLogoEditor } from '@/components/admin'
 
 interface SponsorAddModalProps {
   isOpen: boolean
@@ -63,8 +60,6 @@ export default function SponsorAddModal({
   onSponsorUpdated,
 }: SponsorAddModalProps) {
   const { theme } = useTheme()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const brightFileInputRef = useRef<HTMLInputElement>(null)
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
@@ -170,36 +165,6 @@ export default function SponsorAddModal({
       setFormData((prev) => ({ ...prev, tierId: preselectedTierId }))
     }
   }, [preselectedTierId, isOpen, editingSponsor])
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file && file.type === 'image/svg+xml') {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const svgContent = e.target?.result as string
-        setFormData((prev) => ({ ...prev, logo: svgContent }))
-      }
-      reader.readAsText(file)
-    } else {
-      alert('Please select an SVG file.')
-    }
-  }
-
-  const handleBrightFileUpload = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0]
-    if (file && file.type === 'image/svg+xml') {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const svgContent = e.target?.result as string
-        setFormData((prev) => ({ ...prev, logo_bright: svgContent }))
-      }
-      reader.readAsText(file)
-    } else {
-      alert('Please select an SVG file.')
-    }
-  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -710,138 +675,17 @@ export default function SponsorAddModal({
                             </div>
                           </div>
 
-                          <div>
-                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                              Logo (SVG) *
-                            </label>
-                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                              Primary logo for light backgrounds and general
-                              display
-                            </p>
-                            <div className="mt-2">
-                              <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleFileUpload}
-                                accept=".svg"
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:text-gray-400 dark:file:bg-indigo-500/10 dark:file:text-indigo-400 dark:hover:file:bg-indigo-500/20"
-                              />
-                              {formData.logo && (
-                                <div className="mt-3">
-                                  <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                                    Logo Preview:
-                                  </p>
-                                  <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
-                                    <InlineSvg
-                                      value={formData.logo}
-                                      style={LOGO_PREVIEW_SIZE}
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        logo: '',
-                                      }))
-                                    }
-                                    className="ml-3 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                              Logo (Bright/White) - Optional
-                            </label>
-                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                              Bright/white version for dark backgrounds
-                            </p>
-                            <div className="mt-2">
-                              <input
-                                type="file"
-                                ref={brightFileInputRef}
-                                onChange={handleBrightFileUpload}
-                                accept=".svg"
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:text-gray-400 dark:file:bg-indigo-500/10 dark:file:text-indigo-400 dark:hover:file:bg-indigo-500/20"
-                              />
-                              {formData.logo_bright && (
-                                <div className="mt-3">
-                                  <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                                    Bright Logo Preview:
-                                  </p>
-                                  <div className="inline-block rounded-lg border border-gray-200 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
-                                    <InlineSvg
-                                      value={formData.logo_bright}
-                                      style={LOGO_PREVIEW_SIZE}
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        logo_bright: '',
-                                      }))
-                                    }
-                                    className="ml-3 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                          <div className="sm:col-span-2">
+                            <SponsorLogoEditor
+                              logo={formData.logo || ''}
+                              logoBright={formData.logo_bright || ''}
+                              name={formData.name}
+                              onChange={(updates) =>
+                                setFormData((prev) => ({ ...prev, ...updates }))
+                              }
+                            />
                           </div>
                         </div>
-
-                        {formData.logo && formData.logo_bright && (
-                          <div className="mt-4 sm:col-span-2">
-                            <h5 className="mb-3 block text-sm/6 font-medium text-gray-900 dark:text-white">
-                              Logo Preview (How they appear in different modes)
-                            </h5>
-                            <div className="flex flex-col gap-4 sm:flex-row">
-                              <div className="flex-1">
-                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
-                                  Light Mode
-                                </p>
-                                <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
-                                  <InlineSvg
-                                    value={formData.logo}
-                                    style={LOGO_PREVIEW_SIZE}
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
-                                  Dark Mode
-                                </p>
-                                <div className="inline-block rounded-lg border border-gray-600 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
-                                  <InlineSvg
-                                    value={formData.logo_bright}
-                                    style={LOGO_PREVIEW_SIZE}
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
-                                  Responsive
-                                </p>
-                                <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-gray-900">
-                                  <SponsorLogo
-                                    logo={formData.logo}
-                                    logoBright={formData.logo_bright}
-                                    name={formData.name || 'Logo Preview'}
-                                    style={LOGO_PREVIEW_SIZE}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">

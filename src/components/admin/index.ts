@@ -37,6 +37,7 @@ export { default as SponsorAddModal } from './SponsorAddModal'
 export { default as SponsorPageClient } from './SponsorPageClient'
 export { SponsorContactTable } from './SponsorContactTable'
 export { SponsorContactActions } from './SponsorContactActions'
+export * from './sponsor'
 
 export { DiscountCodeManager } from './DiscountCodeManager'
 export { TicketAnalysisClient } from './TicketAnalysisClient'

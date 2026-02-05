@@ -321,14 +321,13 @@ export function SponsorCRMClient({
       {isFormOpen && (
         <SponsorCRMForm
           conferenceId={conferenceId}
-          conference={conference}
-          domain={domain}
           sponsor={selectedSponsor}
           isOpen={isFormOpen}
           onClose={handleCloseForm}
           onSuccess={() => {
             utils.sponsor.crm.list.invalidate()
           }}
+          onEmailTrigger={handleOpenEmail}
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
         />
       )}
