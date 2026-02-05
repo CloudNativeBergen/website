@@ -85,7 +85,8 @@ export function SponsorCard({
         <div
           className={clsx(
             'absolute top-1 left-1 z-10 origin-top-left scale-75 transition-transform',
-            (isSelected || true) && 'translate-x-5', // Move avatar right to make room for checkbox
+            isSelected && 'translate-x-5', // Move avatar right when selected
+            'group-hover:translate-x-5', // Move avatar right on hover to make room for checkbox
           )}
         >
           <SpeakerAvatars

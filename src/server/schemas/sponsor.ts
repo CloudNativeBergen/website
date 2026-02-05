@@ -19,8 +19,12 @@ export const BillingInfoSchema = z.object({
 
 export const SponsorInputSchema = z.object({
   name: z.string().min(1, 'Sponsor name is required'),
-  website: z.string().url('Valid website URL is required'),
-  logo: z.string().min(1, 'Logo is required'),
+  website: z
+    .string()
+    .url('Valid website URL is required')
+    .optional()
+    .or(z.literal('')),
+  logo: z.string().optional().or(z.literal('')),
   logo_bright: z.string().nullable().optional().transform(nullToUndefined),
   org_number: z.string().nullable().optional().transform(nullToUndefined),
   contact_persons: z.array(ContactPersonSchema).optional(),

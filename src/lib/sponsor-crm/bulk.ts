@@ -30,7 +30,7 @@ export async function bulkUpdateSponsors(
 ): Promise<{ success: true; updatedCount: number; totalCount: number }> {
   const { ids, ...input } = params
 
-  // Fetch all target sponsors in one query
+  // SECURITY: Only fetch and update documents of type sponsorForConference
   const sponsors = await clientWrite.fetch<SponsorForConference[]>(
     `*[_type == "sponsorForConference" && _id in $ids]`,
     { ids },
@@ -72,14 +72,14 @@ export async function bulkUpdateSponsors(
     if (input.add_tags) {
       const newTags = [...new Set([...currentTags, ...input.add_tags])]
       if (newTags.length !== currentTags.length) {
-        currentTags = newTags
+        currentTags = newTags as SponsorTag[]
         tagsChanged = true
       }
     }
     if (input.remove_tags) {
       const newTags = currentTags.filter((t) => !input.remove_tags?.includes(t))
       if (newTags.length !== currentTags.length) {
-        currentTags = newTags
+        currentTags = newTags as SponsorTag[]
         tagsChanged = true
       }
     }
@@ -93,7 +93,8 @@ export async function bulkUpdateSponsors(
       updatedCount++
 
       // Prepare activity logs
-      if (input.status && input.status !== existing.status) {
+      // FIXED: Use undefined check instead of truthiness to avoid skipping valid enum values
+      if (input.status !== undefined && input.status !== existing.status) {
         const activityId = `activity-status-${existing._id}-${Date.now()}`
         transaction.create({
           _id: activityId,
@@ -150,14 +151,29 @@ export async function bulkUpdateSponsors(
 
 /**
  * Deletes multiple sponsor CRM records in a single transaction.
+ * Also cleans up related activity documents to prevent orphaned data.
  */
 export async function bulkDeleteSponsors(
   ids: string[],
 ): Promise<{ success: true; deletedCount: number; totalCount: number }> {
+  // Find all related activity documents
+  const relatedActivityIds = await clientWrite.fetch<string[]>(
+    `*[_type == "sponsorActivity" && sponsor_for_conference._ref in $ids]._id`,
+    { ids },
+  )
+
   const transaction = clientWrite.transaction()
+
+  // Delete the sponsor-conference documents
   for (const id of ids) {
     transaction.delete(id)
   }
+
+  // Delete the related activity documents
+  for (const id of relatedActivityIds) {
+    transaction.delete(id)
+  }
+
   await transaction.commit()
   return {
     success: true,

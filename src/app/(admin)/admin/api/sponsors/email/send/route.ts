@@ -58,6 +58,13 @@ export const POST = auth(async (req: NextAuthRequest) => {
       htmlContent: htmlContent!,
     })
 
+    if (!conference.sponsor_email) {
+      return createEmailErrorResponse(
+        'Missing sponsor_email in conference configuration',
+        500,
+      )
+    }
+
     const result = await retryWithBackoff(async () => {
       return await resend.emails.send({
         from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsor_email}>`,

@@ -74,32 +74,46 @@ export function SponsorIndividualEmailModal({
     subject: string
     message: PortableTextBlock[]
   }) => {
-    const messageJSON = JSON.stringify(message as PortableTextBlockForHTML[])
+    try {
+      const messageJSON = JSON.stringify(message as PortableTextBlockForHTML[])
 
-    const response = await fetch('/admin/api/sponsors/email/send', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        sponsorId: sponsorForConference.sponsor._id,
-        subject,
-        message: messageJSON,
-      }),
-    })
+      const response = await fetch('/admin/api/sponsors/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sponsorId: sponsorForConference.sponsor._id,
+          subject,
+          message: messageJSON,
+        }),
+      })
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error || 'Failed to send email')
+      if (!response.ok) {
+        const errorData = await response.json()
+        showNotification({
+          type: 'error',
+          title: 'Email failed',
+          message: errorData.error || 'Failed to send email',
+        })
+        return
+      }
+
+      const result = await response.json()
+
+      showNotification({
+        type: 'success',
+        title: 'Email sent successfully',
+        message: `Sent to ${result.recipientCount} contact${result.recipientCount > 1 ? 's' : ''} for ${sponsorForConference.sponsor.name}`,
+      })
+    } catch (err) {
+      showNotification({
+        type: 'error',
+        title: 'Network error',
+        message:
+          err instanceof Error ? err.message : 'An unexpected error occurred',
+      })
     }
-
-    const result = await response.json()
-
-    showNotification({
-      type: 'success',
-      title: 'Email sent successfully',
-      message: `Email sent to ${result.recipientCount} contact${result.recipientCount > 1 ? 's' : ''} for ${sponsorForConference.sponsor.name}`,
-    })
   }
 
   const localhostWarning = createLocalhostWarning(domain, 'sponsors')

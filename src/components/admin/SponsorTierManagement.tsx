@@ -339,7 +339,7 @@ export default function SponsorTierManagement({
                           {sponsor.logo && (
                             <button
                               onClick={() =>
-                                handleDownloadSvg(sponsor.name, sponsor.logo)
+                                handleDownloadSvg(sponsor.name, sponsor.logo!)
                               }
                               className="rounded-md bg-blue-50 p-1.5 text-blue-600 hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-blue-900/50 dark:text-blue-400 dark:hover:bg-blue-900"
                               title="Download SVG logo"

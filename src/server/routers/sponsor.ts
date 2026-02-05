@@ -38,11 +38,7 @@ import type {
 } from '@/lib/sponsor/types'
 import type {
   SponsorTag,
-  SponsorForConference,
   SponsorForConferenceInput,
-  SponsorStatus,
-  ContractStatus,
-  InvoiceStatus,
 } from '@/lib/sponsor-crm/types'
 import {
   createSponsorForConference,
@@ -73,11 +69,7 @@ import {
   listActivitiesForSponsor,
   listActivitiesForConference,
 } from '@/lib/sponsor-crm/activities'
-import {
-  bulkUpdateSponsors,
-  bulkDeleteSponsors,
-} from '@/lib/sponsor-crm/bulk'
-import { formatStatusName } from '@/components/admin/sponsor-crm/utils'
+import { bulkUpdateSponsors, bulkDeleteSponsors } from '@/lib/sponsor-crm/bulk'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]

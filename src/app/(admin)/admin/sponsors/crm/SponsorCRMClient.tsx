@@ -17,7 +17,7 @@ import {
 import { SponsorBoardColumn } from '@/components/admin/sponsor-crm/SponsorBoardColumn'
 import { SponsorBulkActions } from '@/components/admin/sponsor-crm/SponsorBulkActions'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
-import { XMarkIcon, CheckIcon } from '@heroicons/react/20/solid'
+import { XMarkIcon, CheckIcon, PlusIcon } from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
 
 interface SponsorCRMClientProps {
@@ -59,11 +59,19 @@ export function SponsorCRMClient({
     tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
   })
 
-  // Fetch tiers and organizers for filters
+  // Fetch tiers for filters
   const { data: tiers = [] } = api.sponsor.tiers.listByConference.useQuery({
     conferenceId,
   })
-  const { data: organizers = [] } = api.sponsor.crm.listOrganizers.useQuery()
+
+  // Use organizers from conference data
+  const organizers =
+    conference.organizers?.map((o) => ({
+      _id: o._id,
+      name: o.name,
+      email: o.email,
+      avatar: o.image,
+    })) || []
 
   const utils = api.useUtils()
 
@@ -87,6 +95,11 @@ export function SponsorCRMClient({
 
   const handleOpenForm = (sponsor?: SponsorForConferenceExpanded) => {
     setSelectedSponsor(sponsor || null)
+    setIsFormOpen(true)
+  }
+
+  const handleCreateNew = () => {
+    setSelectedSponsor(null)
     setIsFormOpen(true)
   }
 
@@ -426,6 +439,13 @@ export function SponsorCRMClient({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleCreateNew}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:ring-gray-600 dark:hover:bg-gray-700"
+          >
+            <PlusIcon className="-ml-0.5 h-5 w-5" aria-hidden="true" />
+            Create New
+          </button>
           <ImportHistoricSponsorsButton
             conferenceId={conferenceId}
             onSuccess={() => {

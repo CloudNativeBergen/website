@@ -13,8 +13,8 @@ import { createLocalhostWarning } from '@/lib/localhost-warning'
 interface SponsorWithTierInfo {
   id: string
   name: string
-  website: string
-  logo: string
+  website?: string
+  logo?: string
   tier: {
     title: string
     tagline: string

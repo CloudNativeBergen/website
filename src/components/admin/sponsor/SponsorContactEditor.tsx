@@ -12,6 +12,7 @@ import {
   CheckIcon,
 } from '@heroicons/react/24/outline'
 import { ContactRoleSelect } from '@/components/common/ContactRoleSelect'
+import { nanoid } from 'nanoid'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '../NotificationProvider'
 
@@ -62,7 +63,7 @@ export function SponsorContactEditor({
     setContacts([
       ...contacts,
       {
-        _key: `contact-${Date.now()}`,
+        _key: nanoid(),
         name: '',
         email: '',
         phone: '',
