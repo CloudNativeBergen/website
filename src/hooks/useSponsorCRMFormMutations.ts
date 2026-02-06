@@ -94,13 +94,17 @@ export function useSponsorCRMFormMutations({
     },
   })
 
+  const resetCreate = createMutation.reset
+  const resetUpdate = updateMutation.reset
+  const resetGlobal = updateGlobalSponsorMutation.reset
+
   useEffect(() => {
     if (isOpen) {
-      createMutation.reset()
-      updateMutation.reset()
+      resetCreate()
+      resetUpdate()
+      resetGlobal()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
+  }, [isOpen, resetCreate, resetUpdate, resetGlobal])
 
   const handleSubmit = async (formData: SponsorCRMFormData) => {
     if (sponsor) {

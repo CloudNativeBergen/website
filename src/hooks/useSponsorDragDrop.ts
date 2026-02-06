@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { DragStartEvent, DragEndEvent } from '@dnd-kit/core'
+import { useQueryClient, type QueryKey } from '@tanstack/react-query'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { BoardView } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { api } from '@/lib/trpc/client'
-import { useQueryClient } from '@tanstack/react-query'
 
 interface DragItem {
   type: 'sponsor'
@@ -11,7 +11,8 @@ interface DragItem {
   sourceColumnKey: string
 }
 
-// Applies an optimistic status change to cached sponsor list data
+type CachedQueryEntry = [QueryKey, SponsorForConferenceExpanded[] | undefined]
+
 function applyOptimisticMove(
   sponsors: SponsorForConferenceExpanded[] | undefined,
   sponsorId: string,
@@ -21,31 +22,35 @@ function applyOptimisticMove(
   if (!sponsors) return sponsors
   return sponsors.map((s) => {
     if (s._id !== sponsorId) return s
-    if (currentView === 'pipeline') {
-      return {
-        ...s,
-        status: targetColumnKey as SponsorForConferenceExpanded['status'],
-      }
-    } else if (currentView === 'contract') {
-      return {
-        ...s,
-        contract_status:
-          targetColumnKey as SponsorForConferenceExpanded['contract_status'],
-      }
-    } else {
-      return {
-        ...s,
-        invoice_status:
-          targetColumnKey as SponsorForConferenceExpanded['invoice_status'],
-      }
+    switch (currentView) {
+      case 'pipeline':
+        return {
+          ...s,
+          status: targetColumnKey as SponsorForConferenceExpanded['status'],
+        }
+      case 'contract':
+        return {
+          ...s,
+          contract_status:
+            targetColumnKey as SponsorForConferenceExpanded['contract_status'],
+        }
+      case 'invoice':
+        return {
+          ...s,
+          invoice_status:
+            targetColumnKey as SponsorForConferenceExpanded['invoice_status'],
+        }
     }
   })
 }
+
+const LIST_QUERY_KEY_FILTER = { queryKey: [['sponsor', 'crm', 'list']] }
 
 export function useSponsorDragDrop(currentView: BoardView) {
   const [activeItem, setActiveItem] = useState<DragItem | null>(null)
   const utils = api.useUtils()
   const queryClient = useQueryClient()
+  const previousDataRef = useRef<CachedQueryEntry[]>([])
 
   const moveStage = api.sponsor.crm.moveStage.useMutation()
   const updateInvoiceStatus = api.sponsor.crm.updateInvoiceStatus.useMutation()
@@ -86,10 +91,13 @@ export function useSponsorDragDrop(currentView: BoardView) {
         return
       }
 
-      // Optimistic update: move the card immediately in the cache
+      // Capture previous data for rollback, then optimistically update
       await utils.sponsor.crm.list.cancel()
+      previousDataRef.current = queryClient.getQueriesData<
+        SponsorForConferenceExpanded[]
+      >(LIST_QUERY_KEY_FILTER)
       queryClient.setQueriesData<SponsorForConferenceExpanded[]>(
-        { queryKey: [['sponsor', 'crm', 'list']] },
+        LIST_QUERY_KEY_FILTER,
         (old) =>
           applyOptimisticMove(old, sponsor._id, currentView, targetColumnKey),
       )
@@ -97,38 +105,48 @@ export function useSponsorDragDrop(currentView: BoardView) {
       setActiveItem(null)
 
       try {
-        if (currentView === 'pipeline') {
-          await moveStage.mutateAsync({
-            id: sponsor._id,
-            newStatus: targetColumnKey as
-              | 'prospect'
-              | 'contacted'
-              | 'negotiating'
-              | 'closed-won'
-              | 'closed-lost',
-          })
-        } else if (currentView === 'invoice') {
-          await updateInvoiceStatus.mutateAsync({
-            id: sponsor._id,
-            newStatus: targetColumnKey as
-              | 'not-sent'
-              | 'sent'
-              | 'paid'
-              | 'overdue'
-              | 'cancelled',
-          })
-        } else if (currentView === 'contract') {
-          await updateContractStatus.mutateAsync({
-            id: sponsor._id,
-            newStatus: targetColumnKey as
-              | 'none'
-              | 'verbal-agreement'
-              | 'contract-sent'
-              | 'contract-signed',
-          })
+        switch (currentView) {
+          case 'pipeline':
+            await moveStage.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                | 'prospect'
+                | 'contacted'
+                | 'negotiating'
+                | 'closed-won'
+                | 'closed-lost',
+            })
+            break
+          case 'invoice':
+            await updateInvoiceStatus.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                | 'not-sent'
+                | 'sent'
+                | 'paid'
+                | 'overdue'
+                | 'cancelled',
+            })
+            break
+          case 'contract':
+            await updateContractStatus.mutateAsync({
+              id: sponsor._id,
+              newStatus: targetColumnKey as
+                | 'none'
+                | 'verbal-agreement'
+                | 'contract-sent'
+                | 'contract-signed',
+            })
+            break
         }
       } catch (error) {
         console.error('Failed to update sponsor status:', error)
+        // Rollback to previous data on failure
+        for (const [key, data] of previousDataRef.current) {
+          queryClient.setQueryData(key, data)
+        }
+      } finally {
+        previousDataRef.current = []
       }
 
       // Always refetch from server to ensure consistency
