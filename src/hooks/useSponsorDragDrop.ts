@@ -111,6 +111,7 @@ export function useSponsorDragDrop(currentView: BoardView) {
 
   return {
     activeItem,
+    isDragging: activeItem !== null,
     handleDragStart,
     handleDragEnd,
   }

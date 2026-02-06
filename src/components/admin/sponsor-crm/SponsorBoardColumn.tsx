@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { SponsorCard } from './SponsorCard'
 import { PlusIcon } from '@heroicons/react/24/outline'
@@ -50,16 +51,23 @@ export function SponsorBoardColumn({
     },
   })
 
-  const calculateValueInNOK = (
-    sponsor: SponsorForConferenceExpanded,
-  ): number => {
-    const { value, currency } = calculateSponsorValue(sponsor)
-    return convertCurrency(
-      value,
-      currency as 'NOK' | 'USD' | 'EUR' | 'GBP',
-      'NOK',
-    )
-  }
+  const sortedSponsors = useMemo(() => {
+    return [...sponsors].sort((a, b) => {
+      const aVal = calculateSponsorValue(a)
+      const bVal = calculateSponsorValue(b)
+      const aNOK = convertCurrency(
+        aVal.value,
+        aVal.currency as 'NOK' | 'USD' | 'EUR' | 'GBP',
+        'NOK',
+      )
+      const bNOK = convertCurrency(
+        bVal.value,
+        bVal.currency as 'NOK' | 'USD' | 'EUR' | 'GBP',
+        'NOK',
+      )
+      return bNOK - aNOK
+    })
+  }, [sponsors, convertCurrency])
 
   return (
     <div
@@ -73,7 +81,7 @@ export function SponsorBoardColumn({
         <h3 className="font-semibold text-brand-cloud-blue dark:text-blue-400">
           {title}
         </h3>
-        <span className="rounded-full bg-brand-cloud-blue px-2 py-1 text-xs text-white dark:bg-blue-600">
+        <span className="min-w-6 rounded-full bg-brand-cloud-blue px-2 py-1 text-center text-xs text-white dark:bg-blue-600">
           {isLoading ? (
             <span className="inline-block h-4 w-4 animate-pulse rounded-full bg-white/30" />
           ) : (
@@ -102,24 +110,22 @@ export function SponsorBoardColumn({
         </div>
       ) : (
         <div className="space-y-3">
-          {sponsors
-            .sort((a, b) => calculateValueInNOK(b) - calculateValueInNOK(a))
-            .map((sponsor) => (
-              <SponsorCard
-                key={sponsor._id}
-                sponsor={sponsor}
-                currentView={currentView}
-                columnKey={columnKey}
-                isSelected={selectedIds.includes(sponsor._id)}
-                isSelectionMode={isSelectionMode}
-                onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
-                onEdit={() => onSponsorClick(sponsor)}
-                onDelete={() => onSponsorDelete(sponsor._id)}
-                onEmail={
-                  onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
-                }
-              />
-            ))}
+          {sortedSponsors.map((sponsor) => (
+            <SponsorCard
+              key={sponsor._id}
+              sponsor={sponsor}
+              currentView={currentView}
+              columnKey={columnKey}
+              isSelected={selectedIds.includes(sponsor._id)}
+              isSelectionMode={isSelectionMode}
+              onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
+              onEdit={() => onSponsorClick(sponsor)}
+              onDelete={() => onSponsorDelete(sponsor._id)}
+              onEmail={
+                onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
+              }
+            />
+          ))}
 
           {sponsors.length === 0 && (
             <button

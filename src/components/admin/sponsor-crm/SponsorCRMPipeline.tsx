@@ -59,7 +59,7 @@ export function SponsorCRMPipeline({
 
   const utils = api.useUtils()
 
-  const { activeItem, handleDragStart, handleDragEnd } =
+  const { activeItem, isDragging, handleDragStart, handleDragEnd } =
     useSponsorDragDrop(currentView)
 
   const deleteMutation = api.sponsor.crm.delete.useMutation({
@@ -73,7 +73,10 @@ export function SponsorCRMPipeline({
     () => searchParams.get('tiers')?.split(',').filter(Boolean) || [],
     [searchParams],
   )
-  const assignedToFilter = searchParams.get('assigned_to') || undefined
+  const assignedToFilter = useMemo(
+    () => searchParams.get('assigned_to') || undefined,
+    [searchParams],
+  )
   const tagsFilter = useMemo(
     () =>
       (searchParams.get('tags')?.split(',').filter(Boolean) ||
@@ -81,15 +84,25 @@ export function SponsorCRMPipeline({
     [searchParams],
   )
 
+  // Pause background refresh when user is actively interacting
+  const isUserBusy =
+    isFormOpen || isEmailModalOpen || isDragging || selectedIds.length > 0
+
   // Fetch with filters
-  const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({
-    conferenceId,
-    assigned_to:
-      assignedToFilter === 'unassigned' ? undefined : assignedToFilter,
-    unassigned_only: assignedToFilter === 'unassigned',
-    tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-    tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
-  })
+  const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery(
+    {
+      conferenceId,
+      assigned_to:
+        assignedToFilter === 'unassigned' ? undefined : assignedToFilter,
+      unassigned_only: assignedToFilter === 'unassigned',
+      tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+      tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
+    },
+    {
+      refetchInterval: isUserBusy ? false : 30_000,
+      refetchOnWindowFocus: !isUserBusy,
+    },
+  )
 
   // Filter logic
   const filteredSponsors = useMemo(() => {
@@ -620,7 +633,7 @@ export function SponsorCRMPipeline({
 
         <DragOverlay>
           {activeItem && (
-            <div className="scale-105 rotate-3 transform opacity-90">
+            <div className="scale-105 rotate-3 transform opacity-90 shadow-lg">
               <SponsorCard
                 sponsor={activeItem.sponsor}
                 currentView={currentView}

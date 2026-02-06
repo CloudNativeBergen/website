@@ -1,6 +1,7 @@
 'use client'
 
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import type { Speaker } from '@/lib/speaker/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import {
@@ -105,7 +106,7 @@ export function SponsorCard({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => { }} // Handled by parent click
+          onChange={() => {}} // Handled by parent click
           className="h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
         />
       </div>
@@ -115,21 +116,17 @@ export function SponsorCard({
         <div
           className={clsx(
             'absolute top-1 left-1 z-10 origin-top-left scale-75 transition-transform',
-            isSelected && 'translate-x-5', // Move avatar right when selected
-            'group-hover:translate-x-5', // Move avatar right on hover to make room for checkbox
+            isSelected && 'translate-x-5',
+            'group-hover:translate-x-5',
           )}
         >
           <SpeakerAvatars
             speakers={[
               {
                 _id: sponsor.assigned_to._id,
-                _rev: '',
-                _createdAt: '',
-                _updatedAt: '',
                 name: sponsor.assigned_to.name,
-                email: sponsor.assigned_to.email,
                 image: sponsor.assigned_to.image,
-              },
+              } as Speaker,
             ]}
             size="sm"
             maxVisible={1}
@@ -230,7 +227,7 @@ export function SponsorCard({
       {/* Drag Handle - Bottom Right */}
       {!isSelectionMode && columnKey && (
         <div
-          className="absolute bottom-1 right-1 z-20 opacity-0 transition-opacity group-hover:opacity-100"
+          className="absolute right-1 bottom-1 z-20 opacity-0 transition-opacity group-hover:opacity-100"
           {...listeners}
         >
           <div className="cursor-grab rounded bg-white/90 p-0.5 shadow-sm transition-colors hover:bg-gray-100 active:cursor-grabbing dark:bg-gray-700/90 dark:hover:bg-gray-600">
