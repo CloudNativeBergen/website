@@ -10,6 +10,8 @@ import {
   SponsorTierUpdateSchema,
   ConferenceSponsorInputSchema,
   SponsorTierAssignmentSchema,
+  SponsorEmailTemplateInputSchema,
+  SponsorEmailTemplateUpdateSchema,
 } from '../schemas/sponsor'
 import {
   getAllSponsors,
@@ -25,6 +27,10 @@ import {
   addSponsorToConference,
   removeSponsorFromConference,
   updateSponsorTierAssignment,
+  getSponsorEmailTemplates,
+  createSponsorEmailTemplate,
+  updateSponsorEmailTemplate,
+  deleteSponsorEmailTemplate,
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -1077,6 +1083,61 @@ export const sponsorRouter = router({
 
           return []
         }),
+    }),
+  }),
+
+  emailTemplates: router({
+    list: adminProcedure.query(async () => {
+      const { templates, error } = await getSponsorEmailTemplates()
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list email templates',
+          cause: error,
+        })
+      }
+      return templates || []
+    }),
+
+    create: adminProcedure
+      .input(SponsorEmailTemplateInputSchema)
+      .mutation(async ({ input }) => {
+        const { template, error } = await createSponsorEmailTemplate(input)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to create email template',
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    update: adminProcedure
+      .input(IdParamSchema.merge(SponsorEmailTemplateUpdateSchema))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input
+        const { template, error } = await updateSponsorEmailTemplate(id, data)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update email template',
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
+      const { error } = await deleteSponsorEmailTemplate(input.id)
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete email template',
+          cause: error,
+        })
+      }
+      return { success: true }
     }),
   }),
 })

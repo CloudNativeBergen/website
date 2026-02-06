@@ -69,3 +69,26 @@ export const SponsorTierUpdateSchema = SponsorTierInputSchema.partial()
 export const IdParamSchema = z.object({
   id: z.string().min(1, 'ID is required'),
 })
+
+export const TemplateCategorySchema = z.enum([
+  'cold-outreach',
+  'returning-sponsor',
+  'international',
+  'local-community',
+  'follow-up',
+  'custom',
+])
+
+export const SponsorEmailTemplateInputSchema = z.object({
+  title: z.string().min(1, 'Template name is required'),
+  slug: z.string().min(1, 'Slug is required'),
+  category: TemplateCategorySchema,
+  subject: z.string().min(1, 'Subject is required'),
+  body: z.array(z.record(z.string(), z.unknown())).optional(),
+  description: z.string().nullable().optional().transform(nullToUndefined),
+  is_default: z.boolean().optional(),
+  sort_order: z.number().optional(),
+})
+
+export const SponsorEmailTemplateUpdateSchema =
+  SponsorEmailTemplateInputSchema.partial()

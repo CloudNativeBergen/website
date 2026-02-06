@@ -13,7 +13,7 @@ Both domains share the same tRPC router (`sponsor.*`) and Sanity backend, but ha
 
 ## Data Model
 
-All sponsor data is stored in Sanity CMS across four document types:
+All sponsor data is stored in Sanity CMS across five document types:
 
 ### `sponsor`
 
@@ -99,6 +99,23 @@ All CRM status values are defined as TypeScript union types in `src/lib/sponsor-
 
 Tags are classification labels applied to CRM entries: `warm-lead`, `returning-sponsor`, `cold-outreach`, `referral`, `high-priority`, `needs-follow-up`, `multi-year-potential`, `previously-declined`.
 
+### `sponsorEmailTemplate`
+
+Reusable email templates stored in Sanity for sponsor outreach. Global (not conference-scoped) — conference context is injected via `{{{VARIABLE}}}` placeholders at send time.
+
+| Field         | Description                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| `title`       | Admin-facing label (e.g. "Cold Outreach")                                                       |
+| `slug`        | Stable identifier for programmatic reference                                                    |
+| `category`    | `cold-outreach`, `returning-sponsor`, `international`, `local-community`, `follow-up`, `custom` |
+| `subject`     | Email subject line with `{{{VAR}}}` placeholders                                                |
+| `body`        | PortableText body with `{{{VAR}}}` placeholders in text spans                                   |
+| `description` | Internal notes on when to use this template                                                     |
+| `is_default`  | Default template for its category                                                               |
+| `sort_order`  | Ordering in the template picker                                                                 |
+
+**Available template variables:** `CONTACT_NAMES`, `SPONSOR_NAME`, `ORG_NAME`, `CONFERENCE_TITLE`, `CONFERENCE_DATE`, `CONFERENCE_YEAR`, `CONFERENCE_CITY`, `CONFERENCE_URL`, `SPONSOR_PAGE_URL`, `PROSPECTUS_URL`, `SENDER_NAME`, `TIER_NAME`.
+
 ## Architecture
 
 ### Directory Layout
@@ -107,8 +124,9 @@ Tags are classification labels applied to CRM entries: `warm-lead`, `returning-s
 src/
 ├── lib/
 │   ├── sponsor/                    # Core sponsor domain
-│   │   ├── types.ts                # Sponsor, SponsorTier, ContactPerson types
-│   │   ├── sanity.ts               # CRUD operations against Sanity
+│   │   ├── types.ts                # Sponsor, SponsorTier, ContactPerson, SponsorEmailTemplate types
+│   │   ├── sanity.ts               # CRUD operations against Sanity (incl. email templates)
+│   │   ├── templates.ts            # Template variable processing utilities
 │   │   ├── utils.ts                # Sorting, formatting, grouping utilities
 │   │   └── validation.ts           # Input validation for sponsors and tiers
 │   └── sponsor-crm/                # CRM pipeline domain
@@ -143,7 +161,8 @@ src/
 │       │   ├── SponsorActionItems.tsx       # Action item checklist
 │       │   ├── SponsorActivityTimeline.tsx  # Activity log display
 │       │   ├── SponsorDiscountEmailModal.tsx# Discount code emails
-│       │   └── SponsorIndividualEmailModal.tsx # Individual email compose
+│       │   ├── SponsorIndividualEmailModal.tsx # Individual email compose
+│       │   └── SponsorTemplatePicker.tsx    # Email template selector dropdown
 │       └── sponsor-crm/            # CRM pipeline admin UI
 │           ├── SponsorCRMPageClient.tsx     # CRM page shell
 │           ├── SponsorCRMPipeline.tsx       # Main board with filters/search
@@ -245,6 +264,7 @@ Tests are located in `__tests__/` mirroring the source structure:
 | ------------------------------------------ | -------------------------------------------- |
 | `lib/sponsor/validation.test.ts`           | Sponsor and tier input validation            |
 | `lib/sponsor/utils.test.ts`                | Tier sorting, formatting, grouping utilities |
+| `lib/sponsor/templates.test.ts`            | Template variable processing utilities       |
 | `lib/sponsor/sponsorForConference.test.ts` | CRM Sanity operations                        |
 | `lib/sponsor-crm/bulk.test.ts`             | Bulk update/delete operations                |
 | `components/Sponsors.test.tsx`             | Public sponsor display component             |

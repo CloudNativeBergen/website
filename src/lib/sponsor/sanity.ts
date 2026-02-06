@@ -4,6 +4,7 @@ import {
   SponsorTierExisting,
   SponsorInput,
   SponsorExisting,
+  SponsorEmailTemplate,
 } from './types'
 import {
   prepareArrayWithKeys,
@@ -362,6 +363,105 @@ export async function updateSponsorTierAssignment(
       })
       .commit()
 
+    return {}
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+const EMAIL_TEMPLATE_PROJECTION = `{
+  _id,
+  _createdAt,
+  _updatedAt,
+  title,
+  slug,
+  category,
+  subject,
+  body,
+  description,
+  is_default,
+  sort_order
+}`
+
+export async function getSponsorEmailTemplates(): Promise<{
+  templates?: SponsorEmailTemplate[]
+  error?: Error
+}> {
+  try {
+    const templates = await clientWrite.fetch(
+      `*[_type == "sponsorEmailTemplate"] | order(category asc, sort_order asc) ${EMAIL_TEMPLATE_PROJECTION}`,
+    )
+    return { templates }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function createSponsorEmailTemplate(data: {
+  title: string
+  slug: string
+  category: string
+  subject: string
+  body?: unknown[]
+  description?: string
+  is_default?: boolean
+  sort_order?: number
+}): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
+    const template = await clientWrite.create({
+      _type: 'sponsorEmailTemplate',
+      title: data.title,
+      slug: { _type: 'slug', current: data.slug },
+      category: data.category,
+      subject: data.subject,
+      body: data.body,
+      description: data.description,
+      is_default: data.is_default ?? false,
+      sort_order: data.sort_order ?? 0,
+    })
+    return { template: template as unknown as SponsorEmailTemplate }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function updateSponsorEmailTemplate(
+  id: string,
+  data: {
+    title?: string
+    slug?: string
+    category?: string
+    subject?: string
+    body?: unknown[]
+    description?: string
+    is_default?: boolean
+    sort_order?: number
+  },
+): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
+    const patch: Record<string, unknown> = {}
+    if (data.title !== undefined) patch.title = data.title
+    if (data.slug !== undefined)
+      patch.slug = { _type: 'slug', current: data.slug }
+    if (data.category !== undefined) patch.category = data.category
+    if (data.subject !== undefined) patch.subject = data.subject
+    if (data.body !== undefined) patch.body = data.body
+    if (data.description !== undefined) patch.description = data.description
+    if (data.is_default !== undefined) patch.is_default = data.is_default
+    if (data.sort_order !== undefined) patch.sort_order = data.sort_order
+
+    const template = await clientWrite.patch(id).set(patch).commit()
+    return { template: template as unknown as SponsorEmailTemplate }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function deleteSponsorEmailTemplate(
+  id: string,
+): Promise<{ error?: Error }> {
+  try {
+    await clientWrite.delete(id)
     return {}
   } catch (error) {
     return { error: error as Error }

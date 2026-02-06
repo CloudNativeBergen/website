@@ -9,6 +9,7 @@ import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { formatConferenceDateLong } from '@/lib/time'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
+import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 
 interface SponsorIndividualEmailModalProps {
   isOpen: boolean
@@ -21,8 +22,10 @@ interface SponsorIndividualEmailModalProps {
     city: string
     country: string
     start_date: string
+    organizer?: string
     domains: string[]
     social_links?: string[]
+    prospectus_url?: string
   }
 }
 
@@ -180,6 +183,22 @@ export function SponsorIndividualEmailModal({
       warningContent={localhostWarning}
       previewComponent={createPreview}
       fromAddress={fromEmail}
+      templateSelector={({ setSubject, setMessage }) => (
+        <SponsorTemplatePicker
+          sponsorName={sponsorForConference.sponsor.name}
+          contactNames={
+            contacts.length > 0
+              ? contacts.map((c) => c.name).join(', ')
+              : undefined
+          }
+          conference={conference}
+          tierName={sponsorForConference.tier?.title}
+          onApply={(subject, body) => {
+            setSubject(subject)
+            setMessage(body)
+          }}
+        />
+      )}
       initialValues={{
         subject: defaultSubject,
         message: initialMessage,

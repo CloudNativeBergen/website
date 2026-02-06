@@ -102,3 +102,42 @@ export interface SponsorExisting {
   logo?: string | null
   logo_bright?: string | null
 }
+
+export type TemplateCategory =
+  | 'cold-outreach'
+  | 'returning-sponsor'
+  | 'international'
+  | 'local-community'
+  | 'follow-up'
+  | 'custom'
+
+export interface SponsorEmailTemplate {
+  _id: string
+  _createdAt: string
+  _updatedAt: string
+  title: string
+  slug: { current: string }
+  category: TemplateCategory
+  subject: string
+  body?: PortableTextBlock[]
+  description?: string
+  is_default?: boolean
+  sort_order?: number
+}
+
+export interface PortableTextBlock {
+  _type: string
+  _key: string
+  children?: Array<{
+    _type: string
+    _key: string
+    text?: string
+    marks?: string[]
+    [key: string]: unknown
+  }>
+  markDefs?: Array<Record<string, unknown>>
+  style?: string
+  listItem?: string
+  level?: number
+  [key: string]: unknown
+}
