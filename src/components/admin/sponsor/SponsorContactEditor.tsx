@@ -120,10 +120,10 @@ export function SponsorContactEditor({
       })),
       billing: billing.email
         ? {
-          email: billing.email.trim(),
-          reference: billing.reference?.trim() || undefined,
-          comments: billing.comments?.trim() || undefined,
-        }
+            email: billing.email.trim(),
+            reference: billing.reference?.trim() || undefined,
+            comments: billing.comments?.trim() || undefined,
+          }
         : undefined,
     }
 
