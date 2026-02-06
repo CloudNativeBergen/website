@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useNotification } from './NotificationProvider'
-import { EmailModal } from './EmailModal'
+import { useNotification, EmailModal } from '@/components/admin'
 import { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { SponsorWithContactInfo } from '@/lib/sponsor/types'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
@@ -65,7 +64,36 @@ export function SponsorIndividualEmailModal({
     }
   }, [isOpen, sponsorForConference.sponsor.name])
 
-  const defaultSubject = `Regarding your sponsorship for ${conference.title}`
+  const getDefaultSubject = () => {
+    const status = sponsorForConference.status
+    const contractStatus = sponsorForConference.contract_status
+    const invoiceStatus = sponsorForConference.invoice_status
+    const title = conference.title
+
+    // Priority for transactional states if closed-won
+    if (status === 'closed-won') {
+      if (invoiceStatus === 'sent' || invoiceStatus === 'overdue') {
+        return `Sponsorship Invoice: ${title}`
+      }
+      if (contractStatus === 'contract-sent') {
+        return `Sponsorship Contract: ${title}`
+      }
+      return `Sponsorship for ${title} - Next steps`
+    }
+
+    switch (status) {
+      case 'prospect':
+        return `Partnership opportunity: ${title}`
+      case 'contacted':
+        return `Following up: Sponsorship for ${title}`
+      case 'negotiating':
+        return `Sponsorship proposal - ${title}`
+      default:
+        return `Regarding your sponsorship for ${title}`
+    }
+  }
+
+  const defaultSubject = getDefaultSubject()
 
   const handleSend = async ({
     subject,

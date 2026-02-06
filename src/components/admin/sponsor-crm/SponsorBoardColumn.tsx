@@ -5,11 +5,13 @@ import { SponsorCard } from './SponsorCard'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { useExchangeRates } from '@/hooks/useExchangeRates'
 import { calculateSponsorValue } from './utils'
+import { BoardView } from './BoardViewSwitcher'
 
 interface SponsorBoardColumnProps {
   title: string
   sponsors: SponsorForConferenceExpanded[]
   isLoading?: boolean
+  currentView: BoardView
   selectedIds?: string[]
   isSelectionMode?: boolean
   onSponsorClick: (sponsor: SponsorForConferenceExpanded) => void
@@ -24,6 +26,7 @@ export function SponsorBoardColumn({
   title,
   sponsors,
   isLoading = false,
+  currentView,
   selectedIds = [],
   isSelectionMode = false,
   onSponsorClick,
@@ -87,6 +90,7 @@ export function SponsorBoardColumn({
               <SponsorCard
                 key={sponsor._id}
                 sponsor={sponsor}
+                currentView={currentView}
                 isSelected={selectedIds.includes(sponsor._id)}
                 isSelectionMode={isSelectionMode}
                 onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}

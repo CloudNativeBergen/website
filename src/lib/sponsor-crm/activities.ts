@@ -26,13 +26,15 @@ const SPONSOR_ACTIVITY_FIELDS = `
 
 export async function listActivitiesForSponsor(
   sponsorForConferenceId: string,
+  limit?: number,
 ): Promise<{
   activities?: SponsorActivityExpanded[]
   error?: Error
 }> {
   try {
+    const limitClause = limit ? ` [0...${limit}]` : ''
     const activities = await clientRead.fetch<SponsorActivityExpanded[]>(
-      `*[_type == "sponsorActivity" && sponsor_for_conference._ref == $sponsorId] | order(created_at desc){${SPONSOR_ACTIVITY_FIELDS}}`,
+      `*[_type == "sponsorActivity" && sponsor_for_conference._ref == $sponsorId] | order(created_at desc)${limitClause}{${SPONSOR_ACTIVITY_FIELDS}}`,
       { sponsorId: sponsorForConferenceId },
     )
 

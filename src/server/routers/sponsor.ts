@@ -53,6 +53,8 @@ import {
   logStageChange,
   logInvoiceStatusChange,
   logContractStatusChange,
+  logSponsorCreated,
+  logAssignmentChange,
 } from '@/lib/sponsor-crm/activity'
 import {
   SponsorForConferenceInputSchema,
@@ -626,6 +628,7 @@ export const sponsorRouter = router({
           status: z.array(z.string()).optional(),
           invoice_status: z.array(z.string()).optional(),
           assigned_to: z.string().optional(),
+          unassigned_only: z.boolean().optional(),
           tags: z.array(z.string()).optional(),
           tiers: z.array(z.string()).optional(),
         }),
@@ -637,6 +640,7 @@ export const sponsorRouter = router({
             status: input.status,
             invoice_status: input.invoice_status,
             assigned_to: input.assigned_to,
+            unassigned_only: input.unassigned_only,
             tags: input.tags,
             tiers: input.tiers,
           },
@@ -700,6 +704,14 @@ export const sponsorRouter = router({
           })
         }
 
+        if (sponsorForConference && userId) {
+          try {
+            await logSponsorCreated(sponsorForConference._id, userId)
+          } catch (logError) {
+            console.error('Failed to log sponsor created activity:', logError)
+          }
+        }
+
         return sponsorForConference
       }),
 
@@ -761,32 +773,59 @@ export const sponsorRouter = router({
         // Log activity for key field changes
         const userId = ctx.speaker._id
         if (userId) {
-          if (updateData.status && updateData.status !== existing.status) {
-            await logStageChange(id, existing.status, updateData.status, userId)
-          }
+          try {
+            if (updateData.status && updateData.status !== existing.status) {
+              await logStageChange(
+                id,
+                existing.status,
+                updateData.status,
+                userId,
+              )
+            }
 
-          if (
-            updateData.invoice_status &&
-            updateData.invoice_status !== existing.invoice_status
-          ) {
-            await logInvoiceStatusChange(
-              id,
-              existing.invoice_status,
-              updateData.invoice_status,
-              userId,
-            )
-          }
+            if (
+              updateData.invoice_status &&
+              updateData.invoice_status !== existing.invoice_status
+            ) {
+              await logInvoiceStatusChange(
+                id,
+                existing.invoice_status,
+                updateData.invoice_status,
+                userId,
+              )
+            }
 
-          if (
-            updateData.contract_status &&
-            updateData.contract_status !== existing.contract_status
-          ) {
-            await logContractStatusChange(
-              id,
-              existing.contract_status,
-              updateData.contract_status,
-              userId,
-            )
+            if (
+              updateData.contract_status &&
+              updateData.contract_status !== existing.contract_status
+            ) {
+              await logContractStatusChange(
+                id,
+                existing.contract_status,
+                updateData.contract_status,
+                userId,
+              )
+            }
+
+            if (
+              updateData.assigned_to !== undefined &&
+              updateData.assigned_to !== (existing.assigned_to?._id || null)
+            ) {
+              let assigneeName: string | null = null
+              if (updateData.assigned_to) {
+                try {
+                  const { getSpeaker } = await import('@/lib/speaker/sanity')
+                  const { speaker } = await getSpeaker(updateData.assigned_to)
+                  assigneeName = speaker?.name || updateData.assigned_to
+                } catch (lookupError) {
+                  console.error('Failed to lookup assignee name:', lookupError)
+                  assigneeName = updateData.assigned_to
+                }
+              }
+              await logAssignmentChange(id, assigneeName, userId)
+            }
+          } catch (logError) {
+            console.error('Failed to log activity:', logError)
           }
         }
 
@@ -823,7 +862,11 @@ export const sponsorRouter = router({
 
         const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
-          await logStageChange(input.id, oldStatus, input.newStatus, userId)
+          try {
+            await logStageChange(input.id, oldStatus, input.newStatus, userId)
+          } catch (logError) {
+            console.error('Failed to log stage change activity:', logError)
+          }
         }
 
         return sponsorForConference
@@ -875,12 +918,19 @@ export const sponsorRouter = router({
 
         const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
-          await logInvoiceStatusChange(
-            input.id,
-            oldStatus,
-            input.newStatus,
-            userId,
-          )
+          try {
+            await logInvoiceStatusChange(
+              input.id,
+              oldStatus,
+              input.newStatus,
+              userId,
+            )
+          } catch (logError) {
+            console.error(
+              'Failed to log invoice status change activity:',
+              logError,
+            )
+          }
         }
 
         return sponsorForConference
@@ -974,45 +1024,49 @@ export const sponsorRouter = router({
 
     activities: router({
       list: adminProcedure
-        .input(z.object({ sponsorForConferenceId: z.string().min(1) }))
-        .query(async ({ input }) => {
-          const { activities, error } = await listActivitiesForSponsor(
-            input.sponsorForConferenceId,
-          )
-
-          if (error) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to list activities',
-              cause: error,
-            })
-          }
-
-          return activities || []
-        }),
-
-      listForConference: adminProcedure
         .input(
           z.object({
-            conferenceId: z.string().min(1),
+            conferenceId: z.string().optional(),
+            sponsorForConferenceId: z.string().optional(),
             limit: z.number().optional(),
           }),
         )
         .query(async ({ input }) => {
-          const { activities, error } = await listActivitiesForConference(
-            input.conferenceId,
-            input.limit,
-          )
+          if (input.sponsorForConferenceId) {
+            const { activities, error } = await listActivitiesForSponsor(
+              input.sponsorForConferenceId,
+              input.limit,
+            )
 
-          if (error) {
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to list conference activities',
-              cause: error,
-            })
+            if (error) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to list activities',
+                cause: error,
+              })
+            }
+
+            return activities || []
           }
 
-          return activities || []
+          if (input.conferenceId) {
+            const { activities, error } = await listActivitiesForConference(
+              input.conferenceId,
+              input.limit,
+            )
+
+            if (error) {
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to list conference activities',
+                cause: error,
+              })
+            }
+
+            return activities || []
+          }
+
+          return []
         }),
     }),
   }),

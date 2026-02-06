@@ -29,7 +29,7 @@ export function BoardViewSwitcher({
   onViewChange,
 }: BoardViewSwitcherProps) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5 dark:border-gray-700 dark:bg-gray-800">
+    <div className="inline-flex h-9 items-center gap-1 rounded-lg border border-gray-300 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800">
       {VIEWS.map((view) => {
         const Icon = view.icon
         const isActive = currentView === view.key
@@ -39,14 +39,14 @@ export function BoardViewSwitcher({
             key={view.key}
             onClick={() => onViewChange(view.key)}
             className={clsx(
-              'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all',
+              'flex h-full items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-all transition-colors',
               isActive
-                ? 'bg-brand-cloud-blue text-white dark:bg-blue-600'
-                : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700',
+                ? 'bg-white text-brand-cloud-blue shadow-sm ring-1 ring-gray-200 dark:bg-gray-700 dark:text-blue-400 dark:ring-gray-600'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white',
             )}
           >
             <Icon className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{view.label}</span>
+            <span className="hidden lg:inline">{view.label}</span>
           </button>
         )
       })}

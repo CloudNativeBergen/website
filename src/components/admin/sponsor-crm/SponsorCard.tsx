@@ -14,9 +14,11 @@ import {
   calculateSponsorValue,
 } from './utils'
 import clsx from 'clsx'
+import { BoardView } from './BoardViewSwitcher'
 
 interface SponsorCardProps {
   sponsor: SponsorForConferenceExpanded
+  currentView: BoardView
   isSelected?: boolean
   isSelectionMode?: boolean
   onToggleSelect?: (e: React.MouseEvent) => void
@@ -27,6 +29,7 @@ interface SponsorCardProps {
 
 export function SponsorCard({
   sponsor,
+  currentView,
   isSelected = false,
   isSelectionMode = false,
   onToggleSelect,
@@ -147,41 +150,25 @@ export function SponsorCard({
 
       {/* Logo */}
       <div className="mb-1.5 flex h-8 items-center justify-center overflow-hidden">
-        <SponsorLogo
-          logo={sponsor.sponsor.logo}
-          logoBright={sponsor.sponsor.logo_bright}
-          name={sponsor.sponsor.name}
-          className="max-h-full w-auto max-w-20 object-contain"
-        />
+        {sponsor.sponsor.logo ? (
+          <SponsorLogo
+            logo={sponsor.sponsor.logo}
+            logoBright={sponsor.sponsor.logo_bright}
+            name={sponsor.sponsor.name}
+            className="max-h-full w-auto max-w-20 object-contain"
+          />
+        ) : (
+          <span className="truncate px-1 text-center text-xs font-bold text-gray-600 uppercase dark:text-gray-300">
+            {sponsor.sponsor.name}
+          </span>
+        )}
       </div>
 
-      {/* Priority Tags */}
-      {sponsor.tags?.some((t) =>
-        ['high-priority', 'needs-follow-up', 'returning-sponsor'].includes(t),
-      ) && (
-        <div className="mb-1.5 flex flex-wrap gap-1">
-          {sponsor.tags.includes('high-priority') && (
-            <span className="inline-flex items-center rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700 uppercase dark:bg-red-900/30 dark:text-red-400">
-              High Priority
-            </span>
-          )}
-          {sponsor.tags.includes('needs-follow-up') && (
-            <span className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 uppercase dark:bg-amber-900/30 dark:text-amber-400">
-              Needs Follow-up
-            </span>
-          )}
-          {sponsor.tags.includes('returning-sponsor') && (
-            <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 uppercase dark:bg-emerald-900/30 dark:text-emerald-400">
-              Returning
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Value & Tier */}
-      <div className="mb-1 flex items-center justify-between gap-1 text-xs">
+      {/* Labels Section */}
+      <div className="mb-1.5 flex flex-wrap items-center justify-center gap-1">
+        {/* Value Label First */}
         {value > 0 && (
-          <span className="font-semibold text-brand-cloud-blue dark:text-blue-400">
+          <span className="inline-flex items-center rounded-md bg-brand-cloud-blue/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-cloud-blue uppercase ring-1 ring-brand-cloud-blue/20 ring-inset dark:bg-blue-400/10 dark:text-blue-400 dark:ring-blue-400/20">
             {value >= 1000000
               ? `${(value / 1000000).toFixed(1)}M`
               : value >= 1000
@@ -190,19 +177,31 @@ export function SponsorCard({
             {currency}
           </span>
         )}
-        {sponsor.tier && (
-          <span className="truncate text-brand-slate-gray dark:text-gray-400">
-            {sponsor.tier.title}
+
+        {/* Priority Tags */}
+        {sponsor.tags?.includes('high-priority') && (
+          <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700 uppercase ring-1 ring-red-700/20 ring-inset dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20">
+            High Priority
+          </span>
+        )}
+        {sponsor.tags?.includes('needs-follow-up') && (
+          <span className="inline-flex items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 uppercase ring-1 ring-amber-700/20 ring-inset dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20">
+            Needs Follow-up
+          </span>
+        )}
+        {sponsor.tags?.includes('returning-sponsor') && (
+          <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 uppercase ring-1 ring-emerald-700/20 ring-inset dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20">
+            Returning
           </span>
         )}
       </div>
 
-      {/* Invoice Status */}
-      {value > 0 && (
-        <div className="flex items-center gap-1">
+      {/* Invoice Status - Hide in pipeline view */}
+      {value > 0 && currentView !== 'pipeline' && (
+        <div className="mt-1 flex items-center gap-1 border-t border-gray-100 pt-1 dark:border-gray-700">
           <span
             className={clsx(
-              'inline-flex flex-1 items-center justify-center rounded px-1.5 py-0.5 text-xs font-medium',
+              'inline-flex flex-1 items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-medium',
               getInvoiceStatusColor(sponsor.invoice_status),
             )}
           >

@@ -1,7 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
-import { ErrorDisplay } from '@/components/admin'
-import SponsorPageClient from '@/components/admin/SponsorPageClient'
+import { ErrorDisplay, SponsorTiersPageClient } from '@/components/admin'
 import { sortTierNamesByValue } from '@/lib/sponsor/utils'
 
 export default async function AdminSponsorTiers() {
@@ -48,7 +47,7 @@ export default async function AdminSponsorTiers() {
   )
 
   return (
-    <SponsorPageClient
+    <SponsorTiersPageClient
       conference={conference}
       sponsors={sponsors}
       sponsorTiers={sponsorTiers}

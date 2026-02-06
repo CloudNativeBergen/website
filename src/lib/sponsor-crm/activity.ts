@@ -104,6 +104,27 @@ export async function logContractStatusChange(
   )
 }
 
+export async function logAssignmentChange(
+  sponsorForConferenceId: string,
+  assigneeName: string | null,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  const description = assigneeName
+    ? `Assigned to ${assigneeName}`
+    : 'Unassigned'
+
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'note',
+    description,
+    createdBy,
+    {
+      additional_data: assigneeName || '',
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}
+
 export async function logEmailSent(
   sponsorForConferenceId: string,
   subject: string,
@@ -116,6 +137,21 @@ export async function logEmailSent(
     createdBy,
     {
       additional_data: subject,
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}
+
+export async function logSponsorCreated(
+  sponsorForConferenceId: string,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'note',
+    'Sponsor opportunity created in pipeline',
+    createdBy,
+    {
       timestamp: getCurrentDateTime(),
     },
   )

@@ -1,9 +1,9 @@
 'use client'
 
-import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
+import { AdminPageHeader } from '@/components/admin'
 import { GeneralBroadcastModal } from '@/components/admin'
-import SponsorTierEditor from '@/components/admin/SponsorTierEditor'
-import SponsorTierManagement from '@/components/admin/SponsorTierManagement'
+import SponsorTierEditor from './SponsorTierEditor'
+import SponsorTierManagement from './SponsorTierManagement'
 import {
   GlobeAltIcon,
   UserGroupIcon,
@@ -17,7 +17,7 @@ import { SponsorTier } from '@/lib/sponsor/types'
 import { formatConferenceDateLong } from '@/lib/time'
 import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
 
-interface SponsorPageClientProps {
+interface SponsorTiersPageClientProps {
   conference: Conference
   sponsors: ConferenceSponsorWithContact[]
   sponsorTiers: SponsorTier[]
@@ -25,13 +25,13 @@ interface SponsorPageClientProps {
   sortedTierNames: string[]
 }
 
-export default function SponsorPageClient({
+export default function SponsorTiersPageClient({
   conference,
   sponsors,
   sponsorTiers,
   sponsorsByTier,
   sortedTierNames,
-}: SponsorPageClientProps) {
+}: SponsorTiersPageClientProps) {
   const {
     isBroadcastModalOpen,
     setIsBroadcastModalOpen,

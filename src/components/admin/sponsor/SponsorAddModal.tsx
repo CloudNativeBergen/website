@@ -21,8 +21,6 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import { ChevronDownIcon as ChevronDownIconSmall } from '@heroicons/react/16/solid'
-import { InlineSvg } from '@/components/InlineSvg'
-import { SponsorLogo } from '@/components/SponsorLogo'
 import {
   ConferenceSponsorWithContact,
   SponsorTierExisting,
@@ -31,8 +29,7 @@ import {
 } from '@/lib/sponsor/types'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 import { api } from '@/lib/trpc/client'
-
-const LOGO_PREVIEW_SIZE = { width: '100px', height: '100px' }
+import { SponsorLogoEditor } from './SponsorLogoEditor'
 
 interface SponsorAddModalProps {
   isOpen: boolean
@@ -63,14 +60,12 @@ export default function SponsorAddModal({
   onSponsorUpdated,
 }: SponsorAddModalProps) {
   const { theme } = useTheme()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const brightFileInputRef = useRef<HTMLInputElement>(null)
   const companyNameInputRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState<SponsorFormData>({
     name: '',
     website: '',
-    logo: '',
-    logo_bright: '',
+    logo: null,
+    logo_bright: null,
     tierId: preselectedTierId || '',
     org_number: '',
     contact_persons: [],
@@ -122,11 +117,12 @@ export default function SponsorAddModal({
         const tierMatch = sponsorTiers.find(
           (tier) => tier.title === editingSponsor.tier?.title,
         )
-        setFormData({
+        setFormData((prev) => ({
+          ...prev,
           name: editingSponsor.sponsor.name,
           website: editingSponsor.sponsor.website || '',
-          logo: editingSponsor.sponsor.logo || '',
-          logo_bright: editingSponsor.sponsor.logo_bright || '',
+          logo: editingSponsor.sponsor.logo || null,
+          logo_bright: editingSponsor.sponsor.logo_bright || null,
           tierId: tierMatch?._id || '',
           org_number: editingSponsor.sponsor.org_number || '',
           contact_persons:
@@ -140,15 +136,16 @@ export default function SponsorAddModal({
             reference: editingSponsor.sponsor.billing?.reference || '',
             comments: editingSponsor.sponsor.billing?.comments || '',
           },
-        })
+        }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
       } else {
-        setFormData({
+        setFormData((prev) => ({
+          ...prev,
           name: '',
           website: '',
-          logo: '',
-          logo_bright: '',
+          logo: null,
+          logo_bright: null,
           tierId: preselectedTierId || '',
           org_number: '',
           contact_persons: [],
@@ -157,7 +154,7 @@ export default function SponsorAddModal({
             reference: '',
             comments: '',
           },
-        })
+        }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
         setSponsorId('')
@@ -170,36 +167,6 @@ export default function SponsorAddModal({
       setFormData((prev) => ({ ...prev, tierId: preselectedTierId }))
     }
   }, [preselectedTierId, isOpen, editingSponsor])
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file && file.type === 'image/svg+xml') {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const svgContent = e.target?.result as string
-        setFormData((prev) => ({ ...prev, logo: svgContent }))
-      }
-      reader.readAsText(file)
-    } else {
-      alert('Please select an SVG file.')
-    }
-  }
-
-  const handleBrightFileUpload = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0]
-    if (file && file.type === 'image/svg+xml') {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const svgContent = e.target?.result as string
-        setFormData((prev) => ({ ...prev, logo_bright: svgContent }))
-      }
-      reader.readAsText(file)
-    } else {
-      alert('Please select an SVG file.')
-    }
-  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -217,8 +184,8 @@ export default function SponsorAddModal({
       const sponsorData: SponsorInput = {
         name: formData.name,
         website: formData.website,
-        logo: formData.logo,
-        logo_bright: formData.logo_bright || undefined,
+        logo: formData.logo || null,
+        logo_bright: formData.logo_bright || null,
         org_number: formData.org_number || undefined,
         contact_persons: formData.contact_persons?.map((contact) => ({
           ...contact,
@@ -404,8 +371,8 @@ export default function SponsorAddModal({
       ...prev,
       name: query,
       website: '',
-      logo: '',
-      logo_bright: '',
+      logo: null,
+      logo_bright: null,
       org_number: '',
       contact_persons: [],
       billing: { email: '', reference: '', comments: '' },
@@ -710,138 +677,17 @@ export default function SponsorAddModal({
                             </div>
                           </div>
 
-                          <div>
-                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                              Logo (SVG) *
-                            </label>
-                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                              Primary logo for light backgrounds and general
-                              display
-                            </p>
-                            <div className="mt-2">
-                              <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleFileUpload}
-                                accept=".svg"
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:text-gray-400 dark:file:bg-indigo-500/10 dark:file:text-indigo-400 dark:hover:file:bg-indigo-500/20"
-                              />
-                              {formData.logo && (
-                                <div className="mt-3">
-                                  <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                                    Logo Preview:
-                                  </p>
-                                  <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
-                                    <InlineSvg
-                                      value={formData.logo}
-                                      style={LOGO_PREVIEW_SIZE}
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        logo: '',
-                                      }))
-                                    }
-                                    className="ml-3 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                              Logo (Bright/White) - Optional
-                            </label>
-                            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                              Bright/white version for dark backgrounds
-                            </p>
-                            <div className="mt-2">
-                              <input
-                                type="file"
-                                ref={brightFileInputRef}
-                                onChange={handleBrightFileUpload}
-                                accept=".svg"
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:text-gray-400 dark:file:bg-indigo-500/10 dark:file:text-indigo-400 dark:hover:file:bg-indigo-500/20"
-                              />
-                              {formData.logo_bright && (
-                                <div className="mt-3">
-                                  <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                                    Bright Logo Preview:
-                                  </p>
-                                  <div className="inline-block rounded-lg border border-gray-200 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
-                                    <InlineSvg
-                                      value={formData.logo_bright}
-                                      style={LOGO_PREVIEW_SIZE}
-                                    />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        logo_bright: '',
-                                      }))
-                                    }
-                                    className="ml-3 text-sm text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                          <div className="sm:col-span-2">
+                            <SponsorLogoEditor
+                              logo={formData.logo || null}
+                              logoBright={formData.logo_bright || null}
+                              name={formData.name}
+                              onChange={(updates) =>
+                                setFormData((prev) => ({ ...prev, ...updates }))
+                              }
+                            />
                           </div>
                         </div>
-
-                        {formData.logo && formData.logo_bright && (
-                          <div className="mt-4 sm:col-span-2">
-                            <h5 className="mb-3 block text-sm/6 font-medium text-gray-900 dark:text-white">
-                              Logo Preview (How they appear in different modes)
-                            </h5>
-                            <div className="flex flex-col gap-4 sm:flex-row">
-                              <div className="flex-1">
-                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
-                                  Light Mode
-                                </p>
-                                <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/5">
-                                  <InlineSvg
-                                    value={formData.logo}
-                                    style={LOGO_PREVIEW_SIZE}
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
-                                  Dark Mode
-                                </p>
-                                <div className="inline-block rounded-lg border border-gray-600 bg-gray-900 p-4 dark:border-white/10 dark:bg-gray-900">
-                                  <InlineSvg
-                                    value={formData.logo_bright}
-                                    style={LOGO_PREVIEW_SIZE}
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex-1">
-                                <p className="mb-2 text-xs text-gray-600 dark:text-gray-400">
-                                  Responsive
-                                </p>
-                                <div className="inline-block rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-gray-900">
-                                  <SponsorLogo
-                                    logo={formData.logo}
-                                    logoBright={formData.logo_bright}
-                                    name={formData.name || 'Logo Preview'}
-                                    style={LOGO_PREVIEW_SIZE}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">
@@ -890,17 +736,19 @@ export default function SponsorAddModal({
                                         type="text"
                                         value={contact.name}
                                         onChange={(e) => {
-                                          const updatedContacts = [
-                                            ...(formData.contact_persons || []),
-                                          ]
-                                          updatedContacts[index] = {
-                                            ...contact,
-                                            name: e.target.value,
-                                          }
-                                          setFormData((prev) => ({
-                                            ...prev,
-                                            contact_persons: updatedContacts,
-                                          }))
+                                          setFormData((prev) => {
+                                            const updatedContacts = [
+                                              ...(prev.contact_persons || []),
+                                            ]
+                                            updatedContacts[index] = {
+                                              ...contact,
+                                              name: e.target.value,
+                                            }
+                                            return {
+                                              ...prev,
+                                              contact_persons: updatedContacts,
+                                            }
+                                          })
                                         }}
                                         className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                                         placeholder="Full name"
@@ -916,17 +764,19 @@ export default function SponsorAddModal({
                                         type="email"
                                         value={contact.email}
                                         onChange={(e) => {
-                                          const updatedContacts = [
-                                            ...(formData.contact_persons || []),
-                                          ]
-                                          updatedContacts[index] = {
-                                            ...contact,
-                                            email: e.target.value,
-                                          }
-                                          setFormData((prev) => ({
-                                            ...prev,
-                                            contact_persons: updatedContacts,
-                                          }))
+                                          setFormData((prev) => {
+                                            const updatedContacts = [
+                                              ...(prev.contact_persons || []),
+                                            ]
+                                            updatedContacts[index] = {
+                                              ...contact,
+                                              email: e.target.value,
+                                            }
+                                            return {
+                                              ...prev,
+                                              contact_persons: updatedContacts,
+                                            }
+                                          })
                                         }}
                                         className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                                         placeholder="email@example.com"
@@ -942,17 +792,19 @@ export default function SponsorAddModal({
                                         type="tel"
                                         value={contact.phone || ''}
                                         onChange={(e) => {
-                                          const updatedContacts = [
-                                            ...(formData.contact_persons || []),
-                                          ]
-                                          updatedContacts[index] = {
-                                            ...contact,
-                                            phone: e.target.value,
-                                          }
-                                          setFormData((prev) => ({
-                                            ...prev,
-                                            contact_persons: updatedContacts,
-                                          }))
+                                          setFormData((prev) => {
+                                            const updatedContacts = [
+                                              ...(prev.contact_persons || []),
+                                            ]
+                                            updatedContacts[index] = {
+                                              ...contact,
+                                              phone: e.target.value,
+                                            }
+                                            return {
+                                              ...prev,
+                                              contact_persons: updatedContacts,
+                                            }
+                                          })
                                         }}
                                         className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                                         placeholder="+47 123 45 678"
@@ -967,17 +819,19 @@ export default function SponsorAddModal({
                                       <select
                                         value={contact.role || ''}
                                         onChange={(e) => {
-                                          const updatedContacts = [
-                                            ...(formData.contact_persons || []),
-                                          ]
-                                          updatedContacts[index] = {
-                                            ...contact,
-                                            role: e.target.value,
-                                          }
-                                          setFormData((prev) => ({
-                                            ...prev,
-                                            contact_persons: updatedContacts,
-                                          }))
+                                          setFormData((prev) => {
+                                            const updatedContacts = [
+                                              ...(prev.contact_persons || []),
+                                            ]
+                                            updatedContacts[index] = {
+                                              ...contact,
+                                              role: e.target.value,
+                                            }
+                                            return {
+                                              ...prev,
+                                              contact_persons: updatedContacts,
+                                            }
+                                          })
                                         }}
                                         className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
                                       >
@@ -1001,13 +855,15 @@ export default function SponsorAddModal({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const updatedContacts = (
-                                        formData.contact_persons || []
-                                      ).filter((_, i) => i !== index)
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        contact_persons: updatedContacts,
-                                      }))
+                                      setFormData((prev) => {
+                                        const updatedContacts = (
+                                          prev.contact_persons || []
+                                        ).filter((_, i) => i !== index)
+                                        return {
+                                          ...prev,
+                                          contact_persons: updatedContacts,
+                                        }
+                                      })
                                     }}
                                     className="text-sm/6 font-semibold text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                                   >

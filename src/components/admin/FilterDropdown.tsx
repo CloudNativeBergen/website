@@ -22,6 +22,7 @@ interface FilterDropdownProps {
   keepOpen?: boolean
   disabled?: boolean
   forceDropUp?: boolean
+  size?: 'default' | 'sm'
 }
 
 export function FilterDropdown({
@@ -33,6 +34,7 @@ export function FilterDropdown({
   fixedWidth = false,
   disabled = false,
   forceDropUp = false,
+  size = 'default',
 }: FilterDropdownProps) {
   const menuRef = useRef<HTMLDivElement>(null)
   const [shouldDropUp, setShouldDropUp] = useState(forceDropUp)
@@ -137,10 +139,13 @@ export function FilterDropdown({
             <MenuButton
               disabled={disabled}
               className={clsx(
-                'inline-flex w-full items-center justify-between gap-x-1.5 rounded-md px-3 py-1.5 text-base outline-1 -outline-offset-1 sm:text-sm/6',
+                'inline-flex w-full items-center justify-between gap-x-1.5 rounded-lg outline-1 -outline-offset-1 transition-all',
+                size === 'sm'
+                  ? 'h-9 px-2.5 text-xs'
+                  : 'px-3 py-1.5 text-base sm:text-sm/6',
                 disabled
                   ? 'cursor-not-allowed bg-gray-50 text-gray-400 outline-gray-200 dark:bg-gray-800/50 dark:text-gray-600 dark:outline-gray-700'
-                  : 'bg-white text-gray-900 outline-gray-300 hover:bg-gray-50 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-gray-600',
+                  : 'bg-white text-gray-900 ring-1 ring-gray-300 outline-gray-300 ring-inset hover:bg-gray-50 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-white/5 dark:text-white dark:ring-white/10 dark:outline-white/10 dark:hover:bg-gray-600',
                 fixedWidth ? getButtonWidthClass() : '',
               )}
               onClick={handleMenuButtonClick}
@@ -148,15 +153,17 @@ export function FilterDropdown({
               <span className="min-w-0 truncate text-left">
                 {label}
                 {activeCount > 0 && (
-                  <span className="ml-1 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                  <span className="ml-1 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
                     {activeCount}
                   </span>
                 )}
               </span>
               <ChevronDownIcon
-                className={`-mr-1 h-5 w-5 text-gray-400 transition-transform duration-200 dark:text-gray-500 ${
-                  isClient && shouldDropUp ? 'rotate-180' : ''
-                }`}
+                className={clsx(
+                  '-mr-1 text-gray-400 transition-transform duration-200 dark:text-gray-500',
+                  size === 'sm' ? 'h-4 w-4' : 'h-5 w-5',
+                  isClient && shouldDropUp ? 'rotate-180' : '',
+                )}
               />
             </MenuButton>
             {open && (

@@ -11,9 +11,9 @@ import {
 } from '@heroicons/react/24/outline'
 import { CheckIcon } from '@heroicons/react/24/solid'
 import { api } from '@/lib/trpc/client'
-import { useNotification } from './NotificationProvider'
+import { useNotification } from '@/components/admin'
 import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
-import { SponsorContactEditor } from './sponsor/SponsorContactEditor'
+import { SponsorContactEditor } from './SponsorContactEditor'
 import {
   Dialog,
   DialogPanel,

@@ -1,7 +1,6 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
-import { SponsorCRMClient } from './SponsorCRMClient'
-import { RectangleStackIcon } from '@heroicons/react/24/outline'
+import { ErrorDisplay } from '@/components/admin'
+import { SponsorCRMPageClient } from '@/components/admin/sponsor-crm'
 import { headers } from 'next/headers'
 
 export default async function AdminSponsorsCRM() {
@@ -25,22 +24,5 @@ export default async function AdminSponsorsCRM() {
     )
   }
 
-  return (
-    <div className="mx-auto max-w-7xl">
-      <AdminPageHeader
-        icon={<RectangleStackIcon />}
-        title="Sponsor Pipeline"
-        description="Manage sponsor relationships and track deals for"
-        contextHighlight={conference.title}
-        stats={[]}
-        backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
-      />
-
-      <SponsorCRMClient
-        conferenceId={conference._id}
-        conference={conference}
-        domain={domain}
-      />
-    </div>
-  )
+  return <SponsorCRMPageClient conference={conference} domain={domain} />
 }
