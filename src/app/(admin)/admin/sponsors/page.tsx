@@ -10,6 +10,7 @@ import {
   ChartBarIcon,
   BuildingOffice2Icon,
   UserGroupIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 
 export default async function AdminSponsors() {
@@ -55,7 +56,7 @@ export default async function AdminSponsors() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Quick Navigation
         </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Link
             href="/admin/sponsors/crm"
             className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
@@ -120,6 +121,23 @@ export default async function AdminSponsors() {
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Full history
+              </p>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/sponsors/templates"
+            className="flex items-center gap-3 rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+          >
+            <div className="rounded-full bg-rose-100 p-3 dark:bg-rose-900/20">
+              <EnvelopeIcon className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+            </div>
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">
+                Email Templates
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Outreach templates
               </p>
             </div>
           </Link>

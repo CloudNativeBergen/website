@@ -7,19 +7,11 @@ import {
   buildTemplateVariables,
   processTemplateVariables,
   processPortableTextVariables,
+  CATEGORY_LABELS,
 } from '@/lib/sponsor/templates'
 import type { PortableTextBlock } from '@portabletext/editor'
 import { formatConferenceDateLong } from '@/lib/time'
 import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
-
-const CATEGORY_LABELS: Record<string, string> = {
-  'cold-outreach': 'Cold Outreach',
-  'returning-sponsor': 'Returning Sponsor',
-  international: 'International',
-  'local-community': 'Local / Community',
-  'follow-up': 'Follow-up',
-  custom: 'Custom',
-}
 
 interface SponsorTemplatePickerProps {
   sponsorName: string
@@ -86,9 +78,9 @@ export function SponsorTemplatePicker({
 
     const processedBody = template.body
       ? processPortableTextVariables(
-        template.body as TemplateBlock[],
-        variables,
-      )
+          template.body as TemplateBlock[],
+          variables,
+        )
       : []
 
     onApply(processedSubject, processedBody as unknown as PortableTextBlock[])
