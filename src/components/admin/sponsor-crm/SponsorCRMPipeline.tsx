@@ -21,11 +21,18 @@ import {
   sortSponsorTiers,
   formatTierLabel,
 } from '@/components/admin/sponsor-crm/utils'
+import {
+  TAGS,
+  STATUSES,
+  INVOICE_STATUSES,
+  CONTRACT_STATUSES,
+} from '@/components/admin/sponsor-crm/form/constants'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core'
 import clsx from 'clsx'
 
@@ -54,6 +61,7 @@ export function SponsorCRMPipeline({
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<BoardView>('pipeline')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -209,19 +217,15 @@ export function SponsorCRMPipeline({
       }))
   }, [conference.organizers])
 
-  const handleDelete = useCallback(
-    async (sponsorId: string) => {
-      if (
-        !confirm(
-          'Are you sure you want to remove this sponsor from the pipeline?',
-        )
-      ) {
-        return
-      }
-      await deleteMutation.mutateAsync({ id: sponsorId })
-    },
-    [deleteMutation],
-  )
+  const handleDelete = useCallback(async (sponsorId: string) => {
+    setDeleteConfirmId(sponsorId)
+  }, [])
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteConfirmId) return
+    await deleteMutation.mutateAsync({ id: deleteConfirmId })
+    setDeleteConfirmId(null)
+  }, [deleteConfirmId, deleteMutation])
 
   // Clear selection when filters change
   useEffect(() => {
@@ -321,17 +325,6 @@ export function SponsorCRMPipeline({
   const activeFilterCount =
     tiersFilter.length + (assignedToFilter ? 1 : 0) + tagsFilter.length
 
-  const availableTags: SponsorTag[] = [
-    'warm-lead',
-    'returning-sponsor',
-    'cold-outreach',
-    'referral',
-    'high-priority',
-    'needs-follow-up',
-    'multi-year-potential',
-    'previously-declined',
-  ]
-
   const groupedSponsors = useMemo(() => {
     return filteredSponsors.reduce(
       (acc, sponsor) => {
@@ -354,28 +347,16 @@ export function SponsorCRMPipeline({
   }, [filteredSponsors, currentView])
 
   const columns = useMemo(() => {
-    return currentView === 'pipeline'
-      ? [
-        { key: 'prospect', label: 'Prospect' },
-        { key: 'contacted', label: 'Contacted' },
-        { key: 'negotiating', label: 'Negotiating' },
-        { key: 'closed-won', label: 'Closed - Won' },
-        { key: 'closed-lost', label: 'Closed - Lost' },
-      ]
-      : currentView === 'contract'
-        ? [
-          { key: 'none', label: 'No Contract' },
-          { key: 'verbal-agreement', label: 'Verbal Agreement' },
-          { key: 'contract-sent', label: 'Contract Sent' },
-          { key: 'contract-signed', label: 'Contract Signed' },
-        ]
-        : [
-          { key: 'not-sent', label: 'Not Sent' },
-          { key: 'sent', label: 'Sent' },
-          { key: 'overdue', label: 'Overdue' },
-          { key: 'paid', label: 'Paid' },
-          { key: 'cancelled', label: 'Cancelled' },
-        ]
+    const source =
+      currentView === 'pipeline'
+        ? STATUSES
+        : currentView === 'contract'
+          ? CONTRACT_STATUSES
+          : INVOICE_STATUSES
+    return source.map((s) => ({
+      key: s.value,
+      label: ('columnLabel' in s && s.columnLabel) || s.label,
+    }))
   }, [currentView])
 
   if (!conferenceId) {
@@ -389,6 +370,16 @@ export function SponsorCRMPipeline({
   return (
     <div className="space-y-4">
       {/* Modals */}
+      <ConfirmationModal
+        isOpen={deleteConfirmId !== null}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={confirmDelete}
+        title="Remove Sponsor"
+        message="Are you sure you want to remove this sponsor from the pipeline?"
+        confirmButtonText="Remove"
+        variant="danger"
+        isLoading={deleteMutation.isPending}
+      />
       {isFormOpen && (
         <SponsorCRMForm
           key={selectedSponsor?._id || 'new'}
@@ -522,17 +513,14 @@ export function SponsorCRMPipeline({
               position="left"
               size="sm"
             >
-              {availableTags.map((tag) => (
+              {TAGS.map((tag) => (
                 <FilterOption
-                  key={tag}
-                  onClick={() => toggleTagFilter(tag)}
-                  checked={tagsFilter.includes(tag)}
+                  key={tag.value}
+                  onClick={() => toggleTagFilter(tag.value)}
+                  checked={tagsFilter.includes(tag.value)}
                   keepOpen
                 >
-                  {tag
-                    .split('-')
-                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(' ')}
+                  {tag.label}
                 </FilterOption>
               ))}
             </FilterDropdown>

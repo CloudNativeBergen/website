@@ -10,6 +10,7 @@ import {
 import { STATUSES, TAGS } from './form/constants'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import {
   XMarkIcon,
   ChevronDownIcon,
@@ -51,6 +52,7 @@ export function SponsorBulkActions({
   const { showNotification } = useNotification()
   const utils = api.useUtils()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const bulkUpdateMutation = api.sponsor.crm.bulkUpdate.useMutation({
     onSuccess: (result) => {
@@ -107,13 +109,11 @@ export function SponsorBulkActions({
   }
 
   const handleDelete = async () => {
-    if (
-      !confirm(
-        `Are you sure you want to remove ${selectedIds.length} sponsors from the pipeline?`,
-      )
-    ) {
-      return
-    }
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false)
     setIsProcessing(true)
     await bulkDeleteMutation.mutateAsync({
       ids: selectedIds,
@@ -307,6 +307,17 @@ export function SponsorBulkActions({
           </button>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="Delete Sponsors"
+        message={`Are you sure you want to remove ${selectedIds.length} sponsors from the pipeline?`}
+        confirmButtonText="Delete"
+        variant="danger"
+        isLoading={bulkDeleteMutation.isPending}
+      />
     </div>
   )
 }

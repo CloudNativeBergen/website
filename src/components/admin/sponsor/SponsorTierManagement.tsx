@@ -20,7 +20,7 @@ import {
 import { formatCurrency } from '@/lib/format'
 import { formatTierLabel, downloadSvg } from '@/lib/sponsor/utils'
 import { useNotification, ConfirmationModal } from '@/components/admin'
-import SponsorAddModal from './SponsorAddModal'
+import { SponsorAddModal } from './SponsorAddModal'
 import { api } from '@/lib/trpc/client'
 
 const ADMIN_LOGO_SIZE = { maxWidth: '48px', maxHeight: '48px' }
@@ -32,7 +32,7 @@ interface SponsorManagementProps {
   sortedTierNames: string[]
 }
 
-export default function SponsorTierManagement({
+export function SponsorTierManagement({
   sponsors: initialSponsors,
   sponsorTiers,
   sponsorsByTier: initialSponsorsByTier,
@@ -223,7 +223,7 @@ export default function SponsorTierManagement({
         (tierName) => newSponsorsByTier[tierName]?.length > 0,
       )
       setSortedTierNames(newSortedTierNames)
-    } catch {}
+    } catch { }
   }
 
   const handleDownloadSvg = (sponsorName: string, svgContent: string) => {
@@ -395,11 +395,10 @@ export default function SponsorTierManagement({
                               Active
                             </span>
                             <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                                isMissingContactInfo(sponsorData)
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${isMissingContactInfo(sponsorData)
                                   ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
                                   : 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
-                              }`}
+                                }`}
                               title={
                                 isMissingContactInfo(sponsorData)
                                   ? 'Missing contact information'
@@ -412,11 +411,10 @@ export default function SponsorTierManagement({
                               {!isMissingContactInfo(sponsorData) && 'Contact'}
                             </span>
                             <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                                isMissingBillingInfo(sponsorData)
+                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${isMissingBillingInfo(sponsorData)
                                   ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
                                   : 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
-                              }`}
+                                }`}
                               title={
                                 isMissingBillingInfo(sponsorData)
                                   ? 'Missing billing information'
@@ -443,57 +441,57 @@ export default function SponsorTierManagement({
               !sponsorsByTier[tier.title] ||
               sponsorsByTier[tier.title].length === 0,
           ) && (
-            <div className="border-t border-gray-200 pt-8 dark:border-gray-700">
-              <h3 className="text-md mb-4 font-medium text-gray-900 dark:text-white">
-                Available Tiers
-              </h3>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {sponsorTiers
-                  .filter(
-                    (tier) =>
-                      !sponsorsByTier[tier.title] ||
-                      sponsorsByTier[tier.title].length === 0,
-                  )
-                  .sort((a, b) => {
-                    const getMaxPrice = (tier: SponsorTierExisting) => {
-                      if (!tier.price || tier.price.length === 0) return 0
-                      return Math.max(...tier.price.map((p) => p.amount))
-                    }
-                    return getMaxPrice(b) - getMaxPrice(a)
-                  })
-                  .map((tier) => (
-                    <div
-                      key={tier._id}
-                      className="relative block rounded-lg border-2 border-dashed border-gray-300 p-4 text-center hover:border-gray-400 sm:p-6 dark:border-gray-600 dark:hover:border-gray-500"
-                    >
-                      <TagIcon className="mx-auto h-6 w-6 text-gray-400 sm:h-8 sm:w-8 dark:text-gray-500" />
-                      <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-white">
-                        {tier.title}
-                      </span>
-                      <span className="mt-1 block text-xs text-gray-500 sm:text-sm dark:text-gray-400">
-                        {tier.tagline}
-                      </span>
-                      {tier.price && tier.price.length > 0 && (
-                        <span className="mt-2 inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-800 dark:text-green-200">
-                          <CurrencyDollarIcon className="mr-1 h-3 w-3" />
-                          {formatCurrency(
-                            Math.max(...tier.price.map((p) => p.amount)),
-                            tier.price[0].currency,
-                          )}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => openAddModal(tier._id)}
-                        className="mt-3 inline-flex w-full items-center justify-center text-sm font-medium text-indigo-600 hover:text-indigo-500 sm:w-auto dark:text-indigo-400 dark:hover:text-indigo-300"
+              <div className="border-t border-gray-200 pt-8 dark:border-gray-700">
+                <h3 className="text-md mb-4 font-medium text-gray-900 dark:text-white">
+                  Available Tiers
+                </h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {sponsorTiers
+                    .filter(
+                      (tier) =>
+                        !sponsorsByTier[tier.title] ||
+                        sponsorsByTier[tier.title].length === 0,
+                    )
+                    .sort((a, b) => {
+                      const getMaxPrice = (tier: SponsorTierExisting) => {
+                        if (!tier.price || tier.price.length === 0) return 0
+                        return Math.max(...tier.price.map((p) => p.amount))
+                      }
+                      return getMaxPrice(b) - getMaxPrice(a)
+                    })
+                    .map((tier) => (
+                      <div
+                        key={tier._id}
+                        className="relative block rounded-lg border-2 border-dashed border-gray-300 p-4 text-center hover:border-gray-400 sm:p-6 dark:border-gray-600 dark:hover:border-gray-500"
                       >
-                        <PlusIcon className="mr-1 h-4 w-4" />
-                        Add sponsor
-                      </button>
-                    </div>
-                  ))}
+                        <TagIcon className="mx-auto h-6 w-6 text-gray-400 sm:h-8 sm:w-8 dark:text-gray-500" />
+                        <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-white">
+                          {tier.title}
+                        </span>
+                        <span className="mt-1 block text-xs text-gray-500 sm:text-sm dark:text-gray-400">
+                          {tier.tagline}
+                        </span>
+                        {tier.price && tier.price.length > 0 && (
+                          <span className="mt-2 inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-800 dark:text-green-200">
+                            <CurrencyDollarIcon className="mr-1 h-3 w-3" />
+                            {formatCurrency(
+                              Math.max(...tier.price.map((p) => p.amount)),
+                              tier.price[0].currency,
+                            )}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => openAddModal(tier._id)}
+                          className="mt-3 inline-flex w-full items-center justify-center text-sm font-medium text-indigo-600 hover:text-indigo-500 sm:w-auto dark:text-indigo-400 dark:hover:text-indigo-300"
+                        >
+                          <PlusIcon className="mr-1 h-4 w-4" />
+                          Add sponsor
+                        </button>
+                      </div>
+                    ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
       )}
 
