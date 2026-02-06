@@ -65,10 +65,8 @@ export function SponsorBoardColumn({
     <div
       ref={setNodeRef}
       className={clsx(
-        'flex flex-col rounded-lg border-2 p-3 transition-all',
-        isOver
-          ? 'border-indigo-400 bg-indigo-50/20 shadow-md dark:border-indigo-500 dark:bg-indigo-900/10'
-          : 'border-transparent',
+        'flex flex-col transition-all',
+        isOver && 'rounded-lg bg-indigo-50/30 dark:bg-indigo-900/20',
       )}
     >
       <div className="mb-3 flex items-center justify-between">

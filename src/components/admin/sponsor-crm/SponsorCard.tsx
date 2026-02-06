@@ -7,7 +7,7 @@ import {
   PencilIcon,
   TrashIcon,
   EnvelopeIcon,
-  Bars3Icon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
 import {
   getInvoiceStatusColor,
@@ -227,14 +227,14 @@ export function SponsorCard({
         </div>
       )}
 
-      {/* Drag Handle - Bottom Left */}
+      {/* Drag Handle - Bottom Right */}
       {!isSelectionMode && columnKey && (
         <div
-          className="absolute bottom-1 left-1 z-20 opacity-0 transition-opacity group-hover:opacity-100"
+          className="absolute bottom-1 right-1 z-20 opacity-0 transition-opacity group-hover:opacity-100"
           {...listeners}
         >
           <div className="cursor-grab rounded bg-white/90 p-0.5 shadow-sm transition-colors hover:bg-gray-100 active:cursor-grabbing dark:bg-gray-700/90 dark:hover:bg-gray-600">
-            <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
+            <ArrowsRightLeftIcon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
           </div>
         </div>
       )}
