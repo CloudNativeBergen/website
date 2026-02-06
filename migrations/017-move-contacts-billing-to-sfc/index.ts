@@ -21,7 +21,7 @@ export default defineMigration({
   title:
     'Move contact_persons and billing from sponsor to sponsorForConference',
   description:
-    'Copies contact_persons[] and billing from each referenced sponsor document into the sponsorForConference document. Adds is_primary=true to the first contact. Uses setIfMissing to avoid overwriting data that has already been set directly on the CRM record.',
+    'Copies contact_persons[] and billing from each referenced sponsor document into the sponsorForConference document. Adds is_primary=true to the first contact. Skips documents that already have the field populated to avoid overwriting data set directly on the CRM record.',
   documentTypes: ['sponsorForConference'],
 
   migrate: {

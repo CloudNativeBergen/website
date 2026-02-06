@@ -97,7 +97,14 @@ export function SponsorContactEditor({
   }
 
   const handleRemoveContact = (index: number) => {
-    setContacts(contacts.filter((_, i) => i !== index))
+    const removedContact = contacts[index]
+    const newContacts = contacts.filter((_, i) => i !== index)
+
+    if (removedContact.is_primary && newContacts.length > 0) {
+      newContacts[0] = { ...newContacts[0], is_primary: true }
+    }
+
+    setContacts(newContacts)
   }
 
   const handleSave = async () => {

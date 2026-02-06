@@ -44,7 +44,14 @@ export const POST = auth(async (req: NextAuthRequest) => {
       { sponsorId, conferenceId: conference._id },
     )
 
-    const contacts = sfc?.contact_persons || []
+    if (!sfc) {
+      return createEmailErrorResponse(
+        'Sponsor not found in this conference',
+        404,
+      )
+    }
+
+    const contacts = sfc.contact_persons || []
     const recipients = contacts
       .filter((c) => c.email)
       .map((c) => ({ email: c.email, name: c.name }))

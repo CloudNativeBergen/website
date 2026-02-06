@@ -70,7 +70,10 @@ export const SponsorForConferenceInputSchema = z.object({
         is_primary: z.boolean().optional(),
       }),
     )
-    .optional(),
+    .optional()
+    .refine((arr) => !arr || arr.filter((c) => c.is_primary).length <= 1, {
+      message: 'Only one contact can be marked as primary',
+    }),
   billing: BillingInfoSchema.optional(),
 })
 
@@ -106,7 +109,10 @@ export const SponsorForConferenceUpdateSchema = z.object({
         is_primary: z.boolean().optional(),
       }),
     )
-    .optional(),
+    .optional()
+    .refine((arr) => !arr || arr.filter((c) => c.is_primary).length <= 1, {
+      message: 'Only one contact can be marked as primary',
+    }),
   billing: BillingInfoSchema.nullable().optional(),
 })
 

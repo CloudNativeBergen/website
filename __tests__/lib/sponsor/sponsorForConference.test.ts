@@ -442,6 +442,27 @@ describe('SponsorForConferenceInputSchema - contact_persons', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  it('fails with multiple primary contacts', () => {
+    const result = SponsorForConferenceInputSchema.safeParse({
+      ...validInput,
+      contact_persons: [
+        {
+          _key: 'c1',
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          is_primary: true,
+        },
+        {
+          _key: 'c2',
+          name: 'John Smith',
+          email: 'john@example.com',
+          is_primary: true,
+        },
+      ],
+    })
+    expect(result.success).toBe(false)
+  })
 })
 
 describe('SponsorForConferenceInputSchema - billing', () => {
@@ -544,6 +565,27 @@ describe('SponsorForConferenceUpdateSchema - contact_persons and billing', () =>
     const result = SponsorForConferenceUpdateSchema.safeParse({
       id: 'sfc-123',
       contact_persons: [{ _key: 'c1', name: '', email: 'bad' }],
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('fails with multiple primary contacts in update', () => {
+    const result = SponsorForConferenceUpdateSchema.safeParse({
+      id: 'sfc-123',
+      contact_persons: [
+        {
+          _key: 'c1',
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          is_primary: true,
+        },
+        {
+          _key: 'c2',
+          name: 'John Smith',
+          email: 'john@example.com',
+          is_primary: true,
+        },
+      ],
     })
     expect(result.success).toBe(false)
   })
