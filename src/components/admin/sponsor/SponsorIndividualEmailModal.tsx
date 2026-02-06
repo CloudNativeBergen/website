@@ -3,14 +3,13 @@
 import { useState, useEffect } from 'react'
 import { useNotification, EmailModal } from '@/components/admin'
 import { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
-import { SponsorWithContactInfo } from '@/lib/sponsor/types'
 import { BroadcastTemplate } from '@/components/email/BroadcastTemplate'
 import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableTextBlock as PortableTextBlockForHTML } from '@portabletext/types'
 import { formatConferenceDateLong } from '@/lib/time'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
-import { api } from '@/lib/trpc/client'
+import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 
 interface SponsorIndividualEmailModalProps {
   isOpen: boolean
@@ -23,8 +22,10 @@ interface SponsorIndividualEmailModalProps {
     city: string
     country: string
     start_date: string
+    organizer?: string
     domains: string[]
     social_links?: string[]
+    prospectus_url?: string
   }
 }
 
@@ -38,22 +39,8 @@ export function SponsorIndividualEmailModal({
 }: SponsorIndividualEmailModalProps) {
   const { showNotification } = useNotification()
   const [initialMessage, setInitialMessage] = useState<PortableTextBlock[]>([])
-  const [fullSponsor, setFullSponsor] = useState<SponsorWithContactInfo | null>(
-    null,
-  )
 
-  const { data: sponsorData, isLoading: isLoadingSponsor } =
-    api.sponsor.getById.useQuery(
-      { id: sponsorForConference.sponsor._id, includeContactInfo: true },
-      { enabled: isOpen },
-    )
-
-  useEffect(() => {
-    if (sponsorData) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize sponsor data when fetched
-      setFullSponsor(sponsorData as SponsorWithContactInfo)
-    }
-  }, [sponsorData])
+  const contacts = sponsorForConference.contact_persons || []
 
   useEffect(() => {
     if (isOpen) {
@@ -167,7 +154,6 @@ export function SponsorIndividualEmailModal({
     )
   }
 
-  const contacts = fullSponsor?.contact_persons || []
   const recipientDisplay =
     contacts.length > 0 ? (
       <div className="flex flex-wrap gap-2">
@@ -180,10 +166,6 @@ export function SponsorIndividualEmailModal({
           </span>
         ))}
       </div>
-    ) : isLoadingSponsor ? (
-      <span className="animate-pulse text-sm text-gray-500">
-        Loading contacts...
-      </span>
     ) : (
       <span className="text-sm text-red-500">No contact persons found</span>
     )
@@ -201,6 +183,22 @@ export function SponsorIndividualEmailModal({
       warningContent={localhostWarning}
       previewComponent={createPreview}
       fromAddress={fromEmail}
+      templateSelector={({ setSubject, setMessage }) => (
+        <SponsorTemplatePicker
+          sponsorName={sponsorForConference.sponsor.name}
+          contactNames={
+            contacts.length > 0
+              ? contacts.map((c) => c.name).join(', ')
+              : undefined
+          }
+          conference={conference}
+          tierName={sponsorForConference.tier?.title}
+          onApply={(subject, body) => {
+            setSubject(subject)
+            setMessage(body)
+          }}
+        />
+      )}
       initialValues={{
         subject: defaultSubject,
         message: initialMessage,

@@ -21,7 +21,6 @@ export function SponsorManagement() {
     refetch: refetchSponsors,
   } = api.sponsor.list.useQuery({
     query: searchQuery || undefined,
-    includeContactInfo: true,
   })
 
   // Fetch sponsor tiers

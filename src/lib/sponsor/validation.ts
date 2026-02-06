@@ -149,47 +149,5 @@ export function validateSponsor(data: SponsorInput): ValidationError[] {
     }
   }
 
-  if (data.contact_persons) {
-    data.contact_persons.forEach((contact, index) => {
-      if (!contact.name || contact.name.trim().length === 0) {
-        errors.push({
-          field: `contact_persons.${index}.name`,
-          message: 'Contact person name is required',
-        })
-      }
-      if (!contact.email || contact.email.trim().length === 0) {
-        errors.push({
-          field: `contact_persons.${index}.email`,
-          message: 'Contact person email is required',
-        })
-      } else {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(contact.email)) {
-          errors.push({
-            field: `contact_persons.${index}.email`,
-            message: 'Contact person email must be valid',
-          })
-        }
-      }
-    })
-  }
-
-  if (data.billing) {
-    if (!data.billing.email || data.billing.email.trim().length === 0) {
-      errors.push({
-        field: 'billing.email',
-        message: 'Billing email is required when billing info is provided',
-      })
-    } else {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailRegex.test(data.billing.email)) {
-        errors.push({
-          field: 'billing.email',
-          message: 'Billing email must be valid',
-        })
-      }
-    }
-  }
-
   return errors
 }

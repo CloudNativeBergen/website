@@ -55,6 +55,10 @@ export interface EmailModalProps {
   onAdditionalFieldsChange?: (
     fields: Record<string, string | number | boolean>,
   ) => void
+  templateSelector?: (actions: {
+    setSubject: (subject: string) => void
+    setMessage: (blocks: PortableTextBlock[]) => void
+  }) => React.ReactNode
 
   ticketUrl?: string
   onTicketUrlChange?: (url: string) => void
@@ -77,6 +81,7 @@ export function EmailModal({
   storageKey,
   additionalFields = {},
   onAdditionalFieldsChange,
+  templateSelector,
   ticketUrl,
   onTicketUrlChange,
 }: EmailModalProps) {
@@ -453,6 +458,23 @@ export function EmailModal({
                             </span>
                           </div>
                         </div>
+
+                        {templateSelector && (
+                          <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
+                            <label className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300">
+                              Template:
+                            </label>
+                            <div className="flex-1">
+                              {templateSelector({
+                                setSubject,
+                                setMessage: (blocks: PortableTextBlock[]) => {
+                                  setRichTextValue(blocks)
+                                  setEditorRemountKey((prev) => prev + 1)
+                                },
+                              })}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
                           <label

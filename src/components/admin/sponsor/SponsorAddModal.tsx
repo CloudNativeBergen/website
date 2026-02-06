@@ -22,12 +22,11 @@ import {
 } from '@heroicons/react/24/outline'
 import { ChevronDownIcon as ChevronDownIconSmall } from '@heroicons/react/16/solid'
 import {
-  ConferenceSponsorWithContact,
+  ConferenceSponsor,
   SponsorTierExisting,
   SponsorInput,
-  SponsorWithContactInfo,
+  SponsorExisting,
 } from '@/lib/sponsor/types'
-import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 import { api } from '@/lib/trpc/client'
 import { SponsorLogoEditor } from './SponsorLogoEditor'
 
@@ -36,18 +35,13 @@ interface SponsorAddModalProps {
   onClose: () => void
   sponsorTiers: SponsorTierExisting[]
   preselectedTierId?: string
-  editingSponsor?: ConferenceSponsorWithContact | null
-  onSponsorAdded?: (sponsor: ConferenceSponsorWithContact) => void
-  onSponsorUpdated?: (sponsor: ConferenceSponsorWithContact) => void
+  editingSponsor?: ConferenceSponsor | null
+  onSponsorAdded?: (sponsor: ConferenceSponsor) => void
+  onSponsorUpdated?: (sponsor: ConferenceSponsor) => void
 }
 
-interface SponsorFormData extends Omit<SponsorInput, 'billing'> {
+interface SponsorFormData extends SponsorInput {
   tierId: string
-  billing: {
-    email: string
-    reference?: string
-    comments?: string
-  }
 }
 
 export function SponsorAddModal({
@@ -68,19 +62,13 @@ export function SponsorAddModal({
     logo_bright: null,
     tierId: preselectedTierId || '',
     org_number: '',
-    contact_persons: [],
-    billing: {
-      email: '',
-      reference: '',
-      comments: '',
-    },
   })
 
-  const [availableSponsors, setAvailableSponsors] = useState<
-    SponsorWithContactInfo[]
-  >([])
+  const [availableSponsors, setAvailableSponsors] = useState<SponsorExisting[]>(
+    [],
+  )
   const [selectedExistingSponsor, setSelectedExistingSponsor] =
-    useState<SponsorWithContactInfo | null>(null)
+    useState<SponsorExisting | null>(null)
   const [query, setQuery] = useState('')
   const [sponsorId, setSponsorId] = useState<string>('')
   const [isCreatingNew, setIsCreatingNew] = useState(false)
@@ -124,18 +112,7 @@ export function SponsorAddModal({
           logo: editingSponsor.sponsor.logo || null,
           logo_bright: editingSponsor.sponsor.logo_bright || null,
           tierId: tierMatch?._id || '',
-          org_number: editingSponsor.sponsor.org_number || '',
-          contact_persons:
-            editingSponsor.sponsor.contact_persons?.map((contact) => ({
-              ...contact,
-              phone: contact.phone || '',
-              role: contact.role || '',
-            })) || [],
-          billing: {
-            email: editingSponsor.sponsor.billing?.email || '',
-            reference: editingSponsor.sponsor.billing?.reference || '',
-            comments: editingSponsor.sponsor.billing?.comments || '',
-          },
+          org_number: '',
         }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
@@ -148,12 +125,6 @@ export function SponsorAddModal({
           logo_bright: null,
           tierId: preselectedTierId || '',
           org_number: '',
-          contact_persons: [],
-          billing: {
-            email: '',
-            reference: '',
-            comments: '',
-          },
         }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
@@ -172,27 +143,12 @@ export function SponsorAddModal({
     event.preventDefault()
 
     try {
-      const billingData =
-        formData.billing.email || formData.billing.reference
-          ? {
-              email: formData.billing.email,
-              reference: formData.billing.reference || undefined,
-              comments: formData.billing.comments || undefined,
-            }
-          : undefined
-
       const sponsorData: SponsorInput = {
         name: formData.name,
         website: formData.website,
         logo: formData.logo || null,
         logo_bright: formData.logo_bright || null,
         org_number: formData.org_number || undefined,
-        contact_persons: formData.contact_persons?.map((contact) => ({
-          ...contact,
-          phone: contact.phone || undefined,
-          role: contact.role || undefined,
-        })),
-        billing: billingData,
       }
 
       if (editingSponsor) {
@@ -223,22 +179,19 @@ export function SponsorAddModal({
         const updatedSponsor = (await updateMutation.mutateAsync({
           id: existingSponsor._id,
           data: sponsorUpdateData,
-        })) as SponsorWithContactInfo
+        })) as SponsorExisting
 
         const selectedTier = sponsorTiers.find(
           (tier) => tier._id === formData.tierId,
         )
 
-        const updatedConferenceSponsor: ConferenceSponsorWithContact = {
+        const updatedConferenceSponsor: ConferenceSponsor = {
           sponsor: {
             _id: updatedSponsor._id,
             name: updatedSponsor.name,
             website: updatedSponsor.website,
             logo: updatedSponsor.logo,
             logo_bright: updatedSponsor.logo_bright,
-            org_number: updatedSponsor.org_number,
-            contact_persons: updatedSponsor.contact_persons,
-            billing: updatedSponsor.billing,
           },
           tier: {
             title: selectedTier?.title || '',
@@ -259,9 +212,6 @@ export function SponsorAddModal({
                     logo: updatedSponsor.logo,
                     logo_bright: updatedSponsor.logo_bright,
                     website: updatedSponsor.website,
-                    org_number: updatedSponsor.org_number,
-                    contact_persons: updatedSponsor.contact_persons,
-                    billing: updatedSponsor.billing,
                   }
                 : sponsor,
             )
@@ -291,16 +241,13 @@ export function SponsorAddModal({
           (tier) => tier._id === formData.tierId,
         )
 
-        const addedSponsor: ConferenceSponsorWithContact = {
+        const addedSponsor: ConferenceSponsor = {
           sponsor: {
             _id: finalSponsorId,
             name: formData.name,
             website: formData.website,
             logo: formData.logo,
             logo_bright: formData.logo_bright || undefined,
-            org_number: formData.org_number,
-            contact_persons: formData.contact_persons,
-            billing: billingData,
           },
           tier: {
             title: selectedTier?.title || '',
@@ -312,7 +259,7 @@ export function SponsorAddModal({
         onSponsorAdded?.(addedSponsor)
 
         if (isCreatingNew && finalSponsorId) {
-          const newSponsor: SponsorWithContactInfo = {
+          const newSponsor: SponsorExisting = {
             _id: finalSponsorId,
             _createdAt: new Date().toISOString(),
             _updatedAt: new Date().toISOString(),
@@ -320,9 +267,6 @@ export function SponsorAddModal({
             website: formData.website,
             logo: formData.logo,
             logo_bright: formData.logo_bright,
-            org_number: formData.org_number,
-            contact_persons: formData.contact_persons,
-            billing: billingData,
           }
           setAvailableSponsors((prev) =>
             [...prev, newSponsor].sort((a, b) => a.name.localeCompare(b.name)),
@@ -337,7 +281,7 @@ export function SponsorAddModal({
     }
   }
 
-  const handleSponsorSelection = (sponsor: SponsorWithContactInfo | null) => {
+  const handleSponsorSelection = (sponsor: SponsorExisting | null) => {
     if (sponsor === null) {
       createNewSponsor()
       return
@@ -351,13 +295,7 @@ export function SponsorAddModal({
         logo: sponsor.logo || '',
         logo_bright: sponsor.logo_bright || '',
         tierId: formData.tierId,
-        org_number: sponsor.org_number || '',
-        contact_persons: sponsor.contact_persons || [],
-        billing: {
-          email: sponsor.billing?.email || '',
-          reference: sponsor.billing?.reference || '',
-          comments: sponsor.billing?.comments || '',
-        },
+        org_number: '',
       })
       setSponsorId(sponsor._id)
       setIsCreatingNew(false)
@@ -374,8 +312,6 @@ export function SponsorAddModal({
       logo: null,
       logo_bright: null,
       org_number: '',
-      contact_persons: [],
-      billing: { email: '', reference: '', comments: '' },
     }))
     setSponsorId('')
 
@@ -439,7 +375,7 @@ export function SponsorAddModal({
                   </h3>
                   <button
                     onClick={onClose}
-                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200"
+                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200 dark:focus:outline-indigo-500"
                   >
                     <span className="sr-only">Close</span>
                     <XMarkIcon className="h-6 w-6" aria-hidden="true" />
@@ -505,7 +441,7 @@ export function SponsorAddModal({
                           <div className="relative">
                             <ComboboxInput
                               className="w-full rounded-md bg-white py-1.5 pr-10 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                              displayValue={(sponsor: SponsorWithContactInfo) =>
+                              displayValue={(sponsor: SponsorExisting) =>
                                 sponsor?.name || ''
                               }
                               onChange={(event) => setQuery(event.target.value)}
@@ -686,278 +622,6 @@ export function SponsorAddModal({
                                 setFormData((prev) => ({ ...prev, ...updates }))
                               }
                             />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="border-b border-gray-900/10 pb-4 dark:border-white/10">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
-                            Contact Persons
-                          </h4>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormData((prev) => ({
-                                ...prev,
-                                contact_persons: [
-                                  ...(prev.contact_persons || []),
-                                  {
-                                    _key: `contact-${Date.now()}`,
-                                    name: '',
-                                    email: '',
-                                    phone: '',
-                                    role: '',
-                                  },
-                                ],
-                              }))
-                            }}
-                            className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:shadow-none dark:focus-visible:outline-indigo-500"
-                          >
-                            <PlusIcon className="mr-1.5 h-4 w-4" />
-                            Add Contact
-                          </button>
-                        </div>
-
-                        <div className="mt-4 space-y-3">
-                          {(formData.contact_persons || []).map(
-                            (contact, index) => (
-                              <div
-                                key={index}
-                                className="rounded-lg border border-gray-900/10 p-4 dark:border-white/10"
-                              >
-                                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                                  <div>
-                                    <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                                      Full Name *
-                                    </label>
-                                    <div className="mt-1">
-                                      <input
-                                        type="text"
-                                        value={contact.name}
-                                        onChange={(e) => {
-                                          setFormData((prev) => {
-                                            const updatedContacts = [
-                                              ...(prev.contact_persons || []),
-                                            ]
-                                            updatedContacts[index] = {
-                                              ...contact,
-                                              name: e.target.value,
-                                            }
-                                            return {
-                                              ...prev,
-                                              contact_persons: updatedContacts,
-                                            }
-                                          })
-                                        }}
-                                        className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                        placeholder="Full name"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                                      Email *
-                                    </label>
-                                    <div className="mt-1">
-                                      <input
-                                        type="email"
-                                        value={contact.email}
-                                        onChange={(e) => {
-                                          setFormData((prev) => {
-                                            const updatedContacts = [
-                                              ...(prev.contact_persons || []),
-                                            ]
-                                            updatedContacts[index] = {
-                                              ...contact,
-                                              email: e.target.value,
-                                            }
-                                            return {
-                                              ...prev,
-                                              contact_persons: updatedContacts,
-                                            }
-                                          })
-                                        }}
-                                        className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                        placeholder="email@example.com"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                                      Phone
-                                    </label>
-                                    <div className="mt-1">
-                                      <input
-                                        type="tel"
-                                        value={contact.phone || ''}
-                                        onChange={(e) => {
-                                          setFormData((prev) => {
-                                            const updatedContacts = [
-                                              ...(prev.contact_persons || []),
-                                            ]
-                                            updatedContacts[index] = {
-                                              ...contact,
-                                              phone: e.target.value,
-                                            }
-                                            return {
-                                              ...prev,
-                                              contact_persons: updatedContacts,
-                                            }
-                                          })
-                                        }}
-                                        className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                        placeholder="+47 123 45 678"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                                      Role
-                                    </label>
-                                    <div className="mt-1 grid grid-cols-1">
-                                      <select
-                                        value={contact.role || ''}
-                                        onChange={(e) => {
-                                          setFormData((prev) => {
-                                            const updatedContacts = [
-                                              ...(prev.contact_persons || []),
-                                            ]
-                                            updatedContacts[index] = {
-                                              ...contact,
-                                              role: e.target.value,
-                                            }
-                                            return {
-                                              ...prev,
-                                              contact_persons: updatedContacts,
-                                            }
-                                          })
-                                        }}
-                                        className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
-                                      >
-                                        <option value="">
-                                          Select a role...
-                                        </option>
-                                        {CONTACT_ROLE_OPTIONS.map((role) => (
-                                          <option key={role} value={role}>
-                                            {role}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <ChevronDownIconSmall
-                                        aria-hidden="true"
-                                        className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4 dark:text-gray-400"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="mt-3 flex justify-end">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setFormData((prev) => {
-                                        const updatedContacts = (
-                                          prev.contact_persons || []
-                                        ).filter((_, i) => i !== index)
-                                        return {
-                                          ...prev,
-                                          contact_persons: updatedContacts,
-                                        }
-                                      })
-                                    }}
-                                    className="text-sm/6 font-semibold text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              </div>
-                            ),
-                          )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <h4 className="text-base/7 font-semibold text-gray-900 dark:text-white">
-                          Billing Information
-                        </h4>
-                        <div className="mt-4 grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-                          <div className="sm:col-span-2">
-                            <label
-                              htmlFor="billing_email"
-                              className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                            >
-                              Billing Email
-                            </label>
-                            <div className="mt-1">
-                              <input
-                                type="email"
-                                id="billing_email"
-                                value={formData.billing?.email || ''}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    billing: {
-                                      ...prev.billing,
-                                      email: e.target.value,
-                                    },
-                                  }))
-                                }
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                placeholder="billing@example.com"
-                              />
-                            </div>
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label
-                              htmlFor="billing_reference"
-                              className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                            >
-                              Billing Reference
-                            </label>
-                            <div className="mt-1">
-                              <input
-                                type="text"
-                                id="billing_reference"
-                                value={formData.billing?.reference || ''}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    billing: {
-                                      ...prev.billing,
-                                      reference: e.target.value,
-                                    },
-                                  }))
-                                }
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                placeholder="Internal reference number"
-                              />
-                            </div>
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label
-                              htmlFor="billing_comments"
-                              className="block text-sm/6 font-medium text-gray-900 dark:text-white"
-                            >
-                              Billing Comments
-                            </label>
-                            <div className="mt-1">
-                              <textarea
-                                id="billing_comments"
-                                rows={3}
-                                value={formData.billing?.comments || ''}
-                                onChange={(e) =>
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    billing: {
-                                      ...prev.billing,
-                                      comments: e.target.value,
-                                    },
-                                  }))
-                                }
-                                className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                                placeholder="Any special billing instructions..."
-                              />
-                            </div>
                           </div>
                         </div>
                       </div>

@@ -10,7 +10,6 @@ export default async function AdminSponsorsCRM() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       sponsors: true,
-      sponsorContact: true,
       sponsorTiers: true,
       organizers: true,
     })

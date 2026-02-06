@@ -1,6 +1,9 @@
 'use client'
 
-import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import type {
+  SponsorForConferenceExpanded,
+  SponsorTag,
+} from '@/lib/sponsor-crm/types'
 import type { Speaker } from '@/lib/speaker/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
@@ -29,6 +32,37 @@ interface SponsorCardProps {
   onEdit: () => void
   onDelete: () => void
   onEmail?: () => void
+}
+
+const TAG_BADGES: {
+  tag: SponsorTag
+  label: string
+  classes: string
+}[] = [
+  {
+    tag: 'high-priority',
+    label: 'PRI',
+    classes:
+      'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
+  },
+  {
+    tag: 'needs-follow-up',
+    label: 'FUP',
+    classes:
+      'bg-amber-100 text-amber-700 ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
+  },
+  {
+    tag: 'returning-sponsor',
+    label: 'RET',
+    classes:
+      'bg-emerald-100 text-emerald-700 ring-emerald-700/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
+  },
+]
+
+const TAG_TOOLTIPS: Record<string, string> = {
+  PRI: 'High Priority',
+  FUP: 'Needs Follow-up',
+  RET: 'Returning Sponsor',
 }
 
 export function SponsorCard({
@@ -82,11 +116,20 @@ export function SponsorCard({
     }
   }
 
+  const activeTags = TAG_BADGES.filter((t) => sponsor.tags?.includes(t.tag))
+
+  const formatValue = (v: number) =>
+    v >= 1000000
+      ? `${(v / 1000000).toFixed(1)}M`
+      : v >= 1000
+        ? `${(v / 1000).toFixed(0)}K`
+        : v.toLocaleString()
+
   return (
     <div
       ref={setNodeRef}
       className={clsx(
-        'group relative cursor-pointer rounded border p-2 transition-all hover:border-brand-cloud-blue hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
+        'group relative flex h-18 cursor-pointer gap-2.5 overflow-hidden rounded border p-2 transition-all hover:border-brand-cloud-blue hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
         isSelected
           ? 'border-indigo-500 bg-indigo-50/30 shadow-sm ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-900/20'
           : 'border-gray-200 bg-white',
@@ -106,36 +149,99 @@ export function SponsorCard({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => {}} // Handled by parent click
-          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
+          onChange={() => {}}
+          className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
         />
       </div>
 
-      {/* Assignee Avatar - Top Left (Offset if checkbox is visible) */}
-      {sponsor.assigned_to && (
-        <div
-          className={clsx(
-            'absolute top-1 left-1 z-10 origin-top-left scale-75 transition-transform',
-            isSelected && 'translate-x-5',
-            'group-hover:translate-x-5',
+      {/* Left: Avatar + Logo */}
+      <div className="flex w-12 shrink-0 flex-col items-center justify-center gap-1">
+        {/* Logo */}
+        <div className="flex h-7 w-12 items-center justify-center overflow-hidden">
+          {sponsor.sponsor.logo ? (
+            <SponsorLogo
+              logo={sponsor.sponsor.logo}
+              logoBright={sponsor.sponsor.logo_bright}
+              name={sponsor.sponsor.name}
+              className="max-h-full w-auto max-w-12 object-contain"
+            />
+          ) : (
+            <span className="truncate text-center text-[9px] leading-tight font-bold text-gray-500 uppercase dark:text-gray-400">
+              {sponsor.sponsor.name}
+            </span>
           )}
-        >
-          <SpeakerAvatars
-            speakers={[
-              {
-                _id: sponsor.assigned_to._id,
-                name: sponsor.assigned_to.name,
-                image: sponsor.assigned_to.image,
-              } as Speaker,
-            ]}
-            size="sm"
-            maxVisible={1}
-            showTooltip={true}
-          />
         </div>
-      )}
+        {/* Assignee */}
+        {sponsor.assigned_to && (
+          <div className="scale-[0.6] transform">
+            <SpeakerAvatars
+              speakers={[
+                {
+                  _id: sponsor.assigned_to._id,
+                  name: sponsor.assigned_to.name,
+                  image: sponsor.assigned_to.image,
+                } as Speaker,
+              ]}
+              size="sm"
+              maxVisible={1}
+              showTooltip={true}
+            />
+          </div>
+        )}
+      </div>
 
-      {/* Action Buttons */}
+      {/* Right: Name + Value + Tags */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+        {/* Name */}
+        <p className="truncate text-xs leading-tight font-semibold text-gray-900 dark:text-white">
+          {sponsor.sponsor.name}
+        </p>
+
+        {/* Tier + Value */}
+        <div className="flex items-center gap-1.5 text-[10px] leading-tight">
+          {sponsor.tier && (
+            <span className="truncate text-gray-500 dark:text-gray-400">
+              {sponsor.tier.title}
+            </span>
+          )}
+          {value > 0 && sponsor.tier && (
+            <span className="text-gray-300 dark:text-gray-600">&middot;</span>
+          )}
+          {value > 0 && (
+            <span className="shrink-0 font-bold text-brand-cloud-blue dark:text-blue-400">
+              {formatValue(value)} {currency}
+            </span>
+          )}
+        </div>
+
+        {/* Tags + Invoice status */}
+        <div className="flex items-center gap-1">
+          {activeTags.map((t) => (
+            <span
+              key={t.tag}
+              title={TAG_TOOLTIPS[t.label]}
+              className={clsx(
+                'inline-flex items-center rounded px-1 py-px text-[8px] leading-none font-bold uppercase ring-1 ring-inset',
+                t.classes,
+              )}
+            >
+              {t.label}
+            </span>
+          ))}
+          {value > 0 && currentView !== 'pipeline' && (
+            <span
+              className={clsx(
+                'inline-flex items-center rounded px-1 py-px text-[8px] leading-none font-medium',
+                getInvoiceStatusColor(sponsor.invoice_status),
+              )}
+            >
+              {formatInvoiceStatusLabel(sponsor.invoice_status)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Action Buttons - Top Right */}
       <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         {onEmail && (
           <button
@@ -161,68 +267,6 @@ export function SponsorCard({
           <TrashIcon className="h-3 w-3 text-red-600 dark:text-red-400" />
         </button>
       </div>
-
-      {/* Logo */}
-      <div className="mb-1.5 flex h-8 items-center justify-center overflow-hidden">
-        {sponsor.sponsor.logo ? (
-          <SponsorLogo
-            logo={sponsor.sponsor.logo}
-            logoBright={sponsor.sponsor.logo_bright}
-            name={sponsor.sponsor.name}
-            className="max-h-full w-auto max-w-20 object-contain"
-          />
-        ) : (
-          <span className="truncate px-1 text-center text-xs font-bold text-gray-600 uppercase dark:text-gray-300">
-            {sponsor.sponsor.name}
-          </span>
-        )}
-      </div>
-
-      {/* Labels Section */}
-      <div className="mb-1.5 flex flex-wrap items-center justify-center gap-1">
-        {/* Value Label First */}
-        {value > 0 && (
-          <span className="inline-flex items-center rounded-md bg-brand-cloud-blue/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-cloud-blue uppercase ring-1 ring-brand-cloud-blue/20 ring-inset dark:bg-blue-400/10 dark:text-blue-400 dark:ring-blue-400/20">
-            {value >= 1000000
-              ? `${(value / 1000000).toFixed(1)}M`
-              : value >= 1000
-                ? `${(value / 1000).toFixed(0)}K`
-                : value.toLocaleString()}{' '}
-            {currency}
-          </span>
-        )}
-
-        {/* Priority Tags */}
-        {sponsor.tags?.includes('high-priority') && (
-          <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700 uppercase ring-1 ring-red-700/20 ring-inset dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20">
-            High Priority
-          </span>
-        )}
-        {sponsor.tags?.includes('needs-follow-up') && (
-          <span className="inline-flex items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 uppercase ring-1 ring-amber-700/20 ring-inset dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20">
-            Needs Follow-up
-          </span>
-        )}
-        {sponsor.tags?.includes('returning-sponsor') && (
-          <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 uppercase ring-1 ring-emerald-700/20 ring-inset dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20">
-            Returning
-          </span>
-        )}
-      </div>
-
-      {/* Invoice Status - Hide in pipeline view */}
-      {value > 0 && currentView !== 'pipeline' && (
-        <div className="mt-1 flex items-center gap-1 border-t border-gray-100 pt-1 dark:border-gray-700">
-          <span
-            className={clsx(
-              'inline-flex flex-1 items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-medium',
-              getInvoiceStatusColor(sponsor.invoice_status),
-            )}
-          >
-            {formatInvoiceStatusLabel(sponsor.invoice_status)}
-          </span>
-        </div>
-      )}
 
       {/* Drag Handle - Bottom Right */}
       {!isSelectionMode && columnKey && (

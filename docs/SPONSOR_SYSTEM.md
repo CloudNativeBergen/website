@@ -6,30 +6,26 @@ The sponsor system manages the full lifecycle of conference sponsorships — fro
 
 The system is split into two distinct domains:
 
-1. **Sponsor Management** — the core sponsor entity registry (companies, logos, contacts, tiers, and public-facing display)
+1. **Sponsor Management** — the core sponsor entity registry (companies, logos, tiers, and public-facing display)
 2. **Sponsor CRM** — the per-conference relationship pipeline that tracks the status, contracts, invoices, and activity history for each sponsor engagement
 
 Both domains share the same tRPC router (`sponsor.*`) and Sanity backend, but have separate type systems, libraries, and UI components.
 
 ## Data Model
 
-All sponsor data is stored in Sanity CMS across four document types:
+All sponsor data is stored in Sanity CMS across five document types:
 
 ### `sponsor`
 
 The base company record. Conference-independent — a single sponsor can participate across multiple conferences/years.
 
-| Field               | Description                                         |
-| ------------------- | --------------------------------------------------- |
-| `name`              | Company name                                        |
-| `website`           | Company URL                                         |
-| `logo`              | Inline SVG logo (required)                          |
-| `logo_bright`       | Optional bright/white variant for dark backgrounds  |
-| `org_number`        | Company registration number (admin-only visibility) |
-| `contact_persons[]` | Array of contacts with name, email, phone, and role |
-| `billing`           | Billing email, reference, and comments              |
-
-Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`.
+| Field         | Description                                         |
+| ------------- | --------------------------------------------------- |
+| `name`        | Company name                                        |
+| `website`     | Company URL                                         |
+| `logo`        | Inline SVG logo (required)                          |
+| `logo_bright` | Optional bright/white variant for dark backgrounds  |
+| `org_number`  | Company registration number (admin-only visibility) |
 
 ### `sponsorTier`
 
@@ -57,6 +53,8 @@ The CRM join document linking a sponsor to a conference with relationship metada
 | `conference`        | Reference to `conference` document                                                                     |
 | `tier`              | Reference to a `sponsorTier` (standard/special)                                                        |
 | `addons[]`          | Array of references to addon-type `sponsorTier` documents                                              |
+| `contact_persons[]` | Per-conference contacts (name, email, phone, role, `is_primary`)                                       |
+| `billing`           | Per-conference billing info (email, reference, comments)                                               |
 | `status`            | Pipeline stage: `prospect` &rarr; `contacted` &rarr; `negotiating` &rarr; `closed-won` / `closed-lost` |
 | `contract_status`   | `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`                       |
 | `invoice_status`    | `not-sent` &rarr; `sent` &rarr; `paid` / `overdue` / `cancelled`                                       |
@@ -66,6 +64,8 @@ The CRM join document linking a sponsor to a conference with relationship metada
 | `tags[]`            | Classification tags (see Tags section below)                                                           |
 | `notes`             | Freeform text                                                                                          |
 | Timestamps          | `contact_initiated_at`, `contract_signed_at`, `invoice_sent_at`, `invoice_paid_at`                     |
+
+Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`. The `is_primary` flag identifies the main contact for contract signing (Phase 2).
 
 ### `sponsorActivity`
 
@@ -99,6 +99,23 @@ All CRM status values are defined as TypeScript union types in `src/lib/sponsor-
 
 Tags are classification labels applied to CRM entries: `warm-lead`, `returning-sponsor`, `cold-outreach`, `referral`, `high-priority`, `needs-follow-up`, `multi-year-potential`, `previously-declined`.
 
+### `sponsorEmailTemplate`
+
+Reusable email templates stored in Sanity for sponsor outreach. Global (not conference-scoped) — conference context is injected via `{{{VARIABLE}}}` placeholders at send time.
+
+| Field         | Description                                                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| `title`       | Admin-facing label (e.g. "Cold Outreach")                                                       |
+| `slug`        | Stable identifier for programmatic reference                                                    |
+| `category`    | `cold-outreach`, `returning-sponsor`, `international`, `local-community`, `follow-up`, `custom` |
+| `subject`     | Email subject line with `{{{VAR}}}` placeholders                                                |
+| `body`        | PortableText body with `{{{VAR}}}` placeholders in text spans                                   |
+| `description` | Internal notes on when to use this template                                                     |
+| `is_default`  | Default template for its category                                                               |
+| `sort_order`  | Ordering in the template picker                                                                 |
+
+**Available template variables:** `CONTACT_NAMES`, `SPONSOR_NAME`, `ORG_NAME`, `CONFERENCE_TITLE`, `CONFERENCE_DATE`, `CONFERENCE_YEAR`, `CONFERENCE_CITY`, `CONFERENCE_URL`, `SPONSOR_PAGE_URL`, `PROSPECTUS_URL`, `SENDER_NAME`, `TIER_NAME`.
+
 ## Architecture
 
 ### Directory Layout
@@ -107,11 +124,11 @@ Tags are classification labels applied to CRM entries: `warm-lead`, `returning-s
 src/
 ├── lib/
 │   ├── sponsor/                    # Core sponsor domain
-│   │   ├── types.ts                # Sponsor, SponsorTier, ContactPerson types
-│   │   ├── sanity.ts               # CRUD operations against Sanity
+│   │   ├── types.ts                # Sponsor, SponsorTier, ContactPerson, SponsorEmailTemplate types
+│   │   ├── sanity.ts               # CRUD operations against Sanity (incl. email templates)
+│   │   ├── templates.ts            # Template variable processing utilities
 │   │   ├── utils.ts                # Sorting, formatting, grouping utilities
-│   │   ├── validation.ts           # Input validation for sponsors and tiers
-│   │   └── audience.ts             # Resend audience sync for sponsor contacts
+│   │   └── validation.ts           # Input validation for sponsors and tiers
 │   └── sponsor-crm/                # CRM pipeline domain
 │       ├── types.ts                # CRM-specific types (statuses, activities, inputs)
 │       ├── sanity.ts               # CRM CRUD, copy/import operations
@@ -144,7 +161,10 @@ src/
 │       │   ├── SponsorActionItems.tsx       # Action item checklist
 │       │   ├── SponsorActivityTimeline.tsx  # Activity log display
 │       │   ├── SponsorDiscountEmailModal.tsx# Discount code emails
-│       │   └── SponsorIndividualEmailModal.tsx # Individual email compose
+│       │   ├── SponsorIndividualEmailModal.tsx # Individual email compose
+│       │   ├── SponsorTemplatePicker.tsx    # Email template selector dropdown
+│       │   ├── SponsorEmailTemplatesPageClient.tsx # Template list + editor page
+│       │   └── SponsorEmailTemplateEditor.tsx # Full-page template editor with preview
 │       └── sponsor-crm/            # CRM pipeline admin UI
 │           ├── SponsorCRMPageClient.tsx     # CRM page shell
 │           ├── SponsorCRMPipeline.tsx       # Main board with filters/search
@@ -175,14 +195,17 @@ src/
         ├── sponsors/
         │   ├── page.tsx            # Sponsor management page
         │   ├── crm/page.tsx        # CRM pipeline page
-        │   └── tiers/page.tsx      # Tier management page
+        │   ├── tiers/page.tsx      # Tier management page
+        │   ├── templates/page.tsx  # Email template management page
+        │   └── activity/page.tsx   # Activity log page
         └── marketing/page.tsx      # Marketing page (includes SponsorThankYou)
 
 sanity/schemaTypes/
 ├── sponsor.ts                      # Sponsor document schema
 ├── sponsorTier.ts                  # Tier document schema
 ├── sponsorForConference.ts         # CRM join document schema
-└── sponsorActivity.ts              # Activity log schema
+├── sponsorActivity.ts              # Activity log schema
+└── sponsorEmailTemplate.ts         # Email template schema
 ```
 
 ### API Layer
@@ -198,6 +221,7 @@ All sponsor operations go through a single tRPC router at `src/server/routers/sp
 | `sponsor.removeFromConference` | —                                                                                                                                                                                                      | Unlink sponsor from conference       |
 | `sponsor.crm.*`                | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations              |
 | `sponsor.crm.activities.*`     | `list`                                                                                                                                                                                                 | Activity log queries                 |
+| `sponsor.emailTemplates.*`     | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                  |
 
 All procedures are protected by `adminProcedure` (requires `is_organizer: true`).
 
@@ -246,7 +270,8 @@ Tests are located in `__tests__/` mirroring the source structure:
 | ------------------------------------------ | -------------------------------------------- |
 | `lib/sponsor/validation.test.ts`           | Sponsor and tier input validation            |
 | `lib/sponsor/utils.test.ts`                | Tier sorting, formatting, grouping utilities |
-| `lib/sponsor/sponsorForConference.test.ts` | CRM Sanity operations                        |
+| `lib/sponsor/templates.test.ts`            | Template variable processing utilities       |
+| `lib/sponsor/sponsorForConference.test.ts` | CRM Zod schema validation                    |
 | `lib/sponsor-crm/bulk.test.ts`             | Bulk update/delete operations                |
 | `components/Sponsors.test.tsx`             | Public sponsor display component             |
 | `components/SponsorLogo.test.tsx`          | Logo rendering                               |
@@ -298,7 +323,7 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
 
 ## Key Design Decisions
 
-**Separated sponsor vs. CRM types.** A sponsor company (`sponsor`) is a conference-independent entity, while `sponsorForConference` is a per-conference relationship record. This allows the same company to sponsor multiple events with different tiers, statuses, and pricing.
+**Separated sponsor vs. CRM types.** A sponsor company (`sponsor`) is a conference-independent entity holding only company-level data (name, logo, website). Contact persons and billing details live on `sponsorForConference` — the per-conference relationship record — since contacts and billing arrangements often differ between conferences/years.
 
 **Sanity as the single source of truth.** All data lives in Sanity, with tRPC providing validated, type-safe access. There is no separate database.
 

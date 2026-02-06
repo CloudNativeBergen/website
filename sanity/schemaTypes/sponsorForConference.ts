@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { CONTACT_ROLE_OPTIONS } from '../../src/lib/sponsor/types'
 
 const SPONSOR_TAGS = [
   'warm-lead',
@@ -215,6 +216,108 @@ export default defineType({
       ],
       options: {
         layout: 'tags',
+      },
+    }),
+    defineField({
+      name: 'contact_persons',
+      title: 'Contact Persons',
+      type: 'array',
+      of: [
+        {
+          type: 'object',
+          name: 'contactPerson',
+          title: 'Contact Person',
+          fields: [
+            {
+              name: 'name',
+              title: 'Name',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            },
+            {
+              name: 'email',
+              title: 'Email',
+              type: 'string',
+              validation: (Rule) =>
+                Rule.required().email().error('Please enter a valid email'),
+            },
+            {
+              name: 'phone',
+              title: 'Phone',
+              type: 'string',
+            },
+            {
+              name: 'role',
+              title: 'Role',
+              type: 'string',
+              description: "Select the contact person's role",
+              options: {
+                list: CONTACT_ROLE_OPTIONS.map((role) => ({
+                  title: role,
+                  value: role,
+                })),
+                layout: 'dropdown',
+              },
+            },
+            {
+              name: 'is_primary',
+              title: 'Primary Contact',
+              type: 'boolean',
+              description:
+                'Designate as the primary contact for this sponsorship',
+              initialValue: false,
+            },
+          ],
+          preview: {
+            select: {
+              title: 'name',
+              subtitle: 'role',
+              description: 'email',
+            },
+          },
+        },
+      ],
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
+    defineField({
+      name: 'billing',
+      title: 'Billing Information',
+      type: 'object',
+      fields: [
+        {
+          name: 'email',
+          title: 'Billing Email',
+          type: 'string',
+          validation: (Rule) =>
+            Rule.required().email().error('Please enter a valid email'),
+        },
+        {
+          name: 'reference',
+          title: 'Billing Reference',
+          type: 'string',
+          description: 'Purchase order number, reference code, etc.',
+        },
+        {
+          name: 'comments',
+          title: 'Billing Comments',
+          type: 'text',
+          description: 'Additional billing instructions or notes',
+        },
+      ],
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
       },
     }),
     defineField({

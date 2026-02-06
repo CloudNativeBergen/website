@@ -49,7 +49,6 @@ export function parsePortableTextMessage(message: string): {
 
 export async function getEmailRouteConference(options?: {
   sponsors?: boolean
-  sponsorContact?: boolean
 }): Promise<{
   conference?: Conference
   error?: Response
@@ -91,7 +90,7 @@ export function validateRequiredFields(
 export async function setupEmailRoute(
   req: NextAuthRequest,
   requestData: { subject: string; message: string },
-  conferenceOptions?: { sponsors?: boolean; sponsorContact?: boolean },
+  conferenceOptions?: { sponsors?: boolean },
 ): Promise<{
   context?: EmailRouteContext
   error?: Response

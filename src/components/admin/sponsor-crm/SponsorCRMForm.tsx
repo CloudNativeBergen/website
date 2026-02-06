@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import {
   Dialog,
   DialogPanel,
@@ -40,7 +40,7 @@ import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
 import { SponsorLogoEditor } from '../sponsor/SponsorLogoEditor'
 import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
-import { SponsorWithContactInfo, SponsorTier } from '@/lib/sponsor/types'
+import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
 
 interface SponsorCRMFormProps {
@@ -89,17 +89,7 @@ export function SponsorCRMForm({
     assignedTo: sponsor?.assigned_to?._id || '',
   })
 
-  const { data: allSponsors = [] } = api.sponsor.list.useQuery({
-    includeContactInfo: true,
-  })
-
-  // Get the full sponsor object if editing, including contacts
-  const editingFullSponsor =
-    sponsor && allSponsors.length > 0
-      ? (allSponsors.find(
-          (s) => s._id === sponsor.sponsor._id,
-        ) as SponsorWithContactInfo)
-      : null
+  const { data: allSponsors = [] } = api.sponsor.list.useQuery()
 
   const availableSponsors = sponsor
     ? allSponsors
@@ -111,13 +101,24 @@ export function SponsorCRMForm({
       { enabled: isOpen },
     )
 
-  const sortedSponsorTiers = sortSponsorTiers(sponsorTiers)
-
-  const regularTiers = sortedSponsorTiers.filter(
-    (tier: SponsorTier) => tier.tier_type !== 'addon',
+  const sortedSponsorTiers = useMemo(
+    () => sortSponsorTiers(sponsorTiers),
+    [sponsorTiers],
   )
-  const addonTiers = sortedSponsorTiers.filter(
-    (tier: SponsorTier) => tier.tier_type === 'addon',
+
+  const regularTiers = useMemo(
+    () =>
+      sortedSponsorTiers.filter(
+        (tier: SponsorTier) => tier.tier_type !== 'addon',
+      ),
+    [sortedSponsorTiers],
+  )
+  const addonTiers = useMemo(
+    () =>
+      sortedSponsorTiers.filter(
+        (tier: SponsorTier) => tier.tier_type === 'addon',
+      ),
+    [sortedSponsorTiers],
   )
 
   const { data: organizers = [] } = api.sponsor.crm.listOrganizers.useQuery(
@@ -344,12 +345,12 @@ export function SponsorCRMForm({
 
                   <div className="flex-1 overflow-y-auto p-6">
                     <div className="min-h-100 text-left">
-                      {view === 'contacts' && editingFullSponsor ? (
+                      {view === 'contacts' && sponsor ? (
                         <SponsorContactEditor
-                          sponsor={editingFullSponsor}
+                          sponsorForConference={sponsor}
                           onSuccess={() => {
-                            utils.sponsor.list.invalidate()
-                            setView('pipeline') // Return to pipeline view on save
+                            utils.sponsor.crm.list.invalidate()
+                            setView('pipeline')
                           }}
                           onCancel={() => setView('pipeline')}
                         />

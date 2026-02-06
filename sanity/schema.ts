@@ -10,6 +10,7 @@ import speaker from './schemaTypes/speaker'
 import speakerBadge from './schemaTypes/speakerBadge'
 import sponsor from './schemaTypes/sponsor'
 import sponsorActivity from './schemaTypes/sponsorActivity'
+import sponsorEmailTemplate from './schemaTypes/sponsorEmailTemplate'
 import sponsorForConference from './schemaTypes/sponsorForConference'
 import sponsorTier from './schemaTypes/sponsorTier'
 import talk from './schemaTypes/talk'
@@ -32,6 +33,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     speakerBadge,
     sponsor,
     sponsorActivity,
+    sponsorEmailTemplate,
     sponsorForConference,
     sponsorTier,
     talk,

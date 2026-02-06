@@ -5,12 +5,13 @@ import { router, adminProcedure } from '../trpc'
 import {
   SponsorInputSchema,
   SponsorUpdateSchema,
-  SponsorSearchSchema,
   IdParamSchema,
   SponsorTierInputSchema,
   SponsorTierUpdateSchema,
   ConferenceSponsorInputSchema,
   SponsorTierAssignmentSchema,
+  SponsorEmailTemplateInputSchema,
+  SponsorEmailTemplateUpdateSchema,
 } from '../schemas/sponsor'
 import {
   getAllSponsors,
@@ -26,16 +27,16 @@ import {
   addSponsorToConference,
   removeSponsorFromConference,
   updateSponsorTierAssignment,
+  getSponsorEmailTemplates,
+  createSponsorEmailTemplate,
+  updateSponsorEmailTemplate,
+  deleteSponsorEmailTemplate,
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { updateSponsorAudience } from '@/lib/sponsor/audience'
 import { clientWrite } from '@/lib/sanity/client'
 import { getCurrentDateTime } from '@/lib/time'
-import type {
-  SponsorTierExisting,
-  SponsorWithContactInfo,
-} from '@/lib/sponsor/types'
+import type { SponsorTierExisting } from '@/lib/sponsor/types'
 import type {
   SponsorTag,
   SponsorForConferenceInput,
@@ -117,61 +118,56 @@ async function getAllSponsorTiers(conferenceId?: string): Promise<{
 }
 
 export const sponsorRouter = router({
-  list: adminProcedure.input(SponsorSearchSchema).query(async ({ input }) => {
-    try {
-      let result
-      if (input.query) {
-        result = await searchSponsors(input.query, input.includeContactInfo)
-      } else {
-        result = await getAllSponsors(input.includeContactInfo)
-      }
+  list: adminProcedure
+    .input(z.object({ query: z.string().optional() }).optional())
+    .query(async ({ input }) => {
+      try {
+        let result
+        if (input?.query) {
+          result = await searchSponsors(input.query)
+        } else {
+          result = await getAllSponsors()
+        }
 
-      const { sponsors, error } = result
-      if (error) {
+        const { sponsors, error } = result
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch sponsors',
+            cause: error,
+          })
+        }
+
+        return sponsors || []
+      } catch (error) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch sponsors',
+          message: 'Failed to process sponsor list request',
           cause: error,
         })
       }
+    }),
 
-      return sponsors || []
-    } catch (error) {
+  getById: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
+    const { sponsor, error } = await getSponsor(input.id)
+
+    if (error) {
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to process sponsor list request',
+        message: 'Failed to fetch sponsor',
         cause: error,
       })
     }
+
+    if (!sponsor) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Sponsor not found',
+      })
+    }
+
+    return sponsor
   }),
-
-  getById: adminProcedure
-    .input(
-      IdParamSchema.extend({ includeContactInfo: z.boolean().default(false) }),
-    )
-    .query(async ({ input }) => {
-      const { sponsor, error } = await getSponsor(
-        input.id,
-        input.includeContactInfo,
-      )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch sponsor',
-          cause: error,
-        })
-      }
-
-      if (!sponsor) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Sponsor not found',
-        })
-      }
-
-      return sponsor
-    }),
 
   create: adminProcedure
     .input(SponsorInputSchema)
@@ -195,29 +191,6 @@ export const sponsorRouter = router({
           })
         }
 
-        try {
-          const { conference } = await getConferenceForCurrentDomain()
-          if (conference && sponsor) {
-            const audienceResult = await updateSponsorAudience(
-              conference,
-              null,
-              sponsor,
-            )
-
-            if (!audienceResult.success) {
-              console.warn(
-                `Failed to update sponsor audience for new sponsor ${sponsor.name}:`,
-                audienceResult.error,
-              )
-            }
-          }
-        } catch (audienceError) {
-          console.warn(
-            'Failed to sync sponsor audience, but sponsor was created:',
-            audienceError,
-          )
-        }
-
         return sponsor
       } catch (error) {
         if (error instanceof TRPCError) {
@@ -236,7 +209,7 @@ export const sponsorRouter = router({
     .mutation(async ({ input }) => {
       try {
         if (Object.keys(input.data).length > 0) {
-          const { sponsor: existingSponsor } = await getSponsor(input.id, true)
+          const { sponsor: existingSponsor } = await getSponsor(input.id)
           if (!existingSponsor) {
             throw new TRPCError({
               code: 'NOT_FOUND',
@@ -272,29 +245,6 @@ export const sponsorRouter = router({
               code: 'NOT_FOUND',
               message: 'Sponsor not found',
             })
-          }
-
-          try {
-            const { conference } = await getConferenceForCurrentDomain()
-            if (conference && existingSponsor && sponsor) {
-              const audienceResult = await updateSponsorAudience(
-                conference,
-                existingSponsor as SponsorWithContactInfo,
-                sponsor,
-              )
-
-              if (!audienceResult.success) {
-                console.warn(
-                  `Failed to update sponsor audience for updated sponsor ${sponsor.name}:`,
-                  audienceResult.error,
-                )
-              }
-            }
-          } catch (audienceError) {
-            console.warn(
-              'Failed to sync sponsor audience, but sponsor was updated:',
-              audienceError,
-            )
           }
 
           return sponsor
@@ -739,6 +689,8 @@ export const sponsorRouter = router({
               updateData.assigned_to === null
                 ? undefined
                 : updateData.assigned_to,
+            billing:
+              updateData.billing === null ? undefined : updateData.billing,
             contact_initiated_at:
               updateData.contact_initiated_at === null
                 ? undefined
@@ -1131,6 +1083,61 @@ export const sponsorRouter = router({
 
           return []
         }),
+    }),
+  }),
+
+  emailTemplates: router({
+    list: adminProcedure.query(async () => {
+      const { templates, error } = await getSponsorEmailTemplates()
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list email templates',
+          cause: error,
+        })
+      }
+      return templates || []
+    }),
+
+    create: adminProcedure
+      .input(SponsorEmailTemplateInputSchema)
+      .mutation(async ({ input }) => {
+        const { template, error } = await createSponsorEmailTemplate(input)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to create email template',
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    update: adminProcedure
+      .input(IdParamSchema.merge(SponsorEmailTemplateUpdateSchema))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input
+        const { template, error } = await updateSponsorEmailTemplate(id, data)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update email template',
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    delete: adminProcedure.input(IdParamSchema).mutation(async ({ input }) => {
+      const { error } = await deleteSponsorEmailTemplate(input.id)
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete email template',
+          cause: error,
+        })
+      }
+      return { success: true }
     }),
   }),
 })

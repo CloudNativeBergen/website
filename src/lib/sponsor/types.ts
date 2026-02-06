@@ -69,35 +69,13 @@ export interface ConferenceSponsor {
   }
 }
 
-export interface ConferenceSponsorWithContact {
-  sponsor: {
-    _id: string
-    name: string
-    website: string
-    logo?: string | null
-    logo_bright?: string | null
-    org_number?: string
-    contact_persons?: ContactPerson[]
-    billing?: BillingInfo
-  }
-  tier: {
-    title: string
-    tagline: string
-    tier_type?: 'standard' | 'special' | 'addon'
-    price?: Array<{
-      _key: string
-      amount: number
-      currency: string
-    }>
-  }
-}
-
 export interface ContactPerson extends Record<string, unknown> {
   _key: string
   name: string
   email: string
   phone?: string
   role?: string
+  is_primary?: boolean
 }
 
 export interface BillingInfo {
@@ -112,8 +90,6 @@ export interface SponsorInput {
   logo?: string | null
   logo_bright?: string | null
   org_number?: string
-  contact_persons?: ContactPerson[]
-  billing?: BillingInfo
   tierId?: string
 }
 
@@ -127,8 +103,41 @@ export interface SponsorExisting {
   logo_bright?: string | null
 }
 
-export interface SponsorWithContactInfo extends SponsorExisting {
-  org_number?: string
-  contact_persons?: ContactPerson[]
-  billing?: BillingInfo
+export type TemplateCategory =
+  | 'cold-outreach'
+  | 'returning-sponsor'
+  | 'international'
+  | 'local-community'
+  | 'follow-up'
+  | 'custom'
+
+export interface SponsorEmailTemplate {
+  _id: string
+  _createdAt: string
+  _updatedAt: string
+  title: string
+  slug: { current: string }
+  category: TemplateCategory
+  subject: string
+  body?: PortableTextBlock[]
+  description?: string
+  is_default?: boolean
+  sort_order?: number
+}
+
+export interface PortableTextBlock {
+  _type: string
+  _key: string
+  children?: Array<{
+    _type: string
+    _key: string
+    text?: string
+    marks?: string[]
+    [key: string]: unknown
+  }>
+  markDefs?: Array<Record<string, unknown>>
+  style?: string
+  listItem?: string
+  level?: number
+  [key: string]: unknown
 }

@@ -7,7 +7,6 @@ import {
   createEmailErrorResponse,
 } from '@/lib/email/route-helpers'
 import { resend, retryWithBackoff } from '@/lib/email/config'
-import { getSponsor } from '@/lib/sponsor/sanity'
 import { logEmailSent, logStageChange } from '@/lib/sponsor-crm/activity'
 import {
   clientWrite,
@@ -25,28 +24,39 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     const { context, error } = await setupEmailRoute(req, body, {
       sponsors: true,
-      sponsorContact: true,
     })
 
     if (error) return error
 
     const { conference, messagePortableText, subject } = context!
 
-    // Fetch sponsor contacts
-    const { sponsor, error: sponsorError } = await getSponsor(sponsorId, true)
-    if (sponsorError || !sponsor) {
+    // Fetch contacts from the CRM record (sponsorForConference)
+    const sfc = await clientRead.fetch<{
+      _id: string
+      status: string
+      contact_persons?: Array<{ name: string; email: string }>
+    }>(
+      `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
+        _id,
+        status,
+        contact_persons[]{ name, email }
+      }`,
+      { sponsorId, conferenceId: conference._id },
+    )
+
+    if (!sfc) {
       return createEmailErrorResponse(
-        sponsorError?.message || 'Sponsor not found',
+        'Sponsor not found in this conference',
         404,
       )
     }
 
-    const contacts = 'contact_persons' in sponsor ? sponsor.contact_persons : []
+    const contacts = sfc.contact_persons || []
     const recipients = contacts
-      ?.filter((c) => c.email)
+      .filter((c) => c.email)
       .map((c) => ({ email: c.email, name: c.name }))
 
-    if (!recipients || recipients.length === 0) {
+    if (recipients.length === 0) {
       return createEmailErrorResponse(
         'Sponsor has no contact persons with email addresses',
         400,
@@ -87,14 +97,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
     try {
       const userId = req.auth?.speaker?._id
 
-      // Find the sponsor-for-conference relationship
-      const sfc = await clientRead.fetch<{ _id: string; status: string }>(
-        `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{_id, status}`,
-        { sponsorId, conferenceId: conference._id },
-      )
-
       if (sfc && userId) {
-        // 1. Log the interaction
         try {
           await logEmailSent(sfc._id, subject, userId)
         } catch (logError) {
@@ -104,7 +107,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
           )
         }
 
-        // 2. Automatically move to 'contacted' if currently in 'prospect'
         if (sfc.status === 'prospect') {
           try {
             await clientWrite
@@ -123,7 +125,6 @@ export const POST = auth(async (req: NextAuthRequest) => {
       }
     } catch (crmError) {
       console.warn('[SponsorIndividualEmail] CRM tracking failed:', crmError)
-      // We don't fail the request if tracking fails, as the email was already sent
     }
 
     return createEmailSuccessResponse({

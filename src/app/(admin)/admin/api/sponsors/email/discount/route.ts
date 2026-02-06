@@ -51,10 +51,10 @@ export const POST = auth(async (req: NextAuthRequest) => {
       return conferenceError
     }
 
-    const sponsor = await clientReadUncached.fetch<{
+    // Fetch contacts from the CRM record (sponsorForConference)
+    const sfc = await clientReadUncached.fetch<{
       _id: string
-      name: string
-      website: string
+      sponsor: { name: string }
       contact_persons?: Array<{
         _key: string
         name: string
@@ -62,30 +62,28 @@ export const POST = auth(async (req: NextAuthRequest) => {
         phone?: string
         role?: string
       }>
-      billing?: {
-        email: string
-        reference?: string
-        comments?: string
-      }
     }>(
-      `*[_type == "sponsor" && _id == $sponsorId][0]{
+      `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
         _id,
-        name,
-        website,
-        contact_persons,
-        billing
+        sponsor->{ name },
+        contact_persons[]{ _key, name, email, phone, role }
       }`,
-      { sponsorId },
+      { sponsorId, conferenceId: conference!._id },
     )
 
-    if (!sponsor) {
-      return Response.json({ error: 'Sponsor not found' }, { status: 404 })
+    if (!sfc) {
+      return Response.json(
+        { error: 'Sponsor not found in this conference' },
+        { status: 404 },
+      )
     }
+
+    const sponsorName = sfc.sponsor.name
 
     const ccEmails: string[] = []
 
-    if (sponsor.contact_persons) {
-      sponsor.contact_persons.forEach(
+    if (sfc.contact_persons) {
+      sfc.contact_persons.forEach(
         (contact: {
           _key: string
           name: string
@@ -103,7 +101,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
     if (ccEmails.length === 0) {
       return Response.json(
         {
-          error: `No valid contact person email addresses found for sponsor ${sponsor.name}. Please add contact persons with valid email addresses in the sponsor settings. Billing emails are not used for discount code distribution.`,
+          error: `No valid contact person email addresses found for sponsor ${sponsorName}. Please add contact persons with valid email addresses in the sponsor CRM. Billing emails are not used for discount code distribution.`,
         },
         { status: 400 },
       )
@@ -139,7 +137,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       const responseData = await emailResponse.json()
       return Response.json({
         ...responseData,
-        sponsorName: sponsor.name,
+        sponsorName,
         discountCode,
       })
     }

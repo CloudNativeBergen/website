@@ -407,8 +407,11 @@ export function SponsorCRMPipeline({
             city: conference.city || '',
             country: conference.country || '',
             start_date: conference.start_date || '',
+            organizer: conference.organizer,
             domains: conference.domains || [domain],
             social_links: conference.social_links,
+            prospectus_url:
+              conference.sponsorship_customization?.prospectus_url,
           }}
         />
       )}

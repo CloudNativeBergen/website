@@ -2,7 +2,8 @@ import { NextAuthRequest, auth } from '@/lib/auth'
 import { checkOrganizerAccess } from '@/lib/auth/admin'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { syncSponsorAudience, Contact } from '@/lib/email/audience'
-import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
+import { listSponsorsForConference } from '@/lib/sponsor-crm/sanity'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 
 export const POST = auth(async (req: NextAuthRequest) => {
   const startTime = Date.now()
@@ -13,10 +14,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
   try {
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain({
-        sponsors: true,
-        sponsorContact: true,
-      })
+      await getConferenceForCurrentDomain()
 
     if (conferenceError) {
       console.error('[SponsorSync] Failed to load conference:', {
@@ -40,14 +38,27 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    const sponsors = (conference.sponsors ||
-      []) as ConferenceSponsorWithContact[]
+    const { sponsors: crmSponsors, error: crmError } =
+      await listSponsorsForConference(conference._id)
 
-    const eligibleSponsors = sponsors.filter(
-      (sponsor: ConferenceSponsorWithContact) =>
-        sponsor.sponsor.contact_persons &&
-        sponsor.sponsor.contact_persons.length > 0 &&
-        sponsor.sponsor.contact_persons.some((contact) => contact.email),
+    if (crmError || !crmSponsors) {
+      console.error('[SponsorSync] Failed to load CRM sponsors:', {
+        error: crmError?.message,
+      })
+      return Response.json(
+        {
+          error: 'Failed to load sponsor CRM data',
+          details: crmError?.message || 'Unknown error',
+        },
+        { status: 500 },
+      )
+    }
+
+    const eligibleSponsors = crmSponsors.filter(
+      (s: SponsorForConferenceExpanded) =>
+        s.contact_persons &&
+        s.contact_persons.length > 0 &&
+        s.contact_persons.some((contact) => contact.email),
     )
 
     if (eligibleSponsors.length === 0) {
@@ -64,14 +75,14 @@ export const POST = auth(async (req: NextAuthRequest) => {
     }
 
     const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
-      (sponsor: ConferenceSponsorWithContact) =>
-        sponsor.sponsor.contact_persons
+      (s: SponsorForConferenceExpanded) =>
+        s.contact_persons
           ?.filter((contact) => contact.email)
           .map((contact) => ({
             email: contact.email,
             firstName: contact.name?.split(' ')[0] || '',
             lastName: contact.name?.split(' ').slice(1).join(' ') || '',
-            organization: sponsor.sponsor.name,
+            organization: s.sponsor.name,
           })) || [],
     )
 

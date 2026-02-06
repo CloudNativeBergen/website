@@ -2,11 +2,7 @@ import { TypedObject } from 'sanity'
 import { Format, ProposalExisting } from '@/lib/proposal/types'
 import { Speaker, SpeakerWithTalks } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
-import {
-  SponsorTier,
-  ConferenceSponsor,
-  ConferenceSponsorWithContact,
-} from '@/lib/sponsor/types'
+import { SponsorTier, ConferenceSponsor } from '@/lib/sponsor/types'
 import type { SalesTargetConfig } from '@/lib/tickets/types'
 import { GalleryImageWithSpeakers } from '@/lib/gallery/types'
 
@@ -89,7 +85,7 @@ export interface Conference {
   domains: string[]
   formats: Format[]
   topics: Topic[]
-  sponsors?: ConferenceSponsor[] | ConferenceSponsorWithContact[]
+  sponsors?: ConferenceSponsor[]
   sponsor_tiers?: SponsorTier[]
   sponsor_benefits?: SponsorBenefit[]
   sponsorship_customization?: SponsorshipCustomization

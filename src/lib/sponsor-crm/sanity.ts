@@ -2,6 +2,7 @@ import {
   clientWrite,
   clientReadUncached as clientRead,
 } from '@/lib/sanity/client'
+import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
 import type {
   SponsorForConference,
   SponsorForConferenceExpanded,
@@ -67,7 +68,20 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   invoice_sent_at,
   invoice_paid_at,
   notes,
-  tags
+  tags,
+  contact_persons[]{
+    _key,
+    name,
+    email,
+    phone,
+    role,
+    is_primary
+  },
+  billing{
+    email,
+    reference,
+    comments
+  }
 `
 
 export async function createSponsorForConference(
@@ -102,6 +116,10 @@ export async function createSponsorForConference(
       invoice_paid_at: data.invoice_paid_at,
       notes: data.notes,
       tags: data.tags,
+      contact_persons: data.contact_persons
+        ? prepareArrayWithKeys(data.contact_persons, 'contact')
+        : undefined,
+      billing: data.billing || undefined,
     }
 
     const created = await clientWrite.create(doc)
@@ -170,6 +188,12 @@ export async function updateSponsorForConference(
       updates.invoice_paid_at = data.invoice_paid_at
     if (data.notes !== undefined) updates.notes = data.notes
     if (data.tags !== undefined) updates.tags = data.tags
+    if (data.contact_persons !== undefined) {
+      updates.contact_persons = data.contact_persons
+        ? prepareArrayWithKeys(data.contact_persons, 'contact')
+        : null
+    }
+    if (data.billing !== undefined) updates.billing = data.billing
 
     await clientWrite.patch(id).set(updates).commit()
 
@@ -291,7 +315,9 @@ export async function copySponsorsFromPreviousYear(
         tier,
         assigned_to,
         contract_currency,
-        tags
+        tags,
+        contact_persons[]{ _key, name, email, phone, role, is_primary },
+        billing{ email, reference, comments }
       }`,
       { conferenceId: sourceConferenceId },
     )
@@ -364,6 +390,8 @@ export async function copySponsorsFromPreviousYear(
         contract_currency: sourceSponsor.contract_currency || 'NOK',
         invoice_status: 'not-sent' as const,
         tags: sourceSponsor.tags,
+        contact_persons: sourceSponsor.contact_persons,
+        billing: sourceSponsor.billing,
       }
 
       await clientWrite.create(newDoc)

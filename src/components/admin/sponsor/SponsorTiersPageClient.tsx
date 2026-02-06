@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { TicketIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
-import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
+import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { formatConferenceDateLong } from '@/lib/time'
@@ -19,9 +19,9 @@ import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
 
 interface SponsorTiersPageClientProps {
   conference: Conference
-  sponsors: ConferenceSponsorWithContact[]
+  sponsors: ConferenceSponsor[]
   sponsorTiers: SponsorTier[]
-  sponsorsByTier: Record<string, ConferenceSponsorWithContact[]>
+  sponsorsByTier: Record<string, ConferenceSponsor[]>
   sortedTierNames: string[]
 }
 
@@ -39,12 +39,7 @@ export function SponsorTiersPageClient({
     handleSyncContacts,
   } = useSponsorBroadcast()
 
-  const sponsorsWithContacts = sponsors.filter(
-    (sponsor) =>
-      sponsor.sponsor.contact_persons &&
-      sponsor.sponsor.contact_persons.length > 0 &&
-      sponsor.sponsor.contact_persons.some((contact) => contact.email),
-  )
+  const recipientCount = sponsors.length
 
   return (
     <>
@@ -137,7 +132,7 @@ export function SponsorTiersPageClient({
         onClose={() => setIsBroadcastModalOpen(false)}
         onSend={handleBroadcastEmail}
         onSyncContacts={handleSyncContacts}
-        recipientCount={sponsorsWithContacts.length}
+        recipientCount={recipientCount}
         recipientType="sponsors"
         fromEmail={`${conference.organizer || 'Cloud Native Days'} <${conference.sponsor_email}>`}
         eventName={conference.title}

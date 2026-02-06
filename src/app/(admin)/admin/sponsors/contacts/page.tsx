@@ -9,11 +9,9 @@ import {
   BuildingOffice2Icon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline'
-import {
-  SponsorWithContactInfo,
-  ConferenceSponsorWithContact,
-} from '@/lib/sponsor/types'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { listSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import Link from 'next/link'
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -21,12 +19,9 @@ export default async function AdminSponsorContacts() {
   noStore()
   try {
     const { conference, error: conferenceError } =
-      await getConferenceForCurrentDomain({
-        sponsors: true,
-        sponsorContact: true,
-      })
+      await getConferenceForCurrentDomain()
 
-    if (conferenceError || !conference || !conference.sponsors) {
+    if (conferenceError || !conference) {
       return (
         <ErrorDisplay
           title="Conference Not Found"
@@ -35,30 +30,25 @@ export default async function AdminSponsorContacts() {
       )
     }
 
-    const sponsorsWithContacts = (
-      conference.sponsors as ConferenceSponsorWithContact[]
-    ).map(
-      (conferenceSponsor): SponsorWithContactInfo => ({
-        _id: conferenceSponsor.sponsor._id,
-        _createdAt: '',
-        _updatedAt: '',
-        name: conferenceSponsor.sponsor.name,
-        website: conferenceSponsor.sponsor.website,
-        logo: conferenceSponsor.sponsor.logo,
-        org_number: conferenceSponsor.sponsor.org_number,
-        contact_persons: conferenceSponsor.sponsor.contact_persons,
-        billing: conferenceSponsor.sponsor.billing,
-      }),
+    const { sponsors: crmSponsors, error: crmError } =
+      await listSponsorsForConference(conference._id)
+
+    if (crmError || !crmSponsors) {
+      return (
+        <ErrorDisplay
+          title="Failed to Load Sponsors"
+          message={crmError?.message || 'Could not load sponsor CRM data'}
+        />
+      )
+    }
+
+    const sponsorsWithContactPersons = crmSponsors.filter(
+      (s: SponsorForConferenceExpanded) =>
+        Array.isArray(s.contact_persons) && s.contact_persons.length > 0,
     )
 
-    const sponsorsWithContactPersons = sponsorsWithContacts.filter(
-      (sponsor) =>
-        Array.isArray(sponsor.contact_persons) &&
-        sponsor.contact_persons.length > 0,
-    )
-
-    const sponsorsWithBillingInfo = sponsorsWithContacts.filter(
-      (sponsor) => sponsor.billing && sponsor.billing.email,
+    const sponsorsWithBillingInfo = crmSponsors.filter(
+      (s: SponsorForConferenceExpanded) => s.billing && s.billing.email,
     )
 
     return (
@@ -70,7 +60,7 @@ export default async function AdminSponsorContacts() {
           contextHighlight={conference.title}
           stats={[
             {
-              value: sponsorsWithContacts.length,
+              value: crmSponsors.length,
               label: 'Active sponsors',
               color: 'slate',
             },
@@ -95,7 +85,7 @@ export default async function AdminSponsorContacts() {
           backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
         />{' '}
         <div className="mt-8">
-          <SponsorContactTable sponsors={sponsorsWithContacts} />
+          <SponsorContactTable sponsors={crmSponsors} />
         </div>
         <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">

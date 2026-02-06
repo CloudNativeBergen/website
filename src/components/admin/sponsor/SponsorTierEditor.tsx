@@ -324,7 +324,7 @@ function SponsorTierModal({
                     <button
                       onClick={onClose}
                       disabled={isLoading}
-                      className="cursor-pointer rounded-md bg-white text-gray-400 hover:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200"
+                      className="cursor-pointer rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-2 focus:outline-offset-2 focus:outline-indigo-600 disabled:opacity-50 dark:bg-white/10 dark:text-gray-300 dark:hover:text-gray-200 dark:focus:outline-indigo-500"
                     >
                       <span className="sr-only">Close</span>
                       <XMarkIcon className="h-6 w-6" />

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, Fragment } from 'react'
-import { SponsorWithContactInfo, ContactPerson } from '@/lib/sponsor/types'
+import { ContactPerson } from '@/lib/sponsor/types'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
   EnvelopeIcon,
   BuildingOffice2Icon,
@@ -23,7 +24,7 @@ import {
 } from '@headlessui/react'
 
 interface SponsorContactTableProps {
-  sponsors: SponsorWithContactInfo[]
+  sponsors: SponsorForConferenceExpanded[]
 }
 
 const CopyEmailButton = ({ email }: { email: string }) => {
@@ -63,7 +64,7 @@ const CopyEmailButton = ({ email }: { email: string }) => {
 }
 
 interface ContactRow {
-  sponsor: SponsorWithContactInfo
+  sfc: SponsorForConferenceExpanded
   contact: ContactPerson
   isFirstContactForSponsor: boolean
 }
@@ -72,45 +73,42 @@ export function SponsorContactTable({
   sponsors: initialSponsors,
 }: SponsorContactTableProps) {
   const [sponsors, setSponsors] =
-    useState<SponsorWithContactInfo[]>(initialSponsors)
+    useState<SponsorForConferenceExpanded[]>(initialSponsors)
   const [editingSponsor, setEditingSponsor] =
-    useState<SponsorWithContactInfo | null>(null)
+    useState<SponsorForConferenceExpanded | null>(null)
   const utils = api.useUtils()
 
   useEffect(() => {
     setSponsors(initialSponsors)
   }, [initialSponsors])
 
-  const handleStartEdit = (sponsor: SponsorWithContactInfo) => {
-    setEditingSponsor(sponsor)
+  const handleStartEdit = (sfc: SponsorForConferenceExpanded) => {
+    setEditingSponsor(sfc)
   }
 
   const handleCloseEdit = () => {
     setEditingSponsor(null)
   }
 
-  const handleUpdateSuccess = (updatedSponsor: SponsorWithContactInfo) => {
-    setSponsors((prev) =>
-      prev.map((s) => (s._id === updatedSponsor._id ? updatedSponsor : s)),
-    )
+  const handleUpdateSuccess = () => {
     handleCloseEdit()
-    utils.sponsor.list.invalidate()
+    utils.sponsor.crm.list.invalidate()
   }
 
   const contactRows: ContactRow[] = []
 
-  sponsors.forEach((sponsor) => {
-    if (sponsor.contact_persons && sponsor.contact_persons.length > 0) {
-      sponsor.contact_persons.forEach((contact, index) => {
+  sponsors.forEach((sfc) => {
+    if (sfc.contact_persons && sfc.contact_persons.length > 0) {
+      sfc.contact_persons.forEach((contact, index) => {
         contactRows.push({
-          sponsor,
+          sfc,
           contact,
           isFirstContactForSponsor: index === 0,
         })
       })
     } else {
       contactRows.push({
-        sponsor,
+        sfc,
         contact: {
           _key: 'no-contact',
           name: '',
@@ -169,7 +167,7 @@ export function SponsorContactTable({
                       as="h3"
                       className="font-space-grotesk text-xl font-bold text-gray-900 dark:text-white"
                     >
-                      Manage Contacts: {editingSponsor?.name}
+                      Manage Contacts: {editingSponsor?.sponsor.name}
                     </DialogTitle>
                     <button
                       onClick={handleCloseEdit}
@@ -182,7 +180,7 @@ export function SponsorContactTable({
                   {editingSponsor && (
                     <div className="mt-2">
                       <SponsorContactEditor
-                        sponsor={editingSponsor}
+                        sponsorForConference={editingSponsor}
                         onSuccess={handleUpdateSuccess}
                         onCancel={handleCloseEdit}
                       />
@@ -247,17 +245,17 @@ export function SponsorContactTable({
             {contactRows.map((row, index) => {
               return (
                 <tr
-                  key={`${row.sponsor._id}-${row.contact._key}-${index}`}
+                  key={`${row.sfc._id}-${row.contact._key}-${index}`}
                   className="hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   <td className="px-4 py-3">
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
-                        {row.sponsor.name}
+                        {row.sfc.sponsor.name}
                       </div>
-                      {row.sponsor.org_number && (
+                      {row.sfc.sponsor.org_number && (
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          Org: {row.sponsor.org_number}
+                          Org: {row.sfc.sponsor.org_number}
                         </div>
                       )}
                     </div>
@@ -320,29 +318,27 @@ export function SponsorContactTable({
                   <td className="px-4 py-3">
                     {row.isFirstContactForSponsor && (
                       <div className="space-y-1">
-                        {row.sponsor.billing && row.sponsor.billing.email ? (
+                        {row.sfc.billing && row.sfc.billing.email ? (
                           <>
                             <div className="flex items-center text-sm text-gray-900 dark:text-white">
                               <EnvelopeIcon className="mr-2 h-4 w-4 shrink-0 text-gray-400 dark:text-gray-500" />
                               <a
-                                href={`mailto:${row.sponsor.billing.email}`}
+                                href={`mailto:${row.sfc.billing.email}`}
                                 className="truncate hover:text-blue-600 dark:hover:text-blue-400"
-                                title={row.sponsor.billing.email}
+                                title={row.sfc.billing.email}
                               >
-                                {row.sponsor.billing.email}
+                                {row.sfc.billing.email}
                               </a>
-                              <CopyEmailButton
-                                email={row.sponsor.billing.email}
-                              />
+                              <CopyEmailButton email={row.sfc.billing.email} />
                             </div>
-                            {row.sponsor.billing.reference && (
+                            {row.sfc.billing.reference && (
                               <div className="text-xs text-gray-500 dark:text-gray-400">
-                                Ref: {row.sponsor.billing.reference}
+                                Ref: {row.sfc.billing.reference}
                               </div>
                             )}
-                            {row.sponsor.billing.comments && (
+                            {row.sfc.billing.comments && (
                               <div className="max-h-8 overflow-hidden text-xs text-gray-500 dark:text-gray-400">
-                                {row.sponsor.billing.comments}
+                                {row.sfc.billing.comments}
                               </div>
                             )}
                           </>
@@ -357,7 +353,7 @@ export function SponsorContactTable({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => handleStartEdit(row.sponsor)}
+                        onClick={() => handleStartEdit(row.sfc)}
                         className="inline-flex cursor-pointer items-center rounded p-1 text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                         title="Manage contacts"
                       >

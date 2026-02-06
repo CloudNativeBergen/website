@@ -32,7 +32,6 @@ const { conference, error } = await getConferenceForCurrentDomain({
   organizers: true, // Include organizers
   schedule: true, // Include schedule
   sponsors: true, // Include sponsors
-  sponsorContact: true, // Include sponsor contact information (admin only)
   sponsorTiers: true, // Include sponsor tiers
 })
 ```

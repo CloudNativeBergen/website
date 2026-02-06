@@ -4,7 +4,7 @@ import {
   SponsorTierExisting,
   SponsorInput,
   SponsorExisting,
-  SponsorWithContactInfo,
+  SponsorEmailTemplate,
 } from './types'
 import {
   prepareArrayWithKeys,
@@ -141,7 +141,7 @@ export async function getSponsorTier(
 
 export async function createSponsor(
   data: SponsorInput,
-): Promise<{ sponsor?: SponsorWithContactInfo; error?: Error }> {
+): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
   try {
     const sponsor = await clientWrite.create({
       _type: 'sponsor',
@@ -150,22 +150,15 @@ export async function createSponsor(
       logo: data.logo,
       logo_bright: data.logo_bright,
       org_number: data.org_number,
-      contact_persons: data.contact_persons
-        ? prepareArrayWithKeys(data.contact_persons, 'contact')
-        : undefined,
-      billing: data.billing,
     })
 
-    const result: SponsorWithContactInfo = {
+    const result: SponsorExisting = {
       _id: sponsor._id,
       _createdAt: sponsor._createdAt,
       _updatedAt: sponsor._updatedAt,
       name: sponsor.name,
       website: sponsor.website,
       logo: sponsor.logo,
-      org_number: sponsor.org_number,
-      contact_persons: sponsor.contact_persons,
-      billing: sponsor.billing,
     }
 
     return { sponsor: result }
@@ -177,7 +170,7 @@ export async function createSponsor(
 export async function updateSponsor(
   id: string,
   data: SponsorInput,
-): Promise<{ sponsor?: SponsorWithContactInfo; error?: Error }> {
+): Promise<{ sponsor?: SponsorExisting; error?: Error }> {
   try {
     const sponsor = await clientWrite
       .patch(id)
@@ -187,23 +180,16 @@ export async function updateSponsor(
         logo: data.logo,
         logo_bright: data.logo_bright,
         org_number: data.org_number,
-        contact_persons: data.contact_persons
-          ? prepareArrayWithKeys(data.contact_persons, 'contact')
-          : undefined,
-        billing: data.billing,
       })
       .commit()
 
-    const result: SponsorWithContactInfo = {
+    const result: SponsorExisting = {
       _id: sponsor._id,
       _createdAt: sponsor._createdAt,
       _updatedAt: sponsor._updatedAt,
       name: sponsor.name,
       website: sponsor.website,
       logo: sponsor.logo,
-      org_number: sponsor.org_number,
-      contact_persons: sponsor.contact_persons,
-      billing: sponsor.billing,
     }
 
     return { sponsor: result }
@@ -221,46 +207,20 @@ export async function deleteSponsor(id: string): Promise<{ error?: Error }> {
   }
 }
 
-export async function getSponsor(
-  id: string,
-  includeContactInfo: boolean = false,
-): Promise<{
-  sponsor?: SponsorExisting | SponsorWithContactInfo
+export async function getSponsor(id: string): Promise<{
+  sponsor?: SponsorExisting
   error?: Error
 }> {
   try {
-    const fields = includeContactInfo
-      ? `_id,
-        _createdAt,
-        _updatedAt,
-        name,
-        website,
-        logo,
-        logo_bright,
-        org_number,
-        contact_persons[]{
-          _key,
-          name,
-          email,
-          phone,
-          role
-        },
-        billing{
-          email,
-          reference,
-          comments
-        }`
-      : `_id,
-        _createdAt,
-        _updatedAt,
-        name,
-        website,
-        logo,
-        logo_bright`
-
     const sponsor = await clientWrite.fetch(
       `*[_type == "sponsor" && _id == $id][0]{
-        ${fields}
+        _id,
+        _createdAt,
+        _updatedAt,
+        name,
+        website,
+        logo,
+        logo_bright
       }`,
       { id },
     )
@@ -275,46 +235,20 @@ export async function getSponsor(
   }
 }
 
-export async function searchSponsors(
-  query: string,
-  includeContactInfo: boolean = false,
-): Promise<{
-  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
+export async function searchSponsors(query: string): Promise<{
+  sponsors?: SponsorExisting[]
   error?: Error
 }> {
   try {
-    const fields = includeContactInfo
-      ? `_id,
-        _createdAt,
-        _updatedAt,
-        name,
-        website,
-        logo,
-        logo_bright,
-        org_number,
-        contact_persons[]{
-          _key,
-          name,
-          email,
-          phone,
-          role
-        },
-        billing{
-          email,
-          reference,
-          comments
-        }`
-      : `_id,
-        _createdAt,
-        _updatedAt,
-        name,
-        website,
-        logo,
-        logo_bright`
-
     const sponsors = await clientWrite.fetch(
       `*[_type == "sponsor" && name match $searchQuery]{
-        ${fields}
+        _id,
+        _createdAt,
+        _updatedAt,
+        name,
+        website,
+        logo,
+        logo_bright
       }`,
       { searchQuery: `${query}*` },
     )
@@ -325,45 +259,20 @@ export async function searchSponsors(
   }
 }
 
-export async function getAllSponsors(
-  includeContactInfo: boolean = false,
-): Promise<{
-  sponsors?: SponsorExisting[] | SponsorWithContactInfo[]
+export async function getAllSponsors(): Promise<{
+  sponsors?: SponsorExisting[]
   error?: Error
 }> {
   try {
-    const fields = includeContactInfo
-      ? `_id,
-        _createdAt,
-        _updatedAt,
-        name,
-        website,
-        logo,
-        logo_bright,
-        org_number,
-        contact_persons[]{
-          _key,
-          name,
-          email,
-          phone,
-          role
-        },
-        billing{
-          email,
-          reference,
-          comments
-        }`
-      : `_id,
-        _createdAt,
-        _updatedAt,
-        name,
-        website,
-        logo,
-        logo_bright`
-
     const sponsors = await clientWrite.fetch(
       `*[_type == "sponsor"] | order(name asc){
-        ${fields}
+        _id,
+        _createdAt,
+        _updatedAt,
+        name,
+        website,
+        logo,
+        logo_bright
       }`,
     )
 
@@ -454,6 +363,105 @@ export async function updateSponsorTierAssignment(
       })
       .commit()
 
+    return {}
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+const EMAIL_TEMPLATE_PROJECTION = `{
+  _id,
+  _createdAt,
+  _updatedAt,
+  title,
+  slug,
+  category,
+  subject,
+  body,
+  description,
+  is_default,
+  sort_order
+}`
+
+export async function getSponsorEmailTemplates(): Promise<{
+  templates?: SponsorEmailTemplate[]
+  error?: Error
+}> {
+  try {
+    const templates = await clientWrite.fetch(
+      `*[_type == "sponsorEmailTemplate"] | order(category asc, sort_order asc) ${EMAIL_TEMPLATE_PROJECTION}`,
+    )
+    return { templates }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function createSponsorEmailTemplate(data: {
+  title: string
+  slug: string
+  category: string
+  subject: string
+  body?: unknown[]
+  description?: string
+  is_default?: boolean
+  sort_order?: number
+}): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
+    const template = await clientWrite.create({
+      _type: 'sponsorEmailTemplate',
+      title: data.title,
+      slug: { _type: 'slug', current: data.slug },
+      category: data.category,
+      subject: data.subject,
+      body: data.body,
+      description: data.description,
+      is_default: data.is_default ?? false,
+      sort_order: data.sort_order ?? 0,
+    })
+    return { template: template as unknown as SponsorEmailTemplate }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function updateSponsorEmailTemplate(
+  id: string,
+  data: {
+    title?: string
+    slug?: string
+    category?: string
+    subject?: string
+    body?: unknown[]
+    description?: string
+    is_default?: boolean
+    sort_order?: number
+  },
+): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
+    const patch: Record<string, unknown> = {}
+    if (data.title !== undefined) patch.title = data.title
+    if (data.slug !== undefined)
+      patch.slug = { _type: 'slug', current: data.slug }
+    if (data.category !== undefined) patch.category = data.category
+    if (data.subject !== undefined) patch.subject = data.subject
+    if (data.body !== undefined) patch.body = data.body
+    if (data.description !== undefined) patch.description = data.description
+    if (data.is_default !== undefined) patch.is_default = data.is_default
+    if (data.sort_order !== undefined) patch.sort_order = data.sort_order
+
+    const template = await clientWrite.patch(id).set(patch).commit()
+    return { template: template as unknown as SponsorEmailTemplate }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function deleteSponsorEmailTemplate(
+  id: string,
+): Promise<{ error?: Error }> {
+  try {
+    await clientWrite.delete(id)
     return {}
   } catch (error) {
     return { error: error as Error }
