@@ -631,7 +631,7 @@ export function SponsorCRMPipeline({
           })}
         </div>
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {activeItem && (
             <div className="scale-105 rotate-3 transform opacity-90 shadow-lg">
               <SponsorCard
