@@ -20,13 +20,24 @@ import {
 export const STATUSES: Array<{
   value: SponsorStatus
   label: string
+  columnLabel?: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }> = [
   { value: 'prospect', label: 'Prospect', icon: UserGroupIcon },
   { value: 'contacted', label: 'Contacted', icon: ChatBubbleLeftRightIcon },
   { value: 'negotiating', label: 'Negotiating', icon: ArrowsRightLeftIcon },
-  { value: 'closed-won', label: 'Won', icon: CheckCircleIcon },
-  { value: 'closed-lost', label: 'Lost', icon: XCircleIcon },
+  {
+    value: 'closed-won',
+    label: 'Won',
+    columnLabel: 'Closed - Won',
+    icon: CheckCircleIcon,
+  },
+  {
+    value: 'closed-lost',
+    label: 'Lost',
+    columnLabel: 'Closed - Lost',
+    icon: XCircleIcon,
+  },
 ]
 
 export const INVOICE_STATUSES: Array<{
@@ -44,9 +55,15 @@ export const INVOICE_STATUSES: Array<{
 export const CONTRACT_STATUSES: Array<{
   value: ContractStatus
   label: string
+  columnLabel?: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }> = [
-  { value: 'none', label: 'None', icon: MinusCircleIcon },
+  {
+    value: 'none',
+    label: 'None',
+    columnLabel: 'No Contract',
+    icon: MinusCircleIcon,
+  },
   {
     value: 'verbal-agreement',
     label: 'Verbal Agreement',

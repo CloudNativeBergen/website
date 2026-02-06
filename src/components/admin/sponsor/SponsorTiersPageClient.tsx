@@ -2,8 +2,8 @@
 
 import { AdminPageHeader } from '@/components/admin'
 import { GeneralBroadcastModal } from '@/components/admin'
-import SponsorTierEditor from './SponsorTierEditor'
-import SponsorTierManagement from './SponsorTierManagement'
+import { SponsorTierEditor } from './SponsorTierEditor'
+import { SponsorTierManagement } from './SponsorTierManagement'
 import {
   GlobeAltIcon,
   UserGroupIcon,
@@ -25,7 +25,7 @@ interface SponsorTiersPageClientProps {
   sortedTierNames: string[]
 }
 
-export default function SponsorTiersPageClient({
+export function SponsorTiersPageClient({
   conference,
   sponsors,
   sponsorTiers,

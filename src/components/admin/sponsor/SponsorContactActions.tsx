@@ -60,7 +60,7 @@ export function SponsorContactActions({
         <button
           onClick={() => setIsBroadcastModalOpen(true)}
           disabled={sponsorsWithContactsCount === 0}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-brand-cloud-blue px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-cloud-blue/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
         >
           <EnvelopeIcon className="h-4 w-4" />
           Send Broadcast ({sponsorsWithContactsCount})

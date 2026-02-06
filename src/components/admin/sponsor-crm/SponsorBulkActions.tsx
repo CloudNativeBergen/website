@@ -10,6 +10,7 @@ import {
 import { STATUSES, TAGS } from './form/constants'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '@/components/admin/NotificationProvider'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import {
   XMarkIcon,
   ChevronDownIcon,
@@ -51,6 +52,7 @@ export function SponsorBulkActions({
   const { showNotification } = useNotification()
   const utils = api.useUtils()
   const [isProcessing, setIsProcessing] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   const bulkUpdateMutation = api.sponsor.crm.bulkUpdate.useMutation({
     onSuccess: (result) => {
@@ -107,13 +109,11 @@ export function SponsorBulkActions({
   }
 
   const handleDelete = async () => {
-    if (
-      !confirm(
-        `Are you sure you want to remove ${selectedIds.length} sponsors from the pipeline?`,
-      )
-    ) {
-      return
-    }
+    setShowDeleteConfirm(true)
+  }
+
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false)
     setIsProcessing(true)
     await bulkDeleteMutation.mutateAsync({
       ids: selectedIds,
@@ -139,25 +139,7 @@ export function SponsorBulkActions({
             </span>
             {isProcessing && (
               <div className="flex items-center gap-2 border-l border-gray-200 pl-2 dark:border-gray-700">
-                <svg
-                  className="h-4 w-4 animate-spin text-indigo-600 dark:text-indigo-400"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
+                <ArrowPathIcon className="h-4 w-4 animate-spin text-indigo-600 dark:text-indigo-400" />
                 <span className="animate-pulse text-xs font-medium text-gray-500">
                   Processing...
                 </span>
@@ -325,6 +307,17 @@ export function SponsorBulkActions({
           </button>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDelete}
+        title="Delete Sponsors"
+        message={`Are you sure you want to remove ${selectedIds.length} sponsors from the pipeline?`}
+        confirmButtonText="Delete"
+        variant="danger"
+        isLoading={bulkDeleteMutation.isPending}
+      />
     </div>
   )
 }

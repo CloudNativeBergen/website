@@ -50,7 +50,7 @@ interface SponsorFormData extends Omit<SponsorInput, 'billing'> {
   }
 }
 
-export default function SponsorAddModal({
+export function SponsorAddModal({
   isOpen,
   onClose,
   sponsorTiers,

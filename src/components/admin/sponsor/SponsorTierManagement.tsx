@@ -20,7 +20,7 @@ import {
 import { formatCurrency } from '@/lib/format'
 import { formatTierLabel, downloadSvg } from '@/lib/sponsor/utils'
 import { useNotification, ConfirmationModal } from '@/components/admin'
-import SponsorAddModal from './SponsorAddModal'
+import { SponsorAddModal } from './SponsorAddModal'
 import { api } from '@/lib/trpc/client'
 
 const ADMIN_LOGO_SIZE = { maxWidth: '48px', maxHeight: '48px' }
@@ -32,7 +32,7 @@ interface SponsorManagementProps {
   sortedTierNames: string[]
 }
 
-export default function SponsorTierManagement({
+export function SponsorTierManagement({
   sponsors: initialSponsors,
   sponsorTiers,
   sponsorsByTier: initialSponsorsByTier,

@@ -1,13 +1,17 @@
 'use client'
 
+import { useMemo } from 'react'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { SponsorCard } from './SponsorCard'
 import { PlusIcon } from '@heroicons/react/24/outline'
 import { useExchangeRates } from '@/hooks/useExchangeRates'
 import { calculateSponsorValue } from './utils'
 import { BoardView } from './BoardViewSwitcher'
+import { useDroppable } from '@dnd-kit/core'
+import clsx from 'clsx'
 
 interface SponsorBoardColumnProps {
+  columnKey: string
   title: string
   sponsors: SponsorForConferenceExpanded[]
   isLoading?: boolean
@@ -23,6 +27,7 @@ interface SponsorBoardColumnProps {
 }
 
 export function SponsorBoardColumn({
+  columnKey,
   title,
   sponsors,
   isLoading = false,
@@ -38,24 +43,45 @@ export function SponsorBoardColumn({
 }: SponsorBoardColumnProps) {
   const { convertCurrency } = useExchangeRates()
 
-  const calculateValueInNOK = (
-    sponsor: SponsorForConferenceExpanded,
-  ): number => {
-    const { value, currency } = calculateSponsorValue(sponsor)
-    return convertCurrency(
-      value,
-      currency as 'NOK' | 'USD' | 'EUR' | 'GBP',
-      'NOK',
-    )
-  }
+  const { setNodeRef, isOver } = useDroppable({
+    id: columnKey,
+    data: {
+      type: 'column',
+      columnKey,
+    },
+  })
+
+  const sortedSponsors = useMemo(() => {
+    return [...sponsors].sort((a, b) => {
+      const aVal = calculateSponsorValue(a)
+      const bVal = calculateSponsorValue(b)
+      const aNOK = convertCurrency(
+        aVal.value,
+        aVal.currency as 'NOK' | 'USD' | 'EUR' | 'GBP',
+        'NOK',
+      )
+      const bNOK = convertCurrency(
+        bVal.value,
+        bVal.currency as 'NOK' | 'USD' | 'EUR' | 'GBP',
+        'NOK',
+      )
+      return bNOK - aNOK
+    })
+  }, [sponsors, convertCurrency])
 
   return (
-    <div className="flex flex-col">
+    <div
+      ref={setNodeRef}
+      className={clsx(
+        'flex flex-col transition-all',
+        isOver && 'rounded-lg bg-indigo-50/30 dark:bg-indigo-900/20',
+      )}
+    >
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-semibold text-brand-cloud-blue dark:text-blue-400">
           {title}
         </h3>
-        <span className="rounded-full bg-brand-cloud-blue px-2 py-1 text-xs text-white dark:bg-blue-600">
+        <span className="min-w-6 rounded-full bg-brand-cloud-blue px-2 py-1 text-center text-xs text-white dark:bg-blue-600">
           {isLoading ? (
             <span className="inline-block h-4 w-4 animate-pulse rounded-full bg-white/30" />
           ) : (
@@ -84,23 +110,22 @@ export function SponsorBoardColumn({
         </div>
       ) : (
         <div className="space-y-3">
-          {sponsors
-            .sort((a, b) => calculateValueInNOK(b) - calculateValueInNOK(a))
-            .map((sponsor) => (
-              <SponsorCard
-                key={sponsor._id}
-                sponsor={sponsor}
-                currentView={currentView}
-                isSelected={selectedIds.includes(sponsor._id)}
-                isSelectionMode={isSelectionMode}
-                onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
-                onEdit={() => onSponsorClick(sponsor)}
-                onDelete={() => onSponsorDelete(sponsor._id)}
-                onEmail={
-                  onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
-                }
-              />
-            ))}
+          {sortedSponsors.map((sponsor) => (
+            <SponsorCard
+              key={sponsor._id}
+              sponsor={sponsor}
+              currentView={currentView}
+              columnKey={columnKey}
+              isSelected={selectedIds.includes(sponsor._id)}
+              isSelectionMode={isSelectionMode}
+              onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
+              onEdit={() => onSponsorClick(sponsor)}
+              onDelete={() => onSponsorDelete(sponsor._id)}
+              onEmail={
+                onSponsorEmail ? () => onSponsorEmail(sponsor) : undefined
+              }
+            />
+          ))}
 
           {sponsors.length === 0 && (
             <button

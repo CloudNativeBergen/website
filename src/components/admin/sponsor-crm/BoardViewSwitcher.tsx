@@ -39,7 +39,7 @@ export function BoardViewSwitcher({
             key={view.key}
             onClick={() => onViewChange(view.key)}
             className={clsx(
-              'flex h-full items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-all transition-colors',
+              'flex h-full items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
               isActive
                 ? 'bg-white text-brand-cloud-blue shadow-sm ring-1 ring-gray-200 dark:bg-gray-700 dark:text-blue-400 dark:ring-gray-600'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white',

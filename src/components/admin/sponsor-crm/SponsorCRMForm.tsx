@@ -37,11 +37,11 @@ import {
   SponsorGlobalInfoFields,
 } from './form'
 import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './form/constants'
-import { useNotification } from '@/components/admin/NotificationProvider'
 import { SponsorContactEditor } from '../sponsor/SponsorContactEditor'
 import { SponsorLogoEditor } from '../sponsor/SponsorLogoEditor'
 import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
 import { SponsorWithContactInfo, SponsorTier } from '@/lib/sponsor/types'
+import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
 
 interface SponsorCRMFormProps {
   conferenceId: string
@@ -65,7 +65,6 @@ export function SponsorCRMForm({
   const [view, setView] = useState<
     'pipeline' | 'contacts' | 'logo' | 'history'
   >('pipeline')
-  const { showNotification } = useNotification()
   const [userHasEditedValue, setUserHasEditedValue] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -131,71 +130,15 @@ export function SponsorCRMForm({
     onClose()
   }
 
-  const handleSuccess = () => {
-    onSuccess()
-    handleClose()
-  }
-
-  const createMutation = api.sponsor.crm.create.useMutation({
-    onSuccess: async () => {
-      // Invalidate all sponsor queries to ensure fresh data
-      await utils.sponsor.crm.list.invalidate()
-      await utils.sponsor.crm.list.refetch()
-      showNotification({
-        title: 'Success',
-        message: 'Sponsor added to pipeline',
-        type: 'success',
-      })
-      handleSuccess()
-    },
-    onError: (error) => {
-      showNotification({
-        title: 'Error',
-        message: error.message || 'Failed to add sponsor',
-        type: 'error',
-      })
-    },
-  })
-
-  const updateMutation = api.sponsor.crm.update.useMutation({
-    onSuccess: async () => {
-      // Invalidate all sponsor queries to ensure fresh data
-      await utils.sponsor.crm.list.invalidate()
-      await utils.sponsor.crm.list.refetch()
-      showNotification({
-        title: 'Success',
-        message: 'Sponsor updated successfully',
-        type: 'success',
-      })
-      handleSuccess()
-    },
-    onError: (error) => {
-      showNotification({
-        title: 'Error',
-        message: error.message || 'Failed to update sponsor',
-        type: 'error',
-      })
-    },
-  })
-
-  const updateGlobalSponsorMutation = api.sponsor.update.useMutation({
-    onSuccess: () => {
-      utils.sponsor.list.invalidate()
-    },
+  const { handleSubmit: submitForm, isPending } = useSponsorCRMFormMutations({
+    conferenceId,
+    sponsor,
+    isOpen,
+    onSuccess,
+    onClose: handleClose,
   })
 
   const utils = api.useUtils()
-
-  const resetCreateMutation = createMutation.reset
-  const resetUpdateMutation = updateMutation.reset
-
-  useEffect(() => {
-    if (isOpen) {
-      // Reset mutation states when modal opens
-      resetCreateMutation()
-      resetUpdateMutation()
-    }
-  }, [isOpen, resetCreateMutation, resetUpdateMutation])
 
   // Auto-fill contract value when package changes
   useEffect(() => {
@@ -253,14 +196,8 @@ export function SponsorCRMForm({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
-        // Create a synthetic form submit event
         const form = document.querySelector('form')
-        if (
-          form &&
-          !createMutation.isPending &&
-          !updateMutation.isPending &&
-          !updateGlobalSponsorMutation.isPending
-        ) {
+        if (form && !isPending) {
           form.requestSubmit()
         }
       }
@@ -268,78 +205,11 @@ export function SponsorCRMForm({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    isOpen,
-    view,
-    createMutation.isPending,
-    updateMutation.isPending,
-    updateGlobalSponsorMutation.isPending,
-  ])
+  }, [isOpen, view, isPending])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (sponsor) {
-      // 1. Update global sponsor info if it changed
-      if (
-        formData.website !== sponsor.sponsor.website ||
-        formData.logo !== sponsor.sponsor.logo ||
-        formData.logo_bright !== sponsor.sponsor.logo_bright ||
-        formData.name !== sponsor.sponsor.name
-      ) {
-        await updateGlobalSponsorMutation.mutateAsync({
-          id: sponsor.sponsor._id,
-          data: {
-            name: formData.name,
-            website: formData.website,
-            logo: formData.logo || null,
-            logo_bright: formData.logo_bright || null,
-          },
-        })
-      }
-
-      // 2. Update conference relationship
-      await updateMutation.mutateAsync({
-        id: sponsor._id,
-        tier: formData.tierId || undefined,
-        addons: formData.addonIds,
-        contract_status: formData.contractStatus,
-        status: formData.status,
-        invoice_status: formData.invoiceStatus,
-        contract_value: formData.contractValue
-          ? parseFloat(formData.contractValue)
-          : undefined,
-        contract_currency: formData.contractCurrency as
-          | 'NOK'
-          | 'USD'
-          | 'EUR'
-          | 'GBP',
-        notes: formData.notes || undefined,
-        tags: formData.tags.length > 0 ? formData.tags : undefined,
-        assigned_to: formData.assignedTo || null,
-      })
-    } else {
-      await createMutation.mutateAsync({
-        sponsor: formData.sponsorId,
-        conference: conferenceId,
-        tier: formData.tierId || undefined,
-        addons: formData.addonIds.length > 0 ? formData.addonIds : undefined,
-        contract_status: formData.contractStatus,
-        status: formData.status,
-        invoice_status: formData.invoiceStatus,
-        contract_value: formData.contractValue
-          ? parseFloat(formData.contractValue)
-          : undefined,
-        contract_currency: formData.contractCurrency as
-          | 'NOK'
-          | 'USD'
-          | 'EUR'
-          | 'GBP',
-        notes: formData.notes || undefined,
-        tags: formData.tags.length > 0 ? formData.tags : undefined,
-        assigned_to: formData.assignedTo || undefined,
-      })
-    }
+    await submitForm(formData)
   }
 
   return (
@@ -473,7 +343,7 @@ export function SponsorCRMForm({
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-6">
-                    <div className="min-h-[400px] text-left">
+                    <div className="min-h-100 text-left">
                       {view === 'contacts' && editingFullSponsor ? (
                         <SponsorContactEditor
                           sponsor={editingFullSponsor}
@@ -685,23 +555,15 @@ export function SponsorCRMForm({
                           <div className="mt-4 flex flex-row-reverse gap-3">
                             <button
                               type="submit"
-                              disabled={
-                                createMutation.isPending ||
-                                updateMutation.isPending ||
-                                updateGlobalSponsorMutation.isPending
-                              }
+                              disabled={isPending}
                               className={clsx(
                                 'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm',
-                                createMutation.isPending ||
-                                  updateMutation.isPending ||
-                                  updateGlobalSponsorMutation.isPending
+                                isPending
                                   ? 'bg-gray-400 dark:bg-gray-600'
                                   : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400',
                               )}
                             >
-                              {createMutation.isPending ||
-                              updateMutation.isPending ||
-                              updateGlobalSponsorMutation.isPending ? (
+                              {isPending ? (
                                 'Saving...'
                               ) : (
                                 <>
