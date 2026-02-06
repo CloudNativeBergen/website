@@ -162,7 +162,9 @@ src/
 │       │   ├── SponsorActivityTimeline.tsx  # Activity log display
 │       │   ├── SponsorDiscountEmailModal.tsx# Discount code emails
 │       │   ├── SponsorIndividualEmailModal.tsx # Individual email compose
-│       │   └── SponsorTemplatePicker.tsx    # Email template selector dropdown
+│       │   ├── SponsorTemplatePicker.tsx    # Email template selector dropdown
+│       │   ├── SponsorEmailTemplatesPageClient.tsx # Template list + editor page
+│       │   └── SponsorEmailTemplateEditor.tsx # Full-page template editor with preview
 │       └── sponsor-crm/            # CRM pipeline admin UI
 │           ├── SponsorCRMPageClient.tsx     # CRM page shell
 │           ├── SponsorCRMPipeline.tsx       # Main board with filters/search
@@ -193,14 +195,17 @@ src/
         ├── sponsors/
         │   ├── page.tsx            # Sponsor management page
         │   ├── crm/page.tsx        # CRM pipeline page
-        │   └── tiers/page.tsx      # Tier management page
+        │   ├── tiers/page.tsx      # Tier management page
+        │   ├── templates/page.tsx  # Email template management page
+        │   └── activity/page.tsx   # Activity log page
         └── marketing/page.tsx      # Marketing page (includes SponsorThankYou)
 
 sanity/schemaTypes/
 ├── sponsor.ts                      # Sponsor document schema
 ├── sponsorTier.ts                  # Tier document schema
 ├── sponsorForConference.ts         # CRM join document schema
-└── sponsorActivity.ts              # Activity log schema
+├── sponsorActivity.ts              # Activity log schema
+└── sponsorEmailTemplate.ts         # Email template schema
 ```
 
 ### API Layer
@@ -216,6 +221,7 @@ All sponsor operations go through a single tRPC router at `src/server/routers/sp
 | `sponsor.removeFromConference` | —                                                                                                                                                                                                      | Unlink sponsor from conference       |
 | `sponsor.crm.*`                | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations              |
 | `sponsor.crm.activities.*`     | `list`                                                                                                                                                                                                 | Activity log queries                 |
+| `sponsor.emailTemplates.*`     | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                  |
 
 All procedures are protected by `adminProcedure` (requires `is_organizer: true`).
 
@@ -265,7 +271,7 @@ Tests are located in `__tests__/` mirroring the source structure:
 | `lib/sponsor/validation.test.ts`           | Sponsor and tier input validation            |
 | `lib/sponsor/utils.test.ts`                | Tier sorting, formatting, grouping utilities |
 | `lib/sponsor/templates.test.ts`            | Template variable processing utilities       |
-| `lib/sponsor/sponsorForConference.test.ts` | CRM Sanity operations                        |
+| `lib/sponsor/sponsorForConference.test.ts` | CRM Zod schema validation                    |
 | `lib/sponsor-crm/bulk.test.ts`             | Bulk update/delete operations                |
 | `components/Sponsors.test.tsx`             | Public sponsor display component             |
 | `components/SponsorLogo.test.tsx`          | Logo rendering                               |
