@@ -1,6 +1,9 @@
 'use client'
 
-import type { SponsorForConferenceExpanded, SponsorTag } from '@/lib/sponsor-crm/types'
+import type {
+  SponsorForConferenceExpanded,
+  SponsorTag,
+} from '@/lib/sponsor-crm/types'
 import type { Speaker } from '@/lib/speaker/types'
 import { SponsorLogo } from '@/components/SponsorLogo'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
@@ -36,25 +39,25 @@ const TAG_BADGES: {
   label: string
   classes: string
 }[] = [
-    {
-      tag: 'high-priority',
-      label: 'PRI',
-      classes:
-        'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
-    },
-    {
-      tag: 'needs-follow-up',
-      label: 'FUP',
-      classes:
-        'bg-amber-100 text-amber-700 ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
-    },
-    {
-      tag: 'returning-sponsor',
-      label: 'RET',
-      classes:
-        'bg-emerald-100 text-emerald-700 ring-emerald-700/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
-    },
-  ]
+  {
+    tag: 'high-priority',
+    label: 'PRI',
+    classes:
+      'bg-red-100 text-red-700 ring-red-700/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-400/20',
+  },
+  {
+    tag: 'needs-follow-up',
+    label: 'FUP',
+    classes:
+      'bg-amber-100 text-amber-700 ring-amber-700/20 dark:bg-amber-900/30 dark:text-amber-400 dark:ring-amber-400/20',
+  },
+  {
+    tag: 'returning-sponsor',
+    label: 'RET',
+    classes:
+      'bg-emerald-100 text-emerald-700 ring-emerald-700/20 dark:bg-emerald-900/30 dark:text-emerald-400 dark:ring-emerald-400/20',
+  },
+]
 
 const TAG_TOOLTIPS: Record<string, string> = {
   PRI: 'High Priority',
@@ -146,7 +149,7 @@ export function SponsorCard({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => { }}
+          onChange={() => {}}
           className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
         />
       </div>
@@ -163,7 +166,7 @@ export function SponsorCard({
               className="max-h-full w-auto max-w-12 object-contain"
             />
           ) : (
-            <span className="truncate text-center text-[9px] font-bold text-gray-500 uppercase leading-tight dark:text-gray-400">
+            <span className="truncate text-center text-[9px] leading-tight font-bold text-gray-500 uppercase dark:text-gray-400">
               {sponsor.sponsor.name}
             </span>
           )}
@@ -190,7 +193,7 @@ export function SponsorCard({
       {/* Right: Name + Value + Tags */}
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
         {/* Name */}
-        <p className="truncate text-xs font-semibold leading-tight text-gray-900 dark:text-white">
+        <p className="truncate text-xs leading-tight font-semibold text-gray-900 dark:text-white">
           {sponsor.sponsor.name}
         </p>
 
@@ -218,7 +221,7 @@ export function SponsorCard({
               key={t.tag}
               title={TAG_TOOLTIPS[t.label]}
               className={clsx(
-                'inline-flex items-center rounded px-1 py-px text-[8px] font-bold uppercase leading-none ring-1 ring-inset',
+                'inline-flex items-center rounded px-1 py-px text-[8px] leading-none font-bold uppercase ring-1 ring-inset',
                 t.classes,
               )}
             >
@@ -228,7 +231,7 @@ export function SponsorCard({
           {value > 0 && currentView !== 'pipeline' && (
             <span
               className={clsx(
-                'inline-flex items-center rounded px-1 py-px text-[8px] font-medium leading-none',
+                'inline-flex items-center rounded px-1 py-px text-[8px] leading-none font-medium',
                 getInvoiceStatusColor(sponsor.invoice_status),
               )}
             >
