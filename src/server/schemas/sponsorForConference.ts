@@ -107,6 +107,11 @@ export const UpdateInvoiceStatusSchema = z.object({
   newStatus: InvoiceStatusSchema,
 })
 
+export const UpdateContractStatusSchema = z.object({
+  id: z.string().min(1, 'ID is required'),
+  newStatus: ContractStatusSchema,
+})
+
 export const CopySponsorsSchema = z.object({
   sourceConferenceId: z.string().min(1, 'Source conference ID is required'),
   targetConferenceId: z.string().min(1, 'Target conference ID is required'),

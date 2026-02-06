@@ -16,6 +16,7 @@ import {
 } from '@/components/admin/sponsor-crm/BoardViewSwitcher'
 import { SponsorBoardColumn } from '@/components/admin/sponsor-crm/SponsorBoardColumn'
 import { SponsorBulkActions } from '@/components/admin/sponsor-crm/SponsorBulkActions'
+import { SponsorCard } from '@/components/admin/sponsor-crm/SponsorCard'
 import {
   sortSponsorTiers,
   formatTierLabel,
@@ -24,6 +25,8 @@ import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
+import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
+import { DndContext, DragOverlay, pointerWithin } from '@dnd-kit/core'
 import clsx from 'clsx'
 
 interface SponsorCRMPipelineProps {
@@ -55,6 +58,9 @@ export function SponsorCRMPipeline({
   const [searchQuery, setSearchQuery] = useState('')
 
   const utils = api.useUtils()
+
+  const { activeItem, handleDragStart, handleDragEnd } =
+    useSponsorDragDrop(currentView)
 
   const deleteMutation = api.sponsor.crm.delete.useMutation({
     onSuccess: () => {
@@ -92,8 +98,8 @@ export function SponsorCRMPipeline({
         ? sponsors
         : currentView === 'invoice'
           ? sponsors.filter(
-              (s) => s.status === 'closed-won' && s.contract_value != null,
-            )
+            (s) => s.status === 'closed-won' && s.contract_value != null,
+          )
           : sponsors.filter((s) => s.status === 'closed-won')
 
     if (searchQuery.trim()) {
@@ -337,26 +343,26 @@ export function SponsorCRMPipeline({
   const columns = useMemo(() => {
     return currentView === 'pipeline'
       ? [
-          { key: 'prospect', label: 'Prospect' },
-          { key: 'contacted', label: 'Contacted' },
-          { key: 'negotiating', label: 'Negotiating' },
-          { key: 'closed-won', label: 'Closed - Won' },
-          { key: 'closed-lost', label: 'Closed - Lost' },
-        ]
+        { key: 'prospect', label: 'Prospect' },
+        { key: 'contacted', label: 'Contacted' },
+        { key: 'negotiating', label: 'Negotiating' },
+        { key: 'closed-won', label: 'Closed - Won' },
+        { key: 'closed-lost', label: 'Closed - Lost' },
+      ]
       : currentView === 'contract'
         ? [
-            { key: 'none', label: 'No Contract' },
-            { key: 'verbal-agreement', label: 'Verbal Agreement' },
-            { key: 'contract-sent', label: 'Contract Sent' },
-            { key: 'contract-signed', label: 'Contract Signed' },
-          ]
+          { key: 'none', label: 'No Contract' },
+          { key: 'verbal-agreement', label: 'Verbal Agreement' },
+          { key: 'contract-sent', label: 'Contract Sent' },
+          { key: 'contract-signed', label: 'Contract Signed' },
+        ]
         : [
-            { key: 'not-sent', label: 'Not Sent' },
-            { key: 'sent', label: 'Sent' },
-            { key: 'overdue', label: 'Overdue' },
-            { key: 'paid', label: 'Paid' },
-            { key: 'cancelled', label: 'Cancelled' },
-          ]
+          { key: 'not-sent', label: 'Not Sent' },
+          { key: 'sent', label: 'Sent' },
+          { key: 'overdue', label: 'Overdue' },
+          { key: 'paid', label: 'Paid' },
+          { key: 'cancelled', label: 'Cancelled' },
+        ]
   }, [currentView])
 
   if (!conferenceId) {
@@ -406,7 +412,7 @@ export function SponsorCRMPipeline({
       {/* THE UNIFIED CLEAN TOOLBAR - SINGLE LINE */}
       <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-800 dark:bg-gray-900">
         {/* Navigation */}
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <BoardViewSwitcher
             currentView={currentView}
             onViewChange={setCurrentView}
@@ -416,7 +422,7 @@ export function SponsorCRMPipeline({
         <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
 
         {/* Search */}
-        <div className="group relative max-w-sm flex-grow">
+        <div className="group relative max-w-sm grow">
           <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500" />
           <input
             type="text"
@@ -576,35 +582,55 @@ export function SponsorCRMPipeline({
       )}
 
       {/* Board Columns */}
-      <div
-        className={clsx(
-          'grid grid-cols-1 gap-4',
-          currentView === 'pipeline' && 'lg:grid-cols-5',
-          currentView === 'invoice' && 'lg:grid-cols-5',
-          currentView === 'contract' && 'lg:grid-cols-4',
-        )}
+      <DndContext
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        collisionDetection={pointerWithin}
       >
-        {columns.map((column) => {
-          const columnSponsors = groupedSponsors[column.key] || []
-          return (
-            <SponsorBoardColumn
-              key={column.key}
-              title={column.label}
-              sponsors={columnSponsors}
-              isLoading={isLoading}
-              currentView={currentView}
-              selectedIds={selectedIds}
-              isSelectionMode={selectedIds.length > 0}
-              onSponsorClick={handleOpenForm}
-              onSponsorDelete={handleDelete}
-              onSponsorEmail={handleOpenEmail}
-              onSponsorToggleSelect={handleToggleSelect}
-              onAddClick={() => handleOpenForm()}
-              emptyMessage="No sponsors"
-            />
-          )
-        })}
-      </div>
+        <div
+          className={clsx(
+            'grid grid-cols-1 gap-4',
+            currentView === 'pipeline' && 'lg:grid-cols-5',
+            currentView === 'invoice' && 'lg:grid-cols-5',
+            currentView === 'contract' && 'lg:grid-cols-4',
+          )}
+        >
+          {columns.map((column) => {
+            const columnSponsors = groupedSponsors[column.key] || []
+            return (
+              <SponsorBoardColumn
+                key={column.key}
+                columnKey={column.key}
+                title={column.label}
+                sponsors={columnSponsors}
+                isLoading={isLoading}
+                currentView={currentView}
+                selectedIds={selectedIds}
+                isSelectionMode={selectedIds.length > 0}
+                onSponsorClick={handleOpenForm}
+                onSponsorDelete={handleDelete}
+                onSponsorEmail={handleOpenEmail}
+                onSponsorToggleSelect={handleToggleSelect}
+                onAddClick={() => handleOpenForm()}
+                emptyMessage="No sponsors"
+              />
+            )
+          })}
+        </div>
+
+        <DragOverlay>
+          {activeItem && (
+            <div className="scale-105 rotate-3 transform opacity-90">
+              <SponsorCard
+                sponsor={activeItem.sponsor}
+                currentView={currentView}
+                onEdit={() => { }}
+                onDelete={() => { }}
+              />
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
     </div>
   )
 }

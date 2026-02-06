@@ -7,6 +7,7 @@ import {
   PencilIcon,
   TrashIcon,
   EnvelopeIcon,
+  Bars3Icon,
 } from '@heroicons/react/24/outline'
 import {
   getInvoiceStatusColor,
@@ -15,10 +16,12 @@ import {
 } from './utils'
 import clsx from 'clsx'
 import { BoardView } from './BoardViewSwitcher'
+import { useDraggable } from '@dnd-kit/core'
 
 interface SponsorCardProps {
   sponsor: SponsorForConferenceExpanded
   currentView: BoardView
+  columnKey?: string
   isSelected?: boolean
   isSelectionMode?: boolean
   onToggleSelect?: (e: React.MouseEvent) => void
@@ -30,6 +33,7 @@ interface SponsorCardProps {
 export function SponsorCard({
   sponsor,
   currentView,
+  columnKey,
   isSelected = false,
   isSelectionMode = false,
   onToggleSelect,
@@ -38,6 +42,16 @@ export function SponsorCard({
   onEmail,
 }: SponsorCardProps) {
   const { value, currency } = calculateSponsorValue(sponsor)
+
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: sponsor._id,
+    data: {
+      type: 'sponsor',
+      sponsor,
+      sourceColumnKey: columnKey,
+    },
+    disabled: isSelectionMode || !columnKey,
+  })
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -69,13 +83,16 @@ export function SponsorCard({
 
   return (
     <div
+      ref={setNodeRef}
       className={clsx(
         'group relative cursor-pointer rounded border p-2 transition-all hover:border-brand-cloud-blue hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
         isSelected
           ? 'border-indigo-500 bg-indigo-50/30 shadow-sm ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-900/20'
           : 'border-gray-200 bg-white',
+        isDragging && 'opacity-30',
       )}
       onClick={handleCardClick}
+      {...attributes}
     >
       {/* Selection Checkbox */}
       <div
@@ -88,7 +105,7 @@ export function SponsorCard({
         <input
           type="checkbox"
           checked={isSelected}
-          onChange={() => {}} // Handled by parent click
+          onChange={() => { }} // Handled by parent click
           className="h-4 w-4 cursor-pointer rounded border-gray-300 text-indigo-600 focus:ring-indigo-600 dark:border-gray-600 dark:bg-gray-700"
         />
       </div>
@@ -207,6 +224,18 @@ export function SponsorCard({
           >
             {formatInvoiceStatusLabel(sponsor.invoice_status)}
           </span>
+        </div>
+      )}
+
+      {/* Drag Handle - Bottom Left */}
+      {!isSelectionMode && columnKey && (
+        <div
+          className="absolute bottom-1 left-1 z-20 opacity-0 transition-opacity group-hover:opacity-100"
+          {...listeners}
+        >
+          <div className="cursor-grab rounded bg-white/90 p-0.5 shadow-sm transition-colors hover:bg-gray-100 active:cursor-grabbing dark:bg-gray-700/90 dark:hover:bg-gray-600">
+            <Bars3Icon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
+          </div>
         </div>
       )}
     </div>

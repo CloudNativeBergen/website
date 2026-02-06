@@ -62,6 +62,7 @@ import {
   SponsorForConferenceIdSchema,
   MoveStageSchema,
   UpdateInvoiceStatusSchema,
+  UpdateContractStatusSchema,
   CopySponsorsSchema,
   ImportAllHistoricSponsorsSchema,
   BulkUpdateSponsorCRMSchema,
@@ -928,6 +929,68 @@ export const sponsorRouter = router({
           } catch (logError) {
             console.error(
               'Failed to log invoice status change activity:',
+              logError,
+            )
+          }
+        }
+
+        return sponsorForConference
+      }),
+
+    updateContractStatus: adminProcedure
+      .input(UpdateContractStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { sponsorForConference: existing } =
+          await getSponsorForConference(input.id)
+
+        if (!existing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+          })
+        }
+
+        const oldStatus = existing.contract_status
+        const updateData: Partial<{
+          contract_status: string
+          contract_signed_at: string | null
+        }> = {
+          contract_status: input.newStatus,
+        }
+
+        if (
+          input.newStatus === 'contract-signed' &&
+          !existing.contract_signed_at
+        ) {
+          updateData.contract_signed_at = getCurrentDateTime()
+        }
+
+        const { sponsorForConference, error } =
+          await updateSponsorForConference(
+            input.id,
+            updateData as Partial<SponsorForConferenceInput>,
+          )
+
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update contract status',
+            cause: error,
+          })
+        }
+
+        const userId = ctx.speaker._id
+        if (userId && oldStatus !== input.newStatus) {
+          try {
+            await logContractStatusChange(
+              input.id,
+              oldStatus,
+              input.newStatus,
+              userId,
+            )
+          } catch (logError) {
+            console.error(
+              'Failed to log contract status change activity:',
               logError,
             )
           }

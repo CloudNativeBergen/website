@@ -6,8 +6,11 @@ import { PlusIcon } from '@heroicons/react/24/outline'
 import { useExchangeRates } from '@/hooks/useExchangeRates'
 import { calculateSponsorValue } from './utils'
 import { BoardView } from './BoardViewSwitcher'
+import { useDroppable } from '@dnd-kit/core'
+import clsx from 'clsx'
 
 interface SponsorBoardColumnProps {
+  columnKey: string
   title: string
   sponsors: SponsorForConferenceExpanded[]
   isLoading?: boolean
@@ -23,6 +26,7 @@ interface SponsorBoardColumnProps {
 }
 
 export function SponsorBoardColumn({
+  columnKey,
   title,
   sponsors,
   isLoading = false,
@@ -38,6 +42,14 @@ export function SponsorBoardColumn({
 }: SponsorBoardColumnProps) {
   const { convertCurrency } = useExchangeRates()
 
+  const { setNodeRef, isOver } = useDroppable({
+    id: columnKey,
+    data: {
+      type: 'column',
+      columnKey,
+    },
+  })
+
   const calculateValueInNOK = (
     sponsor: SponsorForConferenceExpanded,
   ): number => {
@@ -50,7 +62,15 @@ export function SponsorBoardColumn({
   }
 
   return (
-    <div className="flex flex-col">
+    <div
+      ref={setNodeRef}
+      className={clsx(
+        'flex flex-col rounded-lg border-2 p-3 transition-all',
+        isOver
+          ? 'border-indigo-400 bg-indigo-50/20 shadow-md dark:border-indigo-500 dark:bg-indigo-900/10'
+          : 'border-transparent',
+      )}
+    >
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-semibold text-brand-cloud-blue dark:text-blue-400">
           {title}
@@ -91,6 +111,7 @@ export function SponsorBoardColumn({
                 key={sponsor._id}
                 sponsor={sponsor}
                 currentView={currentView}
+                columnKey={columnKey}
                 isSelected={selectedIds.includes(sponsor._id)}
                 isSelectionMode={isSelectionMode}
                 onToggleSelect={() => onSponsorToggleSelect?.(sponsor._id)}
