@@ -5,7 +5,7 @@ import type {
   SponsorForConferenceExpanded,
   SponsorTag,
 } from '@/lib/sponsor-crm/types'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { SponsorCRMForm } from '@/components/admin/sponsor-crm/SponsorCRMForm'
@@ -62,46 +62,95 @@ export function SponsorCRMPipeline({
     },
   })
 
-  // Handlers
-  const handleOpenForm = (sponsor?: SponsorForConferenceExpanded) => {
-    setSelectedSponsor(sponsor || null)
-    setIsFormOpen(true)
-  }
+  // Parse filters from URL
+  const tiersFilter = useMemo(
+    () => searchParams.get('tiers')?.split(',').filter(Boolean) || [],
+    [searchParams],
+  )
+  const assignedToFilter = searchParams.get('assigned_to') || undefined
+  const tagsFilter = useMemo(
+    () =>
+      (searchParams.get('tags')?.split(',').filter(Boolean) ||
+        []) as SponsorTag[],
+    [searchParams],
+  )
 
-  const handleCreateNew = () => {
+  // Fetch with filters
+  const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({
+    conferenceId,
+    assigned_to:
+      assignedToFilter === 'unassigned' ? undefined : assignedToFilter,
+    unassigned_only: assignedToFilter === 'unassigned',
+    tags: tagsFilter.length > 0 ? tagsFilter : undefined,
+    tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
+  })
+
+  // Filter logic
+  const filteredSponsors = useMemo(() => {
+    let filtered =
+      currentView === 'pipeline'
+        ? sponsors
+        : currentView === 'invoice'
+          ? sponsors.filter(
+              (s) => s.status === 'closed-won' && s.contract_value != null,
+            )
+          : sponsors.filter((s) => s.status === 'closed-won')
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter((s) =>
+        s.sponsor.name.toLowerCase().includes(q),
+      )
+    }
+    return filtered
+  }, [sponsors, currentView, searchQuery])
+
+  // Handlers
+  const handleOpenForm = useCallback(
+    (sponsor?: SponsorForConferenceExpanded) => {
+      setSelectedSponsor(sponsor || null)
+      setIsFormOpen(true)
+    },
+    [],
+  )
+
+  const handleCreateNew = useCallback(() => {
     setSelectedSponsor(null)
     setIsFormOpen(true)
-  }
+  }, [])
 
-  const handleCloseForm = () => {
+  const handleCloseForm = useCallback(() => {
     setSelectedSponsor(null)
     setIsFormOpen(false)
-  }
+  }, [])
 
-  const handleOpenEmail = (sponsor: SponsorForConferenceExpanded) => {
-    setEmailSponsor(sponsor)
-    setIsEmailModalOpen(true)
-  }
+  const handleOpenEmail = useCallback(
+    (sponsor: SponsorForConferenceExpanded) => {
+      setEmailSponsor(sponsor)
+      setIsEmailModalOpen(true)
+    },
+    [],
+  )
 
-  const handleCloseEmail = () => {
+  const handleCloseEmail = useCallback(() => {
     setEmailSponsor(null)
     setIsEmailModalOpen(false)
-  }
+  }, [])
 
-  const handleToggleSelect = (id: string) => {
+  const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
     )
-  }
+  }, [])
 
-  const handleClearSelection = () => {
+  const handleClearSelection = useCallback(() => {
     setSelectedIds([])
-  }
+  }, [])
 
-  const handleSelectAllFiltered = () => {
+  const handleSelectAllFiltered = useCallback(() => {
     const allFilteredIds = filteredSponsors.map((s) => s._id)
     setSelectedIds(allFilteredIds)
-  }
+  }, [filteredSponsors])
 
   // Handle external trigger for new sponsor
   useEffect(() => {
@@ -109,14 +158,7 @@ export function SponsorCRMPipeline({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       handleCreateNew()
     }
-  }, [externalNewTrigger])
-
-  // Parse filters from URL
-  const tiersFilter =
-    searchParams.get('tiers')?.split(',').filter(Boolean) || []
-  const assignedToFilter = searchParams.get('assigned_to') || undefined
-  const tagsFilter = (searchParams.get('tags')?.split(',').filter(Boolean) ||
-    []) as SponsorTag[]
+  }, [externalNewTrigger, handleCreateNew])
 
   // Default to current user's assigned sponsors if no assignedTo filter is set
   useEffect(() => {
@@ -131,48 +173,48 @@ export function SponsorCRMPipeline({
     hasDefaultedRef.current = true
   }, [session?.speaker?._id, searchParams, router])
 
-  // Fetch with filters
-  const { data: sponsors = [], isLoading } = api.sponsor.crm.list.useQuery({
-    conferenceId,
-    assigned_to:
-      assignedToFilter === 'unassigned' ? undefined : assignedToFilter,
-    unassigned_only: assignedToFilter === 'unassigned',
-    tags: tagsFilter.length > 0 ? tagsFilter : undefined,
-    tiers: tiersFilter.length > 0 ? tiersFilter : undefined,
-  })
-
   // Fetch tiers for filters
   const { data: tiers = [] } = api.sponsor.tiers.listByConference.useQuery({
     conferenceId,
   })
 
   // Use organizers from conference data
-  const organizers =
-    [...(conference.organizers || [])]
+  const organizers = useMemo(() => {
+    return [...(conference.organizers || [])]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((o) => ({
         _id: o._id,
         name: o.name,
         email: o.email,
         avatar: o.image,
-      })) || []
+      }))
+  }, [conference.organizers])
 
-  const handleDelete = async (sponsorId: string) => {
-    if (
-      !confirm(
-        'Are you sure you want to remove this sponsor from the pipeline?',
-      )
-    ) {
-      return
-    }
-    await deleteMutation.mutateAsync({ id: sponsorId })
-  }
+  const handleDelete = useCallback(
+    async (sponsorId: string) => {
+      if (
+        !confirm(
+          'Are you sure you want to remove this sponsor from the pipeline?',
+        )
+      ) {
+        return
+      }
+      await deleteMutation.mutateAsync({ id: sponsorId })
+    },
+    [deleteMutation],
+  )
 
   // Clear selection when filters change
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     handleClearSelection()
-  }, [tiersFilter.length, assignedToFilter, tagsFilter.length, currentView])
+  }, [
+    tiersFilter.length,
+    assignedToFilter,
+    tagsFilter.length,
+    currentView,
+    handleClearSelection,
+  ])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -188,7 +230,7 @@ export function SponsorCRMPipeline({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [handleCreateNew, handleOpenForm])
 
   // Handle sponsor query parameter
   useEffect(() => {
@@ -212,55 +254,50 @@ export function SponsorCRMPipeline({
   }, [searchParams, sponsors, isFormOpen, router])
 
   // Update URL with filters
-  const updateFilters = (key: string, value: string | null) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (value) {
-      params.set(key, value)
-    } else {
-      params.delete(key)
-    }
-    router.push(`?${params.toString()}`, { scroll: false })
-  }
+  const updateFilters = useCallback(
+    (key: string, value: string | null) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (value) {
+        params.set(key, value)
+      } else {
+        params.delete(key)
+      }
+      router.push(`?${params.toString()}`, { scroll: false })
+    },
+    [router, searchParams],
+  )
 
   // Filter handlers
-  const toggleTierFilter = (tierId: string) => {
-    const newTiers = tiersFilter.includes(tierId)
-      ? tiersFilter.filter((t) => t !== tierId)
-      : [...tiersFilter, tierId]
-    updateFilters('tiers', newTiers.length > 0 ? newTiers.join(',') : null)
-  }
+  const toggleTierFilter = useCallback(
+    (tierId: string) => {
+      const newTiers = tiersFilter.includes(tierId)
+        ? tiersFilter.filter((t) => t !== tierId)
+        : [...tiersFilter, tierId]
+      updateFilters('tiers', newTiers.length > 0 ? newTiers.join(',') : null)
+    },
+    [tiersFilter, updateFilters],
+  )
 
-  const setOrganizerFilter = (organizerId: string | null) => {
-    updateFilters('assigned_to', organizerId)
-  }
+  const setOrganizerFilter = useCallback(
+    (organizerId: string | null) => {
+      updateFilters('assigned_to', organizerId)
+    },
+    [updateFilters],
+  )
 
-  const toggleTagFilter = (tag: SponsorTag) => {
-    const newTags = tagsFilter.includes(tag)
-      ? tagsFilter.filter((t) => t !== tag)
-      : [...tagsFilter, tag]
-    updateFilters('tags', newTags.length > 0 ? newTags.join(',') : null)
-  }
+  const toggleTagFilter = useCallback(
+    (tag: SponsorTag) => {
+      const newTags = tagsFilter.includes(tag)
+        ? tagsFilter.filter((t) => t !== tag)
+        : [...tagsFilter, tag]
+      updateFilters('tags', newTags.length > 0 ? newTags.join(',') : null)
+    },
+    [tagsFilter, updateFilters],
+  )
 
-  const clearAllFilters = () => {
+  const clearAllFilters = useCallback(() => {
     router.push(window.location.pathname, { scroll: false })
-  }
-
-  // Filter logic
-  let filteredSponsors =
-    currentView === 'pipeline'
-      ? sponsors
-      : currentView === 'invoice'
-        ? sponsors.filter(
-            (s) => s.status === 'closed-won' && s.contract_value != null,
-          )
-        : sponsors.filter((s) => s.status === 'closed-won')
-
-  if (searchQuery.trim()) {
-    const q = searchQuery.toLowerCase().trim()
-    filteredSponsors = filteredSponsors.filter((s) =>
-      s.sponsor.name.toLowerCase().includes(q),
-    )
-  }
+  }, [router])
 
   const activeFilterCount =
     tiersFilter.length + (assignedToFilter ? 1 : 0) + tagsFilter.length
@@ -276,27 +313,29 @@ export function SponsorCRMPipeline({
     'previously-declined',
   ]
 
-  const groupedSponsors = filteredSponsors.reduce(
-    (acc, sponsor) => {
-      let key: string
-      if (currentView === 'pipeline') {
-        key = sponsor.status
-      } else if (currentView === 'contract') {
-        key = sponsor.contract_status
-      } else {
-        key = sponsor.invoice_status
-      }
-      if (!acc[key]) {
-        acc[key] = []
-      }
-      acc[key].push(sponsor)
-      return acc
-    },
-    {} as Record<string, SponsorForConferenceExpanded[]>,
-  )
+  const groupedSponsors = useMemo(() => {
+    return filteredSponsors.reduce(
+      (acc, sponsor) => {
+        let key: string
+        if (currentView === 'pipeline') {
+          key = sponsor.status
+        } else if (currentView === 'contract') {
+          key = sponsor.contract_status
+        } else {
+          key = sponsor.invoice_status
+        }
+        if (!acc[key]) {
+          acc[key] = []
+        }
+        acc[key].push(sponsor)
+        return acc
+      },
+      {} as Record<string, SponsorForConferenceExpanded[]>,
+    )
+  }, [filteredSponsors, currentView])
 
-  const columns =
-    currentView === 'pipeline'
+  const columns = useMemo(() => {
+    return currentView === 'pipeline'
       ? [
           { key: 'prospect', label: 'Prospect' },
           { key: 'contacted', label: 'Contacted' },
@@ -318,6 +357,7 @@ export function SponsorCRMPipeline({
             { key: 'paid', label: 'Paid' },
             { key: 'cancelled', label: 'Cancelled' },
           ]
+  }, [currentView])
 
   if (!conferenceId) {
     return (

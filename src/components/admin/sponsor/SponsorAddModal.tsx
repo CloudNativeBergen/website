@@ -117,7 +117,8 @@ export default function SponsorAddModal({
         const tierMatch = sponsorTiers.find(
           (tier) => tier.title === editingSponsor.tier?.title,
         )
-        setFormData({
+        setFormData((prev) => ({
+          ...prev,
           name: editingSponsor.sponsor.name,
           website: editingSponsor.sponsor.website || '',
           logo: editingSponsor.sponsor.logo || null,
@@ -135,11 +136,12 @@ export default function SponsorAddModal({
             reference: editingSponsor.sponsor.billing?.reference || '',
             comments: editingSponsor.sponsor.billing?.comments || '',
           },
-        })
+        }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
       } else {
-        setFormData({
+        setFormData((prev) => ({
+          ...prev,
           name: '',
           website: '',
           logo: null,
@@ -152,7 +154,7 @@ export default function SponsorAddModal({
             reference: '',
             comments: '',
           },
-        })
+        }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
         setSponsorId('')
@@ -677,8 +679,8 @@ export default function SponsorAddModal({
 
                           <div className="sm:col-span-2">
                             <SponsorLogoEditor
-                              logo={formData.logo || ''}
-                              logoBright={formData.logo_bright || ''}
+                              logo={formData.logo || null}
+                              logoBright={formData.logo_bright || null}
                               name={formData.name}
                               onChange={(updates) =>
                                 setFormData((prev) => ({ ...prev, ...updates }))
@@ -734,17 +736,19 @@ export default function SponsorAddModal({
                                         type="text"
                                         value={contact.name}
                                         onChange={(e) => {
-                                          const updatedContacts = [
-                                            ...(formData.contact_persons || []),
-                                          ]
-                                          updatedContacts[index] = {
-                                            ...contact,
-                                            name: e.target.value,
-                                          }
-                                          setFormData((prev) => ({
-                                            ...prev,
-                                            contact_persons: updatedContacts,
-                                          }))
+                                          setFormData((prev) => {
+                                            const updatedContacts = [
+                                              ...(prev.contact_persons || []),
+                                            ]
+                                            updatedContacts[index] = {
+                                              ...contact,
+                                              name: e.target.value,
+                                            }
+                                            return {
+                                              ...prev,
+                                              contact_persons: updatedContacts,
+                                            }
+                                          })
                                         }}
                                         className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                                         placeholder="Full name"
@@ -760,17 +764,19 @@ export default function SponsorAddModal({
                                         type="email"
                                         value={contact.email}
                                         onChange={(e) => {
-                                          const updatedContacts = [
-                                            ...(formData.contact_persons || []),
-                                          ]
-                                          updatedContacts[index] = {
-                                            ...contact,
-                                            email: e.target.value,
-                                          }
-                                          setFormData((prev) => ({
-                                            ...prev,
-                                            contact_persons: updatedContacts,
-                                          }))
+                                          setFormData((prev) => {
+                                            const updatedContacts = [
+                                              ...(prev.contact_persons || []),
+                                            ]
+                                            updatedContacts[index] = {
+                                              ...contact,
+                                              email: e.target.value,
+                                            }
+                                            return {
+                                              ...prev,
+                                              contact_persons: updatedContacts,
+                                            }
+                                          })
                                         }}
                                         className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                                         placeholder="email@example.com"
@@ -786,17 +792,19 @@ export default function SponsorAddModal({
                                         type="tel"
                                         value={contact.phone || ''}
                                         onChange={(e) => {
-                                          const updatedContacts = [
-                                            ...(formData.contact_persons || []),
-                                          ]
-                                          updatedContacts[index] = {
-                                            ...contact,
-                                            phone: e.target.value,
-                                          }
-                                          setFormData((prev) => ({
-                                            ...prev,
-                                            contact_persons: updatedContacts,
-                                          }))
+                                          setFormData((prev) => {
+                                            const updatedContacts = [
+                                              ...(prev.contact_persons || []),
+                                            ]
+                                            updatedContacts[index] = {
+                                              ...contact,
+                                              phone: e.target.value,
+                                            }
+                                            return {
+                                              ...prev,
+                                              contact_persons: updatedContacts,
+                                            }
+                                          })
                                         }}
                                         className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                                         placeholder="+47 123 45 678"
@@ -811,17 +819,19 @@ export default function SponsorAddModal({
                                       <select
                                         value={contact.role || ''}
                                         onChange={(e) => {
-                                          const updatedContacts = [
-                                            ...(formData.contact_persons || []),
-                                          ]
-                                          updatedContacts[index] = {
-                                            ...contact,
-                                            role: e.target.value,
-                                          }
-                                          setFormData((prev) => ({
-                                            ...prev,
-                                            contact_persons: updatedContacts,
-                                          }))
+                                          setFormData((prev) => {
+                                            const updatedContacts = [
+                                              ...(prev.contact_persons || []),
+                                            ]
+                                            updatedContacts[index] = {
+                                              ...contact,
+                                              role: e.target.value,
+                                            }
+                                            return {
+                                              ...prev,
+                                              contact_persons: updatedContacts,
+                                            }
+                                          })
                                         }}
                                         className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
                                       >
@@ -845,13 +855,15 @@ export default function SponsorAddModal({
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      const updatedContacts = (
-                                        formData.contact_persons || []
-                                      ).filter((_, i) => i !== index)
-                                      setFormData((prev) => ({
-                                        ...prev,
-                                        contact_persons: updatedContacts,
-                                      }))
+                                      setFormData((prev) => {
+                                        const updatedContacts = (
+                                          prev.contact_persons || []
+                                        ).filter((_, i) => i !== index)
+                                        return {
+                                          ...prev,
+                                          contact_persons: updatedContacts,
+                                        }
+                                      })
                                     }}
                                     className="text-sm/6 font-semibold text-red-600 hover:text-red-500 dark:text-red-400 dark:hover:text-red-300"
                                   >

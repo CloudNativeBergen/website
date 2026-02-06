@@ -95,13 +95,30 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
       if (sfc && userId) {
         // 1. Log the interaction
-        await logEmailSent(sfc._id, subject, userId)
+        try {
+          await logEmailSent(sfc._id, subject, userId)
+        } catch (logError) {
+          console.error(
+            '[SponsorIndividualEmail] Failed to log email activity:',
+            logError,
+          )
+        }
 
         // 2. Automatically move to 'contacted' if currently in 'prospect'
         if (sfc.status === 'prospect') {
-          await clientWrite.patch(sfc._id).set({ status: 'contacted' }).commit()
+          try {
+            await clientWrite
+              .patch(sfc._id)
+              .set({ status: 'contacted' })
+              .commit()
 
-          await logStageChange(sfc._id, 'prospect', 'contacted', userId)
+            await logStageChange(sfc._id, 'prospect', 'contacted', userId)
+          } catch (statusError) {
+            console.error(
+              '[SponsorIndividualEmail] Failed to update sponsor status:',
+              statusError,
+            )
+          }
         }
       }
     } catch (crmError) {

@@ -705,7 +705,11 @@ export const sponsorRouter = router({
         }
 
         if (sponsorForConference && userId) {
-          await logSponsorCreated(sponsorForConference._id, userId)
+          try {
+            await logSponsorCreated(sponsorForConference._id, userId)
+          } catch (logError) {
+            console.error('Failed to log sponsor created activity:', logError)
+          }
         }
 
         return sponsorForConference
@@ -769,50 +773,59 @@ export const sponsorRouter = router({
         // Log activity for key field changes
         const userId = ctx.speaker._id
         if (userId) {
-          if (updateData.status && updateData.status !== existing.status) {
-            await logStageChange(id, existing.status, updateData.status, userId)
-          }
-
-          if (
-            updateData.invoice_status &&
-            updateData.invoice_status !== existing.invoice_status
-          ) {
-            await logInvoiceStatusChange(
-              id,
-              existing.invoice_status,
-              updateData.invoice_status,
-              userId,
-            )
-          }
-
-          if (
-            updateData.contract_status &&
-            updateData.contract_status !== existing.contract_status
-          ) {
-            await logContractStatusChange(
-              id,
-              existing.contract_status,
-              updateData.contract_status,
-              userId,
-            )
-          }
-
-          if (
-            updateData.assigned_to !== undefined &&
-            updateData.assigned_to !== (existing.assigned_to?._id || null)
-          ) {
-            let assigneeName: string | null = null
-            if (updateData.assigned_to) {
-              try {
-                const { getSpeaker } = await import('@/lib/speaker/sanity')
-                const { speaker } = await getSpeaker(updateData.assigned_to)
-                assigneeName = speaker?.name || updateData.assigned_to
-              } catch (lookupError) {
-                console.error('Failed to lookup assignee name:', lookupError)
-                assigneeName = updateData.assigned_to
-              }
+          try {
+            if (updateData.status && updateData.status !== existing.status) {
+              await logStageChange(
+                id,
+                existing.status,
+                updateData.status,
+                userId,
+              )
             }
-            await logAssignmentChange(id, assigneeName, userId)
+
+            if (
+              updateData.invoice_status &&
+              updateData.invoice_status !== existing.invoice_status
+            ) {
+              await logInvoiceStatusChange(
+                id,
+                existing.invoice_status,
+                updateData.invoice_status,
+                userId,
+              )
+            }
+
+            if (
+              updateData.contract_status &&
+              updateData.contract_status !== existing.contract_status
+            ) {
+              await logContractStatusChange(
+                id,
+                existing.contract_status,
+                updateData.contract_status,
+                userId,
+              )
+            }
+
+            if (
+              updateData.assigned_to !== undefined &&
+              updateData.assigned_to !== (existing.assigned_to?._id || null)
+            ) {
+              let assigneeName: string | null = null
+              if (updateData.assigned_to) {
+                try {
+                  const { getSpeaker } = await import('@/lib/speaker/sanity')
+                  const { speaker } = await getSpeaker(updateData.assigned_to)
+                  assigneeName = speaker?.name || updateData.assigned_to
+                } catch (lookupError) {
+                  console.error('Failed to lookup assignee name:', lookupError)
+                  assigneeName = updateData.assigned_to
+                }
+              }
+              await logAssignmentChange(id, assigneeName, userId)
+            }
+          } catch (logError) {
+            console.error('Failed to log activity:', logError)
           }
         }
 
@@ -849,7 +862,11 @@ export const sponsorRouter = router({
 
         const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
-          await logStageChange(input.id, oldStatus, input.newStatus, userId)
+          try {
+            await logStageChange(input.id, oldStatus, input.newStatus, userId)
+          } catch (logError) {
+            console.error('Failed to log stage change activity:', logError)
+          }
         }
 
         return sponsorForConference
@@ -901,12 +918,19 @@ export const sponsorRouter = router({
 
         const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
-          await logInvoiceStatusChange(
-            input.id,
-            oldStatus,
-            input.newStatus,
-            userId,
-          )
+          try {
+            await logInvoiceStatusChange(
+              input.id,
+              oldStatus,
+              input.newStatus,
+              userId,
+            )
+          } catch (logError) {
+            console.error(
+              'Failed to log invoice status change activity:',
+              logError,
+            )
+          }
         }
 
         return sponsorForConference

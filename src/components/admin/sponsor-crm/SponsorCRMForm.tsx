@@ -255,7 +255,12 @@ export function SponsorCRMForm({
         e.preventDefault()
         // Create a synthetic form submit event
         const form = document.querySelector('form')
-        if (form && !createMutation.isPending && !updateMutation.isPending) {
+        if (
+          form &&
+          !createMutation.isPending &&
+          !updateMutation.isPending &&
+          !updateGlobalSponsorMutation.isPending
+        ) {
           form.requestSubmit()
         }
       }
@@ -263,7 +268,13 @@ export function SponsorCRMForm({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, view, createMutation.isPending, updateMutation.isPending])
+  }, [
+    isOpen,
+    view,
+    createMutation.isPending,
+    updateMutation.isPending,
+    updateGlobalSponsorMutation.isPending,
+  ])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -478,7 +489,10 @@ export function SponsorCRMForm({
                           logoBright={formData.logo_bright}
                           name={formData.name}
                           onChange={(updates) =>
-                            setFormData({ ...formData, ...updates })
+                            setFormData((prev) => ({
+                              ...prev,
+                              ...updates,
+                            }))
                           }
                           className="py-4"
                         />
@@ -499,7 +513,10 @@ export function SponsorCRMForm({
                               <SponsorCombobox
                                 value={formData.sponsorId}
                                 onChange={(value) =>
-                                  setFormData({ ...formData, sponsorId: value })
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    sponsorId: value,
+                                  }))
                                 }
                                 availableSponsors={availableSponsors}
                                 disabled={!!sponsor}
@@ -511,10 +528,10 @@ export function SponsorCRMForm({
                                 name={formData.name}
                                 website={formData.website}
                                 onNameChange={(name) =>
-                                  setFormData({ ...formData, name })
+                                  setFormData((prev) => ({ ...prev, name }))
                                 }
                                 onWebsiteChange={(website) =>
-                                  setFormData({ ...formData, website })
+                                  setFormData((prev) => ({ ...prev, website }))
                                 }
                               />
                             )}
@@ -524,7 +541,10 @@ export function SponsorCRMForm({
                               tiers={regularTiers}
                               value={formData.tierId}
                               onChange={(value) =>
-                                setFormData({ ...formData, tierId: value })
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  tierId: value,
+                                }))
                               }
                             />
 
@@ -533,7 +553,10 @@ export function SponsorCRMForm({
                               addons={addonTiers}
                               value={formData.addonIds}
                               onChange={(value) =>
-                                setFormData({ ...formData, addonIds: value })
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  addonIds: value,
+                                }))
                               }
                             />
 
@@ -544,7 +567,10 @@ export function SponsorCRMForm({
                                   label="Status *"
                                   value={formData.status}
                                   onChange={(value) =>
-                                    setFormData({ ...formData, status: value })
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      status: value,
+                                    }))
                                   }
                                   options={STATUSES}
                                 />
@@ -555,10 +581,10 @@ export function SponsorCRMForm({
                                   label="Contract Status *"
                                   value={formData.contractStatus}
                                   onChange={(value) =>
-                                    setFormData({
-                                      ...formData,
+                                    setFormData((prev) => ({
+                                      ...prev,
                                       contractStatus: value,
-                                    })
+                                    }))
                                   }
                                   options={CONTRACT_STATUSES}
                                 />
@@ -569,10 +595,10 @@ export function SponsorCRMForm({
                                   label="Invoice Status *"
                                   value={formData.invoiceStatus}
                                   onChange={(value) =>
-                                    setFormData({
-                                      ...formData,
+                                    setFormData((prev) => ({
+                                      ...prev,
                                       invoiceStatus: value,
-                                    })
+                                    }))
                                   }
                                   options={INVOICE_STATUSES}
                                   disabled={
@@ -594,10 +620,10 @@ export function SponsorCRMForm({
                               <OrganizerCombobox
                                 value={formData.assignedTo}
                                 onChange={(value) =>
-                                  setFormData({
-                                    ...formData,
+                                  setFormData((prev) => ({
+                                    ...prev,
                                     assignedTo: value,
-                                  })
+                                  }))
                                 }
                                 organizers={organizers}
                               />
@@ -606,21 +632,21 @@ export function SponsorCRMForm({
                                 value={formData.contractValue}
                                 currency={formData.contractCurrency}
                                 onValueChange={(value) => {
-                                  setFormData({
-                                    ...formData,
+                                  setFormData((prev) => ({
+                                    ...prev,
                                     contractValue: value,
-                                  })
+                                  }))
                                   setUserHasEditedValue(true)
                                 }}
                                 onCurrencyChange={(value) =>
-                                  setFormData({
-                                    ...formData,
+                                  setFormData((prev) => ({
+                                    ...prev,
                                     contractCurrency: value as
                                       | 'NOK'
                                       | 'USD'
                                       | 'EUR'
                                       | 'GBP',
-                                  })
+                                  }))
                                 }
                               />
                             </div>
@@ -631,7 +657,7 @@ export function SponsorCRMForm({
                                 <TagCombobox
                                   value={formData.tags}
                                   onChange={(tags) =>
-                                    setFormData({ ...formData, tags })
+                                    setFormData((prev) => ({ ...prev, tags }))
                                   }
                                 />
                               </div>
@@ -645,10 +671,10 @@ export function SponsorCRMForm({
                               <textarea
                                 value={formData.notes}
                                 onChange={(e) =>
-                                  setFormData({
-                                    ...formData,
+                                  setFormData((prev) => ({
+                                    ...prev,
                                     notes: e.target.value,
-                                  })
+                                  }))
                                 }
                                 rows={2}
                                 className="mt-1.5 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
