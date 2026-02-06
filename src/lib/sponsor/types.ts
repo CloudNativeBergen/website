@@ -69,35 +69,13 @@ export interface ConferenceSponsor {
   }
 }
 
-export interface ConferenceSponsorWithContact {
-  sponsor: {
-    _id: string
-    name: string
-    website: string
-    logo?: string | null
-    logo_bright?: string | null
-    org_number?: string
-    contact_persons?: ContactPerson[]
-    billing?: BillingInfo
-  }
-  tier: {
-    title: string
-    tagline: string
-    tier_type?: 'standard' | 'special' | 'addon'
-    price?: Array<{
-      _key: string
-      amount: number
-      currency: string
-    }>
-  }
-}
-
 export interface ContactPerson extends Record<string, unknown> {
   _key: string
   name: string
   email: string
   phone?: string
   role?: string
+  is_primary?: boolean
 }
 
 export interface BillingInfo {
@@ -112,8 +90,6 @@ export interface SponsorInput {
   logo?: string | null
   logo_bright?: string | null
   org_number?: string
-  contact_persons?: ContactPerson[]
-  billing?: BillingInfo
   tierId?: string
 }
 
@@ -125,10 +101,4 @@ export interface SponsorExisting {
   website: string
   logo?: string | null
   logo_bright?: string | null
-}
-
-export interface SponsorWithContactInfo extends SponsorExisting {
-  org_number?: string
-  contact_persons?: ContactPerson[]
-  billing?: BillingInfo
 }

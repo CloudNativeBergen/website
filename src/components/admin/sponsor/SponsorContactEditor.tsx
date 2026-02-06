@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { SponsorWithContactInfo, ContactPerson } from '@/lib/sponsor/types'
+import { ContactPerson } from '@/lib/sponsor/types'
+import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import {
   ArrowPathIcon,
   EnvelopeIcon,
@@ -11,45 +12,47 @@ import {
   TrashIcon,
   CreditCardIcon,
   CheckIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline'
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { ContactRoleSelect } from '@/components/common/ContactRoleSelect'
 import { nanoid } from 'nanoid'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '../NotificationProvider'
 
 interface SponsorContactEditorProps {
-  sponsor: SponsorWithContactInfo
-  onSuccess?: (updatedSponsor: SponsorWithContactInfo) => void
+  sponsorForConference: SponsorForConferenceExpanded
+  onSuccess?: () => void
   onCancel?: () => void
   className?: string
 }
 
 export function SponsorContactEditor({
-  sponsor,
+  sponsorForConference,
   onSuccess,
   onCancel,
   className = '',
 }: SponsorContactEditorProps) {
   const [contacts, setContacts] = useState<ContactPerson[]>(
-    sponsor.contact_persons || [],
+    sponsorForConference.contact_persons || [],
   )
   const [billing, setBilling] = useState({
-    email: sponsor.billing?.email || '',
-    reference: sponsor.billing?.reference || '',
-    comments: sponsor.billing?.comments || '',
+    email: sponsorForConference.billing?.email || '',
+    reference: sponsorForConference.billing?.reference || '',
+    comments: sponsorForConference.billing?.comments || '',
   })
   const { showNotification } = useNotification()
   const utils = api.useUtils()
 
-  const updateSponsorMutation = api.sponsor.update.useMutation({
-    onSuccess: async (updatedSponsor) => {
-      await utils.sponsor.list.invalidate()
+  const updateCRMMutation = api.sponsor.crm.update.useMutation({
+    onSuccess: async () => {
+      await utils.sponsor.crm.list.invalidate()
       showNotification({
         type: 'success',
         title: 'Contacts updated',
-        message: `Successfully updated contact information for ${sponsor.name}.`,
+        message: `Successfully updated contact information for ${sponsorForConference.sponsor.name}.`,
       })
-      onSuccess?.(updatedSponsor as SponsorWithContactInfo)
+      onSuccess?.()
     },
     onError: (error) => {
       showNotification({
@@ -61,6 +64,7 @@ export function SponsorContactEditor({
   })
 
   const handleAddContact = () => {
+    const isFirst = contacts.length === 0
     setContacts([
       ...contacts,
       {
@@ -69,6 +73,7 @@ export function SponsorContactEditor({
         email: '',
         phone: '',
         role: '',
+        is_primary: isFirst,
       },
     ])
   }
@@ -82,12 +87,20 @@ export function SponsorContactEditor({
     setContacts(newContacts)
   }
 
+  const handleSetPrimary = (index: number) => {
+    setContacts(
+      contacts.map((c, i) => ({
+        ...c,
+        is_primary: i === index,
+      })),
+    )
+  }
+
   const handleRemoveContact = (index: number) => {
     setContacts(contacts.filter((_, i) => i !== index))
   }
 
   const handleSave = async () => {
-    // Validation
     const invalidContacts = contacts.filter((c) => !c.name || !c.email)
     if (invalidContacts.length > 0) {
       showNotification({
@@ -107,16 +120,13 @@ export function SponsorContactEditor({
       return
     }
 
-    const updateData = {
-      name: sponsor.name,
-      website: sponsor.website,
-      logo: sponsor.logo,
-      logo_bright: sponsor.logo_bright,
-      org_number: sponsor.org_number,
+    await updateCRMMutation.mutateAsync({
+      id: sponsorForConference._id,
       contact_persons: contacts.map((c) => ({
         ...c,
         phone: c.phone || undefined,
         role: c.role || undefined,
+        is_primary: c.is_primary ?? false,
       })),
       billing: billing.email
         ? {
@@ -125,11 +135,6 @@ export function SponsorContactEditor({
             comments: billing.comments?.trim() || undefined,
           }
         : undefined,
-    }
-
-    await updateSponsorMutation.mutateAsync({
-      id: sponsor._id,
-      data: updateData,
     })
   }
 
@@ -165,14 +170,32 @@ export function SponsorContactEditor({
                 key={contact._key}
                 className="group relative rounded-xl border border-gray-200 bg-gray-50/50 p-4 transition-all hover:bg-gray-100/50 hover:shadow-sm dark:border-gray-700 dark:bg-gray-800/50 dark:hover:bg-gray-700/50 dark:hover:shadow-none"
               >
-                <button
-                  type="button"
-                  onClick={() => handleRemoveContact(index)}
-                  className="absolute top-2 right-2 cursor-pointer rounded-md p-1.5 text-gray-400 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                  title="Remove contact"
-                >
-                  <TrashIcon className="h-4 w-4" />
-                </button>
+                <div className="absolute top-2 right-2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleSetPrimary(index)}
+                    className="cursor-pointer rounded-md p-1.5 text-gray-400 transition-all hover:bg-yellow-50 hover:text-yellow-500 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400"
+                    title={
+                      contact.is_primary
+                        ? 'Primary contact'
+                        : 'Set as primary contact'
+                    }
+                  >
+                    {contact.is_primary ? (
+                      <StarIconSolid className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
+                    ) : (
+                      <StarIcon className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveContact(index)}
+                    className="cursor-pointer rounded-md p-1.5 text-gray-400 opacity-0 transition-all group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+                    title="Remove contact"
+                  >
+                    <TrashIcon className="h-4 w-4" />
+                  </button>
+                </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
@@ -319,7 +342,7 @@ export function SponsorContactEditor({
           <button
             type="button"
             onClick={onCancel}
-            disabled={updateSponsorMutation.isPending}
+            disabled={updateCRMMutation.isPending}
             className="cursor-pointer rounded-md px-4 py-2 text-sm font-semibold text-gray-900 dark:text-white"
           >
             Cancel
@@ -329,10 +352,10 @@ export function SponsorContactEditor({
         <button
           type="button"
           onClick={handleSave}
-          disabled={updateSponsorMutation.isPending}
+          disabled={updateCRMMutation.isPending}
           className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
         >
-          {updateSponsorMutation.isPending ? (
+          {updateCRMMutation.isPending ? (
             <>
               <ArrowPathIcon className="h-4 w-4 animate-spin" />
               Saving...

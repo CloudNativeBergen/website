@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ContactPersonSchema, BillingInfoSchema } from './sponsor'
 
 export const SponsorStatusSchema = z.enum([
   'prospect',
@@ -63,6 +64,14 @@ export const SponsorForConferenceInputSchema = z.object({
   invoice_paid_at: z.string().optional(),
   notes: z.string().optional(),
   tags: z.array(SponsorTagSchema).optional(),
+  contact_persons: z
+    .array(
+      ContactPersonSchema.extend({
+        is_primary: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+  billing: BillingInfoSchema.optional(),
 })
 
 export const SponsorForConferenceUpdateSchema = z.object({
@@ -91,6 +100,14 @@ export const SponsorForConferenceUpdateSchema = z.object({
   invoice_paid_at: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   tags: z.array(SponsorTagSchema).optional(),
+  contact_persons: z
+    .array(
+      ContactPersonSchema.extend({
+        is_primary: z.boolean().optional(),
+      }),
+    )
+    .optional(),
+  billing: BillingInfoSchema.nullable().optional(),
 })
 
 export const SponsorForConferenceIdSchema = z.object({

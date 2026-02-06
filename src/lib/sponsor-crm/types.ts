@@ -1,3 +1,5 @@
+import type { ContactPerson, BillingInfo } from '@/lib/sponsor/types'
+
 export type SponsorStatus =
   | 'prospect'
   | 'contacted'
@@ -56,6 +58,8 @@ export interface SponsorForConference {
   assigned_to?: {
     _ref: string
   }
+  contact_persons?: ContactPerson[]
+  billing?: BillingInfo
   contact_initiated_at?: string
   contract_signed_at?: string
   contract_value?: number
@@ -121,6 +125,8 @@ export interface SponsorForConferenceExpanded {
   invoice_paid_at?: string
   notes?: string
   tags?: SponsorTag[]
+  contact_persons?: ContactPerson[]
+  billing?: BillingInfo
 }
 
 export interface SponsorActivityExpanded {
@@ -159,6 +165,8 @@ export interface SponsorForConferenceInput {
   contract_status: ContractStatus
   status: SponsorStatus
   assigned_to?: string | null
+  contact_persons?: ContactPerson[]
+  billing?: BillingInfo
   contact_initiated_at?: string
   contract_signed_at?: string
   contract_value?: number

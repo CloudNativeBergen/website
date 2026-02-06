@@ -23,7 +23,6 @@ export async function getConferenceForCurrentDomain({
   organizers = false,
   schedule = false,
   sponsors = false,
-  sponsorContact = false,
   sponsorTiers = false,
   topics = false,
   featuredSpeakers = false,
@@ -34,7 +33,6 @@ export async function getConferenceForCurrentDomain({
   organizers?: boolean
   schedule?: boolean
   sponsors?: boolean
-  sponsorContact?: boolean
   sponsorTiers?: boolean
   topics?: boolean
   featuredSpeakers?: boolean
@@ -59,7 +57,6 @@ export async function getConferenceForCurrentDomain({
       organizers,
       schedule,
       sponsors,
-      sponsorContact,
       sponsorTiers,
       topics,
       featuredSpeakers,
@@ -80,7 +77,6 @@ export async function getConferenceForDomain(
     organizers = false,
     schedule = false,
     sponsors = false,
-    sponsorContact = false,
     sponsorTiers = false,
     topics = false,
     featuredSpeakers = false,
@@ -91,7 +87,6 @@ export async function getConferenceForDomain(
     organizers?: boolean
     schedule?: boolean
     sponsors?: boolean
-    sponsorContact?: boolean
     sponsorTiers?: boolean
     topics?: boolean
     featuredSpeakers?: boolean
@@ -214,24 +209,7 @@ export async function getConferenceForDomain(
         name,
         website,
         logo,
-        logo_bright,${
-          sponsorContact
-            ? `
-        org_number,
-        contact_persons[]{
-          _key,
-          name,
-          email,
-          phone,
-          role
-        },
-        billing{
-          email,
-          reference,
-          comments
-        },`
-            : ''
-        }
+        logo_bright,
       },
       tier->{
         title,

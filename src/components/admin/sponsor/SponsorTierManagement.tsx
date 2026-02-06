@@ -11,12 +11,8 @@ import {
   TrashIcon,
   ArrowDownTrayIcon,
   PencilIcon,
-  UserGroupIcon,
 } from '@heroicons/react/24/outline'
-import {
-  ConferenceSponsorWithContact,
-  SponsorTierExisting,
-} from '@/lib/sponsor/types'
+import { ConferenceSponsor, SponsorTierExisting } from '@/lib/sponsor/types'
 import { formatCurrency } from '@/lib/format'
 import { formatTierLabel, downloadSvg } from '@/lib/sponsor/utils'
 import { useNotification, ConfirmationModal } from '@/components/admin'
@@ -26,9 +22,9 @@ import { api } from '@/lib/trpc/client'
 const ADMIN_LOGO_SIZE = { maxWidth: '48px', maxHeight: '48px' }
 
 interface SponsorManagementProps {
-  sponsors: ConferenceSponsorWithContact[]
+  sponsors: ConferenceSponsor[]
   sponsorTiers: SponsorTierExisting[]
-  sponsorsByTier: Record<string, ConferenceSponsorWithContact[]>
+  sponsorsByTier: Record<string, ConferenceSponsor[]>
   sortedTierNames: string[]
 }
 
@@ -44,7 +40,7 @@ export function SponsorTierManagement({
   const [modalState, setModalState] = useState<{
     isOpen: boolean
     preselectedTierId?: string
-    editingSponsor?: ConferenceSponsorWithContact | null
+    editingSponsor?: ConferenceSponsor | null
   }>({ isOpen: false, preselectedTierId: undefined, editingSponsor: null })
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean
@@ -70,22 +66,7 @@ export function SponsorTierManagement({
     },
   })
 
-  const isMissingContactInfo = (
-    sponsor: ConferenceSponsorWithContact,
-  ): boolean => {
-    return (
-      !sponsor.sponsor.contact_persons ||
-      sponsor.sponsor.contact_persons.length === 0
-    )
-  }
-
-  const isMissingBillingInfo = (
-    sponsor: ConferenceSponsorWithContact,
-  ): boolean => {
-    return !sponsor.sponsor.billing || !sponsor.sponsor.billing.email
-  }
-
-  const addSponsorToState = (newSponsor: ConferenceSponsorWithContact) => {
+  const addSponsorToState = (newSponsor: ConferenceSponsor) => {
     setSponsors((prev) =>
       [...prev, newSponsor].sort((a, b) =>
         a.sponsor.name.localeCompare(b.sponsor.name),
@@ -127,7 +108,7 @@ export function SponsorTierManagement({
     })
   }
 
-  const openEditModal = (sponsor: ConferenceSponsorWithContact) => {
+  const openEditModal = (sponsor: ConferenceSponsor) => {
     setModalState({
       isOpen: true,
       editingSponsor: sponsor,
@@ -143,9 +124,7 @@ export function SponsorTierManagement({
     })
   }
 
-  const updateSponsorInState = (
-    updatedSponsor: ConferenceSponsorWithContact,
-  ) => {
+  const updateSponsorInState = (updatedSponsor: ConferenceSponsor) => {
     setSponsors((prev) =>
       prev
         .map((sponsor) =>
@@ -393,40 +372,6 @@ export function SponsorTierManagement({
                             <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800 dark:bg-green-800 dark:text-green-200">
                               <TagIcon className="mr-1 h-3 w-3" />
                               Active
-                            </span>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                                isMissingContactInfo(sponsorData)
-                                  ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
-                                  : 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
-                              }`}
-                              title={
-                                isMissingContactInfo(sponsorData)
-                                  ? 'Missing contact information'
-                                  : 'Contact information complete'
-                              }
-                            >
-                              <UserGroupIcon
-                                className={`h-3 w-3 ${!isMissingContactInfo(sponsorData) ? 'mr-1' : ''}`}
-                              />
-                              {!isMissingContactInfo(sponsorData) && 'Contact'}
-                            </span>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                                isMissingBillingInfo(sponsorData)
-                                  ? 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200'
-                                  : 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-200'
-                              }`}
-                              title={
-                                isMissingBillingInfo(sponsorData)
-                                  ? 'Missing billing information'
-                                  : 'Billing information complete'
-                              }
-                            >
-                              <CurrencyDollarIcon
-                                className={`h-3 w-3 ${!isMissingBillingInfo(sponsorData) ? 'mr-1' : ''}`}
-                              />
-                              {!isMissingBillingInfo(sponsorData) && 'Billing'}
                             </span>
                           </div>
                         </div>

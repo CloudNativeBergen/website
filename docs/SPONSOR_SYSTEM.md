@@ -6,7 +6,7 @@ The sponsor system manages the full lifecycle of conference sponsorships — fro
 
 The system is split into two distinct domains:
 
-1. **Sponsor Management** — the core sponsor entity registry (companies, logos, contacts, tiers, and public-facing display)
+1. **Sponsor Management** — the core sponsor entity registry (companies, logos, tiers, and public-facing display)
 2. **Sponsor CRM** — the per-conference relationship pipeline that tracks the status, contracts, invoices, and activity history for each sponsor engagement
 
 Both domains share the same tRPC router (`sponsor.*`) and Sanity backend, but have separate type systems, libraries, and UI components.
@@ -19,17 +19,13 @@ All sponsor data is stored in Sanity CMS across four document types:
 
 The base company record. Conference-independent — a single sponsor can participate across multiple conferences/years.
 
-| Field               | Description                                         |
-| ------------------- | --------------------------------------------------- |
-| `name`              | Company name                                        |
-| `website`           | Company URL                                         |
-| `logo`              | Inline SVG logo (required)                          |
-| `logo_bright`       | Optional bright/white variant for dark backgrounds  |
-| `org_number`        | Company registration number (admin-only visibility) |
-| `contact_persons[]` | Array of contacts with name, email, phone, and role |
-| `billing`           | Billing email, reference, and comments              |
-
-Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`.
+| Field         | Description                                         |
+| ------------- | --------------------------------------------------- |
+| `name`        | Company name                                        |
+| `website`     | Company URL                                         |
+| `logo`        | Inline SVG logo (required)                          |
+| `logo_bright` | Optional bright/white variant for dark backgrounds  |
+| `org_number`  | Company registration number (admin-only visibility) |
 
 ### `sponsorTier`
 
@@ -57,6 +53,8 @@ The CRM join document linking a sponsor to a conference with relationship metada
 | `conference`        | Reference to `conference` document                                                                     |
 | `tier`              | Reference to a `sponsorTier` (standard/special)                                                        |
 | `addons[]`          | Array of references to addon-type `sponsorTier` documents                                              |
+| `contact_persons[]` | Per-conference contacts (name, email, phone, role, `is_primary`)                                       |
+| `billing`           | Per-conference billing info (email, reference, comments)                                               |
 | `status`            | Pipeline stage: `prospect` &rarr; `contacted` &rarr; `negotiating` &rarr; `closed-won` / `closed-lost` |
 | `contract_status`   | `none` &rarr; `verbal-agreement` &rarr; `contract-sent` &rarr; `contract-signed`                       |
 | `invoice_status`    | `not-sent` &rarr; `sent` &rarr; `paid` / `overdue` / `cancelled`                                       |
@@ -66,6 +64,8 @@ The CRM join document linking a sponsor to a conference with relationship metada
 | `tags[]`            | Classification tags (see Tags section below)                                                           |
 | `notes`             | Freeform text                                                                                          |
 | Timestamps          | `contact_initiated_at`, `contract_signed_at`, `invoice_sent_at`, `invoice_paid_at`                     |
+
+Contact person roles are defined by `CONTACT_ROLE_OPTIONS` in `src/lib/sponsor/types.ts`. The `is_primary` flag identifies the main contact for contract signing (Phase 2).
 
 ### `sponsorActivity`
 
@@ -110,8 +110,7 @@ src/
 │   │   ├── types.ts                # Sponsor, SponsorTier, ContactPerson types
 │   │   ├── sanity.ts               # CRUD operations against Sanity
 │   │   ├── utils.ts                # Sorting, formatting, grouping utilities
-│   │   ├── validation.ts           # Input validation for sponsors and tiers
-│   │   └── audience.ts             # Resend audience sync for sponsor contacts
+│   │   └── validation.ts           # Input validation for sponsors and tiers
 │   └── sponsor-crm/                # CRM pipeline domain
 │       ├── types.ts                # CRM-specific types (statuses, activities, inputs)
 │       ├── sanity.ts               # CRM CRUD, copy/import operations
@@ -298,7 +297,7 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
 
 ## Key Design Decisions
 
-**Separated sponsor vs. CRM types.** A sponsor company (`sponsor`) is a conference-independent entity, while `sponsorForConference` is a per-conference relationship record. This allows the same company to sponsor multiple events with different tiers, statuses, and pricing.
+**Separated sponsor vs. CRM types.** A sponsor company (`sponsor`) is a conference-independent entity holding only company-level data (name, logo, website). Contact persons and billing details live on `sponsorForConference` — the per-conference relationship record — since contacts and billing arrangements often differ between conferences/years.
 
 **Sanity as the single source of truth.** All data lives in Sanity, with tRPC providing validated, type-safe access. There is no separate database.
 

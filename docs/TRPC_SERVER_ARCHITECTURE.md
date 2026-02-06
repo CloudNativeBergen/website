@@ -144,13 +144,7 @@ create: adminProcedure.input(SponsorInputSchema).mutation(async ({ input }) => {
 
 ```typescript
 // Basic queries - automatic caching and refetching
-const {
-  data: sponsors,
-  isLoading,
-  error,
-} = api.sponsor.list.useQuery({
-  includeContactInfo: true,
-})
+const { data: sponsors, isLoading, error } = api.sponsor.list.useQuery()
 
 // Mutations with UI updates
 const removeMutation = api.sponsor.removeFromConference.useMutation({

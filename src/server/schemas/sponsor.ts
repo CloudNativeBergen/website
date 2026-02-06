@@ -23,8 +23,6 @@ export const SponsorInputSchema = z.object({
   logo: z.string().nullable().optional().or(z.literal('')),
   logo_bright: z.string().nullable().optional(),
   org_number: z.string().nullable().optional().transform(nullToUndefined),
-  contact_persons: z.array(ContactPersonSchema).optional(),
-  billing: BillingInfoSchema.optional(),
   tierId: z.string().nullable().optional().transform(nullToUndefined),
 })
 
@@ -63,11 +61,6 @@ export const ConferenceSponsorInputSchema = z.object({
 export const SponsorTierAssignmentSchema = z.object({
   sponsorName: z.string().min(1, 'Sponsor name is required'),
   tierId: z.string().min(1, 'Tier ID is required'),
-})
-
-export const SponsorSearchSchema = z.object({
-  query: z.string().optional(),
-  includeContactInfo: z.boolean().default(false),
 })
 
 export const SponsorUpdateSchema = SponsorInputSchema.partial()

@@ -1,5 +1,5 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { ConferenceSponsorWithContact } from '@/lib/sponsor/types'
+import { ConferenceSponsor } from '@/lib/sponsor/types'
 import { ErrorDisplay, SponsorTiersPageClient } from '@/components/admin'
 import { sortTierNamesByValue } from '@/lib/sponsor/utils'
 
@@ -7,7 +7,6 @@ export default async function AdminSponsorTiers() {
   const { conference, error: conferenceError } =
     await getConferenceForCurrentDomain({
       sponsors: true,
-      sponsorContact: true,
       sponsorTiers: true,
     })
 
@@ -20,7 +19,7 @@ export default async function AdminSponsorTiers() {
     )
   }
 
-  const sponsors: ConferenceSponsorWithContact[] = conference?.sponsors || []
+  const sponsors: ConferenceSponsor[] = conference?.sponsors || []
   const sponsorTiers = conference?.sponsor_tiers || []
 
   const sponsorsByTier = sponsors.reduce(
