@@ -69,12 +69,12 @@ export function ProposalsList({
         actionItems={
           onCreateProposal
             ? [
-              {
-                label: 'New Proposal',
-                onClick: onCreateProposal,
-                icon: <PlusIcon className="h-4 w-4" />,
-              },
-            ]
+                {
+                  label: 'New Proposal',
+                  onClick: onCreateProposal,
+                  icon: <PlusIcon className="h-4 w-4" />,
+                },
+              ]
             : undefined
         }
       />

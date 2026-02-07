@@ -52,11 +52,11 @@ export default async function AdminDashboard() {
       .flatMap((p) =>
         p.speakers && Array.isArray(p.speakers)
           ? p.speakers
-            .filter(
-              (speaker) =>
-                typeof speaker === 'object' && speaker && '_id' in speaker,
-            )
-            .map((speaker) => speaker._id)
+              .filter(
+                (speaker) =>
+                  typeof speaker === 'object' && speaker && '_id' in speaker,
+              )
+              .map((speaker) => speaker._id)
           : [],
       )
       .filter(Boolean),
@@ -99,24 +99,24 @@ export default async function AdminDashboard() {
   const acceptanceRate =
     totalProposals > 0
       ? Math.round(
-        ((acceptedProposals + confirmedProposals) / totalProposals) * 100,
-      )
+          ((acceptedProposals + confirmedProposals) / totalProposals) * 100,
+        )
       : 0
 
   const userReviewedProposals = currentUserId
     ? proposals.filter((p) =>
-      p.reviews?.some((review) => {
-        const r =
-          typeof review === 'object' && 'reviewer' in review
-            ? (review as Review)
-            : null
-        const reviewerId =
-          typeof r?.reviewer === 'object' && r.reviewer && '_id' in r.reviewer
-            ? r.reviewer._id
-            : null
-        return reviewerId === currentUserId
-      }),
-    ).length
+        p.reviews?.some((review) => {
+          const r =
+            typeof review === 'object' && 'reviewer' in review
+              ? (review as Review)
+              : null
+          const reviewerId =
+            typeof r?.reviewer === 'object' && r.reviewer && '_id' in r.reviewer
+              ? r.reviewer._id
+              : null
+          return reviewerId === currentUserId
+        }),
+      ).length
     : 0
 
   const userUnreviewedProposals = currentUserId
@@ -516,11 +516,11 @@ export default async function AdminDashboard() {
                 const speakers =
                   proposal.speakers && Array.isArray(proposal.speakers)
                     ? proposal.speakers.filter(
-                      (speaker) =>
-                        typeof speaker === 'object' &&
-                        speaker &&
-                        'name' in speaker,
-                    )
+                        (speaker) =>
+                          typeof speaker === 'object' &&
+                          speaker &&
+                          'name' in speaker,
+                      )
                     : []
                 const primarySpeaker =
                   speakers.length > 0 ? (speakers[0] as Speaker) : null
@@ -538,14 +538,15 @@ export default async function AdminDashboard() {
                       <div className="relative flex space-x-3">
                         <div>
                           <span
-                            className={`flex h-8 w-8 items-center justify-center rounded-full ring-8 ring-white dark:ring-gray-900 ${proposal.status === Status.accepted
+                            className={`flex h-8 w-8 items-center justify-center rounded-full ring-8 ring-white dark:ring-gray-900 ${
+                              proposal.status === Status.accepted
                                 ? 'bg-green-500'
                                 : proposal.status === Status.rejected
                                   ? 'bg-red-500'
                                   : proposal.status === Status.confirmed
                                     ? 'bg-blue-500'
                                     : 'bg-gray-500'
-                              }`}
+                            }`}
                           >
                             <DocumentTextIcon
                               aria-hidden="true"

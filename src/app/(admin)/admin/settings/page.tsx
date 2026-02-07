@@ -87,23 +87,23 @@ function FieldRow({
 }: {
   label: string
   value:
-  | string
-  | boolean
-  | Array<string | NamedItem>
-  | number
-  | null
-  | undefined
+    | string
+    | boolean
+    | Array<string | NamedItem>
+    | number
+    | null
+    | undefined
   type?:
-  | 'text'
-  | 'date'
-  | 'datetime'
-  | 'boolean'
-  | 'array'
-  | 'links'
-  | 'formats'
-  | 'team'
-  | 'url'
-  | 'email'
+    | 'text'
+    | 'date'
+    | 'datetime'
+    | 'boolean'
+    | 'array'
+    | 'links'
+    | 'formats'
+    | 'team'
+    | 'url'
+    | 'email'
 }) {
   let displayValue: React.ReactNode = value as React.ReactNode
 
@@ -111,9 +111,9 @@ function FieldRow({
     case 'datetime':
       displayValue = value
         ? new Date(value as string).toLocaleString('en-US', {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        })
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          })
         : 'Not set'
       break
     case 'date':
@@ -145,8 +145,8 @@ function FieldRow({
                 typeof item === 'string'
                   ? item
                   : (item as NamedItem)?.title ||
-                  (item as NamedItem)?.name ||
-                  JSON.stringify(item)
+                    (item as NamedItem)?.name ||
+                    JSON.stringify(item)
               return <Badge key={idx}>{displayText}</Badge>
             })}
           </div>

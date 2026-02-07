@@ -293,8 +293,8 @@ export default async function CompaniesAdminPage() {
             value:
               companyBreakdown.length > 0
                 ? Math.round(
-                  totalAttendees / companyBreakdown.length,
-                ).toString()
+                    totalAttendees / companyBreakdown.length,
+                  ).toString()
                 : '0',
           },
         ]}
@@ -346,10 +346,10 @@ export default async function CompaniesAdminPage() {
                         </div>
                         {company.normalizedName !==
                           company.originalName.toLowerCase() && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              Normalized: {company.normalizedName}
-                            </div>
-                          )}
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Normalized: {company.normalizedName}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">

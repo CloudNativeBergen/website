@@ -37,27 +37,27 @@ export default function AdminFeaturedPage() {
             ? []
             : summary
               ? [
-                {
-                  value: summary.featuredSpeakersCount,
-                  label: 'Featured speakers',
-                  color: 'green',
-                },
-                {
-                  value: summary.featuredTalksCount,
-                  label: 'Featured talks',
-                  color: 'blue',
-                },
-                {
-                  value: summary.availableSpeakersCount,
-                  label: 'Available speakers',
-                  color: 'blue',
-                },
-                {
-                  value: summary.availableTalksCount,
-                  label: 'Available talks',
-                  color: 'purple',
-                },
-              ]
+                  {
+                    value: summary.featuredSpeakersCount,
+                    label: 'Featured speakers',
+                    color: 'green',
+                  },
+                  {
+                    value: summary.featuredTalksCount,
+                    label: 'Featured talks',
+                    color: 'blue',
+                  },
+                  {
+                    value: summary.availableSpeakersCount,
+                    label: 'Available speakers',
+                    color: 'blue',
+                  },
+                  {
+                    value: summary.availableTalksCount,
+                    label: 'Available talks',
+                    color: 'purple',
+                  },
+                ]
               : []
         }
       >

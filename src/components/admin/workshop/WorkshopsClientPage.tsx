@@ -240,32 +240,32 @@ export function WorkshopsClientPage({
         stats={
           statsData
             ? [
-              {
-                value: statsData.data.totals.totalWorkshops,
-                label: 'Total Workshops',
-                color: 'blue' as const,
-              },
-              {
-                value: statsData.data.totals.uniqueParticipants,
-                label: 'Unique Participants',
-                color: 'purple' as const,
-              },
-              {
-                value: statsData.data.totals.totalSignups,
-                label: 'Total Signups',
-                color: 'slate' as const,
-              },
-              {
-                value: statsData.data.totals.totalConfirmed,
-                label: 'Confirmed',
-                color: 'green' as const,
-              },
-              {
-                value: statsData.data.totals.totalWaitlist,
-                label: 'Waitlist',
-                color: 'blue' as const,
-              },
-            ]
+                {
+                  value: statsData.data.totals.totalWorkshops,
+                  label: 'Total Workshops',
+                  color: 'blue' as const,
+                },
+                {
+                  value: statsData.data.totals.uniqueParticipants,
+                  label: 'Unique Participants',
+                  color: 'purple' as const,
+                },
+                {
+                  value: statsData.data.totals.totalSignups,
+                  label: 'Total Signups',
+                  color: 'slate' as const,
+                },
+                {
+                  value: statsData.data.totals.totalConfirmed,
+                  label: 'Confirmed',
+                  color: 'green' as const,
+                },
+                {
+                  value: statsData.data.totals.totalWaitlist,
+                  label: 'Waitlist',
+                  color: 'blue' as const,
+                },
+              ]
             : []
         }
       />
