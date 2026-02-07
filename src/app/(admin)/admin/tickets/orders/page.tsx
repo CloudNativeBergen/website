@@ -73,12 +73,6 @@ export default async function OrdersAdminPage() {
 
   const orders = groupTicketsByOrder(allTickets)
 
-  const paidTickets = allTickets.filter((ticket) => parseFloat(ticket.sum) > 0)
-  const freeTickets = allTickets.filter(
-    (ticket) => parseFloat(ticket.sum) === 0,
-  )
-  const pendingPayments = orders.filter((order) => order.amountLeft > 0)
-
   return (
     <div className="mx-auto max-w-7xl">
       <AdminPageHeader
@@ -87,28 +81,6 @@ export default async function OrdersAdminPage() {
         description="View and manage ticket orders for"
         contextHighlight={conference.title}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
-        stats={[
-          {
-            label: 'Total Orders',
-            value: orders.length.toString(),
-          },
-          {
-            label: 'Total Tickets',
-            value: allTickets.length.toString(),
-          },
-          {
-            label: 'Pending Payments',
-            value: pendingPayments.length.toString(),
-          },
-          {
-            label: 'Free Tickets',
-            value: freeTickets.length.toString(),
-          },
-          {
-            label: 'Paid Tickets',
-            value: paidTickets.length.toString(),
-          },
-        ]}
       />
 
       <div className="mt-12">

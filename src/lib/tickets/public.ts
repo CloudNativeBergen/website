@@ -69,7 +69,7 @@ const TICKET_TYPES_QUERY = `
   }
 `
 
-async function fetchTicketTypesFromCheckin(
+export async function fetchTicketTypesFromCheckin(
   eventId: number,
 ): Promise<{ event: PublicEventInfo; tickets: PublicTicketType[] }> {
   const response = await checkinQuery<FindEventResponse>(TICKET_TYPES_QUERY, {

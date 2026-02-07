@@ -35,21 +35,22 @@ export function SponsorCRMPageClient({
             </span>
           </span>
         }
-        actions={
-          <div className="flex items-center gap-2">
-            <ImportHistoricSponsorsButton
-              conferenceId={conference._id}
-              onSuccess={() => utils.sponsor.crm.list.invalidate()}
-            />
-            <button
-              onClick={() => setTriggerNew((v) => v + 1)}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-            >
-              <PlusIcon className="-ml-0.5 h-5 w-5" aria-hidden="true" />
-              New Sponsor
-            </button>
-          </div>
-        }
+        actionItems={[
+          {
+            label: 'Import Historic',
+            render: () => (
+              <ImportHistoricSponsorsButton
+                conferenceId={conference._id}
+                onSuccess={() => utils.sponsor.crm.list.invalidate()}
+              />
+            ),
+          },
+          {
+            label: 'New Sponsor',
+            onClick: () => setTriggerNew((v) => v + 1),
+            icon: <PlusIcon className="-ml-0.5 h-5 w-5" aria-hidden="true" />,
+          },
+        ]}
         backLink={{ href: '/admin/sponsors', label: 'Back' }}
       />
 

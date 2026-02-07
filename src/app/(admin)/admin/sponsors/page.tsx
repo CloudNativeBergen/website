@@ -42,7 +42,6 @@ export default async function AdminSponsors() {
         title="Sponsor Management"
         description="Manage sponsorships, track revenue, and monitor pipeline health for"
         contextHighlight={conference.title}
-        stats={[]}
       />
 
       <SponsorDashboardMetrics conferenceId={conference._id} />

@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from 'react'
 import { api } from '@/lib/trpc/client'
-import Link from 'next/link'
 import { AdminPageHeader } from '@/components/admin'
 import {
   PlusIcon,
@@ -160,45 +159,45 @@ export function TicketPageContentEditor({
         description="Configure the public tickets page for"
         contextHighlight={conferenceTitle}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
-        stats={[]}
-        actions={
-          <>
-            <Link
-              href="/tickets"
-              target="_blank"
-              className="inline-flex items-center rounded-lg bg-gray-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 dark:bg-gray-500 dark:hover:bg-gray-400"
-            >
-              <TicketIcon className="mr-2 h-4 w-4" />
-              View Public Page
-            </Link>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${
-                saveStatus === 'error'
-                  ? 'bg-red-600 hover:bg-red-500 dark:bg-red-500 dark:hover:bg-red-400'
-                  : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400'
-              }`}
-            >
-              {saving ? (
-                <>
-                  <ArrowPathIcon className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : saveStatus === 'success' ? (
-                <>
-                  <CheckIcon className="mr-2 h-4 w-4" />
-                  Saved
-                </>
-              ) : saveStatus === 'error' ? (
-                'Save Failed — Retry'
-              ) : (
-                'Save Changes'
-              )}
-            </button>
-          </>
-        }
+        actionItems={[
+          {
+            label: 'View Public Page',
+            href: '/tickets',
+            target: '_blank',
+            icon: <TicketIcon className="mr-2 h-4 w-4" />,
+            variant: 'secondary' as const,
+          },
+          {
+            label: 'Save Changes',
+            render: () => (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${saveStatus === 'error'
+                    ? 'bg-red-600 hover:bg-red-500 dark:bg-red-500 dark:hover:bg-red-400'
+                    : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400'
+                  }`}
+              >
+                {saving ? (
+                  <>
+                    <ArrowPathIcon className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : saveStatus === 'success' ? (
+                  <>
+                    <CheckIcon className="mr-2 h-4 w-4" />
+                    Saved
+                  </>
+                ) : saveStatus === 'error' ? (
+                  'Save Failed — Retry'
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+            ),
+          },
+        ]}
       />
 
       <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-2">

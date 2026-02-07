@@ -15,6 +15,7 @@ import {
   HomeIcon,
   CreditCardIcon,
   DocumentTextIcon,
+  QueueListIcon,
 } from '@heroicons/react/24/outline'
 
 import { formatCurrency } from '@/lib/format'
@@ -182,32 +183,28 @@ export default async function AdminTickets() {
         description="Manage sold tickets and attendee information for"
         contextHighlight={conference.title}
         backLink={{ href: '/admin', label: 'Back to Dashboard' }}
-        stats={[]}
-        actions={
-          <div className="flex space-x-3">
-            <Link
-              href="/admin/tickets/content"
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-            >
-              <DocumentTextIcon className="mr-2 h-4 w-4" />
-              Page Content
-            </Link>
-            <Link
-              href="/admin/tickets/orders"
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-            >
-              <ShoppingBagIcon className="mr-2 h-4 w-4" />
-              View Orders
-            </Link>
-            <Link
-              href="/admin/tickets/discount"
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-            >
-              <CreditCardIcon className="mr-2 h-4 w-4" />
-              Discount Codes
-            </Link>
-          </div>
-        }
+        actionItems={[
+          {
+            label: 'Page Content',
+            href: '/admin/tickets/content',
+            icon: <DocumentTextIcon className="h-4 w-4" />,
+          },
+          {
+            label: 'Ticket Types',
+            href: '/admin/tickets/types',
+            icon: <QueueListIcon className="h-4 w-4" />,
+          },
+          {
+            label: 'Orders',
+            href: '/admin/tickets/orders',
+            icon: <ShoppingBagIcon className="h-4 w-4" />,
+          },
+          {
+            label: 'Discounts',
+            href: '/admin/tickets/discount',
+            icon: <CreditCardIcon className="h-4 w-4" />,
+          },
+        ]}
       />
 
       <TicketAnalysisClient
@@ -565,6 +562,25 @@ export default async function AdminTickets() {
                 </p>
                 <p className="truncate text-sm text-gray-500 dark:text-gray-400">
                   Configure the public tickets page
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            href="/admin/tickets/types"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="shrink-0">
+                <QueueListIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Ticket Types
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  View all ticket type configurations
                 </p>
               </div>
             </div>

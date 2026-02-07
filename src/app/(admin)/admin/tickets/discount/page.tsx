@@ -75,10 +75,8 @@ export default async function DiscountCodesAdminPage() {
       }
     }) || []
 
-  let discounts
   try {
-    const discountData = await getEventDiscounts(conference.checkin_event_id)
-    discounts = discountData.discounts
+    await getEventDiscounts(conference.checkin_event_id)
   } catch (error) {
     return (
       <ErrorDisplay
@@ -89,14 +87,6 @@ export default async function DiscountCodesAdminPage() {
     )
   }
 
-  const sponsorsWithDiscounts = sponsorsWithTierInfo.filter((sponsor) => {
-    return discounts.some((discount) =>
-      discount.triggerValue
-        ?.toLowerCase()
-        .includes(sponsor.name.toLowerCase().replace(/\s+/g, '')),
-    )
-  })
-
   return (
     <div className="mx-auto max-w-7xl">
       <AdminPageHeader
@@ -105,30 +95,6 @@ export default async function DiscountCodesAdminPage() {
         description="Create and manage sponsor discount codes based on tier entitlements"
         contextHighlight={conference.title}
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
-        stats={[
-          {
-            label: 'Total Sponsors',
-            value: sponsorsWithTierInfo.length.toString(),
-          },
-          {
-            label: 'Total Ticket Allowances',
-            value: sponsorsWithTierInfo
-              .reduce(
-                (sum: number, s: SponsorWithTierInfo) =>
-                  sum + s.ticketEntitlement,
-                0,
-              )
-              .toString(),
-          },
-          {
-            label: 'Sponsors with Codes',
-            value: sponsorsWithDiscounts.length.toString(),
-          },
-          {
-            label: 'Total Active Codes',
-            value: discounts.length.toString(),
-          },
-        ]}
       />
 
       <div className="mt-8">

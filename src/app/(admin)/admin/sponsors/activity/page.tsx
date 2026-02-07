@@ -31,7 +31,6 @@ export default async function AdminSponsorActivity() {
         title="Activity Log"
         description="Complete history of sponsor activities for"
         contextHighlight={conference.title}
-        stats={[]}
         backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
       />
 
