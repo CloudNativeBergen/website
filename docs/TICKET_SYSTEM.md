@@ -82,9 +82,11 @@ Tickets that **don't share categories** with other tiers are rendered as individ
 
 **Example:** `Student: The 1337 Ticket` → The category "The 1337 Ticket" only exists under "Student", so it becomes a standalone card.
 
-#### Complimentary Tickets (Static Cards)
+#### Complimentary Tickets (Free Cards)
 
-Speaker and Volunteer tickets are shown as static "Free" cards alongside standalone tickets. These are **not fetched from Checkin.no** — they're hardcoded in the page component since the API filters out invite-only and zero-price tickets.
+Speaker and Volunteer complimentary tickets are shown as static &quot;Free&quot; cards alongside standalone tickets. Unlike regular paid tickets in the pricing grid, they are **derived from the Checkin.no ticket list** inside `getPublicTicketTypes()` via `extractComplimentaryTickets()`.
+
+Complimentary tickets are identified using **name-pattern filtering** (e.g., ticket names containing speaker/volunteer-specific patterns) and then **mapped to their corresponding Checkin.no registration links** so that each card links to the correct registration flow. They are rendered as free, invite-style cards on the public page, separate from the paid ticket pricing grid (which still excludes `requiresInvitation: true` and `price == 0` tickets).
 
 #### Rules Summary
 
@@ -208,7 +210,7 @@ Reuse the existing `conference.vanity_metrics[]` (attendees, speakers, tracks) t
 
 Follow the `sponsorship_customization` pattern — a collapsible object on the conference document:
 
-```
+```text
 conference.ticket_customization (object, collapsible)
   ├── hero_headline: string          (default: "Secure Your Spot")
   ├── hero_subheadline: text         (default: auto-generated from conference name + dates)

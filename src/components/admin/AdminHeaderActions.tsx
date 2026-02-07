@@ -60,6 +60,9 @@ export function AdminHeaderActions({ items }: AdminHeaderActionsProps) {
                   key={item.label}
                   href={item.href}
                   target={item.target}
+                  rel={
+                    item.target === '_blank' ? 'noopener noreferrer' : undefined
+                  }
                   className={cls}
                 >
                   {item.icon && (
@@ -118,6 +121,11 @@ export function AdminHeaderActions({ items }: AdminHeaderActionsProps) {
                       key={item.label}
                       href={item.href}
                       target={item.target}
+                      rel={
+                        item.target === '_blank'
+                          ? 'noopener noreferrer'
+                          : undefined
+                      }
                       className={cls}
                       onClick={() => setOpen(false)}
                     >

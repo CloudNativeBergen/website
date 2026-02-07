@@ -6,8 +6,27 @@ import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { formatDatesSafe } from '@/lib/time'
-import * as HeroIcons from '@heroicons/react/24/outline'
 import {
+  MicrophoneIcon,
+  UserGroupIcon,
+  PresentationChartBarIcon,
+  AcademicCapIcon,
+  SparklesIcon,
+  LightBulbIcon,
+  BeakerIcon,
+  GiftIcon,
+  FilmIcon,
+  CameraIcon,
+  CodeBracketIcon,
+  CommandLineIcon,
+  CpuChipIcon,
+  ChatBubbleLeftRightIcon,
+  TrophyIcon,
+  HeartIcon,
+  StarIcon,
+  GlobeAltIcon,
+  MusicalNoteIcon,
+  CheckBadgeIcon,
   CalendarDaysIcon,
   ClockIcon,
   TicketIcon,
@@ -17,6 +36,29 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
 import type { ElementType } from 'react'
+
+const INCLUSION_ICONS: Record<string, ElementType> = {
+  MicrophoneIcon,
+  UserGroupIcon,
+  PresentationChartBarIcon,
+  AcademicCapIcon,
+  SparklesIcon,
+  LightBulbIcon,
+  BeakerIcon,
+  GiftIcon,
+  FilmIcon,
+  CameraIcon,
+  CodeBracketIcon,
+  CommandLineIcon,
+  CpuChipIcon,
+  ChatBubbleLeftRightIcon,
+  TrophyIcon,
+  HeartIcon,
+  StarIcon,
+  GlobeAltIcon,
+  MusicalNoteIcon,
+  CheckBadgeIcon,
+}
 
 export const metadata = {
   title: 'Tickets - Cloud Native Days Norway',
@@ -33,7 +75,7 @@ function DynamicIcon({
   name: string
   className?: string
 }) {
-  const IconComponent = (HeroIcons as Record<string, ElementType>)[name]
+  const IconComponent = INCLUSION_ICONS[name]
   if (!IconComponent) return null
   return <IconComponent className={className} aria-hidden="true" />
 }

@@ -11,8 +11,6 @@ export interface StatCardProps {
   subtitle?: string | React.ReactNode
 
   color?: 'blue' | 'green' | 'purple' | 'slate' | 'indigo' | 'yellow' | 'red'
-
-  icon?: React.ReactNode
 }
 
 export interface AdminPageHeaderProps {

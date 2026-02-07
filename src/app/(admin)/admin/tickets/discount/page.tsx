@@ -1,5 +1,4 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getEventDiscounts } from '@/lib/discounts'
 import { SPONSOR_TIER_TICKET_ALLOCATION } from '@/lib/tickets/processor'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
@@ -74,18 +73,6 @@ export default async function DiscountCodesAdminPage() {
         ticketEntitlement,
       }
     }) || []
-
-  try {
-    await getEventDiscounts(conference.checkin_event_id)
-  } catch (error) {
-    return (
-      <ErrorDisplay
-        title="Failed to Load Discount Data"
-        message={`Unable to fetch discount codes from Checkin.no: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your API credentials and event configuration.`}
-        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
-      />
-    )
-  }
 
   return (
     <div className="space-y-6">

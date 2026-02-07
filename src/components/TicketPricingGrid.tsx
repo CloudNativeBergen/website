@@ -44,6 +44,10 @@ export function TicketPricingGrid({
   const vat = vatPercent || (tickets[0]?.price[0]?.vat ?? '25')
   const vatDisplay = parseFloat(vat) % 1 === 0 ? parseInt(vat).toString() : vat
 
+  const hasInclVatPrimary = standaloneCategories.some((cat) =>
+    /student/i.test(cat.tickets[0]?.name ?? ''),
+  )
+
   return (
     <div className="space-y-8">
       {/* Mobile stacked pricing (visible on small screens only) */}
@@ -286,7 +290,8 @@ export function TicketPricingGrid({
 
       {/* VAT note */}
       <p className="font-inter text-center text-xs text-gray-500 dark:text-gray-400">
-        All prices in {currency} excl. {vatDisplay}% VAT.
+        All prices in {currency} excl. {vatDisplay}% VAT
+        {hasInclVatPrimary && ' unless otherwise noted'}.
         {registrationLink && (
           <>
             {' '}
