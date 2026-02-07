@@ -26,14 +26,20 @@ export function TicketPricingGrid({
 }: TicketPricingGridProps) {
   const { categories, tiers, matrix } = buildPricingMatrix(tickets)
 
-  // Separate standalone tickets (those without a tier match in the matrix)
-  const standaloneCategories = categories.filter((_cat, idx) =>
-    matrix[idx].every((cell) => cell === null),
+  // Pair categories with their matrix rows before filtering to keep
+  // indices aligned (addresses review concern about independent filtering)
+  const paired = categories.map((cat, idx) => ({
+    category: cat,
+    row: matrix[idx],
+  }))
+  const tieredPairs = paired.filter((p) => p.row.some((cell) => cell !== null))
+  const standalonePairs = paired.filter((p) =>
+    p.row.every((cell) => cell === null),
   )
-  const tieredCategories = categories.filter((_cat, idx) =>
-    matrix[idx].some((cell) => cell !== null),
-  )
-  const tieredMatrix = matrix.filter((row) => row.some((cell) => cell !== null))
+
+  const tieredCategories = tieredPairs.map((p) => p.category)
+  const tieredMatrix = tieredPairs.map((p) => p.row)
+  const standaloneCategories = standalonePairs.map((p) => p.category)
 
   const vat = vatPercent || (tickets[0]?.price[0]?.vat ?? '25')
   const vatDisplay = parseFloat(vat) % 1 === 0 ? parseInt(vat).toString() : vat

@@ -111,10 +111,10 @@ export async function getPublicTicketTypes(eventId: number): Promise<{
   try {
     const data = await fetchTicketTypesFromCheckin(eventId)
 
-    // Filter to only public tickets: not invite-only, has a price > 0
+    // Filter to only public tickets: not invite-only, has at least one price > 0
     const publicTickets = data.tickets
       .filter((t) => !t.requiresInvitation)
-      .filter((t) => t.price.length > 0 && parseFloat(t.price[0].price) > 0)
+      .filter((t) => t.price.some((p) => parseFloat(p.price) > 0))
       .sort((a, b) => a.position - b.position)
 
     // Extract complimentary tickets (invite-only or free) that have descriptions
@@ -203,16 +203,7 @@ export function buildPricingMatrix(tickets: PublicTicketType[]): {
     return { ticket: t, tier: null, category: t.name }
   })
 
-  // A tier is valid only if multiple tickets share it or if
-  // its categories overlap with other tiers' categories
-  const tierCounts = new Map<string, number>()
-  for (const p of parsed) {
-    if (p.tier) {
-      tierCounts.set(p.tier, (tierCounts.get(p.tier) || 0) + 1)
-    }
-  }
-
-  // Collect categories that appear with recognized tiers (count > 0 and shared across tiers)
+  // Collect categories that appear across multiple tiers
   const categoriesPerTier = new Map<string, Set<string>>()
   for (const p of parsed) {
     if (p.tier) {
@@ -340,7 +331,7 @@ export function extractComplimentaryTickets(
       (t) =>
         t.requiresInvitation ||
         t.price.length === 0 ||
-        parseFloat(t.price[0].price) === 0,
+        !t.price.some((p) => parseFloat(p.price) > 0),
     )
     .filter((t) =>
       COMPLIMENTARY_TICKET_CONFIG.some((c) => c.pattern.test(t.name)),

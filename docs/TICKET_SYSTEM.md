@@ -136,17 +136,17 @@ The sponsor page is the most mature public-facing page and serves as the templat
 | Hero (headline + subheadline) | `sponsorship_customization.hero_headline/subheadline`    | **Missing** — should add customizable headline                |
 | Vanity metrics (stats bar)    | `conference.vanity_metrics[]`                            | **Missing** — could reuse (attendees, speakers, tracks, etc.) |
 | Why Sponsor (benefit cards)   | `conference.sponsor_benefits[]` (icon + title + desc)    | **Missing** — should add "What's Included" cards              |
-| Tier pricing cards            | `sponsorTier` Sanity documents                           | ✅ Exists — pricing grid from Checkin.no                       |
+| Tier pricing cards            | `sponsorTier` Sanity documents                           | ✅ Exists — pricing grid from Checkin.no                      |
 | Philosophy section            | `sponsorship_customization.philosophy_title/description` | **Missing** — could add registration type explanations        |
-| Closing CTA                   | `sponsorship_customization.closing_quote/cta_text`       | ✅ Partial — has "Register Now" button                         |
-| Contact footer                | `conference.sponsor_email`                               | ✅ Exists — uses `contact_email`                               |
+| Closing CTA                   | `sponsorship_customization.closing_quote/cta_text`       | ✅ Partial — has "Register Now" button                        |
+| Contact footer                | `conference.sponsor_email`                               | ✅ Exists — uses `contact_email`                              |
 | Past sponsors grid            | `sponsorForConference` documents                         | N/A                                                           |
 
 ### KubeCon Registration Page Sections
 
 | Section                                                                   | Our Equivalent                     | Priority |
 | ------------------------------------------------------------------------- | ---------------------------------- | -------- |
-| Pricing grid (pass types × tiers × registration types)                    | ✅ Exists                           | —        |
+| Pricing grid (pass types × tiers × registration types)                    | ✅ Exists                          | —        |
 | Pass types explanation ("What can I expect?")                             | **Missing**                        | High     |
 | Registration types explanation (Corporate, Individual, Academic, Speaker) | **Missing**                        | High     |
 | What's Included (bullet list of benefits)                                 | **Missing**                        | High     |
