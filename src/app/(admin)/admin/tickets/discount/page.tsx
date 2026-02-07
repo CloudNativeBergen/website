@@ -104,6 +104,7 @@ export default async function DiscountCodesAdminPage() {
         title="Discount Code Management"
         description="Create and manage sponsor discount codes based on tier entitlements"
         contextHighlight={conference.title}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
         stats={[
           {
             label: 'Total Sponsors',

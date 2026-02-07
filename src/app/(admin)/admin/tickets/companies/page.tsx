@@ -278,6 +278,7 @@ export default async function CompaniesAdminPage() {
         title="Company Breakdown"
         description="Overview of attending companies for"
         contextHighlight={conference.title}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
         stats={[
           {
             label: 'Total Companies',

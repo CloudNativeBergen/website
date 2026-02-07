@@ -46,9 +46,68 @@ export function TicketPricingGrid({
 
   return (
     <div className="space-y-8">
-      {/* Pricing grid for tiered tickets */}
+      {/* Mobile stacked pricing (visible on small screens only) */}
       {tiers.length > 0 && tieredCategories.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="space-y-6 md:hidden">
+          {tieredCategories.map((category, catIdx) => (
+            <div key={category.key}>
+              <h3 className="font-space-grotesk mb-2 text-xl font-bold text-brand-slate-gray dark:text-white">
+                {category.label}
+              </h3>
+              <div className="space-y-0">
+                {tiers.map((tier, tierIdx) => {
+                  const ticket = tieredMatrix[catIdx][tierIdx]
+                  const status = ticket
+                    ? getTicketSaleStatus(ticket)
+                    : tier.status
+
+                  return (
+                    <div
+                      key={`${category.key}-${tier.label}`}
+                      className={clsx(
+                        'flex items-center justify-between px-4 py-3',
+                        tierIdx === 0 && 'rounded-t-xl',
+                        tierIdx === tiers.length - 1 && 'rounded-b-xl',
+                        status === 'active'
+                          ? 'bg-brand-cloud-blue text-white'
+                          : status === 'expired'
+                            ? 'bg-brand-cloud-blue/60 text-white/90'
+                            : 'bg-brand-sky-mist text-brand-slate-gray dark:bg-gray-700 dark:text-gray-300',
+                      )}
+                    >
+                      <div>
+                        <div className="font-space-grotesk text-sm font-bold">
+                          {tier.label}
+                        </div>
+                        {tier.dateRange && (
+                          <div className="text-xs opacity-80">
+                            {tier.dateRange}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        {ticket ? (
+                          <MobilePriceCell
+                            ticket={ticket}
+                            currency={currency}
+                            status={status}
+                          />
+                        ) : (
+                          <span className="text-sm opacity-50">&mdash;</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pricing grid for tiered tickets (desktop) */}
+      {tiers.length > 0 && tieredCategories.length > 0 && (
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full border-collapse">
             <thead>
               <tr>
@@ -244,6 +303,38 @@ export function TicketPricingGrid({
           </>
         )}
       </p>
+    </div>
+  )
+}
+
+function MobilePriceCell({
+  ticket,
+  currency,
+  status,
+}: {
+  ticket: PublicTicketType
+  currency: string
+  status: 'expired' | 'active' | 'upcoming'
+}) {
+  const price = ticket.price[0]
+  if (!price) return null
+
+  const formatted = formatTicketPrice(price.price, price.vat)
+
+  if (status === 'expired') {
+    return (
+      <div>
+        <div className="font-space-grotesk text-lg font-bold line-through opacity-70">
+          {currency} {formatted}
+        </div>
+        <div className="text-xs font-medium opacity-70">Expired</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="font-space-grotesk text-lg font-bold">
+      {currency} {formatted}
     </div>
   )
 }

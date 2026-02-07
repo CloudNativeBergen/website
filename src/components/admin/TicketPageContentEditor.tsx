@@ -2,11 +2,15 @@
 
 import { useState, useCallback } from 'react'
 import { api } from '@/lib/trpc/client'
+import Link from 'next/link'
+import { AdminPageHeader } from '@/components/admin'
 import {
   PlusIcon,
   TrashIcon,
   CheckIcon,
   ArrowPathIcon,
+  DocumentTextIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline'
 import type {
   TicketCustomization,
@@ -44,6 +48,7 @@ function generateKey(): string {
 
 interface TicketPageContentEditorProps {
   conferenceId: string
+  conferenceTitle: string
   initialCustomization: Partial<TicketCustomization>
   initialInclusions: TicketInclusion[]
   initialFaqs: TicketFaq[]
@@ -52,6 +57,7 @@ interface TicketPageContentEditorProps {
 
 export function TicketPageContentEditor({
   conferenceId,
+  conferenceTitle,
   initialCustomization,
   initialInclusions,
   initialFaqs,
@@ -147,37 +153,54 @@ export function TicketPageContentEditor({
   )
 
   return (
-    <div className="mt-6 space-y-6">
-      <div className="flex items-center justify-end gap-3">
-        {saveStatus === 'success' && (
-          <span className="inline-flex items-center text-sm text-green-600 dark:text-green-400">
-            <CheckIcon className="mr-1 h-4 w-4" />
-            Saved
-          </span>
-        )}
-        {saveStatus === 'error' && (
-          <span className="text-sm text-red-600 dark:text-red-400">
-            Failed to save
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-        >
-          {saving ? (
-            <>
-              <ArrowPathIcon className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            'Save Changes'
-          )}
-        </button>
-      </div>
+    <div className="space-y-6">
+      <AdminPageHeader
+        icon={<DocumentTextIcon />}
+        title="Ticket Page Content"
+        description="Configure the public tickets page for"
+        contextHighlight={conferenceTitle}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
+        stats={[]}
+        actions={
+          <>
+            <Link
+              href="/tickets"
+              target="_blank"
+              className="inline-flex items-center rounded-lg bg-gray-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-500 dark:bg-gray-500 dark:hover:bg-gray-400"
+            >
+              <TicketIcon className="mr-2 h-4 w-4" />
+              View Public Page
+            </Link>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${saveStatus === 'error'
+                  ? 'bg-red-600 hover:bg-red-500 dark:bg-red-500 dark:hover:bg-red-400'
+                  : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400'
+                }`}
+            >
+              {saving ? (
+                <>
+                  <ArrowPathIcon className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : saveStatus === 'success' ? (
+                <>
+                  <CheckIcon className="mr-2 h-4 w-4" />
+                  Saved
+                </>
+              ) : saveStatus === 'error' ? (
+                'Save Failed — Retry'
+              ) : (
+                'Save Changes'
+              )}
+            </button>
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-2">
         {/* Hero Section */}
         <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
@@ -291,7 +314,7 @@ export function TicketPageContentEditor({
         </div>
 
         {/* Partner Nodes & Sponsor Capacity */}
-        <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
+        <div className="flex flex-col rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-700">
           <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             Partner Nodes &amp; Sponsor Capacity
           </h3>
@@ -310,7 +333,7 @@ export function TicketPageContentEditor({
               }))
             }
             placeholder="e.g., Groups of 5 or more receive a 10% discount. Contact us for details."
-            className="mt-3 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+            className="mt-3 block w-full flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           />
         </div>
 

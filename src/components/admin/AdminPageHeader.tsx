@@ -90,19 +90,17 @@ export function AdminPageHeader({
 
   return (
     <div className="pb-4">
-      {backLink && (
-        <div className="mb-2">
-          <Link
-            href={backLink.href}
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-            {backLink.label || 'Back'}
-          </Link>
-        </div>
-      )}
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
+          {backLink && (
+            <Link
+              href={backLink.href}
+              className="mt-1.5 shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 sm:mt-2 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              title={backLink.label || 'Back'}
+            >
+              <ChevronLeftIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+            </Link>
+          )}
           <div className="mt-1 shrink-0">
             <div className="h-6 w-6 text-brand-cloud-blue sm:h-8 sm:w-8 dark:text-blue-300">
               {icon}

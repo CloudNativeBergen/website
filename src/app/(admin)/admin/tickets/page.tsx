@@ -181,26 +181,27 @@ export default async function AdminTickets() {
         title="Ticket Management"
         description="Manage sold tickets and attendee information for"
         contextHighlight={conference.title}
+        backLink={{ href: '/admin', label: 'Back to Dashboard' }}
         stats={[]}
         actions={
           <div className="flex space-x-3">
             <Link
               href="/admin/tickets/content"
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
             >
               <DocumentTextIcon className="mr-2 h-4 w-4" />
               Page Content
             </Link>
             <Link
               href="/admin/tickets/orders"
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
             >
               <ShoppingBagIcon className="mr-2 h-4 w-4" />
               View Orders
             </Link>
             <Link
               href="/admin/tickets/discount"
-              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
             >
               <CreditCardIcon className="mr-2 h-4 w-4" />
               Discount Codes

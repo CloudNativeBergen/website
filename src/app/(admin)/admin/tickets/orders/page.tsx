@@ -86,6 +86,7 @@ export default async function OrdersAdminPage() {
         title="Order Management"
         description="View and manage ticket orders for"
         contextHighlight={conference.title}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
         stats={[
           {
             label: 'Total Orders',
