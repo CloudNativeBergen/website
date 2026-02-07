@@ -10,41 +10,53 @@ import {
   CalendarDaysIcon,
   BuildingOfficeIcon,
   TicketIcon,
-  StarIcon,
   PresentationChartBarIcon,
-  CreditCardIcon,
   AcademicCapIcon,
-  PhotoIcon,
 } from '@heroicons/react/24/outline'
 import {
   DashboardLayout,
-  NavigationItem,
+  type NavigationSection,
 } from '@/components/common/DashboardLayout'
 import { SearchModal } from './SearchModal'
 import { NotificationProvider } from './NotificationProvider'
 
-const navigation: NavigationItem[] = [
-  { name: 'Dashboard', href: '/admin', icon: HomeIcon },
-  { name: 'Proposals', href: '/admin/proposals', icon: DocumentTextIcon },
-  { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
-  { name: 'Featured', href: '/admin/featured', icon: StarIcon },
-  { name: 'Gallery', href: '/admin/gallery', icon: PhotoIcon },
-  { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
-  { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
-  { name: 'Workshops', href: '/admin/workshops', icon: AcademicCapIcon },
+const navigation: NavigationSection[] = [
   {
-    name: 'Travel Support',
-    href: '/admin/travel-support',
-    icon: CreditCardIcon,
+    label: 'Core',
+    items: [
+      { name: 'Dashboard', href: '/admin', icon: HomeIcon },
+      { name: 'Proposals', href: '/admin/proposals', icon: DocumentTextIcon },
+      { name: 'Schedule', href: '/admin/schedule', icon: CalendarDaysIcon },
+    ],
   },
-  { name: 'Volunteers', href: '/admin/volunteers', icon: UserGroupIcon },
-  { name: 'Sponsors', href: '/admin/sponsors', icon: BuildingOfficeIcon },
   {
-    name: 'Marketing',
-    href: '/admin/marketing',
-    icon: PresentationChartBarIcon,
+    label: 'People',
+    items: [
+      { name: 'Speakers', href: '/admin/speakers', icon: UsersIcon },
+      { name: 'Volunteers', href: '/admin/volunteers', icon: UserGroupIcon },
+      { name: 'Workshops', href: '/admin/workshops', icon: AcademicCapIcon },
+    ],
   },
-  { name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon },
+  {
+    label: 'Events & Content',
+    items: [
+      { name: 'Tickets', href: '/admin/tickets', icon: TicketIcon },
+      {
+        name: 'Sponsors',
+        href: '/admin/sponsors',
+        icon: BuildingOfficeIcon,
+      },
+      {
+        name: 'Marketing',
+        href: '/admin/marketing',
+        icon: PresentationChartBarIcon,
+      },
+    ],
+  },
+  {
+    label: 'System',
+    items: [{ name: 'Settings', href: '/admin/settings', icon: Cog6ToothIcon }],
+  },
 ]
 
 interface ConferenceLogos {

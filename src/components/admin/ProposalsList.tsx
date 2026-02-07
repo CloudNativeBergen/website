@@ -1,6 +1,7 @@
 'use client'
 
 import { DocumentTextIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
 import Link from 'next/link'
 import { ProposalExisting, Status, Format } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
@@ -60,35 +61,25 @@ export function ProposalsList({
   )
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <DocumentTextIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
-            <div>
-              <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
-                Proposal Management
-              </h1>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                Review and manage all conference proposals (
-                {filteredProposals.length} of {proposals.length} total)
-              </p>
-            </div>
-          </div>
-          {onCreateProposal && (
-            <button
-              onClick={onCreateProposal}
-              className="font-space-grotesk inline-flex items-center gap-2 rounded-lg bg-brand-cloud-blue px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-cloud-blue/90 focus:outline-2 focus:outline-offset-2 focus:outline-brand-cloud-blue dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus:outline-blue-500"
-              aria-label="Create new proposal"
-            >
-              <PlusIcon className="h-5 w-5" />
-              New Proposal
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <AdminPageHeader
+        icon={<DocumentTextIcon />}
+        title="Proposal Management"
+        description={`Review and manage all conference proposals (${filteredProposals.length} of ${proposals.length} total)`}
+        actionItems={
+          onCreateProposal
+            ? [
+              {
+                label: 'New Proposal',
+                onClick: onCreateProposal,
+                icon: <PlusIcon className="h-4 w-4" />,
+              },
+            ]
+            : undefined
+        }
+      />
 
-      <div className="mt-6">
+      <div>
         <ProposalsFilter
           filters={filters}
           onFilterChange={toggleFilter}

@@ -17,7 +17,7 @@ export default async function TicketContentAdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <TicketPageContentEditor
         conferenceId={conference._id}
         conferenceTitle={conference.title}

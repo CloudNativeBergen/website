@@ -12,6 +12,7 @@ import {
   UserGroupIcon,
   EnvelopeIcon,
   AcademicCapIcon,
+  CreditCardIcon,
 } from '@heroicons/react/24/outline'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
@@ -107,7 +108,7 @@ export default function SpeakersPageClient({
 
   return (
     <>
-      <div className="mx-auto max-w-7xl">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={<UserGroupIcon className="h-6 w-6" />}
           title="Speaker Management"
@@ -184,6 +185,12 @@ export default function SpeakersPageClient({
               variant: 'secondary',
             },
             {
+              label: 'Travel Support',
+              href: '/admin/speakers/travel-support',
+              icon: <CreditCardIcon className="h-4 w-4" />,
+              variant: 'secondary',
+            },
+            {
               label: 'Email Speakers',
               onClick: () => setIsEmailModalOpen(true),
               icon: <EnvelopeIcon className="h-4 w-4" />,
@@ -192,7 +199,7 @@ export default function SpeakersPageClient({
           ]}
         />
 
-        <div className="mt-8">
+        <div>
           <SpeakerTable
             speakers={speakers}
             currentConferenceId={currentConferenceId}

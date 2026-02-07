@@ -4,6 +4,7 @@ import { ProposalExisting, Status } from '@/lib/proposal/types'
 import { Speaker } from '@/lib/speaker/types'
 import { Review } from '@/lib/review/types'
 import { getAuthSession } from '@/lib/auth'
+import { AdminPageHeader } from '@/components/admin'
 import {
   DocumentTextIcon,
   UsersIcon,
@@ -51,11 +52,11 @@ export default async function AdminDashboard() {
       .flatMap((p) =>
         p.speakers && Array.isArray(p.speakers)
           ? p.speakers
-              .filter(
-                (speaker) =>
-                  typeof speaker === 'object' && speaker && '_id' in speaker,
-              )
-              .map((speaker) => speaker._id)
+            .filter(
+              (speaker) =>
+                typeof speaker === 'object' && speaker && '_id' in speaker,
+            )
+            .map((speaker) => speaker._id)
           : [],
       )
       .filter(Boolean),
@@ -98,24 +99,24 @@ export default async function AdminDashboard() {
   const acceptanceRate =
     totalProposals > 0
       ? Math.round(
-          ((acceptedProposals + confirmedProposals) / totalProposals) * 100,
-        )
+        ((acceptedProposals + confirmedProposals) / totalProposals) * 100,
+      )
       : 0
 
   const userReviewedProposals = currentUserId
     ? proposals.filter((p) =>
-        p.reviews?.some((review) => {
-          const r =
-            typeof review === 'object' && 'reviewer' in review
-              ? (review as Review)
-              : null
-          const reviewerId =
-            typeof r?.reviewer === 'object' && r.reviewer && '_id' in r.reviewer
-              ? r.reviewer._id
-              : null
-          return reviewerId === currentUserId
-        }),
-      ).length
+      p.reviews?.some((review) => {
+        const r =
+          typeof review === 'object' && 'reviewer' in review
+            ? (review as Review)
+            : null
+        const reviewerId =
+          typeof r?.reviewer === 'object' && r.reviewer && '_id' in r.reviewer
+            ? r.reviewer._id
+            : null
+        return reviewerId === currentUserId
+      }),
+    ).length
     : 0
 
   const userUnreviewedProposals = currentUserId
@@ -158,17 +159,22 @@ export default async function AdminDashboard() {
   ]
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="border-b border-gray-200 pb-5 dark:border-gray-700">
-        <h1 className="text-2xl leading-7 font-bold text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight dark:text-white">
-          Admin Dashboard
-        </h1>
-        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-          Overview of {conference?.title || 'conference'} management
-        </p>
-      </div>
+    <div className="space-y-6">
+      <AdminPageHeader
+        icon={<DocumentTextIcon />}
+        title="Admin Dashboard"
+        description={
+          <>
+            Overview of{' '}
+            <span className="font-semibold">
+              {conference?.title || 'conference'}
+            </span>{' '}
+            management
+          </>
+        }
+      />
 
-      <div className="mt-8">
+      <div>
         <dl className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((item) => (
             <div
@@ -209,7 +215,7 @@ export default async function AdminDashboard() {
         </dl>
       </div>
 
-      <div className="mt-12 grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-900 dark:shadow-gray-900/20">
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
@@ -510,11 +516,11 @@ export default async function AdminDashboard() {
                 const speakers =
                   proposal.speakers && Array.isArray(proposal.speakers)
                     ? proposal.speakers.filter(
-                        (speaker) =>
-                          typeof speaker === 'object' &&
-                          speaker &&
-                          'name' in speaker,
-                      )
+                      (speaker) =>
+                        typeof speaker === 'object' &&
+                        speaker &&
+                        'name' in speaker,
+                    )
                     : []
                 const primarySpeaker =
                   speakers.length > 0 ? (speakers[0] as Speaker) : null
@@ -532,15 +538,14 @@ export default async function AdminDashboard() {
                       <div className="relative flex space-x-3">
                         <div>
                           <span
-                            className={`flex h-8 w-8 items-center justify-center rounded-full ring-8 ring-white dark:ring-gray-900 ${
-                              proposal.status === Status.accepted
+                            className={`flex h-8 w-8 items-center justify-center rounded-full ring-8 ring-white dark:ring-gray-900 ${proposal.status === Status.accepted
                                 ? 'bg-green-500'
                                 : proposal.status === Status.rejected
                                   ? 'bg-red-500'
                                   : proposal.status === Status.confirmed
                                     ? 'bg-blue-500'
                                     : 'bg-gray-500'
-                            }`}
+                              }`}
                           >
                             <DocumentTextIcon
                               aria-hidden="true"

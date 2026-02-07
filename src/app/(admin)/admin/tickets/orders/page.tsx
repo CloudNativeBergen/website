@@ -74,7 +74,7 @@ export default async function OrdersAdminPage() {
   const orders = groupTicketsByOrder(allTickets)
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<ShoppingBagIcon />}
         title="Order Management"
@@ -83,7 +83,7 @@ export default async function OrdersAdminPage() {
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
 
-      <div className="mt-12">
+      <div>
         <div className="mb-6">
           <h2 className="text-lg font-medium text-gray-900 dark:text-white">
             All Orders
@@ -109,7 +109,7 @@ export default async function OrdersAdminPage() {
         )}
       </div>
 
-      <div className="mt-12">
+      <div>
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions
         </h2>

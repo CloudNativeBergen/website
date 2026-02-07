@@ -14,6 +14,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
+import { AdminPageHeader } from '@/components/admin'
 import { EmailModal } from '@/components/admin/EmailModal'
 import { PortableTextBlock } from '@sanity/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
@@ -159,52 +160,34 @@ export default function VolunteerAdminPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="border-b border-gray-200 pb-6 dark:border-gray-700">
-        <div className="mb-2 flex items-center gap-3">
-          <UserGroupIcon className="h-8 w-8 text-brand-cloud-blue dark:text-blue-400" />
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Volunteer Management
-          </h1>
-        </div>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Review and manage volunteer applications for the conference
-        </p>
-        <div className="mt-4 grid grid-cols-4 gap-4">
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-            <div className="text-2xl font-semibold text-gray-900 dark:text-white">
-              {stats.total}
-            </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              Total Applications
-            </div>
-          </div>
-          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
-            <div className="text-2xl font-semibold text-yellow-800 dark:text-yellow-300">
-              {stats.pending}
-            </div>
-            <div className="text-sm text-yellow-700 dark:text-yellow-400">
-              Pending Review
-            </div>
-          </div>
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
-            <div className="text-2xl font-semibold text-green-800 dark:text-green-300">
-              {stats.approved}
-            </div>
-            <div className="text-sm text-green-700 dark:text-green-400">
-              Approved
-            </div>
-          </div>
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20">
-            <div className="text-2xl font-semibold text-red-800 dark:text-red-300">
-              {stats.rejected}
-            </div>
-            <div className="text-sm text-red-700 dark:text-red-400">
-              Rejected
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <AdminPageHeader
+        icon={<UserGroupIcon />}
+        title="Volunteer Management"
+        description="Review and manage volunteer applications for the conference"
+        stats={[
+          {
+            value: stats.total,
+            label: 'Total Applications',
+            color: 'slate',
+          },
+          {
+            value: stats.pending,
+            label: 'Pending Review',
+            color: 'yellow',
+          },
+          {
+            value: stats.approved,
+            label: 'Approved',
+            color: 'green',
+          },
+          {
+            value: stats.rejected,
+            label: 'Rejected',
+            color: 'red',
+          },
+        ]}
+      />
 
       <div className="flex items-center gap-4">
         <FilterDropdown label="Status" activeCount={statusFilter.size}>
@@ -250,46 +233,73 @@ export default function VolunteerAdminPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredVolunteers.map((volunteer) => (
-                <div
-                  key={volunteer._id}
-                  onClick={() => setSelectedVolunteerId(volunteer._id)}
-                  className={`cursor-pointer rounded-lg border p-4 transition-all ${
-                    selectedVolunteerId === volunteer._id
-                      ? 'border-brand-cloud-blue bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20'
-                      : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
-                  }`}
-                >
-                  <div className="mb-2 flex items-start justify-between">
-                    <div>
-                      <div className="font-semibold text-gray-900 dark:text-white">
-                        {volunteer.name}
+              {filteredVolunteers.length === 0 ? (
+                <div className="rounded-lg bg-gray-50 p-8 text-center dark:bg-gray-800">
+                  <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                    {volunteers && volunteers.length > 0
+                      ? 'No volunteers match your filters'
+                      : 'No volunteer applications'}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {volunteers && volunteers.length > 0
+                      ? 'Try adjusting your filters to see more results.'
+                      : 'No volunteer applications have been submitted yet.'}
+                  </p>
+                  {volunteers &&
+                    volunteers.length > 0 &&
+                    statusFilter.size > 0 && (
+                      <div className="mt-6">
+                        <button
+                          onClick={() => setStatusFilter(new Set())}
+                          className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                        >
+                          Clear All Filters
+                        </button>
                       </div>
-                      <div className="mt-1 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-                        <span className="flex items-center gap-1">
-                          <EnvelopeIcon className="h-3.5 w-3.5" />
-                          {volunteer.email}
-                        </span>
-                        {volunteer.phone && (
-                          <span className="flex items-center gap-1">
-                            <PhoneIcon className="h-3.5 w-3.5" />
-                            {volunteer.phone}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <StatusBadge status={volunteer.status} />
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    {volunteer.occupation && (
-                      <div>Occupation: {volunteer.occupation}</div>
                     )}
-                    <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
-                      {volunteer.conference?.title || 'No conference'}
+                </div>
+              ) : (
+                filteredVolunteers.map((volunteer) => (
+                  <div
+                    key={volunteer._id}
+                    onClick={() => setSelectedVolunteerId(volunteer._id)}
+                    className={`cursor-pointer rounded-lg border p-4 transition-all ${selectedVolunteerId === volunteer._id
+                        ? 'border-brand-cloud-blue bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20'
+                        : 'border-gray-200 bg-white hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-gray-600'
+                      }`}
+                  >
+                    <div className="mb-2 flex items-start justify-between">
+                      <div>
+                        <div className="font-semibold text-gray-900 dark:text-white">
+                          {volunteer.name}
+                        </div>
+                        <div className="mt-1 flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <EnvelopeIcon className="h-3.5 w-3.5" />
+                            {volunteer.email}
+                          </span>
+                          {volunteer.phone && (
+                            <span className="flex items-center gap-1">
+                              <PhoneIcon className="h-3.5 w-3.5" />
+                              {volunteer.phone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <StatusBadge status={volunteer.status} />
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {volunteer.occupation && (
+                        <div>Occupation: {volunteer.occupation}</div>
+                      )}
+                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+                        {volunteer.conference?.title || 'No conference'}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </div>

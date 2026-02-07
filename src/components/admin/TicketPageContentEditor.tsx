@@ -174,10 +174,11 @@ export function TicketPageContentEditor({
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${saveStatus === 'error'
+                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${
+                  saveStatus === 'error'
                     ? 'bg-red-600 hover:bg-red-500 dark:bg-red-500 dark:hover:bg-red-400'
                     : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400'
-                  }`}
+                }`}
               >
                 {saving ? (
                   <>

@@ -92,7 +92,7 @@ export function TravelSupportAdminPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-7xl">
+      <div className="space-y-6">
         <div className="pb-6">
           <div className="animate-pulse">
             <div className="flex items-center gap-3">
@@ -124,7 +124,7 @@ export function TravelSupportAdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <div className="pb-6">
         <div className="flex items-center gap-3">
           <CurrencyDollarIcon className="h-8 w-8 text-brand-cloud-blue" />
@@ -262,10 +262,10 @@ function SummaryStats({
         // If there's an explicitly approved amount, use that
         const amountInNOK = r.bankingDetails?.preferredCurrency
           ? convertCurrency(
-              r.approvedAmount,
-              r.bankingDetails.preferredCurrency,
-              'NOK',
-            )
+            r.approvedAmount,
+            r.bankingDetails.preferredCurrency,
+            'NOK',
+          )
           : r.approvedAmount
         return sum + amountInNOK
       } else if (r.expenses && r.expenses.length > 0) {
@@ -385,17 +385,16 @@ function RequestCard({
   const totalInNOK =
     request.expenses && request.expenses.length > 0
       ? request.expenses.reduce((sum, expense) => {
-          return sum + convertCurrency(expense.amount, expense.currency, 'NOK')
-        }, 0)
+        return sum + convertCurrency(expense.amount, expense.currency, 'NOK')
+      }, 0)
       : request.totalAmount || 0
 
   return (
     <div
-      className={`cursor-pointer p-4 transition-colors ${
-        isSelected
+      className={`cursor-pointer p-4 transition-colors ${isSelected
           ? 'border-l-4 border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20'
           : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'
-      }`}
+        }`}
       onClick={onSelect}
     >
       <div className="flex items-start justify-between">
@@ -466,19 +465,19 @@ function RequestDetails({
   const totalReimbursableNOK =
     request.expenses && request.expenses.length > 0
       ? request.expenses
-          .filter(
-            (e) =>
-              e.status === ExpenseStatus.APPROVED ||
-              e.status === ExpenseStatus.PENDING,
+        .filter(
+          (e) =>
+            e.status === ExpenseStatus.APPROVED ||
+            e.status === ExpenseStatus.PENDING,
+        )
+        .reduce((sum, expense) => {
+          const amountInNOK = convertCurrency(
+            expense.amount,
+            expense.currency,
+            'NOK',
           )
-          .reduce((sum, expense) => {
-            const amountInNOK = convertCurrency(
-              expense.amount,
-              expense.currency,
-              'NOK',
-            )
-            return sum + amountInNOK
-          }, 0)
+          return sum + amountInNOK
+        }, 0)
       : 0
 
   const canApprove =

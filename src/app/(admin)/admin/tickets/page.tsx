@@ -176,13 +176,12 @@ export default async function AdminTickets() {
   )
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<TicketIcon />}
         title="Ticket Management"
         description="Manage sold tickets and attendee information for"
         contextHighlight={conference.title}
-        backLink={{ href: '/admin', label: 'Back to Dashboard' }}
         actionItems={[
           {
             label: 'Page Content',
@@ -232,7 +231,7 @@ export default async function AdminTickets() {
         defaultCapacity={DEFAULT_CAPACITY}
       />
 
-      <div className="mt-8">
+      <div>
         <CollapsibleSection
           title="Free Ticket Allocation & Usage"
           defaultOpen={true}
@@ -337,7 +336,7 @@ export default async function AdminTickets() {
       </div>
 
       {categoryStats.length > 0 && (
-        <div className="mt-8">
+        <div>
           <CollapsibleSection
             title="Breakdown by Ticket Type"
             defaultOpen={false}
@@ -430,7 +429,7 @@ export default async function AdminTickets() {
 
       {/* Sponsor Tickets Breakdown */}
       {statistics.sponsorTickets > 0 && (
-        <div className="mt-8">
+        <div>
           <CollapsibleSection
             title="Sponsor Ticket Allocations"
             defaultOpen={false}
@@ -543,7 +542,7 @@ export default async function AdminTickets() {
       )}
 
       {/* Quick Actions */}
-      <div className="mt-12">
+      <div>
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions
         </h2>

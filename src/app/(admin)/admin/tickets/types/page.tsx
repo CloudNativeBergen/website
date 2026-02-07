@@ -87,7 +87,7 @@ export default async function TicketTypesAdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<TicketIcon />}
         title="Ticket Types"
@@ -96,7 +96,7 @@ export default async function TicketTypesAdminPage() {
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
 
-      <div className="mt-6 space-y-4">
+      <div className="space-y-4">
         {tickets.map((ticket) => {
           const status = getTicketSaleStatus(ticket)
           const currency = ticket.price[0]?.key?.toUpperCase() || 'NOK'

@@ -10,7 +10,7 @@ export interface StatCardProps {
 
   subtitle?: string | React.ReactNode
 
-  color?: 'blue' | 'green' | 'purple' | 'slate' | 'indigo'
+  color?: 'blue' | 'green' | 'purple' | 'slate' | 'indigo' | 'yellow' | 'red'
 
   icon?: React.ReactNode
 }
@@ -50,6 +50,10 @@ function getValueColorClasses(color: StatCardProps['color'] = 'slate') {
       return 'text-brand-nordic-purple dark:text-indigo-300'
     case 'indigo':
       return 'text-brand-cloud-blue dark:text-indigo-300'
+    case 'yellow':
+      return 'text-yellow-600 dark:text-yellow-300'
+    case 'red':
+      return 'text-red-600 dark:text-red-300'
     case 'slate':
     default:
       return 'text-gray-900 dark:text-white'

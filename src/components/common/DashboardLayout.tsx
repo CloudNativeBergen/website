@@ -38,6 +38,19 @@ export interface NavigationItem {
   >
 }
 
+export interface NavigationSection {
+  label: string
+  items: NavigationItem[]
+}
+
+export type NavigationConfig = NavigationItem[] | NavigationSection[]
+
+function isNavigationSections(
+  config: NavigationConfig,
+): config is NavigationSection[] {
+  return config.length > 0 && 'label' in config[0] && 'items' in config[0]
+}
+
 type DashboardMode = 'admin' | 'speaker'
 
 export interface ConferenceLogos {
@@ -49,7 +62,7 @@ export interface ConferenceLogos {
 
 interface DashboardLayoutProps {
   children: React.ReactNode
-  navigation: NavigationItem[]
+  navigation: NavigationConfig
   mode: DashboardMode
   title: string
   conferenceLogos?: ConferenceLogos
@@ -229,29 +242,65 @@ export function DashboardLayout({
                 </div>
                 <nav className="flex flex-1 flex-col">
                   <ul role="list" className="-mx-2 flex-1 space-y-1">
-                    {navigation.map((item) => {
-                      const isCurrent = isCurrentPath(item.href)
-                      return (
-                        <li key={item.name}>
-                          <Link
-                            href={item.href}
-                            onClick={() => setSidebarOpen(false)}
-                            className={clsx(
-                              isCurrent
-                                ? colors.sidebar.active
-                                : `${colors.sidebar.inactive} ${colors.sidebar.hover}`,
-                              'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
+                    {isNavigationSections(navigation)
+                      ? navigation.map((section, sectionIndex) => (
+                          <li key={section.label}>
+                            {sectionIndex > 0 && (
+                              <div className="mx-2 my-2 border-t border-white/10" />
                             )}
-                          >
-                            <item.icon
-                              aria-hidden="true"
-                              className="size-6 shrink-0"
-                            />
-                            {item.name}
-                          </Link>
-                        </li>
-                      )
-                    })}
+                            <p className="px-2 pt-2 pb-1 text-xs font-medium tracking-wider text-gray-500 uppercase">
+                              {section.label}
+                            </p>
+                            <ul role="list" className="space-y-1">
+                              {section.items.map((item) => {
+                                const isCurrent = isCurrentPath(item.href)
+                                return (
+                                  <li key={item.name}>
+                                    <Link
+                                      href={item.href}
+                                      onClick={() => setSidebarOpen(false)}
+                                      className={clsx(
+                                        isCurrent
+                                          ? colors.sidebar.active
+                                          : `${colors.sidebar.inactive} ${colors.sidebar.hover}`,
+                                        'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
+                                      )}
+                                    >
+                                      <item.icon
+                                        aria-hidden="true"
+                                        className="size-6 shrink-0"
+                                      />
+                                      {item.name}
+                                    </Link>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </li>
+                        ))
+                      : navigation.map((item) => {
+                          const isCurrent = isCurrentPath(item.href)
+                          return (
+                            <li key={item.name}>
+                              <Link
+                                href={item.href}
+                                onClick={() => setSidebarOpen(false)}
+                                className={clsx(
+                                  isCurrent
+                                    ? colors.sidebar.active
+                                    : `${colors.sidebar.inactive} ${colors.sidebar.hover}`,
+                                  'group flex gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold',
+                                )}
+                              >
+                                <item.icon
+                                  aria-hidden="true"
+                                  className="size-6 shrink-0"
+                                />
+                                {item.name}
+                              </Link>
+                            </li>
+                          )
+                        })}
                   </ul>
                 </nav>
               </div>
@@ -276,29 +325,62 @@ export function DashboardLayout({
             </div>
             <nav className="flex flex-1 flex-col">
               <ul role="list" className="flex-1 space-y-1">
-                {navigation.map((item) => {
-                  const isCurrent = isCurrentPath(item.href)
-                  return (
-                    <li key={item.name}>
-                      <Link
-                        href={item.href}
-                        title={item.name}
-                        className={clsx(
-                          isCurrent
-                            ? colors.sidebar.active
-                            : `${colors.sidebar.inactive} ${colors.sidebar.hover}`,
-                          'group flex justify-center rounded-md p-3 text-sm leading-6 font-semibold',
+                {isNavigationSections(navigation)
+                  ? navigation.map((section, sectionIndex) => (
+                      <li key={section.label}>
+                        {sectionIndex > 0 && (
+                          <div className="mx-1 my-2 border-t border-white/10" />
                         )}
-                      >
-                        <item.icon
-                          aria-hidden="true"
-                          className="size-6 shrink-0"
-                        />
-                        <span className="sr-only">{item.name}</span>
-                      </Link>
-                    </li>
-                  )
-                })}
+                        <ul role="list" className="space-y-1">
+                          {section.items.map((item) => {
+                            const isCurrent = isCurrentPath(item.href)
+                            return (
+                              <li key={item.name}>
+                                <Link
+                                  href={item.href}
+                                  title={item.name}
+                                  className={clsx(
+                                    isCurrent
+                                      ? colors.sidebar.active
+                                      : `${colors.sidebar.inactive} ${colors.sidebar.hover}`,
+                                    'group flex justify-center rounded-md p-3 text-sm leading-6 font-semibold',
+                                  )}
+                                >
+                                  <item.icon
+                                    aria-hidden="true"
+                                    className="size-6 shrink-0"
+                                  />
+                                  <span className="sr-only">{item.name}</span>
+                                </Link>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </li>
+                    ))
+                  : navigation.map((item) => {
+                      const isCurrent = isCurrentPath(item.href)
+                      return (
+                        <li key={item.name}>
+                          <Link
+                            href={item.href}
+                            title={item.name}
+                            className={clsx(
+                              isCurrent
+                                ? colors.sidebar.active
+                                : `${colors.sidebar.inactive} ${colors.sidebar.hover}`,
+                              'group flex justify-center rounded-md p-3 text-sm leading-6 font-semibold',
+                            )}
+                          >
+                            <item.icon
+                              aria-hidden="true"
+                              className="size-6 shrink-0"
+                            />
+                            <span className="sr-only">{item.name}</span>
+                          </Link>
+                        </li>
+                      )
+                    })}
               </ul>
             </nav>
           </div>

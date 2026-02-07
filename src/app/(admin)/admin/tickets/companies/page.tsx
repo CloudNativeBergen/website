@@ -272,7 +272,7 @@ export default async function CompaniesAdminPage() {
   )
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<BuildingOfficeIcon />}
         title="Company Breakdown"
@@ -293,14 +293,14 @@ export default async function CompaniesAdminPage() {
             value:
               companyBreakdown.length > 0
                 ? Math.round(
-                    totalAttendees / companyBreakdown.length,
-                  ).toString()
+                  totalAttendees / companyBreakdown.length,
+                ).toString()
                 : '0',
           },
         ]}
       />
 
-      <div className="mt-12">
+      <div>
         {companyBreakdown.length === 0 ? (
           <div className="rounded-lg bg-white p-12 text-center shadow dark:bg-gray-900">
             <BuildingOfficeIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
@@ -346,10 +346,10 @@ export default async function CompaniesAdminPage() {
                         </div>
                         {company.normalizedName !==
                           company.originalName.toLowerCase() && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            Normalized: {company.normalizedName}
-                          </div>
-                        )}
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              Normalized: {company.normalizedName}
+                            </div>
+                          )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -378,7 +378,7 @@ export default async function CompaniesAdminPage() {
         )}
       </div>
 
-      <div className="mt-12">
+      <div>
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions
         </h2>

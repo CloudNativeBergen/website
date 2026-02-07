@@ -88,7 +88,7 @@ export default async function DiscountCodesAdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<TicketIcon />}
         title="Discount Code Management"
@@ -97,7 +97,7 @@ export default async function DiscountCodesAdminPage() {
         backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
 
-      <div className="mt-8">
+      <div>
         <DiscountCodeManager
           sponsors={sponsorsWithTierInfo}
           eventId={conference.checkin_event_id}
@@ -114,7 +114,7 @@ export default async function DiscountCodesAdminPage() {
         />
       </div>
 
-      <div className="mt-12">
+      <div>
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions
         </h2>

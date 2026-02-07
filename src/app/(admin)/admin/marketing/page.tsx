@@ -22,6 +22,7 @@ import {
   MicrophoneIcon,
   TrophyIcon,
   PhotoIcon,
+  StarIcon,
 } from '@heroicons/react/24/outline'
 
 interface SponsorData {
@@ -237,7 +238,7 @@ export default async function MarketingPage() {
       : 'Join the Nordic cloud native community for a day of cutting-edge talks, hands-on workshops, and meaningful connections.'
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<MicrophoneIcon />}
         title="Marketing Materials"
@@ -251,6 +252,20 @@ export default async function MarketingPage() {
             marketing campaigns.
           </>
         }
+        actionItems={[
+          {
+            label: 'Featured Content',
+            href: '/admin/marketing/featured',
+            icon: <StarIcon className="h-4 w-4" />,
+            variant: 'secondary',
+          },
+          {
+            label: 'Gallery',
+            href: '/admin/marketing/gallery',
+            icon: <PhotoIcon className="h-4 w-4" />,
+            variant: 'secondary',
+          },
+        ]}
       />
 
       <MarketingTabs

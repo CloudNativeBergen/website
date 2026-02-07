@@ -23,7 +23,7 @@ export function SponsorCRMPageClient({
   const [triggerNew, setTriggerNew] = React.useState(0)
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<RectangleStackIcon />}
         title="Sponsor Pipeline"

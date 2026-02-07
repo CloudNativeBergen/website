@@ -77,7 +77,7 @@ export function SponsorEmailTemplatesPageClient({
   const isEditorOpen = !!(editingTemplate || isCreating)
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<EnvelopeIcon />}
         title="Email Templates"

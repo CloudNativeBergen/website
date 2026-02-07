@@ -36,7 +36,7 @@ export default async function AdminSponsors() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<BuildingOffice2Icon />}
         title="Sponsor Management"
@@ -46,12 +46,12 @@ export default async function AdminSponsors() {
 
       <SponsorDashboardMetrics conferenceId={conference._id} />
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-2">
         <SponsorActionItems conferenceId={conference._id} />
         <SponsorActivityTimeline conferenceId={conference._id} />
       </div>
 
-      <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
           Quick Navigation
         </h2>
