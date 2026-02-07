@@ -79,10 +79,10 @@ export function SponsorProspectus({
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-3xl text-center">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
               {heroHeadline}
             </h1>
-            <p className="mt-8 font-mono text-lg leading-8 text-gray-600 dark:text-gray-300">
+            <p className="font-inter mt-8 text-lg leading-8 text-brand-slate-gray dark:text-gray-300">
               {heroSubheadline}
             </p>
             {prospectusUrl && (

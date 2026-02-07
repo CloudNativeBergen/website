@@ -223,10 +223,10 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-xl lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
               Practical Information
             </h1>
-            <div className="font-display mt-6 space-y-6 text-2xl tracking-tight text-blue-900 dark:text-blue-300">
+            <div className="font-inter mt-6 space-y-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
               <p>
                 Here, you&apos;ll find all the essential details you need to
                 make the most of your conference experience. From venue

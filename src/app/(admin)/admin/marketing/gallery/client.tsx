@@ -164,11 +164,12 @@ function GalleryPageContent() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<PhotoIcon />}
         title="Gallery Management"
         description="Upload and manage event photos"
+        backLink={{ href: '/admin/marketing', label: 'Back to Marketing' }}
       />
 
       <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-900 dark:ring-1 dark:ring-gray-800">

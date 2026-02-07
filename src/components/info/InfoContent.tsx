@@ -49,7 +49,7 @@ export function InfoContent({ faqs }: InfoContentProps) {
             <div className="rounded-3xl bg-white p-8 ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
               <div className="lg:grid lg:grid-cols-12 lg:gap-8">
                 <div className="lg:col-span-5">
-                  <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+                  <h2 className="font-jetbrains text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl dark:text-blue-400">
                     {section.heading}
                   </h2>
                   <p className="mt-4 text-lg leading-7 text-gray-600 dark:text-gray-400">

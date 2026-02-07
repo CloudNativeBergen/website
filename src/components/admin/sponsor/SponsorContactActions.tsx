@@ -8,6 +8,7 @@ import {
 import { Conference } from '@/lib/conference/types'
 import { formatConferenceDateLong } from '@/lib/time'
 import { GeneralBroadcastModal } from '@/components/admin'
+import { AdminHeaderActions } from '@/components/admin/AdminHeaderActions'
 import { useSponsorBroadcast } from '@/hooks/useSponsorBroadcast'
 
 interface SponsorContactActionsProps {
@@ -47,25 +48,23 @@ export function SponsorContactActions({
 
   return (
     <>
-      <div className="flex items-center gap-3">
-        <button
-          onClick={exportSponsorContacts}
-          disabled={sponsorsWithContactsCount === 0 || isExporting}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-gray-300 ring-inset hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <DocumentArrowDownIcon className="h-4 w-4" />
-          {isExporting ? 'Exporting...' : 'Export Contacts'}
-        </button>
-
-        <button
-          onClick={() => setIsBroadcastModalOpen(true)}
-          disabled={sponsorsWithContactsCount === 0}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-        >
-          <EnvelopeIcon className="h-4 w-4" />
-          Send Broadcast ({sponsorsWithContactsCount})
-        </button>
-      </div>
+      <AdminHeaderActions
+        items={[
+          {
+            label: isExporting ? 'Exporting...' : 'Export Contacts',
+            onClick: exportSponsorContacts,
+            icon: <DocumentArrowDownIcon className="h-4 w-4" />,
+            variant: 'secondary',
+            disabled: sponsorsWithContactsCount === 0 || isExporting,
+          },
+          {
+            label: `Send Broadcast (${sponsorsWithContactsCount})`,
+            onClick: () => setIsBroadcastModalOpen(true),
+            icon: <EnvelopeIcon className="h-4 w-4" />,
+            disabled: sponsorsWithContactsCount === 0,
+          },
+        ]}
+      />
 
       <GeneralBroadcastModal
         isOpen={isBroadcastModalOpen}

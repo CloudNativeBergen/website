@@ -27,6 +27,34 @@ export const ConferenceIdSchema = z.object({
   conferenceId: z.string().min(1, 'Conference ID is required'),
 })
 
+export const TicketCustomizationSchema = z.object({
+  hero_headline: z.string().optional(),
+  hero_subheadline: z.string().optional(),
+  show_vanity_metrics: z.boolean().optional(),
+  group_discount_info: z.string().optional(),
+  cta_button_text: z.string().optional(),
+})
+
+export const TicketInclusionSchema = z.object({
+  _key: z.string(),
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+})
+
+export const TicketFaqSchema = z.object({
+  _key: z.string(),
+  question: z.string().min(1, 'Question is required'),
+  answer: z.string().min(1, 'Answer is required'),
+})
+
+export const UpdateTicketPageContentSchema = z.object({
+  conferenceId: z.string().min(1, 'Conference ID is required'),
+  ticket_customization: TicketCustomizationSchema.optional(),
+  ticket_inclusions: z.array(TicketInclusionSchema).optional(),
+  ticket_faqs: z.array(TicketFaqSchema).optional(),
+})
+
 export const CreateDiscountCodeSchema = z.object({
   eventId: z.number().min(1, 'Event ID is required'),
   discountCode: z.string().min(1, 'Discount code is required'),

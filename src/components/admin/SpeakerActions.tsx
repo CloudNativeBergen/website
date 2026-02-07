@@ -1,9 +1,7 @@
 'use client'
 
-import { Button } from '@/components/Button'
 import { GeneralBroadcastModal } from '@/components/admin'
 import { useNotification } from './NotificationProvider'
-import { EnvelopeIcon } from '@heroicons/react/24/outline'
 
 import { Conference } from '@/lib/conference/types'
 import { formatConferenceDateLong } from '@/lib/time'
@@ -79,32 +77,19 @@ export function SpeakerActions({
   }
 
   return (
-    <>
-      <Button
-        onClick={() => setIsModalOpen(true)}
-        variant="primary"
-        size="md"
-        className="font-space-grotesk flex items-center gap-2 rounded-xl transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={eligibleSpeakersCount === 0}
-      >
-        <EnvelopeIcon className="h-4 w-4" />
-        Email Speakers
-      </Button>
-
-      <GeneralBroadcastModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSend={handleSendBroadcast}
-        onSyncContacts={handleSyncContacts}
-        recipientCount={eligibleSpeakersCount}
-        recipientType="speakers"
-        fromEmail={fromEmail}
-        eventName={conference.title}
-        eventLocation={`${conference.city}, ${conference.country}`}
-        eventDate={formatConferenceDateLong(conference.start_date)}
-        eventUrl={`https://${conference.domains[0]}`}
-        socialLinks={conference.social_links || []}
-      />
-    </>
+    <GeneralBroadcastModal
+      isOpen={isModalOpen}
+      onClose={() => setIsModalOpen(false)}
+      onSend={handleSendBroadcast}
+      onSyncContacts={handleSyncContacts}
+      recipientCount={eligibleSpeakersCount}
+      recipientType="speakers"
+      fromEmail={fromEmail}
+      eventName={conference.title}
+      eventLocation={`${conference.city}, ${conference.country}`}
+      eventDate={formatConferenceDateLong(conference.start_date)}
+      eventUrl={`https://${conference.domains[0]}`}
+      socialLinks={conference.social_links || []}
+    />
   )
 }

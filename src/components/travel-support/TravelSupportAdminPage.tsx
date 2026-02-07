@@ -92,7 +92,7 @@ export function TravelSupportAdminPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-7xl">
+      <div className="space-y-6">
         <div className="pb-6">
           <div className="animate-pulse">
             <div className="flex items-center gap-3">
@@ -124,7 +124,7 @@ export function TravelSupportAdminPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <div className="pb-6">
         <div className="flex items-center gap-3">
           <CurrencyDollarIcon className="h-8 w-8 text-brand-cloud-blue" />

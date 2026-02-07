@@ -1,5 +1,4 @@
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { getEventDiscounts } from '@/lib/discounts'
 import { SPONSOR_TIER_TICKET_ALLOCATION } from '@/lib/tickets/processor'
 import { ErrorDisplay, AdminPageHeader } from '@/components/admin'
 import { DiscountCodeManager } from '@/components/admin/DiscountCodeManager'
@@ -75,62 +74,17 @@ export default async function DiscountCodesAdminPage() {
       }
     }) || []
 
-  let discounts
-  try {
-    const discountData = await getEventDiscounts(conference.checkin_event_id)
-    discounts = discountData.discounts
-  } catch (error) {
-    return (
-      <ErrorDisplay
-        title="Failed to Load Discount Data"
-        message={`Unable to fetch discount codes from Checkin.no: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your API credentials and event configuration.`}
-        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
-      />
-    )
-  }
-
-  const sponsorsWithDiscounts = sponsorsWithTierInfo.filter((sponsor) => {
-    return discounts.some((discount) =>
-      discount.triggerValue
-        ?.toLowerCase()
-        .includes(sponsor.name.toLowerCase().replace(/\s+/g, '')),
-    )
-  })
-
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<TicketIcon />}
         title="Discount Code Management"
         description="Create and manage sponsor discount codes based on tier entitlements"
         contextHighlight={conference.title}
-        stats={[
-          {
-            label: 'Total Sponsors',
-            value: sponsorsWithTierInfo.length.toString(),
-          },
-          {
-            label: 'Total Ticket Allowances',
-            value: sponsorsWithTierInfo
-              .reduce(
-                (sum: number, s: SponsorWithTierInfo) =>
-                  sum + s.ticketEntitlement,
-                0,
-              )
-              .toString(),
-          },
-          {
-            label: 'Sponsors with Codes',
-            value: sponsorsWithDiscounts.length.toString(),
-          },
-          {
-            label: 'Total Active Codes',
-            value: discounts.length.toString(),
-          },
-        ]}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
 
-      <div className="mt-8">
+      <div>
         <DiscountCodeManager
           sponsors={sponsorsWithTierInfo}
           eventId={conference.checkin_event_id}
@@ -147,7 +101,7 @@ export default async function DiscountCodesAdminPage() {
         />
       </div>
 
-      <div className="mt-12">
+      <div>
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions
         </h2>

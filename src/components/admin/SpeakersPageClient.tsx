@@ -7,12 +7,12 @@ import { SpeakerManagementModal } from '@/components/admin/SpeakerManagementModa
 import { SpeakerActions } from '@/components/admin/SpeakerActions'
 import SpeakerProfilePreview from '@/components/SpeakerProfilePreview'
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader'
-import { Button } from '@/components/Button'
 import {
   PlusIcon,
   UserGroupIcon,
   EnvelopeIcon,
   AcademicCapIcon,
+  CreditCardIcon,
 } from '@heroicons/react/24/outline'
 import { Speaker } from '@/lib/speaker/types'
 import { ProposalExisting, Status } from '@/lib/proposal/types'
@@ -108,7 +108,7 @@ export default function SpeakersPageClient({
 
   return (
     <>
-      <div className="mx-auto max-w-7xl">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={<UserGroupIcon className="h-6 w-6" />}
           title="Speaker Management"
@@ -172,41 +172,34 @@ export default function SpeakersPageClient({
               color: 'indigo' as const,
             },
           ]}
-          actions={
-            <div className="flex items-center gap-3">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={handleCreateClick}
-                className="font-space-grotesk inline-flex items-center gap-2"
-              >
-                <PlusIcon className="h-5 w-5" />
-                Create New Speaker
-              </Button>
-              <Button
-                onClick={() => router.push('/admin/speakers/badge')}
-                variant="secondary"
-                size="sm"
-                className="font-space-grotesk inline-flex items-center gap-2"
-              >
-                <AcademicCapIcon className="h-5 w-5" />
-                Manage Badges
-              </Button>
-              <Button
-                onClick={() => setIsEmailModalOpen(true)}
-                variant="primary"
-                size="sm"
-                className="font-space-grotesk inline-flex items-center gap-2"
-                disabled={confirmedSpeakersCount === 0}
-              >
-                <EnvelopeIcon className="h-4 w-4" />
-                Email Speakers
-              </Button>
-            </div>
-          }
+          actionItems={[
+            {
+              label: 'Create New Speaker',
+              onClick: handleCreateClick,
+              icon: <PlusIcon className="h-4 w-4" />,
+            },
+            {
+              label: 'Manage Badges',
+              href: '/admin/speakers/badge',
+              icon: <AcademicCapIcon className="h-4 w-4" />,
+              variant: 'secondary',
+            },
+            {
+              label: 'Travel Support',
+              href: '/admin/speakers/travel-support',
+              icon: <CreditCardIcon className="h-4 w-4" />,
+              variant: 'secondary',
+            },
+            {
+              label: 'Email Speakers',
+              onClick: () => setIsEmailModalOpen(true),
+              icon: <EnvelopeIcon className="h-4 w-4" />,
+              disabled: confirmedSpeakersCount === 0,
+            },
+          ]}
         />
 
-        <div className="mt-8">
+        <div>
           <SpeakerTable
             speakers={speakers}
             currentConferenceId={currentConferenceId}

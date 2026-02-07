@@ -46,6 +46,27 @@ export interface SponsorshipCustomization {
   prospectus_url?: string
 }
 
+export interface TicketCustomization {
+  hero_headline?: string
+  hero_subheadline?: string
+  show_vanity_metrics?: boolean
+  group_discount_info?: string
+  cta_button_text?: string
+}
+
+export interface TicketInclusion {
+  _key?: string
+  title: string
+  description?: string
+  icon?: string
+}
+
+export interface TicketFaq {
+  _key?: string
+  question: string
+  answer: string
+}
+
 export interface Conference {
   _id: string
   title: string
@@ -89,6 +110,9 @@ export interface Conference {
   sponsor_tiers?: SponsorTier[]
   sponsor_benefits?: SponsorBenefit[]
   sponsorship_customization?: SponsorshipCustomization
+  ticket_customization?: TicketCustomization
+  ticket_inclusions?: TicketInclusion[]
+  ticket_faqs?: TicketFaq[]
   schedules?: ConferenceSchedule[]
   vanity_metrics?: ConferenceVanityMetric[]
   features?: string[]

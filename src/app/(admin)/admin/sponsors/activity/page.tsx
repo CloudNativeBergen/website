@@ -25,17 +25,16 @@ export default async function AdminSponsorActivity() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<ClipboardDocumentListIcon />}
         title="Activity Log"
         description="Complete history of sponsor activities for"
         contextHighlight={conference.title}
-        stats={[]}
         backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
       />
 
-      <div className="mt-8 rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-600 dark:bg-gray-800">
+      <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white p-12 text-center dark:border-gray-600 dark:bg-gray-800">
         <p className="text-gray-600 dark:text-gray-400">
           Full activity log with filters and pagination coming soon
         </p>

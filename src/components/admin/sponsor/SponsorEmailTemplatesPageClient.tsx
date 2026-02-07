@@ -77,23 +77,20 @@ export function SponsorEmailTemplatesPageClient({
   const isEditorOpen = !!(editingTemplate || isCreating)
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<EnvelopeIcon />}
         title="Email Templates"
         description="Manage outreach email templates for"
         contextHighlight={conference.title}
-        actions={
-          !isEditorOpen ? (
-            <button
-              onClick={() => setIsCreating(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-            >
-              <PlusIcon className="h-4 w-4" />
-              New Template
-            </button>
-          ) : undefined
-        }
+        actionItems={[
+          {
+            label: 'New Template',
+            onClick: () => setIsCreating(true),
+            icon: <PlusIcon className="h-4 w-4" />,
+            hidden: isEditorOpen,
+          },
+        ]}
         backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
       />
 

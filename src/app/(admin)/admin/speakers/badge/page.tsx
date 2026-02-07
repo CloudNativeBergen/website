@@ -103,7 +103,7 @@ export default async function AdminBadgePage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         title="Speaker Badges"
         description={

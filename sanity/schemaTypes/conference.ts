@@ -362,6 +362,151 @@ export default defineType({
       ],
       hidden: ({ document }) => !document?.ticket_capacity,
     }),
+    defineField({
+      name: 'ticket_customization',
+      title: 'Ticket Page Customization',
+      type: 'object',
+      fieldset: 'ticketing',
+      options: { collapsible: true, collapsed: true },
+      fields: [
+        defineField({
+          name: 'hero_headline',
+          type: 'string',
+          title: 'Hero Headline',
+          description: 'Main headline on the tickets page',
+        }),
+        defineField({
+          name: 'hero_subheadline',
+          type: 'text',
+          title: 'Hero Subheadline',
+          rows: 3,
+          description:
+            'Subheadline text below the main headline. Leave blank to auto-generate from conference name and dates.',
+        }),
+        defineField({
+          name: 'show_vanity_metrics',
+          title: 'Show Vanity Metrics',
+          type: 'boolean',
+          description:
+            'Show the vanity metrics bar (attendees, speakers, etc.) on the tickets page. Uses the same metrics configured under Content & Announcements.',
+          initialValue: false,
+        }),
+        defineField({
+          name: 'group_discount_info',
+          type: 'text',
+          title: 'Group Discount Information',
+          rows: 3,
+          description:
+            'Information about group discounts or special offers. Leave blank to hide this section.',
+        }),
+        defineField({
+          name: 'cta_button_text',
+          type: 'string',
+          title: 'CTA Button Text',
+          description:
+            'Text for the main registration button. Defaults to "Register Now".',
+        }),
+      ],
+    }),
+    defineField({
+      name: 'ticket_inclusions',
+      title: 'Ticket Inclusions',
+      type: 'array',
+      fieldset: 'ticketing',
+      description:
+        'What attendees get with their ticket. Displayed as "What\'s Included" on the tickets page.',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'title',
+              title: 'Title',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'description',
+              title: 'Description',
+              type: 'text',
+              rows: 2,
+            }),
+            defineField({
+              name: 'icon',
+              title: 'Icon',
+              type: 'string',
+              options: {
+                list: [
+                  { title: 'Microphone', value: 'MicrophoneIcon' },
+                  { title: 'User Group', value: 'UserGroupIcon' },
+                  {
+                    title: 'Presentation Chart',
+                    value: 'PresentationChartBarIcon',
+                  },
+                  { title: 'Academic Cap', value: 'AcademicCapIcon' },
+                  { title: 'Sparkles', value: 'SparklesIcon' },
+                  { title: 'Light Bulb', value: 'LightBulbIcon' },
+                  { title: 'Cup Soda', value: 'BeakerIcon' },
+                  { title: 'Gift', value: 'GiftIcon' },
+                  { title: 'Film', value: 'FilmIcon' },
+                  { title: 'Camera', value: 'CameraIcon' },
+                  { title: 'Code Bracket', value: 'CodeBracketIcon' },
+                  { title: 'Command Line', value: 'CommandLineIcon' },
+                  { title: 'CPU Chip', value: 'CpuChipIcon' },
+                  { title: 'Chat Bubble', value: 'ChatBubbleLeftRightIcon' },
+                  { title: 'Trophy', value: 'TrophyIcon' },
+                  { title: 'Heart', value: 'HeartIcon' },
+                  { title: 'Star', value: 'StarIcon' },
+                  { title: 'Globe', value: 'GlobeAltIcon' },
+                  { title: 'Musical Note', value: 'MusicalNoteIcon' },
+                  { title: 'Check Badge', value: 'CheckBadgeIcon' },
+                ],
+              },
+            }),
+          ],
+          preview: {
+            select: {
+              title: 'title',
+              subtitle: 'description',
+            },
+          },
+        },
+      ],
+    }),
+    defineField({
+      name: 'ticket_faqs',
+      title: 'Ticket FAQs',
+      type: 'array',
+      fieldset: 'ticketing',
+      description:
+        'Frequently asked questions about tickets and registration. Displayed on the tickets page.',
+      of: [
+        {
+          type: 'object',
+          fields: [
+            defineField({
+              name: 'question',
+              title: 'Question',
+              type: 'string',
+              validation: (Rule) => Rule.required(),
+            }),
+            defineField({
+              name: 'answer',
+              title: 'Answer',
+              type: 'text',
+              rows: 4,
+              validation: (Rule) => Rule.required(),
+            }),
+          ],
+          preview: {
+            select: {
+              title: 'question',
+              subtitle: 'answer',
+            },
+          },
+        },
+      ],
+    }),
 
     // === Communication ===
     defineField({

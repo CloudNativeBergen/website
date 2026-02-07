@@ -10,6 +10,7 @@ import {
   GetDiscountsSchema,
   DeleteDiscountCodeSchema,
   GetPaymentDetailsSchema,
+  UpdateTicketPageContentSchema,
 } from '../schemas/tickets'
 import { clientWrite } from '@/lib/sanity/client'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -433,6 +434,92 @@ export const ticketsRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch payment details',
+          cause: error,
+        })
+      }
+    }),
+
+  getPageContent: adminProcedure
+    .input(ConferenceIdSchema)
+    .query(async ({ input }) => {
+      const { conferenceId } = input
+
+      try {
+        const query = `*[_type == "conference" && _id == $conferenceId][0]{
+          _id,
+          ticket_customization,
+          ticket_inclusions,
+          ticket_faqs,
+          vanity_metrics
+        }`
+
+        const conference = await clientWrite.fetch(query, { conferenceId })
+
+        if (!conference) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Conference not found',
+          })
+        }
+
+        return conference
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch ticket page content',
+          cause: error,
+        })
+      }
+    }),
+
+  updatePageContent: adminProcedure
+    .input(UpdateTicketPageContentSchema)
+    .mutation(async ({ input }) => {
+      const {
+        conferenceId,
+        ticket_customization,
+        ticket_inclusions,
+        ticket_faqs,
+      } = input
+
+      const updates: Record<string, unknown> = {}
+
+      if (ticket_customization !== undefined) {
+        updates.ticket_customization = ticket_customization
+      }
+
+      if (ticket_inclusions !== undefined) {
+        updates.ticket_inclusions = ticket_inclusions
+      }
+
+      if (ticket_faqs !== undefined) {
+        updates.ticket_faqs = ticket_faqs
+      }
+
+      if (Object.keys(updates).length === 0) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'No updates provided',
+        })
+      }
+
+      try {
+        const result = await clientWrite
+          .patch(conferenceId)
+          .set(updates)
+          .commit()
+
+        revalidateTag('content:tickets', 'default')
+
+        return {
+          success: true,
+          updated: result,
+        }
+      } catch (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update ticket page content',
           cause: error,
         })
       }

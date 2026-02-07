@@ -1,15 +1,16 @@
 import React from 'react'
 import Link from 'next/link'
 import { ChevronLeftIcon } from '@heroicons/react/24/outline'
+import { AdminHeaderActions, type ActionItem } from './AdminHeaderActions'
 
 export interface StatCardProps {
   value: string | number
 
   label: string
 
-  color?: 'blue' | 'green' | 'purple' | 'slate' | 'indigo'
+  subtitle?: string | React.ReactNode
 
-  icon?: React.ReactNode
+  color?: 'blue' | 'green' | 'purple' | 'slate' | 'indigo' | 'yellow' | 'red'
 }
 
 export interface AdminPageHeaderProps {
@@ -23,6 +24,10 @@ export interface AdminPageHeaderProps {
 
   stats?: StatCardProps[]
 
+  /** Structured action items — preferred way to add header actions */
+  actionItems?: ActionItem[]
+
+  /** Raw JSX actions — escape hatch for complex cases */
   actions?: React.ReactNode
 
   children?: React.ReactNode
@@ -43,26 +48,30 @@ function getValueColorClasses(color: StatCardProps['color'] = 'slate') {
       return 'text-brand-nordic-purple dark:text-indigo-300'
     case 'indigo':
       return 'text-brand-cloud-blue dark:text-indigo-300'
+    case 'yellow':
+      return 'text-yellow-600 dark:text-yellow-300'
+    case 'red':
+      return 'text-red-600 dark:text-red-300'
     case 'slate':
     default:
-      return 'text-brand-slate-gray dark:text-white'
+      return 'text-gray-900 dark:text-white'
   }
 }
 
-function StatCard({ value, label, color = 'slate', icon }: StatCardProps) {
+function StatCard({ value, label, subtitle, color = 'slate' }: StatCardProps) {
   const valueColorClasses = getValueColorClasses(color)
 
   return (
-    <div className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-brand-frosted-steel/20 dark:bg-gray-900 dark:ring-gray-700">
-      <div className="flex items-center gap-2">
-        {icon && <div className="shrink-0">{icon}</div>}
-        <div className={`text-lg font-bold sm:text-xl ${valueColorClasses}`}>
-          {value}
-        </div>
-      </div>
-      <div className="mt-1 text-xs text-brand-slate-gray/70 dark:text-gray-400">
+    <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400">
         {label}
-      </div>
+      </dt>
+      <dd className={`mt-1 text-xl font-semibold ${valueColorClasses}`}>
+        {value}
+      </dd>
+      {subtitle && (
+        <dd className="text-xs text-gray-600 dark:text-gray-400">{subtitle}</dd>
+      )}
     </div>
   )
 }
@@ -73,6 +82,7 @@ export function AdminPageHeader({
   description,
   contextHighlight,
   stats,
+  actionItems,
   actions,
   children,
   backLink,
@@ -90,20 +100,18 @@ export function AdminPageHeader({
 
   return (
     <div className="pb-4">
-      {backLink && (
-        <div className="mb-2">
-          <Link
-            href={backLink.href}
-            className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-            {backLink.label || 'Back'}
-          </Link>
-        </div>
-      )}
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div className="mt-1 shrink-0">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          {backLink && (
+            <Link
+              href={backLink.href}
+              className="shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              title={backLink.label || 'Back'}
+            >
+              <ChevronLeftIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+            </Link>
+          )}
+          <div className="shrink-0">
             <div className="h-6 w-6 text-brand-cloud-blue sm:h-8 sm:w-8 dark:text-blue-300">
               {icon}
             </div>
@@ -113,7 +121,7 @@ export function AdminPageHeader({
             <h1 className="font-space-grotesk text-xl leading-6 font-bold text-brand-slate-gray sm:text-2xl sm:leading-7 sm:tracking-tight lg:text-3xl lg:leading-8 dark:text-white">
               {title}
             </h1>
-            <div className="font-inter mt-2 text-sm text-brand-slate-gray/70 dark:text-gray-400">
+            <div className="font-inter mt-1 text-sm text-brand-slate-gray/70 dark:text-gray-400">
               {typeof description === 'string' ? (
                 <p>
                   {description}
@@ -133,9 +141,13 @@ export function AdminPageHeader({
           </div>
         </div>
 
-        {actions && (
-          <div className="ml-4 shrink-0">
-            <div className="flex flex-col gap-2 sm:flex-row">{actions}</div>
+        {(actionItems || actions) && (
+          <div className="shrink-0">
+            {actionItems ? (
+              <AdminHeaderActions items={actionItems} />
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row">{actions}</div>
+            )}
           </div>
         )}
       </div>
@@ -149,8 +161,8 @@ export function AdminPageHeader({
               key={`${stat.label}-${index}`}
               value={stat.value}
               label={stat.label}
+              subtitle={stat.subtitle}
               color={stat.color}
-              icon={stat.icon}
             />
           ))}
         </div>

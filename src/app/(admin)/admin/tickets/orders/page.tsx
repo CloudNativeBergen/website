@@ -73,44 +73,17 @@ export default async function OrdersAdminPage() {
 
   const orders = groupTicketsByOrder(allTickets)
 
-  const paidTickets = allTickets.filter((ticket) => parseFloat(ticket.sum) > 0)
-  const freeTickets = allTickets.filter(
-    (ticket) => parseFloat(ticket.sum) === 0,
-  )
-  const pendingPayments = orders.filter((order) => order.amountLeft > 0)
-
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<ShoppingBagIcon />}
         title="Order Management"
         description="View and manage ticket orders for"
         contextHighlight={conference.title}
-        stats={[
-          {
-            label: 'Total Orders',
-            value: orders.length.toString(),
-          },
-          {
-            label: 'Total Tickets',
-            value: allTickets.length.toString(),
-          },
-          {
-            label: 'Pending Payments',
-            value: pendingPayments.length.toString(),
-          },
-          {
-            label: 'Free Tickets',
-            value: freeTickets.length.toString(),
-          },
-          {
-            label: 'Paid Tickets',
-            value: paidTickets.length.toString(),
-          },
-        ]}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
       />
 
-      <div className="mt-12">
+      <div>
         <div className="mb-6">
           <h2 className="text-lg font-medium text-gray-900 dark:text-white">
             All Orders
@@ -136,7 +109,7 @@ export default async function OrdersAdminPage() {
         )}
       </div>
 
-      <div className="mt-12">
+      <div>
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions
         </h2>

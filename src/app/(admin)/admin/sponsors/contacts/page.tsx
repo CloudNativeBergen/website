@@ -52,7 +52,7 @@ export default async function AdminSponsorContacts() {
     )
 
     return (
-      <div className="mx-auto max-w-7xl">
+      <div className="space-y-6">
         <AdminPageHeader
           icon={<UserGroupIcon />}
           title="Sponsor Contacts"
@@ -84,10 +84,10 @@ export default async function AdminSponsorContacts() {
           }
           backLink={{ href: '/admin/sponsors', label: 'Back to Dashboard' }}
         />{' '}
-        <div className="mt-8">
+        <div>
           <SponsorContactTable sponsors={crmSponsors} />
         </div>
-        <div className="mt-8 rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
             Quick Navigation
           </h2>

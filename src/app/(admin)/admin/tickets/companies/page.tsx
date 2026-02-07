@@ -272,12 +272,13 @@ export default async function CompaniesAdminPage() {
   )
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <AdminPageHeader
         icon={<BuildingOfficeIcon />}
         title="Company Breakdown"
         description="Overview of attending companies for"
         contextHighlight={conference.title}
+        backLink={{ href: '/admin/tickets', label: 'Back to Tickets' }}
         stats={[
           {
             label: 'Total Companies',
@@ -299,7 +300,7 @@ export default async function CompaniesAdminPage() {
         ]}
       />
 
-      <div className="mt-12">
+      <div>
         {companyBreakdown.length === 0 ? (
           <div className="rounded-lg bg-white p-12 text-center shadow dark:bg-gray-900">
             <BuildingOfficeIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
@@ -377,7 +378,7 @@ export default async function CompaniesAdminPage() {
         )}
       </div>
 
-      <div className="mt-12">
+      <div>
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">
           Quick Actions
         </h2>

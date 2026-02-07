@@ -2,7 +2,7 @@ import { SkeletonCard, SkeletonTable } from './LoadingSkeleton'
 
 export function TicketPageLoadingSkeleton() {
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="space-y-6">
       <div className="pb-6">
         <div className="animate-pulse">
           <div className="flex items-center justify-between">
@@ -18,7 +18,7 @@ export function TicketPageLoadingSkeleton() {
         </div>
       </div>
 
-      <div className="mt-8">
+      <div>
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {[...Array(5)].map((_, i) => (
             <div
@@ -63,7 +63,7 @@ export function TicketPageLoadingSkeleton() {
         </div>
       </div>
 
-      <div className="mt-8">
+      <div>
         <SkeletonCard
           showHeader={true}
           rows={3}
@@ -72,7 +72,7 @@ export function TicketPageLoadingSkeleton() {
         />
       </div>
 
-      <div className="mt-8 space-y-8">
+      <div className="space-y-8">
         <div className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
           <div className="p-4">
             <div className="animate-pulse">
@@ -102,7 +102,7 @@ export function TicketPageLoadingSkeleton() {
         </div>
       </div>
 
-      <div className="mt-12">
+      <div>
         <div className="animate-pulse">
           <div className="mb-4 h-6 w-32 rounded bg-gray-200 dark:bg-gray-700" />
         </div>
