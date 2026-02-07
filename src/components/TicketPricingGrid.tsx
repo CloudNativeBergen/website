@@ -176,6 +176,7 @@ export function TicketPricingGrid({
                     status={status}
                     registrationLink={registrationLink}
                     showLabel={false}
+                    showInclVat={/student/i.test(ticket.name)}
                   />
                 </div>
                 {ticket.description && (
@@ -253,12 +254,14 @@ function PriceCell({
   status,
   registrationLink,
   showLabel = true,
+  showInclVat = false,
 }: {
   ticket: PublicTicketType
   currency: string
   status: 'expired' | 'active' | 'upcoming'
   registrationLink?: string
   showLabel?: boolean
+  showInclVat?: boolean
 }) {
   const price = ticket.price[0]
   if (!price) return null
@@ -267,6 +270,10 @@ function PriceCell({
   const formattedInclVat = formatTicketPrice(price.price, price.vat, {
     includeVat: true,
   })
+
+  const primaryPrice = showInclVat ? formattedInclVat : formatted
+  const secondaryPrice = showInclVat ? formatted : formattedInclVat
+  const secondaryLabel = showInclVat ? 'excl. VAT' : 'incl. VAT'
 
   if (status === 'expired') {
     return (
@@ -277,7 +284,7 @@ function PriceCell({
           </div>
         )}
         <div className="font-space-grotesk text-base font-bold text-gray-400 line-through dark:text-gray-500">
-          {currency} {formatted}
+          {currency} {primaryPrice}
         </div>
       </div>
     )
@@ -292,7 +299,7 @@ function PriceCell({
           </div>
         )}
         <div className="font-space-grotesk text-base font-bold text-gray-400 dark:text-gray-500">
-          {currency} {formatted}
+          {currency} {primaryPrice}
         </div>
       </div>
     )
@@ -301,10 +308,10 @@ function PriceCell({
   return (
     <div>
       <div className="font-space-grotesk text-xl font-bold text-brand-slate-gray dark:text-white">
-        {currency} {formatted}
+        {currency} {primaryPrice}
       </div>
       <div className="font-inter mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
-        {currency} {formattedInclVat} incl. VAT
+        {currency} {secondaryPrice} {secondaryLabel}
       </div>
       {registrationLink && (
         <a

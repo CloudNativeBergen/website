@@ -71,9 +71,9 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
 
   if (hasTicketPricing) {
     return (
-      <div className="relative overflow-hidden">
+      <div className="relative py-20 sm:pt-36 sm:pb-24">
         <BackgroundImage className="-top-36 -bottom-14" />
-        <Container className="relative py-12 sm:py-16 lg:py-20">
+        <Container className="relative">
           <div className="mx-auto max-w-5xl">
             {/* Header */}
             <div className="mb-10 text-center">
@@ -245,9 +245,9 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
 
   // Fallback: "Tickets Coming Soon" when no pricing data is available
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative py-20 sm:pt-36 sm:pb-24">
       <BackgroundImage className="-top-36 -bottom-14" />
-      <Container className="relative py-12 sm:py-16 lg:py-20">
+      <Container className="relative">
         <div className="mx-auto max-w-3xl">
           <div className="overflow-hidden rounded-2xl bg-white/95 shadow-xl ring-1 ring-brand-cloud-blue/10 backdrop-blur-sm dark:bg-gray-800/95 dark:ring-gray-700">
             <div className="px-6 py-8 sm:px-10 sm:py-12">
