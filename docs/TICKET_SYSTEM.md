@@ -40,11 +40,82 @@ src/app/(main)/tickets/page.tsx   ← public page with 'use cache'
 
 ### Ticket Name Convention
 
-Tickets in Checkin.no follow the naming pattern `"Tier: Category (details)"`:
+Tickets in Checkin.no **must** follow a specific naming pattern for the pricing grid to render correctly. The `buildPricingMatrix()` function in `src/lib/tickets/public.ts` parses ticket names to construct a categories × tiers grid.
 
-- `"Early Bird: Conference Only (1 day)"` → tier=Early Bird, category=Conference Only (1 day)
-- `"Standard: Workshop + Conference (2 days)"` → tier=Standard, category=Workshop + Conference (2 days)
-- `"Student: The 1337 Ticket"` → detected as standalone (Student doesn't share categories with other tiers)
+#### Naming Pattern: `"Tier: Category (details)"`
+
+The parser splits on the **first colon** (`:`) in the ticket name:
+
+- Everything before the colon = **Tier** (pricing period column header)
+- Everything after the colon = **Category** (row label)
+
+#### Tiered Tickets (Grid Rows)
+
+A tier is only recognized as valid if its categories overlap with at least one other tier. This means a minimum of **two tiers sharing the same category names** is required to produce a grid.
+
+**Example — 3 tiers × 2 categories = 6 tickets in Checkin.no:**
+
+| Checkin.no Ticket Name                       | Parsed Tier | Parsed Category                |
+| -------------------------------------------- | ----------- | ------------------------------ |
+| `Early Bird: Conference Only (1 day)`        | Early Bird  | Conference Only (1 day)        |
+| `Early Bird: Workshop + Conference (2 days)` | Early Bird  | Workshop + Conference (2 days) |
+| `Standard: Conference Only (1 day)`          | Standard    | Conference Only (1 day)        |
+| `Standard: Workshop + Conference (2 days)`   | Standard    | Workshop + Conference (2 days) |
+| `Late Bird: Conference Only (1 day)`         | Late Bird   | Conference Only (1 day)        |
+| `Late Bird: Workshop + Conference (2 days)`  | Late Bird   | Workshop + Conference (2 days) |
+
+This renders as:
+
+```
+                    | Early Bird      | Standard  | Late Bird |
+                    | --------------- | --------- | --------- | --------- |
+                    | Conference Only | NOK 2,000 | NOK 2,500 | NOK 3,000 |
+                    | Workshop + Conf | NOK 4,500 | NOK 4,500 | NOK 5,500 |
+```
+
+#### Standalone Tickets (Cards)
+
+Tickets that **don't share categories** with other tiers are rendered as individual cards below the grid. This happens in two cases:
+
+1. **No colon in the name** — treated as a standalone category (e.g., `Student: The 1337 Ticket` where "The 1337 Ticket" doesn't appear in any other tier)
+2. **Colon present but unique category** — if the category part only appears under one tier, the ticket falls through to standalone rendering
+
+**Example:** `Student: The 1337 Ticket` → The category "The 1337 Ticket" only exists under "Student", so it becomes a standalone card.
+
+#### Complimentary Tickets (Static Cards)
+
+Speaker and Volunteer tickets are shown as static "Free" cards alongside standalone tickets. These are **not fetched from Checkin.no** — they're hardcoded in the page component since the API filters out invite-only and zero-price tickets.
+
+#### Rules Summary
+
+| Rule                    | Requirement                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| Tier/Category separator | First `:` (colon) in the name                                                   |
+| Grid row qualification  | Category string must appear in **2+ different tiers**                           |
+| Tier column ordering    | Follows the `position` field set in Checkin.no                                  |
+| Category row ordering   | Follows the `position` of the first ticket in that category                     |
+| Standalone fallback     | Any ticket whose category is unique to one tier                                 |
+| Excluded from display   | `requiresInvitation: true` or `price == 0`                                      |
+| Sale window columns     | `visibleStartsAt`/`visibleEndsAt` control tier status (expired/active/upcoming) |
+
+#### Checklist for Setting Up a New Conference
+
+1. **Name tiered tickets consistently** — use the exact same category string across all tiers (case-sensitive, including parenthetical details)
+2. **Set `position` values** — controls display order for both columns and rows
+3. **Set visibility windows** — `visibleStartsAt`/`visibleEndsAt` determine which tier shows as "active" vs "coming soon" vs "expired"
+4. **Use `requiresInvitation: true`** for speaker/sponsor/volunteer comps — these are automatically filtered out
+5. **Add descriptions** — only shown on standalone ticket cards, not in the tiered grid
+6. **Verify the grid** — after creating tickets, check `/tickets` to confirm the matrix renders as expected
+
+#### Common Mistakes
+
+| Mistake                                                                      | Result                                |
+| ---------------------------------------------------------------------------- | ------------------------------------- |
+| Typo in category across tiers (e.g., "Conference only" vs "Conference Only") | Two separate rows instead of one      |
+| Only one tier has a colon in names                                           | All tickets become standalone cards   |
+| Missing colon separator                                                      | Ticket treated as standalone          |
+| Forgetting to set `position`                                                 | Unpredictable row/column ordering     |
+| Price set to 0 for a public ticket                                           | Ticket filtered out and not displayed |
 
 ### Caching Strategy
 
@@ -65,17 +136,17 @@ The sponsor page is the most mature public-facing page and serves as the templat
 | Hero (headline + subheadline) | `sponsorship_customization.hero_headline/subheadline`    | **Missing** — should add customizable headline                |
 | Vanity metrics (stats bar)    | `conference.vanity_metrics[]`                            | **Missing** — could reuse (attendees, speakers, tracks, etc.) |
 | Why Sponsor (benefit cards)   | `conference.sponsor_benefits[]` (icon + title + desc)    | **Missing** — should add "What's Included" cards              |
-| Tier pricing cards            | `sponsorTier` Sanity documents                           | ✅ Exists — pricing grid from Checkin.no                      |
+| Tier pricing cards            | `sponsorTier` Sanity documents                           | ✅ Exists — pricing grid from Checkin.no                       |
 | Philosophy section            | `sponsorship_customization.philosophy_title/description` | **Missing** — could add registration type explanations        |
-| Closing CTA                   | `sponsorship_customization.closing_quote/cta_text`       | ✅ Partial — has "Register Now" button                        |
-| Contact footer                | `conference.sponsor_email`                               | ✅ Exists — uses `contact_email`                              |
+| Closing CTA                   | `sponsorship_customization.closing_quote/cta_text`       | ✅ Partial — has "Register Now" button                         |
+| Contact footer                | `conference.sponsor_email`                               | ✅ Exists — uses `contact_email`                               |
 | Past sponsors grid            | `sponsorForConference` documents                         | N/A                                                           |
 
 ### KubeCon Registration Page Sections
 
 | Section                                                                   | Our Equivalent                     | Priority |
 | ------------------------------------------------------------------------- | ---------------------------------- | -------- |
-| Pricing grid (pass types × tiers × registration types)                    | ✅ Exists                          | —        |
+| Pricing grid (pass types × tiers × registration types)                    | ✅ Exists                           | —        |
 | Pass types explanation ("What can I expect?")                             | **Missing**                        | High     |
 | Registration types explanation (Corporate, Individual, Academic, Speaker) | **Missing**                        | High     |
 | What's Included (bullet list of benefits)                                 | **Missing**                        | High     |

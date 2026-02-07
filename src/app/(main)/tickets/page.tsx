@@ -128,6 +128,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
               <TicketPricingGrid
                 tickets={ticketData.tickets}
                 registrationLink={conference.registration_link}
+                complimentaryTickets={ticketData.complimentaryTickets}
               />
             </div>
 

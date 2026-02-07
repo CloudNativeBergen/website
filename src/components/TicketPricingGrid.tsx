@@ -2,7 +2,9 @@ import {
   buildPricingMatrix,
   formatTicketPrice,
   getTicketSaleStatus,
+  stripHtml,
   type PublicTicketType,
+  type ComplimentaryTicketInfo,
 } from '@/lib/tickets/public'
 import { TicketIcon, CalendarDaysIcon } from '@heroicons/react/24/outline'
 import clsx from 'clsx'
@@ -12,6 +14,7 @@ interface TicketPricingGridProps {
   registrationLink?: string
   currency?: string
   vatPercent?: string
+  complimentaryTickets?: ComplimentaryTicketInfo[]
 }
 
 export function TicketPricingGrid({
@@ -19,6 +22,7 @@ export function TicketPricingGrid({
   registrationLink,
   currency = 'NOK',
   vatPercent,
+  complimentaryTickets = [],
 }: TicketPricingGridProps) {
   const { categories, tiers, matrix } = buildPricingMatrix(tickets)
 
@@ -127,7 +131,7 @@ export function TicketPricingGrid({
       )}
 
       {/* Standalone tickets (e.g., Student) */}
-      {standaloneCategories.length > 0 && (
+      {(standaloneCategories.length > 0 || complimentaryTickets.length > 0) && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {standaloneCategories.map((category) => {
             const ticket = category.tickets[0]
@@ -182,6 +186,35 @@ export function TicketPricingGrid({
               </div>
             )
           })}
+          {complimentaryTickets.map((comp) => (
+            <div
+              key={comp.name}
+              className="rounded-xl border border-brand-fresh-green/20 bg-white p-5 transition-shadow hover:shadow-md dark:border-green-800/30 dark:bg-gray-800"
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <TicketIcon className="h-5 w-5 text-brand-fresh-green dark:text-green-400" />
+                <h3 className="font-space-grotesk text-base font-semibold text-brand-slate-gray dark:text-gray-200">
+                  {comp.name}
+                </h3>
+              </div>
+              <div className="mb-3">
+                <div className="font-space-grotesk text-xl font-bold text-brand-fresh-green dark:text-green-400">
+                  Free
+                </div>
+              </div>
+              <p className="font-inter text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                {comp.description}
+              </p>
+              {comp.link && (
+                <a
+                  href={comp.link}
+                  className="font-inter mt-3 inline-block rounded-lg bg-brand-fresh-green px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 dark:hover:bg-green-600"
+                >
+                  Learn more
+                </a>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -279,8 +312,4 @@ function PriceCell({
       )}
     </div>
   )
-}
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').trim()
 }

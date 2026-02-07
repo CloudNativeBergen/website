@@ -93,9 +93,16 @@ async function fetchTicketTypesFromCheckin(
   }
 }
 
+export interface ComplimentaryTicketInfo {
+  name: string
+  description: string
+  link: string | null
+}
+
 export async function getPublicTicketTypes(eventId: number): Promise<{
   event: PublicEventInfo
   tickets: PublicTicketType[]
+  complimentaryTickets: ComplimentaryTicketInfo[]
 } | null> {
   'use cache'
   cacheLife('hours')
@@ -110,7 +117,10 @@ export async function getPublicTicketTypes(eventId: number): Promise<{
       .filter((t) => t.price.length > 0 && parseFloat(t.price[0].price) > 0)
       .sort((a, b) => a.position - b.position)
 
-    return { event: data.event, tickets: publicTickets }
+    // Extract complimentary tickets (invite-only or free) that have descriptions
+    const complimentaryTickets = extractComplimentaryTickets(data.tickets)
+
+    return { event: data.event, tickets: publicTickets, complimentaryTickets }
   } catch (error) {
     console.error('Failed to fetch public ticket types:', error)
     return null
@@ -306,4 +316,49 @@ function formatShortDate(isoDate: string): string {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+/**
+ * Ticket name patterns to surface as complimentary on the public page.
+ * Other hidden tickets (crew, organizer, etc.) are excluded.
+ */
+const COMPLIMENTARY_TICKET_CONFIG: { pattern: RegExp; link: string }[] = [
+  { pattern: /speaker/i, link: '/cfp' },
+  { pattern: /volunteer/i, link: '/volunteer' },
+]
+
+/**
+ * Extracts complimentary ticket info (name + description) from tickets
+ * that are invite-only or have zero/no price, limited to speaker and
+ * volunteer tickets only.
+ */
+export function extractComplimentaryTickets(
+  tickets: PublicTicketType[],
+): ComplimentaryTicketInfo[] {
+  return tickets
+    .filter(
+      (t) =>
+        t.requiresInvitation ||
+        t.price.length === 0 ||
+        parseFloat(t.price[0].price) === 0,
+    )
+    .filter((t) =>
+      COMPLIMENTARY_TICKET_CONFIG.some((c) => c.pattern.test(t.name)),
+    )
+    .filter((t) => t.description && t.description.trim().length > 0)
+    .sort((a, b) => a.position - b.position)
+    .map((t) => {
+      const config = COMPLIMENTARY_TICKET_CONFIG.find((c) =>
+        c.pattern.test(t.name),
+      )
+      return {
+        name: t.name,
+        description: stripHtml(t.description!),
+        link: config?.link ?? null,
+      }
+    })
+}
+
+export function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').trim()
 }
