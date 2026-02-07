@@ -207,7 +207,7 @@ export function TicketPricingGrid({
               <div
                 key={category.key}
                 className={clsx(
-                  'rounded-xl border p-5 transition-shadow hover:shadow-md',
+                  'flex flex-col rounded-xl border p-5 transition-shadow hover:shadow-md',
                   status === 'active'
                     ? 'border-brand-cloud-blue/20 bg-white dark:border-blue-800/30 dark:bg-gray-800'
                     : status === 'expired'
@@ -239,7 +239,7 @@ export function TicketPricingGrid({
                   />
                 </div>
                 {ticket.description && (
-                  <p className="font-inter text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+                  <p className="font-inter flex-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
                     {stripHtml(ticket.description)}
                   </p>
                 )}
@@ -255,7 +255,7 @@ export function TicketPricingGrid({
           {complimentaryTickets.map((comp) => (
             <div
               key={comp.name}
-              className="rounded-xl border border-brand-fresh-green/20 bg-white p-5 transition-shadow hover:shadow-md dark:border-green-800/30 dark:bg-gray-800"
+              className="flex flex-col rounded-xl border border-brand-fresh-green/20 bg-white p-5 transition-shadow hover:shadow-md dark:border-green-800/30 dark:bg-gray-800"
             >
               <div className="mb-3 flex items-center gap-2">
                 <TicketIcon className="h-5 w-5 text-brand-fresh-green dark:text-green-400" />
@@ -268,13 +268,13 @@ export function TicketPricingGrid({
                   Free
                 </div>
               </div>
-              <p className="font-inter text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+              <p className="font-inter flex-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
                 {comp.description}
               </p>
               {comp.link && (
                 <a
                   href={comp.link}
-                  className="font-inter mt-3 inline-block rounded-lg bg-brand-fresh-green px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 dark:hover:bg-green-600"
+                  className="font-inter mt-3 inline-block self-start rounded-lg bg-brand-fresh-green px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-700 dark:hover:bg-green-600"
                 >
                   Learn more
                 </a>
