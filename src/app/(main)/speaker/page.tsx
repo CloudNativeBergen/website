@@ -31,10 +31,10 @@ async function CachedSpeakersContent({ domain }: { domain: string }) {
         <Container className="relative">
           <div className="mx-auto max-w-7xl px-6 lg:px-8">
             <div className="mx-auto max-w-2xl lg:mx-0">
-              <h2 className="font-jetbrains text-3xl font-bold tracking-tight text-brand-slate-gray sm:text-4xl">
+              <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
                 Meet our {speakersWithTalks.length} speakers
-              </h2>
-              <p className="mt-6 text-lg leading-8 text-brand-cloud-gray">
+              </h1>
+              <p className="font-inter mt-6 text-xl leading-8 tracking-tight text-brand-slate-gray dark:text-gray-300">
                 These industry experts will share their insights and experiences
                 in the world of cloud native technologies. Get ready to be
                 inspired and learn from the best in the field.

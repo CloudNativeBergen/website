@@ -77,13 +77,10 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
           <div className="mx-auto max-w-5xl">
             {/* Header */}
             <div className="mb-10 text-center">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-sky-mist dark:bg-blue-900/50">
-                <TicketIcon className="h-7 w-7 text-brand-cloud-blue dark:text-blue-400" />
-              </div>
-              <h1 className="font-space-grotesk mb-3 text-3xl font-bold text-brand-slate-gray sm:text-4xl dark:text-white">
+              <h1 className="font-jetbrains mb-3 text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
                 {heroHeadline}
               </h1>
-              <p className="font-inter mx-auto max-w-2xl text-lg text-brand-slate-gray/80 dark:text-gray-300">
+              <p className="font-inter mx-auto max-w-2xl text-xl tracking-tight text-brand-slate-gray/80 dark:text-gray-300">
                 {heroSubheadline || (
                   <>
                     Secure your spot at {conference.title}
@@ -150,7 +147,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
             {/* What's Included */}
             {inclusions.length > 0 && (
               <div className="mt-14">
-                <h2 className="font-space-grotesk mb-6 text-center text-2xl font-bold text-brand-slate-gray dark:text-white">
+                <h2 className="font-jetbrains mb-6 text-center text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl dark:text-blue-400">
                   What&apos;s Included
                 </h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -188,7 +185,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
             {/* Group Discounts */}
             {groupDiscountInfo && (
               <div className="mt-10 rounded-xl bg-brand-sky-mist/50 p-6 ring-1 ring-brand-cloud-blue/10 dark:bg-blue-900/20 dark:ring-blue-800/30">
-                <h2 className="font-space-grotesk mb-2 text-lg font-bold text-brand-slate-gray dark:text-white">
+                <h2 className="font-space-grotesk mb-2 text-lg font-bold text-brand-cloud-blue dark:text-blue-400">
                   Partner Nodes &amp; Sponsor Capacity
                 </h2>
                 <div className="font-inter space-y-2 text-sm leading-relaxed text-brand-slate-gray/80 dark:text-gray-300">
@@ -202,7 +199,7 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
             {/* FAQs */}
             {faqs.length > 0 && (
               <div className="mt-14">
-                <h2 className="font-space-grotesk mb-6 text-center text-2xl font-bold text-brand-slate-gray dark:text-white">
+                <h2 className="font-jetbrains mb-6 text-center text-3xl font-medium tracking-tighter text-brand-cloud-blue sm:text-4xl dark:text-blue-400">
                   Frequently Asked Questions
                 </h2>
                 <div className="mx-auto max-w-3xl space-y-3">
@@ -259,11 +256,11 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
                   <CalendarDaysIcon className="h-8 w-8 text-brand-cloud-blue dark:text-blue-400" />
                 </div>
 
-                <h1 className="font-space-grotesk mb-4 text-3xl font-bold text-brand-slate-gray dark:text-white">
+                <h1 className="font-jetbrains mb-4 text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
                   Tickets Coming Soon
                 </h1>
 
-                <p className="font-inter mb-8 text-lg text-brand-slate-gray dark:text-gray-300">
+                <p className="font-inter mb-8 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
                   Tickets for {conference.title} are not yet available.
                   We&apos;re working hard to bring you an amazing conference
                   experience!

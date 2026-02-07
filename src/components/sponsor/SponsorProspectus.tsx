@@ -79,10 +79,10 @@ export function SponsorProspectus({
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-3xl text-center">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
               {heroHeadline}
             </h1>
-            <p className="mt-8 font-mono text-lg leading-8 text-gray-600 dark:text-gray-300">
+            <p className="font-inter mt-8 text-lg leading-8 text-brand-slate-gray dark:text-gray-300">
               {heroSubheadline}
             </p>
             {prospectusUrl && (
@@ -147,13 +147,13 @@ export function SponsorProspectus({
                       className={clsx(
                         'h-1',
                         index === 0 &&
-                          'bg-linear-to-r from-blue-500 to-cyan-500',
+                        'bg-linear-to-r from-blue-500 to-cyan-500',
                         index === 1 &&
-                          'bg-linear-to-r from-cyan-500 to-emerald-500',
+                        'bg-linear-to-r from-cyan-500 to-emerald-500',
                         index === 2 &&
-                          'bg-linear-to-r from-indigo-500 to-purple-500',
+                        'bg-linear-to-r from-indigo-500 to-purple-500',
                         index > 2 &&
-                          'bg-linear-to-r from-blue-500 to-indigo-500',
+                        'bg-linear-to-r from-blue-500 to-indigo-500',
                       )}
                     />
                     <div className="p-8 sm:p-10">
@@ -162,11 +162,11 @@ export function SponsorProspectus({
                           className={clsx(
                             'mb-6 flex h-10 w-10 items-center justify-center rounded-lg text-white',
                             index === 0 &&
-                              'bg-linear-to-br from-blue-500 to-cyan-600',
+                            'bg-linear-to-br from-blue-500 to-cyan-600',
                             index === 1 &&
-                              'bg-linear-to-br from-cyan-500 to-emerald-600',
+                            'bg-linear-to-br from-cyan-500 to-emerald-600',
                             index === 2 &&
-                              'bg-linear-to-br from-indigo-500 to-purple-600',
+                            'bg-linear-to-br from-indigo-500 to-purple-600',
                             index > 2 && 'bg-blue-600',
                           )}
                         >
@@ -224,7 +224,7 @@ export function SponsorProspectus({
                 <div
                   className={clsx(
                     standardTiers.length <= 2 &&
-                      'flex flex-col justify-between',
+                    'flex flex-col justify-between',
                   )}
                 >
                   <div>
@@ -364,11 +364,11 @@ export function SponsorProspectus({
                     className={clsx(
                       'h-1',
                       index % 3 === 0 &&
-                        'bg-linear-to-r from-cyan-500 to-blue-500',
+                      'bg-linear-to-r from-cyan-500 to-blue-500',
                       index % 3 === 1 &&
-                        'bg-linear-to-r from-blue-500 to-indigo-500',
+                      'bg-linear-to-r from-blue-500 to-indigo-500',
                       index % 3 === 2 &&
-                        'bg-linear-to-r from-indigo-500 to-purple-500',
+                      'bg-linear-to-r from-indigo-500 to-purple-500',
                     )}
                   />
                   {tier.max_quantity === 1 && (

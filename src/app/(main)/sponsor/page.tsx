@@ -55,10 +55,10 @@ async function CachedSponsorContent({ domain }: { domain: string }) {
         <BackgroundImage className="-top-36 -bottom-14" />
         <Container className="relative">
           <div className="mx-auto max-w-xl text-center lg:max-w-4xl lg:px-12">
-            <h1 className="font-display text-5xl font-bold tracking-tighter text-blue-600 sm:text-7xl dark:text-blue-400">
+            <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl dark:text-blue-400">
               Become a Sponsor
             </h1>
-            <p className="font-display mt-6 text-2xl tracking-tight text-blue-900 dark:text-blue-300">
+            <p className="font-inter mt-6 text-xl tracking-tight text-brand-slate-gray dark:text-gray-300">
               Sponsorship opportunities for {conference.title} will be announced
               soon. Please check back later or contact us at{' '}
               <a

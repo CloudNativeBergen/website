@@ -151,27 +151,50 @@ export function TicketPageContentEditor({
     <div className="mt-8 space-y-8">
       {/* Hero Customization */}
       <CollapsibleSection title="Hero Section" defaultOpen={true}>
-        <div className="space-y-4">
-          <div>
-            <label
-              htmlFor="hero_headline"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Headline
-            </label>
-            <input
-              id="hero_headline"
-              type="text"
-              value={customization.hero_headline ?? ''}
-              onChange={(e) =>
-                setCustomization((prev) => ({
-                  ...prev,
-                  hero_headline: e.target.value,
-                }))
-              }
-              placeholder="Tickets (leave blank for default)"
-              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            />
+        <div className="space-y-5 px-6 pt-5 pb-6">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <div>
+              <label
+                htmlFor="hero_headline"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                Headline
+              </label>
+              <input
+                id="hero_headline"
+                type="text"
+                value={customization.hero_headline ?? ''}
+                onChange={(e) =>
+                  setCustomization((prev) => ({
+                    ...prev,
+                    hero_headline: e.target.value,
+                  }))
+                }
+                placeholder="Tickets (leave blank for default)"
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="cta_button_text"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                CTA Button Text
+              </label>
+              <input
+                id="cta_button_text"
+                type="text"
+                value={customization.cta_button_text ?? ''}
+                onChange={(e) =>
+                  setCustomization((prev) => ({
+                    ...prev,
+                    cta_button_text: e.target.value,
+                  }))
+                }
+                placeholder="Register Now (default)"
+                className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              />
+            </div>
           </div>
           <div>
             <label
@@ -191,27 +214,6 @@ export function TicketPageContentEditor({
                 }))
               }
               placeholder="Leave blank to auto-generate from conference name and dates"
-              className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="cta_button_text"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              CTA Button Text
-            </label>
-            <input
-              id="cta_button_text"
-              type="text"
-              value={customization.cta_button_text ?? ''}
-              onChange={(e) =>
-                setCustomization((prev) => ({
-                  ...prev,
-                  cta_button_text: e.target.value,
-                }))
-              }
-              placeholder="Register Now (default)"
               className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
             />
           </div>
@@ -236,7 +238,7 @@ export function TicketPageContentEditor({
             </label>
           </div>
           {customization.show_vanity_metrics && (
-            <div className="ml-7 rounded-md bg-gray-50 p-3 text-sm text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+            <div className="ml-7 rounded-lg bg-gray-50 p-4 text-sm text-gray-600 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700">
               {vanityMetrics.length > 0 ? (
                 <p>
                   Currently configured:{' '}
@@ -261,7 +263,7 @@ export function TicketPageContentEditor({
         title={`What's Included (${inclusions.length} items)`}
         defaultOpen={true}
       >
-        <div className="space-y-4">
+        <div className="space-y-4 px-6 pt-5 pb-6">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Describe what attendees get with their ticket — keynotes, workshops,
             social events, meals, swag, etc.
@@ -336,7 +338,7 @@ export function TicketPageContentEditor({
         title="Partner Nodes & Sponsor Capacity"
         defaultOpen={false}
       >
-        <div className="space-y-4">
+        <div className="space-y-4 px-6 pt-5 pb-6">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Information about sponsor-exclusive group pricing and partner
             packages. Use double line breaks to separate paragraphs. Leave blank
@@ -362,7 +364,7 @@ export function TicketPageContentEditor({
         title={`FAQs (${faqs.length} items)`}
         defaultOpen={true}
       >
-        <div className="space-y-4">
+        <div className="space-y-4 px-6 pt-5 pb-6">
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Frequently asked questions about tickets and registration.
           </p>
