@@ -21,7 +21,6 @@
     "format": "prettier --write --list-different .",
     "typecheck": "tsc --noEmit",
     "sanity": "sanity",
-    "sanity:deploy": "sanity deploy",
     "manage-orphaned-files": "tsx scripts/manage-orphaned-files.ts"
   },
   "browserslist": "defaults, not ie <= 11",

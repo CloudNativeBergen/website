@@ -41,6 +41,7 @@ src/app/(main)/tickets/page.tsx   ← public page with 'use cache'
 ### Ticket Name Convention
 
 Tickets in Checkin.no follow the naming pattern `"Tier: Category (details)"`:
+
 - `"Early Bird: Conference Only (1 day)"` → tier=Early Bird, category=Conference Only (1 day)
 - `"Standard: Workshop + Conference (2 days)"` → tier=Standard, category=Workshop + Conference (2 days)
 - `"Student: The 1337 Ticket"` → detected as standalone (Student doesn't share categories with other tiers)
@@ -64,17 +65,17 @@ The sponsor page is the most mature public-facing page and serves as the templat
 | Hero (headline + subheadline) | `sponsorship_customization.hero_headline/subheadline`    | **Missing** — should add customizable headline                |
 | Vanity metrics (stats bar)    | `conference.vanity_metrics[]`                            | **Missing** — could reuse (attendees, speakers, tracks, etc.) |
 | Why Sponsor (benefit cards)   | `conference.sponsor_benefits[]` (icon + title + desc)    | **Missing** — should add "What's Included" cards              |
-| Tier pricing cards            | `sponsorTier` Sanity documents                           | ✅ Exists — pricing grid from Checkin.no                       |
+| Tier pricing cards            | `sponsorTier` Sanity documents                           | ✅ Exists — pricing grid from Checkin.no                      |
 | Philosophy section            | `sponsorship_customization.philosophy_title/description` | **Missing** — could add registration type explanations        |
-| Closing CTA                   | `sponsorship_customization.closing_quote/cta_text`       | ✅ Partial — has "Register Now" button                         |
-| Contact footer                | `conference.sponsor_email`                               | ✅ Exists — uses `contact_email`                               |
+| Closing CTA                   | `sponsorship_customization.closing_quote/cta_text`       | ✅ Partial — has "Register Now" button                        |
+| Contact footer                | `conference.sponsor_email`                               | ✅ Exists — uses `contact_email`                              |
 | Past sponsors grid            | `sponsorForConference` documents                         | N/A                                                           |
 
 ### KubeCon Registration Page Sections
 
 | Section                                                                   | Our Equivalent                     | Priority |
 | ------------------------------------------------------------------------- | ---------------------------------- | -------- |
-| Pricing grid (pass types × tiers × registration types)                    | ✅ Exists                           | —        |
+| Pricing grid (pass types × tiers × registration types)                    | ✅ Exists                          | —        |
 | Pass types explanation ("What can I expect?")                             | **Missing**                        | High     |
 | Registration types explanation (Corporate, Individual, Academic, Speaker) | **Missing**                        | High     |
 | What's Included (bullet list of benefits)                                 | **Missing**                        | High     |
@@ -93,31 +94,37 @@ The sponsor page is the most mature public-facing page and serves as the templat
 Based on the sponsor page pattern and KubeCon's registration page, these sections should be added:
 
 #### 1. Hero with Customizable Copy (High Priority)
+
 Like the sponsor page's `sponsorship_customization`, allow organizers to set a headline and subheadline for the tickets page.
 
 **Config:** Sanity `ticket_customization.hero_headline` / `hero_subheadline`
 
 #### 2. What's Included (High Priority)
+
 A bullet list or card grid showing what attendees get with their ticket. KubeCon lists: keynotes, breakouts, social events, solutions showcase, lunches/coffee, conference t-shirt, on-demand recordings, etc.
 
 **Config:** Sanity `ticket_inclusions[]` — array of `{icon: HeroIcon, title: string, description?: text}`, same pattern as `sponsor_benefits[]`.
 
 #### 3. Ticket Type Explanations (High Priority)
+
 Each ticket category needs a short description explaining what it includes and who it's for. Similar to KubeCon's "Pass Types" and "Registration Types" sections.
 
 **Config:** This data already exists in Checkin.no's `EventTicket.description` field — it's rendered on standalone cards but not on tiered rows. Could also add a Sanity `ticket_type_descriptions[]` override.
 
 #### 4. Group Discounts & Special Offers (Medium Priority)
+
 Information about available discounts — group pricing, community partner codes, etc.
 
 **Config:** Sanity `ticket_customization.group_discount_info` (text) or reference the existing discount system (`src/lib/discounts/`).
 
 #### 5. FAQ / Additional Information (Medium Priority)
+
 Collapsible FAQ section covering: registration deadlines, cancellation policy, invoice info, accessibility, etc.
 
 **Config:** Sanity `ticket_faqs[]` — array of `{question: string, answer: text}`.
 
 #### 6. Vanity Metrics Bar (Optional)
+
 Reuse the existing `conference.vanity_metrics[]` (attendees, speakers, tracks) to build excitement. The sponsor page already renders this data.
 
 **Config:** Already exists in Sanity — just render it on the tickets page too.
@@ -192,6 +199,7 @@ conference.ticket_faqs[] (array of objects)
 ## Checkin.no API Reference
 
 ### Authentication
+
 - Basic auth: `CHECKIN_API_KEY` : `CHECKIN_API_SECRET` (base64 encoded)
 - Endpoint: `https://api.checkin.no/graphql`
 
@@ -214,13 +222,13 @@ type EventTicket {
 }
 
 type Price {
-  price: Amount!      # excl. VAT
-  vat: Amount!        # VAT percentage (e.g., "25")
+  price: Amount! # excl. VAT
+  vat: Amount! # VAT percentage (e.g., "25")
   description: String
   key: String
 }
 
-scalar Amount  # String-encoded decimal
+scalar Amount # String-encoded decimal
 ```
 
 ### Public Query
@@ -234,16 +242,28 @@ query FindEvent($id: Int!) {
     registrationClosesAt
     currencies
     tickets {
-      id, name, type, description
-      price { price, vat, description, key }
-      available, requiresInvitation
-      visibleStartsAt, visibleEndsAt, position
+      id
+      name
+      type
+      description
+      price {
+        price
+        vat
+        description
+        key
+      }
+      available
+      requiresInvitation
+      visibleStartsAt
+      visibleEndsAt
+      position
     }
   }
 }
 ```
 
 ### Filtering Rules
+
 - Exclude `requiresInvitation: true` (speaker/sponsor comps)
 - Exclude tickets with `price[0].price == 0` (free/internal)
 - Sort by `position` (organizer-defined order)

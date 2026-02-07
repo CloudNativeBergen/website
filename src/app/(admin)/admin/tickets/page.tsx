@@ -14,6 +14,7 @@ import {
   ShoppingBagIcon,
   HomeIcon,
   CreditCardIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline'
 
 import { formatCurrency } from '@/lib/format'
@@ -183,6 +184,13 @@ export default async function AdminTickets() {
         stats={[]}
         actions={
           <div className="flex space-x-3">
+            <Link
+              href="/admin/tickets/content"
+              className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
+            >
+              <DocumentTextIcon className="mr-2 h-4 w-4" />
+              Page Content
+            </Link>
             <Link
               href="/admin/tickets/orders"
               className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:bg-indigo-500 dark:hover:bg-indigo-400"
@@ -542,6 +550,25 @@ export default async function AdminTickets() {
           Quick Actions
         </h2>
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/admin/tickets/content"
+            className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="shrink-0">
+                <DocumentTextIcon className="h-6 w-6 text-gray-400 dark:text-gray-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  Page Content
+                </p>
+                <p className="truncate text-sm text-gray-500 dark:text-gray-400">
+                  Configure the public tickets page
+                </p>
+              </div>
+            </div>
+          </Link>
+
           <Link
             href="/admin/tickets/orders"
             className="relative block rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm hover:border-gray-400 dark:border-gray-600 dark:bg-gray-900 dark:hover:border-gray-500"

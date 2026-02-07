@@ -155,6 +155,7 @@ The site is multi-tenant, meaning it can be used for multiple events or conferen
 - **Testing:** `pnpm run test` - Runs Jest tests silently.
 - **Testing (Debug):** `pnpm run test:debug` - Runs Jest tests with debug output.
 - **Testing (Watch):** `pnpm run test:watch` - Runs Jest tests in watch mode.
+- Run sanity commands with `pnpm sanity {command}` (e.g., `pnpm sanity deploy`) - do not use `npx sanity` directly.
 
 ## Code Organization & Refactoring
 
