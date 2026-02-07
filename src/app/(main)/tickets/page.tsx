@@ -1,11 +1,16 @@
-import { redirect } from 'next/navigation'
 import { getConferenceForDomain } from '@/lib/conference/sanity'
 import { isRegistrationAvailable } from '@/lib/conference/state'
+import { getPublicTicketTypes } from '@/lib/tickets/public'
+import { TicketPricingGrid } from '@/components/TicketPricingGrid'
 import { Container } from '@/components/Container'
 import { Button } from '@/components/Button'
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { formatDatesSafe } from '@/lib/time'
-import { CalendarDaysIcon, ClockIcon } from '@heroicons/react/24/outline'
+import {
+  CalendarDaysIcon,
+  ClockIcon,
+  TicketIcon,
+} from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import { headers } from 'next/headers'
 import { cacheLife, cacheTag } from 'next/cache'
@@ -30,6 +35,88 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
     return <div>Error loading conference data</div>
   }
 
+  // Fetch ticket types from Checkin.no if the conference has a checkin event ID
+  const ticketData = conference.checkin_event_id
+    ? await getPublicTicketTypes(conference.checkin_event_id)
+    : null
+
+  const hasTicketPricing = ticketData && ticketData.tickets.length > 0
+  const registrationAvailable = isRegistrationAvailable(conference)
+
+  // Show full pricing page when we have ticket data from Checkin.no
+  if (hasTicketPricing) {
+    return (
+      <div className="relative">
+        <BackgroundImage className="-top-24 -bottom-24" />
+        <Container className="relative py-12 sm:py-16 lg:py-20">
+          <div className="mx-auto max-w-5xl">
+            {/* Header */}
+            <div className="mb-10 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-sky-mist dark:bg-blue-900/50">
+                <TicketIcon className="h-7 w-7 text-brand-cloud-blue dark:text-blue-400" />
+              </div>
+              <h1 className="font-space-grotesk mb-3 text-3xl font-bold text-brand-slate-gray sm:text-4xl dark:text-white">
+                Tickets
+              </h1>
+              <p className="font-inter mx-auto max-w-2xl text-lg text-brand-slate-gray/80 dark:text-gray-300">
+                Secure your spot at {conference.title}
+                {conference.start_date && (
+                  <>
+                    {' '}
+                    &mdash;{' '}
+                    <time dateTime={conference.start_date}>
+                      {formatDatesSafe(
+                        conference.start_date,
+                        conference.end_date,
+                      )}
+                    </time>
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Pricing grid */}
+            <div className="rounded-2xl bg-white/95 p-6 shadow-xl ring-1 ring-brand-cloud-blue/10 backdrop-blur-sm sm:p-8 dark:bg-gray-800/95 dark:ring-gray-700">
+              <TicketPricingGrid
+                tickets={ticketData.tickets}
+                registrationLink={conference.registration_link}
+              />
+            </div>
+
+            {/* Main CTA */}
+            {registrationAvailable && (
+              <div className="mt-8 text-center">
+                <Button
+                  href={conference.registration_link!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  variant="primary"
+                  size="lg"
+                >
+                  Register Now
+                </Button>
+              </div>
+            )}
+
+            {/* Contact footer */}
+            <div className="mt-8 text-center">
+              <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
+                Need help or have questions about tickets?{' '}
+                <Link
+                  href={`mailto:${conference.contact_email}`}
+                  className="text-brand-cloud-blue transition-colors hover:text-brand-fresh-green dark:text-blue-400 dark:hover:text-brand-fresh-green"
+                >
+                  Contact us
+                </Link>
+              </p>
+            </div>
+          </div>
+        </Container>
+      </div>
+    )
+  }
+
+  // Fallback: "Tickets Coming Soon" when no pricing data is available
   return (
     <div className="relative">
       <BackgroundImage className="-top-24 -bottom-24" />
@@ -119,13 +206,6 @@ async function CachedTicketsContent({ domain }: { domain: string }) {
 export default async function TicketsPage() {
   const headersList = await headers()
   const domain = headersList.get('host') || ''
-
-  const { conference } = await getConferenceForDomain(domain)
-
-  // Handle redirect at request time (outside cache)
-  if (isRegistrationAvailable(conference)) {
-    redirect(conference.registration_link!)
-  }
 
   return <CachedTicketsContent domain={domain} />
 }
