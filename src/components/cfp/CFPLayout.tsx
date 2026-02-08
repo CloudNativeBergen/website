@@ -33,17 +33,17 @@ export function CFPLayout({ children, conferenceLogos }: CFPLayoutProps) {
   const baseNavigation: NavigationItem[] = [
     {
       name: 'Profile',
-      href: `/cfp/profile${impersonateQuery}`,
+      href: `/speaker/profile${impersonateQuery}`,
       icon: UserIcon,
     },
     {
       name: 'Submit Talk',
-      href: `/cfp/proposal${impersonateQuery}`,
+      href: `/speaker/proposal${impersonateQuery}`,
       icon: PlusIcon,
     },
     {
       name: 'My Proposals',
-      href: `/cfp/list${impersonateQuery}`,
+      href: `/speaker/list${impersonateQuery}`,
       icon: ListBulletIcon,
     },
   ]
@@ -54,7 +54,7 @@ export function CFPLayout({ children, conferenceLogos }: CFPLayoutProps) {
           ...baseNavigation,
           {
             name: 'Travel Support',
-            href: `/cfp/expense${impersonateQuery}`,
+            href: `/speaker/expense${impersonateQuery}`,
             icon: CreditCardIcon,
           },
         ]
@@ -64,7 +64,7 @@ export function CFPLayout({ children, conferenceLogos }: CFPLayoutProps) {
     ...navigationWithTravelSupport,
     {
       name: 'Email Settings',
-      href: `/cfp/admin${impersonateQuery}`,
+      href: `/speaker/admin${impersonateQuery}`,
       icon: EnvelopeIcon,
     },
   ]

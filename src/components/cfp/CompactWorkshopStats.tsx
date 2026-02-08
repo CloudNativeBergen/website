@@ -21,7 +21,7 @@ export function CompactWorkshopStats({ stats }: CompactWorkshopStatsProps) {
         {stats.map((stat) => (
           <Link
             key={stat.workshopId}
-            href={`/cfp/workshop/${stat.workshopId}${queryString}`}
+            href={`/speaker/workshop/${stat.workshopId}${queryString}`}
             className="flex items-center justify-between gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm transition-colors hover:bg-gray-100 dark:bg-gray-900/50 dark:hover:bg-gray-800"
           >
             <div className="flex min-w-0 items-center gap-2">

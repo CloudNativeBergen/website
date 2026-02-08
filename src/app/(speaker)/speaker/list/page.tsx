@@ -25,7 +25,7 @@ export default async function SpeakerDashboard() {
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    return redirect('/api/auth/signin?callbackUrl=/cfp/list')
+    return redirect('/api/auth/signin?callbackUrl=/speaker/list')
   }
 
   const speaker = session.speaker

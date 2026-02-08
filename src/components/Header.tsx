@@ -104,7 +104,7 @@ export function Header({ c }: { c: Conference }) {
                 >
                   <div className="overflow-hidden rounded-xl bg-white p-2 text-sm font-semibold shadow-lg ring-1 ring-gray-900/5 dark:bg-gray-800 dark:ring-white/10">
                     <Link
-                      href="/cfp/list"
+                      href="/speaker/list"
                       className="block rounded-lg px-3 py-2 text-gray-900 transition hover:bg-gray-50 dark:text-white dark:hover:bg-gray-700"
                     >
                       My Dashboard
@@ -119,7 +119,7 @@ export function Header({ c }: { c: Conference }) {
                 </PopoverPanel>
               </Popover>
             ) : (
-              <Link href="/cfp/list" className="flex items-center">
+              <Link href="/speaker/list" className="flex items-center">
                 <UserCircleIcon className="h-10 w-10 text-brand-slate-gray dark:text-white" />
               </Link>
             )}

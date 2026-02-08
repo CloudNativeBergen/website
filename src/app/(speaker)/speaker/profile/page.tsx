@@ -11,7 +11,7 @@ export default async function ProfilePage() {
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    return redirect('/api/auth/signin?callbackUrl=/cfp/profile')
+    return redirect('/api/auth/signin?callbackUrl=/speaker/profile')
   }
 
   const { speaker, err } = await getSpeaker(session.speaker._id)

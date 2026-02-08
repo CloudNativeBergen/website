@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
-// This route has been moved to /cfp/proposal
+// This route has been moved to /speaker/proposal
 // Redirect old URLs to the new location
 export default async function Submit({
   searchParams,
@@ -10,8 +10,8 @@ export default async function Submit({
   const { id: proposalId } = (await searchParams) || {}
 
   if (proposalId) {
-    redirect(`/cfp/proposal/${proposalId}`)
+    redirect(`/speaker/proposal/${proposalId}`)
   }
 
-  redirect('/cfp/proposal')
+  redirect('/speaker/proposal')
 }

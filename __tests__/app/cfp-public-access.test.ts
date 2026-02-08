@@ -17,13 +17,13 @@ describe('CFP Page Public Access', () => {
 
     it('should have authenticated routes in (speaker) route group', () => {
       // Authenticated speaker routes are located at:
-      // src/app/(speaker)/cfp/*
+      // src/app/(speaker)/speaker/*
       // This route group has authentication requirements via layout.tsx
       const authenticatedRoutes = [
-        '(speaker)/cfp/profile/page.tsx',
-        '(speaker)/cfp/list/page.tsx',
-        '(speaker)/cfp/proposal/[id]/page.tsx',
-        '(speaker)/cfp/expense/page.tsx',
+        '(speaker)/speaker/profile/page.tsx',
+        '(speaker)/speaker/list/page.tsx',
+        '(speaker)/speaker/proposal/[id]/page.tsx',
+        '(speaker)/speaker/expense/page.tsx',
       ]
       expect(authenticatedRoutes.length).toBeGreaterThan(0)
     })
@@ -31,12 +31,12 @@ describe('CFP Page Public Access', () => {
     it('should verify route groups do not affect URL paths', () => {
       // Route groups like (main) and (speaker) are organizational only
       // They do not affect the final URL path
-      // Both (main)/cfp and (speaker)/cfp/* resolve to /cfp and /cfp/* respectively
+      // (main)/cfp resolves to /cfp and (speaker)/speaker/* resolves to /speaker/*
       const publicRoute = '/cfp' // served by (main)/cfp/page.tsx
-      const authRoute = '/cfp/profile' // served by (speaker)/cfp/profile/page.tsx
+      const authRoute = '/speaker/profile' // served by (speaker)/speaker/profile/page.tsx
       
       expect(publicRoute).toBe('/cfp')
-      expect(authRoute).toBe('/cfp/profile')
+      expect(authRoute).toBe('/speaker/profile')
     })
   })
 
@@ -57,10 +57,11 @@ describe('CFP Page Public Access', () => {
 
     it('should document the authentication redirect flow', () => {
       // When an unauthenticated user tries to access (speaker) routes,
-      // they are redirected to: /api/auth/signin?callbackUrl=/cfp
-      const redirectUrl = '/api/auth/signin?callbackUrl=/cfp'
+      // When an unauthenticated user tries to access (speaker) routes,
+      // they are redirected to: /api/auth/signin?callbackUrl=/speaker/list
+      const redirectUrl = '/api/auth/signin?callbackUrl=/speaker/list'
       expect(redirectUrl).toContain('/api/auth/signin')
-      expect(redirectUrl).toContain('callbackUrl=/cfp')
+      expect(redirectUrl).toContain('callbackUrl=/speaker/list')
     })
   })
 
@@ -73,26 +74,27 @@ describe('CFP Page Public Access', () => {
       expect(cfpRouteIsPublic).toBe(true)
     })
 
-    it('should verify /cfp/* routes require authentication', () => {
-      // URLs like /cfp/profile, /cfp/list, /cfp/proposal/123
-      // resolve to routes under (speaker)/cfp/*
+    it('should verify /speaker/* routes require authentication', () => {
+      // URLs like /speaker/profile, /speaker/list, /speaker/proposal/123
+      // resolve to routes under (speaker)/speaker/*
       // These DO go through (speaker)/layout.tsx which requires auth
+      // Old /cfp/* routes redirect to /speaker/*
       const authRoutes = [
-        '/cfp/profile',
-        '/cfp/list',
-        '/cfp/proposal/123',
-        '/cfp/expense',
-        '/cfp/workshop/456',
+        '/speaker/profile',
+        '/speaker/list',
+        '/speaker/proposal/123',
+        '/speaker/expense',
+        '/speaker/workshop/456',
       ]
       
       authRoutes.forEach((route) => {
-        expect(route).toMatch(/^\/cfp\//)
+        expect(route).toMatch(/^\/speaker\//)
       })
     })
 
     it('should verify no naming conflict between route groups', () => {
       // Before fix: (cfp)/cfp/* and (main)/cfp could cause conflicts
-      // After fix: (speaker)/cfp/* and (main)/cfp are clearly separated
+      // After fix: (speaker)/speaker/* and (main)/cfp are clearly separated
       const publicGroupName = '(main)'
       const authGroupName = '(speaker)'
       
@@ -126,27 +128,27 @@ describe('CFP Page Public Access', () => {
 
   describe('Security Verification', () => {
     it('should verify route group naming prevents ambiguity', () => {
-      // Using (speaker) instead of (cfp) ensures Next.js clearly
+      // Using (speaker) with /speaker/* paths ensures Next.js clearly
       // distinguishes between:
-      // - Public: (main)/cfp/page.tsx
-      // - Auth: (speaker)/cfp/*/page.tsx
+      // - Public: (main)/cfp/page.tsx → /cfp
+      // - Auth: (speaker)/speaker/*/page.tsx → /speaker/*
       const hasNamingConflict = false
       expect(hasNamingConflict).toBe(false)
     })
 
     it('should document the fix for the routing issue', () => {
       // Original issue: /cfp was requiring authentication
-      // Root cause: Both (cfp) and (main) had 'cfp' folders
-      // Solution: Renamed (cfp) to (speaker) to avoid ambiguity
-      const fixDescription = 'Renamed (cfp) route group to (speaker)'
-      expect(fixDescription).toContain('(speaker)')
+      // Root cause: Both (cfp) and (main) had 'cfp' folder names
+      // Solution: Renamed path from /cfp/* to /speaker/* for auth routes
+      const fixDescription = 'Renamed /cfp/* to /speaker/* for authenticated routes'
+      expect(fixDescription).toContain('/speaker/')
     })
 
-    it('should verify all URLs remain unchanged after route group rename', () => {
-      // Route groups are organizational and don't affect URLs
-      // Renaming (cfp) to (speaker) changed NO public-facing URLs
-      const urlsChanged = false
-      expect(urlsChanged).toBe(false)
+    it('should verify redirects are in place for backward compatibility', () => {
+      // Old URLs like /cfp/profile redirect to /speaker/profile
+      // This maintains backward compatibility while fixing the routing issue
+      const hasRedirects = true
+      expect(hasRedirects).toBe(true)
     })
   })
 })

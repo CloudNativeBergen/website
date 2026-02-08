@@ -168,7 +168,7 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         {
           question: 'What do I need to do before the conference?',
           answer:
-            'You need to confirm your talk and register your ticket before the conference. You can do this by going to the <u><a href="/cfp/list">speaker dashboard</a></u> to confirm your talk, and clicking the link in the email you received to register your complimentary speaker ticket.',
+            'You need to confirm your talk and register your ticket before the conference. You can do this by going to the <u><a href="/speaker/list">speaker dashboard</a></u> to confirm your talk, and clicking the link in the email you received to register your complimentary speaker ticket.',
         },
         {
           question: 'Will there be a speaker dinner?',
@@ -178,7 +178,7 @@ Important: Please check your ticket type. Workshop tickets (&quot;Workshop + Con
         {
           question: 'Can I make changes to my talk?',
           answer:
-            'Yes, you can make changes to your talk up until the day before the conference. You can edit your talk directly from our website by going to the <u><a href="/cfp/list">speaker dashboard</a></u>.',
+            'Yes, you can make changes to your talk up until the day before the conference. You can edit your talk directly from our website by going to the <u><a href="/speaker/list">speaker dashboard</a></u>.',
         },
         {
           question: 'Do I need to bring my own laptop?',

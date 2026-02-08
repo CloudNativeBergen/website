@@ -16,7 +16,7 @@ export function ImpersonationBanner({
   const router = useRouter()
 
   const handleExitImpersonation = () => {
-    router.push('/cfp/list')
+    router.push('/speaker/list')
     router.refresh()
   }
 
