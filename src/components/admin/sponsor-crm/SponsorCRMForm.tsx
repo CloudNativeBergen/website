@@ -43,6 +43,8 @@ import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
 
+type FormView = 'pipeline' | 'contacts' | 'logo' | 'history'
+
 interface SponsorCRMFormProps {
   conferenceId: string
   sponsor: SponsorForConferenceExpanded | null
@@ -51,6 +53,7 @@ interface SponsorCRMFormProps {
   onSuccess: () => void
   onEmailTrigger?: (sponsor: SponsorForConferenceExpanded) => void
   existingSponsorsInCRM?: string[]
+  initialView?: FormView
 }
 
 export function SponsorCRMForm({
@@ -61,10 +64,9 @@ export function SponsorCRMForm({
   onSuccess,
   onEmailTrigger,
   existingSponsorsInCRM = [],
+  initialView = 'pipeline',
 }: SponsorCRMFormProps) {
-  const [view, setView] = useState<
-    'pipeline' | 'contacts' | 'logo' | 'history'
-  >('pipeline')
+  const [view, setView] = useState<FormView>(initialView)
   const [userHasEditedValue, setUserHasEditedValue] = useState(false)
 
   const [formData, setFormData] = useState({

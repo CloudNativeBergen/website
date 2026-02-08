@@ -65,6 +65,9 @@ export function SponsorCRMPipeline({
     useState<SponsorForConferenceExpanded | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [initialFormView, setInitialFormView] = useState<
+    'pipeline' | 'history'
+  >('pipeline')
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<BoardView>('pipeline')
@@ -143,6 +146,7 @@ export function SponsorCRMPipeline({
   const handleOpenForm = useCallback(
     (sponsor?: SponsorForConferenceExpanded) => {
       setSelectedSponsor(sponsor || null)
+      setInitialFormView('pipeline')
       setIsFormOpen(true)
     },
     [],
@@ -150,6 +154,7 @@ export function SponsorCRMPipeline({
 
   const handleCreateNew = useCallback(() => {
     setSelectedSponsor(null)
+    setInitialFormView('pipeline')
     setIsFormOpen(true)
   }, [])
 
@@ -265,14 +270,17 @@ export function SponsorCRMPipeline({
   // Handle sponsor query parameter
   useEffect(() => {
     const sponsorId = searchParams.get('sponsor')
+    const viewParam = searchParams.get('view')
     if (sponsorId && sponsors.length > 0 && !isFormOpen) {
       const sponsor = sponsors.find((s) => s._id === sponsorId)
       if (sponsor) {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedSponsor(sponsor)
+        setInitialFormView(viewParam === 'history' ? 'history' : 'pipeline')
         setIsFormOpen(true)
         const params = new URLSearchParams(searchParams.toString())
         params.delete('sponsor')
+        params.delete('view')
         router.replace(
           params.toString()
             ? `?${params.toString()}`
@@ -399,6 +407,7 @@ export function SponsorCRMPipeline({
           }}
           onEmailTrigger={handleOpenEmail}
           existingSponsorsInCRM={sponsors.map((s) => s.sponsor._id)}
+          initialView={initialFormView}
         />
       )}
 
