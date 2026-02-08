@@ -19,10 +19,10 @@ const VIEWS: Array<{
   label: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }> = [
-    { key: 'pipeline', label: 'Full Pipeline', icon: RectangleStackIcon },
-    { key: 'contract', label: 'Contract Board', icon: DocumentTextIcon },
-    { key: 'invoice', label: 'Invoice Board', icon: BanknotesIcon },
-  ]
+  { key: 'pipeline', label: 'Full Pipeline', icon: RectangleStackIcon },
+  { key: 'contract', label: 'Contract Board', icon: DocumentTextIcon },
+  { key: 'invoice', label: 'Invoice Board', icon: BanknotesIcon },
+]
 
 export function BoardViewSwitcher({
   currentView,
