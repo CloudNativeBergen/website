@@ -112,6 +112,7 @@ export interface ProcessTicketSalesInput {
   capacity: number
   conference: Conference
   conferenceDate: string
+  speakerCount: number
 }
 
 export interface EventTicketWithoutDate {

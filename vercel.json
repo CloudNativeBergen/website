@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/sales-update",
+      "path": "/api/cron/weekly-update",
       "schedule": "0 9 * * 1"
     },
     {
