@@ -8,6 +8,7 @@ import type {
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceOver } from '@/lib/conference/state'
 import { getOrganizerCount, getSpeakers } from '@/lib/speaker/sanity'
+import { Status } from '@/lib/proposal/types'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
 import {
   aggregateSponsorPipeline,
@@ -87,8 +88,20 @@ export async function GET(request: NextRequest) {
     const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)
     const freeTickets = allTickets.filter((t) => parseFloat(t.sum) === 0)
 
-    const { count: organizerCount } = await getOrganizerCount()
-    const { speakers } = await getSpeakers(conference._id)
+    const { count: organizerCount, err: organizerErr } =
+      await getOrganizerCount()
+    if (organizerErr) {
+      console.log('Failed to fetch organizer count:', organizerErr)
+    }
+
+    const { speakers, err: speakersErr } = await getSpeakers(
+      conference._id,
+      [Status.confirmed],
+      false,
+    )
+    if (speakersErr) {
+      console.log('Failed to fetch speakers:', speakersErr)
+    }
 
     let analysis: TicketAnalysisResult | null = null
 
@@ -139,18 +152,13 @@ export async function GET(request: NextRequest) {
     }
 
     let sponsorPipeline: SponsorPipelineData | null = null
-    try {
-      const { sponsors: crmSponsors } = await listSponsorsForConference(
-        conference._id,
-      )
-      if (crmSponsors && crmSponsors.length > 0) {
-        sponsorPipeline = aggregateSponsorPipeline(crmSponsors)
-      }
-    } catch (error) {
-      console.log(
-        'Sponsor pipeline data fetch failed:',
-        (error as Error).message,
-      )
+    const { sponsors: crmSponsors, error: sponsorsError } =
+      await listSponsorsForConference(conference._id)
+
+    if (sponsorsError) {
+      console.log('Sponsor pipeline data fetch failed:', sponsorsError.message)
+    } else if (crmSponsors && crmSponsors.length > 0) {
+      sponsorPipeline = aggregateSponsorPipeline(crmSponsors)
     }
 
     await sendSalesUpdateToSlack({

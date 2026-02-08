@@ -21,6 +21,7 @@ const mockFetch = jest.fn() as jest.MockedFunction<typeof global.fetch>
 
 let savedNodeEnv: string | undefined
 let savedBotToken: string | undefined
+let savedFetch: typeof global.fetch
 
 function setEnv(nodeEnv: string, botToken?: string) {
   Object.defineProperty(process.env, 'NODE_ENV', {
@@ -118,16 +119,18 @@ describe('salesUpdate', () => {
     mockFetch.mockReset()
     savedNodeEnv = process.env.NODE_ENV
     savedBotToken = process.env.SLACK_BOT_TOKEN
+    savedFetch = global.fetch
   })
 
   afterEach(() => {
+    global.fetch = savedFetch
     restoreEnv()
   })
 
   describe('sendSalesUpdateToSlack', () => {
     it('should log to console in development mode', async () => {
       setEnv('development')
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
@@ -139,7 +142,7 @@ describe('salesUpdate', () => {
 
     it('should warn when SLACK_BOT_TOKEN is missing', async () => {
       setEnv('production')
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
@@ -449,8 +452,8 @@ describe('salesUpdate', () => {
 
     it('should calculate correct win rate', () => {
       const pipeline = createMockPipeline({
-        totalSponsors: 10,
         closedWonCount: 4,
+        closedLostCount: 1,
         totalContractValue: 100000,
       })
       const blocks = createSponsorPipelineBlocks(pipeline, 'NOK')
@@ -458,19 +461,31 @@ describe('salesUpdate', () => {
       const fieldsText = blocks
         .flatMap((b) => b.fields?.map((f) => f.text) || [])
         .join(' ')
-      expect(fieldsText).toContain('40%')
+      // 4 / (4 + 1) = 80%
+      expect(fieldsText).toContain('80%')
     })
 
     it('should handle empty pipeline statuses', () => {
       const pipeline = createMockPipeline({
         byStatus: {},
         byInvoiceStatus: {},
+        byContractStatus: {},
       })
       const blocks = createSponsorPipelineBlocks(pipeline, 'NOK')
 
       const allText = blocks.map((b) => b.text?.text || '').join(' ')
       expect(allText).not.toContain('Pipeline Stages')
       expect(allText).not.toContain('Invoice Status')
+      expect(allText).not.toContain('Contract Status')
+    })
+
+    it('should display contract status breakdown', () => {
+      const pipeline = createMockPipeline()
+      const blocks = createSponsorPipelineBlocks(pipeline, 'NOK')
+
+      const allText = blocks.map((b) => b.text?.text || '').join(' ')
+      expect(allText).toContain('Contract Status')
+      expect(allText).toContain('contract-signed: 6')
     })
   })
 })

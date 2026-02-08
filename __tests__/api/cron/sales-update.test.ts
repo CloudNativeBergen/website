@@ -4,91 +4,23 @@
 import { describe, it, expect } from '@jest/globals'
 import { aggregateSponsorPipeline } from '@/lib/sponsor-crm/pipeline'
 import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
+import { isConferenceOver } from '@/lib/conference/state'
+import { createMockConference } from '../../testdata/conference'
 
 describe('api/cron/sales-update', () => {
-  describe('Authentication', () => {
-    it('should reject requests without authorization header', () => {
-      const authHeader = undefined
-      const shouldReject = !authHeader
-
-      expect(shouldReject).toBe(true)
+  describe('Conference State', () => {
+    it('should detect conference has ended', () => {
+      const conference = createMockConference({
+        end_date: '2025-01-01',
+      })
+      expect(isConferenceOver(conference)).toBe(true)
     })
 
-    it('should reject requests with invalid authorization token', () => {
-      const wrongToken: string = 'Bearer wrong-token'
-      const cronSecret = 'correct-secret'
-      const expectedHeader = `Bearer ${cronSecret}`
-      const isValid = wrongToken === expectedHeader
-
-      expect(isValid).toBe(false)
-    })
-
-    it('should accept requests with valid authorization token', () => {
-      const cronSecret = 'correct-secret'
-      const authHeader = `Bearer ${cronSecret}`
-      const expectedHeader = `Bearer ${cronSecret}`
-      const isValid = authHeader === expectedHeader
-
-      expect(isValid).toBe(true)
-    })
-
-    it('should reject requests when CRON_SECRET is not configured', () => {
-      const cronSecret = undefined
-      const shouldReject = !cronSecret
-
-      expect(shouldReject).toBe(true)
-    })
-  })
-
-  describe('Conference Resolution', () => {
-    it('should fail when conference is not found for domain', () => {
-      const conference = null
-      const conferenceError = new Error('Conference not found')
-      const shouldFail = !!conferenceError || !conference
-
-      expect(shouldFail).toBe(true)
-    })
-
-    it('should skip update when conference has ended', () => {
-      const conferenceEndDate = '2025-01-01'
-      const now = new Date('2026-02-07')
-      const isOver = new Date(conferenceEndDate) < now
-
-      expect(isOver).toBe(true)
-    })
-
-    it('should proceed when conference is upcoming', () => {
-      const conferenceEndDate = '2026-06-15'
-      const now = new Date('2026-02-07')
-      const isOver = new Date(conferenceEndDate) < now
-
-      expect(isOver).toBe(false)
-    })
-  })
-
-  describe('Checkin Configuration', () => {
-    it('should fail when checkin_customer_id is missing', () => {
-      const conference = { checkin_customer_id: undefined, checkin_event_id: 1 }
-      const isMissing =
-        !conference.checkin_customer_id || !conference.checkin_event_id
-
-      expect(isMissing).toBe(true)
-    })
-
-    it('should fail when checkin_event_id is missing', () => {
-      const conference = { checkin_customer_id: 1, checkin_event_id: undefined }
-      const isMissing =
-        !conference.checkin_customer_id || !conference.checkin_event_id
-
-      expect(isMissing).toBe(true)
-    })
-
-    it('should proceed when both checkin IDs are present', () => {
-      const conference = { checkin_customer_id: 1, checkin_event_id: 2 }
-      const isMissing =
-        !conference.checkin_customer_id || !conference.checkin_event_id
-
-      expect(isMissing).toBe(false)
+    it('should detect conference is upcoming', () => {
+      const conference = createMockConference({
+        end_date: '2099-06-15',
+      })
+      expect(isConferenceOver(conference)).toBe(false)
     })
   })
 
@@ -137,78 +69,6 @@ describe('api/cron/sales-update', () => {
 
       expect(paidTickets.length).toBe(0)
       expect(freeTickets.length).toBe(0)
-    })
-  })
-
-  describe('Target Analysis Guard', () => {
-    it('should skip analysis when targets are not enabled', () => {
-      const targetConfig = { enabled: false }
-      const ticketCapacity = 200
-      const paidTicketsLength = 50
-
-      const shouldAnalyze =
-        targetConfig &&
-        targetConfig.enabled &&
-        ticketCapacity &&
-        paidTicketsLength > 0
-
-      expect(shouldAnalyze).toBeFalsy()
-    })
-
-    it('should skip analysis when ticket capacity is missing', () => {
-      const targetConfig = {
-        enabled: true,
-        sales_start_date: '2026-01-01',
-        target_curve: 'linear',
-      }
-      const ticketCapacity = undefined
-      const paidTicketsLength = 50
-
-      const shouldAnalyze =
-        targetConfig &&
-        targetConfig.enabled &&
-        ticketCapacity &&
-        paidTicketsLength > 0
-
-      expect(shouldAnalyze).toBeFalsy()
-    })
-
-    it('should skip analysis when no paid tickets exist', () => {
-      const targetConfig = {
-        enabled: true,
-        sales_start_date: '2026-01-01',
-        target_curve: 'linear',
-      }
-      const ticketCapacity = 200
-      const paidTicketsLength = 0
-
-      const shouldAnalyze =
-        targetConfig &&
-        targetConfig.enabled &&
-        ticketCapacity &&
-        paidTicketsLength > 0
-
-      expect(shouldAnalyze).toBeFalsy()
-    })
-
-    it('should proceed with analysis when all conditions are met', () => {
-      const targetConfig = {
-        enabled: true,
-        sales_start_date: '2026-01-01',
-        target_curve: 'linear',
-      }
-      const ticketCapacity = 200
-      const paidTicketsLength = 50
-
-      const shouldAnalyze =
-        targetConfig &&
-        targetConfig.enabled &&
-        ticketCapacity &&
-        targetConfig.sales_start_date &&
-        targetConfig.target_curve &&
-        paidTicketsLength > 0
-
-      expect(shouldAnalyze).toBeTruthy()
     })
   })
 
@@ -315,52 +175,6 @@ describe('api/cron/sales-update', () => {
       const result = aggregateSponsorPipeline(sponsors)
 
       expect(result.contractCurrency).toBe('EUR')
-    })
-  })
-
-  describe('Statistics Fallback', () => {
-    it('should use analysis statistics when available', () => {
-      const analysisStats = {
-        totalPaidTickets: 50,
-        totalRevenue: 125000,
-        totalOrders: 45,
-        averageTicketPrice: 2500,
-        categoryBreakdown: { Regular: 30, 'Early Bird': 20 },
-        sponsorTickets: 10,
-        speakerTickets: 8,
-        totalCapacityUsed: 68,
-      }
-
-      const statistics = analysisStats || {
-        categoryBreakdown: {},
-        sponsorTickets: 0,
-        speakerTickets: 0,
-        totalCapacityUsed: 50,
-      }
-
-      expect(statistics.categoryBreakdown).toEqual({
-        Regular: 30,
-        'Early Bird': 20,
-      })
-      expect(statistics.sponsorTickets).toBe(10)
-    })
-
-    it('should fall back to defaults when analysis is null', () => {
-      const getAnalysis = (): {
-        statistics: Record<string, unknown>
-      } | null => null
-      const analysis = getAnalysis()
-
-      const statistics = analysis?.statistics || {
-        categoryBreakdown: {},
-        sponsorTickets: 0,
-        speakerTickets: 0,
-        totalCapacityUsed: 50,
-      }
-
-      expect(statistics.categoryBreakdown).toEqual({})
-      expect(statistics.sponsorTickets).toBe(0)
-      expect(statistics.totalCapacityUsed).toBe(50)
     })
   })
 })

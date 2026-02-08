@@ -14,6 +14,7 @@ const mockFetch = jest.fn() as jest.MockedFunction<typeof global.fetch>
 
 let savedNodeEnv: string | undefined
 let savedBotToken: string | undefined
+let savedFetch: typeof global.fetch
 
 function setEnv(opts: { nodeEnv: string; botToken?: string }) {
   Object.defineProperty(process.env, 'NODE_ENV', {
@@ -48,9 +49,11 @@ describe('Slack client', () => {
     mockFetch.mockReset()
     savedNodeEnv = process.env.NODE_ENV
     savedBotToken = process.env.SLACK_BOT_TOKEN
+    savedFetch = global.fetch
   })
 
   afterEach(() => {
+    global.fetch = savedFetch
     restoreEnv()
   })
 
@@ -61,7 +64,7 @@ describe('Slack client', () => {
   describe('development mode', () => {
     it('should log to console instead of sending', async () => {
       setEnv({ nodeEnv: 'development' })
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await postSlackMessage(testMessage, { channel: '#test' })
@@ -156,7 +159,7 @@ describe('Slack client', () => {
   describe('missing configuration', () => {
     it('should warn when no bot token', async () => {
       setEnv({ nodeEnv: 'production' })
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await postSlackMessage(testMessage, { channel: '#test' })
@@ -166,7 +169,7 @@ describe('Slack client', () => {
 
     it('should warn when no channel specified', async () => {
       setEnv({ nodeEnv: 'production', botToken: 'xoxb-test' })
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { postSlackMessage } = await import('@/lib/slack/client')
       await postSlackMessage(testMessage)

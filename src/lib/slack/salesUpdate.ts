@@ -94,6 +94,7 @@ export function createSponsorPipelineBlocks(
   ]
 
   if (pipeline.totalContractValue > 0) {
+    const closedDeals = pipeline.closedWonCount + pipeline.closedLostCount
     blocks.push({
       type: 'section',
       fields: [
@@ -103,7 +104,7 @@ export function createSponsorPipelineBlocks(
         },
         {
           type: 'mrkdwn',
-          text: `*Win Rate:*\n${pipeline.totalSponsors > 0 ? ((pipeline.closedWonCount / pipeline.totalSponsors) * 100).toFixed(0) : 0}%`,
+          text: `*Win Rate:*\n${closedDeals > 0 ? ((pipeline.closedWonCount / closedDeals) * 100).toFixed(0) : 0}%`,
         },
       ],
     })
@@ -137,6 +138,22 @@ export function createSponsorPipelineBlocks(
       text: {
         type: 'mrkdwn',
         text: `*Invoice Status:* ${invoiceText}`,
+      },
+    })
+  }
+
+  const contractEntries = Object.entries(pipeline.byContractStatus).filter(
+    ([, count]) => count > 0,
+  )
+  if (contractEntries.length > 0) {
+    const contractText = contractEntries
+      .map(([status, count]) => `${status}: ${count}`)
+      .join(' · ')
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Contract Status:* ${contractText}`,
       },
     })
   }

@@ -242,7 +242,7 @@ describe('Slack notifications', () => {
 
     it('should catch and log errors from postSlackMessage', async () => {
       mockPostSlackMessage.mockRejectedValue(new Error('Slack API failed'))
-      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => { })
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
 
       const { notifyProposalStatusChange } = await import('@/lib/slack/notify')
 
