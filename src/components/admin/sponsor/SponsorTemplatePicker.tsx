@@ -2,15 +2,22 @@
 
 import { useMemo } from 'react'
 import { api } from '@/lib/trpc/client'
-import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
+import type {
+  SponsorEmailTemplate,
+  TemplateCategory,
+  TemplateLanguage,
+} from '@/lib/sponsor/types'
 import {
   buildTemplateVariables,
   processTemplateVariables,
   processPortableTextVariables,
+  suggestTemplateCategory,
+  suggestTemplateLanguage,
+  findBestTemplate,
   CATEGORY_LABELS,
+  LANGUAGE_FLAGS,
 } from '@/lib/sponsor/templates'
 import type { PortableTextBlock } from '@portabletext/editor'
-import { formatConferenceDateLong } from '@/lib/time'
 import type { PortableTextBlock as TemplateBlock } from '@/lib/sponsor/types'
 
 interface SponsorTemplatePickerProps {
@@ -27,6 +34,13 @@ interface SponsorTemplatePickerProps {
   senderName?: string
   tierName?: string
   onApply: (subject: string, body: PortableTextBlock[]) => void
+  crmContext?: {
+    tags?: string[]
+    status?: string
+    currency?: string
+    orgNumber?: string
+    website?: string
+  }
 }
 
 export function SponsorTemplatePicker({
@@ -36,6 +50,7 @@ export function SponsorTemplatePicker({
   senderName,
   tierName,
   onApply,
+  crmContext,
 }: SponsorTemplatePickerProps) {
   const { data: templates, isLoading } =
     api.sponsor.emailTemplates.list.useQuery()
@@ -48,10 +63,24 @@ export function SponsorTemplatePicker({
         conference,
         senderName,
         tierName,
-        formatDate: formatConferenceDateLong,
       }),
     [sponsorName, contactNames, conference, senderName, tierName],
   )
+
+  const suggestedCategory = useMemo<TemplateCategory | undefined>(
+    () => (crmContext ? suggestTemplateCategory(crmContext) : undefined),
+    [crmContext],
+  )
+
+  const suggestedLanguage = useMemo<TemplateLanguage | undefined>(
+    () => (crmContext ? suggestTemplateLanguage(crmContext) : undefined),
+    [crmContext],
+  )
+
+  const recommendedTemplate = useMemo(() => {
+    if (!templates || !suggestedCategory || !suggestedLanguage) return undefined
+    return findBestTemplate(templates, suggestedCategory, suggestedLanguage)
+  }, [templates, suggestedCategory, suggestedLanguage])
 
   const grouped = useMemo(() => {
     if (!templates) return {}
@@ -113,9 +142,18 @@ export function SponsorTemplatePicker({
       {Object.entries(grouped).map(([category, categoryTemplates]) => (
         <optgroup key={category} label={CATEGORY_LABELS[category] || category}>
           {categoryTemplates.map((t) => (
-            <option key={t._id} value={t._id}>
+            <option
+              key={t._id}
+              value={t._id}
+              title={[t.description, `Subject: ${t.subject}`]
+                .filter(Boolean)
+                .join('\n')}
+            >
+              {LANGUAGE_FLAGS[t.language]
+                ? `${LANGUAGE_FLAGS[t.language]} `
+                : ''}
               {t.title}
-              {t.is_default ? ' (default)' : ''}
+              {recommendedTemplate?._id === t._id ? ' ✦' : ''}
             </option>
           ))}
         </optgroup>

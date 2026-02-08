@@ -135,7 +135,8 @@ export function SponsorBulkActions({
           </button>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-gray-900 dark:text-white">
-              {selectedIds.length} selected
+              {selectedIds.length}
+              <span className="hidden sm:inline"> selected</span>
             </span>
             {isProcessing && (
               <div className="flex items-center gap-2 border-l border-gray-200 pl-2 dark:border-gray-700">

@@ -349,7 +349,7 @@ function Toolbar() {
     )) || []
 
   return (
-    <div className="my-2 flex gap-1">
+    <div className="my-1 flex gap-1">
       {styleButtons}
       {decoratorButtons}
       <LinkButton />

@@ -17,6 +17,7 @@ interface SponsorIndividualEmailModalProps {
   sponsorForConference: SponsorForConferenceExpanded
   domain: string
   fromEmail: string
+  senderName?: string
   conference: {
     title: string
     city: string
@@ -35,6 +36,7 @@ export function SponsorIndividualEmailModal({
   sponsorForConference,
   domain,
   fromEmail,
+  senderName,
   conference,
 }: SponsorIndividualEmailModalProps) {
   const { showNotification } = useNotification()
@@ -192,10 +194,18 @@ export function SponsorIndividualEmailModal({
               : undefined
           }
           conference={conference}
+          senderName={senderName}
           tierName={sponsorForConference.tier?.title}
           onApply={(subject, body) => {
             setSubject(subject)
             setMessage(body)
+          }}
+          crmContext={{
+            tags: sponsorForConference.tags,
+            status: sponsorForConference.status,
+            currency: sponsorForConference.contract_currency,
+            orgNumber: sponsorForConference.sponsor.org_number,
+            website: sponsorForConference.sponsor.website,
           }}
         />
       )}

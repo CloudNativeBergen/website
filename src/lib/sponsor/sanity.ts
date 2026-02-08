@@ -376,6 +376,7 @@ const EMAIL_TEMPLATE_PROJECTION = `{
   title,
   slug,
   category,
+  "language": coalesce(language, "no"),
   subject,
   body,
   description,
@@ -397,10 +398,25 @@ export async function getSponsorEmailTemplates(): Promise<{
   }
 }
 
+export async function getSponsorEmailTemplate(
+  id: string,
+): Promise<{ template?: SponsorEmailTemplate; error?: Error }> {
+  try {
+    const template = await clientWrite.fetch(
+      `*[_type == "sponsorEmailTemplate" && _id == $id][0] ${EMAIL_TEMPLATE_PROJECTION}`,
+      { id },
+    )
+    return { template: template ?? undefined }
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
 export async function createSponsorEmailTemplate(data: {
   title: string
   slug: string
   category: string
+  language: string
   subject: string
   body?: unknown[]
   description?: string
@@ -413,6 +429,7 @@ export async function createSponsorEmailTemplate(data: {
       title: data.title,
       slug: { _type: 'slug', current: data.slug },
       category: data.category,
+      language: data.language,
       subject: data.subject,
       body: data.body,
       description: data.description,
@@ -431,6 +448,7 @@ export async function updateSponsorEmailTemplate(
     title?: string
     slug?: string
     category?: string
+    language?: string
     subject?: string
     body?: unknown[]
     description?: string
@@ -444,6 +462,7 @@ export async function updateSponsorEmailTemplate(
     if (data.slug !== undefined)
       patch.slug = { _type: 'slug', current: data.slug }
     if (data.category !== undefined) patch.category = data.category
+    if (data.language !== undefined) patch.language = data.language
     if (data.subject !== undefined) patch.subject = data.subject
     if (data.body !== undefined) patch.body = data.body
     if (data.description !== undefined) patch.description = data.description
@@ -462,6 +481,71 @@ export async function deleteSponsorEmailTemplate(
 ): Promise<{ error?: Error }> {
   try {
     await clientWrite.delete(id)
+    return {}
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function setDefaultSponsorEmailTemplate(
+  id: string,
+): Promise<{ error?: Error }> {
+  try {
+    // Fetch template to derive category server-side (don't trust client)
+    const current = await clientWrite.fetch<{
+      is_default?: boolean
+      category?: string
+    }>(
+      `*[_type == "sponsorEmailTemplate" && _id == $id][0]{ is_default, category }`,
+      { id },
+    )
+    if (!current) {
+      return { error: new Error('Sponsor email template not found') }
+    }
+    if (!current.category) {
+      return { error: new Error('Sponsor email template has no category') }
+    }
+
+    // Unset is_default for all other templates in the same category
+    const others = await clientWrite.fetch<{ _id: string }[]>(
+      `*[_type == "sponsorEmailTemplate" && category == $category && _id != $id && is_default == true]{ _id }`,
+      { category: current.category, id },
+    )
+    const tx = clientWrite.transaction()
+    for (const t of others) {
+      tx.patch(t._id, (p) => p.set({ is_default: false }))
+    }
+    // Toggle: if already default, unset; otherwise set
+    tx.patch(id, (p) => p.set({ is_default: !current.is_default }))
+    await tx.commit()
+    return {}
+  } catch (error) {
+    return { error: error as Error }
+  }
+}
+
+export async function reorderSponsorEmailTemplates(
+  orderedIds: string[],
+): Promise<{ error?: Error }> {
+  try {
+    // Validate all IDs belong to sponsorEmailTemplate documents
+    const valid = await clientWrite.fetch<{ _id: string }[]>(
+      `*[_type == "sponsorEmailTemplate" && _id in $ids]{ _id }`,
+      { ids: orderedIds },
+    )
+    const validIds = new Set(valid.map((t) => t._id))
+    const invalid = orderedIds.filter((id) => !validIds.has(id))
+    if (invalid.length > 0) {
+      return {
+        error: new Error(`Invalid template IDs: ${invalid.join(', ')}`),
+      }
+    }
+
+    const tx = clientWrite.transaction()
+    orderedIds.forEach((id, index) => {
+      tx.patch(id, (p) => p.set({ sort_order: index }))
+    })
+    await tx.commit()
     return {}
   } catch (error) {
     return { error: error as Error }

@@ -2,11 +2,12 @@
 
 import { useState, useMemo, useCallback } from 'react'
 import { api } from '@/lib/trpc/client'
-import { useNotification } from '@/components/admin'
+import { useNotification, AdminPageHeader } from '@/components/admin'
 import { PortableTextEditor } from '@/components/PortableTextEditor'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
 import {
   CATEGORY_LABELS,
+  LANGUAGE_LABELS,
   TEMPLATE_VARIABLE_DESCRIPTIONS,
   processTemplateVariables,
   processPortableTextVariables,
@@ -15,15 +16,17 @@ import {
 import type {
   SponsorEmailTemplate,
   TemplateCategory,
+  TemplateLanguage,
   PortableTextBlock as TemplateBlock,
 } from '@/lib/sponsor/types'
 import type { PortableTextBlock } from '@portabletext/editor'
 import type { PortableTextBlock as RenderBlock } from '@portabletext/types'
 import type { Conference } from '@/lib/conference/types'
-import { formatConferenceDateLong } from '@/lib/time'
 import {
-  ArrowLeftIcon,
   ClipboardDocumentIcon,
+  EnvelopeIcon,
+  ArrowPathIcon,
+  CheckIcon,
 } from '@heroicons/react/24/outline'
 import { ChevronDownIcon } from '@heroicons/react/16/solid'
 
@@ -32,10 +35,15 @@ const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as [
   string,
 ][]
 
+const LANGUAGE_OPTIONS = Object.entries(LANGUAGE_LABELS) as [
+  TemplateLanguage,
+  string,
+][]
+
 interface SponsorEmailTemplateEditorProps {
   conference: Conference
   template?: SponsorEmailTemplate
-  onClose: () => void
+  onSaved: () => void
 }
 
 function slugify(text: string): string {
@@ -48,37 +56,44 @@ function slugify(text: string): string {
 export function SponsorEmailTemplateEditor({
   conference,
   template,
-  onClose,
+  onSaved,
 }: SponsorEmailTemplateEditorProps) {
   const isEditing = !!template
   const { showNotification } = useNotification()
 
   const [title, setTitle] = useState(template?.title ?? '')
-  const [slug, setSlug] = useState(template?.slug?.current ?? '')
   const [category, setCategory] = useState<TemplateCategory>(
     template?.category ?? 'cold-outreach',
+  )
+  const [language, setLanguage] = useState<TemplateLanguage>(
+    template?.language ?? 'no',
   )
   const [subject, setSubject] = useState(template?.subject ?? '')
   const [body, setBody] = useState<PortableTextBlock[]>(
     (template?.body as unknown as PortableTextBlock[]) ?? [],
   )
   const [description, setDescription] = useState(template?.description ?? '')
-  const [isDefault, setIsDefault] = useState(template?.is_default ?? false)
-  const [sortOrder, setSortOrder] = useState(template?.sort_order ?? 0)
-  const [autoSlug, setAutoSlug] = useState(!isEditing)
+
+  // Reset save status when any field changes
+  const markDirty = () => setSaveStatus('idle')
 
   const [editorKey] = useState(0)
 
+  const utils = api.useUtils()
+
   const createMutation = api.sponsor.emailTemplates.create.useMutation({
     onSuccess: () => {
+      setSaveStatus('success')
+      utils.sponsor.emailTemplates.list.invalidate()
       showNotification({
         type: 'success',
         title: 'Template created',
         message: `"${title}" has been created`,
       })
-      onClose()
+      onSaved()
     },
     onError: (error) => {
+      setSaveStatus('error')
       showNotification({
         type: 'error',
         title: 'Create failed',
@@ -89,14 +104,17 @@ export function SponsorEmailTemplateEditor({
 
   const updateMutation = api.sponsor.emailTemplates.update.useMutation({
     onSuccess: () => {
+      setSaveStatus('success')
+      utils.sponsor.emailTemplates.list.invalidate()
       showNotification({
         type: 'success',
         title: 'Template updated',
         message: `"${title}" has been saved`,
       })
-      onClose()
+      onSaved()
     },
     onError: (error) => {
+      setSaveStatus('error')
       showNotification({
         type: 'error',
         title: 'Update failed',
@@ -106,36 +124,31 @@ export function SponsorEmailTemplateEditor({
   })
 
   const isPending = createMutation.isPending || updateMutation.isPending
-
-  const handleTitleChange = (value: string) => {
-    setTitle(value)
-    if (autoSlug) {
-      setSlug(slugify(value))
-    }
-  }
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>(
+    'idle',
+  )
 
   const handleSubmit = () => {
-    if (!title.trim() || !slug.trim() || !subject.trim()) {
+    if (!title.trim() || !subject.trim()) {
       showNotification({
         type: 'warning',
         title: 'Validation error',
-        message: 'Title, slug, and subject are required',
+        message: 'Title and subject are required',
       })
       return
     }
 
     const payload = {
       title: title.trim(),
-      slug: slug.trim(),
+      slug: slugify(title.trim()),
       category,
+      language,
       subject: subject.trim(),
       body:
         body.length > 0
           ? (body as unknown as Record<string, unknown>[])
           : undefined,
       description: description.trim() || undefined,
-      is_default: isDefault,
-      sort_order: sortOrder,
     }
 
     if (isEditing && template) {
@@ -161,7 +174,6 @@ export function SponsorEmailTemplateEditor({
         },
         senderName: 'Hans Kristian',
         tierName: 'Community Partner',
-        formatDate: formatConferenceDateLong,
       }),
     [conference],
   )
@@ -198,40 +210,60 @@ export function SponsorEmailTemplateEditor({
   )
 
   return (
-    <div className="mt-6">
-      {/* Sub-header with back link and actions */}
-      <div className="mb-6 flex items-center justify-between">
-        <button
-          onClick={onClose}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-        >
-          <ArrowLeftIcon className="h-4 w-4" />
-          Back to templates
-        </button>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onClose}
-            className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
-          >
-            {isPending
-              ? 'Saving...'
-              : isEditing
-                ? 'Save Changes'
-                : 'Create Template'}
-          </button>
-        </div>
-      </div>
-
-      <h2 className="mb-6 text-lg font-bold text-gray-900 dark:text-white">
-        {isEditing ? `Edit: ${template.title}` : 'New Email Template'}
-      </h2>
+    <div className="space-y-6">
+      <AdminPageHeader
+        icon={<EnvelopeIcon />}
+        title={
+          isEditing
+            ? `Edit: ${template?.title ?? 'Template'}`
+            : 'New Email Template'
+        }
+        description={
+          isEditing
+            ? 'Edit outreach email template for'
+            : 'Create a new outreach email template for'
+        }
+        contextHighlight={conference.title}
+        backLink={{
+          href: '/admin/sponsors/templates',
+          label: 'Back to Templates',
+        }}
+        actionItems={[
+          {
+            label: isEditing ? 'Save Changes' : 'Create Template',
+            render: () => (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isPending}
+                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${
+                  saveStatus === 'error'
+                    ? 'bg-red-600 hover:bg-red-500 dark:bg-red-500 dark:hover:bg-red-400'
+                    : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400'
+                }`}
+              >
+                {isPending ? (
+                  <>
+                    <ArrowPathIcon className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : saveStatus === 'success' ? (
+                  <>
+                    <CheckIcon className="mr-2 h-4 w-4" />
+                    Saved
+                  </>
+                ) : saveStatus === 'error' ? (
+                  'Save Failed — Retry'
+                ) : isEditing ? (
+                  'Save Changes'
+                ) : (
+                  'Create Template'
+                )}
+              </button>
+            ),
+          },
+        ]}
+      />
 
       {/* Two-column layout */}
       <div className="grid gap-6 lg:grid-cols-5">
@@ -239,7 +271,7 @@ export function SponsorEmailTemplateEditor({
         <div className="space-y-6 lg:col-span-3">
           {/* Meta fields */}
           <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
                   Title
@@ -247,23 +279,11 @@ export function SponsorEmailTemplateEditor({
                 <input
                   type="text"
                   value={title}
-                  onChange={(e) => handleTitleChange(e.target.value)}
-                  placeholder="e.g. Cold Outreach (English)"
-                  className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                  Slug
-                </label>
-                <input
-                  type="text"
-                  value={slug}
                   onChange={(e) => {
-                    setAutoSlug(false)
-                    setSlug(e.target.value)
+                    setTitle(e.target.value)
+                    markDirty()
                   }}
-                  placeholder="cold-outreach-en"
+                  placeholder="e.g. Cold Outreach (English)"
                   className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                 />
               </div>
@@ -274,9 +294,10 @@ export function SponsorEmailTemplateEditor({
                 <div className="mt-2 grid grid-cols-1">
                   <select
                     value={category}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setCategory(e.target.value as TemplateCategory)
-                    }
+                      markDirty()
+                    }}
                     className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
                   >
                     {CATEGORY_OPTIONS.map(([value, label]) => (
@@ -293,14 +314,27 @@ export function SponsorEmailTemplateEditor({
               </div>
               <div>
                 <label className="block text-sm/6 font-medium text-gray-900 dark:text-white">
-                  Sort Order
+                  Language
                 </label>
-                <input
-                  type="number"
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(parseInt(e.target.value) || 0)}
-                  className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
-                />
+                <div className="mt-2 flex gap-1">
+                  {LANGUAGE_OPTIONS.map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        setLanguage(value)
+                        markDirty()
+                      }}
+                      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                        language === value
+                          ? 'bg-indigo-600 text-white dark:bg-indigo-500'
+                          : 'bg-white text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -311,39 +345,13 @@ export function SponsorEmailTemplateEditor({
               <input
                 type="text"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => {
+                  setDescription(e.target.value)
+                  markDirty()
+                }}
                 placeholder="Internal notes on when to use this template"
                 className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
               />
-            </div>
-
-            <div className="mt-4 flex items-center gap-3">
-              <div className="flex h-6 shrink-0 items-center">
-                <div className="group grid size-4 grid-cols-1">
-                  <input
-                    type="checkbox"
-                    checked={isDefault}
-                    onChange={(e) => setIsDefault(e.target.checked)}
-                    className="col-start-1 row-start-1 appearance-none rounded-sm border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 dark:border-gray-600 dark:bg-white/5 dark:checked:border-indigo-500 dark:checked:bg-indigo-500 dark:focus-visible:outline-indigo-500"
-                  />
-                  <svg
-                    fill="none"
-                    viewBox="0 0 14 14"
-                    className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-disabled:stroke-gray-950/25"
-                  >
-                    <path
-                      d="M3 8L6 11L11 3.5"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="opacity-0 group-has-checked:opacity-100"
-                    />
-                  </svg>
-                </div>
-              </div>
-              <label className="text-sm/6 font-medium text-gray-900 dark:text-white">
-                Default template for this category
-              </label>
             </div>
           </div>
 
@@ -355,7 +363,10 @@ export function SponsorEmailTemplateEditor({
             <input
               type="text"
               value={subject}
-              onChange={(e) => setSubject(e.target.value)}
+              onChange={(e) => {
+                setSubject(e.target.value)
+                markDirty()
+              }}
               placeholder="e.g. Partnership opportunity: {{{CONFERENCE_TITLE}}}"
               className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
             />
@@ -367,7 +378,10 @@ export function SponsorEmailTemplateEditor({
               key={editorKey}
               label="Email Body"
               value={body}
-              onChange={setBody}
+              onChange={(val) => {
+                setBody(val)
+                markDirty()
+              }}
               forceRemountKey={editorKey}
               helpText="Use {{{VARIABLE_NAME}}} syntax for dynamic content. Click a variable below to copy it."
             />
@@ -422,13 +436,13 @@ export function SponsorEmailTemplateEditor({
 
               {/* Body preview — matches email rendering */}
               <div
+                className="text-gray-700 dark:text-gray-200 dark:[&_blockquote]:text-gray-300! dark:[&_code]:text-gray-200! dark:[&_li]:text-gray-200! dark:[&_ol]:text-gray-200! dark:[&_p]:text-gray-200! dark:[&_ul]:text-gray-200!"
                 style={{
                   maxWidth: 600,
                   fontFamily:
                     "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
                   fontSize: 16,
                   lineHeight: 1.6,
-                  color: '#334155',
                 }}
               >
                 {previewBody.length > 0 ? (
