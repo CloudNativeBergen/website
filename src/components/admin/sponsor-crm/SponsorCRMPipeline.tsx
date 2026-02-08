@@ -406,6 +406,7 @@ export function SponsorCRMPipeline({
         <SponsorIndividualEmailModal
           isOpen={isEmailModalOpen}
           onClose={handleCloseEmail}
+          onSent={() => utils.sponsor.crm.list.invalidate()}
           sponsorForConference={emailSponsor}
           domain={domain}
           fromEmail={conference.sponsor_email || ''}

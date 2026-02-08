@@ -14,6 +14,7 @@ import { SponsorTemplatePicker } from './SponsorTemplatePicker'
 interface SponsorIndividualEmailModalProps {
   isOpen: boolean
   onClose: () => void
+  onSent?: () => void
   sponsorForConference: SponsorForConferenceExpanded
   domain: string
   fromEmail: string
@@ -33,6 +34,7 @@ interface SponsorIndividualEmailModalProps {
 export function SponsorIndividualEmailModal({
   isOpen,
   onClose,
+  onSent,
   sponsorForConference,
   domain,
   fromEmail,
@@ -123,6 +125,7 @@ export function SponsorIndividualEmailModal({
         title: 'Email sent successfully',
         message: `Sent to ${result.recipientCount} contact${result.recipientCount > 1 ? 's' : ''} for ${sponsorForConference.sponsor.name}`,
       })
+      onSent?.()
       onClose()
     } catch (err) {
       showNotification({
