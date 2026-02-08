@@ -72,7 +72,10 @@ export default function middleware(req: NextRequest, event: NextFetchEvent) {
     return workOSMiddleware(req, event)
   }
 
-  if (pathname.startsWith('/cfp') || pathname.startsWith('/admin')) {
+  if (
+    (pathname.startsWith('/cfp') && pathname !== '/cfp') ||
+    pathname.startsWith('/admin')
+  ) {
     return nextAuthMiddleware(req, { params: Promise.resolve({}) })
   }
 
