@@ -309,13 +309,13 @@ export class TicketSalesProcessor {
 
     const nextMilestoneInfo = nextMilestone
       ? {
-        date: nextMilestone.date,
-        label: nextMilestone.milestoneLabel!,
-        daysAway: Math.ceil(
-          (new Date(nextMilestone.date).getTime() - this.today.getTime()) /
-          (1000 * 60 * 60 * 24),
-        ),
-      }
+          date: nextMilestone.date,
+          label: nextMilestone.milestoneLabel!,
+          daysAway: Math.ceil(
+            (new Date(nextMilestone.date).getTime() - this.today.getTime()) /
+              (1000 * 60 * 60 * 24),
+          ),
+        }
       : null
 
     return {

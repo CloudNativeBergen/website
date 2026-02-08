@@ -125,7 +125,7 @@ describe('salesUpdate', () => {
   describe('sendSalesUpdateToSlack', () => {
     it('should log to console in development mode', async () => {
       setEnv('development')
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
@@ -137,7 +137,7 @@ describe('salesUpdate', () => {
 
     it('should warn when CFP_BOT is not configured', async () => {
       setEnv('production')
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
