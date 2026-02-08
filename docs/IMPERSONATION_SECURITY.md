@@ -281,7 +281,7 @@ console.log(
 ### Integration Points
 
 - `src/server/trpc.ts` - tRPC context with impersonation support
-- `src/app/(cfp)/cfp/expense/page.tsx` - Server-side data fetching with impersonation
+- `src/app/(speaker)/cfp/expense/page.tsx` - Server-side data fetching with impersonation
 
 ## Testing
 
