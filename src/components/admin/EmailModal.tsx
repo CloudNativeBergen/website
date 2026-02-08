@@ -73,7 +73,6 @@ export function EmailModal({
   onSend,
   submitButtonText = 'Send Email',
   helpText,
-  warningContent,
   placeholder = {},
   initialValues = {},
   previewComponent,
@@ -401,10 +400,6 @@ export function EmailModal({
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  {warningContent && (
-                    <div className="space-y-4 p-6 pb-0">{warningContent}</div>
-                  )}
-
                   {showPreview && previewComponent ? (
                     <div className="space-y-4 p-6">
                       <div className="flex items-center justify-between">
@@ -420,7 +415,7 @@ export function EmailModal({
                           <span className="sm:hidden">Cancel</span>
                         </button>
                       </div>
-                      <div className="rounded-xl bg-white p-6 dark:bg-gray-800">
+                      <div className="rounded-xl border border-gray-200 bg-white p-6">
                         {previewComponent({
                           subject,
                           message: richTextValue,
@@ -449,32 +444,39 @@ export function EmailModal({
                         </div>
 
                         <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
-                          <label className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300">
-                            From:
-                          </label>
-                          <div className="flex-1">
-                            <span className="font-inter text-sm text-gray-600 dark:text-gray-300">
-                              {fromAddress}
-                            </span>
-                          </div>
-                        </div>
-
-                        {templateSelector && (
-                          <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
+                          <div
+                            className={
+                              templateSelector
+                                ? 'flex w-1/2 items-center'
+                                : 'flex flex-1 items-center'
+                            }
+                          >
                             <label className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300">
-                              Template:
+                              From:
                             </label>
                             <div className="flex-1">
-                              {templateSelector({
-                                setSubject,
-                                setMessage: (blocks: PortableTextBlock[]) => {
-                                  setRichTextValue(blocks)
-                                  setEditorRemountKey((prev) => prev + 1)
-                                },
-                              })}
+                              <span className="font-inter text-sm text-gray-600 dark:text-gray-300">
+                                {fromAddress}
+                              </span>
                             </div>
                           </div>
-                        )}
+                          {templateSelector && (
+                            <div className="flex w-1/2 items-center border-l border-gray-200/50 pl-4 dark:border-gray-700/50">
+                              <label className="font-space-grotesk mr-2 text-sm font-medium text-gray-600 dark:text-gray-300">
+                                Template:
+                              </label>
+                              <div className="flex-1">
+                                {templateSelector({
+                                  setSubject,
+                                  setMessage: (blocks: PortableTextBlock[]) => {
+                                    setRichTextValue(blocks)
+                                    setEditorRemountKey((prev) => prev + 1)
+                                  },
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
 
                         <div className="flex items-center border-b border-gray-200/50 px-6 py-3 dark:border-gray-700/50">
                           <label
@@ -523,12 +525,7 @@ export function EmailModal({
                         )}
                       </div>
 
-                      <div className="p-6">
-                        <div className="mb-2">
-                          <label className="font-space-grotesk text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Message
-                          </label>
-                        </div>
+                      <div className="px-6 pt-2 pb-6">
                         <div className="min-h-[200px] rounded-lg">
                           <PortableTextEditor
                             label=""
@@ -591,6 +588,8 @@ export function EmailModal({
                           <span className="hidden sm:inline">Sending...</span>
                           <span className="sm:hidden">...</span>
                         </div>
+                      ) : isLocalhost ? (
+                        <span>Disabled in Dev</span>
                       ) : (
                         <>
                           <span className="hidden sm:inline">

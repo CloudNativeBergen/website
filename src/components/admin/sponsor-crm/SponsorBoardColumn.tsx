@@ -23,7 +23,6 @@ interface SponsorBoardColumnProps {
   onSponsorEmail?: (sponsor: SponsorForConferenceExpanded) => void
   onSponsorToggleSelect?: (id: string) => void
   onAddClick: () => void
-  emptyMessage?: string
 }
 
 export function SponsorBoardColumn({
@@ -39,7 +38,6 @@ export function SponsorBoardColumn({
   onSponsorEmail,
   onSponsorToggleSelect,
   onAddClick,
-  emptyMessage = 'No sponsors',
 }: SponsorBoardColumnProps) {
   const { convertCurrency } = useExchangeRates()
 
@@ -73,11 +71,13 @@ export function SponsorBoardColumn({
     <div
       ref={setNodeRef}
       className={clsx(
-        'flex flex-col transition-all',
+        'flex min-h-0 flex-col transition-all',
+        'w-[85vw] max-w-sm shrink-0 snap-start snap-always',
+        'lg:w-auto lg:shrink lg:snap-align-none',
         isOver && 'rounded-lg bg-indigo-50/30 dark:bg-indigo-900/20',
       )}
     >
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex shrink-0 items-center justify-between px-2">
         <h3 className="font-semibold text-brand-cloud-blue dark:text-blue-400">
           {title}
         </h3>
@@ -109,7 +109,7 @@ export function SponsorBoardColumn({
           ))}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-2">
           {sortedSponsors.map((sponsor) => (
             <SponsorCard
               key={sponsor._id}
@@ -130,16 +130,17 @@ export function SponsorBoardColumn({
           {sponsors.length === 0 && (
             <button
               onClick={onAddClick}
-              className="w-full cursor-pointer rounded-lg border-2 border-dashed border-gray-300 bg-transparent p-4 text-center text-sm text-gray-500 transition-all hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-500 dark:hover:text-blue-400"
+              className="w-full cursor-pointer rounded-lg border-2 border-dashed border-gray-300 bg-transparent p-3 text-center text-sm text-gray-500 transition-all hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-500 dark:hover:text-blue-400"
             >
-              {emptyMessage}
+              <PlusIcon className="mx-auto mb-1 h-5 w-5" />
+              Add sponsor
             </button>
           )}
 
           {sponsors.length > 0 && (
             <button
               onClick={onAddClick}
-              className="group w-full cursor-pointer rounded-lg border-2 border-dashed border-gray-300 bg-transparent p-3 text-center text-sm text-gray-500 transition-all hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-500 dark:hover:text-blue-400"
+              className="w-full cursor-pointer rounded-lg border-2 border-dashed border-gray-300 bg-transparent p-3 text-center text-sm text-gray-500 transition-all hover:border-brand-cloud-blue hover:text-brand-cloud-blue dark:border-gray-600 dark:text-gray-500 dark:hover:border-blue-500 dark:hover:text-blue-400"
             >
               <PlusIcon className="mx-auto mb-1 h-5 w-5" />
               Add sponsor

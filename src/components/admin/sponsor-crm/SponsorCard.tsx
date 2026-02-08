@@ -11,7 +11,6 @@ import {
   PencilIcon,
   TrashIcon,
   EnvelopeIcon,
-  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
 import {
   getInvoiceStatusColor,
@@ -129,7 +128,7 @@ export function SponsorCard({
     <div
       ref={setNodeRef}
       className={clsx(
-        'group relative flex h-18 cursor-pointer gap-2.5 overflow-hidden rounded border p-2 transition-all hover:border-brand-cloud-blue hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
+        'group relative flex cursor-grab gap-3 overflow-hidden rounded-lg border p-3 transition-all hover:border-brand-cloud-blue hover:shadow-md active:cursor-grabbing dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-500',
         isSelected
           ? 'border-indigo-500 bg-indigo-50/30 shadow-sm ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-900/20'
           : 'border-gray-200 bg-white',
@@ -137,6 +136,7 @@ export function SponsorCard({
       )}
       onClick={handleCardClick}
       {...attributes}
+      {...listeners}
     >
       {/* Selection Checkbox */}
       <div
@@ -145,6 +145,7 @@ export function SponsorCard({
           isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
         )}
         onClick={handleSelectClick}
+        onPointerDown={(e) => e.stopPropagation()}
       >
         <input
           type="checkbox"
@@ -154,26 +155,26 @@ export function SponsorCard({
         />
       </div>
 
-      {/* Left: Avatar + Logo */}
-      <div className="flex w-12 shrink-0 flex-col items-center justify-center gap-1">
+      {/* Left: Logo + Assignee */}
+      <div className="flex w-14 shrink-0 flex-col items-center justify-center gap-1.5">
         {/* Logo */}
-        <div className="flex h-7 w-12 items-center justify-center overflow-hidden">
+        <div className="flex h-9 w-14 items-center justify-center overflow-hidden">
           {sponsor.sponsor.logo ? (
             <SponsorLogo
               logo={sponsor.sponsor.logo}
               logoBright={sponsor.sponsor.logo_bright}
               name={sponsor.sponsor.name}
-              className="max-h-full w-auto max-w-12 object-contain"
+              className="max-h-full w-auto max-w-14 object-contain"
             />
           ) : (
-            <span className="truncate text-center text-[9px] leading-tight font-bold text-gray-500 uppercase dark:text-gray-400">
+            <span className="truncate text-center text-[10px] leading-tight font-bold text-gray-500 uppercase dark:text-gray-400">
               {sponsor.sponsor.name}
             </span>
           )}
         </div>
         {/* Assignee */}
         {sponsor.assigned_to && (
-          <div className="scale-[0.6] transform">
+          <div className="scale-[0.8] transform">
             <SpeakerAvatars
               speakers={[
                 {
@@ -191,28 +192,20 @@ export function SponsorCard({
       </div>
 
       {/* Right: Name + Value + Tags */}
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
         {/* Name */}
-        <p className="truncate text-xs leading-tight font-semibold text-gray-900 dark:text-white">
+        <p className="truncate text-base leading-snug font-semibold text-gray-900 dark:text-white">
           {sponsor.sponsor.name}
         </p>
 
-        {/* Tier + Value */}
-        <div className="flex items-center gap-1.5 text-[10px] leading-tight">
-          {sponsor.tier && (
-            <span className="truncate text-gray-500 dark:text-gray-400">
-              {sponsor.tier.title}
-            </span>
-          )}
-          {value > 0 && sponsor.tier && (
-            <span className="text-gray-300 dark:text-gray-600">&middot;</span>
-          )}
-          {value > 0 && (
+        {/* Value */}
+        {value > 0 && (
+          <div className="flex items-center text-base leading-snug">
             <span className="shrink-0 font-bold text-brand-cloud-blue dark:text-blue-400">
               {formatValue(value)} {currency}
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Tags + Invoice status */}
         <div className="flex items-center gap-1">
@@ -221,7 +214,7 @@ export function SponsorCard({
               key={t.tag}
               title={TAG_TOOLTIPS[t.label]}
               className={clsx(
-                'inline-flex items-center rounded px-1 py-px text-[8px] leading-none font-bold uppercase ring-1 ring-inset',
+                'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-bold uppercase ring-1 ring-inset',
                 t.classes,
               )}
             >
@@ -231,7 +224,7 @@ export function SponsorCard({
           {value > 0 && currentView !== 'pipeline' && (
             <span
               className={clsx(
-                'inline-flex items-center rounded px-1 py-px text-[8px] leading-none font-medium',
+                'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium',
                 getInvoiceStatusColor(sponsor.invoice_status),
               )}
             >
@@ -242,43 +235,34 @@ export function SponsorCard({
       </div>
 
       {/* Action Buttons - Top Right */}
-      <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+      <div
+        className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         {onEmail && (
           <button
             onClick={handleEmailClick}
-            className="cursor-pointer rounded bg-white/90 p-0.5 shadow-sm hover:bg-blue-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
+            className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-blue-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
             title="Email Sponsor"
           >
-            <EnvelopeIcon className="h-3 w-3 text-brand-cloud-blue dark:text-blue-400" />
+            <EnvelopeIcon className="h-3.5 w-3.5 text-brand-cloud-blue dark:text-blue-400" />
           </button>
         )}
         <button
           onClick={handleEditClick}
-          className="cursor-pointer rounded bg-white/90 p-0.5 shadow-sm hover:bg-gray-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
+          className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-gray-50 dark:bg-gray-700/90 dark:hover:bg-gray-600"
           title="Edit"
         >
-          <PencilIcon className="h-3 w-3 text-brand-cloud-blue dark:text-blue-400" />
+          <PencilIcon className="h-3.5 w-3.5 text-brand-cloud-blue dark:text-blue-400" />
         </button>
         <button
           onClick={handleDeleteClick}
-          className="cursor-pointer rounded bg-white/90 p-0.5 shadow-sm hover:bg-red-50 dark:bg-gray-700/90 dark:hover:bg-red-900"
+          className="cursor-pointer rounded bg-white/90 p-1 shadow-sm hover:bg-red-50 dark:bg-gray-700/90 dark:hover:bg-red-900"
           title="Delete"
         >
-          <TrashIcon className="h-3 w-3 text-red-600 dark:text-red-400" />
+          <TrashIcon className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
         </button>
       </div>
-
-      {/* Drag Handle - Bottom Right */}
-      {!isSelectionMode && columnKey && (
-        <div
-          className="absolute right-1 bottom-1 z-20 opacity-0 transition-opacity group-hover:opacity-100"
-          {...listeners}
-        >
-          <div className="cursor-grab rounded bg-white/90 p-0.5 shadow-sm transition-colors hover:bg-gray-100 active:cursor-grabbing dark:bg-gray-700/90 dark:hover:bg-gray-600">
-            <ArrowsRightLeftIcon className="h-3 w-3 text-gray-400 dark:text-gray-500" />
-          </div>
-        </div>
-      )}
     </div>
   )
 }

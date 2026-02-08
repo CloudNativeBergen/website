@@ -23,7 +23,7 @@ export function SponsorCRMPageClient({
   const [triggerNew, setTriggerNew] = React.useState(0)
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-[calc(100dvh-9rem)] flex-col overflow-hidden lg:h-[calc(100vh-9rem)]">
       <AdminPageHeader
         icon={<RectangleStackIcon />}
         title="Sponsor Pipeline"
@@ -54,7 +54,7 @@ export function SponsorCRMPageClient({
         backLink={{ href: '/admin/sponsors', label: 'Back' }}
       />
 
-      <div className="-mt-2">
+      <div className="min-h-0 flex-1">
         <SponsorCRMPipeline
           conferenceId={conference._id}
           conference={conference}

@@ -79,10 +79,13 @@ export const TemplateCategorySchema = z.enum([
   'custom',
 ])
 
+export const TemplateLanguageSchema = z.enum(['no', 'en'])
+
 export const SponsorEmailTemplateInputSchema = z.object({
   title: z.string().min(1, 'Template name is required'),
   slug: z.string().min(1, 'Slug is required'),
   category: TemplateCategorySchema,
+  language: TemplateLanguageSchema,
   subject: z.string().min(1, 'Subject is required'),
   body: z.array(z.record(z.string(), z.unknown())).optional(),
   description: z.string().nullable().optional().transform(nullToUndefined),
@@ -92,3 +95,12 @@ export const SponsorEmailTemplateInputSchema = z.object({
 
 export const SponsorEmailTemplateUpdateSchema =
   SponsorEmailTemplateInputSchema.partial()
+
+export const ReorderTemplatesSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+})
+
+export const SetDefaultTemplateSchema = z.object({
+  id: z.string().min(1),
+  category: TemplateCategorySchema,
+})

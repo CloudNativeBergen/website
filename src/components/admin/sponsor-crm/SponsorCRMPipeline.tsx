@@ -28,7 +28,12 @@ import {
   CONTRACT_STATUSES,
 } from '@/components/admin/sponsor-crm/form/constants'
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
-import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/20/solid'
+import { MobileFilterSheet } from '@/components/admin/sponsor-crm/MobileFilterSheet'
+import {
+  XMarkIcon,
+  MagnifyingGlassIcon,
+  FunnelIcon,
+} from '@heroicons/react/20/solid'
 import { Conference } from '@/lib/conference/types'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorDragDrop } from '@/hooks/useSponsorDragDrop'
@@ -64,6 +69,8 @@ export function SponsorCRMPipeline({
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<BoardView>('pipeline')
   const [searchQuery, setSearchQuery] = useState('')
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
 
   const utils = api.useUtils()
 
@@ -368,7 +375,7 @@ export function SponsorCRMPipeline({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full flex-col gap-2 lg:gap-4">
       {/* Modals */}
       <ConfirmationModal
         isOpen={deleteConfirmId !== null}
@@ -402,6 +409,7 @@ export function SponsorCRMPipeline({
           sponsorForConference={emailSponsor}
           domain={domain}
           fromEmail={conference.sponsor_email || ''}
+          senderName={session?.user?.name || ''}
           conference={{
             title: conference.title || '',
             city: conference.city || '',
@@ -416,43 +424,58 @@ export function SponsorCRMPipeline({
         />
       )}
 
-      {/* THE UNIFIED CLEAN TOOLBAR - SINGLE LINE */}
-      <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-2 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-        {/* Navigation */}
-        <div className="shrink-0">
-          <BoardViewSwitcher
-            currentView={currentView}
-            onViewChange={setCurrentView}
-          />
-        </div>
+      {/* Row 1: Clean toolbar */}
+      <div className="shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex items-center gap-2 p-2 sm:gap-3">
+          {/* View Switcher */}
+          <div className="shrink-0">
+            <BoardViewSwitcher
+              currentView={currentView}
+              onViewChange={setCurrentView}
+            />
+          </div>
 
-        <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
+          <div className="hidden h-6 w-px bg-gray-200 sm:block dark:bg-gray-700" />
 
-        {/* Search */}
-        <div className="group relative max-w-sm grow">
-          <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search sponsors..."
-            className="h-9 w-full rounded-lg bg-gray-50 pr-8 pl-9 text-sm ring-1 ring-gray-300 transition-all ring-inset focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:ring-inset dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus:bg-white/10"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-            >
-              <XMarkIcon className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+          {/* Search - desktop: always visible, mobile: expandable */}
+          <div className="hidden grow sm:block">
+            <div className="group relative max-w-sm">
+              <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search sponsors..."
+                className="h-9 w-full rounded-lg bg-gray-50 pr-8 pl-9 text-sm ring-1 ring-gray-300 transition-all ring-inset focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:ring-inset dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus:bg-white/10"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
 
-        <div className="h-6 w-px bg-gray-200 dark:bg-gray-700" />
+          {/* Mobile: search toggle */}
+          <button
+            onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+            className={clsx(
+              'flex h-9 w-9 items-center justify-center rounded-lg transition-colors sm:hidden',
+              isMobileSearchOpen || searchQuery
+                ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400'
+                : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800',
+            )}
+          >
+            <MagnifyingGlassIcon className="h-4.5 w-4.5" />
+          </button>
 
-        {/* Filters */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
+          <div className="hidden h-6 w-px bg-gray-200 sm:block dark:bg-gray-700" />
+
+          {/* Filter dropdowns - desktop only */}
+          <div className="hidden items-center gap-1.5 lg:flex">
             <FilterDropdown
               label="Tier"
               activeCount={tiersFilter.length}
@@ -529,52 +552,154 @@ export function SponsorCRMPipeline({
             </FilterDropdown>
           </div>
 
-          {selectedIds.length === 0 &&
-            (activeFilterCount > 0 || searchQuery) && (
-              <button
-                onClick={handleSelectAllFiltered}
-                className="flex h-9 items-center justify-center rounded-lg bg-white px-3 text-xs font-medium text-indigo-600 ring-1 ring-gray-300 transition-all ring-inset hover:bg-indigo-50 dark:bg-white/5 dark:text-indigo-400 dark:ring-white/10 dark:hover:bg-indigo-900/20"
-              >
-                Select all {filteredSponsors.length}
-              </button>
+          {/* Mobile: Filter button with badge */}
+          <button
+            onClick={() => setIsMobileFilterOpen(true)}
+            className={clsx(
+              'relative flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors lg:hidden',
+              activeFilterCount > 0
+                ? 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-300 ring-inset dark:bg-indigo-900/40 dark:text-indigo-300 dark:ring-indigo-700'
+                : 'text-gray-600 ring-1 ring-gray-300 ring-inset hover:bg-gray-50 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-gray-800',
+            )}
+          >
+            <FunnelIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">Filter</span>
+            {activeFilterCount > 0 && (
+              <span className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-indigo-600 px-1 text-[10px] font-bold text-white dark:bg-indigo-500">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <div className="ml-auto hidden h-6 w-px bg-gray-200 sm:block dark:bg-gray-700" />
+
+          {/* Select all / Clear selection */}
+          {selectedIds.length === 0 ? (
+            <button
+              onClick={handleSelectAllFiltered}
+              className="hidden h-9 items-center justify-center rounded-lg bg-white px-3 text-xs font-medium text-gray-600 ring-1 ring-gray-300 transition-all ring-inset hover:bg-indigo-50 hover:text-indigo-600 sm:flex dark:bg-white/5 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400"
+            >
+              Select all
+            </button>
+          ) : (
+            <button
+              onClick={handleClearSelection}
+              className="hidden h-9 items-center justify-center rounded-lg bg-white px-3 text-xs font-medium text-red-600 ring-1 ring-gray-300 transition-all ring-inset hover:bg-red-50 hover:ring-red-200 sm:flex dark:bg-white/5 dark:text-red-400 dark:ring-white/10 dark:hover:bg-red-900/20 dark:hover:ring-red-900/30"
+            >
+              Clear ({selectedIds.length})
+            </button>
+          )}
+        </div>
+
+        {/* Mobile: expandable search row */}
+        {isMobileSearchOpen && (
+          <div className="border-t border-gray-200 px-2 py-2 sm:hidden dark:border-gray-800">
+            <div className="group relative">
+              <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400 transition-colors group-focus-within:text-indigo-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search sponsors..."
+                autoFocus
+                className="h-9 w-full rounded-lg bg-gray-50 pr-8 pl-9 text-sm ring-1 ring-gray-300 transition-all ring-inset focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:ring-inset dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-gray-500 dark:focus:bg-white/10"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute top-1/2 right-2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Row 2: Active filter pills (appears only when filters are active) */}
+        {(activeFilterCount > 0 || searchQuery) && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-200 px-2.5 py-2 dark:border-gray-800">
+            {/* Tier pills */}
+            {tiersFilter.map((tierId) => {
+              const tier = tiers.find((t) => t._id === tierId)
+              return (
+                <FilterPill
+                  key={`tier-${tierId}`}
+                  label={tier ? formatTierLabel(tier) : tierId}
+                  category="Tier"
+                  onRemove={() => toggleTierFilter(tierId)}
+                />
+              )
+            })}
+
+            {/* Owner pill */}
+            {assignedToFilter && (
+              <FilterPill
+                label={
+                  assignedToFilter === 'unassigned'
+                    ? 'Unassigned'
+                    : organizers.find((o) => o._id === assignedToFilter)
+                        ?.name || 'Owner'
+                }
+                category="Owner"
+                onRemove={() => setOrganizerFilter(null)}
+              />
             )}
 
-          {(activeFilterCount > 0 || searchQuery) && (
+            {/* Tag pills */}
+            {tagsFilter.map((tag) => {
+              const tagDef = TAGS.find((t) => t.value === tag)
+              return (
+                <FilterPill
+                  key={`tag-${tag}`}
+                  label={tagDef?.label || tag}
+                  category="Tag"
+                  onRemove={() => toggleTagFilter(tag)}
+                />
+              )
+            })}
+
+            {/* Search pill */}
+            {searchQuery && (
+              <FilterPill
+                label={searchQuery}
+                category="Search"
+                onRemove={() => setSearchQuery('')}
+              />
+            )}
+
+            {/* Clear all */}
             <button
               onClick={() => {
                 clearAllFilters()
                 setSearchQuery('')
               }}
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-gray-400 ring-1 ring-gray-300 transition-all ring-inset hover:bg-red-50 hover:text-red-500 hover:ring-red-200 dark:bg-white/5 dark:text-gray-400 dark:ring-white/10 dark:hover:bg-red-900/20 dark:hover:ring-red-900/30"
-              title="Clear all filters"
+              className="ml-1 rounded-md px-2 py-1 text-xs font-medium text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-gray-400 dark:hover:bg-red-900/20 dark:hover:text-red-400"
             >
-              <XMarkIcon className="h-5 w-5" />
+              Clear all
             </button>
-          )}
-        </div>
-
-        {/* Selection / Count */}
-        <div className="ml-auto flex items-center gap-3 pl-4">
-          <div className="flex flex-col items-end">
-            <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
-              {filteredSponsors.length}
-            </span>
-            <span className="text-[10px] tracking-wider text-gray-500 uppercase dark:text-gray-400">
-              Sponsors
-            </span>
           </div>
-          {selectedIds.length > 0 && (
-            <div className="flex flex-col items-end border-l border-gray-200 pl-3 dark:border-gray-700">
-              <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                {selectedIds.length}
-              </span>
-              <span className="text-[10px] tracking-wider text-indigo-500/70 uppercase dark:text-indigo-400/70">
-                Selected
-              </span>
-            </div>
-          )}
-        </div>
+        )}
       </div>
+
+      {/* Mobile Filter Sheet */}
+      <MobileFilterSheet
+        isOpen={isMobileFilterOpen}
+        onClose={() => setIsMobileFilterOpen(false)}
+        tiers={tiers}
+        tiersFilter={tiersFilter}
+        onToggleTier={toggleTierFilter}
+        organizers={organizers}
+        assignedToFilter={assignedToFilter}
+        onSetOrganizer={setOrganizerFilter}
+        tagsFilter={tagsFilter}
+        onToggleTag={toggleTagFilter}
+        onClearAll={() => {
+          clearAllFilters()
+          setSearchQuery('')
+        }}
+        activeFilterCount={activeFilterCount}
+      />
 
       {/* Bulk Actions (Overlay style when items selected) */}
       {selectedIds.length > 0 && (
@@ -593,7 +718,9 @@ export function SponsorCRMPipeline({
       >
         <div
           className={clsx(
-            'grid grid-cols-1 gap-4',
+            'min-h-0 flex-1',
+            'flex snap-x snap-mandatory gap-3 overflow-x-auto',
+            'lg:grid lg:snap-none lg:gap-1 lg:overflow-x-visible',
             currentView === 'pipeline' && 'lg:grid-cols-5',
             currentView === 'invoice' && 'lg:grid-cols-5',
             currentView === 'contract' && 'lg:grid-cols-4',
@@ -616,7 +743,6 @@ export function SponsorCRMPipeline({
                 onSponsorEmail={handleOpenEmail}
                 onSponsorToggleSelect={handleToggleSelect}
                 onAddClick={() => handleOpenForm()}
-                emptyMessage="No sponsors"
               />
             )
           })}
@@ -636,5 +762,28 @@ export function SponsorCRMPipeline({
         </DragOverlay>
       </DndContext>
     </div>
+  )
+}
+
+function FilterPill({
+  label,
+  category,
+  onRemove,
+}: {
+  label: string
+  category: string
+  onRemove: () => void
+}) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 py-0.5 pr-1 pl-2.5 text-xs font-medium text-indigo-700 ring-1 ring-indigo-200 ring-inset dark:bg-indigo-900/30 dark:text-indigo-300 dark:ring-indigo-800">
+      <span className="text-indigo-400 dark:text-indigo-500">{category}:</span>
+      <span className="max-w-32 truncate">{label}</span>
+      <button
+        onClick={onRemove}
+        className="ml-0.5 rounded-full p-0.5 transition-colors hover:bg-indigo-200 hover:text-indigo-900 dark:hover:bg-indigo-800 dark:hover:text-indigo-100"
+      >
+        <XMarkIcon className="h-3 w-3" />
+      </button>
+    </span>
   )
 }

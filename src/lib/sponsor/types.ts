@@ -111,6 +111,8 @@ export type TemplateCategory =
   | 'follow-up'
   | 'custom'
 
+export type TemplateLanguage = 'no' | 'en'
+
 export interface SponsorEmailTemplate {
   _id: string
   _createdAt: string
@@ -118,6 +120,7 @@ export interface SponsorEmailTemplate {
   title: string
   slug: { current: string }
   category: TemplateCategory
+  language: TemplateLanguage
   subject: string
   body?: PortableTextBlock[]
   description?: string

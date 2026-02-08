@@ -12,6 +12,8 @@ import {
   SponsorTierAssignmentSchema,
   SponsorEmailTemplateInputSchema,
   SponsorEmailTemplateUpdateSchema,
+  ReorderTemplatesSchema,
+  SetDefaultTemplateSchema,
 } from '../schemas/sponsor'
 import {
   getAllSponsors,
@@ -28,9 +30,12 @@ import {
   removeSponsorFromConference,
   updateSponsorTierAssignment,
   getSponsorEmailTemplates,
+  getSponsorEmailTemplate,
   createSponsorEmailTemplate,
   updateSponsorEmailTemplate,
   deleteSponsorEmailTemplate,
+  setDefaultSponsorEmailTemplate,
+  reorderSponsorEmailTemplates,
 } from '@/lib/sponsor/sanity'
 import { validateSponsor, validateSponsorTier } from '@/lib/sponsor/validation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
@@ -1099,6 +1104,24 @@ export const sponsorRouter = router({
       return templates || []
     }),
 
+    get: adminProcedure.input(IdParamSchema).query(async ({ input }) => {
+      const { template, error } = await getSponsorEmailTemplate(input.id)
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch email template',
+          cause: error,
+        })
+      }
+      if (!template) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Email template not found',
+        })
+      }
+      return template
+    }),
+
     create: adminProcedure
       .input(SponsorEmailTemplateInputSchema)
       .mutation(async ({ input }) => {
@@ -1139,5 +1162,36 @@ export const sponsorRouter = router({
       }
       return { success: true }
     }),
+
+    setDefault: adminProcedure
+      .input(SetDefaultTemplateSchema)
+      .mutation(async ({ input }) => {
+        const { error } = await setDefaultSponsorEmailTemplate(
+          input.id,
+          input.category,
+        )
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to set default template',
+            cause: error,
+          })
+        }
+        return { success: true }
+      }),
+
+    reorder: adminProcedure
+      .input(ReorderTemplatesSchema)
+      .mutation(async ({ input }) => {
+        const { error } = await reorderSponsorEmailTemplates(input.orderedIds)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to reorder templates',
+            cause: error,
+          })
+        }
+        return { success: true }
+      }),
   }),
 })

@@ -34,11 +34,11 @@ export function BroadcastTemplate({
         heading: subject,
         body: (
           <div
-            className="text-gray-700 dark:text-gray-300"
             style={{
               fontSize: '16px',
               lineHeight: '1.6',
               marginBottom: '24px',
+              color: '#334155',
             }}
           >
             {content}
