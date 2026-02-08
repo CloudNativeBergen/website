@@ -3,25 +3,9 @@ import type { TicketAnalysisResult } from '@/lib/tickets/types'
 import type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
+import { postSlackMessage, type SlackBlock } from '@/lib/slack/client'
 
 export type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
-
-type SlackBlock = {
-  type: string
-  text?: {
-    type: string
-    text: string
-    emoji?: boolean
-  }
-  fields?: Array<{
-    type: string
-    text: string
-  }>
-}
-
-type SlackMessage = {
-  blocks: SlackBlock[]
-}
 
 export interface SalesUpdateData {
   conference: Conference
@@ -36,37 +20,6 @@ export interface SalesUpdateData {
   targetAnalysis?: TicketAnalysisResult | null
   sponsorPipeline?: SponsorPipelineData | null
   lastUpdated: string
-}
-
-async function sendSlackMessage(message: SlackMessage, forceSlack = false) {
-  const webhookUrl = process.env.CFP_BOT
-  if (process.env.NODE_ENV === 'development' && !forceSlack) {
-    console.log('Slack sales update notification (development mode):')
-    console.log(JSON.stringify(message, null, 2))
-    return
-  }
-
-  if (!webhookUrl) {
-    console.warn('CFP_BOT webhook URL is not configured')
-    return
-  }
-
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-  } catch (error) {
-    console.error('Error sending Slack sales update notification:', error)
-    throw error
-  }
 }
 
 function createCategoryBreakdown(
@@ -230,7 +183,7 @@ export async function sendSalesUpdateToSlack(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Sales Summary as of ${formattedDate}*${conference.sales_notification_channel ? `\nChannel: ${conference.sales_notification_channel}` : ''}`,
+        text: `*Sales Summary as of ${formattedDate}*`,
       },
     },
     {
@@ -408,5 +361,8 @@ export async function sendSalesUpdateToSlack(
   )
 
   const message = { blocks }
-  await sendSlackMessage(message, forceSlack)
+  await postSlackMessage(message, {
+    channel: conference.sales_notification_channel,
+    forceSlack,
+  })
 }

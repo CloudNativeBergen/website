@@ -20,18 +20,18 @@ import { createMockConference } from '../../testdata/conference'
 const mockFetch = jest.fn() as jest.MockedFunction<typeof global.fetch>
 
 let savedNodeEnv: string | undefined
-let savedCfpBot: string | undefined
+let savedBotToken: string | undefined
 
-function setEnv(nodeEnv: string, cfpBot?: string) {
+function setEnv(nodeEnv: string, botToken?: string) {
   Object.defineProperty(process.env, 'NODE_ENV', {
     value: nodeEnv,
     writable: true,
     configurable: true,
   })
-  if (cfpBot !== undefined) {
-    process.env.CFP_BOT = cfpBot
+  if (botToken !== undefined) {
+    process.env.SLACK_BOT_TOKEN = botToken
   } else {
-    delete process.env.CFP_BOT
+    delete process.env.SLACK_BOT_TOKEN
   }
 }
 
@@ -41,10 +41,10 @@ function restoreEnv() {
     writable: true,
     configurable: true,
   })
-  if (savedCfpBot !== undefined) {
-    process.env.CFP_BOT = savedCfpBot
+  if (savedBotToken !== undefined) {
+    process.env.SLACK_BOT_TOKEN = savedBotToken
   } else {
-    delete process.env.CFP_BOT
+    delete process.env.SLACK_BOT_TOKEN
   }
 }
 
@@ -52,7 +52,9 @@ function createBaseSalesData(
   overrides: Partial<SalesUpdateData> = {},
 ): SalesUpdateData {
   return {
-    conference: createMockConference(),
+    conference: createMockConference({
+      sales_notification_channel: '#sales',
+    }),
     ticketsByCategory: { Regular: 50 },
     paidTickets: 50,
     sponsorTickets: 10,
@@ -115,7 +117,7 @@ describe('salesUpdate', () => {
     jest.restoreAllMocks()
     mockFetch.mockReset()
     savedNodeEnv = process.env.NODE_ENV
-    savedCfpBot = process.env.CFP_BOT
+    savedBotToken = process.env.SLACK_BOT_TOKEN
   })
 
   afterEach(() => {
@@ -125,53 +127,64 @@ describe('salesUpdate', () => {
   describe('sendSalesUpdateToSlack', () => {
     it('should log to console in development mode', async () => {
       setEnv('development')
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        'Slack sales update notification (development mode):',
+        'Slack notification (development mode):',
       )
     })
 
-    it('should warn when CFP_BOT is not configured', async () => {
+    it('should warn when SLACK_BOT_TOKEN is missing', async () => {
       setEnv('production')
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
 
-      expect(warnSpy).toHaveBeenCalledWith(
-        'CFP_BOT webhook URL is not configured',
-      )
+      expect(warnSpy).toHaveBeenCalledWith('SLACK_BOT_TOKEN is not configured')
     })
 
-    it('should send message to webhook in production', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+    it('should send message via bot token in production', async () => {
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(createBaseSalesData())
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://hooks.slack.com/test',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+      await sendSalesUpdateToSlack(
+        createBaseSalesData({
+          conference: createMockConference({
+            sales_notification_channel: '#sales-updates',
+          }),
         }),
       )
 
-      const body = parseSlackBody()
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://slack.com/api/chat.postMessage',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            Authorization: 'Bearer xoxb-test-token',
+          },
+        }),
+      )
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1]!.body as string)
+      expect(body.channel).toBe('#sales-updates')
       expect(body.blocks).toBeDefined()
-      const header = body.blocks[0] as SlackBlock
+      const header = body.blocks[0]
       expect(header.text?.text).toContain('Weekly Sales Update')
       expect(header.text?.text).toContain('Cloud Native Day 2026')
     })
 
-    it('should throw on HTTP error from webhook', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+    it('should throw on HTTP error from Slack API', async () => {
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
       mockFetch.mockResolvedValue({
         ok: false,
@@ -181,14 +194,23 @@ describe('salesUpdate', () => {
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await expect(
-        sendSalesUpdateToSlack(createBaseSalesData()),
-      ).rejects.toThrow('HTTP 500: Internal Server Error')
+        sendSalesUpdateToSlack(
+          createBaseSalesData({
+            conference: createMockConference({
+              sales_notification_channel: '#test',
+            }),
+          }),
+        ),
+      ).rejects.toThrow('Slack API HTTP 500: Internal Server Error')
     })
 
-    it('should include channel name when configured', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+    it('should not embed channel name in message text', async () => {
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       const data = createBaseSalesData({
@@ -198,28 +220,18 @@ describe('salesUpdate', () => {
       })
       await sendSalesUpdateToSlack(data)
 
-      const body = parseSlackBody()
-      const summaryBlock = body.blocks[1] as SlackBlock
-      expect(summaryBlock.text?.text).toContain('#conference-sales')
-    })
-
-    it('should not include channel text when not configured', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
-      global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
-
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(createBaseSalesData())
-
-      const body = parseSlackBody()
-      const summaryBlock = body.blocks[1] as SlackBlock
-      expect(summaryBlock.text?.text).not.toContain('Channel:')
+      const body = JSON.parse(mockFetch.mock.calls[0][1]!.body as string)
+      const summaryText = body.blocks[1]?.text?.text || ''
+      expect(summaryText).not.toContain('Channel:')
     })
 
     it('should include target analysis section when provided', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const targetAnalysis: TicketAnalysisResult = {
         statistics: {
@@ -259,9 +271,12 @@ describe('salesUpdate', () => {
     })
 
     it('should omit target section when targetAnalysis is null', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(
@@ -273,9 +288,12 @@ describe('salesUpdate', () => {
     })
 
     it('should include sponsor pipeline section when provided', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(
@@ -291,9 +309,12 @@ describe('salesUpdate', () => {
     })
 
     it('should omit sponsor pipeline when not provided', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
@@ -303,9 +324,12 @@ describe('salesUpdate', () => {
     })
 
     it('should include category breakdown when multiple categories', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(
@@ -321,9 +345,12 @@ describe('salesUpdate', () => {
     })
 
     it('should omit category breakdown with single category', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(
@@ -335,9 +362,12 @@ describe('salesUpdate', () => {
     })
 
     it('should calculate free ticket claim rate correctly', async () => {
-      setEnv('production', 'https://hooks.slack.com/test')
+      setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
-      mockFetch.mockResolvedValue({ ok: true } as Response)
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       // 15 claimed out of 23 allocated (10+8+5) = 65.2%

@@ -541,6 +541,14 @@ export default defineType({
         'Slack channel name where weekly sales updates are posted (e.g. #conference-sales)',
     }),
     defineField({
+      name: 'cfp_notification_channel',
+      title: 'CFP Notification Slack Channel',
+      type: 'string',
+      fieldset: 'communication',
+      description:
+        'Slack channel name where CFP notifications are posted (e.g. #conference-cfp)',
+    }),
+    defineField({
       name: 'social_links',
       title: 'Social Links',
       type: 'array',

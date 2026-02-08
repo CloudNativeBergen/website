@@ -3,60 +3,20 @@ import { getSpeaker } from '@/lib/speaker/sanity'
 import { Action } from '@/lib/proposal/types'
 import { Conference } from '@/lib/conference/types'
 import { Volunteer } from '@/lib/volunteer/types'
+import {
+  postSlackMessage,
+  type SlackBlock,
+  type SlackMessage,
+} from '@/lib/slack/client'
 
-type SlackBlock = {
-  type: string
-  text?: {
-    type: string
-    text: string
-    emoji?: boolean
-  }
-  fields?: Array<{
-    type: string
-    text: string
-  }>
-  elements?: Array<{
-    type: string
-    text: {
-      type: string
-      text: string
-      emoji?: boolean
-    }
-    url?: string
-    action_id?: string
-  }>
-}
-
-type SlackMessage = {
-  blocks: SlackBlock[]
-}
-
-async function sendSlackMessage(message: SlackMessage) {
-  const webhookUrl = process.env.CFP_BOT
-
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Slack notification (development mode):')
-    console.log(JSON.stringify(message, null, 2))
-    return
-  }
-
-  if (!webhookUrl) {
-    console.warn('CFP_BOT is not configured')
-    return
-  }
-
+async function sendSlackNotification(
+  message: SlackMessage,
+  conference: Conference,
+) {
   try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
+    await postSlackMessage(message, {
+      channel: conference.cfp_notification_channel,
     })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
   } catch (error) {
     console.error('Error sending Slack notification:', error)
   }
@@ -178,8 +138,9 @@ export async function notifyProposalStatusChange(
   proposal: ProposalExisting,
   action: Action,
   conference: Conference,
+  speakerNames?: string,
 ) {
-  const speakerNames = await resolveSpeakerNames(proposal)
+  const names = speakerNames || (await resolveSpeakerNames(proposal))
   const domain = getDomainFromConference(conference)
 
   const blocks: SlackBlock[] = [
@@ -191,7 +152,7 @@ export async function notifyProposalStatusChange(
         emoji: true,
       },
     },
-    ...createProposalInfoBlocks(proposal, speakerNames),
+    ...createProposalInfoBlocks(proposal, names),
   ]
 
   if (domain) {
@@ -201,7 +162,37 @@ export async function notifyProposalStatusChange(
   }
 
   const message = { blocks }
-  await sendSlackMessage(message)
+  await sendSlackNotification(message, conference)
+}
+
+export async function notifyNewProposal(
+  proposal: ProposalExisting,
+  conference: Conference,
+  speakerNames?: string,
+) {
+  const names = speakerNames || (await resolveSpeakerNames(proposal))
+  const domain = getDomainFromConference(conference)
+
+  const blocks: SlackBlock[] = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '📥 New Talk Proposal',
+        emoji: true,
+      },
+    },
+    ...createProposalInfoBlocks(proposal, names),
+  ]
+
+  if (domain) {
+    blocks.push(
+      createAdminButton(proposal, domain, 'Review Proposal', 'review_proposal'),
+    )
+  }
+
+  const message = { blocks }
+  await sendSlackNotification(message, conference)
 }
 
 export async function notifyNewVolunteer(
@@ -316,5 +307,5 @@ export async function notifyNewVolunteer(
   }
 
   const message = { blocks }
-  await sendSlackMessage(message)
+  await sendSlackNotification(message, conference)
 }
