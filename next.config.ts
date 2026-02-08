@@ -50,6 +50,42 @@ const config: NextConfig = {
         destination: '/program',
         permanent: true,
       },
+      // Redirect old CFP routes to new speaker routes
+      {
+        source: '/cfp/profile',
+        destination: '/speaker/profile',
+        permanent: false,
+      },
+      {
+        source: '/cfp/list',
+        destination: '/speaker/list',
+        permanent: false,
+      },
+      {
+        source: '/cfp/proposal/:path*',
+        destination: '/speaker/proposal/:path*',
+        permanent: false,
+      },
+      {
+        source: '/cfp/submit',
+        destination: '/speaker/submit',
+        permanent: false,
+      },
+      {
+        source: '/cfp/expense',
+        destination: '/speaker/expense',
+        permanent: false,
+      },
+      {
+        source: '/cfp/workshop/:id',
+        destination: '/speaker/workshop/:id',
+        permanent: false,
+      },
+      {
+        source: '/cfp/admin',
+        destination: '/speaker/admin',
+        permanent: false,
+      },
     ]
   },
 }

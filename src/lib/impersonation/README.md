@@ -131,5 +131,5 @@ See implementations in:
 
 - `/src/components/cfp/CompactProposalList.tsx`
 - `/src/components/cfp/CompactWorkshopStats.tsx`
-- `/src/app/(cfp)/cfp/proposal/[id]/page.tsx`
-- `/src/app/(cfp)/cfp/workshop/[id]/page.tsx`
+- `/src/app/(speaker)/cfp/proposal/[id]/page.tsx`
+- `/src/app/(speaker)/cfp/workshop/[id]/page.tsx`

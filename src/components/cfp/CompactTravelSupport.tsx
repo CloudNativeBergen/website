@@ -79,7 +79,7 @@ export function CompactTravelSupport({
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <BanknotesIcon className="h-4 w-4 shrink-0 text-teal-500 dark:text-teal-400" />
           <Link
-            href={`/cfp/expense${queryString}`}
+            href={`/speaker/expense${queryString}`}
             className="flex-1 font-medium text-gray-900 hover:text-brand-cloud-blue dark:text-white dark:hover:text-blue-400"
           >
             Travel Reimbursement Request
@@ -94,7 +94,7 @@ export function CompactTravelSupport({
           </span>
           {canEdit && (
             <Link
-              href={`/cfp/expense${queryString}`}
+              href={`/speaker/expense${queryString}`}
               className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
               title="Edit travel support"
             >

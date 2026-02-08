@@ -160,7 +160,7 @@ export async function sendFormattedMultiSpeakerEmail({
   senderName: string
 }): Promise<EmailResult<{ emailId: string }>> {
   try {
-    const proposalUrl = `${conference.domains[0]}/cfp/admin/proposals/${proposal._id}`
+    const proposalUrl = `${conference.domains[0]}/speaker/admin/proposals/${proposal._id}`
 
     const emailTemplate = SpeakerEmailTemplate({
       speakers: speakers.map((s) => ({ name: s.name, email: s.email })),

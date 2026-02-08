@@ -678,7 +678,7 @@ export function SpeakerTable({
                                     await import('@/lib/impersonation')
                                   window.open(
                                     addImpersonateParam(
-                                      '/cfp/list',
+                                      '/speaker/list',
                                       speaker._id,
                                     ),
                                     '_blank',

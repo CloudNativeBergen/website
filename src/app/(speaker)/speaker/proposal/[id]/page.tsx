@@ -27,7 +27,7 @@ export default async function ProposalViewPage({
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    return redirect('/api/auth/signin?callbackUrl=/cfp/proposal/' + id)
+    return redirect('/api/auth/signin?callbackUrl=/speaker/proposal/' + id)
   }
 
   const isImpersonatingAsOrganizer =

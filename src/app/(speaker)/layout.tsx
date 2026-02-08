@@ -15,7 +15,7 @@ export default async function CFPGroupLayout({
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    redirect('/api/auth/signin?callbackUrl=/cfp')
+    redirect('/api/auth/signin?callbackUrl=/speaker/list')
   }
 
   const { conference } = await getConferenceForCurrentDomain({})

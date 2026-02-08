@@ -98,7 +98,7 @@ export async function sendGalleryTagEmail(
 
     const eventUrl = `https://${domain}`
     const galleryUrl = buildGalleryImageUrl(domain, image._id)
-    const dashboardUrl = `${eventUrl}/cfp/list`
+    const dashboardUrl = `${eventUrl}/speaker/list`
 
     // Use conference social links if available, otherwise fall back to defaults
     const defaultSocialLinks = [

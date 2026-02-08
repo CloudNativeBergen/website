@@ -71,13 +71,13 @@ export function ProposalForm({
 
   const createProposalMutation = api.proposal.create.useMutation({
     onSuccess: () => {
-      router.push('/cfp/list?success=true')
+      router.push('/speaker/list?success=true')
     },
   })
 
   const updateProposalMutation = api.proposal.update.useMutation({
     onSuccess: () => {
-      router.push('/cfp/list')
+      router.push('/speaker/list')
     },
   })
 

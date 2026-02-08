@@ -49,7 +49,7 @@ export default async function WorkshopDetailsPage({
   const session = await getAuthSession({ url: fullUrl })
 
   if (!session?.speaker) {
-    return redirect(`/api/auth/signin?callbackUrl=/cfp/workshop/${workshopId}`)
+    return redirect(`/api/auth/signin?callbackUrl=/speaker/workshop/${workshopId}`)
   }
 
   const { speaker: currentSpeaker, err: speakerError } = await getSpeaker(
