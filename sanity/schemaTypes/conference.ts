@@ -534,11 +534,11 @@ export default defineType({
     }),
     defineField({
       name: 'sales_notification_channel',
-      title: 'Sales Notification Slack Channel',
+      title: 'Weekly Update Slack Channel',
       type: 'string',
       fieldset: 'communication',
       description:
-        'Slack channel name where weekly sales updates are posted (e.g. #conference-sales)',
+        'Slack channel name where weekly updates are posted (e.g. #conference-updates)',
     }),
     defineField({
       name: 'cfp_notification_channel',

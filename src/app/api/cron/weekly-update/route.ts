@@ -10,8 +10,8 @@ import { isConferenceOver } from '@/lib/conference/state'
 import { getOrganizerCount, getSpeakers } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
 import { getProposals } from '@/lib/proposal/server'
-import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
-import type { ProposalSummaryData } from '@/lib/slack/salesUpdate'
+import { sendWeeklyUpdateToSlack } from '@/lib/slack/weeklyUpdate'
+import type { ProposalSummaryData } from '@/lib/slack/weeklyUpdate'
 import {
   aggregateSponsorPipeline,
   type SponsorPipelineData,
@@ -62,12 +62,12 @@ export async function GET(request: NextRequest) {
 
     if (isConferenceOver(conference)) {
       console.log(
-        `Conference ${conference.title} has ended. Skipping sales update.`,
+        `Conference ${conference.title} has ended. Skipping weekly update.`,
       )
       return NextResponse.json(
         {
           success: true,
-          message: 'Conference has ended. Sales updates are no longer sent.',
+          message: 'Conference has ended. Weekly updates are no longer sent.',
           conference: conference.title,
         },
         { status: 200 },
@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
       sponsorPipeline = aggregateSponsorPipeline(crmSponsors)
     }
 
-    await sendSalesUpdateToSlack({
+    await sendWeeklyUpdateToSlack({
       conference,
       ticketsByCategory: statistics.categoryBreakdown,
       paidTickets: statistics.totalPaidTickets,
@@ -227,7 +227,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Error in sales update cron job:', error)
+    console.error('Error in weekly update cron job:', error)
     return NextResponse.json(
       {
         error: 'Internal server error',

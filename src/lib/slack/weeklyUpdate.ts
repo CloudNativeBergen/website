@@ -16,7 +16,7 @@ export interface ProposalSummaryData {
   total: number
 }
 
-export interface SalesUpdateData {
+export interface WeeklyUpdateData {
   conference: Conference
   ticketsByCategory: Record<string, number>
   paidTickets: number
@@ -229,8 +229,8 @@ export function createSponsorPipelineBlocks(
   return blocks
 }
 
-export async function sendSalesUpdateToSlack(
-  data: SalesUpdateData,
+export async function sendWeeklyUpdateToSlack(
+  data: WeeklyUpdateData,
   forceSlack = false,
 ) {
   const {

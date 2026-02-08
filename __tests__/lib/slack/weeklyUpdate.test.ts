@@ -12,12 +12,12 @@ import {
 import {
   createSponsorPipelineBlocks,
   createProposalSummaryBlocks,
-} from '@/lib/slack/salesUpdate'
+} from '@/lib/slack/weeklyUpdate'
 import type {
-  SalesUpdateData,
+  WeeklyUpdateData,
   SponsorPipelineData,
   ProposalSummaryData,
-} from '@/lib/slack/salesUpdate'
+} from '@/lib/slack/weeklyUpdate'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
 import { createMockConference } from '../../testdata/conference'
 
@@ -53,9 +53,9 @@ function restoreEnv() {
   }
 }
 
-function createBaseSalesData(
-  overrides: Partial<SalesUpdateData> = {},
-): SalesUpdateData {
+function createBaseUpdateData(
+  overrides: Partial<WeeklyUpdateData> = {},
+): WeeklyUpdateData {
   return {
     conference: createMockConference({
       sales_notification_channel: '#sales',
@@ -116,7 +116,7 @@ function allBlockText(body: { blocks: SlackBlock[] }): string {
     .join(' ')
 }
 
-describe('salesUpdate', () => {
+describe('weeklyUpdate', () => {
   beforeEach(() => {
     jest.resetModules()
     jest.restoreAllMocks()
@@ -131,13 +131,14 @@ describe('salesUpdate', () => {
     restoreEnv()
   })
 
-  describe('sendSalesUpdateToSlack', () => {
+  describe('sendWeeklyUpdateToSlack', () => {
     it('should log to console in development mode', async () => {
       setEnv('development')
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(createBaseSalesData())
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(createBaseUpdateData())
 
       expect(consoleSpy).toHaveBeenCalledWith(
         'Slack notification (development mode):',
@@ -146,10 +147,11 @@ describe('salesUpdate', () => {
 
     it('should warn when SLACK_BOT_TOKEN is missing', async () => {
       setEnv('production')
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(createBaseSalesData())
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(createBaseUpdateData())
 
       expect(warnSpy).toHaveBeenCalledWith('SLACK_BOT_TOKEN is not configured')
     })
@@ -162,9 +164,10 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(
-        createBaseSalesData({
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(
+        createBaseUpdateData({
           conference: createMockConference({
             sales_notification_channel: '#sales-updates',
           }),
@@ -199,10 +202,11 @@ describe('salesUpdate', () => {
         statusText: 'Internal Server Error',
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
       await expect(
-        sendSalesUpdateToSlack(
-          createBaseSalesData({
+        sendWeeklyUpdateToSlack(
+          createBaseUpdateData({
             conference: createMockConference({
               sales_notification_channel: '#test',
             }),
@@ -219,13 +223,14 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      const data = createBaseSalesData({
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      const data = createBaseUpdateData({
         conference: createMockConference({
           sales_notification_channel: '#conference-sales',
         }),
       })
-      await sendSalesUpdateToSlack(data)
+      await sendWeeklyUpdateToSlack(data)
 
       const body = JSON.parse(mockFetch.mock.calls[0][1]!.body as string)
       const summaryText = body.blocks[1]?.text?.text || ''
@@ -267,8 +272,9 @@ describe('salesUpdate', () => {
         capacity: 150,
       }
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(createBaseSalesData({ targetAnalysis }))
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(createBaseUpdateData({ targetAnalysis }))
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
       expect(text).toContain('Target Progress')
@@ -286,9 +292,10 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(
-        createBaseSalesData({ targetAnalysis: null }),
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(
+        createBaseUpdateData({ targetAnalysis: null }),
       )
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
@@ -303,9 +310,10 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(
-        createBaseSalesData({ sponsorPipeline: createMockPipeline() }),
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(
+        createBaseUpdateData({ sponsorPipeline: createMockPipeline() }),
       )
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
@@ -324,8 +332,9 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(createBaseSalesData())
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(createBaseUpdateData())
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
       expect(text).not.toContain('Sponsor Pipeline')
@@ -339,9 +348,10 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(
-        createBaseSalesData({
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(
+        createBaseUpdateData({
           ticketsByCategory: { Regular: 30, 'Early Bird': 20 },
         }),
       )
@@ -360,9 +370,10 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(
-        createBaseSalesData({ ticketsByCategory: { Regular: 50 } }),
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(
+        createBaseUpdateData({ ticketsByCategory: { Regular: 50 } }),
       )
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
@@ -386,8 +397,9 @@ describe('salesUpdate', () => {
         total: 26,
       }
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(createBaseSalesData({ proposalSummary }))
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(createBaseUpdateData({ proposalSummary }))
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
       expect(text).toContain('CFP / Proposals')
@@ -407,8 +419,9 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(createBaseSalesData())
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(createBaseUpdateData())
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
       expect(text).not.toContain('CFP / Proposals')
@@ -422,9 +435,10 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
-      await sendSalesUpdateToSlack(
-        createBaseSalesData({
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
+      await sendWeeklyUpdateToSlack(
+        createBaseUpdateData({
           sponsorPipeline: createMockPipeline(),
           proposalSummary: {
             submitted: 10,
@@ -460,9 +474,10 @@ describe('salesUpdate', () => {
         json: async () => ({ ok: true }),
       } as Response)
 
-      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
+      const { sendWeeklyUpdateToSlack } =
+        await import('@/lib/slack/weeklyUpdate')
       // 15 claimed out of 23 allocated (10+8+5) = 65.2%
-      await sendSalesUpdateToSlack(createBaseSalesData())
+      await sendWeeklyUpdateToSlack(createBaseUpdateData())
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
       expect(text).toContain('65.2%')

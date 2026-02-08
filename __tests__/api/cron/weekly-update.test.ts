@@ -7,7 +7,7 @@ import type { SponsorForConferenceExpanded } from '@/lib/sponsor-crm/types'
 import { isConferenceOver } from '@/lib/conference/state'
 import { createMockConference } from '../../testdata/conference'
 
-describe('api/cron/sales-update', () => {
+describe('api/cron/weekly-update', () => {
   describe('Conference State', () => {
     it('should detect conference has ended', () => {
       const conference = createMockConference({
