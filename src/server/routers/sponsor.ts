@@ -1166,10 +1166,7 @@ export const sponsorRouter = router({
     setDefault: adminProcedure
       .input(SetDefaultTemplateSchema)
       .mutation(async ({ input }) => {
-        const { error } = await setDefaultSponsorEmailTemplate(
-          input.id,
-          input.category,
-        )
+        const { error } = await setDefaultSponsorEmailTemplate(input.id)
         if (error) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',

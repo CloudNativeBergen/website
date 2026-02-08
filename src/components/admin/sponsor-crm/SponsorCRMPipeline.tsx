@@ -126,8 +126,8 @@ export function SponsorCRMPipeline({
         ? sponsors
         : currentView === 'invoice'
           ? sponsors.filter(
-              (s) => s.status === 'closed-won' && s.contract_value != null,
-            )
+            (s) => s.status === 'closed-won' && s.contract_value != null,
+          )
           : sponsors.filter((s) => s.status === 'closed-won')
 
     if (searchQuery.trim()) {
@@ -463,7 +463,7 @@ export function SponsorCRMPipeline({
           <button
             onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
             className={clsx(
-              'flex h-9 w-9 items-center justify-center rounded-lg transition-colors sm:hidden',
+              'ml-auto flex h-9 w-9 items-center justify-center rounded-lg transition-colors sm:hidden',
               isMobileSearchOpen || searchQuery
                 ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400'
                 : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800',
@@ -639,7 +639,7 @@ export function SponsorCRMPipeline({
                   assignedToFilter === 'unassigned'
                     ? 'Unassigned'
                     : organizers.find((o) => o._id === assignedToFilter)
-                        ?.name || 'Owner'
+                      ?.name || 'Owner'
                 }
                 category="Owner"
                 onRemove={() => setOrganizerFilter(null)}
@@ -754,8 +754,8 @@ export function SponsorCRMPipeline({
               <SponsorCard
                 sponsor={activeItem.sponsor}
                 currentView={currentView}
-                onEdit={() => {}}
-                onDelete={() => {}}
+                onEdit={() => { }}
+                onDelete={() => { }}
               />
             </div>
           )}

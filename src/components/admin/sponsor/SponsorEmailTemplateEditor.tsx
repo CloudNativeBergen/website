@@ -74,6 +74,9 @@ export function SponsorEmailTemplateEditor({
   )
   const [description, setDescription] = useState(template?.description ?? '')
 
+  // Reset save status when any field changes
+  const markDirty = () => setSaveStatus('idle')
+
   const [editorKey] = useState(0)
 
   const utils = api.useUtils()
@@ -233,11 +236,10 @@ export function SponsorEmailTemplateEditor({
                 type="button"
                 onClick={handleSubmit}
                 disabled={isPending}
-                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${
-                  saveStatus === 'error'
+                className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 ${saveStatus === 'error'
                     ? 'bg-red-600 hover:bg-red-500 dark:bg-red-500 dark:hover:bg-red-400'
                     : 'bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400'
-                }`}
+                  }`}
               >
                 {isPending ? (
                   <>
@@ -276,7 +278,10 @@ export function SponsorEmailTemplateEditor({
                 <input
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => {
+                    setTitle(e.target.value)
+                    markDirty()
+                  }}
                   placeholder="e.g. Cold Outreach (English)"
                   className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
                 />
@@ -288,9 +293,10 @@ export function SponsorEmailTemplateEditor({
                 <div className="mt-2 grid grid-cols-1">
                   <select
                     value={category}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setCategory(e.target.value as TemplateCategory)
-                    }
+                      markDirty()
+                    }}
                     className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-1.5 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:*:bg-gray-800 dark:focus:outline-indigo-500"
                   >
                     {CATEGORY_OPTIONS.map(([value, label]) => (
@@ -314,12 +320,14 @@ export function SponsorEmailTemplateEditor({
                     <button
                       key={value}
                       type="button"
-                      onClick={() => setLanguage(value)}
-                      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                        language === value
+                      onClick={() => {
+                        setLanguage(value)
+                        markDirty()
+                      }}
+                      className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${language === value
                           ? 'bg-indigo-600 text-white dark:bg-indigo-500'
                           : 'bg-white text-gray-900 outline-1 -outline-offset-1 outline-gray-300 hover:bg-gray-50 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:hover:bg-white/10'
-                      }`}
+                        }`}
                     >
                       {label}
                     </button>
@@ -335,7 +343,10 @@ export function SponsorEmailTemplateEditor({
               <input
                 type="text"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => {
+                  setDescription(e.target.value)
+                  markDirty()
+                }}
                 placeholder="Internal notes on when to use this template"
                 className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
               />
@@ -350,7 +361,10 @@ export function SponsorEmailTemplateEditor({
             <input
               type="text"
               value={subject}
-              onChange={(e) => setSubject(e.target.value)}
+              onChange={(e) => {
+                setSubject(e.target.value)
+                markDirty()
+              }}
               placeholder="e.g. Partnership opportunity: {{{CONFERENCE_TITLE}}}"
               className="mt-2 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
             />
@@ -362,7 +376,10 @@ export function SponsorEmailTemplateEditor({
               key={editorKey}
               label="Email Body"
               value={body}
-              onChange={setBody}
+              onChange={(val) => {
+                setBody(val)
+                markDirty()
+              }}
               forceRemountKey={editorKey}
               helpText="Use {{{VARIABLE_NAME}}} syntax for dynamic content. Click a variable below to copy it."
             />

@@ -19,10 +19,10 @@ const VIEWS: Array<{
   label: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }> = [
-  { key: 'pipeline', label: 'Full Pipeline', icon: RectangleStackIcon },
-  { key: 'contract', label: 'Contract Board', icon: DocumentTextIcon },
-  { key: 'invoice', label: 'Invoice Board', icon: BanknotesIcon },
-]
+    { key: 'pipeline', label: 'Full Pipeline', icon: RectangleStackIcon },
+    { key: 'contract', label: 'Contract Board', icon: DocumentTextIcon },
+    { key: 'invoice', label: 'Invoice Board', icon: BanknotesIcon },
+  ]
 
 export function BoardViewSwitcher({
   currentView,
@@ -39,13 +39,13 @@ export function BoardViewSwitcher({
             key={view.key}
             onClick={() => onViewChange(view.key)}
             className={clsx(
-              'flex h-full items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
+              'flex h-full items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors',
               isActive
                 ? 'bg-white text-brand-cloud-blue shadow-sm ring-1 ring-gray-200 dark:bg-gray-700 dark:text-blue-400 dark:ring-gray-600'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white',
             )}
           >
-            <Icon className="h-3.5 w-3.5" />
+            <Icon className="h-4 w-4" />
             <span className="hidden lg:inline">{view.label}</span>
           </button>
         )

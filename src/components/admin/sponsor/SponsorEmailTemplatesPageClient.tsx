@@ -151,6 +151,7 @@ export function SponsorEmailTemplatesPageClient({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id || !templates) return
+    if (reorderMutation.isPending) return
 
     const currentList = localOrder ?? [...templates]
     const oldIndex = currentList.findIndex((t) => t._id === active.id)
@@ -165,7 +166,6 @@ export function SponsorEmailTemplatesPageClient({
   const handleToggleDefault = (template: SponsorEmailTemplate) => {
     setDefaultMutation.mutate({
       id: template._id,
-      category: template.category as TemplateCategory,
     })
   }
 
@@ -303,9 +303,8 @@ function SortableTemplateRow({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm transition-colors dark:border-gray-700 dark:bg-gray-800 ${
-        isDragging ? 'z-50 shadow-lg ring-2 ring-indigo-500' : ''
-      }`}
+      className={`flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm transition-colors dark:border-gray-700 dark:bg-gray-800 ${isDragging ? 'z-50 shadow-lg ring-2 ring-indigo-500' : ''
+        }`}
     >
       {/* Drag handle */}
       <button

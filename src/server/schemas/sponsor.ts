@@ -102,5 +102,4 @@ export const ReorderTemplatesSchema = z.object({
 
 export const SetDefaultTemplateSchema = z.object({
   id: z.string().min(1),
-  category: TemplateCategorySchema,
 })

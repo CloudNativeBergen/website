@@ -376,7 +376,7 @@ const EMAIL_TEMPLATE_PROJECTION = `{
   title,
   slug,
   category,
-  language,
+  "language": coalesce(language, "no"),
   subject,
   body,
   description,
@@ -489,24 +489,34 @@ export async function deleteSponsorEmailTemplate(
 
 export async function setDefaultSponsorEmailTemplate(
   id: string,
-  category: string,
 ): Promise<{ error?: Error }> {
   try {
-    // Unset is_default for all templates in the same category
+    // Fetch template to derive category server-side (don't trust client)
+    const current = await clientWrite.fetch<{
+      is_default?: boolean
+      category?: string
+    }>(
+      `*[_type == "sponsorEmailTemplate" && _id == $id][0]{ is_default, category }`,
+      { id },
+    )
+    if (!current) {
+      return { error: new Error('Sponsor email template not found') }
+    }
+    if (!current.category) {
+      return { error: new Error('Sponsor email template has no category') }
+    }
+
+    // Unset is_default for all other templates in the same category
     const others = await clientWrite.fetch<{ _id: string }[]>(
       `*[_type == "sponsorEmailTemplate" && category == $category && _id != $id && is_default == true]{ _id }`,
-      { category, id },
+      { category: current.category, id },
     )
     const tx = clientWrite.transaction()
     for (const t of others) {
       tx.patch(t._id, (p) => p.set({ is_default: false }))
     }
     // Toggle: if already default, unset; otherwise set
-    const current = await clientWrite.fetch<{ is_default?: boolean }>(
-      `*[_type == "sponsorEmailTemplate" && _id == $id][0]{ is_default }`,
-      { id },
-    )
-    tx.patch(id, (p) => p.set({ is_default: !current?.is_default }))
+    tx.patch(id, (p) => p.set({ is_default: !current.is_default }))
     await tx.commit()
     return {}
   } catch (error) {
@@ -518,6 +528,19 @@ export async function reorderSponsorEmailTemplates(
   orderedIds: string[],
 ): Promise<{ error?: Error }> {
   try {
+    // Validate all IDs belong to sponsorEmailTemplate documents
+    const valid = await clientWrite.fetch<{ _id: string }[]>(
+      `*[_type == "sponsorEmailTemplate" && _id in $ids]{ _id }`,
+      { ids: orderedIds },
+    )
+    const validIds = new Set(valid.map((t) => t._id))
+    const invalid = orderedIds.filter((id) => !validIds.has(id))
+    if (invalid.length > 0) {
+      return {
+        error: new Error(`Invalid template IDs: ${invalid.join(', ')}`),
+      }
+    }
+
     const tx = clientWrite.transaction()
     orderedIds.forEach((id, index) => {
       tx.patch(id, (p) => p.set({ sort_order: index }))
