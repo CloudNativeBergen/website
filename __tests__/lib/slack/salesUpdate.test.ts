@@ -9,10 +9,14 @@ import {
   beforeEach,
   afterEach,
 } from '@jest/globals'
-import { createSponsorPipelineBlocks } from '@/lib/slack/salesUpdate'
+import {
+  createSponsorPipelineBlocks,
+  createProposalSummaryBlocks,
+} from '@/lib/slack/salesUpdate'
 import type {
   SalesUpdateData,
   SponsorPipelineData,
+  ProposalSummaryData,
 } from '@/lib/slack/salesUpdate'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
 import { createMockConference } from '../../testdata/conference'
@@ -130,7 +134,7 @@ describe('salesUpdate', () => {
   describe('sendSalesUpdateToSlack', () => {
     it('should log to console in development mode', async () => {
       setEnv('development')
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
@@ -142,7 +146,7 @@ describe('salesUpdate', () => {
 
     it('should warn when SLACK_BOT_TOKEN is missing', async () => {
       setEnv('production')
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
 
       const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
       await sendSalesUpdateToSlack(createBaseSalesData())
@@ -182,7 +186,7 @@ describe('salesUpdate', () => {
       expect(body.channel).toBe('#sales-updates')
       expect(body.blocks).toBeDefined()
       const header = body.blocks[0]
-      expect(header.text?.text).toContain('Weekly Sales Update')
+      expect(header.text?.text).toContain('Weekly Update')
       expect(header.text?.text).toContain('Cloud Native Day 2026')
     })
 
@@ -225,6 +229,7 @@ describe('salesUpdate', () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1]!.body as string)
       const summaryText = body.blocks[1]?.text?.text || ''
+      expect(summaryText).toContain('Summary as of')
       expect(summaryText).not.toContain('Channel:')
     })
 
@@ -364,6 +369,89 @@ describe('salesUpdate', () => {
       expect(text).not.toContain('Breakdown by Paid Ticket Category')
     })
 
+    it('should include proposal summary section when provided', async () => {
+      setEnv('production', 'xoxb-test-token')
+      global.fetch = mockFetch
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
+
+      const proposalSummary: ProposalSummaryData = {
+        submitted: 15,
+        accepted: 5,
+        confirmed: 3,
+        rejected: 2,
+        withdrawn: 1,
+        total: 26,
+      }
+
+      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
+      await sendSalesUpdateToSlack(createBaseSalesData({ proposalSummary }))
+
+      const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
+      expect(text).toContain('CFP / Proposals')
+      expect(text).toContain('Total Proposals')
+      expect(text).toContain('26')
+      expect(text).toContain('Submitted')
+      expect(text).toContain('15')
+      expect(text).toContain('Accepted')
+      expect(text).toContain('Confirmed')
+    })
+
+    it('should omit proposal summary when not provided', async () => {
+      setEnv('production', 'xoxb-test-token')
+      global.fetch = mockFetch
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
+
+      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
+      await sendSalesUpdateToSlack(createBaseSalesData())
+
+      const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
+      expect(text).not.toContain('CFP / Proposals')
+    })
+
+    it('should include sponsor pipeline before tickets', async () => {
+      setEnv('production', 'xoxb-test-token')
+      global.fetch = mockFetch
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ok: true }),
+      } as Response)
+
+      const { sendSalesUpdateToSlack } = await import('@/lib/slack/salesUpdate')
+      await sendSalesUpdateToSlack(
+        createBaseSalesData({
+          sponsorPipeline: createMockPipeline(),
+          proposalSummary: {
+            submitted: 10,
+            accepted: 2,
+            confirmed: 1,
+            rejected: 0,
+            withdrawn: 0,
+            total: 13,
+          },
+        }),
+      )
+
+      const body = parseSlackBody()
+      const allText = (body.blocks as SlackBlock[]).map(
+        (b) => b.text?.text || b.fields?.map((f) => f.text).join(' ') || '',
+      )
+      const sponsorIdx = allText.findIndex((t) =>
+        t.includes('Sponsor Pipeline'),
+      )
+      const proposalIdx = allText.findIndex((t) =>
+        t.includes('CFP / Proposals'),
+      )
+      const ticketIdx = allText.findIndex((t) => t.includes('Tickets'))
+      expect(sponsorIdx).toBeLessThan(proposalIdx)
+      expect(proposalIdx).toBeLessThan(ticketIdx)
+    })
+
     it('should calculate free ticket claim rate correctly', async () => {
       setEnv('production', 'xoxb-test-token')
       global.fetch = mockFetch
@@ -378,6 +466,66 @@ describe('salesUpdate', () => {
 
       const text = allBlockText(parseSlackBody() as { blocks: SlackBlock[] })
       expect(text).toContain('65.2%')
+    })
+  })
+
+  describe('createProposalSummaryBlocks', () => {
+    it('should create blocks with proposal counts', () => {
+      const summary: ProposalSummaryData = {
+        submitted: 10,
+        accepted: 3,
+        confirmed: 2,
+        rejected: 1,
+        withdrawn: 1,
+        total: 17,
+      }
+      const blocks = createProposalSummaryBlocks(summary)
+
+      expect(blocks[0].text?.text).toContain('CFP / Proposals')
+      const fieldsText = blocks
+        .flatMap((b) => b.fields?.map((f) => f.text) || [])
+        .join(' ')
+      expect(fieldsText).toContain('17')
+      expect(fieldsText).toContain('10')
+      expect(fieldsText).toContain('3')
+      expect(fieldsText).toContain('2')
+    })
+
+    it('should show rejected/withdrawn only when > 0', () => {
+      const noRejections: ProposalSummaryData = {
+        submitted: 5,
+        accepted: 2,
+        confirmed: 1,
+        rejected: 0,
+        withdrawn: 0,
+        total: 8,
+      }
+      const blocks = createProposalSummaryBlocks(noRejections)
+
+      const fieldsText = blocks
+        .flatMap((b) => b.fields?.map((f) => f.text) || [])
+        .join(' ')
+      expect(fieldsText).not.toContain('Rejected')
+      expect(fieldsText).not.toContain('Withdrawn')
+    })
+
+    it('should show rejected/withdrawn when present', () => {
+      const withRejections: ProposalSummaryData = {
+        submitted: 5,
+        accepted: 2,
+        confirmed: 1,
+        rejected: 3,
+        withdrawn: 1,
+        total: 12,
+      }
+      const blocks = createProposalSummaryBlocks(withRejections)
+
+      const fieldsText = blocks
+        .flatMap((b) => b.fields?.map((f) => f.text) || [])
+        .join(' ')
+      expect(fieldsText).toContain('Rejected')
+      expect(fieldsText).toContain('3')
+      expect(fieldsText).toContain('Withdrawn')
     })
   })
 

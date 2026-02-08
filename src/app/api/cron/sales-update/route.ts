@@ -9,7 +9,9 @@ import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceOver } from '@/lib/conference/state'
 import { getOrganizerCount, getSpeakers } from '@/lib/speaker/sanity'
 import { Status } from '@/lib/proposal/types'
+import { getProposals } from '@/lib/proposal/server'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
+import type { ProposalSummaryData } from '@/lib/slack/salesUpdate'
 import {
   aggregateSponsorPipeline,
   type SponsorPipelineData,
@@ -151,6 +153,27 @@ export async function GET(request: NextRequest) {
       totalCapacityUsed: paidTickets.length,
     }
 
+    let proposalSummary: ProposalSummaryData | null = null
+    try {
+      const { proposals } = await getProposals({
+        conferenceId: conference._id,
+        returnAll: true,
+      })
+      proposalSummary = {
+        submitted: proposals.filter((p) => p.status === Status.submitted)
+          .length,
+        accepted: proposals.filter((p) => p.status === Status.accepted).length,
+        confirmed: proposals.filter((p) => p.status === Status.confirmed)
+          .length,
+        rejected: proposals.filter((p) => p.status === Status.rejected).length,
+        withdrawn: proposals.filter((p) => p.status === Status.withdrawn)
+          .length,
+        total: proposals.length,
+      }
+    } catch (error) {
+      console.log('Proposal summary fetch failed:', (error as Error).message)
+    }
+
     let sponsorPipeline: SponsorPipelineData | null = null
     const { sponsors: crmSponsors, error: sponsorsError } =
       await listSponsorsForConference(conference._id)
@@ -173,6 +196,7 @@ export async function GET(request: NextRequest) {
       totalRevenue: statistics.totalRevenue,
       targetAnalysis: analysis,
       sponsorPipeline,
+      proposalSummary,
       lastUpdated: new Date().toISOString(),
     })
 
@@ -188,16 +212,17 @@ export async function GET(request: NextRequest) {
         categories: statistics.categoryBreakdown,
         targetAnalysis: analysis
           ? {
-              enabled: true,
-              capacity: analysis.capacity,
-              currentTargetPercentage: analysis.performance.targetPercentage,
-              actualPercentage: analysis.performance.currentPercentage,
-              variance: analysis.performance.variance,
-              isOnTrack: analysis.performance.isOnTrack,
-              nextMilestone: analysis.performance.nextMilestone,
-            }
+            enabled: true,
+            capacity: analysis.capacity,
+            currentTargetPercentage: analysis.performance.targetPercentage,
+            actualPercentage: analysis.performance.currentPercentage,
+            variance: analysis.performance.variance,
+            isOnTrack: analysis.performance.isOnTrack,
+            nextMilestone: analysis.performance.nextMilestone,
+          }
           : null,
         sponsorPipeline,
+        proposalSummary,
         lastUpdated: new Date().toISOString(),
       },
     })

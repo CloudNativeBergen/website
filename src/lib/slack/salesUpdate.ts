@@ -7,6 +7,15 @@ import { postSlackMessage, type SlackBlock } from '@/lib/slack/client'
 
 export type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 
+export interface ProposalSummaryData {
+  submitted: number
+  accepted: number
+  confirmed: number
+  rejected: number
+  withdrawn: number
+  total: number
+}
+
 export interface SalesUpdateData {
   conference: Conference
   ticketsByCategory: Record<string, number>
@@ -19,6 +28,7 @@ export interface SalesUpdateData {
   totalRevenue: number
   targetAnalysis?: TicketAnalysisResult | null
   sponsorPipeline?: SponsorPipelineData | null
+  proposalSummary?: ProposalSummaryData | null
   lastUpdated: string
 }
 
@@ -51,6 +61,64 @@ function createCategoryBreakdown(
   }
 
   return categoryBlocks
+}
+
+export function createProposalSummaryBlocks(
+  summary: ProposalSummaryData,
+): SlackBlock[] {
+  const blocks: SlackBlock[] = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*📝 CFP / Proposals*',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Total Proposals:*\n${summary.total}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Submitted:*\n${summary.submitted}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Accepted:*\n${summary.accepted}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Confirmed:*\n${summary.confirmed}`,
+        },
+      ],
+    },
+  ]
+
+  if (summary.rejected > 0 || summary.withdrawn > 0) {
+    blocks.push({
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Rejected:*\n${summary.rejected}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Withdrawn:*\n${summary.withdrawn}`,
+        },
+      ],
+    })
+  }
+
+  return blocks
 }
 
 export function createSponsorPipelineBlocks(
@@ -177,6 +245,7 @@ export async function sendSalesUpdateToSlack(
     totalRevenue,
     targetAnalysis,
     sponsorPipeline,
+    proposalSummary,
     lastUpdated,
   } = data
 
@@ -192,7 +261,7 @@ export async function sendSalesUpdateToSlack(
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `📊 Weekly Sales Update - ${conference.title}`,
+        text: `📊 Weekly Update - ${conference.title}`,
         emoji: true,
       },
     },
@@ -200,7 +269,33 @@ export async function sendSalesUpdateToSlack(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Sales Summary as of ${formattedDate}*`,
+        text: `*Summary as of ${formattedDate}*`,
+      },
+    },
+  ]
+
+  // Sponsor pipeline first — most actionable early on
+  if (sponsorPipeline && sponsorPipeline.totalSponsors > 0) {
+    blocks.push(
+      ...createSponsorPipelineBlocks(
+        sponsorPipeline,
+        sponsorPipeline.contractCurrency,
+      ),
+    )
+  }
+
+  // Proposal summary second — key activity indicator
+  if (proposalSummary && proposalSummary.total > 0) {
+    blocks.push(...createProposalSummaryBlocks(proposalSummary))
+  }
+
+  // Ticket overview — compact summary
+  blocks.push(
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*🎟️ Tickets*',
       },
     },
     {
@@ -221,74 +316,15 @@ export async function sendSalesUpdateToSlack(
       fields: [
         {
           type: 'mrkdwn',
-          text: `*Sponsor Tickets:*\n${sponsorTickets}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Speaker Tickets:*\n${speakerTickets}`,
-        },
-      ],
-    },
-    {
-      type: 'section',
-      fields: [
-        {
-          type: 'mrkdwn',
           text: `*Total Tickets:*\n${totalTickets}`,
         },
         {
           type: 'mrkdwn',
-          text: `*Total Complimentary:*\n${sponsorTickets + speakerTickets + organizerTickets}`,
+          text: `*Complimentary:*\n${sponsorTickets + speakerTickets + organizerTickets} (claimed ${freeTicketsClaimed}, rate ${calculateFreeTicketClaimRate(freeTicketsClaimed, sponsorTickets + speakerTickets + organizerTickets).toFixed(1)}%)`,
         },
       ],
     },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: '*🎁 Free Tickets Allocation*',
-      },
-    },
-    {
-      type: 'section',
-      fields: [
-        {
-          type: 'mrkdwn',
-          text: `*Allocated:*\n${sponsorTickets + speakerTickets + organizerTickets}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Claimed:*\n${freeTicketsClaimed}`,
-        },
-      ],
-    },
-    {
-      type: 'section',
-      fields: [
-        {
-          type: 'mrkdwn',
-          text: `*Sponsors:*\n${sponsorTickets}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Speakers:*\n${speakerTickets}`,
-        },
-      ],
-    },
-    {
-      type: 'section',
-      fields: [
-        {
-          type: 'mrkdwn',
-          text: `*Organizers:*\n${organizerTickets}`,
-        },
-        {
-          type: 'mrkdwn',
-          text: `*Claim Rate:*\n${calculateFreeTicketClaimRate(freeTicketsClaimed, sponsorTickets + speakerTickets + organizerTickets).toFixed(1)}%`,
-        },
-      ],
-    },
-  ]
+  )
 
   if (targetAnalysis && targetAnalysis.performance) {
     const { performance } = targetAnalysis
@@ -343,14 +379,6 @@ export async function sendSalesUpdateToSlack(
         },
       })
     }
-  }
-  if (sponsorPipeline && sponsorPipeline.totalSponsors > 0) {
-    blocks.push(
-      ...createSponsorPipelineBlocks(
-        sponsorPipeline,
-        sponsorPipeline.contractCurrency,
-      ),
-    )
   }
 
   if (Object.keys(ticketsByCategory).length > 1) {
