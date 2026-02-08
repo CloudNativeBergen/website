@@ -9,7 +9,6 @@ import type {
   TicketStatistics,
   SalesTargetConfig,
 } from './types'
-import { getSpeakers } from '@/lib/speaker/sanity'
 
 export const SPONSOR_TIER_TICKET_ALLOCATION: Record<string, number> = {
   Pod: 2,
@@ -23,6 +22,7 @@ export class TicketSalesProcessor {
   private readonly capacity: number
   private readonly conference: ProcessTicketSalesInput['conference']
   private readonly conferenceDate: string
+  private readonly speakerCount: number
   private readonly today: Date
 
   constructor(input: ProcessTicketSalesInput) {
@@ -31,10 +31,11 @@ export class TicketSalesProcessor {
     this.capacity = input.capacity
     this.conference = input.conference
     this.conferenceDate = input.conferenceDate
+    this.speakerCount = input.speakerCount
     this.today = new Date()
   }
 
-  public async process(): Promise<TicketAnalysisResult> {
+  public process(): TicketAnalysisResult {
     const dailySales = this.calculateDailySales()
     const cumulativeProgression =
       this.calculateCumulativeProgression(dailySales)
@@ -43,7 +44,7 @@ export class TicketSalesProcessor {
       targetProgression,
       cumulativeProgression,
     )
-    const statistics = await this.calculateStatistics()
+    const statistics = this.calculateStatistics()
     const performance = this.calculatePerformance(targetProgression, statistics)
 
     return {
@@ -240,7 +241,7 @@ export class TicketSalesProcessor {
     return combined
   }
 
-  private async calculateStatistics(): Promise<TicketStatistics> {
+  private calculateStatistics(): TicketStatistics {
     const categoryBreakdown: Record<string, number> = {}
     const processedOrders = new Set<number>()
     let totalRevenue = 0
@@ -256,7 +257,7 @@ export class TicketSalesProcessor {
     })
 
     const sponsorTickets = this.calculateSponsorTickets()
-    const speakerTickets = await this.calculateSpeakerTickets()
+    const speakerTickets = this.speakerCount
 
     const totalPaidTickets = this.tickets.length
     const averageTicketPrice =
@@ -281,18 +282,6 @@ export class TicketSalesProcessor {
       const tierTitle = sponsorData.tier?.title || ''
       return total + (SPONSOR_TIER_TICKET_ALLOCATION[tierTitle] || 0)
     }, 0)
-  }
-
-  private async calculateSpeakerTickets(): Promise<number> {
-    try {
-      const { speakers, err } = await getSpeakers(this.conference._id)
-      if (err) {
-        throw new Error(`Failed to fetch speakers: ${err}`)
-      }
-      return speakers.length
-    } catch (error) {
-      throw new Error(`Error calculating speaker tickets: ${error}`)
-    }
   }
 
   private calculatePerformance(

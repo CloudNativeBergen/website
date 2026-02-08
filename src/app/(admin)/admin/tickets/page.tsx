@@ -54,6 +54,7 @@ async function getTicketData(conference: Conference) {
 async function processTicketAnalysis(
   tickets: EventTicket[],
   conference: Conference,
+  speakerCount: number,
 ) {
   const targetConfig = conference.ticket_targets || DEFAULT_TARGET_CONFIG
   const capacity = conference.ticket_capacity || DEFAULT_CAPACITY
@@ -75,10 +76,11 @@ async function processTicketAnalysis(
         conference.start_date ||
         conference.program_date ||
         new Date().toISOString(),
+      speakerCount,
     }
 
     const processor = new TicketSalesProcessor(input)
-    return await processor.process()
+    return processor.process()
   } catch (error) {
     console.error('Failed to process ticket analysis:', error)
     return null
@@ -139,8 +141,23 @@ export default async function AdminTickets() {
   const uniqueFreeTickets = deduplicateTicketsByEmail(freeTickets)
   const uniqueAllTickets = deduplicateTicketsByEmail(allTickets)
 
-  const paidOnlyAnalysis = await processTicketAnalysis(paidTickets, conference)
-  const allTicketsAnalysis = await processTicketAnalysis(allTickets, conference)
+  const { speakers: confirmedSpeakers } = await getSpeakers(
+    conference._id,
+    [Status.confirmed],
+    false,
+  )
+  const { count: organizerCount } = await getOrganizerCount()
+
+  const paidOnlyAnalysis = await processTicketAnalysis(
+    paidTickets,
+    conference,
+    confirmedSpeakers.length,
+  )
+  const allTicketsAnalysis = await processTicketAnalysis(
+    allTickets,
+    conference,
+    confirmedSpeakers.length,
+  )
 
   const basicStats = calculateTicketStatistics(paidTickets)
   const statistics = paidOnlyAnalysis?.statistics || {
@@ -159,13 +176,6 @@ export default async function AdminTickets() {
     conference,
     SPONSOR_TIER_TICKET_ALLOCATION,
   )
-
-  const { speakers: confirmedSpeakers } = await getSpeakers(
-    conference._id,
-    [Status.confirmed],
-    false,
-  )
-  const { count: organizerCount } = await getOrganizerCount()
 
   const freeTicketAllocation = calculateFreeTicketAllocation(
     conference,

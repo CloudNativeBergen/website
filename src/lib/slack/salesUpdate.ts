@@ -1,26 +1,13 @@
 import { Conference } from '@/lib/conference/types'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
+import type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
+import { postSlackMessage, type SlackBlock } from '@/lib/slack/client'
 
-type SlackBlock = {
-  type: string
-  text?: {
-    type: string
-    text: string
-    emoji?: boolean
-  }
-  fields?: Array<{
-    type: string
-    text: string
-  }>
-}
+export type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 
-type SlackMessage = {
-  blocks: SlackBlock[]
-}
-
-interface SalesUpdateData {
+export interface SalesUpdateData {
   conference: Conference
   ticketsByCategory: Record<string, number>
   paidTickets: number
@@ -31,38 +18,8 @@ interface SalesUpdateData {
   totalTickets: number
   totalRevenue: number
   targetAnalysis?: TicketAnalysisResult | null
+  sponsorPipeline?: SponsorPipelineData | null
   lastUpdated: string
-}
-
-async function sendSlackMessage(message: SlackMessage, forceSlack = false) {
-  const webhookUrl = process.env.CFP_BOT
-  if (process.env.NODE_ENV === 'development' && !forceSlack) {
-    console.log('Slack sales update notification (development mode):')
-    console.log(JSON.stringify(message, null, 2))
-    return
-  }
-
-  if (!webhookUrl) {
-    console.warn('CFP_BOT webhook URL is not configured')
-    return
-  }
-
-  try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-  } catch (error) {
-    console.error('Error sending Slack sales update notification:', error)
-    throw error
-  }
 }
 
 function createCategoryBreakdown(
@@ -96,6 +53,114 @@ function createCategoryBreakdown(
   return categoryBlocks
 }
 
+export function createSponsorPipelineBlocks(
+  pipeline: SponsorPipelineData,
+  currency: string,
+): SlackBlock[] {
+  const blocks: SlackBlock[] = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*🤝 Sponsor Pipeline*',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Total Sponsors:*\n${pipeline.totalSponsors}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Active Deals:*\n${pipeline.activeDeals}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Closed Won:*\n${pipeline.closedWonCount}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Closed Lost:*\n${pipeline.closedLostCount}`,
+        },
+      ],
+    },
+  ]
+
+  if (pipeline.totalContractValue > 0) {
+    const closedDeals = pipeline.closedWonCount + pipeline.closedLostCount
+    blocks.push({
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Total Contract Value:*\n${formatCurrency(pipeline.totalContractValue, currency)}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Win Rate:*\n${closedDeals > 0 ? ((pipeline.closedWonCount / closedDeals) * 100).toFixed(0) : 0}%`,
+        },
+      ],
+    })
+  }
+
+  const stageEntries = Object.entries(pipeline.byStatus).filter(
+    ([, count]) => count > 0,
+  )
+  if (stageEntries.length > 0) {
+    const stageText = stageEntries
+      .map(([stage, count]) => `${stage}: ${count}`)
+      .join(' · ')
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Pipeline Stages:* ${stageText}`,
+      },
+    })
+  }
+
+  const invoiceEntries = Object.entries(pipeline.byInvoiceStatus).filter(
+    ([, count]) => count > 0,
+  )
+  if (invoiceEntries.length > 0) {
+    const invoiceText = invoiceEntries
+      .map(([status, count]) => `${status}: ${count}`)
+      .join(' · ')
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Invoice Status:* ${invoiceText}`,
+      },
+    })
+  }
+
+  const contractEntries = Object.entries(pipeline.byContractStatus).filter(
+    ([, count]) => count > 0,
+  )
+  if (contractEntries.length > 0) {
+    const contractText = contractEntries
+      .map(([status, count]) => `${status}: ${count}`)
+      .join(' · ')
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Contract Status:* ${contractText}`,
+      },
+    })
+  }
+
+  return blocks
+}
+
 export async function sendSalesUpdateToSlack(
   data: SalesUpdateData,
   forceSlack = false,
@@ -111,6 +176,7 @@ export async function sendSalesUpdateToSlack(
     totalTickets,
     totalRevenue,
     targetAnalysis,
+    sponsorPipeline,
     lastUpdated,
   } = data
 
@@ -278,6 +344,15 @@ export async function sendSalesUpdateToSlack(
       })
     }
   }
+  if (sponsorPipeline && sponsorPipeline.totalSponsors > 0) {
+    blocks.push(
+      ...createSponsorPipelineBlocks(
+        sponsorPipeline,
+        sponsorPipeline.contractCurrency,
+      ),
+    )
+  }
+
   if (Object.keys(ticketsByCategory).length > 1) {
     blocks.push({
       type: 'section',
@@ -303,5 +378,8 @@ export async function sendSalesUpdateToSlack(
   )
 
   const message = { blocks }
-  await sendSlackMessage(message, forceSlack)
+  await postSlackMessage(message, {
+    channel: conference.sales_notification_channel,
+    forceSlack,
+  })
 }
