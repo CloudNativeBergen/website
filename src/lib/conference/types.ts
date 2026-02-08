@@ -99,6 +99,7 @@ export interface Conference {
   checkin_event_id?: number
   ticket_capacity?: number
   ticket_targets?: SalesTargetConfig
+  sales_notification_channel?: string
   social_links?: string[]
   organizers: Speaker[]
   featured_speakers?: SpeakerWithTalks[]

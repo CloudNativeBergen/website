@@ -7,8 +7,13 @@ import type {
 } from '@/lib/tickets/types'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
 import { isConferenceOver } from '@/lib/conference/state'
-import { getOrganizerCount } from '@/lib/speaker/sanity'
+import { getOrganizerCount, getSpeakers } from '@/lib/speaker/sanity'
 import { sendSalesUpdateToSlack } from '@/lib/slack/salesUpdate'
+import {
+  aggregateSponsorPipeline,
+  type SponsorPipelineData,
+} from '@/lib/sponsor-crm/pipeline'
+import { listSponsorsForConference } from '@/lib/sponsor-crm/sanity'
 import { calculateTicketStatistics } from '@/lib/tickets/utils'
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -83,6 +88,7 @@ export async function GET(request: NextRequest) {
     const freeTickets = allTickets.filter((t) => parseFloat(t.sum) === 0)
 
     const { count: organizerCount } = await getOrganizerCount()
+    const { speakers } = await getSpeakers(conference._id)
 
     let analysis: TicketAnalysisResult | null = null
 
@@ -110,10 +116,11 @@ export async function GET(request: NextRequest) {
             conference.start_date ||
             conference.program_date ||
             new Date().toISOString(),
+          speakerCount: speakers.length,
         }
 
         const processor = new TicketSalesProcessor(input)
-        analysis = await processor.process()
+        analysis = processor.process()
       } catch (error) {
         console.log(
           'Target analysis calculation failed:',
@@ -131,6 +138,21 @@ export async function GET(request: NextRequest) {
       totalCapacityUsed: paidTickets.length,
     }
 
+    let sponsorPipeline: SponsorPipelineData | null = null
+    try {
+      const { sponsors: crmSponsors } = await listSponsorsForConference(
+        conference._id,
+      )
+      if (crmSponsors && crmSponsors.length > 0) {
+        sponsorPipeline = aggregateSponsorPipeline(crmSponsors)
+      }
+    } catch (error) {
+      console.log(
+        'Sponsor pipeline data fetch failed:',
+        (error as Error).message,
+      )
+    }
+
     await sendSalesUpdateToSlack({
       conference,
       ticketsByCategory: statistics.categoryBreakdown,
@@ -142,6 +164,7 @@ export async function GET(request: NextRequest) {
       totalTickets: statistics.totalCapacityUsed,
       totalRevenue: statistics.totalRevenue,
       targetAnalysis: analysis,
+      sponsorPipeline,
       lastUpdated: new Date().toISOString(),
     })
 
@@ -157,15 +180,16 @@ export async function GET(request: NextRequest) {
         categories: statistics.categoryBreakdown,
         targetAnalysis: analysis
           ? {
-              enabled: true,
-              capacity: analysis.capacity,
-              currentTargetPercentage: analysis.performance.targetPercentage,
-              actualPercentage: analysis.performance.currentPercentage,
-              variance: analysis.performance.variance,
-              isOnTrack: analysis.performance.isOnTrack,
-              nextMilestone: analysis.performance.nextMilestone,
-            }
+            enabled: true,
+            capacity: analysis.capacity,
+            currentTargetPercentage: analysis.performance.targetPercentage,
+            actualPercentage: analysis.performance.currentPercentage,
+            variance: analysis.performance.variance,
+            isOnTrack: analysis.performance.isOnTrack,
+            nextMilestone: analysis.performance.nextMilestone,
+          }
           : null,
+        sponsorPipeline,
         lastUpdated: new Date().toISOString(),
       },
     })

@@ -533,6 +533,14 @@ export default defineType({
       validation: (Rule) => Rule.required().email(),
     }),
     defineField({
+      name: 'sales_notification_channel',
+      title: 'Sales Notification Slack Channel',
+      type: 'string',
+      fieldset: 'communication',
+      description:
+        'Slack channel name where weekly sales updates are posted (e.g. #conference-sales)',
+    }),
+    defineField({
       name: 'social_links',
       title: 'Social Links',
       type: 'array',

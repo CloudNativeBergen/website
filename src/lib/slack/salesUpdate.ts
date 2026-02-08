@@ -1,7 +1,10 @@
 import { Conference } from '@/lib/conference/types'
 import type { TicketAnalysisResult } from '@/lib/tickets/types'
+import type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 import { calculateFreeTicketClaimRate } from '@/lib/tickets/utils'
 import { formatCurrency } from '@/lib/format'
+
+export type { SponsorPipelineData } from '@/lib/sponsor-crm/pipeline'
 
 type SlackBlock = {
   type: string
@@ -20,7 +23,7 @@ type SlackMessage = {
   blocks: SlackBlock[]
 }
 
-interface SalesUpdateData {
+export interface SalesUpdateData {
   conference: Conference
   ticketsByCategory: Record<string, number>
   paidTickets: number
@@ -31,6 +34,7 @@ interface SalesUpdateData {
   totalTickets: number
   totalRevenue: number
   targetAnalysis?: TicketAnalysisResult | null
+  sponsorPipeline?: SponsorPipelineData | null
   lastUpdated: string
 }
 
@@ -96,6 +100,97 @@ function createCategoryBreakdown(
   return categoryBlocks
 }
 
+export function createSponsorPipelineBlocks(
+  pipeline: SponsorPipelineData,
+  currency: string,
+): SlackBlock[] {
+  const blocks: SlackBlock[] = [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*🤝 Sponsor Pipeline*',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Total Sponsors:*\n${pipeline.totalSponsors}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Active Deals:*\n${pipeline.activeDeals}`,
+        },
+      ],
+    },
+    {
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Closed Won:*\n${pipeline.closedWonCount}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Closed Lost:*\n${pipeline.closedLostCount}`,
+        },
+      ],
+    },
+  ]
+
+  if (pipeline.totalContractValue > 0) {
+    blocks.push({
+      type: 'section',
+      fields: [
+        {
+          type: 'mrkdwn',
+          text: `*Total Contract Value:*\n${formatCurrency(pipeline.totalContractValue, currency)}`,
+        },
+        {
+          type: 'mrkdwn',
+          text: `*Win Rate:*\n${pipeline.totalSponsors > 0 ? ((pipeline.closedWonCount / pipeline.totalSponsors) * 100).toFixed(0) : 0}%`,
+        },
+      ],
+    })
+  }
+
+  const stageEntries = Object.entries(pipeline.byStatus).filter(
+    ([, count]) => count > 0,
+  )
+  if (stageEntries.length > 0) {
+    const stageText = stageEntries
+      .map(([stage, count]) => `${stage}: ${count}`)
+      .join(' · ')
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Pipeline Stages:* ${stageText}`,
+      },
+    })
+  }
+
+  const invoiceEntries = Object.entries(pipeline.byInvoiceStatus).filter(
+    ([, count]) => count > 0,
+  )
+  if (invoiceEntries.length > 0) {
+    const invoiceText = invoiceEntries
+      .map(([status, count]) => `${status}: ${count}`)
+      .join(' · ')
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*Invoice Status:* ${invoiceText}`,
+      },
+    })
+  }
+
+  return blocks
+}
+
 export async function sendSalesUpdateToSlack(
   data: SalesUpdateData,
   forceSlack = false,
@@ -111,6 +206,7 @@ export async function sendSalesUpdateToSlack(
     totalTickets,
     totalRevenue,
     targetAnalysis,
+    sponsorPipeline,
     lastUpdated,
   } = data
 
@@ -134,7 +230,7 @@ export async function sendSalesUpdateToSlack(
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Sales Summary as of ${formattedDate}*`,
+        text: `*Sales Summary as of ${formattedDate}*${conference.sales_notification_channel ? `\nChannel: ${conference.sales_notification_channel}` : ''}`,
       },
     },
     {
@@ -278,6 +374,15 @@ export async function sendSalesUpdateToSlack(
       })
     }
   }
+  if (sponsorPipeline && sponsorPipeline.totalSponsors > 0) {
+    blocks.push(
+      ...createSponsorPipelineBlocks(
+        sponsorPipeline,
+        sponsorPipeline.contractCurrency,
+      ),
+    )
+  }
+
   if (Object.keys(ticketsByCategory).length > 1) {
     blocks.push({
       type: 'section',
