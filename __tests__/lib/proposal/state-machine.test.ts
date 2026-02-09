@@ -115,9 +115,9 @@ describe('actionStateMachine', () => {
     it('transitions through the complete happy path', () => {
       let { status } = actionStateMachine(Status.draft, Action.submit, false)
       expect(status).toBe(Status.submitted)
-        ; ({ status } = actionStateMachine(status, Action.accept, true))
+      ;({ status } = actionStateMachine(status, Action.accept, true))
       expect(status).toBe(Status.accepted)
-        ; ({ status } = actionStateMachine(status, Action.confirm, false))
+      ;({ status } = actionStateMachine(status, Action.confirm, false))
       expect(status).toBe(Status.confirmed)
     })
   })
