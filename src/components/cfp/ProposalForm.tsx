@@ -132,9 +132,15 @@ export function ProposalForm({
       .filter((t): t is Topic => typeof t === 'object' && '_id' in t)
       .map((t) => ({ _type: 'reference' as const, _ref: t._id }))
 
-  const prepareProposalData = (includeSpeakers: boolean) => {
+  const prepareProposalData = () => {
     const topicRefs = prepareTopicRefs()
-    const base = {
+
+    const allSpeakers =
+      mode === 'admin' && externalSpeakerIds
+        ? externalSpeakerIds
+        : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
+
+    return {
       title: proposal.title,
       description: proposal.description,
       language: proposal.language,
@@ -145,17 +151,6 @@ export function ProposalForm({
       tos: proposal.tos,
       capacity: proposal.capacity,
       topics: topicRefs,
-    }
-
-    if (!includeSpeakers) return base
-
-    const allSpeakers =
-      mode === 'admin' && externalSpeakerIds
-        ? externalSpeakerIds
-        : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
-
-    return {
-      ...base,
       speakers: allSpeakers.map((id) => ({
         _type: 'reference' as const,
         _ref: id,
@@ -174,7 +169,7 @@ export function ProposalForm({
     }
 
     setLastAction('draft')
-    const data = prepareProposalData(false)
+    const data = prepareProposalData()
 
     if (proposalId) {
       try {
@@ -218,7 +213,7 @@ export function ProposalForm({
       }
     }
 
-    const proposalData = prepareProposalData(true)
+    const proposalData = prepareProposalData()
 
     if (proposalId && !isExistingDraft) {
       try {
@@ -236,7 +231,7 @@ export function ProposalForm({
           id: proposalId,
           data: proposalData,
         })
-        actionMutation.mutate({
+        await actionMutation.mutateAsync({
           id: proposalId,
           action: Action.submit,
         })
@@ -258,41 +253,41 @@ export function ProposalForm({
           proposalMutation.error ||
           actionMutation.error ||
           updateSpeakerMutation.error) && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
-            <div className="flex">
-              <div className="shrink-0">
-                <XCircleIcon
-                  className="h-6 w-6 text-red-500 dark:text-red-400"
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="ml-4">
-                <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
-                  Submission failed
-                </h3>
-                <div className="font-inter mt-2 text-red-700 dark:text-red-300">
-                  {proposalSubmitError && <p>{proposalSubmitError}</p>}
-                  {proposalMutation.error && (
-                    <p>{proposalMutation.error.message}</p>
-                  )}
-                  {actionMutation.error && (
-                    <p>{actionMutation.error.message}</p>
-                  )}
-                  {updateSpeakerMutation.error && (
-                    <p>{updateSpeakerMutation.error.message}</p>
-                  )}
-                  {validationErrors.length > 0 && (
-                    <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                      {validationErrors.map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                    </ul>
-                  )}
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
+              <div className="flex">
+                <div className="shrink-0">
+                  <XCircleIcon
+                    className="h-6 w-6 text-red-500 dark:text-red-400"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="ml-4">
+                  <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
+                    Submission failed
+                  </h3>
+                  <div className="font-inter mt-2 text-red-700 dark:text-red-300">
+                    {proposalSubmitError && <p>{proposalSubmitError}</p>}
+                    {proposalMutation.error && (
+                      <p>{proposalMutation.error.message}</p>
+                    )}
+                    {actionMutation.error && (
+                      <p>{actionMutation.error.message}</p>
+                    )}
+                    {updateSpeakerMutation.error && (
+                      <p>{updateSpeakerMutation.error.message}</p>
+                    )}
+                    {validationErrors.length > 0 && (
+                      <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
+                        {validationErrors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
         <ProposalDetailsForm
           proposal={proposal}
           setProposal={setProposal}
@@ -329,8 +324,8 @@ export function ProposalForm({
               </h3>
               <div className="mt-4 space-y-3">
                 {proposal.speakers &&
-                Array.isArray(proposal.speakers) &&
-                proposal.speakers.length > 0 ? (
+                  Array.isArray(proposal.speakers) &&
+                  proposal.speakers.length > 0 ? (
                   proposal.speakers.map((speaker, index) => {
                     if (
                       typeof speaker === 'object' &&
@@ -402,7 +397,7 @@ export function ProposalForm({
             >
               {(createProposalMutation.isPending ||
                 updateProposalMutation.isPending) &&
-              lastAction === 'draft'
+                lastAction === 'draft'
                 ? 'Saving...'
                 : 'Save Draft'}
             </button>
@@ -413,7 +408,7 @@ export function ProposalForm({
             className="font-space-grotesk cursor-pointer rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
           >
             {(proposalMutation.isPending || updateSpeakerMutation.isPending) &&
-            lastAction === 'submit'
+              lastAction === 'submit'
               ? buttonPrimaryLoading
               : buttonPrimary}
           </button>

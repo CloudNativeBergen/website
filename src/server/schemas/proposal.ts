@@ -13,11 +13,18 @@ import {
   ReferenceSchema,
 } from './common'
 
-// Portable text block schema - validate as array of any with non-empty check
+// Portable text block element — runtime check that each item is an object with _type
+const isPortableTextElement = (val: unknown): boolean =>
+  typeof val === 'object' && val !== null && '_type' in val
+
+// Portable text block schema - validate as array of block objects with non-empty check
 const PortableTextBlockSchema = z
   .array(z.any())
   .refine((arr) => arr.length > 0, {
     message: 'Description cannot be empty',
+  })
+  .refine((arr) => arr.every(isPortableTextElement), {
+    message: 'Description must contain valid content blocks',
   })
 
 // Base proposal schema without refinements (for extending)
@@ -86,7 +93,13 @@ export const ProposalAdminCreateSchema = ProposalInputBaseSchema.extend({
 // Draft proposal schema - relaxed validation for saving work in progress
 const ProposalDraftSchema = z.object({
   title: z.string().min(1, 'Title is required'),
-  description: z.array(z.any()).optional().default([]),
+  description: z
+    .array(z.any())
+    .refine((arr) => arr.every(isPortableTextElement), {
+      message: 'Description must contain valid content blocks',
+    })
+    .optional()
+    .default([]),
   language: z.nativeEnum(Language).optional().default(Language.norwegian),
   format: z.nativeEnum(Format).optional().default(Format.lightning_10),
   level: z.nativeEnum(Level).optional().default(Level.beginner),

@@ -239,9 +239,10 @@ export const proposalRouter = router({
         if (input.status !== 'draft') {
           const result = ProposalInputSchema.safeParse(input.data)
           if (!result.success) {
+            const fieldErrors = result.error.issues.map((i) => i.message)
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message: result.error.issues.map((i) => i.message).join('. '),
+              message: `Please fix the following before submitting: ${fieldErrors.join('. ')}`,
             })
           }
         }
@@ -327,7 +328,7 @@ export const proposalRouter = router({
         if (!ctx.speaker.is_organizer && existing.conference) {
           const conferenceId =
             typeof existing.conference === 'object' &&
-            '_id' in existing.conference
+              '_id' in existing.conference
               ? existing.conference._id
               : typeof existing.conference === 'string'
                 ? existing.conference
@@ -365,10 +366,10 @@ export const proposalRouter = router({
           const merged = { ...existing, ...input.data }
           const strict = ProposalInputSchema.safeParse(merged)
           if (!strict.success) {
+            const fieldErrors = strict.error.issues.map((i) => i.message)
             throw new TRPCError({
               code: 'BAD_REQUEST',
-              message: strict.error.message,
-              cause: strict.error,
+              message: `Please fix the following: ${fieldErrors.join('. ')}`,
             })
           }
         }
