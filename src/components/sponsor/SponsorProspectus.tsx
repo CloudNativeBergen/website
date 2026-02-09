@@ -100,24 +100,24 @@ export function SponsorProspectus({
         {conference.vanity_metrics && conference.vanity_metrics.length > 0 && (
           <Container className="relative z-10 mt-16">
             <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">
-              <div className="grid grid-cols-1 gap-1 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-1">
                 {conference.vanity_metrics.map((metric, index) => (
                   <div
                     key={metric.label}
                     className={clsx(
-                      'relative flex flex-col items-center justify-center overflow-hidden rounded-lg px-4 py-8',
+                      'relative flex flex-col items-center justify-center overflow-hidden rounded-lg px-2 py-4 sm:px-4 sm:py-8',
                       index === 0 && 'bg-blue-50 dark:bg-blue-950/30',
                       index === 1 && 'bg-cyan-50 dark:bg-cyan-950/30',
                       index === 2 && 'bg-indigo-50 dark:bg-indigo-950/30',
                       index > 2 && 'bg-gray-100 dark:bg-gray-800',
                     )}
                   >
-                    <dt className="font-mono text-xs tracking-widest text-gray-600 uppercase dark:text-gray-300">
+                    <dt className="font-mono text-[10px] tracking-widest text-gray-600 uppercase sm:text-xs dark:text-gray-300">
                       {metric.label}
                     </dt>
                     <dd
                       className={clsx(
-                        'font-display mt-2 text-4xl font-bold tracking-tight',
+                        'font-display mt-1 text-2xl font-bold tracking-tight sm:mt-2 sm:text-4xl',
                         index === 0 && 'text-blue-600 dark:text-blue-400',
                         index === 1 && 'text-cyan-600 dark:text-cyan-400',
                         index === 2 && 'text-indigo-600 dark:text-indigo-400',

@@ -243,7 +243,7 @@ export function Hero({ conference }: { conference: Conference }) {
                     <dt className="font-jetbrains text-sm text-brand-cloud-blue">
                       {metric.label}
                     </dt>
-                    <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray dark:text-gray-200">
+                    <dd className="font-space-grotesk mt-0.5 text-2xl font-semibold tracking-tight text-brand-slate-gray sm:text-3xl dark:text-gray-200">
                       {metric.value}
                     </dd>
                   </div>
