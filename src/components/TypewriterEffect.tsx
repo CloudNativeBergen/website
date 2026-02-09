@@ -109,19 +109,30 @@ export function TypewriterEffect({
     )
   }
 
-  // Find the longest word to reserve space and prevent layout shift
-  const longestWord = words.reduce((a, b) => (a.length > b.length ? a : b), '')
-
   return (
     <span className={className} aria-label={fullText}>
       {/* Visual animation - hidden from screen readers */}
       <span aria-hidden="true">
         {prefix}
-        <span className="relative inline-block align-bottom">
-          <span className="invisible">{longestWord}</span>
-          <span className="absolute top-0 left-0">{currentText}</span>
+        {/*
+         * Grid stacking technique: all words occupy the same grid cell,
+         * so the container sizes to the longest word. Only the typed text
+         * is visible; the rest are invisible but still in flow.
+         * See: https://css-tricks.com/positioning-overlay-content-with-css-grid/
+         */}
+        <span className="inline-grid items-end justify-items-start [&>span]:col-start-1 [&>span]:row-start-1">
+          {words.map((word, i) => (
+            <span
+              key={word}
+              className={i === currentWordIndex ? undefined : 'invisible'}
+            >
+              {i === currentWordIndex ? currentText : word}
+              {i === currentWordIndex && (
+                <span className="animate-blink ml-0.5 inline-block h-[1em] w-0.75 translate-y-[0.1em] bg-current" />
+              )}
+            </span>
+          ))}
         </span>
-        <span className="animate-blink ml-0.5 inline-block h-[1em] w-0.75 translate-y-[0.1em] bg-current" />
       </span>
       {/* Screen reader text - visually hidden but accessible */}
       <span className="sr-only">{fullText}</span>
