@@ -41,7 +41,7 @@ export default async function ProposalViewPage({
 
   if (proposalError) {
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             Error Loading Proposal
@@ -71,7 +71,7 @@ export default async function ProposalViewPage({
 
   if (speakerError || !currentUserSpeaker) {
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             Error Loading Speaker
@@ -90,7 +90,7 @@ export default async function ProposalViewPage({
 
   if (!conference) {
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             Error Loading Conference
@@ -108,7 +108,7 @@ export default async function ProposalViewPage({
   const backUrl = buildUrlWithImpersonation('/cfp/list', session)
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl">
       <div className="mb-6">
         <BackLink fallbackUrl={backUrl}>Back to Dashboard</BackLink>
       </div>

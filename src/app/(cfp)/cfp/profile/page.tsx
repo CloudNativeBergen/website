@@ -19,7 +19,7 @@ export default async function ProfilePage() {
   if (err) {
     console.error('Error loading speaker:', err)
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
         <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
           <div className="text-red-500 dark:text-red-400">
             Error loading speaker profile

@@ -178,7 +178,7 @@ export default async function ProposalPage({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl">
       <div className="mb-6">
         <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
           {proposalId

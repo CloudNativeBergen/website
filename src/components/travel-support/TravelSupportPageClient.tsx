@@ -235,7 +235,7 @@ export function TravelSupportPageClient({
 
   if (!travelSupport) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
+      <div className="mx-auto max-w-4xl py-8">
         <div className="text-center">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/50">
             <CurrencyDollarIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />

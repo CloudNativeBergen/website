@@ -1,6 +1,6 @@
 export default function CFPLoading() {
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl">
       <div className="animate-pulse">
         {/* Header */}
         <div className="mb-6">

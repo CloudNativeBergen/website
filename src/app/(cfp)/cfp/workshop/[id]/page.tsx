@@ -58,7 +58,7 @@ export default async function WorkshopDetailsPage({
 
   if (speakerError || !currentSpeaker) {
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             Workshop Details
@@ -100,7 +100,7 @@ export default async function WorkshopDetailsPage({
 
   if (!workshop) {
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             Workshop Details
@@ -132,7 +132,7 @@ export default async function WorkshopDetailsPage({
 
   if (!isSpeaker && !isImpersonatingAsOrganizer) {
     return (
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6">
           <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
             Workshop Details
@@ -203,7 +203,7 @@ export default async function WorkshopDetailsPage({
   const backUrl = buildUrlWithImpersonation('/cfp', session)
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-7xl">
       <BackLink fallbackUrl={backUrl}>Back to Dashboard</BackLink>
 
       <div className="mt-6 mb-6">
