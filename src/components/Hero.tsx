@@ -1,5 +1,6 @@
 import { BackgroundImage } from '@/components/BackgroundImage'
 import { Button } from '@/components/Button'
+import { CollapsibleDescription } from '@/components/CollapsibleDescription'
 import { Container } from '@/components/Container'
 import { iconForLink } from '@/components/SocialIcons'
 import { TypewriterEffect } from '@/components/TypewriterEffect'
@@ -221,13 +222,12 @@ export function Hero({ conference }: { conference: Conference }) {
               conference.tagline
             )}
           </h1>
-          <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
-            {conference.description &&
-              typeof conference.description === 'string' &&
-              conference.description
-                .split('\n')
-                .map((line, index) => <p key={index}>{line}</p>)}
-          </div>
+          {conference.description &&
+            typeof conference.description === 'string' && (
+              <CollapsibleDescription
+                paragraphs={conference.description.split('\n')}
+              />
+            )}
 
           <ActionButtons conference={conference} />
 
