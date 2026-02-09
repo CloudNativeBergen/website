@@ -68,7 +68,7 @@ async function CachedHomeContent({ domain }: { domain: string }) {
               </p>
             </div>
 
-            <div className="mt-12 grid auto-rows-fr gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-12 grid auto-rows-fr grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
               {sortedOrganizers.map((organizer) => (
                 <SpeakerPromotionCard
                   key={organizer._id}
