@@ -11,9 +11,9 @@ import {
 } from '@/lib/proposal/types'
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
-import { XCircleIcon } from '@heroicons/react/24/solid'
+import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ProposalCoSpeaker } from './ProposalCoSpeaker'
 import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
 import Link from 'next/link'
@@ -76,14 +76,31 @@ export function ProposalForm({
   })
 
   const [lastAction, setLastAction] = useState<'draft' | 'submit' | null>(null)
+  const [draftSaved, setDraftSaved] = useState(false)
+  const [currentProposalId, setCurrentProposalId] = useState(proposalId)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout>>(null)
+
+  const showDraftSaved = useCallback(() => {
+    setDraftSaved(true)
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    draftTimerRef.current = setTimeout(() => setDraftSaved(false), 4000)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    }
+  }, [])
 
   const createProposalMutation = api.proposal.create.useMutation({
-    onSuccess: () => {
-      router.push(
-        lastAction === 'draft'
-          ? '/cfp/list?draft=true'
-          : '/cfp/list?success=true',
-      )
+    onSuccess: (data) => {
+      if (lastAction === 'draft') {
+        setCurrentProposalId(data._id)
+        window.history.replaceState(null, '', `/cfp/proposal?id=${data._id}`)
+        showDraftSaved()
+      } else {
+        router.push('/cfp/list?success=true')
+      }
     },
   })
 
@@ -97,11 +114,13 @@ export function ProposalForm({
 
   const updateSpeakerMutation = api.speaker.update.useMutation()
 
-  const isDraft = initialStatus === Status.draft || !proposalId
-  const isExistingDraft = initialStatus === Status.draft && !!proposalId
-  const buttonPrimary = proposalId && !isExistingDraft ? 'Update' : 'Submit'
+  const isDraft = initialStatus === Status.draft || !currentProposalId
+  const isExistingDraft =
+    (initialStatus === Status.draft || draftSaved) && !!currentProposalId
+  const buttonPrimary =
+    currentProposalId && !isExistingDraft ? 'Update' : 'Submit'
   const buttonPrimaryLoading =
-    proposalId && !isExistingDraft ? 'Updating...' : 'Submitting...'
+    currentProposalId && !isExistingDraft ? 'Updating...' : 'Submitting...'
 
   const handleInvitationSent = (invitation: CoSpeakerInvitationMinimal) => {
     setCoSpeakerInvitations((prev) => [...prev, invitation])
@@ -169,12 +188,16 @@ export function ProposalForm({
     }
 
     setLastAction('draft')
+    setDraftSaved(false)
     const data = prepareProposalData()
 
-    if (proposalId) {
+    if (currentProposalId) {
       try {
-        await updateProposalMutation.mutateAsync({ id: proposalId, data })
-        router.push('/cfp/list?draft=true')
+        await updateProposalMutation.mutateAsync({
+          id: currentProposalId,
+          data,
+        })
+        showDraftSaved()
       } catch {
         window.scrollTo(0, 0)
       }
@@ -215,24 +238,24 @@ export function ProposalForm({
 
     const proposalData = prepareProposalData()
 
-    if (proposalId && !isExistingDraft) {
+    if (currentProposalId && !isExistingDraft) {
       try {
         await updateProposalMutation.mutateAsync({
-          id: proposalId,
+          id: currentProposalId,
           data: proposalData,
         })
         router.push('/cfp/list')
       } catch {
         window.scrollTo(0, 0)
       }
-    } else if (isExistingDraft && proposalId) {
+    } else if (isExistingDraft && currentProposalId) {
       try {
         await updateProposalMutation.mutateAsync({
-          id: proposalId,
+          id: currentProposalId,
           data: proposalData,
         })
         await actionMutation.mutateAsync({
-          id: proposalId,
+          id: currentProposalId,
           action: Action.submit,
         })
       } catch {
@@ -249,39 +272,52 @@ export function ProposalForm({
   return (
     <form onSubmit={handleSubmit}>
       <div className="space-y-12">
+        {draftSaved && (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20">
+            <div className="flex items-center">
+              <CheckCircleIcon
+                className="h-5 w-5 text-green-500 dark:text-green-400"
+                aria-hidden="true"
+              />
+              <p className="ml-3 text-sm font-medium text-green-800 dark:text-green-200">
+                Draft saved successfully.
+              </p>
+            </div>
+          </div>
+        )}
         {(proposalSubmitError ||
           mutationError ||
           updateSpeakerMutation.error) && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
-              <div className="flex">
-                <div className="shrink-0">
-                  <XCircleIcon
-                    className="h-6 w-6 text-red-500 dark:text-red-400"
-                    aria-hidden="true"
-                  />
-                </div>
-                <div className="ml-4">
-                  <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
-                    Submission failed
-                  </h3>
-                  <div className="font-inter mt-2 text-red-700 dark:text-red-300">
-                    {proposalSubmitError && <p>{proposalSubmitError}</p>}
-                    {mutationError && <p>{mutationError.message}</p>}
-                    {updateSpeakerMutation.error && (
-                      <p>{updateSpeakerMutation.error.message}</p>
-                    )}
-                    {validationErrors.length > 0 && (
-                      <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                        {validationErrors.map((error, index) => (
-                          <li key={index}>{error}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
+            <div className="flex">
+              <div className="shrink-0">
+                <XCircleIcon
+                  className="h-6 w-6 text-red-500 dark:text-red-400"
+                  aria-hidden="true"
+                />
+              </div>
+              <div className="ml-4">
+                <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
+                  Submission failed
+                </h3>
+                <div className="font-inter mt-2 text-red-700 dark:text-red-300">
+                  {proposalSubmitError && <p>{proposalSubmitError}</p>}
+                  {mutationError && <p>{mutationError.message}</p>}
+                  {updateSpeakerMutation.error && (
+                    <p>{updateSpeakerMutation.error.message}</p>
+                  )}
+                  {validationErrors.length > 0 && (
+                    <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
+                      {validationErrors.map((error, index) => (
+                        <li key={index}>{error}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             </div>
-          )}
+          </div>
+        )}
         <ProposalDetailsForm
           proposal={proposal}
           setProposal={setProposal}
@@ -296,7 +332,7 @@ export function ProposalForm({
                 selectedSpeakers={coSpeakers}
                 onSpeakersChange={setCoSpeakers}
                 format={proposal.format}
-                proposalId={proposalId}
+                proposalId={currentProposalId}
                 pendingInvitations={coSpeakerInvitations}
                 onInvitationSent={handleInvitationSent}
                 onInvitationCanceled={handleInvitationCanceled}
@@ -318,8 +354,8 @@ export function ProposalForm({
               </h3>
               <div className="mt-4 space-y-3">
                 {proposal.speakers &&
-                  Array.isArray(proposal.speakers) &&
-                  proposal.speakers.length > 0 ? (
+                Array.isArray(proposal.speakers) &&
+                proposal.speakers.length > 0 ? (
                   proposal.speakers.map((speaker, index) => {
                     if (
                       typeof speaker === 'object' &&
@@ -391,7 +427,7 @@ export function ProposalForm({
             >
               {(createProposalMutation.isPending ||
                 updateProposalMutation.isPending) &&
-                lastAction === 'draft'
+              lastAction === 'draft'
                 ? 'Saving...'
                 : 'Save Draft'}
             </button>
@@ -404,7 +440,7 @@ export function ProposalForm({
             {(createProposalMutation.isPending ||
               updateProposalMutation.isPending ||
               updateSpeakerMutation.isPending) &&
-              lastAction === 'submit'
+            lastAction === 'submit'
               ? buttonPrimaryLoading
               : buttonPrimary}
           </button>
