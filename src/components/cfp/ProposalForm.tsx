@@ -4,6 +4,7 @@ import { Conference } from '@/lib/conference/types'
 import { api } from '@/lib/trpc/client'
 import { Format, ProposalInput, ProposalExisting } from '@/lib/proposal/types'
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
+import { Topic } from '@/lib/topic/types'
 import { createReference } from '@/lib/sanity/helpers'
 import { ProposalInputSchema } from '@/server/schemas/proposal'
 import { XCircleIcon } from '@heroicons/react/24/solid'
@@ -139,11 +140,16 @@ export function ProposalForm({
         : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
 
     // Prepare proposal data with proper Sanity references
+    const topicRefs = (proposal.topics ?? [])
+      .filter((t): t is Topic => typeof t === 'object' && '_id' in t)
+      .map((t) => createReference(t._id))
+
     // Type assertion is safe as the data structure matches ProposalInputSchema
     // and will be validated by tRPC at runtime
     const proposalWithSpeakers = {
       ...proposal,
       speakers: allSpeakers.map(createReference),
+      topics: topicRefs,
     } as z.infer<typeof ProposalInputSchema>
 
     if (proposalId) {
@@ -162,38 +168,38 @@ export function ProposalForm({
         {(proposalSubmitError ||
           proposalMutation.error ||
           updateSpeakerMutation.error) && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
-            <div className="flex">
-              <div className="shrink-0">
-                <XCircleIcon
-                  className="h-6 w-6 text-red-500 dark:text-red-400"
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="ml-4">
-                <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
-                  Submission failed
-                </h3>
-                <div className="font-inter mt-2 text-red-700 dark:text-red-300">
-                  {proposalSubmitError && <p>{proposalSubmitError}</p>}
-                  {proposalMutation.error && (
-                    <p>{proposalMutation.error.message}</p>
-                  )}
-                  {updateSpeakerMutation.error && (
-                    <p>{updateSpeakerMutation.error.message}</p>
-                  )}
-                  {validationErrors.length > 0 && (
-                    <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                      {validationErrors.map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                    </ul>
-                  )}
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
+              <div className="flex">
+                <div className="shrink-0">
+                  <XCircleIcon
+                    className="h-6 w-6 text-red-500 dark:text-red-400"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="ml-4">
+                  <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
+                    Submission failed
+                  </h3>
+                  <div className="font-inter mt-2 text-red-700 dark:text-red-300">
+                    {proposalSubmitError && <p>{proposalSubmitError}</p>}
+                    {proposalMutation.error && (
+                      <p>{proposalMutation.error.message}</p>
+                    )}
+                    {updateSpeakerMutation.error && (
+                      <p>{updateSpeakerMutation.error.message}</p>
+                    )}
+                    {validationErrors.length > 0 && (
+                      <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
+                        {validationErrors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
         <ProposalDetailsForm
           proposal={proposal}
           setProposal={setProposal}
@@ -230,8 +236,8 @@ export function ProposalForm({
               </h3>
               <div className="mt-4 space-y-3">
                 {proposal.speakers &&
-                Array.isArray(proposal.speakers) &&
-                proposal.speakers.length > 0 ? (
+                  Array.isArray(proposal.speakers) &&
+                  proposal.speakers.length > 0 ? (
                   proposal.speakers.map((speaker, index) => {
                     if (
                       typeof speaker === 'object' &&
