@@ -192,7 +192,11 @@ export function CompactProposalList({
                   />
                 )}
                 <Link
-                  href={`/cfp/proposal/${proposal._id}${queryString}`}
+                  href={
+                    canEdit
+                      ? `/cfp/proposal?id=${proposal._id}${queryString ? `&${queryString.slice(1)}` : ''}`
+                      : `/cfp/proposal/${proposal._id}${queryString}`
+                  }
                   className={`flex-1 truncate font-medium hover:text-brand-cloud-blue dark:hover:text-blue-400 ${
                     isMuted
                       ? 'text-gray-600 dark:text-gray-400'
@@ -235,7 +239,7 @@ export function CompactProposalList({
                 />
                 {canEdit && (
                   <Link
-                    href={`/cfp/proposal/${proposal._id}${queryString}`}
+                    href={`/cfp/proposal?id=${proposal._id}${queryString ? `&${queryString.slice(1)}` : ''}`}
                     className="rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
                     title="Edit proposal"
                   >

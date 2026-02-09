@@ -60,6 +60,11 @@ export default async function ProposalViewPage({
     notFound()
   }
 
+  // Editable proposals (draft/submitted) should use the edit form
+  if (proposal.status === 'draft' || proposal.status === 'submitted') {
+    redirect(`/cfp/proposal?id=${id}`)
+  }
+
   const { speaker: currentUserSpeaker, err: speakerError } = await getSpeaker(
     session.speaker._id,
   )

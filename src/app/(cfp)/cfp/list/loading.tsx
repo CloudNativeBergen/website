@@ -1,4 +1,4 @@
-export default function CFPLoading() {
+export default function DashboardLoading() {
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="animate-pulse">

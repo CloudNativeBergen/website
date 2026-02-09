@@ -308,13 +308,14 @@ export async function createProposal(
   proposal: ProposalInput,
   speakerId: string,
   conferenceId: string,
+  initialStatus: Status = Status.submitted,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let createdProposal: ProposalExisting = {} as ProposalExisting
 
   const _type = 'talk'
   const _id = randomUUID().toString()
-  const status = Status.submitted
+  const status = initialStatus
 
   const speakers = proposal.speakers
     ? prepareReferenceArray(

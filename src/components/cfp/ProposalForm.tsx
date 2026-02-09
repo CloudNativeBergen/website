@@ -2,15 +2,18 @@
 
 import { Conference } from '@/lib/conference/types'
 import { api } from '@/lib/trpc/client'
-import { Format, ProposalInput, ProposalExisting } from '@/lib/proposal/types'
+import {
+  Format,
+  ProposalInput,
+  ProposalExisting,
+  Status,
+  Action,
+} from '@/lib/proposal/types'
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
-import { createReference } from '@/lib/sanity/helpers'
-import { ProposalInputSchema } from '@/server/schemas/proposal'
 import { XCircleIcon } from '@heroicons/react/24/solid'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { z } from 'zod'
 import { ProposalCoSpeaker } from './ProposalCoSpeaker'
 import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
 import Link from 'next/link'
@@ -28,6 +31,7 @@ export function ProposalForm({
   currentUserSpeaker,
   mode = 'user',
   externalSpeakerIds,
+  initialStatus,
 }: {
   initialProposal: ProposalInput
   initialSpeaker: SpeakerInput
@@ -38,6 +42,7 @@ export function ProposalForm({
   currentUserSpeaker: Speaker
   mode?: 'user' | 'admin' | 'readOnly'
   externalSpeakerIds?: string[]
+  initialStatus?: Status
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
@@ -70,22 +75,33 @@ export function ProposalForm({
     enabled: mode === 'user' && !isReadOnly,
   })
 
+  const [lastAction, setLastAction] = useState<'draft' | 'submit' | null>(null)
+
   const createProposalMutation = api.proposal.create.useMutation({
+    onSuccess: () => {
+      router.push(
+        lastAction === 'draft'
+          ? '/cfp/list?draft=true'
+          : '/cfp/list?success=true',
+      )
+    },
+  })
+
+  const updateProposalMutation = api.proposal.update.useMutation()
+
+  const actionMutation = api.proposal.action.useMutation({
     onSuccess: () => {
       router.push('/cfp/list?success=true')
     },
   })
 
-  const updateProposalMutation = api.proposal.update.useMutation({
-    onSuccess: () => {
-      router.push('/cfp/list')
-    },
-  })
-
   const updateSpeakerMutation = api.speaker.update.useMutation()
 
-  const buttonPrimary = proposalId ? 'Update' : 'Submit'
-  const buttonPrimaryLoading = proposalId ? 'Updating...' : 'Submitting...'
+  const isDraft = initialStatus === Status.draft || !proposalId
+  const isExistingDraft = initialStatus === Status.draft && !!proposalId
+  const buttonPrimary = proposalId && !isExistingDraft ? 'Update' : 'Submit'
+  const buttonPrimaryLoading =
+    proposalId && !isExistingDraft ? 'Updating...' : 'Submitting...'
 
   const handleInvitationSent = (invitation: CoSpeakerInvitationMinimal) => {
     setCoSpeakerInvitations((prev) => [...prev, invitation])
@@ -100,10 +116,72 @@ export function ProposalForm({
   const [proposalSubmitError, setProposalSubmitError] = useState<string>('')
   const [validationErrors, setValidationErrors] = useState<string[]>([])
 
-  // Get current mutation based on mode
-  const proposalMutation = proposalId
-    ? updateProposalMutation
-    : createProposalMutation
+  const isMutating =
+    createProposalMutation.isPending ||
+    updateProposalMutation.isPending ||
+    updateSpeakerMutation.isPending ||
+    actionMutation.isPending
+
+  const mutationError =
+    createProposalMutation.error ||
+    updateProposalMutation.error ||
+    actionMutation.error
+
+  const prepareTopicRefs = () =>
+    (proposal.topics ?? [])
+      .filter((t): t is Topic => typeof t === 'object' && '_id' in t)
+      .map((t) => ({ _type: 'reference' as const, _ref: t._id }))
+
+  const prepareProposalData = () => {
+    const topicRefs = prepareTopicRefs()
+
+    const allSpeakers =
+      mode === 'admin' && externalSpeakerIds
+        ? externalSpeakerIds
+        : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
+
+    return {
+      title: proposal.title,
+      description: proposal.description,
+      language: proposal.language,
+      format: proposal.format,
+      level: proposal.level,
+      outline: proposal.outline,
+      audiences: proposal.audiences,
+      tos: proposal.tos,
+      capacity: proposal.capacity,
+      topics: topicRefs,
+      speakers: allSpeakers.map((id) => ({
+        _type: 'reference' as const,
+        _ref: id,
+      })),
+    }
+  }
+
+  const handleSaveDraft = async () => {
+    setProposalSubmitError('')
+    setValidationErrors([])
+
+    if (!proposal.title?.trim()) {
+      setProposalSubmitError('Please enter a title before saving your draft.')
+      window.scrollTo(0, 0)
+      return
+    }
+
+    setLastAction('draft')
+    const data = prepareProposalData()
+
+    if (proposalId) {
+      try {
+        await updateProposalMutation.mutateAsync({ id: proposalId, data })
+        router.push('/cfp/list?draft=true')
+      } catch {
+        window.scrollTo(0, 0)
+      }
+    } else {
+      createProposalMutation.mutate({ data, status: Status.draft })
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -114,6 +192,7 @@ export function ProposalForm({
 
     setProposalSubmitError('')
     setValidationErrors([])
+    setLastAction('submit')
 
     if (mode === 'user') {
       const consentErrors = validateSpeakerConsent(speaker)
@@ -134,31 +213,36 @@ export function ProposalForm({
       }
     }
 
-    const allSpeakers =
-      mode === 'admin' && externalSpeakerIds
-        ? externalSpeakerIds
-        : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
+    const proposalData = prepareProposalData()
 
-    // Prepare proposal data with proper Sanity references
-    const topicRefs = (proposal.topics ?? [])
-      .filter((t): t is Topic => typeof t === 'object' && '_id' in t)
-      .map((t) => createReference(t._id))
-
-    // Type assertion is safe as the data structure matches ProposalInputSchema
-    // and will be validated by tRPC at runtime
-    const proposalWithSpeakers = {
-      ...proposal,
-      speakers: allSpeakers.map(createReference),
-      topics: topicRefs,
-    } as z.infer<typeof ProposalInputSchema>
-
-    if (proposalId) {
-      updateProposalMutation.mutate({
-        id: proposalId,
-        data: proposalWithSpeakers,
-      })
+    if (proposalId && !isExistingDraft) {
+      try {
+        await updateProposalMutation.mutateAsync({
+          id: proposalId,
+          data: proposalData,
+        })
+        router.push('/cfp/list')
+      } catch {
+        window.scrollTo(0, 0)
+      }
+    } else if (isExistingDraft && proposalId) {
+      try {
+        await updateProposalMutation.mutateAsync({
+          id: proposalId,
+          data: proposalData,
+        })
+        await actionMutation.mutateAsync({
+          id: proposalId,
+          action: Action.submit,
+        })
+      } catch {
+        window.scrollTo(0, 0)
+      }
     } else {
-      createProposalMutation.mutate(proposalWithSpeakers)
+      createProposalMutation.mutate({
+        data: proposalData,
+        status: Status.submitted,
+      })
     }
   }
 
@@ -166,7 +250,7 @@ export function ProposalForm({
     <form onSubmit={handleSubmit}>
       <div className="space-y-12">
         {(proposalSubmitError ||
-          proposalMutation.error ||
+          mutationError ||
           updateSpeakerMutation.error) && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
             <div className="flex">
@@ -182,9 +266,7 @@ export function ProposalForm({
                 </h3>
                 <div className="font-inter mt-2 text-red-700 dark:text-red-300">
                   {proposalSubmitError && <p>{proposalSubmitError}</p>}
-                  {proposalMutation.error && (
-                    <p>{proposalMutation.error.message}</p>
-                  )}
+                  {mutationError && <p>{mutationError.message}</p>}
                   {updateSpeakerMutation.error && (
                     <p>{updateSpeakerMutation.error.message}</p>
                   )}
@@ -300,14 +382,29 @@ export function ProposalForm({
           >
             Cancel
           </Link>
+          {mode === 'user' && isDraft && (
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={isMutating}
+              className="font-space-grotesk cursor-pointer rounded-xl bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-300 transition-colors ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-600 dark:focus-visible:outline-gray-500"
+            >
+              {(createProposalMutation.isPending ||
+                updateProposalMutation.isPending) &&
+              lastAction === 'draft'
+                ? 'Saving...'
+                : 'Save Draft'}
+            </button>
+          )}
           <button
             type="submit"
-            disabled={
-              proposalMutation.isPending || updateSpeakerMutation.isPending
-            }
-            className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
+            disabled={isMutating}
+            className="font-space-grotesk cursor-pointer rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
           >
-            {proposalMutation.isPending || updateSpeakerMutation.isPending
+            {(createProposalMutation.isPending ||
+              updateProposalMutation.isPending ||
+              updateSpeakerMutation.isPending) &&
+            lastAction === 'submit'
               ? buttonPrimaryLoading
               : buttonPrimary}
           </button>

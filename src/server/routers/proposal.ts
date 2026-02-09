@@ -8,6 +8,7 @@ import {
   ProposalAdminCreateSchema,
   ProposalUpdateSchema,
   ProposalAdminUpdateSchema,
+  CreateProposalSchema,
   InvitationCreateSchema,
   InvitationResponseSchema,
   InvitationCancelSchema,
@@ -29,6 +30,18 @@ import {
   updateInvitationStatus,
   sendInvitationEmail,
 } from '@/lib/cospeaker/server'
+import { getInvitationByToken } from '@/lib/cospeaker/sanity'
+import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
+import { clientWrite } from '@/lib/sanity/client'
+import { createReference } from '@/lib/sanity/helpers'
+import type { ProposalInput } from '@/lib/proposal/types'
+import { Status } from '@/lib/proposal/types'
+import { actionStateMachine } from '@/lib/proposal'
+import { Speaker } from '@/lib/speaker/types'
+import { eventBus } from '@/lib/events/bus'
+import { ProposalStatusChangeEvent } from '@/lib/events/types'
+import { updateProposalStatus, getProposalSanity } from '@/lib/proposal/server'
+import '@/lib/events/registry'
 
 /**
  * Helper function to delete an attachment and its associated file asset
@@ -109,18 +122,6 @@ async function deleteAttachmentHelper(
 
   return { proposal: updated, attachmentToDelete }
 }
-import { getInvitationByToken } from '@/lib/cospeaker/sanity'
-import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { clientWrite } from '@/lib/sanity/client'
-import { createReference } from '@/lib/sanity/helpers'
-import type { ProposalInput } from '@/lib/proposal/types'
-import { Status } from '@/lib/proposal/types'
-import { actionStateMachine } from '@/lib/proposal'
-import { Speaker } from '@/lib/speaker/types'
-import { eventBus } from '@/lib/events/bus'
-import { ProposalStatusChangeEvent } from '@/lib/events/types'
-import { updateProposalStatus, getProposalSanity } from '@/lib/proposal/server'
-import '@/lib/events/registry'
 
 export const proposalRouter = router({
   // List current user&apos;s proposals
@@ -209,9 +210,9 @@ export const proposalRouter = router({
       }
     }),
 
-  // Create proposal
+  // Create proposal (as draft or submitted)
   create: protectedProcedure
-    .input(ProposalInputSchema)
+    .input(CreateProposalSchema)
     .mutation(async ({ input, ctx }) => {
       try {
         const { conference, error: confError } =
@@ -234,6 +235,18 @@ export const proposalRouter = router({
           })
         }
 
+        // When submitting, enforce strict validation
+        if (input.status !== Status.draft) {
+          const result = ProposalInputSchema.safeParse(input.data)
+          if (!result.success) {
+            const fieldErrors = result.error.issues.map((i) => i.message)
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Please fix the following before submitting: ${fieldErrors.join('. ')}`,
+            })
+          }
+        }
+
         const { proposals: existingProposals } = await getProposals({
           speakerId: ctx.speaker._id,
           conferenceId: conference._id,
@@ -252,27 +265,24 @@ export const proposalRouter = router({
           })
         }
 
+        const initialStatus =
+          input.status === Status.draft ? Status.draft : Status.submitted
+
         const { proposal, err } = await createProposal(
           {
-            ...input,
+            ...input.data,
             speakers: [createReference(ctx.speaker._id)],
           } as ProposalInput,
           ctx.speaker._id,
           conference._id,
+          initialStatus,
         )
 
-        if (err) {
+        if (err || !proposal) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create proposal',
             cause: err,
-          })
-        }
-
-        if (!proposal) {
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Proposal was not created',
           })
         }
 
@@ -349,6 +359,19 @@ export const proposalRouter = router({
 
         if (Object.keys(input.data).length === 0) {
           return existing
+        }
+
+        // Enforce strict validation for non-draft proposals
+        if (existing.status !== Status.draft) {
+          const merged = { ...existing, ...input.data }
+          const strict = ProposalInputSchema.safeParse(merged)
+          if (!strict.success) {
+            const fieldErrors = strict.error.issues.map((i) => i.message)
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `Please fix the following: ${fieldErrors.join('. ')}`,
+            })
+          }
         }
 
         const { proposal, err } = await updateProposal(input.id, input.data)

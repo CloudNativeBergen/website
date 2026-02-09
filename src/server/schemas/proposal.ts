@@ -5,6 +5,7 @@ import {
   Audience,
   Format,
   Action,
+  Status,
   isWorkshopFormat,
 } from '@/lib/proposal/types'
 import {
@@ -13,11 +14,18 @@ import {
   ReferenceSchema,
 } from './common'
 
-// Portable text block schema - validate as array of any with non-empty check
+// Portable text block element — runtime check that each item is an object with _type
+const isPortableTextElement = (val: unknown): boolean =>
+  typeof val === 'object' && val !== null && '_type' in val
+
+// Portable text block schema - validate as array of block objects with non-empty check
 const PortableTextBlockSchema = z
   .array(z.any())
   .refine((arr) => arr.length > 0, {
     message: 'Description cannot be empty',
+  })
+  .refine((arr) => arr.every(isPortableTextElement), {
+    message: 'Description must contain valid content blocks',
   })
 
 // Base proposal schema without refinements (for extending)
@@ -83,8 +91,39 @@ export const ProposalAdminCreateSchema = ProposalInputBaseSchema.extend({
   },
 )
 
-// Proposal update schema
-export const ProposalUpdateSchema = ProposalInputBaseSchema.partial()
+// Draft proposal schema — derived from base with relaxed validation for drafts.
+// Fields that have strict validators in the base (description, audiences, topics,
+// tos) are overridden with permissive defaults so drafts can be saved early.
+const ProposalDraftSchema = ProposalInputBaseSchema.partial()
+  .extend({
+    description: z
+      .array(z.any())
+      .refine((arr) => arr.every(isPortableTextElement), {
+        message: 'Description must contain valid content blocks',
+      })
+      .optional()
+      .default([]),
+    language: z.nativeEnum(Language).optional().default(Language.norwegian),
+    format: z.nativeEnum(Format).optional().default(Format.lightning_10),
+    level: z.nativeEnum(Level).optional().default(Level.beginner),
+    audiences: z.array(z.nativeEnum(Audience)).optional().default([]),
+    topics: z.array(ReferenceSchema).optional().default([]),
+    tos: z.boolean().optional().default(false),
+  })
+  .required({ title: true })
+
+// Create proposal schema - uses draft (permissive) for the data, with status
+// controlling whether strict validation is enforced at runtime
+export const CreateProposalSchema = z.object({
+  data: ProposalDraftSchema,
+  status: z.enum([Status.draft, Status.submitted]).default(Status.submitted),
+})
+
+// Proposal update schema — uses relaxed validation; strict checks enforced
+// at runtime in the router for non-draft proposals
+export const ProposalUpdateSchema = ProposalDraftSchema.partial().required({
+  title: true,
+})
 
 // Admin update schema with speaker IDs
 export const ProposalAdminUpdateSchema =

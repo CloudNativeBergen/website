@@ -5,6 +5,8 @@ import {
   Level,
   FormError,
   ProposalInput,
+  Status,
+  ProposalExisting,
 } from '@/lib/proposal/types'
 import { getProposalSanity } from '@/lib/proposal/server'
 import { Speaker } from '@/lib/speaker/types'
@@ -53,6 +55,7 @@ export default async function ProposalPage({
   let speaker = { name: '', email: '' }
   let loadingError: FormError | null = null
   let currentUserSpeaker: Speaker | null = null
+  let proposalStatus: Status | undefined
 
   const { conference, error } = await getConferenceForCurrentDomain({
     topics: true,
@@ -145,6 +148,7 @@ export default async function ProposalPage({
         loadingError = { type: 'Not Found', message: 'Proposal not found.' }
       } else {
         proposal = fetchedProposal
+        proposalStatus = (fetchedProposal as ProposalExisting).status
         if (
           fetchedProposal.speakers &&
           Array.isArray(fetchedProposal.speakers) &&
@@ -177,11 +181,17 @@ export default async function ProposalPage({
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
         <h1 className="font-space-grotesk text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-          {proposalId ? 'Edit Proposal' : 'Submit Presentation'}
+          {proposalId
+            ? proposalStatus === Status.draft
+              ? 'Edit Draft'
+              : 'Edit Proposal'
+            : 'Submit Presentation'}
         </h1>
         <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
           {proposalId
-            ? 'Update your proposal details'
+            ? proposalStatus === Status.draft
+              ? 'Continue working on your draft. Save your progress or submit when ready.'
+              : 'Update your proposal details'
             : 'Become our next speaker and share your knowledge with the community!'}
         </p>
       </div>
@@ -219,6 +229,7 @@ export default async function ProposalPage({
                 conference={conference}
                 allowedFormats={conference.formats}
                 currentUserSpeaker={currentUserSpeaker}
+                initialStatus={proposalStatus}
               />
             </div>
           </div>
