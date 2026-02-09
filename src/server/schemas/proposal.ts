@@ -83,6 +83,33 @@ export const ProposalAdminCreateSchema = ProposalInputBaseSchema.extend({
   },
 )
 
+// Draft proposal schema - relaxed validation for saving work in progress
+const ProposalDraftSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.array(z.any()).optional().default([]),
+  language: z.nativeEnum(Language).optional().default(Language.norwegian),
+  format: z.nativeEnum(Format).optional().default(Format.lightning_10),
+  level: z.nativeEnum(Level).optional().default(Level.beginner),
+  audiences: z.array(z.nativeEnum(Audience)).optional().default([]),
+  outline: z.string().nullable().optional().transform(nullToUndefined),
+  topics: z.array(ReferenceSchema).optional().default([]),
+  tos: z.boolean().optional().default(false),
+  video: z.string().nullable().optional().transform(nullToUndefined),
+  capacity: z.number().nullable().optional().transform(nullToUndefined),
+  speakers: z
+    .array(ReferenceSchema)
+    .nullable()
+    .optional()
+    .transform(nullToUndefined),
+})
+
+// Create proposal schema - uses draft (permissive) for the data, with status
+// controlling whether strict validation is enforced at runtime
+export const CreateProposalSchema = z.object({
+  data: ProposalDraftSchema,
+  status: z.enum(['draft', 'submitted']).default('submitted'),
+})
+
 // Proposal update schema
 export const ProposalUpdateSchema = ProposalInputBaseSchema.partial()
 

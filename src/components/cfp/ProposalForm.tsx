@@ -2,15 +2,18 @@
 
 import { Conference } from '@/lib/conference/types'
 import { api } from '@/lib/trpc/client'
-import { Format, ProposalInput, ProposalExisting } from '@/lib/proposal/types'
+import {
+  Format,
+  ProposalInput,
+  ProposalExisting,
+  Status,
+  Action,
+} from '@/lib/proposal/types'
 import { SpeakerInput, Speaker } from '@/lib/speaker/types'
 import { Topic } from '@/lib/topic/types'
-import { createReference } from '@/lib/sanity/helpers'
-import { ProposalInputSchema } from '@/server/schemas/proposal'
 import { XCircleIcon } from '@heroicons/react/24/solid'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { z } from 'zod'
 import { ProposalCoSpeaker } from './ProposalCoSpeaker'
 import { CoSpeakerInvitationMinimal } from '@/lib/cospeaker/types'
 import Link from 'next/link'
@@ -28,6 +31,7 @@ export function ProposalForm({
   currentUserSpeaker,
   mode = 'user',
   externalSpeakerIds,
+  initialStatus,
 }: {
   initialProposal: ProposalInput
   initialSpeaker: SpeakerInput
@@ -38,6 +42,7 @@ export function ProposalForm({
   currentUserSpeaker: Speaker
   mode?: 'user' | 'admin' | 'readOnly'
   externalSpeakerIds?: string[]
+  initialStatus?: Status
 }) {
   const [proposal, setProposal] = useState(initialProposal)
   const [speaker, setSpeaker] = useState(initialSpeaker)
@@ -71,21 +76,30 @@ export function ProposalForm({
   })
 
   const createProposalMutation = api.proposal.create.useMutation({
+    onSuccess: (data) => {
+      if (data?.status === Status.draft && data?._id) {
+        router.push(`/cfp/proposal/${data._id}`)
+      } else {
+        router.push('/cfp/list?success=true')
+      }
+    },
+  })
+
+  const updateProposalMutation = api.proposal.update.useMutation()
+
+  const actionMutation = api.proposal.action.useMutation({
     onSuccess: () => {
       router.push('/cfp/list?success=true')
     },
   })
 
-  const updateProposalMutation = api.proposal.update.useMutation({
-    onSuccess: () => {
-      router.push('/cfp/list')
-    },
-  })
-
   const updateSpeakerMutation = api.speaker.update.useMutation()
 
-  const buttonPrimary = proposalId ? 'Update' : 'Submit'
-  const buttonPrimaryLoading = proposalId ? 'Updating...' : 'Submitting...'
+  const isDraft = initialStatus === Status.draft || !proposalId
+  const isExistingDraft = initialStatus === Status.draft && !!proposalId
+  const buttonPrimary = proposalId && !isExistingDraft ? 'Update' : 'Submit'
+  const buttonPrimaryLoading =
+    proposalId && !isExistingDraft ? 'Updating...' : 'Submitting...'
 
   const handleInvitationSent = (invitation: CoSpeakerInvitationMinimal) => {
     setCoSpeakerInvitations((prev) => [...prev, invitation])
@@ -101,9 +115,75 @@ export function ProposalForm({
   const [validationErrors, setValidationErrors] = useState<string[]>([])
 
   // Get current mutation based on mode
-  const proposalMutation = proposalId
-    ? updateProposalMutation
-    : createProposalMutation
+  const proposalMutation =
+    proposalId && !isExistingDraft
+      ? updateProposalMutation
+      : createProposalMutation
+
+  const isMutating =
+    proposalMutation.isPending ||
+    updateSpeakerMutation.isPending ||
+    actionMutation.isPending
+
+  const prepareTopicRefs = () =>
+    (proposal.topics ?? [])
+      .filter((t): t is Topic => typeof t === 'object' && '_id' in t)
+      .map((t) => ({ _type: 'reference' as const, _ref: t._id }))
+
+  const prepareProposalData = (includeSpeakers: boolean) => {
+    const topicRefs = prepareTopicRefs()
+    const base = {
+      title: proposal.title,
+      description: proposal.description,
+      language: proposal.language,
+      format: proposal.format,
+      level: proposal.level,
+      outline: proposal.outline,
+      audiences: proposal.audiences,
+      tos: proposal.tos,
+      capacity: proposal.capacity,
+      topics: topicRefs,
+    }
+
+    if (!includeSpeakers) return base
+
+    const allSpeakers =
+      mode === 'admin' && externalSpeakerIds
+        ? externalSpeakerIds
+        : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
+
+    return {
+      ...base,
+      speakers: allSpeakers.map((id) => ({
+        _type: 'reference' as const,
+        _ref: id,
+      })),
+    }
+  }
+
+  const handleSaveDraft = async () => {
+    setProposalSubmitError('')
+    setValidationErrors([])
+
+    if (!proposal.title?.trim()) {
+      setProposalSubmitError('Please enter a title before saving your draft.')
+      window.scrollTo(0, 0)
+      return
+    }
+
+    const data = prepareProposalData(false)
+
+    if (proposalId) {
+      try {
+        await updateProposalMutation.mutateAsync({ id: proposalId, data })
+        router.push('/cfp/list?draft=true')
+      } catch {
+        window.scrollTo(0, 0)
+      }
+    } else {
+      createProposalMutation.mutate({ data, status: 'draft' })
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -134,31 +214,36 @@ export function ProposalForm({
       }
     }
 
-    const allSpeakers =
-      mode === 'admin' && externalSpeakerIds
-        ? externalSpeakerIds
-        : [currentUserSpeaker._id, ...coSpeakers.map((s) => s._id)]
+    const proposalData = prepareProposalData(true)
 
-    // Prepare proposal data with proper Sanity references
-    const topicRefs = (proposal.topics ?? [])
-      .filter((t): t is Topic => typeof t === 'object' && '_id' in t)
-      .map((t) => createReference(t._id))
-
-    // Type assertion is safe as the data structure matches ProposalInputSchema
-    // and will be validated by tRPC at runtime
-    const proposalWithSpeakers = {
-      ...proposal,
-      speakers: allSpeakers.map(createReference),
-      topics: topicRefs,
-    } as z.infer<typeof ProposalInputSchema>
-
-    if (proposalId) {
-      updateProposalMutation.mutate({
-        id: proposalId,
-        data: proposalWithSpeakers,
-      })
+    if (proposalId && !isExistingDraft) {
+      try {
+        await updateProposalMutation.mutateAsync({
+          id: proposalId,
+          data: proposalData,
+        })
+        router.push('/cfp/list')
+      } catch {
+        window.scrollTo(0, 0)
+      }
+    } else if (isExistingDraft && proposalId) {
+      try {
+        await updateProposalMutation.mutateAsync({
+          id: proposalId,
+          data: proposalData,
+        })
+        actionMutation.mutate({
+          id: proposalId,
+          action: Action.submit,
+        })
+      } catch {
+        window.scrollTo(0, 0)
+      }
     } else {
-      createProposalMutation.mutate(proposalWithSpeakers)
+      createProposalMutation.mutate({
+        data: proposalData,
+        status: 'submitted',
+      })
     }
   }
 
@@ -167,39 +252,43 @@ export function ProposalForm({
       <div className="space-y-12">
         {(proposalSubmitError ||
           proposalMutation.error ||
+          actionMutation.error ||
           updateSpeakerMutation.error) && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
-            <div className="flex">
-              <div className="shrink-0">
-                <XCircleIcon
-                  className="h-6 w-6 text-red-500 dark:text-red-400"
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="ml-4">
-                <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
-                  Submission failed
-                </h3>
-                <div className="font-inter mt-2 text-red-700 dark:text-red-300">
-                  {proposalSubmitError && <p>{proposalSubmitError}</p>}
-                  {proposalMutation.error && (
-                    <p>{proposalMutation.error.message}</p>
-                  )}
-                  {updateSpeakerMutation.error && (
-                    <p>{updateSpeakerMutation.error.message}</p>
-                  )}
-                  {validationErrors.length > 0 && (
-                    <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                      {validationErrors.map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                    </ul>
-                  )}
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
+              <div className="flex">
+                <div className="shrink-0">
+                  <XCircleIcon
+                    className="h-6 w-6 text-red-500 dark:text-red-400"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="ml-4">
+                  <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
+                    Submission failed
+                  </h3>
+                  <div className="font-inter mt-2 text-red-700 dark:text-red-300">
+                    {proposalSubmitError && <p>{proposalSubmitError}</p>}
+                    {proposalMutation.error && (
+                      <p>{proposalMutation.error.message}</p>
+                    )}
+                    {actionMutation.error && (
+                      <p>{actionMutation.error.message}</p>
+                    )}
+                    {updateSpeakerMutation.error && (
+                      <p>{updateSpeakerMutation.error.message}</p>
+                    )}
+                    {validationErrors.length > 0 && (
+                      <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
+                        {validationErrors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
         <ProposalDetailsForm
           proposal={proposal}
           setProposal={setProposal}
@@ -236,8 +325,8 @@ export function ProposalForm({
               </h3>
               <div className="mt-4 space-y-3">
                 {proposal.speakers &&
-                Array.isArray(proposal.speakers) &&
-                proposal.speakers.length > 0 ? (
+                  Array.isArray(proposal.speakers) &&
+                  proposal.speakers.length > 0 ? (
                   proposal.speakers.map((speaker, index) => {
                     if (
                       typeof speaker === 'object' &&
@@ -300,11 +389,22 @@ export function ProposalForm({
           >
             Cancel
           </Link>
+          {mode === 'user' && isDraft && (
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={isMutating}
+              className="font-space-grotesk rounded-xl border border-gray-300 bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:focus-visible:outline-gray-500"
+            >
+              {createProposalMutation.isPending ||
+                updateProposalMutation.isPending
+                ? 'Saving...'
+                : 'Save Draft'}
+            </button>
+          )}
           <button
             type="submit"
-            disabled={
-              proposalMutation.isPending || updateSpeakerMutation.isPending
-            }
+            disabled={isMutating}
             className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
           >
             {proposalMutation.isPending || updateSpeakerMutation.isPending

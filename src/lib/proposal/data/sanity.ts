@@ -46,9 +46,8 @@ export async function getProposal({
       speakers[]-> {
         ...,
         "image": image.asset->url,
-        ${
-          isOrganizer && includeSubmittedTalks
-            ? `"submittedTalks": *[
+        ${isOrganizer && includeSubmittedTalks
+        ? `"submittedTalks": *[
             _type == "talk"
             && ^._id in speakers[]._ref
             && conference._ref == ^.^.conference._ref
@@ -58,11 +57,10 @@ export async function getProposal({
             _id, title, status, _createdAt,
             topics[]-> { _id, title, color }
           },`
-            : ''
-        }
-        ${
-          isOrganizer && includePreviousAcceptedTalks
-            ? `"previousAcceptedTalks": *[
+        : ''
+      }
+        ${isOrganizer && includePreviousAcceptedTalks
+        ? `"previousAcceptedTalks": *[
             _type == "talk"
             && ^._id in speakers[]._ref
             && conference._ref != ^.^.conference._ref
@@ -72,8 +70,8 @@ export async function getProposal({
             conference-> { _id, title, start_date },
             topics[]-> { _id, title, color }
           }`
-            : ''
-        }
+        : ''
+      }
       },
       conference-> {
         _id, title, start_date, end_date
@@ -92,15 +90,14 @@ export async function getProposal({
         respondedAt,
         declineReason
       },
-      ${
-        includeReviews && isOrganizer
-          ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
+      ${includeReviews && isOrganizer
+        ? `"reviews": *[_type == "review" && proposal._ref == ^._id]{
         ...,
         reviewer-> {
           _id, name, email, image
         }
       }`
-          : ''
+        : ''
       }
     }[0]`
 
@@ -168,9 +165,8 @@ export async function getProposals({
     ...,
     speakers[]-> {
       _id, name, email, providers, "image": image.asset->url, flags, "slug": slug.current,
-      ${
-        includePreviousAcceptedTalks
-          ? `"previousAcceptedTalks": *[
+      ${includePreviousAcceptedTalks
+      ? `"previousAcceptedTalks": *[
           _type == "talk"
           && ^._id in speakers[]._ref
           && conference._ref != ^.^.conference._ref
@@ -180,8 +176,8 @@ export async function getProposals({
           conference-> { _id, title, start_date },
           topics[]-> { _id, title, color }
         }`
-          : ''
-      }
+      : ''
+    }
     },
     conference-> {
       _id, title, start_date, end_date
@@ -199,21 +195,19 @@ export async function getProposals({
       createdAt,
       respondedAt,
       declineReason
-    }${
-      includeReviews
-        ? `,"reviews": *[_type == "review" && proposal._ref == ^._id]{
+    }${includeReviews
+      ? `,"reviews": *[_type == "review" && proposal._ref == ^._id]{
       ...,
       reviewer-> {
         _id, name, email, image
       }
     }`
-        : ''
-    }${
-      includeCapacity
-        ? `,"signups": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"]),
+      : ''
+    }${includeCapacity
+      ? `,"signups": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"]),
     "waitlistCount": count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "waitlist"]),
     "available": coalesce(capacity, 30) - count(*[_type == "workshopSignup" && workshop._ref == ^._id && status == "confirmed"])`
-        : ''
+      : ''
     }
   } | order(conference->start_date desc, _updatedAt desc)`
 
@@ -252,9 +246,9 @@ export async function updateProposal(
 
   const speakers = proposal.speakers
     ? prepareReferenceArray(
-        proposal.speakers as Array<Reference | { _id: string }>,
-        'speaker',
-      )
+      proposal.speakers as Array<Reference | { _id: string }>,
+      'speaker',
+    )
     : undefined
 
   try {
@@ -308,19 +302,20 @@ export async function createProposal(
   proposal: ProposalInput,
   speakerId: string,
   conferenceId: string,
+  initialStatus: Status = Status.submitted,
 ): Promise<{ proposal: ProposalExisting; err: Error | null }> {
   let err = null
   let createdProposal: ProposalExisting = {} as ProposalExisting
 
   const _type = 'talk'
   const _id = randomUUID().toString()
-  const status = Status.submitted
+  const status = initialStatus
 
   const speakers = proposal.speakers
     ? prepareReferenceArray(
-        proposal.speakers as Array<Reference | { _id: string }>,
-        'speaker',
-      )
+      proposal.speakers as Array<Reference | { _id: string }>,
+      'speaker',
+    )
     : [createReferenceWithKey(speakerId, 'speaker')]
 
   const conference = createReference(conferenceId)
@@ -458,9 +453,8 @@ export async function searchProposals({
         "image": image.asset->url,
         flags,
         "slug": slug.current
-        ${
-          includePreviousAcceptedTalks
-            ? `,
+        ${includePreviousAcceptedTalks
+      ? `,
         "previousAcceptedTalks": *[
           _type == "talk"
           && ^._id in speakers[]._ref
@@ -471,8 +465,8 @@ export async function searchProposals({
           conference-> { _id, title, start_date },
           topics[]-> { _id, title, color }
         }`
-            : ''
-        }
+      : ''
+    }
       },
       conference-> {
         _id, title, start_date, end_date
@@ -491,17 +485,16 @@ export async function searchProposals({
         respondedAt,
         declineReason
       }
-      ${
-        includeReviews
-          ? `,
+      ${includeReviews
+      ? `,
       "reviews": *[_type == "review" && proposal._ref == ^._id]{
         ...,
         reviewer-> {
           _id, name, email, image
         }
       }`
-          : ''
-      }
+      : ''
+    }
     } | order(_updatedAt desc)
   `
 
@@ -614,12 +607,12 @@ export async function getWorkshops({
           ...(date &&
             startTime &&
             endTime && {
-              scheduleInfo: {
-                date,
-                timeSlot: { startTime, endTime },
-                room,
-              },
-            }),
+            scheduleInfo: {
+              date,
+              timeSlot: { startTime, endTime },
+              room,
+            },
+          }),
         }
       })
     } catch (error) {
