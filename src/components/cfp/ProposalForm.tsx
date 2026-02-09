@@ -75,13 +75,15 @@ export function ProposalForm({
     enabled: mode === 'user' && !isReadOnly,
   })
 
+  const [lastAction, setLastAction] = useState<'draft' | 'submit' | null>(null)
+
   const createProposalMutation = api.proposal.create.useMutation({
-    onSuccess: (data) => {
-      if (data?.status === Status.draft && data?._id) {
-        router.push(`/cfp/proposal/${data._id}`)
-      } else {
-        router.push('/cfp/list?success=true')
-      }
+    onSuccess: () => {
+      router.push(
+        lastAction === 'draft'
+          ? '/cfp/list?draft=true'
+          : '/cfp/list?success=true',
+      )
     },
   })
 
@@ -171,6 +173,7 @@ export function ProposalForm({
       return
     }
 
+    setLastAction('draft')
     const data = prepareProposalData(false)
 
     if (proposalId) {
@@ -194,6 +197,7 @@ export function ProposalForm({
 
     setProposalSubmitError('')
     setValidationErrors([])
+    setLastAction('submit')
 
     if (mode === 'user') {
       const consentErrors = validateSpeakerConsent(speaker)
@@ -394,10 +398,11 @@ export function ProposalForm({
               type="button"
               onClick={handleSaveDraft}
               disabled={isMutating}
-              className="font-space-grotesk rounded-xl bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-300 transition-colors ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-600 dark:focus-visible:outline-gray-500"
+              className="font-space-grotesk cursor-pointer rounded-xl bg-white px-6 py-3 text-sm font-semibold text-gray-700 shadow-sm ring-1 ring-gray-300 transition-colors ring-inset hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-400 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-gray-700 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-600 dark:focus-visible:outline-gray-500"
             >
-              {createProposalMutation.isPending ||
-                updateProposalMutation.isPending
+              {(createProposalMutation.isPending ||
+                updateProposalMutation.isPending) &&
+                lastAction === 'draft'
                 ? 'Saving...'
                 : 'Save Draft'}
             </button>
@@ -405,9 +410,10 @@ export function ProposalForm({
           <button
             type="submit"
             disabled={isMutating}
-            className="font-space-grotesk rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
+            className="font-space-grotesk cursor-pointer rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
           >
-            {proposalMutation.isPending || updateSpeakerMutation.isPending
+            {(proposalMutation.isPending || updateSpeakerMutation.isPending) &&
+              lastAction === 'submit'
               ? buttonPrimaryLoading
               : buttonPrimary}
           </button>

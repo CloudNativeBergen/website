@@ -60,6 +60,11 @@ export default async function ProposalViewPage({
     notFound()
   }
 
+  // Editable proposals (draft/submitted) should use the edit form
+  if (proposal.status === 'draft' || proposal.status === 'submitted') {
+    redirect(`/cfp/proposal?id=${id}`)
+  }
+
   const { speaker: currentUserSpeaker, err: speakerError } = await getSpeaker(
     session.speaker._id,
   )
@@ -126,21 +131,21 @@ export default async function ProposalViewPage({
 
         {(proposal.status === 'confirmed' ||
           proposal.status === 'accepted') && (
-          <div className="hidden w-80 shrink-0 space-y-6 lg:block">
-            <ProposalAttachmentsPanel
-              proposalId={proposal._id}
-              initialAttachments={proposal.attachments || []}
-            />
-            {isConferenceOver(conference) && (
-              <>
-                <PostConferenceVideoPanel proposal={proposal} />
-                <PostConferenceAudienceFeedbackPanel
-                  audienceFeedback={proposal.audienceFeedback}
-                />
-              </>
-            )}
-          </div>
-        )}
+            <div className="hidden w-80 shrink-0 space-y-6 lg:block">
+              <ProposalAttachmentsPanel
+                proposalId={proposal._id}
+                initialAttachments={proposal.attachments || []}
+              />
+              {isConferenceOver(conference) && (
+                <>
+                  <PostConferenceVideoPanel proposal={proposal} />
+                  <PostConferenceAudienceFeedbackPanel
+                    audienceFeedback={proposal.audienceFeedback}
+                  />
+                </>
+              )}
+            </div>
+          )}
       </div>
     </div>
   )

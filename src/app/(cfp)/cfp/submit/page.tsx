@@ -10,7 +10,7 @@ export default async function Submit({
   const { id: proposalId } = (await searchParams) || {}
 
   if (proposalId) {
-    redirect(`/cfp/proposal/${proposalId}`)
+    redirect(`/cfp/proposal?id=${proposalId}`)
   }
 
   redirect('/cfp/proposal')

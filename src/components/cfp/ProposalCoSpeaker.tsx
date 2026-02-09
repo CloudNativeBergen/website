@@ -18,6 +18,7 @@ import {
   getSpeakerLimitDescription,
 } from '@/lib/cospeaker/constants'
 import { useInviteFields, useInvitations } from '@/lib/cospeaker/hooks'
+import { useState } from 'react'
 
 function getFormatDisplayName(format: Format): string {
   switch (format) {
@@ -77,6 +78,8 @@ export function ProposalCoSpeaker({
     cancelInvite,
   } = useInvitations(onInvitationSent, onInvitationCanceled)
 
+  const [missingProposalError, setMissingProposalError] = useState('')
+
   const coSpeakers = selectedSpeakers
 
   const totalCoSpeakers =
@@ -97,9 +100,13 @@ export function ProposalCoSpeaker({
     const validFields = getValidInviteFields()
 
     if (!proposalId) {
+      setMissingProposalError(
+        'Please save your proposal as a draft before inviting co-speakers.',
+      )
       return
     }
 
+    setMissingProposalError('')
     const sentInvitations = await sendInvites(proposalId, validFields)
 
     if (sentInvitations.length > 0) {
@@ -404,12 +411,12 @@ export function ProposalCoSpeaker({
                     ))}
                 </div>
 
-                {inviteError && (
+                {(inviteError || missingProposalError) && (
                   <div
                     className="text-sm text-red-600 dark:text-red-400"
                     role="alert"
                   >
-                    {inviteError}
+                    {inviteError || missingProposalError}
                   </div>
                 )}
 
