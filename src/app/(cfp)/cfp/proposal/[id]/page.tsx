@@ -131,21 +131,21 @@ export default async function ProposalViewPage({
 
         {(proposal.status === 'confirmed' ||
           proposal.status === 'accepted') && (
-            <div className="hidden w-80 shrink-0 space-y-6 lg:block">
-              <ProposalAttachmentsPanel
-                proposalId={proposal._id}
-                initialAttachments={proposal.attachments || []}
-              />
-              {isConferenceOver(conference) && (
-                <>
-                  <PostConferenceVideoPanel proposal={proposal} />
-                  <PostConferenceAudienceFeedbackPanel
-                    audienceFeedback={proposal.audienceFeedback}
-                  />
-                </>
-              )}
-            </div>
-          )}
+          <div className="hidden w-80 shrink-0 space-y-6 lg:block">
+            <ProposalAttachmentsPanel
+              proposalId={proposal._id}
+              initialAttachments={proposal.attachments || []}
+            />
+            {isConferenceOver(conference) && (
+              <>
+                <PostConferenceVideoPanel proposal={proposal} />
+                <PostConferenceAudienceFeedbackPanel
+                  audienceFeedback={proposal.audienceFeedback}
+                />
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

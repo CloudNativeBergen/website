@@ -360,6 +360,19 @@ export const proposalRouter = router({
           return existing
         }
 
+        // Enforce strict validation for non-draft proposals
+        if (existing.status !== Status.draft) {
+          const merged = { ...existing, ...input.data }
+          const strict = ProposalInputSchema.safeParse(merged)
+          if (!strict.success) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: strict.error.message,
+              cause: strict.error,
+            })
+          }
+        }
+
         const { proposal, err } = await updateProposal(input.id, input.data)
 
         if (err) {

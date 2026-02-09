@@ -110,8 +110,11 @@ export const CreateProposalSchema = z.object({
   status: z.enum(['draft', 'submitted']).default('submitted'),
 })
 
-// Proposal update schema
-export const ProposalUpdateSchema = ProposalInputBaseSchema.partial()
+// Proposal update schema — uses relaxed validation; strict checks enforced
+// at runtime in the router for non-draft proposals
+export const ProposalUpdateSchema = ProposalDraftSchema.partial().required({
+  title: true,
+})
 
 // Admin update schema with speaker IDs
 export const ProposalAdminUpdateSchema =
