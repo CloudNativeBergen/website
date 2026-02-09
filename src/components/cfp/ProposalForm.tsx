@@ -116,16 +116,16 @@ export function ProposalForm({
   const [proposalSubmitError, setProposalSubmitError] = useState<string>('')
   const [validationErrors, setValidationErrors] = useState<string[]>([])
 
-  // Get current mutation based on mode
-  const proposalMutation =
-    proposalId && !isExistingDraft
-      ? updateProposalMutation
-      : createProposalMutation
-
   const isMutating =
-    proposalMutation.isPending ||
+    createProposalMutation.isPending ||
+    updateProposalMutation.isPending ||
     updateSpeakerMutation.isPending ||
     actionMutation.isPending
+
+  const mutationError =
+    createProposalMutation.error ||
+    updateProposalMutation.error ||
+    actionMutation.error
 
   const prepareTopicRefs = () =>
     (proposal.topics ?? [])
@@ -179,7 +179,7 @@ export function ProposalForm({
         window.scrollTo(0, 0)
       }
     } else {
-      createProposalMutation.mutate({ data, status: 'draft' })
+      createProposalMutation.mutate({ data, status: Status.draft })
     }
   }
 
@@ -241,7 +241,7 @@ export function ProposalForm({
     } else {
       createProposalMutation.mutate({
         data: proposalData,
-        status: 'submitted',
+        status: Status.submitted,
       })
     }
   }
@@ -250,8 +250,7 @@ export function ProposalForm({
     <form onSubmit={handleSubmit}>
       <div className="space-y-12">
         {(proposalSubmitError ||
-          proposalMutation.error ||
-          actionMutation.error ||
+          mutationError ||
           updateSpeakerMutation.error) && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
               <div className="flex">
@@ -267,12 +266,7 @@ export function ProposalForm({
                   </h3>
                   <div className="font-inter mt-2 text-red-700 dark:text-red-300">
                     {proposalSubmitError && <p>{proposalSubmitError}</p>}
-                    {proposalMutation.error && (
-                      <p>{proposalMutation.error.message}</p>
-                    )}
-                    {actionMutation.error && (
-                      <p>{actionMutation.error.message}</p>
-                    )}
+                    {mutationError && <p>{mutationError.message}</p>}
                     {updateSpeakerMutation.error && (
                       <p>{updateSpeakerMutation.error.message}</p>
                     )}
@@ -407,7 +401,9 @@ export function ProposalForm({
             disabled={isMutating}
             className="font-space-grotesk cursor-pointer rounded-xl bg-brand-cloud-blue px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-cloud-blue-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-cloud-blue disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 dark:focus-visible:outline-blue-500"
           >
-            {(proposalMutation.isPending || updateSpeakerMutation.isPending) &&
+            {(createProposalMutation.isPending ||
+              updateProposalMutation.isPending ||
+              updateSpeakerMutation.isPending) &&
               lastAction === 'submit'
               ? buttonPrimaryLoading
               : buttonPrimary}

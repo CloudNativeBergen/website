@@ -236,7 +236,7 @@ export const proposalRouter = router({
         }
 
         // When submitting, enforce strict validation
-        if (input.status !== 'draft') {
+        if (input.status !== Status.draft) {
           const result = ProposalInputSchema.safeParse(input.data)
           if (!result.success) {
             const fieldErrors = result.error.issues.map((i) => i.message)
@@ -266,7 +266,7 @@ export const proposalRouter = router({
         }
 
         const initialStatus =
-          input.status === 'draft' ? Status.draft : Status.submitted
+          input.status === Status.draft ? Status.draft : Status.submitted
 
         const { proposal, err } = await createProposal(
           {
