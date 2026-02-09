@@ -252,36 +252,36 @@ export function ProposalForm({
         {(proposalSubmitError ||
           mutationError ||
           updateSpeakerMutation.error) && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
-            <div className="flex">
-              <div className="shrink-0">
-                <XCircleIcon
-                  className="h-6 w-6 text-red-500 dark:text-red-400"
-                  aria-hidden="true"
-                />
-              </div>
-              <div className="ml-4">
-                <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
-                  Submission failed
-                </h3>
-                <div className="font-inter mt-2 text-red-700 dark:text-red-300">
-                  {proposalSubmitError && <p>{proposalSubmitError}</p>}
-                  {mutationError && <p>{mutationError.message}</p>}
-                  {updateSpeakerMutation.error && (
-                    <p>{updateSpeakerMutation.error.message}</p>
-                  )}
-                  {validationErrors.length > 0 && (
-                    <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
-                      {validationErrors.map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                    </ul>
-                  )}
+            <div className="rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
+              <div className="flex">
+                <div className="shrink-0">
+                  <XCircleIcon
+                    className="h-6 w-6 text-red-500 dark:text-red-400"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="ml-4">
+                  <h3 className="font-space-grotesk text-lg font-semibold text-red-800 dark:text-red-200">
+                    Submission failed
+                  </h3>
+                  <div className="font-inter mt-2 text-red-700 dark:text-red-300">
+                    {proposalSubmitError && <p>{proposalSubmitError}</p>}
+                    {mutationError && <p>{mutationError.message}</p>}
+                    {updateSpeakerMutation.error && (
+                      <p>{updateSpeakerMutation.error.message}</p>
+                    )}
+                    {validationErrors.length > 0 && (
+                      <ul className="font-inter mt-2 list-inside list-disc text-sm text-red-700 dark:text-red-300">
+                        {validationErrors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
         <ProposalDetailsForm
           proposal={proposal}
           setProposal={setProposal}
@@ -318,8 +318,8 @@ export function ProposalForm({
               </h3>
               <div className="mt-4 space-y-3">
                 {proposal.speakers &&
-                Array.isArray(proposal.speakers) &&
-                proposal.speakers.length > 0 ? (
+                  Array.isArray(proposal.speakers) &&
+                  proposal.speakers.length > 0 ? (
                   proposal.speakers.map((speaker, index) => {
                     if (
                       typeof speaker === 'object' &&
@@ -376,7 +376,7 @@ export function ProposalForm({
       {!isReadOnly && (
         <div className="mt-6 flex items-center justify-end gap-x-6">
           <Link
-            href="/cfp"
+            href="/cfp/list"
             type="button"
             className="text-sm leading-6 font-semibold text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400"
           >
@@ -391,7 +391,7 @@ export function ProposalForm({
             >
               {(createProposalMutation.isPending ||
                 updateProposalMutation.isPending) &&
-              lastAction === 'draft'
+                lastAction === 'draft'
                 ? 'Saving...'
                 : 'Save Draft'}
             </button>
@@ -404,7 +404,7 @@ export function ProposalForm({
             {(createProposalMutation.isPending ||
               updateProposalMutation.isPending ||
               updateSpeakerMutation.isPending) &&
-            lastAction === 'submit'
+              lastAction === 'submit'
               ? buttonPrimaryLoading
               : buttonPrimary}
           </button>
