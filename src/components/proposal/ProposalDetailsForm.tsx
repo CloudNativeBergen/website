@@ -16,7 +16,7 @@ import { Topic } from '@/lib/topic/types'
 import { PortableTextBlock } from '@portabletext/editor'
 import { PortableText } from '@portabletext/react'
 import Link from 'next/link'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Checkbox,
   Dropdown,
@@ -58,47 +58,19 @@ export function ProposalDetailsForm({
   const [outline, setOutline] = useState(proposal?.outline ?? '')
   const [tos, setTos] = useState(proposal?.tos ?? false)
 
-  // Use a ref to track if we're syncing from props to avoid circular updates
-  const isSyncingFromProps = useRef(false)
-
-  // Sync local state when proposal prop changes (e.g., when editing a different proposal)
+  // Push local state changes to parent
   useEffect(() => {
-    isSyncingFromProps.current = true
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initialize form from proposal data
-    setTitle(proposal?.title ?? '')
-    setLanguage(proposal?.language ?? Language.norwegian)
-    setDescription(proposal?.description ?? [])
-    setFormat(proposal?.format ?? Format.lightning_10)
-    setLevel(proposal?.level ?? Level.beginner)
-    setAudiences(proposal?.audiences ?? [])
-    setTopics(
-      Array.isArray(proposal?.topics)
-        ? proposal.topics.filter((topic): topic is Topic => '_id' in topic)
-        : [],
-    )
-    setOutline(proposal?.outline ?? '')
-    setTos(proposal?.tos ?? false)
-    // Use setTimeout to ensure all state updates complete before clearing the flag
-    setTimeout(() => {
-      isSyncingFromProps.current = false
-    }, 0)
-  }, [proposal])
-
-  // Only update parent when local state changes (not when syncing from props)
-  useEffect(() => {
-    if (!isSyncingFromProps.current) {
-      setProposal({
-        title,
-        language,
-        description,
-        format,
-        level,
-        audiences,
-        topics,
-        outline,
-        tos,
-      })
-    }
+    setProposal({
+      title,
+      language,
+      description,
+      format,
+      level,
+      audiences,
+      topics,
+      outline,
+      tos,
+    })
   }, [
     title,
     language,
