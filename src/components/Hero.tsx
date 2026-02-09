@@ -55,21 +55,21 @@ function ActionButtons({ conference }: { conference: Conference }) {
     label: string
     href: string
     variant:
-      | 'primary'
-      | 'secondary'
-      | 'success'
-      | 'warning'
-      | 'info'
-      | 'outline'
+    | 'primary'
+    | 'secondary'
+    | 'success'
+    | 'warning'
+    | 'info'
+    | 'outline'
     icon: React.ComponentType<{ className?: string }>
   }> = [
-    {
-      label: 'Practical Info',
-      href: '/info',
-      variant: 'outline',
-      icon: InformationCircleIcon,
-    },
-  ]
+      {
+        label: 'Practical Info',
+        href: '/info',
+        variant: 'outline',
+        icon: InformationCircleIcon,
+      },
+    ]
 
   if (isSeekingSponsors(conference)) {
     buttons.push({
@@ -126,7 +126,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
   }
 
   return (
-    <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:justify-center lg:flex-nowrap">
+    <div className="mt-6 flex flex-col gap-4 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-center lg:flex-nowrap">
       {displayButtons.map((button) => {
         const Icon = button.icon
         return (
@@ -147,7 +147,7 @@ function ActionButtons({ conference }: { conference: Conference }) {
 
 export function Hero({ conference }: { conference: Conference }) {
   return (
-    <div className="relative py-20 sm:pt-36 sm:pb-24">
+    <div className="relative py-10 sm:pt-36 sm:pb-24">
       <BackgroundImage className="-top-36 -bottom-14" />
       <Container className="relative">
         <div className="mx-auto max-w-2xl lg:max-w-4xl lg:px-12">
@@ -207,7 +207,7 @@ export function Hero({ conference }: { conference: Conference }) {
                 </div>
               </div>
             )}
-          <h1 className="font-jetbrains text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:text-6xl">
+          <h1 className="font-jetbrains h-[5.5rem] overflow-hidden text-4xl font-bold tracking-tighter text-brand-cloud-blue sm:h-[8.5rem] sm:text-6xl lg:h-auto lg:overflow-visible">
             <span className="sr-only">{conference.title} - </span>
             {conference.tagline?.startsWith('Real ') ? (
               <TypewriterEffect

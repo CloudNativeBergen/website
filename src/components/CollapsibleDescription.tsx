@@ -12,7 +12,7 @@ export function CollapsibleDescription({
 
   if (paragraphs.length <= 1) {
     return (
-      <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
+      <div className="font-inter mt-4 space-y-6 text-lg tracking-tight text-brand-slate-gray sm:mt-6 sm:text-2xl dark:text-gray-300">
         {paragraphs.map((line, index) => (
           <p key={index}>{line}</p>
         ))}
@@ -21,7 +21,7 @@ export function CollapsibleDescription({
   }
 
   return (
-    <div className="font-inter mt-6 space-y-6 text-2xl tracking-tight text-brand-slate-gray dark:text-gray-300">
+    <div className="font-inter mt-4 space-y-6 text-lg tracking-tight text-brand-slate-gray sm:mt-6 sm:text-2xl dark:text-gray-300">
       <p>{paragraphs[0]}</p>
       <div className={expanded ? 'block' : 'hidden sm:block'}>
         {paragraphs.slice(1).map((line, index) => (

@@ -114,25 +114,8 @@ export function TypewriterEffect({
       {/* Visual animation - hidden from screen readers */}
       <span aria-hidden="true">
         {prefix}
-        {/*
-         * Grid stacking technique: all words occupy the same grid cell,
-         * so the container sizes to the longest word. Only the typed text
-         * is visible; the rest are invisible but still in flow.
-         * See: https://css-tricks.com/positioning-overlay-content-with-css-grid/
-         */}
-        <span className="inline-grid items-end justify-items-start [&>span]:col-start-1 [&>span]:row-start-1">
-          {words.map((word, i) => (
-            <span
-              key={word}
-              className={i === currentWordIndex ? undefined : 'invisible'}
-            >
-              {i === currentWordIndex ? currentText : word}
-              {i === currentWordIndex && (
-                <span className="animate-blink ml-0.5 inline-block h-[1em] w-0.75 translate-y-[0.1em] bg-current" />
-              )}
-            </span>
-          ))}
-        </span>
+        {currentText}
+        <span className="animate-blink ml-0.5 inline-block h-[0.9em] w-0.75 bg-current align-baseline" />
       </span>
       {/* Screen reader text - visually hidden but accessible */}
       <span className="sr-only">{fullText}</span>
