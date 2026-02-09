@@ -109,12 +109,18 @@ export function TypewriterEffect({
     )
   }
 
+  // Find the longest word to reserve space and prevent layout shift
+  const longestWord = words.reduce((a, b) => (a.length > b.length ? a : b), '')
+
   return (
     <span className={className} aria-label={fullText}>
       {/* Visual animation - hidden from screen readers */}
       <span aria-hidden="true">
         {prefix}
-        <span className="inline-block min-w-[1ch]">{currentText}</span>
+        <span className="relative inline-block align-bottom">
+          <span className="invisible">{longestWord}</span>
+          <span className="absolute top-0 left-0">{currentText}</span>
+        </span>
         <span className="animate-blink ml-0.5 inline-block h-[1em] w-0.75 translate-y-[0.1em] bg-current" />
       </span>
       {/* Screen reader text - visually hidden but accessible */}
