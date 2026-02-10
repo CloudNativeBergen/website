@@ -116,13 +116,6 @@ export function SponsorManagement() {
                 <div>
                   <h3 className="font-semibold">{sponsor.name}</h3>
                   <p className="text-gray-600">{sponsor.website}</p>
-                  {'contact_persons' in sponsor &&
-                  sponsor.contact_persons &&
-                  Array.isArray(sponsor.contact_persons) ? (
-                    <p className="text-sm text-gray-500">
-                      {sponsor.contact_persons.length} contact person(s)
-                    </p>
-                  ) : null}
                 </div>
                 <div className="flex gap-2">
                   <button

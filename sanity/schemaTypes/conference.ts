@@ -840,69 +840,6 @@ export default defineType({
       description: 'Talks to highlight in the Program Highlights section',
     }),
     defineField({
-      name: 'sponsors',
-      title: 'Sponsors',
-      type: 'array',
-      fieldset: 'relations',
-      of: [
-        {
-          type: 'object',
-          fields: [
-            defineField({
-              name: 'sponsor',
-              type: 'reference',
-              to: { type: 'sponsor' },
-              validation: (Rule) => Rule.required(),
-            }),
-            defineField({
-              name: 'tier',
-              type: 'reference',
-              to: { type: 'sponsorTier' },
-              options: {
-                filter: ({ document }) => {
-                  if (!document?._id) return {}
-
-                  const conferenceId = document._id.replace(/^drafts\./, '')
-
-                  return {
-                    filter: 'conference._ref == $conferenceId',
-                    params: { conferenceId },
-                  }
-                },
-              },
-            }),
-          ],
-          preview: {
-            select: {
-              title: 'sponsor.name',
-              subtitle: 'tier.title',
-            },
-          },
-        },
-      ],
-      validation: (Rule) =>
-        Rule.custom((sponsors: any[] | undefined) => {
-          if (!sponsors || !Array.isArray(sponsors)) {
-            return true
-          }
-
-          const sponsorRefs = sponsors
-            .filter((item) => item.sponsor?._ref)
-            .map((item) => item.sponsor._ref)
-
-          const uniqueSponsors = new Set(sponsorRefs)
-
-          if (uniqueSponsors.size !== sponsorRefs.length) {
-            return 'Duplicate sponsors are not allowed in the same conference'
-          }
-
-          return true
-        }),
-      options: {
-        layout: 'tags',
-      },
-    }),
-    defineField({
       name: 'schedules',
       title: 'Schedules',
       type: 'array',

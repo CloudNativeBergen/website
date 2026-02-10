@@ -21,7 +21,6 @@ export default defineType({
       name: 'logo',
       title: 'Logo',
       type: 'inlineSvg',
-      validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'logo_bright',

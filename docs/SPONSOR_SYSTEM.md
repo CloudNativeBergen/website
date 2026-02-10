@@ -23,7 +23,7 @@ The base company record. Conference-independent — a single sponsor can partici
 | ------------- | --------------------------------------------------- |
 | `name`        | Company name                                        |
 | `website`     | Company URL                                         |
-| `logo`        | Inline SVG logo (required)                          |
+| `logo`        | Inline SVG logo                                     |
 | `logo_bright` | Optional bright/white variant for dark backgrounds  |
 | `org_number`  | Company registration number (admin-only visibility) |
 
@@ -212,16 +212,13 @@ sanity/schemaTypes/
 
 All sponsor operations go through a single tRPC router at `src/server/routers/sponsor.ts`, organized into namespaces. See `docs/TRPC_SERVER_ARCHITECTURE.md` for general tRPC patterns.
 
-| Namespace                      | Procedures                                                                                                                                                                                             | Purpose                              |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
-| `sponsor.*`                    | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD            |
-| `sponsor.tiers.*`              | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management                      |
-| `sponsor.addToConference`      | —                                                                                                                                                                                                      | Link sponsor to conference with tier |
-| `sponsor.updateTierAssignment` | —                                                                                                                                                                                                      | Change tier assignment               |
-| `sponsor.removeFromConference` | —                                                                                                                                                                                                      | Unlink sponsor from conference       |
-| `sponsor.crm.*`                | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations              |
-| `sponsor.crm.activities.*`     | `list`                                                                                                                                                                                                 | Activity log queries                 |
-| `sponsor.emailTemplates.*`     | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD                  |
+| Namespace                  | Procedures                                                                                                                                                                                             | Purpose                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| `sponsor.*`                | `list`, `getById`, `create`, `update`, `delete`                                                                                                                                                        | Core sponsor company CRUD |
+| `sponsor.tiers.*`          | `list`, `listByConference`, `getById`, `create`, `update`, `delete`                                                                                                                                    | Tier management           |
+| `sponsor.crm.*`            | `listOrganizers`, `list`, `getById`, `create`, `update`, `moveStage`, `updateInvoiceStatus`, `updateContractStatus`, `bulkUpdate`, `bulkDelete`, `delete`, `copyFromPreviousYear`, `importAllHistoric` | CRM pipeline operations   |
+| `sponsor.crm.activities.*` | `list`                                                                                                                                                                                                 | Activity log queries      |
+| `sponsor.emailTemplates.*` | `list`, `create`, `update`, `delete`                                                                                                                                                                   | Email template CRUD       |
 
 All procedures are protected by `adminProcedure` (requires `is_organizer: true`).
 
@@ -324,6 +321,8 @@ End-to-end sponsor contract workflow with digital signatures, automated reminder
 ## Key Design Decisions
 
 **Separated sponsor vs. CRM types.** A sponsor company (`sponsor`) is a conference-independent entity holding only company-level data (name, logo, website). Contact persons and billing details live on `sponsorForConference` — the per-conference relationship record — since contacts and billing arrangements often differ between conferences/years.
+
+**`sponsorForConference` as the single source of truth.** All conference-sponsor relationships are managed exclusively through `sponsorForConference` documents. There is no inline `sponsors[]` array on conference documents. Public-facing pages query `sponsorForConference` docs with `status == "closed-won"` and project them into the `ConferenceSponsor` shape. The `Conference.sponsors` TypeScript property is populated at runtime from this query for backward compatibility with downstream consumers.
 
 **Sanity as the single source of truth.** All data lives in Sanity, with tRPC providing validated, type-safe access. There is no separate database.
 

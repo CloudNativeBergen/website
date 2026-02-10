@@ -147,7 +147,7 @@ create: adminProcedure.input(SponsorInputSchema).mutation(async ({ input }) => {
 const { data: sponsors, isLoading, error } = api.sponsor.list.useQuery()
 
 // Mutations with UI updates
-const removeMutation = api.sponsor.removeFromConference.useMutation({
+const removeMutation = api.sponsor.crm.delete.useMutation({
   onSuccess: () => {
     showNotification({ type: 'success', message: 'Sponsor removed' })
     // React Query automatically invalidates related queries
@@ -157,8 +157,8 @@ const removeMutation = api.sponsor.removeFromConference.useMutation({
   },
 })
 
-// Calling mutations
-await removeMutation.mutateAsync({ id: sponsor._id })
+// Calling mutations (use _sfcId from ConferenceSponsor)
+await removeMutation.mutateAsync({ id: sponsorForConference._id })
 
 // Conditional queries
 const { data: tiers } = api.sponsor.tiers.list.useQuery(
