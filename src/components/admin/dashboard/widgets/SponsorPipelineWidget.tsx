@@ -4,7 +4,10 @@ import {
   BanknotesIcon,
   BuildingOffice2Icon,
   CheckCircleIcon,
+  TrophyIcon,
+  XCircleIcon,
 } from '@heroicons/react/24/outline'
+import { SponsorLogo } from '@/components/SponsorLogo'
 import { fetchSponsorPipelineData } from '@/app/(admin)/admin/actions'
 import { type SponsorPipelineWidgetData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
@@ -170,34 +173,43 @@ export function SponsorPipelineWidget({
       />
 
       <div className="mb-3 grid grid-cols-3 gap-2 @[200px]:grid-cols-1 @[400px]:grid-cols-3">
-        <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
-          <div className="text-xs text-green-600 dark:text-green-400">
-            Total Value
-          </div>
-          <div className="mt-1 text-xl font-bold text-green-900 dark:text-green-100">
-            kr {(data.totalValue / 1000).toFixed(0)}k
-          </div>
-          {data.revenueGoal > 0 && (
-            <div className="mt-1 text-xs text-green-600 dark:text-green-400">
-              of kr {(data.revenueGoal / 1000).toFixed(0)}k
+        <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-green-100 to-emerald-200 p-2.5 dark:from-green-900/40 dark:to-emerald-800/40">
+          <div className="relative z-10">
+            <div className="text-[10px] font-medium tracking-wide text-green-700 uppercase dark:text-green-400">
+              Total Value
             </div>
-          )}
+            <div className="mt-1 text-xl font-bold text-green-900 dark:text-green-100">
+              kr {(data.totalValue / 1000).toFixed(0)}k
+            </div>
+            {data.revenueGoal > 0 && (
+              <div className="text-[10px] text-green-600 dark:text-green-300">
+                of kr {(data.revenueGoal / 1000).toFixed(0)}k
+              </div>
+            )}
+          </div>
+          <BanknotesIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-green-300/40 dark:text-green-600/30" />
         </div>
-        <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-          <div className="text-xs text-blue-600 dark:text-blue-400">
-            Won Deals
+        <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-2.5 dark:from-blue-900/40 dark:to-cyan-800/40">
+          <div className="relative z-10">
+            <div className="text-[10px] font-medium tracking-wide text-blue-700 uppercase dark:text-blue-400">
+              Won Deals
+            </div>
+            <div className="mt-1 text-xl font-bold text-blue-900 dark:text-blue-100">
+              {data.wonDeals}
+            </div>
           </div>
-          <div className="mt-1 text-xl font-bold text-blue-900 dark:text-blue-100">
-            {data.wonDeals}
-          </div>
+          <TrophyIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-blue-300/40 dark:text-blue-600/30" />
         </div>
-        <div className="rounded-lg bg-gray-50 p-3 dark:bg-gray-800">
-          <div className="text-xs text-gray-600 dark:text-gray-300">
-            Lost Deals
+        <div className="relative overflow-hidden rounded-xl border border-red-200 bg-linear-to-br from-red-100 to-rose-200 p-2.5 dark:border-red-800 dark:from-red-900/40 dark:to-rose-800/40">
+          <div className="relative z-10">
+            <div className="text-[10px] font-medium tracking-wide text-red-700 uppercase dark:text-red-400">
+              Lost Deals
+            </div>
+            <div className="mt-1 text-xl font-bold text-red-900 dark:text-red-100">
+              {data.lostDeals}
+            </div>
           </div>
-          <div className="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">
-            {data.lostDeals}
-          </div>
+          <XCircleIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-red-300/40 dark:text-red-600/30" />
         </div>
       </div>
 
@@ -238,9 +250,9 @@ export function SponsorPipelineWidget({
               return (
                 <div
                   key={stage.name}
-                  className={`flex items-center justify-between rounded-lg border p-2.5 ${color}`}
+                  className={`flex items-center gap-2 rounded-lg border p-2.5 ${color}`}
                 >
-                  <div>
+                  <div className="shrink-0">
                     <div className="text-xs leading-tight font-semibold">
                       {stage.name}
                     </div>
@@ -248,7 +260,40 @@ export function SponsorPipelineWidget({
                       {stage.count} deals
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+                    {stage.sponsors.slice(0, 4).map((sponsor, i) =>
+                      sponsor.logo ? (
+                        <div
+                          key={i}
+                          className="flex h-5 w-10 shrink-0 items-center justify-center rounded bg-white/80 px-0.5 dark:bg-gray-900/50"
+                          title={sponsor.name}
+                        >
+                          <SponsorLogo
+                            logo={sponsor.logo}
+                            logoBright={sponsor.logoBright}
+                            name={sponsor.name}
+                            className="max-h-4 max-w-9"
+                          />
+                        </div>
+                      ) : (
+                        <span
+                          key={i}
+                          className="shrink-0 rounded bg-white/60 px-1 py-0.5 text-[9px] font-medium dark:bg-gray-900/40"
+                          title={sponsor.name}
+                        >
+                          {sponsor.name.length > 8
+                            ? sponsor.name.slice(0, 8) + '…'
+                            : sponsor.name}
+                        </span>
+                      ),
+                    )}
+                    {stage.sponsors.length > 4 && (
+                      <span className="shrink-0 text-[9px] opacity-60">
+                        +{stage.sponsors.length - 4}
+                      </span>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right">
                     <div className="text-xs font-bold">
                       kr {(stage.value / 1000).toFixed(0)}k
                     </div>

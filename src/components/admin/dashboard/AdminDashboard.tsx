@@ -236,10 +236,11 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
 
         <button
           onClick={() => setEditMode(!editMode)}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium shadow-lg transition-colors ${editMode
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium shadow-lg transition-colors ${
+            editMode
               ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
               : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-            }`}
+          }`}
         >
           <PencilIcon className="h-3.5 w-3.5" />
           {editMode ? 'Done' : 'Edit'}

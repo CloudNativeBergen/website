@@ -39,6 +39,11 @@ export interface SponsorPipelineWidgetData {
     name: string
     count: number
     value: number
+    sponsors: {
+      name: string
+      logo?: string
+      logoBright?: string
+    }[]
   }[]
   totalValue: number
   wonDeals: number

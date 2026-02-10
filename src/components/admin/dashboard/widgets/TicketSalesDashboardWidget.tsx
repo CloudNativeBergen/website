@@ -3,7 +3,14 @@
 import dynamic from 'next/dynamic'
 import { useMemo, useSyncExternalStore } from 'react'
 import type { ApexOptions } from 'apexcharts'
-import { CheckCircleIcon, TicketIcon } from '@heroicons/react/24/outline'
+import {
+  BanknotesIcon,
+  BoltIcon,
+  CalendarDaysIcon,
+  CheckCircleIcon,
+  TicketIcon,
+  UsersIcon,
+} from '@heroicons/react/24/outline'
 import {
   getRadialBarChartOptions,
   getLineChartOptions,
@@ -234,29 +241,38 @@ export function TicketSalesDashboardWidget({
         />
         <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto">
           <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-              <div className="text-[11px] text-blue-600 dark:text-blue-400">
-                Capacity
+            <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-2.5 dark:from-blue-900/40 dark:to-cyan-800/40">
+              <div className="relative z-10">
+                <div className="text-[10px] font-medium tracking-wide text-blue-700 uppercase dark:text-blue-400">
+                  Capacity
+                </div>
+                <div className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">
+                  {data.capacity}
+                </div>
               </div>
-              <div className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">
-                {data.capacity}
-              </div>
+              <UsersIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-blue-300/40 dark:text-blue-600/30" />
             </div>
-            <div className="rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
-              <div className="text-[11px] text-purple-600 dark:text-purple-400">
-                Days Until Event
+            <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-purple-100 to-pink-200 p-2.5 dark:from-purple-900/40 dark:to-pink-800/40">
+              <div className="relative z-10">
+                <div className="text-[10px] font-medium tracking-wide text-purple-700 uppercase dark:text-purple-400">
+                  Days Until Event
+                </div>
+                <div className="mt-1 text-2xl font-bold text-purple-900 dark:text-purple-100">
+                  {data.daysUntilEvent}
+                </div>
               </div>
-              <div className="mt-1 text-2xl font-bold text-purple-900 dark:text-purple-100">
-                {data.daysUntilEvent}
-              </div>
+              <CalendarDaysIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-purple-300/40 dark:text-purple-600/30" />
             </div>
-            <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
-              <div className="text-[11px] text-green-600 dark:text-green-400">
-                Tickets Sold
+            <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-green-100 to-emerald-200 p-2.5 dark:from-green-900/40 dark:to-emerald-800/40">
+              <div className="relative z-10">
+                <div className="text-[10px] font-medium tracking-wide text-green-700 uppercase dark:text-green-400">
+                  Tickets Sold
+                </div>
+                <div className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
+                  0
+                </div>
               </div>
-              <div className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
-                0
-              </div>
+              <TicketIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-green-300/40 dark:text-green-600/30" />
             </div>
           </div>
           <div className="space-y-3">
@@ -304,32 +320,41 @@ export function TicketSalesDashboardWidget({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mb-3 grid shrink-0 grid-cols-3 gap-2 @[200px]:grid-cols-1 @[400px]:grid-cols-3">
-          <div className="rounded-lg bg-blue-50 p-2.5 dark:bg-blue-900/20">
-            <div className="text-[11px] text-blue-600 dark:text-blue-400">
-              Sold
+          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-2.5 dark:from-blue-900/40 dark:to-cyan-800/40">
+            <div className="relative z-10">
+              <div className="text-[10px] font-medium tracking-wide text-blue-700 uppercase dark:text-blue-400">
+                Sold
+              </div>
+              <div className="mt-0.5 text-lg font-bold text-blue-900 dark:text-blue-100">
+                {data.currentSales}
+              </div>
+              <div className="mt-0.5 text-[10px] text-blue-600 dark:text-blue-300">
+                of {data.capacity}
+              </div>
             </div>
-            <div className="mt-0.5 text-lg font-bold text-blue-900 dark:text-blue-100">
-              {data.currentSales}
-            </div>
-            <div className="mt-0.5 text-[11px] text-blue-600 dark:text-blue-400">
-              of {data.capacity}
-            </div>
+            <TicketIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-blue-300/40 dark:text-blue-600/30" />
           </div>
-          <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
-            <div className="text-[11px] text-green-600 dark:text-green-400">
-              Revenue
+          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-green-100 to-emerald-200 p-2.5 dark:from-green-900/40 dark:to-emerald-800/40">
+            <div className="relative z-10">
+              <div className="text-[10px] font-medium tracking-wide text-green-700 uppercase dark:text-green-400">
+                Revenue
+              </div>
+              <div className="mt-0.5 text-lg font-bold text-green-900 dark:text-green-100">
+                kr {(data.revenue / 1000).toFixed(0)}k
+              </div>
             </div>
-            <div className="mt-0.5 text-lg font-bold text-green-900 dark:text-green-100">
-              kr {(data.revenue / 1000).toFixed(0)}k
-            </div>
+            <BanknotesIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-green-300/40 dark:text-green-600/30" />
           </div>
-          <div className="rounded-lg bg-purple-50 p-2.5 dark:bg-purple-900/20">
-            <div className="text-[11px] text-purple-600 dark:text-purple-400">
-              Velocity
+          <div className="relative overflow-hidden rounded-xl bg-linear-to-br from-purple-100 to-pink-200 p-2.5 dark:from-purple-900/40 dark:to-pink-800/40">
+            <div className="relative z-10">
+              <div className="text-[10px] font-medium tracking-wide text-purple-700 uppercase dark:text-purple-400">
+                Velocity
+              </div>
+              <div className="mt-0.5 text-lg font-bold text-purple-900 dark:text-purple-100">
+                {data.salesVelocity.toFixed(1)}/d
+              </div>
             </div>
-            <div className="mt-0.5 text-lg font-bold text-purple-900 dark:text-purple-100">
-              {data.salesVelocity.toFixed(1)}/d
-            </div>
+            <BoltIcon className="absolute -right-2 -bottom-2 h-14 w-14 text-purple-300/40 dark:text-purple-600/30" />
           </div>
         </div>
 

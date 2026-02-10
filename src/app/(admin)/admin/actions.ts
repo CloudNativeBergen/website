@@ -82,11 +82,22 @@ export async function fetchSponsorPipelineData(
   const sponsors = sponsorResult.sponsors || []
   const pipeline = aggregateSponsorPipeline(sponsors)
 
-  const stages = PIPELINE_STAGES.map((status) => ({
-    name: STAGE_LABELS[status] || status,
-    count: pipeline.byStatus[status] || 0,
-    value: pipeline.byStatusValue[status] || 0,
-  }))
+  const stages = PIPELINE_STAGES.map((status) => {
+    const stageSponsors = sponsors
+      .filter((s) => s.status === status)
+      .map((s) => ({
+        name: s.sponsor?.name || 'Unknown',
+        logo: s.sponsor?.logo || undefined,
+        logoBright: s.sponsor?.logo_bright || undefined,
+      }))
+
+    return {
+      name: STAGE_LABELS[status] || status,
+      count: pipeline.byStatus[status] || 0,
+      value: pipeline.byStatusValue[status] || 0,
+      sponsors: stageSponsors,
+    }
+  })
 
   const activities = activityResult.activities || []
   const recentActivity = activities.slice(0, 5).map((a) => ({
@@ -248,9 +259,9 @@ export async function fetchCFPHealth(
   const now = new Date()
   const daysSinceOpen = cfpStart
     ? Math.max(
-      1,
-      Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
-    )
+        1,
+        Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
+      )
     : 1
   const averagePerDay =
     submitted.length > 0
