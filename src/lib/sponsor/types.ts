@@ -50,6 +50,7 @@ export interface SponsorTierInput {
 export type SponsorTierExisting = SponsorTier
 
 export interface ConferenceSponsor {
+  _sfcId?: string
   sponsor: {
     _id: string
     name: string
@@ -58,6 +59,7 @@ export interface ConferenceSponsor {
     logo_bright?: string | null
   }
   tier: {
+    _id?: string
     title: string
     tagline: string
     tier_type?: 'standard' | 'special' | 'addon'

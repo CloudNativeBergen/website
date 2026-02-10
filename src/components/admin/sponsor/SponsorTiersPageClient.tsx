@@ -61,6 +61,7 @@ export function SponsorTiersPageClient({
 
         <div className="mt-12">
           <SponsorTierManagement
+            conferenceId={conference._id}
             sponsors={sponsors}
             sponsorTiers={sponsorTiers}
             sponsorsByTier={sponsorsByTier}
