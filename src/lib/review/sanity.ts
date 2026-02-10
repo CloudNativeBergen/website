@@ -28,6 +28,7 @@ export async function updateReview(
 export async function createReview(
   proposalId: string,
   speakerId: string,
+  conferenceId: string,
   review: ReviewBase,
 ): Promise<{ review?: Review; reviewError: Error | null }> {
   let reviewError = null
@@ -39,6 +40,7 @@ export async function createReview(
       _type: 'review',
       proposal: createReference(proposalId),
       reviewer: createReference(speakerId),
+      conference: createReference(conferenceId),
     })) as Review
   } catch (error) {
     reviewError = error as Error

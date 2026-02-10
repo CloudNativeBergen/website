@@ -204,7 +204,7 @@ export async function getPublicSpeaker(
           },
           "scheduleInfo": {
             "talkId": _id,
-            "schedule": *[_type == "schedule" && ^._id in tracks[].talks[].talk._ref][0]
+            "schedule": *[_type == "schedule" && conference._ref == $conferenceId && ^._id in tracks[].talks[].talk._ref][0]
           } {
             "date": schedule.date,
             "trackTitle": schedule.tracks[count(talks[talk._ref == ^.talkId]) > 0][0].trackTitle,

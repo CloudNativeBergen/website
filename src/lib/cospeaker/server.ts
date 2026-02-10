@@ -128,6 +128,7 @@ export async function createCoSpeakerInvitation(params: {
   proposalId: string
   proposalTitle: string
   invitedBySpeakerId: string
+  conferenceId: string
 }): Promise<CoSpeakerInvitationFull | null> {
   try {
     const expiresAt = new Date()
@@ -143,6 +144,7 @@ export async function createCoSpeakerInvitation(params: {
     const invitation = await clientWrite.create({
       _type: 'coSpeakerInvitation',
       proposal: createReference(params.proposalId),
+      conference: createReference(params.conferenceId),
       invitedBy: createReference(params.invitedBySpeakerId),
       invitedEmail: params.invitedEmail,
       invitedName: params.invitedName,

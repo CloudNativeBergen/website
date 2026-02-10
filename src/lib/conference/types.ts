@@ -21,6 +21,7 @@ export interface ConferenceSchedule {
   _id: string
   date: string
   tracks: Array<ScheduleTrack>
+  conference?: { _id: string }
 }
 
 export interface ConferenceVanityMetric {

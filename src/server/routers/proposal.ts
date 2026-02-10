@@ -1070,6 +1070,11 @@ export const proposalRouter = router({
           }
 
           // Create invitation
+          const conferenceId =
+            '_id' in proposal.conference
+              ? proposal.conference._id
+              : (proposal.conference as { _ref: string })._ref
+
           const invitation = await createCoSpeakerInvitation({
             invitedByEmail: ctx.speaker.email,
             invitedByName: ctx.speaker.name,
@@ -1078,6 +1083,7 @@ export const proposalRouter = router({
             proposalId: input.proposalId,
             proposalTitle: proposal.title,
             invitedBySpeakerId: ctx.speaker._id,
+            conferenceId,
           })
 
           if (!invitation) {

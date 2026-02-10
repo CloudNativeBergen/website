@@ -366,7 +366,7 @@ export async function fetchNextUnreviewedProposal({
         _type == "talk" &&
         conference._ref == $conferenceId &&
         status == "${Status.submitted}" &&
-        !(_id in *[_type == "review" && reviewer._ref == $reviewerId].proposal._ref)
+        !(_id in *[_type == "review" && reviewer._ref == $reviewerId && conference._ref == $conferenceId].proposal._ref)
       ] {
         _id,
         title,
@@ -560,9 +560,8 @@ export async function getWorkshops({
 
   // If schedule info is requested, fetch and attach schedule data
   if (includeScheduleInfo && !proposalsError) {
-    // Fetch all schedules (not filtered by conference) since schedule documents
-    // may not have a conference reference, and we match by talk IDs instead
-    const scheduleQuery = groq`*[_type == "schedule"]{
+    // Fetch schedules scoped to the current conference
+    const scheduleQuery = groq`*[_type == "schedule" && conference._ref == $conferenceId]{
       date,
       tracks[]{
         trackTitle,
@@ -577,7 +576,7 @@ export async function getWorkshops({
     try {
       const schedules = await clientRead.fetch(
         scheduleQuery,
-        {},
+        { conferenceId },
         { cache: 'no-store' },
       )
 

@@ -2,9 +2,18 @@ import { defineField, defineType } from 'sanity'
 
 export default defineType({
   name: 'schedule',
-  title: 'Schedule',
+  title: 'Conference Schedule',
   type: 'document',
   fields: [
+    defineField({
+      name: 'conference',
+      title: 'Conference',
+      type: 'reference',
+      to: [{ type: 'conference' }],
+      description: 'Conference this schedule belongs to.',
+      validation: (Rule) => Rule.required(),
+      readOnly: true,
+    }),
     defineField({
       name: 'date',
       title: 'Date',

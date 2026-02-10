@@ -56,6 +56,15 @@ export default defineType({
       description: 'The proposal being reviewed.',
       validation: (Rule) => Rule.required().error('Proposal is required.'),
     }),
+    defineField({
+      name: 'conference',
+      type: 'reference',
+      title: 'Conference',
+      to: [{ type: 'conference' }],
+      description: 'Conference this review belongs to (derived from proposal).',
+      validation: (Rule) => Rule.required(),
+      readOnly: true,
+    }),
   ],
   preview: {
     select: {

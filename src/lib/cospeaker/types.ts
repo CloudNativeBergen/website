@@ -24,6 +24,14 @@ export interface CoSpeakerInvitationFull extends CoSpeakerInvitationMinimal {
   _createdAt?: string
   _updatedAt?: string
 
+  conference?:
+    | {
+        _ref: string
+        _type: 'reference'
+      }
+    | {
+        _id: string
+      }
   proposal?:
     | {
         _ref: string
