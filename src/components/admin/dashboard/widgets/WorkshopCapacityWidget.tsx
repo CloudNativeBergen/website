@@ -7,10 +7,8 @@ import {
   CalendarIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import {
-  getWorkshopCapacityData,
-  type WorkshopCapacityData,
-} from '@/hooks/dashboard/useDashboardData'
+import { type WorkshopCapacityData } from '@/hooks/dashboard/useDashboardData'
+import { fetchWorkshopCapacity } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
@@ -24,11 +22,14 @@ export function WorkshopCapacityWidget({
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getWorkshopCapacityData().then((result) => {
-      setData(result)
-      setLoading(false)
-    })
-  }, [])
+    if (!conference) return
+    fetchWorkshopCapacity(conference._id)
+      .then((result) => {
+        setData(result)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [conference])
 
   // Phase-specific: Initialization/Planning - Show workshop planning
   if (

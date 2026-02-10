@@ -10,10 +10,8 @@ import {
 } from '@heroicons/react/24/outline'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
-import {
-  getProposalPipelineData,
-  ProposalPipelineData,
-} from '@/hooks/dashboard/useDashboardData'
+import { type ProposalPipelineData } from '@/hooks/dashboard/useDashboardData'
+import { fetchProposalPipeline } from '@/app/(admin)/admin/actions'
 
 type ProposalPipelineWidgetProps = BaseWidgetProps
 
@@ -25,11 +23,14 @@ export function ProposalPipelineWidget({
   const phase = conference ? getCurrentPhase(conference) : null
 
   useEffect(() => {
-    getProposalPipelineData().then((result) => {
-      setData(result)
-      setLoading(false)
-    })
-  }, [])
+    if (!conference) return
+    fetchProposalPipeline(conference._id)
+      .then((result) => {
+        setData(result)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [conference])
 
   if (loading) {
     return (

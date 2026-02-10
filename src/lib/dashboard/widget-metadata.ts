@@ -10,7 +10,16 @@ import type { WidgetConfigSchema } from './types'
 
 export interface WidgetSizePreset {
   /** Preset name for UI display */
-  name: 'compact' | 'small' | 'medium' | 'large' | 'wide' | 'full'
+  name:
+    | 'compact'
+    | 'narrow'
+    | 'narrow-tall'
+    | 'small'
+    | 'medium'
+    | 'tall'
+    | 'large'
+    | 'wide'
+    | 'full'
   /** Number of columns to span */
   colSpan: number
   /** Number of rows to span */

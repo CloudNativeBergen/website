@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 import { useMemo, useSyncExternalStore, useState, useEffect } from 'react'
 import type { ApexOptions } from 'apexcharts'
-import { CheckCircleIcon } from '@heroicons/react/24/outline'
+import { CheckCircleIcon, TicketIcon } from '@heroicons/react/24/outline'
 import {
   getRadialBarChartOptions,
   getLineChartOptions,
@@ -11,12 +11,8 @@ import {
 } from '@/lib/dashboard/chart-theme'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
-import {
-  fetchTicketSales,
-} from '@/app/(admin)/admin/actions'
-import {
-  TicketSalesData,
-} from '@/hooks/dashboard/useDashboardData'
+import { fetchTicketSales } from '@/app/(admin)/admin/actions'
+import { TicketSalesData } from '@/hooks/dashboard/useDashboardData'
 
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false })
 
@@ -47,10 +43,14 @@ export function TicketSalesDashboardWidget({
 
   useEffect(() => {
     if (!conference) return
-    fetchTicketSales(conference).then((result) => {
-      setData(result)
-      setLoading(false)
-    })
+    fetchTicketSales(conference)
+      .then((result) => {
+        setData(result)
+        setLoading(false)
+      })
+      .catch(() => {
+        setLoading(false)
+      })
   }, [conference])
 
   const gaugeOptions: ApexOptions = useMemo(() => {
@@ -205,13 +205,110 @@ export function TicketSalesDashboardWidget({
     )
   }
 
-  // Planning & Execution phases: Active sales tracking
-  if (!data || data.capacity === 0) {
+  // Planning & Execution phases: Not configured
+  if (!data) {
     return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No ticket sales data available
-        </p>
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Ticket Sales
+          </h3>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+            Not Configured
+          </span>
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
+          <div className="space-y-2">
+            <TicketIcon className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Ticket integration not configured
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Set up Check-in customer &amp; event IDs in conference settings to
+              enable ticket tracking.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Awaiting first sale
+  if (data.currentSales === 0) {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="mb-2 flex shrink-0 items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+            Ticket Sales
+          </h3>
+          <a
+            href="/admin/tickets"
+            className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            Manage tickets &rarr;
+          </a>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+              <div className="text-[11px] text-blue-600 dark:text-blue-400">
+                Capacity
+              </div>
+              <div className="mt-1 text-2xl font-bold text-blue-900 dark:text-blue-100">
+                {data.capacity}
+              </div>
+            </div>
+            <div className="rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
+              <div className="text-[11px] text-purple-600 dark:text-purple-400">
+                Days Until Event
+              </div>
+              <div className="mt-1 text-2xl font-bold text-purple-900 dark:text-purple-100">
+                {data.daysUntilEvent}
+              </div>
+            </div>
+            <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
+              <div className="text-[11px] text-green-600 dark:text-green-400">
+                Tickets Sold
+              </div>
+              <div className="mt-1 text-2xl font-bold text-green-900 dark:text-green-100">
+                0
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+              Sales Targets
+            </h4>
+            {data.milestones.map((milestone) => {
+              const percent =
+                data.capacity > 0
+                  ? Math.round((data.currentSales / milestone.target) * 100)
+                  : 0
+              return (
+                <div key={milestone.name}>
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {milestone.name}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {data.currentSales} / {milestone.target}
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        milestone.reached
+                          ? 'bg-green-500 dark:bg-green-400'
+                          : 'bg-blue-500 dark:bg-blue-400'
+                      }`}
+                      style={{ width: `${Math.min(percent, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
     )
   }
@@ -288,10 +385,11 @@ export function TicketSalesDashboardWidget({
                 >
                   <div className="flex items-center gap-1.5">
                     <div
-                      className={`h-1.5 w-1.5 rounded-full ${milestone.reached
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        milestone.reached
                           ? 'bg-green-500 dark:bg-green-400'
                           : 'bg-gray-300 dark:bg-gray-600'
-                        }`}
+                      }`}
                     />
                     <span className="truncate text-[11px] leading-tight font-medium text-gray-700 dark:text-gray-200">
                       {milestone.name}

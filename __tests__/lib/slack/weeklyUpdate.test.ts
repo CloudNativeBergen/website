@@ -141,7 +141,7 @@ describe('weeklyUpdate', () => {
   describe('sendWeeklyUpdateToSlack', () => {
     it('should log to console in development mode', async () => {
       setEnv('development')
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => { })
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
 
       const { sendWeeklyUpdateToSlack } =
         await import('@/lib/slack/weeklyUpdate')
@@ -154,7 +154,7 @@ describe('weeklyUpdate', () => {
 
     it('should warn when SLACK_BOT_TOKEN is missing', async () => {
       setEnv('production')
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => { })
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
 
       const { sendWeeklyUpdateToSlack } =
         await import('@/lib/slack/weeklyUpdate')

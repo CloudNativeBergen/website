@@ -7,6 +7,7 @@ import { aggregateSponsorPipeline } from '@/lib/sponsor-crm/pipeline'
 import { listActivitiesForConference } from '@/lib/sponsor-crm/activities'
 import { getProposals } from '@/lib/proposal/server'
 import { Status } from '@/lib/proposal/types'
+import { calculateAverageRating } from '@/lib/proposal/business'
 import { getSpeakers } from '@/lib/speaker/sanity'
 import { getFeaturedSpeakers } from '@/lib/featured/sanity'
 import { Flags } from '@/lib/speaker/types'
@@ -14,7 +15,11 @@ import { fetchEventTickets } from '@/lib/tickets/api'
 import { TicketSalesProcessor } from '@/lib/tickets/processor'
 import type { ProcessTicketSalesInput } from '@/lib/tickets/types'
 import { DEFAULT_TARGET_CONFIG, DEFAULT_CAPACITY } from '@/lib/tickets/config'
+import { getAllTravelSupport } from '@/lib/travel-support/sanity'
+import { TravelSupportStatus } from '@/lib/travel-support/types'
+import { getWorkshopStatistics } from '@/lib/workshop/sanity'
 import { getAuthSession } from '@/lib/auth'
+import { clientWrite } from '@/lib/sanity/client'
 import { formatRelativeTime, formatLabel } from '@/lib/time'
 import type {
   SponsorPipelineData as WidgetSponsorPipelineData,
@@ -23,6 +28,11 @@ import type {
   CFPHealthData,
   SpeakerEngagementData,
   TicketSalesData,
+  ProposalPipelineData,
+  ReviewProgressData,
+  TravelSupportData,
+  WorkshopCapacityData,
+  ScheduleStatusData,
   QuickAction,
 } from '@/hooks/dashboard/useDashboardData'
 
@@ -145,10 +155,7 @@ export async function fetchDeadlines(
     })
   }
 
-  if (
-    ctx.daysUntilProgramRelease !== null &&
-    ctx.daysUntilProgramRelease > 0
-  ) {
+  if (ctx.daysUntilProgramRelease !== null && ctx.daysUntilProgramRelease > 0) {
     candidates.push({
       name: 'Program Published',
       date: conference.program_date,
@@ -172,7 +179,12 @@ export async function fetchDeadlines(
     .sort((a, b) => a.daysRemaining - b.daysRemaining)
     .map((c) => ({
       ...c,
-      urgency: c.daysRemaining <= 7 ? 'high' : c.daysRemaining <= 30 ? 'medium' : 'low',
+      urgency:
+        c.daysRemaining <= 7
+          ? 'high'
+          : c.daysRemaining <= 30
+            ? 'medium'
+            : 'low',
     }))
 }
 
@@ -232,11 +244,9 @@ export async function fetchCFPHealth(
   const now = new Date()
   const daysSinceOpen = cfpStart
     ? Math.max(
-      1,
-      Math.ceil(
-        (now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24),
-      ),
-    )
+        1,
+        Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
+      )
     : 1
   const averagePerDay =
     submitted.length > 0
@@ -290,9 +300,7 @@ export async function fetchSpeakerEngagement(
     if (speakerFlags.includes(Flags.diverseSpeaker)) diverseCount++
     if (speakerFlags.includes(Flags.localSpeaker)) localCount++
     if (speakerFlags.includes(Flags.firstTimeSpeaker)) firstTimeCount++
-    if (
-      speaker.proposals?.some((p) => p.status === Status.accepted)
-    ) {
+    if (speaker.proposals?.some((p) => p.status === Status.accepted)) {
       awaitingConfirmation++
     }
   }
@@ -332,12 +340,34 @@ export async function fetchTicketSales(
       conference.checkin_event_id,
     )
 
+    const capacity = conference.ticket_capacity || DEFAULT_CAPACITY
+
     if (!tickets || tickets.length === 0) {
-      return null
+      return {
+        currentSales: 0,
+        capacity,
+        percentage: 0,
+        revenue: 0,
+        salesByDate: [],
+        milestones: [
+          {
+            name: 'Early Bird',
+            target: Math.round(capacity * 0.2),
+            reached: false,
+          },
+          {
+            name: 'Break Even',
+            target: Math.round(capacity * 0.5),
+            reached: false,
+          },
+          { name: 'Sell Out', target: capacity, reached: false },
+        ],
+        daysUntilEvent: getPhaseContext(conference).daysUntilConference ?? 0,
+        salesVelocity: 0,
+      }
     }
 
     const targetConfig = conference.ticket_targets || DEFAULT_TARGET_CONFIG
-    const capacity = conference.ticket_capacity || DEFAULT_CAPACITY
 
     const input: ProcessTicketSalesInput = {
       tickets: tickets.map((t) => ({
@@ -478,14 +508,16 @@ export async function fetchRecentActivity(
         new Date(b._sortDate).getTime() - new Date(a._sortDate).getTime(),
     )
     .slice(0, 10)
-    .map((item): ActivityItem => ({
-      id: item.id,
-      type: item.type,
-      description: item.description,
-      user: item.user,
-      timestamp: item.timestamp,
-      link: item.link,
-    }))
+    .map(
+      (item): ActivityItem => ({
+        id: item.id,
+        type: item.type,
+        description: item.description,
+        user: item.user,
+        timestamp: item.timestamp,
+        link: item.link,
+      }),
+    )
 }
 
 // --- Quick Actions ---
@@ -720,4 +752,341 @@ export async function fetchQuickActions(
   }
 
   return baseActions[phase] || baseActions.planning
+}
+
+// --- Proposal Pipeline ---
+
+export async function fetchProposalPipeline(
+  conferenceId: string,
+): Promise<ProposalPipelineData> {
+  await requireOrganizer()
+
+  const { proposals, proposalsError } = await getProposals({
+    conferenceId,
+    returnAll: true,
+  })
+
+  if (proposalsError) {
+    throw new Error(`Failed to fetch proposals: ${proposalsError.message}`)
+  }
+
+  const allProposals = proposals || []
+  const nonDraft = allProposals.filter((p) => p.status !== Status.draft)
+
+  const submitted = nonDraft.length
+  const accepted = nonDraft.filter((p) => p.status === Status.accepted).length
+  const rejected = nonDraft.filter((p) => p.status === Status.rejected).length
+  const confirmed = nonDraft.filter((p) => p.status === Status.confirmed).length
+  const pendingDecisions = nonDraft.filter(
+    (p) => p.status === Status.submitted,
+  ).length
+
+  return {
+    submitted,
+    accepted,
+    rejected,
+    confirmed,
+    total: submitted,
+    acceptanceRate:
+      submitted > 0 ? ((accepted + confirmed) / submitted) * 100 : 0,
+    pendingDecisions,
+  }
+}
+
+// --- Review Progress ---
+
+export async function fetchReviewProgress(
+  conferenceId: string,
+): Promise<ReviewProgressData> {
+  await requireOrganizer()
+
+  const { proposals, proposalsError } = await getProposals({
+    conferenceId,
+    returnAll: true,
+    includeReviews: true,
+  })
+
+  if (proposalsError) {
+    throw new Error(`Failed to fetch proposals: ${proposalsError.message}`)
+  }
+
+  const allProposals = proposals || []
+  const nonDraft = allProposals.filter((p) => p.status !== Status.draft)
+  const reviewed = nonDraft.filter((p) => p.reviews && p.reviews.length > 0)
+
+  const totalScores = reviewed.reduce(
+    (sum, p) => sum + calculateAverageRating(p),
+    0,
+  )
+  const averageScore =
+    reviewed.length > 0 ? (totalScores / reviewed.length) * 2 : 0
+
+  // Find next unreviewed proposal
+  const unreviewed = nonDraft.find(
+    (p) =>
+      p.status === Status.submitted && (!p.reviews || p.reviews.length === 0),
+  )
+
+  return {
+    reviewedCount: reviewed.length,
+    totalProposals: nonDraft.length,
+    percentage:
+      nonDraft.length > 0 ? (reviewed.length / nonDraft.length) * 100 : 0,
+    averageScore: Math.round(averageScore * 10) / 10,
+    nextUnreviewed: unreviewed
+      ? { id: unreviewed._id, title: unreviewed.title }
+      : undefined,
+  }
+}
+
+// --- Travel Support ---
+
+export async function fetchTravelSupport(
+  conference: Conference,
+): Promise<TravelSupportData> {
+  await requireOrganizer()
+
+  const { travelSupports, error } = await getAllTravelSupport(conference._id)
+
+  if (error) {
+    throw new Error(`Failed to fetch travel support: ${error.message}`)
+  }
+
+  const pending = travelSupports.filter(
+    (ts) => ts.status === TravelSupportStatus.SUBMITTED,
+  )
+  const approved = travelSupports.filter(
+    (ts) =>
+      ts.status === TravelSupportStatus.APPROVED ||
+      ts.status === TravelSupportStatus.PAID,
+  )
+
+  const totalRequested = travelSupports.reduce((sum, ts) => {
+    const expenseTotal =
+      ts.expenses?.reduce((s, e) => s + (e.amount || 0), 0) || 0
+    return sum + (ts.totalAmount || expenseTotal)
+  }, 0)
+
+  const totalApproved = approved.reduce(
+    (sum, ts) => sum + (ts.approvedAmount || ts.totalAmount || 0),
+    0,
+  )
+
+  const budgetAllocated = conference.travel_support_budget || 0
+
+  return {
+    pendingApprovals: pending.length,
+    totalRequested,
+    totalApproved,
+    budgetAllocated,
+    averageRequest:
+      travelSupports.length > 0 ? totalRequested / travelSupports.length : 0,
+    requests: pending.slice(0, 5).map((ts) => ({
+      id: ts._id,
+      speaker: ts.speaker?.name || 'Unknown',
+      amount:
+        ts.totalAmount ||
+        ts.expenses?.reduce((s, e) => s + (e.amount || 0), 0) ||
+        0,
+      status: ts.status,
+      submittedAt: ts.submittedAt
+        ? formatRelativeTime(ts.submittedAt)
+        : formatRelativeTime(ts._createdAt),
+    })),
+  }
+}
+
+// --- Workshop Capacity ---
+
+export async function fetchWorkshopCapacity(
+  conferenceId: string,
+): Promise<WorkshopCapacityData> {
+  await requireOrganizer()
+
+  const stats = await getWorkshopStatistics(conferenceId)
+
+  const workshops = stats.workshops.map((w) => ({
+    id: w.workshopId,
+    title: w.workshopTitle,
+    capacity: w.capacity,
+    confirmed: w.confirmedSignups,
+    waitlist: w.waitlistSignups,
+    fillRate: w.utilization,
+  }))
+
+  const atCapacity = workshops.filter((w) => w.fillRate >= 100).length
+
+  return {
+    workshops,
+    averageFillRate: stats.totals.averageUtilization,
+    atCapacity,
+    totalWaitlist: stats.totals.totalWaitlist,
+  }
+}
+
+// --- Schedule Status ---
+
+export async function fetchScheduleStatus(
+  conference: Conference,
+): Promise<ScheduleStatusData> {
+  await requireOrganizer()
+
+  const schedules = conference.schedules || []
+
+  // Count total slots and filled slots across all schedule days
+  let totalSlots = 0
+  let filledSlots = 0
+  let placeholderSlots = 0
+  const byDay: { day: string; filled: number; total: number }[] = []
+
+  for (const schedule of schedules) {
+    let dayTotal = 0
+    let dayFilled = 0
+
+    for (const track of schedule.tracks || []) {
+      for (const slot of track.talks || []) {
+        dayTotal++
+        totalSlots++
+        if (slot.talk) {
+          dayFilled++
+          filledSlots++
+        } else if (slot.placeholder) {
+          placeholderSlots++
+        }
+      }
+    }
+
+    const dayLabel = new Date(schedule.date + 'T12:00:00').toLocaleDateString(
+      'en-US',
+      { weekday: 'short', month: 'short', day: 'numeric' },
+    )
+    byDay.push({ day: dayLabel, filled: dayFilled, total: dayTotal })
+  }
+
+  // Count confirmed talks not yet assigned to the schedule
+  const { proposals, proposalsError } = await getProposals({
+    conferenceId: conference._id,
+    returnAll: true,
+  })
+
+  let unassignedConfirmedTalks = 0
+  if (!proposalsError && proposals) {
+    const confirmedProposals = proposals.filter(
+      (p) => p.status === Status.confirmed || p.status === Status.accepted,
+    )
+
+    const scheduledTalkIds = new Set<string>()
+    for (const schedule of schedules) {
+      for (const track of schedule.tracks || []) {
+        for (const slot of track.talks || []) {
+          if (slot.talk?._id) {
+            scheduledTalkIds.add(slot.talk._id)
+          }
+        }
+      }
+    }
+
+    unassignedConfirmedTalks = confirmedProposals.filter(
+      (p) => !scheduledTalkIds.has(p._id),
+    ).length
+  }
+
+  return {
+    totalSlots,
+    filledSlots,
+    percentage: totalSlots > 0 ? (filledSlots / totalSlots) * 100 : 0,
+    byDay,
+    unassignedConfirmedTalks,
+    placeholderSlots,
+  }
+}
+
+// --- Dashboard Config Persistence ---
+
+interface DashboardConfigWidget {
+  _key: string
+  widget_id: string
+  widget_type: string
+  title: string
+  row: number
+  col: number
+  row_span: number
+  col_span: number
+  config?: string
+}
+
+interface DashboardConfigDocument {
+  _id: string
+  _type: 'dashboardConfig'
+  conference: { _ref: string; _type: 'reference' }
+  preset?: string
+  widgets: DashboardConfigWidget[]
+}
+
+export interface SerializedWidget {
+  id: string
+  type: string
+  title: string
+  position: { row: number; col: number; rowSpan: number; colSpan: number }
+  config?: Record<string, unknown>
+}
+
+export async function loadDashboardConfig(
+  conferenceId: string,
+): Promise<SerializedWidget[] | null> {
+  await requireOrganizer()
+
+  const doc = await clientWrite.fetch<DashboardConfigDocument | null>(
+    `*[_type == "dashboardConfig" && conference._ref == $conferenceId][0]`,
+    { conferenceId },
+  )
+
+  if (!doc?.widgets?.length) return null
+
+  return doc.widgets.map((w) => ({
+    id: w.widget_id,
+    type: w.widget_type,
+    title: w.title || w.widget_type,
+    position: {
+      row: w.row || 0,
+      col: w.col || 0,
+      rowSpan: w.row_span || 2,
+      colSpan: w.col_span || 3,
+    },
+    config: w.config ? JSON.parse(w.config) : undefined,
+  }))
+}
+
+export async function saveDashboardConfig(
+  conferenceId: string,
+  widgets: SerializedWidget[],
+): Promise<void> {
+  await requireOrganizer()
+
+  const existingId = await clientWrite.fetch<string | null>(
+    `*[_type == "dashboardConfig" && conference._ref == $conferenceId][0]._id`,
+    { conferenceId },
+  )
+
+  const widgetDocs: DashboardConfigWidget[] = widgets.map((w, i) => ({
+    _key: `widget-${i}`,
+    widget_id: w.id,
+    widget_type: w.type,
+    title: w.title,
+    row: w.position.row,
+    col: w.position.col,
+    row_span: w.position.rowSpan,
+    col_span: w.position.colSpan,
+    config: w.config ? JSON.stringify(w.config) : undefined,
+  }))
+
+  if (existingId) {
+    await clientWrite.patch(existingId).set({ widgets: widgetDocs }).commit()
+  } else {
+    await clientWrite.create({
+      _type: 'dashboardConfig' as const,
+      conference: { _ref: conferenceId, _type: 'reference' },
+      widgets: widgetDocs,
+    })
+  }
 }

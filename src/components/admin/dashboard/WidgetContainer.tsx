@@ -248,7 +248,7 @@ export function WidgetContainer({
           // CSS containment for performance - isolate widgets from affecting each other
           contain: 'layout style paint',
         }}
-        className={`relative rounded-lg border-2 bg-white shadow-sm transition-colors dark:bg-gray-800 ${borderColor}`}
+        className={`relative overflow-hidden rounded-lg border-2 bg-white shadow-sm transition-colors dark:bg-gray-800 ${borderColor}`}
       >
         {/* macOS-style window controls */}
         {editMode && (

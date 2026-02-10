@@ -7,10 +7,8 @@ import {
   CheckCircleIcon,
   DocumentTextIcon,
 } from '@heroicons/react/24/outline'
-import {
-  getScheduleStatusData,
-  type ScheduleStatusData,
-} from '@/hooks/dashboard/useDashboardData'
+import { type ScheduleStatusData } from '@/hooks/dashboard/useDashboardData'
+import { fetchScheduleStatus } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
@@ -24,11 +22,14 @@ export function ScheduleBuilderStatusWidget({
   const phase = conference ? getCurrentPhase(conference) : null
 
   useEffect(() => {
-    getScheduleStatusData().then((result) => {
-      setData(result)
-      setLoading(false)
-    })
-  }, [])
+    if (!conference) return
+    fetchScheduleStatus(conference)
+      .then((result) => {
+        setData(result)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [conference])
 
   if (loading) {
     return (

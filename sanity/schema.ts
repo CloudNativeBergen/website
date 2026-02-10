@@ -4,6 +4,7 @@ import { fileAttachment, urlAttachment } from './schemaTypes/attachment'
 import blockContent from './schemaTypes/blockContent'
 import conference from './schemaTypes/conference'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
+import dashboardConfig from './schemaTypes/dashboardConfig'
 import imageGallery from './schemaTypes/imageGallery'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
@@ -28,6 +29,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     urlAttachment,
     conference,
     coSpeakerInvitation,
+    dashboardConfig,
     imageGallery,
     review,
     schedule,

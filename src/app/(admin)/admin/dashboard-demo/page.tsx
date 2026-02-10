@@ -513,11 +513,7 @@ export default function DashboardDemoPage() {
           content = <ProposalPipelineWidget conference={mockConference} />
           break
         case 'upcoming-deadlines':
-          content = (
-            <UpcomingDeadlinesWidget
-              conference={mockConference}
-            />
-          )
+          content = <UpcomingDeadlinesWidget conference={mockConference} />
           break
         case 'cfp-health':
           content = (
@@ -543,11 +539,7 @@ export default function DashboardDemoPage() {
           content = <SpeakerEngagementWidget conference={mockConference} />
           break
         case 'sponsor-pipeline':
-          content = (
-            <SponsorPipelineWidget
-              conference={mockConference}
-            />
-          )
+          content = <SponsorPipelineWidget conference={mockConference} />
           break
         case 'workshop-capacity':
           content = <WorkshopCapacityWidget />
@@ -556,11 +548,7 @@ export default function DashboardDemoPage() {
           content = <TravelSupportQueueWidget />
           break
         case 'recent-activity':
-          content = (
-            <RecentActivityFeedWidget
-              conference={mockConference}
-            />
-          )
+          content = <RecentActivityFeedWidget conference={mockConference} />
           break
         case 'content-calendar':
           content = <ContentCalendarWidget conference={mockConference} />
@@ -683,10 +671,11 @@ export default function DashboardDemoPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setEditMode(!editMode)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${editMode
-                ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
-                : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                }`}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                editMode
+                  ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
+                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
             >
               <PencilIcon className="h-3.5 w-3.5" />
               {editMode ? 'Exit Edit' : 'Edit'}

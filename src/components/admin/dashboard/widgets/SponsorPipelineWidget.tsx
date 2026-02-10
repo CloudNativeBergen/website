@@ -7,12 +7,8 @@ import {
   BuildingOffice2Icon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import {
-  fetchSponsorPipelineData,
-} from '@/app/(admin)/admin/actions'
-import {
-  type SponsorPipelineData,
-} from '@/hooks/dashboard/useDashboardData'
+import { fetchSponsorPipelineData } from '@/app/(admin)/admin/actions'
+import { type SponsorPipelineData } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
@@ -94,7 +90,8 @@ export function SponsorPipelineWidget({
   // Phase-specific: Post-conference - Show final summary
   if (phase === 'post-conference' && data) {
     const finalRevenue = data.totalValue
-    const goalAchieved = (finalRevenue / data.revenueGoal) * 100
+    const goalAchieved =
+      data.revenueGoal > 0 ? (finalRevenue / data.revenueGoal) * 100 : 0
 
     return (
       <div className="flex h-full flex-col">
@@ -143,9 +140,9 @@ export function SponsorPipelineWidget({
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
               {data.wonDeals + data.lostDeals > 0
                 ? (
-                  (data.wonDeals / (data.wonDeals + data.lostDeals)) *
-                  100
-                ).toFixed(0)
+                    (data.wonDeals / (data.wonDeals + data.lostDeals)) *
+                    100
+                  ).toFixed(0)
                 : 0}
               %
             </div>
@@ -155,7 +152,7 @@ export function SponsorPipelineWidget({
     )
   }
 
-  if (!data || data.totalValue === 0) {
+  if (!data) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
         <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -167,7 +164,8 @@ export function SponsorPipelineWidget({
 
   // Default operational view (execution phase)
 
-  const progress = (data.totalValue / data.revenueGoal) * 100
+  const progress =
+    data.revenueGoal > 0 ? (data.totalValue / data.revenueGoal) * 100 : 0
 
   return (
     <div className="flex h-full flex-col">
@@ -191,9 +189,11 @@ export function SponsorPipelineWidget({
           <div className="mt-1 text-xl font-bold text-green-900 dark:text-green-100">
             ${(data.totalValue / 1000).toFixed(0)}k
           </div>
-          <div className="mt-1 text-xs text-green-600 dark:text-green-400">
-            of ${(data.revenueGoal / 1000).toFixed(0)}k
-          </div>
+          {data.revenueGoal > 0 && (
+            <div className="mt-1 text-xs text-green-600 dark:text-green-400">
+              of ${(data.revenueGoal / 1000).toFixed(0)}k
+            </div>
+          )}
         </div>
         <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
           <div className="text-xs text-blue-600 dark:text-blue-400">
@@ -213,28 +213,30 @@ export function SponsorPipelineWidget({
         </div>
       </div>
 
-      <div className="mb-3">
-        <div className="mb-1.5 flex items-center justify-between">
-          <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-            Revenue Progress
-          </h4>
-          <span className="text-[11px] text-gray-600 dark:text-gray-300">
-            {progress.toFixed(0)}%
-          </span>
+      {data.revenueGoal > 0 && (
+        <div className="mb-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+              Revenue Progress
+            </h4>
+            <span className="text-[11px] text-gray-600 dark:text-gray-300">
+              {progress.toFixed(0)}%
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+            <div
+              className="h-full bg-green-600 transition-all dark:bg-green-500"
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            />
+          </div>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-          <div
-            className="h-full bg-green-600 transition-all dark:bg-green-500"
-            style={{ width: `${Math.min(progress, 100)}%` }}
-          />
-        </div>
-      </div>
+      )}
 
-      <div className="mb-3 flex-1">
+      <div className="mb-3 shrink-0">
         <h4 className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
           Pipeline Stages
         </h4>
-        <div className="space-y-2 [&>*:nth-child(n+3)]:hidden @[400px]:[&>*:nth-child(n+4)]:block @[400px]:[&>*:nth-child(n+5)]:hidden @[600px]:[&>*:nth-child(n+5)]:block">
+        <div className="space-y-2">
           {data.stages.map((stage, index) => {
             const stageColors = [
               'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600',
@@ -265,31 +267,6 @@ export function SponsorPipelineWidget({
               </div>
             )
           })}
-        </div>
-      </div>
-
-      <div className="border-t border-gray-200 pt-3 dark:border-gray-700">
-        <h4 className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-          Recent Activity
-        </h4>
-        <div className="space-y-1.5 [&>*:nth-child(n+2)]:hidden @[300px]:[&>*:nth-child(n+3)]:block @[300px]:[&>*:nth-child(n+4)]:hidden @[500px]:[&>*:nth-child(n+4)]:block">
-          {data.recentActivity.slice(0, 3).map((activity) => (
-            <Link
-              key={activity.id}
-              href="/admin/sponsors/crm"
-              className="block rounded-lg bg-gray-50 p-2 transition-colors hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-            >
-              <div className="truncate text-[11px] leading-tight font-medium text-gray-900 dark:text-gray-100">
-                {activity.sponsor}
-              </div>
-              <div className="truncate text-[11px] text-gray-600 dark:text-gray-300">
-                {activity.activity}
-              </div>
-              <div className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
-                {activity.timestamp}
-              </div>
-            </Link>
-          ))}
         </div>
       </div>
     </div>

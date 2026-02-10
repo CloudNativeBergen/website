@@ -3,10 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircleIcon } from '@heroicons/react/24/outline'
-import {
-  getReviewProgressData,
-  type ReviewProgressData,
-} from '@/hooks/dashboard/useDashboardData'
+import { type ReviewProgressData } from '@/hooks/dashboard/useDashboardData'
+import { fetchReviewProgress } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
@@ -20,11 +18,14 @@ export function ReviewProgressWidget({
   const phase = conference ? getCurrentPhase(conference) : null
 
   useEffect(() => {
-    getReviewProgressData().then((result) => {
-      setData(result)
-      setLoading(false)
-    })
-  }, [])
+    if (!conference) return
+    fetchReviewProgress(conference._id)
+      .then((result) => {
+        setData(result)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [conference])
 
   if (loading) {
     return (

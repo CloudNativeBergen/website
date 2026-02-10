@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Widget } from '@/lib/dashboard/types'
 import { getColumnCountForWidth } from '@/lib/dashboard/grid-utils'
 import { DashboardGrid } from '@/components/admin/dashboard/DashboardGrid'
@@ -13,6 +13,11 @@ import { TicketSalesDashboardWidget } from '@/components/admin/dashboard/widgets
 import { SpeakerEngagementWidget } from '@/components/admin/dashboard/widgets/SpeakerEngagementWidget'
 import { SponsorPipelineWidget } from '@/components/admin/dashboard/widgets/SponsorPipelineWidget'
 import { RecentActivityFeedWidget } from '@/components/admin/dashboard/widgets/RecentActivityFeedWidget'
+import { ProposalPipelineWidget } from '@/components/admin/dashboard/widgets/ProposalPipelineWidget'
+import { ReviewProgressWidget } from '@/components/admin/dashboard/widgets/ReviewProgressWidget'
+import { TravelSupportQueueWidget } from '@/components/admin/dashboard/widgets/TravelSupportQueueWidget'
+import { WorkshopCapacityWidget } from '@/components/admin/dashboard/widgets/WorkshopCapacityWidget'
+import { ScheduleBuilderStatusWidget } from '@/components/admin/dashboard/widgets/ScheduleBuilderStatusWidget'
 import { WidgetPicker } from '@/components/admin/dashboard/WidgetPicker'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
 import { findAvailablePosition } from '@/lib/dashboard/placement-utils'
@@ -27,8 +32,14 @@ import {
   getPhaseName,
   getPhaseColor,
 } from '@/lib/conference/phase'
+import {
+  loadDashboardConfig,
+  saveDashboardConfig,
+  type SerializedWidget,
+} from '@/app/(admin)/admin/actions'
 
 const PLANNING_WIDGETS: Widget[] = [
+  // Left column (col 0, span 3) — 12 rows
   {
     id: 'quick-actions',
     type: 'quick-actions',
@@ -36,40 +47,42 @@ const PLANNING_WIDGETS: Widget[] = [
     position: { row: 0, col: 0, rowSpan: 2, colSpan: 3 },
   },
   {
-    id: 'sponsor-pipeline',
-    type: 'sponsor-pipeline',
-    title: 'Sponsor Pipeline',
-    position: { row: 0, col: 3, rowSpan: 4, colSpan: 5 },
-  },
-  {
-    id: 'upcoming-deadlines',
-    type: 'upcoming-deadlines',
-    title: 'Upcoming Deadlines',
-    position: { row: 0, col: 8, rowSpan: 3, colSpan: 4 },
-  },
-  {
     id: 'cfp-health',
     type: 'cfp-health',
     title: 'CFP Health',
-    position: { row: 2, col: 0, rowSpan: 3, colSpan: 3 },
+    position: { row: 2, col: 0, rowSpan: 6, colSpan: 3 },
   },
   {
     id: 'speaker-engagement',
     type: 'speaker-engagement',
-    title: 'Speaker Outreach',
-    position: { row: 3, col: 8, rowSpan: 4, colSpan: 4 },
+    title: 'Speaker Engagement',
+    position: { row: 8, col: 0, rowSpan: 4, colSpan: 3 },
+  },
+  // Center column (col 3, span 6) — 12 rows
+  {
+    id: 'sponsor-pipeline',
+    type: 'sponsor-pipeline',
+    title: 'Sponsor Pipeline',
+    position: { row: 0, col: 3, rowSpan: 9, colSpan: 6 },
   },
   {
     id: 'ticket-sales',
     type: 'ticket-sales',
     title: 'Ticket Sales',
-    position: { row: 4, col: 3, rowSpan: 3, colSpan: 5 },
+    position: { row: 9, col: 3, rowSpan: 3, colSpan: 6 },
+  },
+  // Right column (col 9, span 3) — 12 rows
+  {
+    id: 'upcoming-deadlines',
+    type: 'upcoming-deadlines',
+    title: 'Upcoming Deadlines',
+    position: { row: 0, col: 9, rowSpan: 2, colSpan: 3 },
   },
   {
     id: 'recent-activity',
     type: 'recent-activity',
     title: 'Recent Activity',
-    position: { row: 5, col: 0, rowSpan: 2, colSpan: 3 },
+    position: { row: 2, col: 9, rowSpan: 10, colSpan: 3 },
   },
 ]
 
@@ -82,10 +95,57 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const [editMode, setEditMode] = useState(false)
   const [columnCount, setColumnCount] = useState(4)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
+  const [configLoaded, setConfigLoaded] = useState(false)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const currentPhase = getCurrentPhase(conference)
   const phaseName = getPhaseName(currentPhase)
   const phaseColor = getPhaseColor(currentPhase)
+
+  // Load saved config on mount
+  useEffect(() => {
+    loadDashboardConfig(conference._id)
+      .then((saved) => {
+        if (saved && saved.length > 0) {
+          setWidgets(
+            saved.map((w) => ({
+              id: w.id,
+              type: w.type,
+              title: w.title,
+              position: w.position,
+              config: w.config,
+            })),
+          )
+        }
+        setConfigLoaded(true)
+      })
+      .catch(() => setConfigLoaded(true))
+  }, [conference._id])
+
+  // Debounced save whenever widgets change (after initial load)
+  const persistWidgets = useCallback(
+    (widgetsToSave: Widget[]) => {
+      if (!configLoaded) return
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(() => {
+        const serialized: SerializedWidget[] = widgetsToSave.map((w) => ({
+          id: w.id,
+          type: w.type,
+          title: w.title,
+          position: w.position,
+          config: w.config as Record<string, unknown> | undefined,
+        }))
+        saveDashboardConfig(conference._id, serialized).catch(() => {
+          // Silently fail — widget state is still in React
+        })
+      }, 1500)
+    },
+    [conference._id, configLoaded],
+  )
+
+  useEffect(() => {
+    persistWidgets(widgets)
+  }, [widgets, persistWidgets])
 
   useEffect(() => {
     const handleResize = () => {
@@ -98,6 +158,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
 
   const handleReset = useCallback(() => {
     setWidgets(PLANNING_WIDGETS)
+    // persistWidgets will fire via the useEffect on widget change
   }, [])
 
   const handleAddWidget = useCallback(
@@ -191,6 +252,21 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         case 'recent-activity':
           content = <RecentActivityFeedWidget conference={conference} />
           break
+        case 'proposal-pipeline':
+          content = <ProposalPipelineWidget conference={conference} />
+          break
+        case 'review-progress':
+          content = <ReviewProgressWidget conference={conference} />
+          break
+        case 'travel-support':
+          content = <TravelSupportQueueWidget conference={conference} />
+          break
+        case 'workshop-capacity':
+          content = <WorkshopCapacityWidget conference={conference} />
+          break
+        case 'schedule-builder':
+          content = <ScheduleBuilderStatusWidget conference={conference} />
+          break
         default:
           content = (
             <div className="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">
@@ -251,10 +327,11 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         <div className="flex gap-2">
           <button
             onClick={() => setEditMode(!editMode)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${editMode
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+              editMode
                 ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                 : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-              }`}
+            }`}
           >
             <PencilIcon className="h-3.5 w-3.5" />
             {editMode ? 'Exit Edit' : 'Edit'}

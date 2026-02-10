@@ -10,12 +10,8 @@ import {
   CheckCircleIcon,
   ChartBarIcon,
 } from '@heroicons/react/24/outline'
-import {
-  fetchSpeakerEngagement,
-} from '@/app/(admin)/admin/actions'
-import {
-  type SpeakerEngagementData,
-} from '@/hooks/dashboard/useDashboardData'
+import { fetchSpeakerEngagement } from '@/app/(admin)/admin/actions'
+import { type SpeakerEngagementData } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
@@ -97,8 +93,9 @@ export function SpeakerEngagementWidget({
                 Early Registrations
               </h4>
               <p className="text-[11px] text-gray-600 dark:text-gray-400">
-                {registeredCount} speaker{registeredCount !== 1 ? 's have' : ' has'}{' '}
-                created profiles. Returning speakers are marked automatically.
+                {registeredCount} speaker
+                {registeredCount !== 1 ? 's have' : ' has'} created profiles.
+                Returning speakers are marked automatically.
               </p>
             </div>
           ) : (
@@ -196,8 +193,8 @@ export function SpeakerEngagementWidget({
           <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
             <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
             <p className="text-xs text-green-800 dark:text-green-300">
-              {data.returningSpeakers} returning, {data.diverseSpeakers} diverse,{' '}
-              {data.localSpeakers} local
+              {data.returningSpeakers} returning, {data.diverseSpeakers}{' '}
+              diverse, {data.localSpeakers} local
             </p>
           </div>
         </div>
@@ -218,7 +215,7 @@ export function SpeakerEngagementWidget({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-1.5 flex shrink-0 items-center justify-between">
         <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
           Speaker Engagement
         </h3>
@@ -226,74 +223,68 @@ export function SpeakerEngagementWidget({
           href="/admin/speakers"
           className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
         >
-          View all →
+          View all &rarr;
         </Link>
       </div>
 
-      <div className="mb-3 rounded-lg bg-linear-to-br from-blue-50 to-purple-50 p-3 dark:from-blue-900/20 dark:to-purple-900/20">
-        <div className="text-[11px] text-blue-600 dark:text-blue-400">
-          Total Speakers
-        </div>
-        <div className="mt-0.5 text-2xl font-bold text-blue-900 dark:text-blue-100">
+      {/* Top half: Total speakers hero */}
+      <div className="flex min-h-0 flex-1 flex-col justify-center rounded-lg bg-linear-to-br from-blue-50 to-purple-50 px-3 dark:from-blue-900/20 dark:to-purple-900/20">
+        <div className="text-3xl font-black text-blue-900 dark:text-blue-100">
           {data.totalSpeakers}
         </div>
-        <div className="mt-1 text-[11px] text-blue-700 dark:text-blue-300">
-          {data.averageProposalsPerSpeaker.toFixed(1)} proposals per speaker
+        <div className="text-[11px] text-blue-600 dark:text-blue-400">
+          speakers &middot; {data.averageProposalsPerSpeaker.toFixed(1)}{' '}
+          proposals each
         </div>
+        {data.awaitingConfirmation > 0 && (
+          <div className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+            {data.awaitingConfirmation} awaiting confirmation
+          </div>
+        )}
       </div>
 
-      <div className="grid flex-1 grid-cols-2 gap-2 @[200px]:grid-cols-1 @[400px]:grid-cols-2">
-        <div className="flex flex-col items-center justify-center rounded-lg bg-green-50 p-2.5 text-center dark:bg-green-900/20">
-          <SparklesIcon className="mb-1.5 h-5 w-5 text-green-600 dark:text-green-400" />
-          <div className="text-[11px] text-green-600 dark:text-green-400">
-            New Speakers
+      {/* Bottom half: 4 columns */}
+      <div className="mt-1.5 grid min-h-0 flex-1 grid-cols-4 gap-1.5">
+        <div className="flex flex-col items-center justify-center rounded-lg bg-green-50 text-center dark:bg-green-900/20">
+          <SparklesIcon className="mb-0.5 h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+          <div className="text-[9px] text-green-600 dark:text-green-400">
+            New
           </div>
-          <div className="mt-0.5 text-xl font-bold text-green-900 dark:text-green-100">
+          <div className="text-lg font-bold text-green-900 dark:text-green-100">
             {data.newSpeakers}
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-lg bg-blue-50 p-2.5 text-center dark:bg-blue-900/20">
-          <ArrowPathIcon className="mb-1.5 h-5 w-5 text-blue-600 dark:text-blue-400" />
-          <div className="text-[11px] text-blue-600 dark:text-blue-400">
-            Returning
+        <div className="flex flex-col items-center justify-center rounded-lg bg-blue-50 text-center dark:bg-blue-900/20">
+          <ArrowPathIcon className="mb-0.5 h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+          <div className="text-[9px] text-blue-600 dark:text-blue-400">
+            Return
           </div>
-          <div className="mt-0.5 text-xl font-bold text-blue-900 dark:text-blue-100">
+          <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
             {data.returningSpeakers}
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-lg bg-purple-50 p-2.5 text-center dark:bg-purple-900/20">
-          <UserGroupIcon className="mb-1.5 h-5 w-5 text-purple-600 dark:text-purple-400" />
-          <div className="text-[11px] text-purple-600 dark:text-purple-400">
+        <div className="flex flex-col items-center justify-center rounded-lg bg-purple-50 text-center dark:bg-purple-900/20">
+          <UserGroupIcon className="mb-0.5 h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+          <div className="text-[9px] text-purple-600 dark:text-purple-400">
             Diverse
           </div>
-          <div className="mt-0.5 text-xl font-bold text-purple-900 dark:text-purple-100">
+          <div className="text-lg font-bold text-purple-900 dark:text-purple-100">
             {data.diverseSpeakers}
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-lg bg-cyan-50 p-2.5 text-center dark:bg-cyan-900/20">
-          <MapPinIcon className="mb-1.5 h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-          <div className="text-[11px] text-cyan-600 dark:text-cyan-400">
+        <div className="flex flex-col items-center justify-center rounded-lg bg-cyan-50 text-center dark:bg-cyan-900/20">
+          <MapPinIcon className="mb-0.5 h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+          <div className="text-[9px] text-cyan-600 dark:text-cyan-400">
             Local
           </div>
-          <div className="mt-0.5 text-xl font-bold text-cyan-900 dark:text-cyan-100">
+          <div className="text-lg font-bold text-cyan-900 dark:text-cyan-100">
             {data.localSpeakers}
           </div>
         </div>
       </div>
-
-      {data.awaitingConfirmation > 0 && (
-        <div className="mt-3 rounded-lg bg-amber-50 p-2.5 text-center dark:bg-amber-900/20">
-          <div className="text-[11px] text-amber-600 dark:text-amber-400">
-            Awaiting Confirmation
-          </div>
-          <div className="mt-0.5 text-xl font-bold text-amber-900 dark:text-amber-100">
-            {data.awaitingConfirmation}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -2,17 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import {
-  ClockIcon,
-  CheckCircleIcon,
-  CalendarIcon,
-} from '@heroicons/react/24/outline'
-import {
-  fetchDeadlines,
-} from '@/app/(admin)/admin/actions'
-import {
-  type DeadlineData,
-} from '@/hooks/dashboard/useDashboardData'
+import { CheckCircleIcon, CalendarIcon } from '@heroicons/react/24/outline'
+import { fetchDeadlines } from '@/app/(admin)/admin/actions'
+import { type DeadlineData } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
@@ -27,6 +19,12 @@ const urgencyBadgeStyles = {
   high: 'bg-red-600 dark:bg-red-500 text-white',
   medium: 'bg-amber-600 dark:bg-amber-500 text-white',
   low: 'bg-blue-600 dark:bg-blue-500 text-white',
+}
+
+function formatDaysRemaining(days: number): string {
+  if (days <= 6) return `${days}d`
+  if (days < 30) return `${Math.floor(days / 7)}w`
+  return `${Math.floor(days / 30)}m`
 }
 
 type UpcomingDeadlinesWidgetProps = BaseWidgetProps
@@ -108,59 +106,50 @@ export function UpcomingDeadlinesWidget({
 
   return (
     <div className="flex h-full flex-col">
-      <h3 className="mb-2 text-xs font-semibold text-gray-900 dark:text-gray-100">
+      <h3 className="mb-1.5 text-xs font-semibold text-gray-900 dark:text-gray-100">
         Upcoming Deadlines
       </h3>
 
-      {/* Vertical layout on narrow/tall containers, horizontal on wide containers */}
-      <div className="flex flex-1 flex-col gap-2 overflow-hidden @[500px]:grid @[500px]:auto-cols-fr @[500px]:grid-flow-col">
-        {deadlines.slice(0, 3).map((deadline) => {
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+        {deadlines.slice(0, 5).map((deadline) => {
           const urgencyClass = urgencyStyles[deadline.urgency]
           const badgeClass = urgencyBadgeStyles[deadline.urgency]
 
           return (
             <div
               key={deadline.name}
-              className={`flex min-w-0 flex-col justify-between rounded-lg border p-2.5 ${urgencyClass}`}
+              className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 ${urgencyClass}`}
             >
-              <div className="mb-2 flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <h4 className="truncate text-xs leading-tight font-semibold">
-                    {deadline.name}
-                  </h4>
-                  <p className="truncate text-[10px] opacity-75">
+              <div className="min-w-0 flex-1">
+                <h4 className="truncate text-[11px] leading-tight font-semibold">
+                  {deadline.name}
+                </h4>
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate text-[10px] opacity-75">
                     {deadline.phase}
-                  </p>
-                </div>
-                <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${badgeClass}`}
-                >
-                  {deadline.daysRemaining}d
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                {/* Always show compact date */}
-                <div className="flex items-center gap-1 text-[10px] opacity-75">
-                  <ClockIcon className="h-3 w-3" />
-                  <span>
+                  </span>
+                  <span className="text-[10px] opacity-60">&middot;</span>
+                  <span className="text-[10px] opacity-75">
                     {new Date(deadline.date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
                     })}
                   </span>
+                  {deadline.action && deadline.actionLink && (
+                    <Link
+                      href={deadline.actionLink}
+                      className="ml-auto text-[10px] font-medium underline hover:no-underline"
+                    >
+                      {deadline.action} &rarr;
+                    </Link>
+                  )}
                 </div>
-
-                {/* Show action link when there's enough horizontal space */}
-                {deadline.action && deadline.actionLink && (
-                  <Link
-                    href={deadline.actionLink}
-                    className="hidden text-[10px] font-medium underline hover:no-underline @[400px]:inline-flex"
-                  >
-                    {deadline.action} →
-                  </Link>
-                )}
               </div>
+              <span
+                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${badgeClass}`}
+              >
+                {formatDaysRemaining(deadline.daysRemaining)}
+              </span>
             </div>
           )
         })}

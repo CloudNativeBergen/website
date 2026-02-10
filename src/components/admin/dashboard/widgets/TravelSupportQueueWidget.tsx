@@ -7,10 +7,8 @@ import {
   GlobeAltIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import {
-  getTravelSupportData,
-  type TravelSupportData,
-} from '@/hooks/dashboard/useDashboardData'
+import { type TravelSupportData } from '@/hooks/dashboard/useDashboardData'
+import { fetchTravelSupport } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
@@ -24,11 +22,14 @@ export function TravelSupportQueueWidget({
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getTravelSupportData().then((result) => {
-      setData(result)
-      setLoading(false)
-    })
-  }, [])
+    if (!conference) return
+    fetchTravelSupport(conference)
+      .then((result) => {
+        setData(result)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [conference])
 
   // Phase-specific: Initialization/Planning - Show setup guidance
   if (

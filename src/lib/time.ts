@@ -323,7 +323,5 @@ export function formatRelativeTime(isoDate: string): string {
  * Formats a snake_case or lowercase string into Title Case (e.g. "lightning_talk" → "Lightning Talk").
  */
 export function formatLabel(value: string): string {
-  return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }

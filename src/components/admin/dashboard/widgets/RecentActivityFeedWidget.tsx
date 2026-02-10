@@ -10,12 +10,8 @@ import {
   SparklesIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import {
-  fetchRecentActivity,
-} from '@/app/(admin)/admin/actions'
-import {
-  type ActivityItem,
-} from '@/hooks/dashboard/useDashboardData'
+import { fetchRecentActivity } from '@/app/(admin)/admin/actions'
+import { type ActivityItem } from '@/hooks/dashboard/useDashboardData'
 import { SwipeablePaginationWidget } from './SwipeablePaginationWidget'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
@@ -105,7 +101,7 @@ export function RecentActivityFeedWidget({
   }
 
   // Split activities into pages of 4 items each
-  const itemsPerPage = 4
+  const itemsPerPage = 6
   const pages = []
   for (let i = 0; i < activities.length; i += itemsPerPage) {
     const pageActivities = activities.slice(i, i + itemsPerPage)

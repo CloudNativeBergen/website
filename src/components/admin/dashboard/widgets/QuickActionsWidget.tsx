@@ -10,12 +10,8 @@ import {
   CalendarIcon,
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
-import {
-  fetchQuickActions,
-} from '@/app/(admin)/admin/actions'
-import {
-  type QuickAction,
-} from '@/hooks/dashboard/useDashboardData'
+import { fetchQuickActions } from '@/app/(admin)/admin/actions'
+import { type QuickAction } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
