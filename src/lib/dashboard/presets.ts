@@ -22,13 +22,13 @@ export const PRESET_CONFIGS: Record<string, PresetConfig> = {
         id: 'sponsor-pipeline',
         type: 'sponsor-pipeline',
         title: 'Sponsor Pipeline',
-        position: { row: 0, col: 3, rowSpan: 4, colSpan: 5 },
+        position: { row: 0, col: 3, rowSpan: 4, colSpan: 6 },
       },
       {
         id: 'upcoming-deadlines',
         type: 'upcoming-deadlines',
         title: 'Upcoming Deadlines',
-        position: { row: 0, col: 8, rowSpan: 3, colSpan: 4 },
+        position: { row: 0, col: 9, rowSpan: 2, colSpan: 3 },
       },
       {
         id: 'cfp-health',
@@ -40,13 +40,13 @@ export const PRESET_CONFIGS: Record<string, PresetConfig> = {
         id: 'recent-activity',
         type: 'recent-activity',
         title: 'Recent Activity',
-        position: { row: 3, col: 8, rowSpan: 4, colSpan: 4 },
+        position: { row: 2, col: 9, rowSpan: 5, colSpan: 3 },
       },
       {
         id: 'ticket-sales',
         type: 'ticket-sales',
         title: 'Ticket Sales',
-        position: { row: 4, col: 3, rowSpan: 3, colSpan: 5 },
+        position: { row: 4, col: 3, rowSpan: 3, colSpan: 6 },
       },
       {
         id: 'speaker-engagement',

@@ -259,9 +259,9 @@ export async function fetchCFPHealth(
   const now = new Date()
   const daysSinceOpen = cfpStart
     ? Math.max(
-        1,
-        Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
-      )
+      1,
+      Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
+    )
     : 1
   const averagePerDay =
     submitted.length > 0
@@ -462,7 +462,7 @@ export async function fetchRecentActivity(
   await requireOrganizer()
 
   const [activityResult, proposalResult] = await Promise.all([
-    listActivitiesForConference(conferenceId, 10),
+    listActivitiesForConference(conferenceId, 15),
     getProposals({ conferenceId, returnAll: true }),
   ])
 
@@ -522,7 +522,7 @@ export async function fetchRecentActivity(
       (a, b) =>
         new Date(b._sortDate).getTime() - new Date(a._sortDate).getTime(),
     )
-    .slice(0, 10)
+    .slice(0, 15)
     .map(
       (item): ActivityItem => ({
         id: item.id,

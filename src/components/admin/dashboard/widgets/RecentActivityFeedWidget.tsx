@@ -98,7 +98,7 @@ export function RecentActivityFeedWidget({
   }
 
   // Split activities into pages
-  const itemsPerPage = config?.maxActivities ?? 6
+  const itemsPerPage = config?.maxActivities ?? 8
   const pages = []
   for (let i = 0; i < activities.length; i += itemsPerPage) {
     const pageActivities = activities.slice(i, i + itemsPerPage)
