@@ -7,46 +7,14 @@ import {
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/solid'
 import { SpeakerWithReviewInfo, Flags, Speaker } from '@/lib/speaker/types'
-import { ProposalExisting, Status } from '@/lib/proposal/types'
+import { ProposalExisting } from '@/lib/proposal/types'
+import { hasPreviousAcceptedTalks } from '@/lib/speaker/utils'
 
 export interface SpeakerIndicator {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   bgColor: string
   textColor: string
   title: string
-}
-
-function hasPreviousAcceptedTalks(
-  speaker: Speaker & { proposals?: ProposalExisting[] },
-  currentConferenceId?: string,
-): boolean {
-  if (!speaker.proposals || speaker.proposals.length === 0) {
-    return false
-  }
-
-  if (!currentConferenceId) {
-    return false
-  }
-
-  return speaker.proposals.some((proposal) => {
-    const isAcceptedOrConfirmed =
-      proposal.status === Status.accepted ||
-      proposal.status === Status.confirmed
-
-    if (!isAcceptedOrConfirmed) {
-      return false
-    }
-
-    if (proposal.conference) {
-      const proposalConferenceId =
-        typeof proposal.conference === 'object' && '_id' in proposal.conference
-          ? proposal.conference._id
-          : proposal.conference
-      return proposalConferenceId !== currentConferenceId
-    }
-
-    return false
-  })
 }
 
 /**

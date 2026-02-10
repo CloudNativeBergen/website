@@ -84,6 +84,13 @@ function createMockPipeline(
       'closed-won': 5,
       'closed-lost': 1,
     },
+    byStatusValue: {
+      prospect: 0,
+      contacted: 0,
+      negotiating: 50000,
+      'closed-won': 200000,
+      'closed-lost': 0,
+    },
     byContractStatus: {
       none: 4,
       'verbal-agreement': 1,

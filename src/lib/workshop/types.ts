@@ -9,6 +9,38 @@ export enum WorkshopSignupStatus {
 export type ExperienceLevel = Level
 export type OperatingSystem = 'windows' | 'macos' | 'linux'
 
+/** Individual workshop statistics returned by getWorkshopStatistics() */
+export interface WorkshopStats {
+  workshopId: string
+  workshopTitle: string
+  capacity: number
+  totalSignups: number
+  confirmedSignups: number
+  pendingSignups: number
+  waitlistSignups: number
+  cancelledSignups: number
+  utilization: number
+}
+
+/** Aggregate totals returned by getWorkshopStatistics() */
+export interface WorkshopStatsTotals {
+  totalWorkshops: number
+  totalCapacity: number
+  totalSignups: number
+  uniqueParticipants: number
+  totalConfirmed: number
+  totalPending: number
+  totalWaitlist: number
+  totalCancelled: number
+  averageUtilization: number
+}
+
+/** Return type of getWorkshopStatistics() — used by both admin workshops and dashboard */
+export interface WorkshopStatistics {
+  workshops: WorkshopStats[]
+  totals: WorkshopStatsTotals
+}
+
 export interface WorkshopSignup {
   userEmail: string
   userName: string

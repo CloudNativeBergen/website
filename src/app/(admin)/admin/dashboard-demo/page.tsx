@@ -1,7 +1,12 @@
+import { notFound } from 'next/navigation'
 import { getConferenceForCurrentDomain } from '@/lib/conference/sanity'
-import { AdminDashboard } from '@/components/admin/dashboard/AdminDashboard'
+import { DashboardDemoClient } from './DashboardDemoClient'
 
-export default async function AdminDashboardPage() {
+export default async function DashboardDemoPage() {
+  if (process.env.NODE_ENV !== 'development') {
+    notFound()
+  }
+
   const { conference, error } = await getConferenceForCurrentDomain({})
 
   if (error || !conference) {
@@ -14,5 +19,5 @@ export default async function AdminDashboardPage() {
     )
   }
 
-  return <AdminDashboard conference={conference} />
+  return <DashboardDemoClient conference={conference} />
 }

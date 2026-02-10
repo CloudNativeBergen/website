@@ -204,6 +204,15 @@ export default defineType({
       description:
         'Default expected payment date for travel support requests. This can be overridden per request.',
     }),
+    defineField({
+      name: 'travel_support_budget',
+      title: 'Travel Support Budget',
+      type: 'number',
+      fieldset: 'dates',
+      description:
+        'Total budget allocated for travel support (in conference currency)',
+      validation: (Rule) => Rule.min(0),
+    }),
 
     // === Registration & Workshops ===
     defineField({
@@ -626,8 +635,49 @@ export default defineType({
       ],
       validation: (Rule) => Rule.required().min(1).unique(),
     }),
+    defineField({
+      name: 'cfp_submission_goal',
+      title: 'CFP Submission Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of CFP submissions for dashboard tracking',
+      validation: (Rule) => Rule.min(1),
+    }),
+    defineField({
+      name: 'cfp_lightning_goal',
+      title: 'Lightning Talk Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of lightning talk submissions',
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'cfp_presentation_goal',
+      title: 'Presentation Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of presentation submissions',
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'cfp_workshop_goal',
+      title: 'Workshop Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of workshop submissions',
+      validation: (Rule) => Rule.min(0),
+    }),
 
     // === Sponsorship Prospectus ===
+    defineField({
+      name: 'sponsor_revenue_goal',
+      title: 'Sponsor Revenue Goal',
+      type: 'number',
+      fieldset: 'sponsorship',
+      description:
+        'Target sponsor revenue for dashboard tracking (in conference currency)',
+      validation: (Rule) => Rule.min(0),
+    }),
     defineField({
       name: 'sponsor_benefits',
       title: 'Sponsor Benefits',
