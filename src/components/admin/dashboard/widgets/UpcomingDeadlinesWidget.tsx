@@ -8,7 +8,9 @@ import {
   CalendarIcon,
 } from '@heroicons/react/24/outline'
 import {
-  getUpcomingDeadlines,
+  fetchDeadlines,
+} from '@/app/(admin)/admin/actions'
+import {
   type DeadlineData,
 } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
@@ -27,27 +29,25 @@ const urgencyBadgeStyles = {
   low: 'bg-blue-600 dark:bg-blue-500 text-white',
 }
 
-type UpcomingDeadlinesWidgetProps = BaseWidgetProps & {
-  stage?: 'early' | 'active' | 'late'
-}
+type UpcomingDeadlinesWidgetProps = BaseWidgetProps
 
 export function UpcomingDeadlinesWidget({
   conference,
-  stage,
 }: UpcomingDeadlinesWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [deadlines, setDeadlines] = useState<DeadlineData[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getUpcomingDeadlines(stage).then((data) => {
+    if (!conference) return
+    fetchDeadlines(conference).then((data) => {
       setDeadlines(data)
       setLoading(false)
     })
-  }, [stage])
+  }, [conference])
 
-  // Phase-specific: Initialization without stage hint - Show planning timeline
-  if (!stage && phase === 'initialization' && conference) {
+  // Phase-specific: Initialization without deadlines - Show planning timeline
+  if (phase === 'initialization' && conference) {
     return (
       <div className="flex h-full flex-col">
         <div className="mb-3 flex items-center justify-between">

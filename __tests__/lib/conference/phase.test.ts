@@ -100,22 +100,22 @@ describe('Conference Phase Detection', () => {
       // Should have negative days until past event (CFP start)
       expect(context.daysUntilCfpStart).toBeLessThan(0)
 
-      // Should be null (conference not over yet)
-      expect(context.daysSinceConference).toBeGreaterThan(0)
+      // Conference hasn't ended yet, so days since should be negative
+      expect(context.daysSinceConference).toBeLessThan(0)
     })
 
     it('calculates countdown timers correctly', () => {
-      jest.setSystemTime(new Date('2025-03-25T12:00:00Z'))
+      jest.setSystemTime(new Date('2025-03-25T00:00:00Z'))
       const context = getPhaseContext(baseConference)
 
       // 6 days until CFP closes (March 31)
-      expect(context.daysUntilCfpClose).toBe(7)
+      expect(context.daysUntilCfpClose).toBe(6)
 
       // 21 days until notification (April 15)
-      expect(context.daysUntilNotification).toBe(22)
+      expect(context.daysUntilNotification).toBe(21)
 
       // 68 days until conference (June 1)
-      expect(context.daysUntilConference).toBe(69)
+      expect(context.daysUntilConference).toBe(68)
     })
 
     it('provides post-conference metrics', () => {

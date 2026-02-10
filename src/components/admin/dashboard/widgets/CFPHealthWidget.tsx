@@ -12,7 +12,9 @@ import {
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import {
-  getCFPHealthData,
+  fetchCFPHealth,
+} from '@/app/(admin)/admin/actions'
+import {
   CFPHealthData,
 } from '@/hooks/dashboard/useDashboardData'
 
@@ -31,11 +33,12 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getCFPHealthData().then((result) => {
+    if (!conference) return
+    fetchCFPHealth(conference).then((result) => {
       setData(result)
       setLoading(false)
     })
-  }, [])
+  }, [conference])
 
   // Apply config defaults
   const submissionTarget = config?.submissionTarget ?? 100
@@ -81,7 +84,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.ceil(
                   (new Date(conference.cfp_start_date).getTime() - now) /
-                    (1000 * 60 * 60 * 24),
+                  (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -94,7 +97,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
                 {Math.ceil(
                   (new Date(conference.cfp_end_date).getTime() -
                     new Date(conference.cfp_start_date).getTime()) /
-                    (1000 * 60 * 60 * 24),
+                  (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -106,6 +109,11 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   }
 
   if (phase === 'execution') {
+    const totalSubs = data?.totalSubmissions ?? 0
+    const goal = data?.submissionGoal || submissionTarget
+    const acceptanceRate =
+      totalSubs > 0 ? Math.round((goal / totalSubs) * 100) : 0
+
     return (
       <div className="flex h-full flex-col">
         <div className="mb-3 flex shrink-0 items-center justify-between">
@@ -121,7 +129,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
           <div className="rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-4 dark:from-blue-900/40 dark:to-cyan-800/40">
             <DocumentTextIcon className="mb-2 h-6 w-6 text-blue-600 dark:text-blue-400" />
             <div className="text-3xl font-black text-blue-900 dark:text-blue-100">
-              147
+              {totalSubs}
             </div>
             <div className="text-[10px] text-blue-700 dark:text-blue-300">
               Total Submissions
@@ -131,30 +139,30 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
           <div className="rounded-xl bg-linear-to-br from-green-100 to-emerald-200 p-4 dark:from-green-900/40 dark:to-emerald-800/40">
             <CheckCircleIcon className="mb-2 h-6 w-6 text-green-600 dark:text-green-400" />
             <div className="text-3xl font-black text-green-900 dark:text-green-100">
-              42
+              {data?.formatDistribution.reduce((sum, f) => sum + f.count, 0) ?? 0}
             </div>
             <div className="text-[10px] text-green-700 dark:text-green-300">
-              Accepted Talks
+              Unique Formats
             </div>
           </div>
 
           <div className="rounded-xl bg-linear-to-br from-purple-100 to-pink-200 p-4 dark:from-purple-900/40 dark:to-pink-800/40">
             <UserGroupIcon className="mb-2 h-6 w-6 text-purple-600 dark:text-purple-400" />
             <div className="text-3xl font-black text-purple-900 dark:text-purple-100">
-              65
+              {data?.averagePerDay.toFixed(1) ?? '0'}
             </div>
             <div className="text-[10px] text-purple-700 dark:text-purple-300">
-              Unique Speakers
+              Avg / Day
             </div>
           </div>
 
           <div className="rounded-xl bg-linear-to-br from-amber-100 to-orange-200 p-4 dark:from-amber-900/40 dark:to-orange-800/40">
             <ChartBarIcon className="mb-2 h-6 w-6 text-amber-600 dark:text-amber-400" />
             <div className="text-3xl font-black text-amber-900 dark:text-amber-100">
-              28%
+              {goal > 0 ? Math.round((totalSubs / goal) * 100) : acceptanceRate}%
             </div>
             <div className="text-[10px] text-amber-700 dark:text-amber-300">
-              Acceptance Rate
+              Goal Progress
             </div>
           </div>
         </div>
@@ -163,6 +171,10 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   }
 
   if (phase === 'post-conference') {
+    const totalSubs = data?.totalSubmissions ?? 0
+    const goal = data?.submissionGoal || submissionTarget
+    const goalPercent = goal > 0 ? Math.round((totalSubs / goal) * 100) : 0
+
     return (
       <div className="flex h-full flex-col">
         <div className="mb-3 flex shrink-0 items-center justify-between">
@@ -182,7 +194,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  147
+                  {totalSubs}
                 </div>
                 <div className="text-[10px] text-gray-600 dark:text-gray-400">
                   Submissions
@@ -190,7 +202,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                  73%
+                  {goalPercent}%
                 </div>
                 <div className="text-[10px] text-gray-600 dark:text-gray-400">
                   Goal Met
@@ -198,7 +210,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               </div>
               <div>
                 <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                  4.2
+                  {data?.averagePerDay.toFixed(1) ?? '0'}
                 </div>
                 <div className="text-[10px] text-gray-600 dark:text-gray-400">
                   Avg/Day

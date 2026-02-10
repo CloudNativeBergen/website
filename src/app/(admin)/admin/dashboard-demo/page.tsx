@@ -501,12 +501,6 @@ export default function DashboardDemoPage() {
   const renderWidget = useCallback(
     (widget: Widget, isDragging: boolean, cellWidth: number) => {
       let content: React.ReactNode
-      const stage =
-        currentPhase === 'initialization'
-          ? ('early' as const)
-          : currentPhase === 'post-conference'
-            ? ('late' as const)
-            : undefined
 
       switch (widget.type) {
         case 'quick-actions':
@@ -522,7 +516,6 @@ export default function DashboardDemoPage() {
           content = (
             <UpcomingDeadlinesWidget
               conference={mockConference}
-              stage={stage}
             />
           )
           break
@@ -553,7 +546,6 @@ export default function DashboardDemoPage() {
           content = (
             <SponsorPipelineWidget
               conference={mockConference}
-              stage={stage}
             />
           )
           break
@@ -567,7 +559,6 @@ export default function DashboardDemoPage() {
           content = (
             <RecentActivityFeedWidget
               conference={mockConference}
-              stage={stage}
             />
           )
           break
@@ -613,7 +604,6 @@ export default function DashboardDemoPage() {
       handleRemoveWidget,
       handleConfigChange,
       mockConference,
-      currentPhase,
     ],
   )
 

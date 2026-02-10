@@ -12,7 +12,9 @@ import {
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import {
-  getTicketSalesData,
+  fetchTicketSales,
+} from '@/app/(admin)/admin/actions'
+import {
   TicketSalesData,
 } from '@/hooks/dashboard/useDashboardData'
 
@@ -44,11 +46,12 @@ export function TicketSalesDashboardWidget({
   const phase = conference ? getCurrentPhase(conference) : null
 
   useEffect(() => {
-    getTicketSalesData().then((result) => {
+    if (!conference) return
+    fetchTicketSales(conference).then((result) => {
       setData(result)
       setLoading(false)
     })
-  }, [])
+  }, [conference])
 
   const gaugeOptions: ApexOptions = useMemo(() => {
     const themeColors = getThemeColors(isDark)
@@ -285,11 +288,10 @@ export function TicketSalesDashboardWidget({
                 >
                   <div className="flex items-center gap-1.5">
                     <div
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        milestone.reached
+                      className={`h-1.5 w-1.5 rounded-full ${milestone.reached
                           ? 'bg-green-500 dark:bg-green-400'
                           : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
+                        }`}
                     />
                     <span className="truncate text-[11px] leading-tight font-medium text-gray-700 dark:text-gray-200">
                       {milestone.name}

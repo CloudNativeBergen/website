@@ -11,7 +11,9 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import {
-  getRecentActivity,
+  fetchRecentActivity,
+} from '@/app/(admin)/admin/actions'
+import {
   type ActivityItem,
 } from '@/hooks/dashboard/useDashboardData'
 import { SwipeablePaginationWidget } from './SwipeablePaginationWidget'
@@ -37,27 +39,25 @@ const activityColors: Record<string, string> = {
   speaker: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',
 }
 
-type RecentActivityFeedWidgetProps = BaseWidgetProps & {
-  stage?: 'early' | 'active' | 'late'
-}
+type RecentActivityFeedWidgetProps = BaseWidgetProps
 
 export function RecentActivityFeedWidget({
   conference,
-  stage,
 }: RecentActivityFeedWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getRecentActivity(stage).then((data) => {
+    if (!conference) return
+    fetchRecentActivity(conference._id).then((data) => {
       setActivities(data)
       setLoading(false)
     })
-  }, [stage])
+  }, [conference])
 
-  // Phase-specific: Initialization without stage hint - Show welcome message
-  if (!stage && phase === 'initialization') {
+  // Phase-specific: Initialization - Show welcome message
+  if (phase === 'initialization') {
     return (
       <div className="flex h-full flex-col items-center justify-center p-4">
         <SparklesIcon className="mb-3 h-12 w-12 text-blue-500" />

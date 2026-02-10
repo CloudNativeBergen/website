@@ -11,7 +11,9 @@ import {
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
 import {
-  getQuickActions,
+  fetchQuickActions,
+} from '@/app/(admin)/admin/actions'
+import {
   type QuickAction,
 } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
@@ -50,12 +52,12 @@ export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
   )
 
   useEffect(() => {
-    // Fetch phase-specific actions
-    getQuickActions(currentPhase).then((data) => {
+    if (!conference) return
+    fetchQuickActions(conference, currentPhase).then((data) => {
       setActions(data)
       setLoading(false)
     })
-  }, [currentPhase])
+  }, [conference, currentPhase])
 
   if (loading) {
     return (

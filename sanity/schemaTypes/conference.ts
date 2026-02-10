@@ -626,8 +626,25 @@ export default defineType({
       ],
       validation: (Rule) => Rule.required().min(1).unique(),
     }),
+    defineField({
+      name: 'cfp_submission_goal',
+      title: 'CFP Submission Goal',
+      type: 'number',
+      fieldset: 'cfpConfig',
+      description: 'Target number of CFP submissions for dashboard tracking',
+      validation: (Rule) => Rule.min(1),
+    }),
 
     // === Sponsorship Prospectus ===
+    defineField({
+      name: 'sponsor_revenue_goal',
+      title: 'Sponsor Revenue Goal',
+      type: 'number',
+      fieldset: 'sponsorship',
+      description:
+        'Target sponsor revenue for dashboard tracking (in conference currency)',
+      validation: (Rule) => Rule.min(0),
+    }),
     defineField({
       name: 'sponsor_benefits',
       title: 'Sponsor Benefits',

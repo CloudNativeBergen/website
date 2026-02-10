@@ -99,6 +99,8 @@ export interface Conference {
   checkin_event_id?: number
   ticket_capacity?: number
   ticket_targets?: SalesTargetConfig
+  cfp_submission_goal?: number
+  sponsor_revenue_goal?: number
   sales_notification_channel?: string
   cfp_notification_channel?: string
   social_links?: string[]

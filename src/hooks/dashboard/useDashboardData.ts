@@ -23,8 +23,9 @@ export interface ReviewProgressData {
 
 export interface SpeakerEngagementData {
   totalSpeakers: number
+  featuredCount: number
   newSpeakers: number
-  returningSpeak: number
+  returningSpeakers: number
   diverseSpeakers: number
   localSpeakers: number
   awaitingConfirmation: number
@@ -301,8 +302,9 @@ export const getSpeakerEngagementData = cache(
 
     return {
       totalSpeakers: 112,
+      featuredCount: 8,
       newSpeakers: 78,
-      returningSpeak: 34,
+      returningSpeakers: 34,
       diverseSpeakers: 45,
       localSpeakers: 23,
       awaitingConfirmation: 7,

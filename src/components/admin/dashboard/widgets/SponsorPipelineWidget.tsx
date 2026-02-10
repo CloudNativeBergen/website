@@ -8,36 +8,47 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import {
-  getSponsorPipelineData,
+  fetchSponsorPipelineData,
+} from '@/app/(admin)/admin/actions'
+import {
   type SponsorPipelineData,
 } from '@/hooks/dashboard/useDashboardData'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-type SponsorPipelineWidgetProps = BaseWidgetProps & {
-  stage?: 'early' | 'active' | 'late'
-}
+type SponsorPipelineWidgetProps = BaseWidgetProps
 
 export function SponsorPipelineWidget({
   conference,
-  stage,
 }: SponsorPipelineWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [data, setData] = useState<SponsorPipelineData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getSponsorPipelineData(stage).then((result) => {
+    if (!conference) return
+    fetchSponsorPipelineData(
+      conference._id,
+      conference.sponsor_revenue_goal || 0,
+    ).then((result) => {
       setData(result)
       setLoading(false)
     })
-  }, [stage])
+  }, [conference])
 
-  // Phase-specific: Initialization/Planning with no pipeline activity
+  if (loading) {
+    return (
+      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
+    )
+  }
+
+  // Check if there's any pipeline activity at all
+  const totalDeals = data?.stages.reduce((sum, s) => sum + s.count, 0) ?? 0
+
+  // Phase-specific: Initialization/Planning with zero pipeline activity
   if (
-    !stage &&
     (phase === 'initialization' || phase === 'planning') &&
-    (!data || data.wonDeals === 0)
+    (!data || totalDeals === 0)
   ) {
     return (
       <div className="flex h-full flex-col">
@@ -69,7 +80,9 @@ export function SponsorPipelineWidget({
             <div className="mt-1 flex items-baseline gap-1">
               <CurrencyDollarIcon className="h-4 w-4 text-gray-400" />
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {data ? `${(data.revenueGoal / 1000).toFixed(0)}k` : '—'}
+                {data && data.revenueGoal > 0
+                  ? `${(data.revenueGoal / 1000).toFixed(0)}k`
+                  : 'Not set'}
               </div>
             </div>
           </div>
@@ -139,12 +152,6 @@ export function SponsorPipelineWidget({
           </div>
         </div>
       </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
     )
   }
 
