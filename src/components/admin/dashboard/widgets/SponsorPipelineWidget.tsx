@@ -39,10 +39,10 @@ export function SponsorPipelineWidget({
     useWidgetData<SponsorPipelineWidgetData>(
       conference
         ? () =>
-            fetchSponsorPipelineData(
-              conference._id,
-              conference.sponsor_revenue_goal || 0,
-            )
+          fetchSponsorPipelineData(
+            conference._id,
+            conference.sponsor_revenue_goal || 0,
+          )
         : null,
       [conference],
     )
@@ -144,9 +144,9 @@ export function SponsorPipelineWidget({
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
               {data.wonDeals + data.lostDeals > 0
                 ? (
-                    (data.wonDeals / (data.wonDeals + data.lostDeals)) *
-                    100
-                  ).toFixed(0)
+                  (data.wonDeals / (data.wonDeals + data.lostDeals)) *
+                  100
+                ).toFixed(0)
                 : 0}
               %
             </div>
@@ -253,32 +253,32 @@ export function SponsorPipelineWidget({
                   className={`flex items-center gap-2 rounded-lg border p-2.5 ${color}`}
                 >
                   <div className="shrink-0">
-                    <div className="text-xs leading-tight font-semibold">
+                    <div className="text-[13px] leading-tight font-semibold">
                       {stage.name}
                     </div>
                     <div className="text-[10px] opacity-75">
                       {stage.count} deals
                     </div>
                   </div>
-                  <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
                     {stage.sponsors.slice(0, 4).map((sponsor, i) =>
                       sponsor.logo ? (
                         <div
                           key={i}
-                          className="flex h-5 w-10 shrink-0 items-center justify-center rounded bg-white/80 px-0.5 dark:bg-gray-900/50"
+                          className="flex h-6 w-12 shrink-0 items-center justify-center rounded bg-white/80 px-0.5 dark:bg-gray-900/50"
                           title={sponsor.name}
                         >
                           <SponsorLogo
                             logo={sponsor.logo}
                             logoBright={sponsor.logoBright}
                             name={sponsor.name}
-                            className="max-h-4 max-w-9"
+                            className="max-h-5 max-w-11"
                           />
                         </div>
                       ) : (
                         <span
                           key={i}
-                          className="shrink-0 rounded bg-white/60 px-1 py-0.5 text-[9px] font-medium dark:bg-gray-900/40"
+                          className="shrink-0 rounded bg-white/60 px-1.5 py-0.5 text-[10px] font-medium dark:bg-gray-900/40"
                           title={sponsor.name}
                         >
                           {sponsor.name.length > 8
@@ -288,13 +288,13 @@ export function SponsorPipelineWidget({
                       ),
                     )}
                     {stage.sponsors.length > 4 && (
-                      <span className="shrink-0 text-[9px] opacity-60">
+                      <span className="shrink-0 text-[10px] opacity-60">
                         +{stage.sponsors.length - 4}
                       </span>
                     )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="text-xs font-bold">
+                    <div className="text-[13px] font-bold">
                       kr {(stage.value / 1000).toFixed(0)}k
                     </div>
                   </div>

@@ -37,9 +37,9 @@ export const PRESET_CONFIGS: Record<string, PresetConfig> = {
         position: { row: 2, col: 0, rowSpan: 3, colSpan: 3 },
       },
       {
-        id: 'speaker-engagement',
-        type: 'speaker-engagement',
-        title: 'Speaker Outreach',
+        id: 'recent-activity',
+        type: 'recent-activity',
+        title: 'Recent Activity',
         position: { row: 3, col: 8, rowSpan: 4, colSpan: 4 },
       },
       {
@@ -49,9 +49,9 @@ export const PRESET_CONFIGS: Record<string, PresetConfig> = {
         position: { row: 4, col: 3, rowSpan: 3, colSpan: 5 },
       },
       {
-        id: 'recent-activity',
-        type: 'recent-activity',
-        title: 'Recent Activity',
+        id: 'speaker-engagement',
+        type: 'speaker-engagement',
+        title: 'Speaker Engagement',
         position: { row: 5, col: 0, rowSpan: 2, colSpan: 3 },
       },
     ],
