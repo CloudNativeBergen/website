@@ -14,24 +14,28 @@ import {
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 
-type SponsorPipelineWidgetProps = BaseWidgetProps
+type SponsorPipelineWidgetProps = BaseWidgetProps & {
+  stage?: 'early' | 'active' | 'late'
+}
 
 export function SponsorPipelineWidget({
   conference,
+  stage,
 }: SponsorPipelineWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [data, setData] = useState<SponsorPipelineData | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getSponsorPipelineData().then((result) => {
+    getSponsorPipelineData(stage).then((result) => {
       setData(result)
       setLoading(false)
     })
-  }, [])
+  }, [stage])
 
-  // Phase-specific: Initialization/Planning - Show prospecting guidance
+  // Phase-specific: Initialization/Planning with no pipeline activity
   if (
+    !stage &&
     (phase === 'initialization' || phase === 'planning') &&
     (!data || data.wonDeals === 0)
   ) {
@@ -126,9 +130,9 @@ export function SponsorPipelineWidget({
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
               {data.wonDeals + data.lostDeals > 0
                 ? (
-                    (data.wonDeals / (data.wonDeals + data.lostDeals)) *
-                    100
-                  ).toFixed(0)
+                  (data.wonDeals / (data.wonDeals + data.lostDeals)) *
+                  100
+                ).toFixed(0)
                 : 0}
               %
             </div>

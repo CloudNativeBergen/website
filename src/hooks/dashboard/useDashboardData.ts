@@ -99,7 +99,7 @@ export interface DeadlineData {
 
 export interface ActivityItem {
   id: string
-  type: 'proposal' | 'review' | 'sponsor' | 'workshop' | 'speaker'
+  type: 'proposal' | 'review' | 'sponsor' | 'speaker'
   description: string
   user: string
   timestamp: string
@@ -330,14 +330,63 @@ export const getScheduleStatusData = cache(
 )
 
 export const getSponsorPipelineData = cache(
-  async (): Promise<SponsorPipelineData> => {
+  async (
+    stage?: 'early' | 'active' | 'late',
+  ): Promise<SponsorPipelineData> => {
     await new Promise((resolve) => setTimeout(resolve, 10))
+
+    if (stage === 'early') {
+      return {
+        totalValue: 25000,
+        wonDeals: 1,
+        lostDeals: 0,
+        revenueGoal: 400000,
+        stages: [
+          { name: 'Prospect', count: 18, value: 180000 },
+          { name: 'Contacted', count: 8, value: 95000 },
+          { name: 'Negotiating', count: 2, value: 50000 },
+          { name: 'Closed Won', count: 1, value: 25000 },
+        ],
+        recentActivity: [
+          {
+            id: '1',
+            sponsor: 'CloudProvider AS',
+            activity: 'Contract signed - Platinum tier',
+            timestamp: '1 day ago',
+          },
+          {
+            id: '2',
+            sponsor: 'DevToolCo',
+            activity: 'Proposal sent - Gold tier',
+            timestamp: '2 days ago',
+          },
+          {
+            id: '3',
+            sponsor: 'KubePlatform',
+            activity: 'Meeting scheduled for next week',
+            timestamp: '3 days ago',
+          },
+          {
+            id: '4',
+            sponsor: 'Nordic Consulting',
+            activity: 'Initial outreach email sent',
+            timestamp: '4 days ago',
+          },
+          {
+            id: '5',
+            sponsor: 'SecOps Inc',
+            activity: 'Added as prospect',
+            timestamp: '5 days ago',
+          },
+        ],
+      }
+    }
 
     return {
       totalValue: 125000,
       wonDeals: 8,
       lostDeals: 3,
-      revenueGoal: 150000,
+      revenueGoal: 400000,
       stages: [
         { name: 'Prospect', count: 12, value: 45000 },
         { name: 'Contacted', count: 6, value: 28000 },
@@ -478,126 +527,225 @@ export const getTravelSupportData = cache(
   },
 )
 
-export const getUpcomingDeadlines = cache(async (): Promise<DeadlineData[]> => {
-  await new Promise((resolve) => setTimeout(resolve, 10))
+export const getUpcomingDeadlines = cache(
+  async (stage?: 'early' | 'active' | 'late'): Promise<DeadlineData[]> => {
+    await new Promise((resolve) => setTimeout(resolve, 10))
 
-  return [
-    {
-      name: 'CFP Closes',
-      date: '2025-12-11',
-      daysRemaining: 12,
-      urgency: 'high',
-      phase: 'CFP Open',
-      action: 'Promote CFP',
-      actionLink: '/admin/settings',
-    },
-    {
-      name: 'Notify Speakers',
-      date: '2025-12-20',
-      daysRemaining: 21,
-      urgency: 'medium',
-      phase: 'CFP Review',
-      action: 'Review Proposals',
-      actionLink: '/admin/proposals',
-    },
-    {
-      name: 'Publish Program',
-      date: '2026-01-10',
-      daysRemaining: 42,
-      urgency: 'low',
-      phase: 'Program Building',
-      action: 'Build Schedule',
-      actionLink: '/admin/schedule',
-    },
-  ]
-})
+    if (stage === 'early') {
+      return [
+        {
+          name: 'CFP Opens',
+          date: '2026-04-01',
+          daysRemaining: 50,
+          urgency: 'high',
+          phase: 'Preparation',
+          action: 'Configure CFP',
+          actionLink: '/admin/settings',
+        },
+        {
+          name: 'CFP Closes',
+          date: '2026-06-10',
+          daysRemaining: 120,
+          urgency: 'low',
+          phase: 'Preparation',
+        },
+        {
+          name: 'Notify Speakers',
+          date: '2026-07-15',
+          daysRemaining: 155,
+          urgency: 'low',
+          phase: 'Review',
+        },
+        {
+          name: 'Program Published',
+          date: '2026-08-15',
+          daysRemaining: 186,
+          urgency: 'low',
+          phase: 'Program',
+        },
+        {
+          name: 'Conference Day',
+          date: '2026-10-15',
+          daysRemaining: 247,
+          urgency: 'low',
+          phase: 'Event',
+        },
+      ]
+    }
 
-export const getRecentActivity = cache(async (): Promise<ActivityItem[]> => {
-  await new Promise((resolve) => setTimeout(resolve, 10))
+    return [
+      {
+        name: 'CFP Closes',
+        date: '2025-12-11',
+        daysRemaining: 12,
+        urgency: 'high',
+        phase: 'CFP Open',
+        action: 'Promote CFP',
+        actionLink: '/admin/settings',
+      },
+      {
+        name: 'Notify Speakers',
+        date: '2025-12-20',
+        daysRemaining: 21,
+        urgency: 'medium',
+        phase: 'CFP Review',
+        action: 'Review Proposals',
+        actionLink: '/admin/proposals',
+      },
+      {
+        name: 'Publish Program',
+        date: '2026-01-10',
+        daysRemaining: 42,
+        urgency: 'low',
+        phase: 'Program Building',
+        action: 'Build Schedule',
+        actionLink: '/admin/schedule',
+      },
+    ]
+  },
+)
 
-  return [
-    {
-      id: 'act-1',
-      type: 'proposal',
-      description: 'New proposal: "Service Mesh Security Patterns"',
-      user: 'Emma Thompson',
-      timestamp: '5 minutes ago',
-      link: '/admin/proposals/prop-148',
-    },
-    {
-      id: 'act-2',
-      type: 'review',
-      description: 'Review added for "Building Resilient Microservices"',
-      user: 'John Organizer',
-      timestamp: '23 minutes ago',
-      link: '/admin/proposals/prop-147',
-    },
-    {
-      id: 'act-3',
-      type: 'sponsor',
-      description: 'TechCorp contract signed - Gold tier',
-      user: 'System',
-      timestamp: '2 hours ago',
-      link: '/admin/sponsors/crm',
-    },
-    {
-      id: 'act-4',
-      type: 'workshop',
-      description: 'Kubernetes Deep Dive reached capacity',
-      user: 'System',
-      timestamp: '3 hours ago',
-      link: '/admin/workshops',
-    },
-    {
-      id: 'act-5',
-      type: 'proposal',
-      description: 'Proposal accepted: "GitOps Best Practices"',
-      user: 'Sarah Organizer',
-      timestamp: '5 hours ago',
-      link: '/admin/proposals/prop-142',
-    },
-    {
-      id: 'act-6',
-      type: 'speaker',
-      description: 'New speaker registered: Alex Kumar',
-      user: 'Alex Kumar',
-      timestamp: '6 hours ago',
-      link: '/admin/speakers',
-    },
-    {
-      id: 'act-7',
-      type: 'review',
-      description: 'Review added for "Cloud Native Observability"',
-      user: 'Mike Organizer',
-      timestamp: '8 hours ago',
-      link: '/admin/proposals/prop-145',
-    },
-    {
-      id: 'act-8',
-      type: 'sponsor',
-      description: 'CloudVendor invoice sent',
-      user: 'System',
-      timestamp: '1 day ago',
-      link: '/admin/sponsors/crm',
-    },
-    {
-      id: 'act-9',
-      type: 'proposal',
-      description: 'New proposal: "Platform Engineering 101"',
-      user: 'Chris Developer',
-      timestamp: '1 day ago',
-      link: '/admin/proposals/prop-146',
-    },
-    {
-      id: 'act-10',
-      type: 'workshop',
-      description: 'GitOps with ArgoCD waitlist: 8 people',
-      user: 'System',
-      timestamp: '2 days ago',
-      link: '/admin/workshops',
-    },
-  ]
-})
+export const getRecentActivity = cache(
+  async (stage?: 'early' | 'active' | 'late'): Promise<ActivityItem[]> => {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    if (stage === 'early') {
+      return [
+        {
+          id: 'act-1',
+          type: 'sponsor',
+          description: 'CloudProvider AS signed Platinum sponsorship',
+          user: 'Hans Kristian',
+          timestamp: '1 day ago',
+          link: '/admin/sponsors/crm',
+        },
+        {
+          id: 'act-2',
+          type: 'sponsor',
+          description: 'Sent proposal to DevToolCo for Gold tier',
+          user: 'Hans Kristian',
+          timestamp: '2 days ago',
+          link: '/admin/sponsors/crm',
+        },
+        {
+          id: 'act-3',
+          type: 'sponsor',
+          description: 'KubePlatform meeting scheduled for next week',
+          user: 'Hans Kristian',
+          timestamp: '3 days ago',
+          link: '/admin/sponsors/crm',
+        },
+        {
+          id: 'act-4',
+          type: 'speaker',
+          description: 'New speaker profile: Sarah Chen',
+          user: 'Sarah Chen',
+          timestamp: '4 days ago',
+          link: '/admin/speakers',
+        },
+        {
+          id: 'act-5',
+          type: 'sponsor',
+          description: 'Added SecOps Inc as prospect',
+          user: 'Hans Kristian',
+          timestamp: '5 days ago',
+          link: '/admin/sponsors/crm',
+        },
+        {
+          id: 'act-6',
+          type: 'sponsor',
+          description: 'Added Nordic Consulting as prospect',
+          user: 'Hans Kristian',
+          timestamp: '6 days ago',
+          link: '/admin/sponsors/crm',
+        },
+        {
+          id: 'act-7',
+          type: 'speaker',
+          description: 'Returning speaker profile updated',
+          user: 'Jane Smith',
+          timestamp: '1 week ago',
+          link: '/admin/speakers',
+        },
+        {
+          id: 'act-8',
+          type: 'sponsor',
+          description: 'Updated sponsor tier pricing',
+          user: 'Hans Kristian',
+          timestamp: '1 week ago',
+          link: '/admin/sponsors',
+        },
+      ]
+    }
+
+    return [
+      {
+        id: 'act-1',
+        type: 'proposal',
+        description: 'New proposal: "Service Mesh Security Patterns"',
+        user: 'Emma Thompson',
+        timestamp: '5 minutes ago',
+        link: '/admin/proposals/prop-148',
+      },
+      {
+        id: 'act-2',
+        type: 'review',
+        description: 'Review added for "Building Resilient Microservices"',
+        user: 'John Organizer',
+        timestamp: '23 minutes ago',
+        link: '/admin/proposals/prop-147',
+      },
+      {
+        id: 'act-3',
+        type: 'sponsor',
+        description: 'TechCorp contract signed - Gold tier',
+        user: 'System',
+        timestamp: '2 hours ago',
+        link: '/admin/sponsors/crm',
+      },
+      {
+        id: 'act-4',
+        type: 'proposal',
+        description: 'Proposal accepted: "GitOps Best Practices"',
+        user: 'Sarah Organizer',
+        timestamp: '5 hours ago',
+        link: '/admin/proposals/prop-142',
+      },
+      {
+        id: 'act-5',
+        type: 'speaker',
+        description: 'New speaker registered: Alex Kumar',
+        user: 'Alex Kumar',
+        timestamp: '6 hours ago',
+        link: '/admin/speakers',
+      },
+      {
+        id: 'act-6',
+        type: 'review',
+        description: 'Review added for "Cloud Native Observability"',
+        user: 'Mike Organizer',
+        timestamp: '8 hours ago',
+        link: '/admin/proposals/prop-145',
+      },
+      {
+        id: 'act-7',
+        type: 'sponsor',
+        description: 'CloudVendor invoice sent',
+        user: 'System',
+        timestamp: '1 day ago',
+        link: '/admin/sponsors/crm',
+      },
+      {
+        id: 'act-8',
+        type: 'proposal',
+        description: 'New proposal: "Platform Engineering 101"',
+        user: 'Chris Developer',
+        timestamp: '1 day ago',
+        link: '/admin/proposals/prop-146',
+      },
+    ]
+  },
+)
 
 export const getQuickActions = cache(
   async (phase?: string): Promise<QuickAction[]> => {
@@ -607,39 +755,40 @@ export const getQuickActions = cache(
     const baseActions = {
       initialization: [
         {
-          label: 'Configure CFP',
-          shortLabel: 'CFP Setup',
-          icon: 'Cog6ToothIcon',
-          link: '/admin/settings',
+          label: 'Sponsor Pipeline',
+          shortLabel: 'Sponsors',
+          icon: 'CurrencyDollarIcon',
+          link: '/admin/sponsors/crm',
+          badge: 18,
+          variant: 'success' as const,
+        },
+        {
+          label: 'Invite Speakers',
+          shortLabel: 'Speakers',
+          icon: 'UserGroupIcon',
+          link: '/admin/speakers',
           variant: 'primary' as const,
         },
         {
-          label: 'Invite Reviewers',
-          shortLabel: 'Reviewers',
-          icon: 'UserGroupIcon',
+          label: 'Configure CFP',
+          shortLabel: 'CFP Setup',
+          icon: 'ClipboardDocumentCheckIcon',
           link: '/admin/settings',
           variant: 'secondary' as const,
         },
         {
-          label: 'Setup Sponsors',
-          shortLabel: 'Sponsors',
-          icon: 'CurrencyDollarIcon',
-          link: '/admin/sponsors',
-          variant: 'success' as const,
-        },
-        {
-          label: 'Configure Tickets',
+          label: 'Setup Tickets',
           shortLabel: 'Tickets',
           icon: 'Cog6ToothIcon',
           link: '/admin/tickets',
           variant: 'secondary' as const,
         },
         {
-          label: 'Build Schedule',
-          shortLabel: 'Schedule',
-          icon: 'CalendarIcon',
-          link: '/admin/schedule',
-          variant: 'secondary' as const,
+          label: 'Featured Speakers',
+          shortLabel: 'Featured',
+          icon: 'GlobeAltIcon',
+          link: '/admin/speakers',
+          variant: 'warning' as const,
         },
         {
           label: 'Settings',

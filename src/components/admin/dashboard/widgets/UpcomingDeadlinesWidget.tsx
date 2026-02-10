@@ -27,24 +27,27 @@ const urgencyBadgeStyles = {
   low: 'bg-blue-600 dark:bg-blue-500 text-white',
 }
 
-type UpcomingDeadlinesWidgetProps = BaseWidgetProps
+type UpcomingDeadlinesWidgetProps = BaseWidgetProps & {
+  stage?: 'early' | 'active' | 'late'
+}
 
 export function UpcomingDeadlinesWidget({
   conference,
+  stage,
 }: UpcomingDeadlinesWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [deadlines, setDeadlines] = useState<DeadlineData[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getUpcomingDeadlines().then((data) => {
+    getUpcomingDeadlines(stage).then((data) => {
       setDeadlines(data)
       setLoading(false)
     })
-  }, [])
+  }, [stage])
 
-  // Phase-specific: Initialization - Show planning timeline
-  if (phase === 'initialization' && conference) {
+  // Phase-specific: Initialization without stage hint - Show planning timeline
+  if (!stage && phase === 'initialization' && conference) {
     return (
       <div className="flex h-full flex-col">
         <div className="mb-3 flex items-center justify-between">

@@ -78,12 +78,12 @@ const createMockConference = (
     case 'initialization':
       return {
         ...baseConference,
-        cfp_start_date: addDays(30),
+        cfp_start_date: addDays(50),
         cfp_end_date: addDays(120),
-        cfp_notify_date: addDays(135),
-        program_date: addDays(150),
-        start_date: addDays(180),
-        end_date: addDays(181),
+        cfp_notify_date: addDays(150),
+        program_date: addDays(180),
+        start_date: addDays(247),
+        end_date: addDays(248),
       } as Conference
 
     case 'planning':
@@ -137,7 +137,8 @@ type PresetConfig = {
 const PRESET_CONFIGS: Record<string, PresetConfig> = {
   planning: {
     name: 'Planning Focus',
-    description: 'CFP management, reviews, and speaker engagement',
+    description:
+      'Sponsor pipeline, CFP preparation, speaker outreach, and early bird tickets',
     widgets: [
       {
         id: 'quick-actions',
@@ -146,52 +147,40 @@ const PRESET_CONFIGS: Record<string, PresetConfig> = {
         position: { row: 0, col: 0, rowSpan: 2, colSpan: 3 },
       },
       {
-        id: 'proposal-pipeline',
-        type: 'proposal-pipeline',
-        title: 'Proposal Pipeline',
-        position: { row: 0, col: 3, rowSpan: 3, colSpan: 5 },
+        id: 'sponsor-pipeline',
+        type: 'sponsor-pipeline',
+        title: 'Sponsor Pipeline',
+        position: { row: 0, col: 3, rowSpan: 4, colSpan: 5 },
       },
       {
         id: 'upcoming-deadlines',
         type: 'upcoming-deadlines',
         title: 'Upcoming Deadlines',
-        position: { row: 0, col: 8, rowSpan: 2, colSpan: 4 },
-      },
-      {
-        id: 'review-progress',
-        type: 'review-progress',
-        title: 'Review Progress',
-        position: { row: 2, col: 0, rowSpan: 3, colSpan: 3 },
+        position: { row: 0, col: 8, rowSpan: 3, colSpan: 4 },
       },
       {
         id: 'cfp-health',
         type: 'cfp-health',
         title: 'CFP Health',
-        position: { row: 2, col: 8, rowSpan: 3, colSpan: 4 },
+        position: { row: 2, col: 0, rowSpan: 3, colSpan: 3 },
       },
       {
         id: 'speaker-engagement',
         type: 'speaker-engagement',
-        title: 'Speaker Engagement',
-        position: { row: 3, col: 3, rowSpan: 3, colSpan: 5 },
+        title: 'Speaker Outreach',
+        position: { row: 3, col: 8, rowSpan: 4, colSpan: 4 },
       },
       {
-        id: 'content-calendar',
-        type: 'content-calendar',
-        title: 'Content Calendar',
-        position: { row: 5, col: 0, rowSpan: 3, colSpan: 6 },
-      },
-      {
-        id: 'team-status',
-        type: 'team-status',
-        title: 'Team Status',
-        position: { row: 5, col: 6, rowSpan: 3, colSpan: 3 },
+        id: 'ticket-sales',
+        type: 'ticket-sales',
+        title: 'Ticket Sales',
+        position: { row: 4, col: 3, rowSpan: 3, colSpan: 5 },
       },
       {
         id: 'recent-activity',
         type: 'recent-activity',
         title: 'Recent Activity',
-        position: { row: 5, col: 9, rowSpan: 3, colSpan: 3 },
+        position: { row: 5, col: 0, rowSpan: 2, colSpan: 3 },
       },
     ],
   },
@@ -403,18 +392,18 @@ const ALL_PRESETS: Record<string, PresetConfig> = {
   empty: EMPTY_PRESET,
 }
 
-const INITIAL_WIDGETS: Widget[] = PRESET_CONFIGS.comprehensive.widgets
+const INITIAL_WIDGETS: Widget[] = PRESET_CONFIGS.planning.widgets
 
 const PRESET_KEYS = Object.keys(ALL_PRESETS)
 export default function DashboardDemoPage() {
   const [widgets, setWidgets] = useState<Widget[]>(INITIAL_WIDGETS)
   const [editMode, setEditMode] = useState(true)
   const [columnCount, setColumnCount] = useState(4)
-  const [currentPhaseIndex, setCurrentPhaseIndex] = useState(1) // Start with 'planning'
-  const [currentPreset, setCurrentPreset] = useState<string>('comprehensive')
+  const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0) // Start with 'initialization'
+  const [currentPreset, setCurrentPreset] = useState<string>('planning')
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
   const [mockConference, setMockConference] = useState<Conference>(() =>
-    createMockConference(PHASES[1]),
+    createMockConference(PHASES[0]),
   )
 
   useEffect(() => {
@@ -512,6 +501,12 @@ export default function DashboardDemoPage() {
   const renderWidget = useCallback(
     (widget: Widget, isDragging: boolean, cellWidth: number) => {
       let content: React.ReactNode
+      const stage =
+        currentPhase === 'initialization'
+          ? ('early' as const)
+          : currentPhase === 'post-conference'
+            ? ('late' as const)
+            : undefined
 
       switch (widget.type) {
         case 'quick-actions':
@@ -524,7 +519,12 @@ export default function DashboardDemoPage() {
           content = <ProposalPipelineWidget conference={mockConference} />
           break
         case 'upcoming-deadlines':
-          content = <UpcomingDeadlinesWidget conference={mockConference} />
+          content = (
+            <UpcomingDeadlinesWidget
+              conference={mockConference}
+              stage={stage}
+            />
+          )
           break
         case 'cfp-health':
           content = (
@@ -550,7 +550,12 @@ export default function DashboardDemoPage() {
           content = <SpeakerEngagementWidget conference={mockConference} />
           break
         case 'sponsor-pipeline':
-          content = <SponsorPipelineWidget />
+          content = (
+            <SponsorPipelineWidget
+              conference={mockConference}
+              stage={stage}
+            />
+          )
           break
         case 'workshop-capacity':
           content = <WorkshopCapacityWidget />
@@ -559,7 +564,12 @@ export default function DashboardDemoPage() {
           content = <TravelSupportQueueWidget />
           break
         case 'recent-activity':
-          content = <RecentActivityFeedWidget />
+          content = (
+            <RecentActivityFeedWidget
+              conference={mockConference}
+              stage={stage}
+            />
+          )
           break
         case 'content-calendar':
           content = <ContentCalendarWidget conference={mockConference} />
@@ -603,6 +613,7 @@ export default function DashboardDemoPage() {
       handleRemoveWidget,
       handleConfigChange,
       mockConference,
+      currentPhase,
     ],
   )
 
@@ -665,7 +676,7 @@ export default function DashboardDemoPage() {
               <ChevronLeftIcon className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
             </button>
             <span
-              className="min-w-[120px] px-2 text-center text-xs font-semibold"
+              className="min-w-30 px-2 text-center text-xs font-semibold"
               style={{ color: phaseColor.text }}
             >
               {phaseName}
@@ -682,11 +693,10 @@ export default function DashboardDemoPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setEditMode(!editMode)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                editMode
-                  ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
-                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-              }`}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${editMode
+                ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
+                : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                }`}
             >
               <PencilIcon className="h-3.5 w-3.5" />
               {editMode ? 'Exit Edit' : 'Edit'}
@@ -712,7 +722,7 @@ export default function DashboardDemoPage() {
       </div>
 
       {widgets.length === 0 ? (
-        <div className="flex min-h-[400px] items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+        <div className="flex min-h-100 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
           <div className="text-center">
             <Squares2X2Icon className="mx-auto mb-4 h-12 w-12 text-gray-400" />
             <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">

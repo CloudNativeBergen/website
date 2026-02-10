@@ -39,34 +39,66 @@ export function SpeakerEngagementWidget({
     )
   }
 
-  // Initialization phase: Setup guide
+  // Initialization phase: Featured speakers + early stats
   if (phase === 'initialization') {
     return (
-      <div className="flex h-full flex-col p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <UserGroupIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+      <div className="flex h-full flex-col">
+        <div className="mb-3 flex items-center justify-between">
           <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Speaker Management
+            Speaker Outreach
           </h3>
+          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-400">
+            Early Stage
+          </span>
         </div>
-        <div className="flex flex-1 flex-col justify-center space-y-3 text-sm text-gray-600 dark:text-gray-400">
-          <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
-            <p className="text-xs font-medium text-purple-900 dark:text-purple-300">
-              Prepare for speaker engagement:
-            </p>
-            <ul className="mt-2 space-y-1 text-xs text-purple-800 dark:text-purple-400">
-              <li>• Define speaker diversity goals</li>
-              <li>• Set up speaker communication templates</li>
-              <li>• Configure speaker profile requirements</li>
-            </ul>
+
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <div className="rounded-lg bg-purple-50 p-2.5 dark:bg-purple-900/20">
+            <div className="text-[10px] text-purple-600 dark:text-purple-400">
+              Featured
+            </div>
+            <div className="mt-0.5 text-xl font-bold text-purple-900 dark:text-purple-100">
+              2
+            </div>
           </div>
-          <Link
-            href="/admin/speakers"
-            className="block rounded-lg bg-purple-600 px-4 py-2 text-center text-xs font-medium text-white transition-colors hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
-          >
-            Configure Speakers
-          </Link>
+          <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-900/20">
+            <div className="text-[10px] text-green-600 dark:text-green-400">
+              Registered
+            </div>
+            <div className="mt-0.5 text-xl font-bold text-green-900 dark:text-green-100">
+              5
+            </div>
+          </div>
         </div>
+
+        <div className="flex-1 space-y-3">
+          <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
+            <h4 className="mb-1 text-[11px] font-semibold text-purple-900 dark:text-purple-200">
+              Featured Speakers
+            </h4>
+            <p className="text-[11px] text-purple-700 dark:text-purple-400">
+              2 speakers featured on the website. Add more via the speakers page
+              to build early momentum.
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
+            <h4 className="mb-1 text-[11px] font-semibold text-gray-900 dark:text-gray-200">
+              Early Registrations
+            </h4>
+            <p className="text-[11px] text-gray-600 dark:text-gray-400">
+              5 speakers have created profiles. Returning speakers are marked
+              automatically.
+            </p>
+          </div>
+        </div>
+
+        <Link
+          href="/admin/speakers"
+          className="mt-3 block text-center text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+        >
+          Manage speakers →
+        </Link>
       </div>
     )
   }

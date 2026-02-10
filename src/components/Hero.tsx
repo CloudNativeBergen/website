@@ -55,21 +55,21 @@ function ActionButtons({ conference }: { conference: Conference }) {
     label: string
     href: string
     variant:
-    | 'primary'
-    | 'secondary'
-    | 'success'
-    | 'warning'
-    | 'info'
-    | 'outline'
+      | 'primary'
+      | 'secondary'
+      | 'success'
+      | 'warning'
+      | 'info'
+      | 'outline'
     icon: React.ComponentType<{ className?: string }>
   }> = [
-      {
-        label: 'Practical Info',
-        href: '/info',
-        variant: 'outline',
-        icon: InformationCircleIcon,
-      },
-    ]
+    {
+      label: 'Practical Info',
+      href: '/info',
+      variant: 'outline',
+      icon: InformationCircleIcon,
+    },
+  ]
 
   if (isSeekingSponsors(conference)) {
     buttons.push({

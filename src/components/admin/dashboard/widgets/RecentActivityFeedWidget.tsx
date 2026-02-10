@@ -6,7 +6,6 @@ import {
   DocumentTextIcon,
   ChatBubbleLeftRightIcon,
   CurrencyDollarIcon,
-  AcademicCapIcon,
   UserIcon,
   SparklesIcon,
   CheckCircleIcon,
@@ -26,7 +25,6 @@ const activityIcons: Record<
   proposal: DocumentTextIcon,
   review: ChatBubbleLeftRightIcon,
   sponsor: CurrencyDollarIcon,
-  workshop: AcademicCapIcon,
   speaker: UserIcon,
 }
 
@@ -36,29 +34,30 @@ const activityColors: Record<string, string> = {
     'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
   sponsor:
     'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400',
-  workshop:
-    'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
   speaker: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',
 }
 
-type RecentActivityFeedWidgetProps = BaseWidgetProps
+type RecentActivityFeedWidgetProps = BaseWidgetProps & {
+  stage?: 'early' | 'active' | 'late'
+}
 
 export function RecentActivityFeedWidget({
   conference,
+  stage,
 }: RecentActivityFeedWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getRecentActivity().then((data) => {
+    getRecentActivity(stage).then((data) => {
       setActivities(data)
       setLoading(false)
     })
-  }, [])
+  }, [stage])
 
-  // Phase-specific: Initialization - Show welcome message
-  if (phase === 'initialization') {
+  // Phase-specific: Initialization without stage hint - Show welcome message
+  if (!stage && phase === 'initialization') {
     return (
       <div className="flex h-full flex-col items-center justify-center p-4">
         <SparklesIcon className="mb-3 h-12 w-12 text-blue-500" />
