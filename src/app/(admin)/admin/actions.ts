@@ -34,7 +34,7 @@ import type {
   WorkshopCapacityData,
   ScheduleStatusData,
   QuickAction,
-} from '@/hooks/dashboard/useDashboardData'
+} from '@/lib/dashboard/data-types'
 
 // --- Auth ---
 

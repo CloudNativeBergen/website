@@ -1,16 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import {
   AcademicCapIcon,
   CalendarIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import { type WorkshopCapacityData } from '@/hooks/dashboard/useDashboardData'
+import { type WorkshopCapacityData } from '@/lib/dashboard/data-types'
 import { fetchWorkshopCapacity } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+} from './shared'
 
 type WorkshopCapacityWidgetProps = BaseWidgetProps
 
@@ -18,18 +23,10 @@ export function WorkshopCapacityWidget({
   conference,
 }: WorkshopCapacityWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const [data, setData] = useState<WorkshopCapacityData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!conference) return
-    fetchWorkshopCapacity(conference._id)
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
+  const { data, loading } = useWidgetData<WorkshopCapacityData>(
+    conference ? () => fetchWorkshopCapacity(conference._id) : null,
+    [conference],
+  )
 
   // Phase-specific: Initialization/Planning - Show workshop planning
   if (
@@ -38,14 +35,10 @@ export function WorkshopCapacityWidget({
   ) {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Workshop Capacity
-          </h3>
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
-            Planning
-          </span>
-        </div>
+        <WidgetHeader
+          title="Workshop Capacity"
+          badge={<PhaseBadge label="Planning" variant="blue" />}
+        />
 
         <div className="space-y-3">
           <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-800/50">
@@ -69,11 +62,11 @@ export function WorkshopCapacityWidget({
                 <div className="text-sm font-bold text-gray-900 dark:text-white">
                   {conference.workshop_registration_start
                     ? new Date(
-                        conference.workshop_registration_start,
-                      ).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                      })
+                      conference.workshop_registration_start,
+                    ).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })
                     : 'Not set'}
                 </div>
               </div>
@@ -94,14 +87,10 @@ export function WorkshopCapacityWidget({
 
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Workshop Capacity
-          </h3>
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-            Complete
-          </span>
-        </div>
+        <WidgetHeader
+          title="Workshop Capacity"
+          badge={<PhaseBadge label="Complete" variant="green" />}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-purple-50 p-4 dark:bg-purple-900/20">
@@ -146,36 +135,21 @@ export function WorkshopCapacityWidget({
   }
 
   if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
+    return <WidgetSkeleton />
   }
 
   if (!data || data.workshops.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No workshop data available
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No workshop data available" />
   }
 
   // Default operational view (execution phase)
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-          Workshop Capacity
-        </h3>
-        <Link
-          href="/admin/workshops"
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          Manage →
-        </Link>
-      </div>
+      <WidgetHeader
+        title="Workshop Capacity"
+        link={{ href: '/admin/workshops', label: 'Manage →' }}
+      />
 
       <div className="@container:grid-cols-1 mb-3 grid grid-cols-3 gap-2">
         <div className="rounded-lg bg-blue-50 p-2 text-center dark:bg-blue-900/20">

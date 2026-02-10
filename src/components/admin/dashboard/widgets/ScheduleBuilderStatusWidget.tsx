@@ -1,52 +1,43 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import {
-  CalendarIcon,
-  CheckCircleIcon,
-  DocumentTextIcon,
-} from '@heroicons/react/24/outline'
-import { type ScheduleStatusData } from '@/hooks/dashboard/useDashboardData'
+import { DocumentTextIcon } from '@heroicons/react/24/outline'
+import { type ScheduleStatusData } from '@/lib/dashboard/data-types'
 import { fetchScheduleStatus } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+  ProgressBar,
+} from './shared'
 
 type ScheduleBuilderStatusWidgetProps = BaseWidgetProps
 
 export function ScheduleBuilderStatusWidget({
   conference,
 }: ScheduleBuilderStatusWidgetProps) {
-  const [data, setData] = useState<ScheduleStatusData | null>(null)
-  const [loading, setLoading] = useState(true)
   const phase = conference ? getCurrentPhase(conference) : null
-
-  useEffect(() => {
-    if (!conference) return
-    fetchScheduleStatus(conference)
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
+  const { data, loading } = useWidgetData<ScheduleStatusData>(
+    conference ? () => fetchScheduleStatus(conference) : null,
+    [conference],
+  )
 
   if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
+    return <WidgetSkeleton />
   }
 
   // Initialization phase: Timeline planning guide
   if (phase === 'initialization') {
     return (
       <div className="flex h-full flex-col p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <CalendarIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Schedule Planning
-          </h3>
-        </div>
+        <WidgetHeader
+          title="Schedule Planning"
+          badge={<PhaseBadge label="Planning" variant="purple" />}
+        />
         <div className="flex flex-1 flex-col justify-center space-y-3 text-sm text-gray-600 dark:text-gray-400">
           <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
             <p className="text-xs font-medium text-purple-900 dark:text-purple-300">
@@ -73,11 +64,7 @@ export function ScheduleBuilderStatusWidget({
   if (phase === 'post-conference') {
     if (!data || data.totalSlots === 0) {
       return (
-        <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            No schedule data available
-          </p>
-        </div>
+        <WidgetEmptyState message="No schedule data available" />
       )
     }
 
@@ -85,12 +72,10 @@ export function ScheduleBuilderStatusWidget({
 
     return (
       <div className="flex h-full flex-col p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Conference Schedule
-          </h3>
-        </div>
+        <WidgetHeader
+          title="Conference Schedule"
+          badge={<PhaseBadge label="Complete" variant="green" />}
+        />
         <div className="flex flex-1 flex-col justify-center space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
@@ -123,30 +108,17 @@ export function ScheduleBuilderStatusWidget({
 
   // Planning & Execution phases: Active schedule building
   if (!data || data.totalSlots === 0) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No schedule data available
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No schedule data available" />
   }
 
   const overallProgress = (data.filledSlots / data.totalSlots) * 100
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-          Schedule Builder
-        </h3>
-        <Link
-          href="/admin/schedule"
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          Build schedule →
-        </Link>
-      </div>
+      <WidgetHeader
+        title="Schedule Builder"
+        link={{ href: '/admin/schedule', label: 'Build schedule →' }}
+      />
 
       <div className="mb-3 grid grid-cols-2 gap-2">
         <div className="rounded-lg bg-blue-50 p-2.5 dark:bg-blue-900/20">
@@ -176,12 +148,10 @@ export function ScheduleBuilderStatusWidget({
             {overallProgress.toFixed(0)}%
           </span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-          <div
-            className="h-full bg-blue-600 transition-all dark:bg-blue-500"
-            style={{ width: `${overallProgress}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={overallProgress}
+          color="bg-blue-600 dark:bg-blue-500"
+        />
       </div>
 
       <div className="flex-1 space-y-2">

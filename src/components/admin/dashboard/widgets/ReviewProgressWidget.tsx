@@ -1,50 +1,40 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircleIcon } from '@heroicons/react/24/outline'
-import { type ReviewProgressData } from '@/hooks/dashboard/useDashboardData'
+import { type ReviewProgressData } from '@/lib/dashboard/data-types'
 import { fetchReviewProgress } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+} from './shared'
 
 type ReviewProgressWidgetProps = BaseWidgetProps
 
 export function ReviewProgressWidget({
   conference,
 }: ReviewProgressWidgetProps) {
-  const [data, setData] = useState<ReviewProgressData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading } = useWidgetData<ReviewProgressData>(
+    conference ? () => fetchReviewProgress(conference._id) : null,
+    [conference],
+  )
   const phase = conference ? getCurrentPhase(conference) : null
 
-  useEffect(() => {
-    if (!conference) return
-    fetchReviewProgress(conference._id)
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
-
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
-  }
+  if (loading) return <WidgetSkeleton />
 
   // Initialization phase: Setup guide
   if (phase === 'initialization') {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Review Progress
-          </h3>
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
-            Setup
-          </span>
-        </div>
+        <WidgetHeader
+          title="Review Progress"
+          badge={<PhaseBadge label="Setup" variant="blue" />}
+        />
         <div className="flex min-h-0 flex-1 flex-col justify-center space-y-3 overflow-y-auto text-sm text-gray-600 dark:text-gray-400">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
             <p className="text-xs font-medium text-blue-900 dark:text-blue-300">
@@ -65,14 +55,10 @@ export function ReviewProgressWidget({
   if (phase === 'post-conference') {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Review Progress
-          </h3>
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-            Complete
-          </span>
-        </div>
+        <WidgetHeader
+          title="Review Progress"
+          badge={<PhaseBadge label="Complete" variant="green" />}
+        />
         {data ? (
           <div className="flex min-h-0 flex-1 flex-col justify-center space-y-3 overflow-y-auto">
             <div className="grid grid-cols-2 gap-3">
@@ -114,13 +100,7 @@ export function ReviewProgressWidget({
 
   // Planning & Execution phases: Active review tracking
   if (!data) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No review data available
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No review data available" />
   }
 
   const radius = 56

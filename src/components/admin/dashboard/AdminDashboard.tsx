@@ -11,6 +11,7 @@ import { renderWidgetContent } from '@/components/admin/dashboard/widget-rendere
 import { WidgetPicker } from '@/components/admin/dashboard/WidgetPicker'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
 import { findAvailablePosition } from '@/lib/dashboard/placement-utils'
+import { PRESET_CONFIGS } from '@/lib/dashboard/presets'
 import {
   PencilIcon,
   ArrowPathIcon,
@@ -28,60 +29,14 @@ import {
   type SerializedWidget,
 } from '@/app/(admin)/admin/actions'
 
-const PLANNING_WIDGETS: Widget[] = [
-  // Left column (col 0, span 3) — 12 rows
-  {
-    id: 'quick-actions',
-    type: 'quick-actions',
-    title: 'Quick Actions',
-    position: { row: 0, col: 0, rowSpan: 2, colSpan: 3 },
-  },
-  {
-    id: 'cfp-health',
-    type: 'cfp-health',
-    title: 'CFP Health',
-    position: { row: 2, col: 0, rowSpan: 6, colSpan: 3 },
-  },
-  {
-    id: 'speaker-engagement',
-    type: 'speaker-engagement',
-    title: 'Speaker Engagement',
-    position: { row: 8, col: 0, rowSpan: 4, colSpan: 3 },
-  },
-  // Center column (col 3, span 6) — 12 rows
-  {
-    id: 'sponsor-pipeline',
-    type: 'sponsor-pipeline',
-    title: 'Sponsor Pipeline',
-    position: { row: 0, col: 3, rowSpan: 9, colSpan: 6 },
-  },
-  {
-    id: 'ticket-sales',
-    type: 'ticket-sales',
-    title: 'Ticket Sales',
-    position: { row: 9, col: 3, rowSpan: 3, colSpan: 6 },
-  },
-  // Right column (col 9, span 3) — 12 rows
-  {
-    id: 'upcoming-deadlines',
-    type: 'upcoming-deadlines',
-    title: 'Upcoming Deadlines',
-    position: { row: 0, col: 9, rowSpan: 2, colSpan: 3 },
-  },
-  {
-    id: 'recent-activity',
-    type: 'recent-activity',
-    title: 'Recent Activity',
-    position: { row: 2, col: 9, rowSpan: 10, colSpan: 3 },
-  },
-]
+const DEFAULT_WIDGETS = PRESET_CONFIGS.planning.widgets
 
 interface AdminDashboardProps {
   conference: Conference
 }
 
 export function AdminDashboard({ conference }: AdminDashboardProps) {
-  const [widgets, setWidgets] = useState<Widget[]>(PLANNING_WIDGETS)
+  const [widgets, setWidgets] = useState<Widget[]>(DEFAULT_WIDGETS)
   const [editMode, setEditMode] = useState(false)
   const [columnCount, setColumnCount] = useState(4)
   const [showWidgetPicker, setShowWidgetPicker] = useState(false)
@@ -147,7 +102,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   }, [])
 
   const handleReset = useCallback(() => {
-    setWidgets(PLANNING_WIDGETS)
+    setWidgets(DEFAULT_WIDGETS)
     // persistWidgets will fire via the useEffect on widget change
   }, [])
 
@@ -259,11 +214,10 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         <div className="flex gap-2">
           <button
             onClick={() => setEditMode(!editMode)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-              editMode
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${editMode
                 ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                 : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-            }`}
+              }`}
           >
             <PencilIcon className="h-3.5 w-3.5" />
             {editMode ? 'Exit Edit' : 'Edit'}

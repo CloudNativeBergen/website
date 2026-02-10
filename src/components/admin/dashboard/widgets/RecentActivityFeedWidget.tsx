@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   DocumentTextIcon,
@@ -11,10 +10,12 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import { fetchRecentActivity } from '@/app/(admin)/admin/actions'
-import { type ActivityItem } from '@/hooks/dashboard/useDashboardData'
+import { type ActivityItem } from '@/lib/dashboard/data-types'
 import { SwipeablePaginationWidget } from './SwipeablePaginationWidget'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import { WidgetSkeleton, WidgetEmptyState } from './shared'
 
 const activityIcons: Record<
   string,
@@ -41,18 +42,10 @@ export function RecentActivityFeedWidget({
   conference,
 }: RecentActivityFeedWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const [activities, setActivities] = useState<ActivityItem[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!conference) return
-    fetchRecentActivity(conference._id)
-      .then((data) => {
-        setActivities(data)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
+  const { data: activities, loading } = useWidgetData<ActivityItem[]>(
+    conference ? () => fetchRecentActivity(conference._id) : null,
+    [conference],
+  )
 
   // Phase-specific: Initialization - Show welcome message
   if (phase === 'initialization') {
@@ -86,20 +79,9 @@ export function RecentActivityFeedWidget({
     )
   }
 
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
-  }
-
+  if (loading) return <WidgetSkeleton />
   if (!activities || activities.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No recent activity
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No recent activity" />
   }
 
   // Split activities into pages of 4 items each

@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   CheckCircleIcon,
@@ -10,61 +9,53 @@ import {
 } from '@heroicons/react/24/outline'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
-import { type ProposalPipelineData } from '@/hooks/dashboard/useDashboardData'
+import { type ProposalPipelineData } from '@/lib/dashboard/data-types'
 import { fetchProposalPipeline } from '@/app/(admin)/admin/actions'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+  ProgressBar,
+} from './shared'
 
 type ProposalPipelineWidgetProps = BaseWidgetProps
 
 export function ProposalPipelineWidget({
   conference,
 }: ProposalPipelineWidgetProps) {
-  const [data, setData] = useState<ProposalPipelineData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading } = useWidgetData<ProposalPipelineData>(
+    conference ? () => fetchProposalPipeline(conference._id) : null,
+    [conference],
+  )
   const phase = conference ? getCurrentPhase(conference) : null
 
-  useEffect(() => {
-    if (!conference) return
-    fetchProposalPipeline(conference._id)
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
-
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
-  }
+  if (loading) return <WidgetSkeleton />
 
   // Phase-specific: Initialization/Planning - Show CFP setup guidance
   if (phase === 'initialization' || phase === 'planning') {
     const now = new Date()
     const daysUntilCFP = conference
       ? Math.ceil(
-          (new Date(conference.cfp_start_date).getTime() - now.getTime()) /
-            (1000 * 60 * 60 * 24),
-        )
+        (new Date(conference.cfp_start_date).getTime() - now.getTime()) /
+        (1000 * 60 * 60 * 24),
+      )
       : 0
     const cfpDuration = conference
       ? Math.ceil(
-          (new Date(conference.cfp_end_date).getTime() -
-            new Date(conference.cfp_start_date).getTime()) /
-            (1000 * 60 * 60 * 24),
-        )
+        (new Date(conference.cfp_end_date).getTime() -
+          new Date(conference.cfp_start_date).getTime()) /
+        (1000 * 60 * 60 * 24),
+      )
       : 0
 
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Proposal Pipeline
-          </h3>
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
-            Setup
-          </span>
-        </div>
+        <WidgetHeader
+          title="Proposal Pipeline"
+          badge={<PhaseBadge label="Setup" variant="blue" />}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-700 dark:bg-blue-800/50">
@@ -116,14 +107,10 @@ export function ProposalPipelineWidget({
   if (phase === 'post-conference') {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Proposal Pipeline
-          </h3>
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-            Complete
-          </span>
-        </div>
+        <WidgetHeader
+          title="Proposal Pipeline"
+          badge={<PhaseBadge label="Complete" variant="green" />}
+        />
 
         <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto">
           <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
@@ -170,13 +157,7 @@ export function ProposalPipelineWidget({
 
   // Default operational view (execution phase or no conference)
   if (!data || data.total === 0) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No proposal data available
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No proposal data available" />
   }
 
   const acceptedPercentage = (data.accepted / data.total) * 100
@@ -186,17 +167,10 @@ export function ProposalPipelineWidget({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="mb-3 flex shrink-0 items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-          Proposal Pipeline
-        </h3>
-        <Link
-          href="/admin/proposals"
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          View all →
-        </Link>
-      </div>
+      <WidgetHeader
+        title="Proposal Pipeline"
+        link={{ href: '/admin/proposals', label: 'View all →' }}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* Main Stats - Redesigned as overlapping cards */}

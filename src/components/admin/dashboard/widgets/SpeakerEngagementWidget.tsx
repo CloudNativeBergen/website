@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   UserGroupIcon,
@@ -11,34 +10,24 @@ import {
   ChartBarIcon,
 } from '@heroicons/react/24/outline'
 import { fetchSpeakerEngagement } from '@/app/(admin)/admin/actions'
-import { type SpeakerEngagementData } from '@/hooks/dashboard/useDashboardData'
+import { type SpeakerEngagementData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import { WidgetSkeleton, WidgetEmptyState } from './shared'
 
 type SpeakerEngagementWidgetProps = BaseWidgetProps
 
 export function SpeakerEngagementWidget({
   conference,
 }: SpeakerEngagementWidgetProps) {
-  const [data, setData] = useState<SpeakerEngagementData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading } = useWidgetData<SpeakerEngagementData>(
+    conference ? () => fetchSpeakerEngagement(conference._id) : null,
+    [conference],
+  )
   const phase = conference ? getCurrentPhase(conference) : null
 
-  useEffect(() => {
-    if (!conference) return
-    fetchSpeakerEngagement(conference._id)
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
-
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
-  }
+  if (loading) return <WidgetSkeleton />
 
   // Initialization phase: Featured speakers + early stats
   if (phase === 'initialization') {
@@ -206,13 +195,7 @@ export function SpeakerEngagementWidget({
 
   // Planning phase (default): Speaker confirmations + diversity
   if (!data || data.totalSpeakers === 0) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No speaker data available
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No speaker data available" />
   }
 
   return (

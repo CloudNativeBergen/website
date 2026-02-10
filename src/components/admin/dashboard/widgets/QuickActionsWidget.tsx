@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useMemo } from 'react'
 import Link from 'next/link'
 import {
   ClipboardDocumentCheckIcon,
@@ -11,9 +11,11 @@ import {
   Cog6ToothIcon,
 } from '@heroicons/react/24/outline'
 import { fetchQuickActions } from '@/app/(admin)/admin/actions'
-import { type QuickAction } from '@/hooks/dashboard/useDashboardData'
+import { type QuickAction } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import { WidgetSkeleton, WidgetEmptyState } from './shared'
 
 const iconMap = {
   ClipboardDocumentCheckIcon,
@@ -38,39 +40,19 @@ const variantStyles = {
 type QuickActionsWidgetProps = BaseWidgetProps
 
 export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
-  const [actions, setActions] = useState<QuickAction[]>([])
-  const [loading, setLoading] = useState(true)
-
-  // Derive current phase without side effects
   const currentPhase = useMemo(
     () => (conference ? getCurrentPhase(conference) : 'planning'),
     [conference],
   )
 
-  useEffect(() => {
-    if (!conference) return
-    fetchQuickActions(conference, currentPhase)
-      .then((data) => {
-        setActions(data)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference, currentPhase])
+  const { data: actions, loading } = useWidgetData<QuickAction[]>(
+    conference ? () => fetchQuickActions(conference, currentPhase) : null,
+    [conference, currentPhase],
+  )
 
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
-  }
-
+  if (loading) return <WidgetSkeleton />
   if (!actions || actions.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No quick actions available
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No quick actions available" />
   }
 
   return (

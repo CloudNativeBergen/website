@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   DocumentTextIcon,
   ChartBarIcon,
@@ -12,7 +12,14 @@ import {
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { fetchCFPHealth } from '@/app/(admin)/admin/actions'
-import { CFPHealthData } from '@/hooks/dashboard/useDashboardData'
+import { CFPHealthData } from '@/lib/dashboard/data-types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+} from './shared'
 
 interface CFPHealthConfig {
   submissionTarget?: number
@@ -25,42 +32,26 @@ type CFPHealthWidgetProps = BaseWidgetProps<CFPHealthConfig>
 export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [now] = useState(() => Date.now())
-  const [data, setData] = useState<CFPHealthData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!conference) return
-    fetchCFPHealth(conference)
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
+  const { data, loading } = useWidgetData<CFPHealthData>(
+    conference ? () => fetchCFPHealth(conference) : null,
+    [conference],
+  )
 
   // Apply config defaults
   const submissionTarget = config?.submissionTarget ?? 100
   const showTrend = config?.showTrend ?? true
   const showFormatBreakdown = config?.showFormatBreakdown ?? true
 
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
-  }
+  if (loading) return <WidgetSkeleton />
 
   // Phase-specific views
   if (phase === 'initialization' && conference) {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            CFP Health
-          </h3>
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-            Preparing
-          </span>
-        </div>
+        <WidgetHeader
+          title="CFP Health"
+          badge={<PhaseBadge label="Preparing" variant="amber" />}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto">
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
@@ -82,7 +73,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.ceil(
                   (new Date(conference.cfp_start_date).getTime() - now) /
-                    (1000 * 60 * 60 * 24),
+                  (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -95,7 +86,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
                 {Math.ceil(
                   (new Date(conference.cfp_end_date).getTime() -
                     new Date(conference.cfp_start_date).getTime()) /
-                    (1000 * 60 * 60 * 24),
+                  (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -114,14 +105,10 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
 
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            CFP Health
-          </h3>
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-            Complete
-          </span>
-        </div>
+        <WidgetHeader
+          title="CFP Health"
+          badge={<PhaseBadge label="Complete" variant="green" />}
+        />
 
         <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto">
           <div className="rounded-xl bg-linear-to-br from-blue-100 to-cyan-200 p-4 dark:from-blue-900/40 dark:to-cyan-800/40">
@@ -177,14 +164,10 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
 
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            CFP Health
-          </h3>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300">
-            Archived
-          </span>
-        </div>
+        <WidgetHeader
+          title="CFP Health"
+          badge={<PhaseBadge label="Archived" variant="gray" />}
+        />
 
         <div className="flex min-h-0 flex-1 flex-col space-y-3 overflow-y-auto">
           <div className="rounded-lg border border-gray-200 bg-linear-to-r from-blue-50 to-purple-50 p-4 dark:border-gray-700 dark:from-blue-900/20 dark:to-purple-900/20">
@@ -229,35 +212,33 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   // Planning phase or when data is provided (backward compatibility)
   if (!data) {
     return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <div>
+      <WidgetEmptyState
+        message="No CFP data available"
+        icon={
           <DocumentTextIcon className="mx-auto mb-2 h-12 w-12 text-gray-400" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            No CFP data available
+        }
+      >
+        {config && (
+          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+            Target: {submissionTarget} submissions
           </p>
-          {config && (
-            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-              Target: {submissionTarget} submissions
-            </p>
-          )}
-        </div>
-      </div>
+        )}
+      </WidgetEmptyState>
     )
   }
 
   if (data.totalSubmissions === 0) {
     return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <div>
+      <WidgetEmptyState
+        message="No submissions yet"
+        icon={
           <ClockIcon className="mx-auto mb-2 h-12 w-12 text-gray-400" />
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            No submissions yet
-          </p>
-          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-            Goal: {data.submissionGoal || submissionTarget} submissions
-          </p>
-        </div>
-      </div>
+        }
+      >
+        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+          Goal: {data.submissionGoal || submissionTarget} submissions
+        </p>
+      </WidgetEmptyState>
     )
   }
 

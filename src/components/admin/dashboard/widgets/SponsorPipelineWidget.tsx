@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   CurrencyDollarIcon,
@@ -8,9 +7,17 @@ import {
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import { fetchSponsorPipelineData } from '@/app/(admin)/admin/actions'
-import { type SponsorPipelineData } from '@/hooks/dashboard/useDashboardData'
+import { type SponsorPipelineData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+  ProgressBar,
+} from './shared'
 
 type SponsorPipelineWidgetProps = BaseWidgetProps
 
@@ -18,27 +25,18 @@ export function SponsorPipelineWidget({
   conference,
 }: SponsorPipelineWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const [data, setData] = useState<SponsorPipelineData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading } = useWidgetData<SponsorPipelineData>(
+    conference
+      ? () =>
+        fetchSponsorPipelineData(
+          conference._id,
+          conference.sponsor_revenue_goal || 0,
+        )
+      : null,
+    [conference],
+  )
 
-  useEffect(() => {
-    if (!conference) return
-    fetchSponsorPipelineData(
-      conference._id,
-      conference.sponsor_revenue_goal || 0,
-    )
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
-
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
-  }
+  if (loading) return <WidgetSkeleton />
 
   // Check if there's any pipeline activity at all
   const totalDeals = data?.stages.reduce((sum, s) => sum + s.count, 0) ?? 0
@@ -50,14 +48,10 @@ export function SponsorPipelineWidget({
   ) {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Sponsor Pipeline
-          </h3>
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-            Prospecting
-          </span>
-        </div>
+        <WidgetHeader
+          title="Sponsor Pipeline"
+          badge={<PhaseBadge label="Prospecting" variant="amber" />}
+        />
 
         <div className="space-y-3">
           <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-700 dark:bg-green-800/50">
@@ -97,14 +91,10 @@ export function SponsorPipelineWidget({
 
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Sponsor Pipeline
-          </h3>
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-            Complete
-          </span>
-        </div>
+        <WidgetHeader
+          title="Sponsor Pipeline"
+          badge={<PhaseBadge label="Complete" variant="green" />}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
@@ -142,9 +132,9 @@ export function SponsorPipelineWidget({
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
               {data.wonDeals + data.lostDeals > 0
                 ? (
-                    (data.wonDeals / (data.wonDeals + data.lostDeals)) *
-                    100
-                  ).toFixed(0)
+                  (data.wonDeals / (data.wonDeals + data.lostDeals)) *
+                  100
+                ).toFixed(0)
                 : 0}
               %
             </div>
@@ -155,13 +145,7 @@ export function SponsorPipelineWidget({
   }
 
   if (!data) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No sponsor data available
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No sponsor data available" />
   }
 
   // Default operational view (execution phase)
@@ -171,17 +155,10 @@ export function SponsorPipelineWidget({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-          Sponsor Pipeline
-        </h3>
-        <Link
-          href="/admin/sponsors/crm"
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          Manage pipeline →
-        </Link>
-      </div>
+      <WidgetHeader
+        title="Sponsor Pipeline"
+        link={{ href: '/admin/sponsors/crm', label: 'Manage pipeline →' }}
+      />
 
       <div className="mb-3 grid grid-cols-3 gap-2 @[200px]:grid-cols-1 @[400px]:grid-cols-3">
         <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
@@ -226,10 +203,7 @@ export function SponsorPipelineWidget({
             </span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-            <div
-              className="h-full bg-green-600 transition-all dark:bg-green-500"
-              style={{ width: `${Math.min(progress, 100)}%` }}
-            />
+            <ProgressBar value={progress} color="bg-green-600 dark:bg-green-500" />
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useSyncExternalStore, useState, useEffect } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import type { ApexOptions } from 'apexcharts'
 import { CheckCircleIcon, TicketIcon } from '@heroicons/react/24/outline'
 import {
@@ -12,7 +12,15 @@ import {
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { fetchTicketSales } from '@/app/(admin)/admin/actions'
-import { TicketSalesData } from '@/hooks/dashboard/useDashboardData'
+import { TicketSalesData } from '@/lib/dashboard/data-types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+  ProgressBar,
+} from './shared'
 
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false })
 
@@ -31,8 +39,10 @@ type TicketSalesDashboardWidgetProps = BaseWidgetProps
 export function TicketSalesDashboardWidget({
   conference,
 }: TicketSalesDashboardWidgetProps) {
-  const [data, setData] = useState<TicketSalesData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading } = useWidgetData<TicketSalesData>(
+    conference ? () => fetchTicketSales(conference) : null,
+    [conference],
+  )
 
   const isDark = useSyncExternalStore(
     subscribeDarkMode,
@@ -40,18 +50,6 @@ export function TicketSalesDashboardWidget({
     () => false,
   )
   const phase = conference ? getCurrentPhase(conference) : null
-
-  useEffect(() => {
-    if (!conference) return
-    fetchTicketSales(conference)
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => {
-        setLoading(false)
-      })
-  }, [conference])
 
   const gaugeOptions: ApexOptions = useMemo(() => {
     const themeColors = getThemeColors(isDark)
@@ -110,23 +108,17 @@ export function TicketSalesDashboardWidget({
   )
 
   if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
+    return <WidgetSkeleton />
   }
 
   // Initialization phase: Setup guide
   if (phase === 'initialization') {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Ticket Sales
-          </h3>
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
-            Setup
-          </span>
-        </div>
+        <WidgetHeader
+          title="Ticket Sales"
+          badge={<PhaseBadge label="Setup" variant="blue" />}
+        />
         <div className="flex min-h-0 flex-1 flex-col justify-center space-y-3 overflow-y-auto text-sm text-gray-600 dark:text-gray-400">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
             <p className="text-xs font-medium text-blue-900 dark:text-blue-300">
@@ -153,25 +145,15 @@ export function TicketSalesDashboardWidget({
   // Post-conference phase: Final revenue report
   if (phase === 'post-conference') {
     if (!data || data.capacity === 0) {
-      return (
-        <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            No ticket sales data available
-          </p>
-        </div>
-      )
+      return <WidgetEmptyState message="No ticket sales data available" />
     }
 
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Ticket Sales
-          </h3>
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-            Complete
-          </span>
-        </div>
+        <WidgetHeader
+          title="Ticket Sales"
+          badge={<PhaseBadge label="Complete" variant="green" />}
+        />
         <div className="flex min-h-0 flex-1 flex-col justify-center space-y-3 overflow-y-auto">
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
@@ -209,14 +191,10 @@ export function TicketSalesDashboardWidget({
   if (!data) {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Ticket Sales
-          </h3>
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-            Not Configured
-          </span>
-        </div>
+        <WidgetHeader
+          title="Ticket Sales"
+          badge={<PhaseBadge label="Not Configured" variant="amber" />}
+        />
         <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
           <div className="space-y-2">
             <TicketIcon className="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500" />
@@ -237,17 +215,10 @@ export function TicketSalesDashboardWidget({
   if (data.currentSales === 0) {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-2 flex shrink-0 items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Ticket Sales
-          </h3>
-          <a
-            href="/admin/tickets"
-            className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-          >
-            Manage tickets &rarr;
-          </a>
-        </div>
+        <WidgetHeader
+          title="Ticket Sales"
+          link={{ href: '/admin/tickets', label: 'Manage tickets →' }}
+        />
         <div className="flex min-h-0 flex-1 flex-col justify-between overflow-y-auto">
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
@@ -294,16 +265,14 @@ export function TicketSalesDashboardWidget({
                       {data.currentSales} / {milestone.target}
                     </span>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        milestone.reached
-                          ? 'bg-green-500 dark:bg-green-400'
-                          : 'bg-blue-500 dark:bg-blue-400'
-                      }`}
-                      style={{ width: `${Math.min(percent, 100)}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    value={percent}
+                    color={
+                      milestone.reached
+                        ? 'bg-green-500 dark:bg-green-400'
+                        : 'bg-blue-500 dark:bg-blue-400'
+                    }
+                  />
                 </div>
               )
             })}
@@ -315,17 +284,10 @@ export function TicketSalesDashboardWidget({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex shrink-0 items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-          Ticket Sales
-        </h3>
-        <a
-          href="/admin/tickets"
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          Manage tickets →
-        </a>
-      </div>
+      <WidgetHeader
+        title="Ticket Sales"
+        link={{ href: '/admin/tickets', label: 'Manage tickets →' }}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="mb-3 grid shrink-0 grid-cols-3 gap-2 @[200px]:grid-cols-1 @[400px]:grid-cols-3">
@@ -385,11 +347,10 @@ export function TicketSalesDashboardWidget({
                 >
                   <div className="flex items-center gap-1.5">
                     <div
-                      className={`h-1.5 w-1.5 rounded-full ${
-                        milestone.reached
+                      className={`h-1.5 w-1.5 rounded-full ${milestone.reached
                           ? 'bg-green-500 dark:bg-green-400'
                           : 'bg-gray-300 dark:bg-gray-600'
-                      }`}
+                        }`}
                     />
                     <span className="truncate text-[11px] leading-tight font-medium text-gray-700 dark:text-gray-200">
                       {milestone.name}

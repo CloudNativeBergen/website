@@ -1,16 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   CurrencyDollarIcon,
   GlobeAltIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import { type TravelSupportData } from '@/hooks/dashboard/useDashboardData'
+import { type TravelSupportData } from '@/lib/dashboard/data-types'
 import { fetchTravelSupport } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+  ProgressBar,
+} from './shared'
 
 type TravelSupportQueueWidgetProps = BaseWidgetProps
 
@@ -18,18 +25,10 @@ export function TravelSupportQueueWidget({
   conference,
 }: TravelSupportQueueWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const [data, setData] = useState<TravelSupportData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!conference) return
-    fetchTravelSupport(conference)
-      .then((result) => {
-        setData(result)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
+  const { data, loading } = useWidgetData<TravelSupportData>(
+    conference ? () => fetchTravelSupport(conference) : null,
+    [conference],
+  )
 
   // Phase-specific: Initialization/Planning - Show setup guidance
   if (
@@ -38,14 +37,10 @@ export function TravelSupportQueueWidget({
   ) {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Travel Support
-          </h3>
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
-            Planning
-          </span>
-        </div>
+        <WidgetHeader
+          title="Travel Support"
+          badge={<PhaseBadge label="Planning" variant="blue" />}
+        />
 
         <div className="space-y-3">
           <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-700 dark:bg-cyan-800/50">
@@ -83,14 +78,10 @@ export function TravelSupportQueueWidget({
 
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Travel Support
-          </h3>
-          <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-400">
-            Complete
-          </span>
-        </div>
+        <WidgetHeader
+          title="Travel Support"
+          badge={<PhaseBadge label="Complete" variant="green" />}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
@@ -138,19 +129,11 @@ export function TravelSupportQueueWidget({
   }
 
   if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
+    return <WidgetSkeleton />
   }
 
   if (!data) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No travel support data available
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No travel support data available" />
   }
 
   // Default operational view (execution phase)
@@ -159,17 +142,10 @@ export function TravelSupportQueueWidget({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-          Travel Support
-        </h3>
-        <Link
-          href="/admin/travel-support"
-          className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-        >
-          Review →
-        </Link>
-      </div>
+      <WidgetHeader
+        title="Travel Support"
+        link={{ href: '/admin/travel-support', label: 'Review →' }}
+      />
 
       {data.pendingApprovals > 0 && (
         <div className="mb-3 rounded-lg bg-amber-50 p-2.5 text-center dark:bg-amber-900/20">
@@ -210,18 +186,17 @@ export function TravelSupportQueueWidget({
             ${(data.budgetAllocated / 1000).toFixed(0)}k total
           </span>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-          <div
-            className={`h-full transition-all ${
-              budgetUsed > 90
-                ? 'bg-red-600 dark:bg-red-500'
-                : budgetUsed > 70
-                  ? 'bg-amber-600 dark:bg-amber-500'
-                  : 'bg-green-600 dark:bg-green-500'
-            }`}
-            style={{ width: `${Math.min(budgetUsed, 100)}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={budgetUsed}
+          color={
+            budgetUsed > 90
+              ? 'bg-red-600 dark:bg-red-500'
+              : budgetUsed > 70
+                ? 'bg-amber-600 dark:bg-amber-500'
+                : 'bg-green-600 dark:bg-green-500'
+          }
+          className="h-1.5"
+        />
         <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-300">
           {budgetUsed.toFixed(0)}% used
         </div>

@@ -1,12 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircleIcon, CalendarIcon } from '@heroicons/react/24/outline'
 import { fetchDeadlines } from '@/app/(admin)/admin/actions'
-import { type DeadlineData } from '@/hooks/dashboard/useDashboardData'
+import { type DeadlineData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
+import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
+import {
+  WidgetSkeleton,
+  WidgetEmptyState,
+  WidgetHeader,
+  PhaseBadge,
+} from './shared'
 
 const urgencyStyles = {
   high: 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
@@ -33,31 +39,19 @@ export function UpcomingDeadlinesWidget({
   conference,
 }: UpcomingDeadlinesWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const [deadlines, setDeadlines] = useState<DeadlineData[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (!conference) return
-    fetchDeadlines(conference)
-      .then((data) => {
-        setDeadlines(data)
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
-  }, [conference])
+  const { data: deadlines, loading } = useWidgetData<DeadlineData[]>(
+    conference ? () => fetchDeadlines(conference) : null,
+    [conference],
+  )
 
   // Phase-specific: Initialization without deadlines - Show planning timeline
   if (phase === 'initialization' && conference) {
     return (
       <div className="flex h-full flex-col">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-            Upcoming Deadlines
-          </h3>
-          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-400">
-            Planning
-          </span>
-        </div>
+        <WidgetHeader
+          title="Upcoming Deadlines"
+          badge={<PhaseBadge label="Planning" variant="blue" />}
+        />
 
         <div className="space-y-2">
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-700 dark:bg-blue-800/50">
@@ -90,20 +84,9 @@ export function UpcomingDeadlinesWidget({
     )
   }
 
-  if (loading) {
-    return (
-      <div className="h-full animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
-    )
-  }
-
+  if (loading) return <WidgetSkeleton />
   if (!deadlines || deadlines.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-lg bg-gray-50 p-6 text-center dark:bg-gray-800">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No upcoming deadlines
-        </p>
-      </div>
-    )
+    return <WidgetEmptyState message="No upcoming deadlines" />
   }
 
   return (
