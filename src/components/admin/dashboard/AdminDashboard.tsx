@@ -18,11 +18,7 @@ import {
   PlusIcon,
 } from '@heroicons/react/24/outline'
 import { Conference } from '@/lib/conference/types'
-import {
-  getCurrentPhase,
-  getPhaseName,
-  getPhaseColor,
-} from '@/lib/conference/phase'
+import { getCurrentPhase } from '@/lib/conference/phase'
 import {
   loadDashboardConfig,
   saveDashboardConfig,
@@ -44,8 +40,6 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const currentPhase = getCurrentPhase(conference)
-  const phaseName = getPhaseName(currentPhase)
-  const phaseColor = getPhaseColor(currentPhase)
 
   // Filter out widgets that should be hidden in the current phase
   const visibleWidgets = useMemo(() => {
@@ -210,7 +204,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   )
 
   return (
-    <div className="min-h-screen">
+    <div className="relative min-h-screen">
       {showWidgetPicker && (
         <WidgetPicker
           onSelect={handleAddWidget}
@@ -218,50 +212,38 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         />
       )}
 
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-white">
-            Dashboard
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {conference.title} &mdash;{' '}
-            <span className={phaseColor.text}>{phaseName}</span>
-          </p>
-        </div>
+      {/* Floating edit controls */}
+      <div className="fixed right-6 bottom-6 z-40 flex items-center gap-2">
+        {editMode && (
+          <>
+            <button
+              onClick={handleReset}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <ArrowPathIcon className="h-3.5 w-3.5" />
+              Reset
+            </button>
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => setEditMode(!editMode)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-              editMode
-                ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
-                : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            <button
+              onClick={() => setShowWidgetPicker(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+            >
+              <PlusIcon className="h-3.5 w-3.5" />
+              Add
+            </button>
+          </>
+        )}
+
+        <button
+          onClick={() => setEditMode(!editMode)}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium shadow-lg transition-colors ${editMode
+              ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
+              : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
             }`}
-          >
-            <PencilIcon className="h-3.5 w-3.5" />
-            {editMode ? 'Exit Edit' : 'Edit'}
-          </button>
-
-          {editMode && (
-            <>
-              <button
-                onClick={() => setShowWidgetPicker(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                <PlusIcon className="h-3.5 w-3.5" />
-                Add Widget
-              </button>
-
-              <button
-                onClick={handleReset}
-                className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-              >
-                <ArrowPathIcon className="h-3.5 w-3.5" />
-                Reset
-              </button>
-            </>
-          )}
-        </div>
+        >
+          <PencilIcon className="h-3.5 w-3.5" />
+          {editMode ? 'Done' : 'Edit'}
+        </button>
       </div>
 
       <DashboardGrid
