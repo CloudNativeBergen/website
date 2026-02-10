@@ -46,10 +46,12 @@ export function RecentActivityFeedWidget({
 
   useEffect(() => {
     if (!conference) return
-    fetchRecentActivity(conference._id).then((data) => {
-      setActivities(data)
-      setLoading(false)
-    })
+    fetchRecentActivity(conference._id)
+      .then((data) => {
+        setActivities(data)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [conference])
 
   // Phase-specific: Initialization - Show welcome message

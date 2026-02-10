@@ -26,10 +26,12 @@ export function SpeakerEngagementWidget({
 
   useEffect(() => {
     if (!conference) return
-    fetchSpeakerEngagement(conference._id).then((result) => {
-      setData(result)
-      setLoading(false)
-    })
+    fetchSpeakerEngagement(conference._id)
+      .then((result) => {
+        setData(result)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [conference])
 
   if (loading) {

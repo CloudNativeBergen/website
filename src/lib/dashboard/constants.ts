@@ -9,3 +9,8 @@ export const GRID_CONFIG: GridConfig = {
     mobile: { minWidth: 0, cols: 4 },
   },
 }
+
+export const DASHBOARD_SAVE_DEBOUNCE_MS = 1500
+export const SWIPE_THRESHOLD_PX = 50
+export const SWIPE_ANIMATION_MS = 300
+export const MIN_GRID_ROWS = 10

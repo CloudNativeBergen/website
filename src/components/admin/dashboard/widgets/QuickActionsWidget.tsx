@@ -49,10 +49,12 @@ export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
 
   useEffect(() => {
     if (!conference) return
-    fetchQuickActions(conference, currentPhase).then((data) => {
-      setActions(data)
-      setLoading(false)
-    })
+    fetchQuickActions(conference, currentPhase)
+      .then((data) => {
+        setActions(data)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [conference, currentPhase])
 
   if (loading) {

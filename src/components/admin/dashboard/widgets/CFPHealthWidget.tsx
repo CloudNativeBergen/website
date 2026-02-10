@@ -30,10 +30,12 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
 
   useEffect(() => {
     if (!conference) return
-    fetchCFPHealth(conference).then((result) => {
-      setData(result)
-      setLoading(false)
-    })
+    fetchCFPHealth(conference)
+      .then((result) => {
+        setData(result)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [conference])
 
   // Apply config defaults
@@ -80,7 +82,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.ceil(
                   (new Date(conference.cfp_start_date).getTime() - now) /
-                    (1000 * 60 * 60 * 24),
+                  (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -93,7 +95,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
                 {Math.ceil(
                   (new Date(conference.cfp_end_date).getTime() -
                     new Date(conference.cfp_start_date).getTime()) /
-                    (1000 * 60 * 60 * 24),
+                  (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -339,9 +341,12 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
           <div className="flex items-end gap-1">
             {data.submissionsPerDay.map((day, index) => {
               const height = (day.count / maxSubmissions) * 100
-              const dateLabel = new Date(
-                day.date + 'T12:00:00',
-              ).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              const date = new Date(day.date + 'T00:00:00Z')
+              const dateLabel = date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'UTC',
+              })
               return (
                 <div
                   key={index}

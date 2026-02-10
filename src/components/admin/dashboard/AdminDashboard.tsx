@@ -3,21 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Widget } from '@/lib/dashboard/types'
 import { getColumnCountForWidth } from '@/lib/dashboard/grid-utils'
+import { DASHBOARD_SAVE_DEBOUNCE_MS } from '@/lib/dashboard/constants'
 import { DashboardGrid } from '@/components/admin/dashboard/DashboardGrid'
 import { WidgetContainer } from '@/components/admin/dashboard/WidgetContainer'
 import { WidgetErrorBoundary } from '@/components/admin/dashboard/WidgetErrorBoundary'
-import { QuickActionsWidget } from '@/components/admin/dashboard/widgets/QuickActionsWidget'
-import { UpcomingDeadlinesWidget } from '@/components/admin/dashboard/widgets/UpcomingDeadlinesWidget'
-import { CFPHealthWidget } from '@/components/admin/dashboard/widgets/CFPHealthWidget'
-import { TicketSalesDashboardWidget } from '@/components/admin/dashboard/widgets/TicketSalesDashboardWidget'
-import { SpeakerEngagementWidget } from '@/components/admin/dashboard/widgets/SpeakerEngagementWidget'
-import { SponsorPipelineWidget } from '@/components/admin/dashboard/widgets/SponsorPipelineWidget'
-import { RecentActivityFeedWidget } from '@/components/admin/dashboard/widgets/RecentActivityFeedWidget'
-import { ProposalPipelineWidget } from '@/components/admin/dashboard/widgets/ProposalPipelineWidget'
-import { ReviewProgressWidget } from '@/components/admin/dashboard/widgets/ReviewProgressWidget'
-import { TravelSupportQueueWidget } from '@/components/admin/dashboard/widgets/TravelSupportQueueWidget'
-import { WorkshopCapacityWidget } from '@/components/admin/dashboard/widgets/WorkshopCapacityWidget'
-import { ScheduleBuilderStatusWidget } from '@/components/admin/dashboard/widgets/ScheduleBuilderStatusWidget'
+import { renderWidgetContent } from '@/components/admin/dashboard/widget-renderer'
 import { WidgetPicker } from '@/components/admin/dashboard/WidgetPicker'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
 import { findAvailablePosition } from '@/lib/dashboard/placement-utils'
@@ -138,7 +128,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         saveDashboardConfig(conference._id, serialized).catch(() => {
           // Silently fail — widget state is still in React
         })
-      }, 1500)
+      }, DASHBOARD_SAVE_DEBOUNCE_MS)
     },
     [conference._id, configLoaded],
   )
@@ -217,64 +207,6 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
 
   const renderWidget = useCallback(
     (widget: Widget, isDragging: boolean, cellWidth: number) => {
-      let content: React.ReactNode
-
-      switch (widget.type) {
-        case 'quick-actions':
-          content = <QuickActionsWidget conference={conference} />
-          break
-        case 'upcoming-deadlines':
-          content = <UpcomingDeadlinesWidget conference={conference} />
-          break
-        case 'cfp-health':
-          content = (
-            <CFPHealthWidget
-              conference={conference}
-              config={
-                widget.config as {
-                  submissionTarget?: number
-                  showTrend?: boolean
-                  showFormatBreakdown?: boolean
-                }
-              }
-            />
-          )
-          break
-        case 'ticket-sales':
-          content = <TicketSalesDashboardWidget conference={conference} />
-          break
-        case 'speaker-engagement':
-          content = <SpeakerEngagementWidget conference={conference} />
-          break
-        case 'sponsor-pipeline':
-          content = <SponsorPipelineWidget conference={conference} />
-          break
-        case 'recent-activity':
-          content = <RecentActivityFeedWidget conference={conference} />
-          break
-        case 'proposal-pipeline':
-          content = <ProposalPipelineWidget conference={conference} />
-          break
-        case 'review-progress':
-          content = <ReviewProgressWidget conference={conference} />
-          break
-        case 'travel-support':
-          content = <TravelSupportQueueWidget conference={conference} />
-          break
-        case 'workshop-capacity':
-          content = <WorkshopCapacityWidget conference={conference} />
-          break
-        case 'schedule-builder':
-          content = <ScheduleBuilderStatusWidget conference={conference} />
-          break
-        default:
-          content = (
-            <div className="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-              Widget not available
-            </div>
-          )
-      }
-
       return (
         <WidgetErrorBoundary widgetName={widget.title}>
           <WidgetContainer
@@ -288,7 +220,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
             onRemove={handleRemoveWidget}
             onConfigChange={handleConfigChange}
           >
-            {content}
+            {renderWidgetContent(widget, conference)}
           </WidgetContainer>
         </WidgetErrorBoundary>
       )
@@ -327,11 +259,10 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         <div className="flex gap-2">
           <button
             onClick={() => setEditMode(!editMode)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-              editMode
+            className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${editMode
                 ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                 : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-            }`}
+              }`}
           >
             <PencilIcon className="h-3.5 w-3.5" />
             {editMode ? 'Exit Edit' : 'Edit'}

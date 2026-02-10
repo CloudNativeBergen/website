@@ -38,10 +38,12 @@ export function UpcomingDeadlinesWidget({
 
   useEffect(() => {
     if (!conference) return
-    fetchDeadlines(conference).then((data) => {
-      setDeadlines(data)
-      setLoading(false)
-    })
+    fetchDeadlines(conference)
+      .then((data) => {
+        setDeadlines(data)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [conference])
 
   // Phase-specific: Initialization without deadlines - Show planning timeline

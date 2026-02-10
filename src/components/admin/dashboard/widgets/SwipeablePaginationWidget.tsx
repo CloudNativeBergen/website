@@ -1,7 +1,11 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import {
+  SWIPE_THRESHOLD_PX,
+  SWIPE_ANIMATION_MS,
+} from '@/lib/dashboard/constants'
 
 /**
  * Swipeable Pagination Widget - POC
@@ -65,8 +69,7 @@ export function SwipeablePaginationWidget({
     }
 
     // Determine if swipe was significant enough
-    const threshold = 50
-    if (Math.abs(dragOffset) > threshold) {
+    if (Math.abs(dragOffset) > SWIPE_THRESHOLD_PX) {
       if (dragOffset > 0 && currentPage > 0) {
         setCurrentPage(currentPage - 1)
       } else if (dragOffset < 0 && currentPage < totalPages - 1) {
@@ -76,19 +79,17 @@ export function SwipeablePaginationWidget({
     setDragOffset(0)
   }
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+  // Keyboard navigation (scoped to focused widget)
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
       if (e.key === 'ArrowLeft' && currentPage > 0) {
         setCurrentPage(currentPage - 1)
       } else if (e.key === 'ArrowRight' && currentPage < totalPages - 1) {
         setCurrentPage(currentPage + 1)
       }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [currentPage, totalPages])
+    },
+    [currentPage, totalPages],
+  )
 
   const goToPage = (pageIndex: number) => {
     setCurrentPage(Math.max(0, Math.min(pageIndex, totalPages - 1)))
@@ -103,7 +104,11 @@ export function SwipeablePaginationWidget({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div
+      className="flex h-full flex-col outline-none"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+    >
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-xs font-semibold text-gray-900 dark:text-gray-100">
           {title}
@@ -114,11 +119,10 @@ export function SwipeablePaginationWidget({
               <button
                 key={index}
                 onClick={() => goToPage(index)}
-                className={`h-1.5 w-1.5 rounded-full transition-all ${
-                  index === currentPage
+                className={`h-1.5 w-1.5 rounded-full transition-all ${index === currentPage
                     ? 'w-3 bg-blue-600 dark:bg-blue-500'
                     : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500'
-                }`}
+                  }`}
                 aria-label={`Go to page ${index + 1}`}
               />
             ))}
@@ -140,7 +144,9 @@ export function SwipeablePaginationWidget({
             className="flex h-full transition-transform"
             style={{
               transform: `translateX(calc(-${currentPage * 100}% + ${dragOffset}px))`,
-              transitionDuration: isDragging ? '0ms' : '300ms',
+              transitionDuration: isDragging
+                ? '0ms'
+                : `${SWIPE_ANIMATION_MS}ms`,
               transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
             }}
           >

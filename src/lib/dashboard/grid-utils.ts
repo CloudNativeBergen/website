@@ -1,4 +1,5 @@
 import type { Widget, GridPosition } from './types'
+import { GRID_CONFIG } from './constants'
 
 /**
  * Builds a map of occupied grid cells for collision detection
@@ -105,7 +106,8 @@ export function snapToGrid(
  * @returns Number of columns (12 for desktop, 6 for tablet, 4 for mobile)
  */
 export function getColumnCountForWidth(width: number): number {
-  if (width >= 1024) return 12
-  if (width >= 768) return 6
-  return 4
+  const { breakpoints } = GRID_CONFIG
+  if (width >= breakpoints.desktop.minWidth) return breakpoints.desktop.cols
+  if (width >= breakpoints.tablet.minWidth) return breakpoints.tablet.cols
+  return breakpoints.mobile.cols
 }

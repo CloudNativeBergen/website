@@ -1,4 +1,5 @@
 import type { Widget, GridPosition } from './types'
+import { MIN_GRID_ROWS } from './constants'
 
 /**
  * Find the first available position for a widget with given dimensions
@@ -13,7 +14,7 @@ export function findAvailablePosition(
   // Create a 2D grid to track occupied cells
   const maxRows = Math.max(
     ...existingWidgets.map((w) => w.position.row + w.position.rowSpan),
-    10, // Minimum grid height
+    MIN_GRID_ROWS,
   )
 
   const grid: boolean[][] = Array.from({ length: maxRows + rowSpan }, () =>

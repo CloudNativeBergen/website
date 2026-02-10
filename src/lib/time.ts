@@ -305,9 +305,12 @@ export function formatRelativeTime(isoDate: string): string {
   const then = new Date(isoDate).getTime()
   const diffMs = now - then
 
+  if (diffMs < 0) return 'just now'
+
   const minutes = Math.floor(diffMs / 60000)
   if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes} minutes ago`
+  if (minutes < 60)
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`
 
   const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`
