@@ -146,12 +146,12 @@ describe('getColumnCountForWidth', () => {
     expect(getColumnCountForWidth(768)).toBe(6)
   })
 
-  it('returns 4 columns for mobile widths', () => {
-    expect(getColumnCountForWidth(767)).toBe(4)
-    expect(getColumnCountForWidth(320)).toBe(4)
+  it('returns 1 column for mobile widths', () => {
+    expect(getColumnCountForWidth(767)).toBe(1)
+    expect(getColumnCountForWidth(320)).toBe(1)
   })
 
-  it('returns 4 columns for zero width', () => {
-    expect(getColumnCountForWidth(0)).toBe(4)
+  it('returns 1 column for zero width', () => {
+    expect(getColumnCountForWidth(0)).toBe(1)
   })
 })

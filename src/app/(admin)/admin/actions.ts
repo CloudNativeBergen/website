@@ -259,9 +259,9 @@ export async function fetchCFPHealth(
   const now = new Date()
   const daysSinceOpen = cfpStart
     ? Math.max(
-      1,
-      Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
-    )
+        1,
+        Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
+      )
     : 1
   const averagePerDay =
     submitted.length > 0

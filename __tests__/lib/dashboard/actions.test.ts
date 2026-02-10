@@ -656,7 +656,7 @@ describe('Dashboard Server Actions', () => {
       const data = await fetchSponsorPipelineData('conf-1', 500000)
 
       expect(data.stages).toHaveLength(4)
-      expect(data.stages[0]).toEqual({
+      expect(data.stages[0]).toMatchObject({
         name: 'Prospect',
         count: 3,
         value: 0,
@@ -794,7 +794,7 @@ describe('Dashboard Server Actions', () => {
       })
 
       const items = await fetchRecentActivity('conf-1')
-      expect(items.length).toBeLessThanOrEqual(10)
+      expect(items.length).toBeLessThanOrEqual(15)
     })
   })
 

@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Widget } from '@/lib/dashboard/types'
-import { getColumnCountForWidth } from '@/lib/dashboard/grid-utils'
+import {
+  getColumnCountForWidth,
+  reflowWidgetsForColumns,
+} from '@/lib/dashboard/grid-utils'
+import { GRID_CONFIG } from '@/lib/dashboard/constants'
 import { DASHBOARD_SAVE_DEBOUNCE_MS } from '@/lib/dashboard/constants'
 import { DashboardGrid } from '@/components/admin/dashboard/DashboardGrid'
 import { WidgetContainer } from '@/components/admin/dashboard/WidgetContainer'
@@ -41,6 +45,11 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
 
   const currentPhase = getCurrentPhase(conference)
 
+  const isDesktop = columnCount >= GRID_CONFIG.breakpoints.desktop.cols
+
+  // Derive effective edit mode — disabled on mobile/tablet
+  const effectiveEditMode = isDesktop && editMode
+
   // Filter out widgets that should be hidden in the current phase
   const visibleWidgets = useMemo(() => {
     return widgets.filter((w) => {
@@ -51,6 +60,12 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
       return relevantPhases.includes(currentPhase)
     })
   }, [widgets, currentPhase])
+
+  // Reflow widget positions for current column count
+  const displayWidgets = useMemo(
+    () => reflowWidgetsForColumns(visibleWidgets, columnCount),
+    [visibleWidgets, columnCount],
+  )
 
   // Load saved config on mount
   useEffect(() => {
@@ -178,11 +193,11 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         <WidgetErrorBoundary widgetName={widget.title}>
           <WidgetContainer
             widget={widget}
-            editMode={editMode}
+            editMode={effectiveEditMode}
             isDragging={isDragging}
             columnCount={columnCount}
             cellWidth={cellWidth}
-            allWidgets={visibleWidgets}
+            allWidgets={displayWidgets}
             onResize={handleResize}
             onRemove={handleRemoveWidget}
             onConfigChange={handleConfigChange}
@@ -193,9 +208,9 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
       )
     },
     [
-      editMode,
+      effectiveEditMode,
       columnCount,
-      visibleWidgets,
+      displayWidgets,
       handleResize,
       handleRemoveWidget,
       handleConfigChange,
@@ -212,46 +227,48 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
         />
       )}
 
-      {/* Floating edit controls */}
-      <div className="fixed right-6 bottom-6 z-40 flex items-center gap-2">
-        {editMode && (
-          <>
-            <button
-              onClick={handleReset}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            >
-              <ArrowPathIcon className="h-3.5 w-3.5" />
-              Reset
-            </button>
+      {/* Floating edit controls — desktop only */}
+      {isDesktop && (
+        <div className="fixed right-6 bottom-6 z-40 flex items-center gap-2">
+          {editMode && (
+            <>
+              <button
+                onClick={handleReset}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <ArrowPathIcon className="h-3.5 w-3.5" />
+                Reset
+              </button>
 
-            <button
-              onClick={() => setShowWidgetPicker(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
-            >
-              <PlusIcon className="h-3.5 w-3.5" />
-              Add
-            </button>
-          </>
-        )}
+              <button
+                onClick={() => setShowWidgetPicker(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 shadow-lg transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <PlusIcon className="h-3.5 w-3.5" />
+                Add
+              </button>
+            </>
+          )}
 
-        <button
-          onClick={() => setEditMode(!editMode)}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium shadow-lg transition-colors ${
-            editMode
-              ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
-              : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
-        >
-          <PencilIcon className="h-3.5 w-3.5" />
-          {editMode ? 'Done' : 'Edit'}
-        </button>
-      </div>
+          <button
+            onClick={() => setEditMode(!editMode)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium shadow-lg transition-colors ${
+              editMode
+                ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
+                : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
+          >
+            <PencilIcon className="h-3.5 w-3.5" />
+            {editMode ? 'Done' : 'Edit'}
+          </button>
+        </div>
+      )}
 
       <DashboardGrid
-        widgets={visibleWidgets}
+        widgets={displayWidgets}
         onWidgetsChange={handleWidgetsChange}
         columnCount={columnCount}
-        editMode={editMode}
+        editMode={effectiveEditMode}
       >
         {renderWidget}
       </DashboardGrid>

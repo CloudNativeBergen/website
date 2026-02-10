@@ -39,10 +39,10 @@ export function SponsorPipelineWidget({
     useWidgetData<SponsorPipelineWidgetData>(
       conference
         ? () =>
-          fetchSponsorPipelineData(
-            conference._id,
-            conference.sponsor_revenue_goal || 0,
-          )
+            fetchSponsorPipelineData(
+              conference._id,
+              conference.sponsor_revenue_goal || 0,
+            )
         : null,
       [conference],
     )
@@ -144,9 +144,9 @@ export function SponsorPipelineWidget({
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
               {data.wonDeals + data.lostDeals > 0
                 ? (
-                  (data.wonDeals / (data.wonDeals + data.lostDeals)) *
-                  100
-                ).toFixed(0)
+                    (data.wonDeals / (data.wonDeals + data.lostDeals)) *
+                    100
+                  ).toFixed(0)
                 : 0}
               %
             </div>

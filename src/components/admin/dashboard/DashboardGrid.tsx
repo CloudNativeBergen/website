@@ -92,16 +92,19 @@ export function DashboardGrid({
     [cellWidth],
   )
 
+  const isMobile = columnCount === 1
+
   const gridStyle = useMemo(
     () => ({
-      display: 'grid',
-      gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
-      gridAutoRows: `${GRID_CONFIG.cellSize}px`,
+      display: isMobile ? ('flex' as const) : ('grid' as const),
+      flexDirection: isMobile ? ('column' as const) : undefined,
+      gridTemplateColumns: isMobile ? undefined : `repeat(${columnCount}, 1fr)`,
+      gridAutoRows: isMobile ? undefined : `${GRID_CONFIG.cellSize}px`,
       gap: `${GRID_CONFIG.gap}px`,
       position: 'relative' as const,
       width: '100%',
     }),
-    [columnCount],
+    [columnCount, isMobile],
   )
 
   const handleDragStart = useCallback((event: DragStartEvent) => {

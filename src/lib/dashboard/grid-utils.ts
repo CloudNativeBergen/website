@@ -2,6 +2,84 @@ import type { Widget, GridPosition } from './types'
 import { GRID_CONFIG } from './constants'
 
 /**
+ * Reflows widget positions for a target column count.
+ * Widgets are sorted by their original (row, col) position and packed
+ * greedily into the target grid. For single-column mode, widgets stack
+ * full-width. Stored config always stays in 12-col format — reflow is
+ * display-only.
+ */
+export function reflowWidgetsForColumns(
+  widgets: Widget[],
+  targetCols: number,
+): Widget[] {
+  const desktopCols = GRID_CONFIG.breakpoints.desktop.cols
+  if (targetCols >= desktopCols) return widgets
+
+  // Sort by original position: top-to-bottom, left-to-right
+  const sorted = [...widgets].sort((a, b) => {
+    if (a.position.row !== b.position.row)
+      return a.position.row - b.position.row
+    return a.position.col - b.position.col
+  })
+
+  // Single column: stack full-width, auto-height
+  if (targetCols === 1) {
+    let currentRow = 0
+    return sorted.map((widget) => ({
+      ...widget,
+      position: {
+        row: currentRow++,
+        col: 0,
+        rowSpan: 1, // auto-height handles sizing
+        colSpan: 1,
+      },
+    }))
+  }
+
+  // Multi-column (tablet): greedy row-packing
+  // Track the next available row for each column
+  const colHeights = new Array(targetCols).fill(0)
+
+  return sorted.map((widget) => {
+    const colSpan = Math.min(widget.position.colSpan, targetCols)
+
+    // Find the first row where this widget fits without overlapping
+    let bestRow = Infinity
+    let bestCol = 0
+
+    for (let c = 0; c <= targetCols - colSpan; c++) {
+      // The widget needs columns c..c+colSpan-1
+      // Find the max height across those columns
+      let maxHeight = 0
+      for (let cc = c; cc < c + colSpan; cc++) {
+        maxHeight = Math.max(maxHeight, colHeights[cc])
+      }
+      if (maxHeight < bestRow) {
+        bestRow = maxHeight
+        bestCol = c
+      }
+    }
+
+    const rowSpan = widget.position.rowSpan
+
+    // Update column heights
+    for (let cc = bestCol; cc < bestCol + colSpan; cc++) {
+      colHeights[cc] = bestRow + rowSpan
+    }
+
+    return {
+      ...widget,
+      position: {
+        row: bestRow,
+        col: bestCol,
+        rowSpan,
+        colSpan,
+      },
+    }
+  })
+}
+
+/**
  * Builds a map of occupied grid cells for collision detection
  */
 export function buildOccupationMap(widgets: Widget[]): Map<string, string> {

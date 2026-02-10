@@ -72,12 +72,15 @@ export function WidgetContainer({
     ? checkCollision(previewPosition, allWidgets, widget.id, columnCount)
     : false
 
+  const isMobile = columnCount === 1
+
   const style = {
-    gridColumn:
-      columnCount === 1
-        ? '1 / -1'
-        : `${currentPosition.col + 1} / span ${currentPosition.colSpan}`,
-    gridRow: `${currentPosition.row + 1} / span ${currentPosition.rowSpan}`,
+    gridColumn: isMobile
+      ? undefined
+      : `${currentPosition.col + 1} / span ${currentPosition.colSpan}`,
+    gridRow: isMobile
+      ? undefined
+      : `${currentPosition.row + 1} / span ${currentPosition.rowSpan}`,
     transform:
       transform && !isResizing
         ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
@@ -255,10 +258,10 @@ export function WidgetContainer({
         style={{
           ...style,
           cursor: editMode && !isResizing ? 'grab' : undefined,
-          touchAction: 'none',
-          containerType: 'size',
+          touchAction: editMode ? 'none' : undefined,
+          containerType: isMobile ? undefined : ('size' as const),
           // CSS containment for performance - isolate widgets from affecting each other
-          contain: 'layout style paint',
+          contain: isMobile ? undefined : 'layout style paint',
         }}
         className={`relative overflow-hidden rounded-lg border-2 bg-white shadow-sm transition-colors dark:bg-gray-800 ${borderColor}`}
       >
@@ -302,7 +305,7 @@ export function WidgetContainer({
           {children}
         </div>
 
-        {editMode && (
+        {editMode && !isMobile && (
           <div
             onPointerDown={handleResizeStart}
             className="pointer-events-auto absolute right-0 bottom-0 h-6 w-6 cursor-nwse-resize"

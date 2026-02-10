@@ -6,7 +6,7 @@ export const GRID_CONFIG: GridConfig = {
   breakpoints: {
     desktop: { minWidth: 1024, cols: 12 },
     tablet: { minWidth: 768, cols: 6 },
-    mobile: { minWidth: 0, cols: 4 },
+    mobile: { minWidth: 0, cols: 1 },
   },
 }
 
