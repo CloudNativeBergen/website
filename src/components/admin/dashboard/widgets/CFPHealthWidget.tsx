@@ -73,7 +73,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
                 {Math.ceil(
                   (new Date(conference.cfp_start_date).getTime() - now) /
-                  (1000 * 60 * 60 * 24),
+                    (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -86,7 +86,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
                 {Math.ceil(
                   (new Date(conference.cfp_end_date).getTime() -
                     new Date(conference.cfp_start_date).getTime()) /
-                  (1000 * 60 * 60 * 24),
+                    (1000 * 60 * 60 * 24),
                 )}
                 d
               </div>
@@ -231,9 +231,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
     return (
       <WidgetEmptyState
         message="No submissions yet"
-        icon={
-          <ClockIcon className="mx-auto mb-2 h-12 w-12 text-gray-400" />
-        }
+        icon={<ClockIcon className="mx-auto mb-2 h-12 w-12 text-gray-400" />}
       >
         <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
           Goal: {data.submissionGoal || submissionTarget} submissions

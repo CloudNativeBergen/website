@@ -334,7 +334,7 @@ export const SCHEDULE_BUILDER_WIDGET = defineWidget({
   category: 'operations',
   icon: 'CalendarIcon',
   constraints: {
-    minCols: 4,
+    minCols: 3,
     maxCols: 6,
     minRows: 3,
     maxRows: 5,
@@ -345,6 +345,7 @@ export const SCHEDULE_BUILDER_WIDGET = defineWidget({
     rowSpan: 4,
   },
   availableSizes: [
+    { name: 'compact', colSpan: 3, rowSpan: 3 },
     { name: 'small', colSpan: 4, rowSpan: 3 },
     { name: 'medium', colSpan: 6, rowSpan: 4 },
   ],
@@ -372,7 +373,7 @@ export const TICKET_SALES_WIDGET = defineWidget({
   category: 'analytics',
   icon: 'TicketIcon',
   constraints: {
-    minCols: 4,
+    minCols: 3,
     maxCols: 8,
     minRows: 3,
     maxRows: 6,
@@ -383,6 +384,7 @@ export const TICKET_SALES_WIDGET = defineWidget({
     rowSpan: 3,
   },
   availableSizes: [
+    { name: 'narrow', colSpan: 3, rowSpan: 4 },
     { name: 'compact', colSpan: 6, rowSpan: 3 },
     { name: 'small', colSpan: 4, rowSpan: 3 },
     { name: 'medium', colSpan: 6, rowSpan: 4 },
@@ -521,7 +523,7 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
   category: 'operations',
   icon: 'CurrencyDollarIcon',
   constraints: {
-    minCols: 6,
+    minCols: 5,
     maxCols: 12,
     minRows: 4,
     maxRows: 10,
@@ -533,6 +535,7 @@ export const SPONSOR_PIPELINE_WIDGET = defineWidget({
     rowSpan: 9,
   },
   availableSizes: [
+    { name: 'compact', colSpan: 5, rowSpan: 4 },
     { name: 'medium', colSpan: 6, rowSpan: 5 },
     { name: 'tall', colSpan: 6, rowSpan: 9 },
     { name: 'large', colSpan: 8, rowSpan: 5 },
@@ -712,7 +715,7 @@ export const RECENT_ACTIVITY_WIDGET = defineWidget({
   constraints: {
     minCols: 3,
     maxCols: 12,
-    minRows: 3,
+    minRows: 2,
     maxRows: 10,
   },
   defaultSize: {
@@ -721,6 +724,7 @@ export const RECENT_ACTIVITY_WIDGET = defineWidget({
     rowSpan: 10,
   },
   availableSizes: [
+    { name: 'compact', colSpan: 3, rowSpan: 2 },
     { name: 'narrow', colSpan: 3, rowSpan: 5 },
     { name: 'narrow-tall', colSpan: 3, rowSpan: 10 },
     { name: 'medium', colSpan: 6, rowSpan: 4 },

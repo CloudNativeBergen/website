@@ -34,7 +34,7 @@ export interface ScheduleStatusData {
   placeholderSlots: number
 }
 
-export interface SponsorPipelineData {
+export interface SponsorPipelineWidgetData {
   stages: {
     name: string
     count: number
@@ -50,20 +50,6 @@ export interface SponsorPipelineData {
     activity: string
     timestamp: string
   }[]
-}
-
-export interface WorkshopCapacityData {
-  workshops: {
-    id: string
-    title: string
-    capacity: number
-    confirmed: number
-    waitlist: number
-    fillRate: number
-  }[]
-  averageFillRate: number
-  atCapacity: number
-  totalWaitlist: number
 }
 
 export interface TravelSupportData {

@@ -5,7 +5,7 @@ import {
   CalendarIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
-import { type WorkshopCapacityData } from '@/lib/dashboard/data-types'
+import type { WorkshopStatistics } from '@/lib/workshop/types'
 import { fetchWorkshopCapacity } from '@/app/(admin)/admin/actions'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
@@ -23,7 +23,7 @@ export function WorkshopCapacityWidget({
   conference,
 }: WorkshopCapacityWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const { data, loading } = useWidgetData<WorkshopCapacityData>(
+  const { data, loading } = useWidgetData<WorkshopStatistics>(
     conference ? () => fetchWorkshopCapacity(conference._id) : null,
     [conference],
   )
@@ -62,11 +62,11 @@ export function WorkshopCapacityWidget({
                 <div className="text-sm font-bold text-gray-900 dark:text-white">
                   {conference.workshop_registration_start
                     ? new Date(
-                      conference.workshop_registration_start,
-                    ).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                    })
+                        conference.workshop_registration_start,
+                      ).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
                     : 'Not set'}
                 </div>
               </div>
@@ -80,7 +80,7 @@ export function WorkshopCapacityWidget({
   // Phase-specific: Post-conference - Show completion summary
   if (phase === 'post-conference' && data) {
     const totalAttendees = data.workshops.reduce(
-      (sum, w) => sum + w.confirmed,
+      (sum, w) => sum + w.confirmedSignups,
       0,
     )
     const totalCapacity = data.workshops.reduce((sum, w) => sum + w.capacity, 0)
@@ -117,7 +117,7 @@ export function WorkshopCapacityWidget({
               Avg Fill Rate
             </div>
             <div className="mt-1 text-3xl font-bold text-green-900 dark:text-green-100">
-              {data.averageFillRate.toFixed(0)}%
+              {data.totals.averageUtilization.toFixed(0)}%
             </div>
           </div>
 
@@ -157,7 +157,7 @@ export function WorkshopCapacityWidget({
             Avg Fill
           </div>
           <div className="mt-1 text-lg font-bold text-blue-900 dark:text-blue-100">
-            {data.averageFillRate.toFixed(0)}%
+            {data.totals.averageUtilization.toFixed(0)}%
           </div>
         </div>
         <div className="rounded-lg bg-green-50 p-2 text-center dark:bg-green-900/20">
@@ -165,7 +165,7 @@ export function WorkshopCapacityWidget({
             Full
           </div>
           <div className="mt-1 text-lg font-bold text-green-900 dark:text-green-100">
-            {data.atCapacity}
+            {data.workshops.filter((w) => w.utilization >= 100).length}
           </div>
         </div>
         <div className="rounded-lg bg-amber-50 p-2 text-center dark:bg-amber-900/20">
@@ -173,7 +173,7 @@ export function WorkshopCapacityWidget({
             Waitlist
           </div>
           <div className="mt-1 text-lg font-bold text-amber-900 dark:text-amber-100">
-            {data.totalWaitlist}
+            {data.totals.totalWaitlist}
           </div>
         </div>
       </div>
@@ -181,46 +181,46 @@ export function WorkshopCapacityWidget({
       <div className="flex-1 space-y-2 [&>*:nth-child(n+4)]:hidden @[300px]:[&>*:nth-child(n+5)]:block @[300px]:[&>*:nth-child(n+6)]:hidden @[400px]:[&>*:nth-child(n+6)]:block @[600px]:[&>*:nth-child(n+7)]:block">
         {data.workshops.map((workshop) => {
           const fillColor =
-            workshop.fillRate === 100
+            workshop.utilization === 100
               ? 'bg-green-600 dark:bg-green-500'
-              : workshop.fillRate >= 80
+              : workshop.utilization >= 80
                 ? 'bg-blue-600 dark:bg-blue-500'
-                : workshop.fillRate >= 50
+                : workshop.utilization >= 50
                   ? 'bg-amber-600 dark:bg-amber-500'
                   : 'bg-gray-600 dark:bg-gray-500'
 
           return (
             <div
-              key={workshop.id}
+              key={workshop.workshopId}
               className="rounded-lg border border-gray-200 bg-white p-2.5 dark:border-gray-700 dark:bg-gray-900"
             >
               <div className="mb-1.5 flex items-start justify-between">
                 <h4 className="flex-1 truncate text-[11px] leading-tight font-semibold text-gray-900 dark:text-gray-100">
-                  {workshop.title}
+                  {workshop.workshopTitle}
                 </h4>
                 <span className="ml-2 text-[11px] font-bold text-gray-700 dark:text-gray-200">
-                  {workshop.fillRate.toFixed(0)}%
+                  {workshop.utilization.toFixed(0)}%
                 </span>
               </div>
 
               <div className="mb-1.5 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
                 <div
                   className={`h-full transition-all ${fillColor}`}
-                  style={{ width: `${workshop.fillRate}%` }}
+                  style={{ width: `${workshop.utilization}%` }}
                 />
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-300">
                 {/* Compact mode: just show ratio on small, full details on larger */}
                 <span className="block @[250px]:hidden">
-                  {workshop.confirmed}/{workshop.capacity}
+                  {workshop.confirmedSignups}/{workshop.capacity}
                 </span>
                 <span className="hidden @[250px]:block">
-                  {workshop.confirmed}/{workshop.capacity} confirmed
+                  {workshop.confirmedSignups}/{workshop.capacity} confirmed
                 </span>
-                {workshop.waitlist > 0 && (
+                {workshop.waitlistSignups > 0 && (
                   <span className="text-amber-600 dark:text-amber-400">
-                    {workshop.waitlist}
+                    {workshop.waitlistSignups}
                     <span className="hidden @[250px]:inline"> waiting</span>
                   </span>
                 )}

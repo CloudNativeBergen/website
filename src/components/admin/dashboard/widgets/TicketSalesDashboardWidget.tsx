@@ -39,7 +39,7 @@ type TicketSalesDashboardWidgetProps = BaseWidgetProps
 export function TicketSalesDashboardWidget({
   conference,
 }: TicketSalesDashboardWidgetProps) {
-  const { data, loading } = useWidgetData<TicketSalesData>(
+  const { data, loading } = useWidgetData<TicketSalesData | null>(
     conference ? () => fetchTicketSales(conference) : null,
     [conference],
   )
@@ -347,10 +347,11 @@ export function TicketSalesDashboardWidget({
                 >
                   <div className="flex items-center gap-1.5">
                     <div
-                      className={`h-1.5 w-1.5 rounded-full ${milestone.reached
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        milestone.reached
                           ? 'bg-green-500 dark:bg-green-400'
                           : 'bg-gray-300 dark:bg-gray-600'
-                        }`}
+                      }`}
                     />
                     <span className="truncate text-[11px] leading-tight font-medium text-gray-700 dark:text-gray-200">
                       {milestone.name}

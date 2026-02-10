@@ -1,13 +1,12 @@
 'use client'
 
-import Link from 'next/link'
 import {
   CurrencyDollarIcon,
   BuildingOffice2Icon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
 import { fetchSponsorPipelineData } from '@/app/(admin)/admin/actions'
-import { type SponsorPipelineData } from '@/lib/dashboard/data-types'
+import { type SponsorPipelineWidgetData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
@@ -25,13 +24,13 @@ export function SponsorPipelineWidget({
   conference,
 }: SponsorPipelineWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const { data, loading } = useWidgetData<SponsorPipelineData>(
+  const { data, loading } = useWidgetData<SponsorPipelineWidgetData>(
     conference
       ? () =>
-        fetchSponsorPipelineData(
-          conference._id,
-          conference.sponsor_revenue_goal || 0,
-        )
+          fetchSponsorPipelineData(
+            conference._id,
+            conference.sponsor_revenue_goal || 0,
+          )
       : null,
     [conference],
   )
@@ -132,9 +131,9 @@ export function SponsorPipelineWidget({
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
               {data.wonDeals + data.lostDeals > 0
                 ? (
-                  (data.wonDeals / (data.wonDeals + data.lostDeals)) *
-                  100
-                ).toFixed(0)
+                    (data.wonDeals / (data.wonDeals + data.lostDeals)) *
+                    100
+                  ).toFixed(0)
                 : 0}
               %
             </div>
@@ -203,7 +202,10 @@ export function SponsorPipelineWidget({
             </span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
-            <ProgressBar value={progress} color="bg-green-600 dark:bg-green-500" />
+            <ProgressBar
+              value={progress}
+              color="bg-green-600 dark:bg-green-500"
+            />
           </div>
         </div>
       )}

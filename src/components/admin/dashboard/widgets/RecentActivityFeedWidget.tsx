@@ -64,7 +64,7 @@ export function RecentActivityFeedWidget({
   }
 
   // Phase-specific: Post-conference - Show completion message
-  if (phase === 'post-conference' && activities.length === 0) {
+  if (phase === 'post-conference' && activities?.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-4">
         <CheckCircleIcon className="mb-3 h-12 w-12 text-green-500" />

@@ -22,7 +22,7 @@ import { getAuthSession } from '@/lib/auth'
 import { clientWrite } from '@/lib/sanity/client'
 import { formatRelativeTime, formatLabel } from '@/lib/time'
 import type {
-  SponsorPipelineData as WidgetSponsorPipelineData,
+  SponsorPipelineWidgetData,
   DeadlineData,
   ActivityItem,
   CFPHealthData,
@@ -31,10 +31,10 @@ import type {
   ProposalPipelineData,
   ReviewProgressData,
   TravelSupportData,
-  WorkshopCapacityData,
   ScheduleStatusData,
   QuickAction,
 } from '@/lib/dashboard/data-types'
+import type { WorkshopStatistics } from '@/lib/workshop/types'
 
 // --- Auth ---
 
@@ -58,7 +58,7 @@ const STAGE_LABELS: Record<string, string> = {
 export async function fetchSponsorPipelineData(
   conferenceId: string,
   revenueGoal: number,
-): Promise<WidgetSponsorPipelineData> {
+): Promise<SponsorPipelineWidgetData> {
   await requireOrganizer()
 
   const [sponsorResult, activityResult] = await Promise.all([
@@ -900,28 +900,9 @@ export async function fetchTravelSupport(
 
 export async function fetchWorkshopCapacity(
   conferenceId: string,
-): Promise<WorkshopCapacityData> {
+): Promise<WorkshopStatistics> {
   await requireOrganizer()
-
-  const stats = await getWorkshopStatistics(conferenceId)
-
-  const workshops = stats.workshops.map((w) => ({
-    id: w.workshopId,
-    title: w.workshopTitle,
-    capacity: w.capacity,
-    confirmed: w.confirmedSignups,
-    waitlist: w.waitlistSignups,
-    fillRate: w.utilization,
-  }))
-
-  const atCapacity = workshops.filter((w) => w.fillRate >= 100).length
-
-  return {
-    workshops,
-    averageFillRate: stats.totals.averageUtilization,
-    atCapacity,
-    totalWaitlist: stats.totals.totalWaitlist,
-  }
+  return getWorkshopStatistics(conferenceId)
 }
 
 // --- Schedule Status ---

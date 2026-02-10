@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import {
   CheckCircleIcon,
   ClockIcon,
@@ -17,7 +16,6 @@ import {
   WidgetEmptyState,
   WidgetHeader,
   PhaseBadge,
-  ProgressBar,
 } from './shared'
 
 type ProposalPipelineWidgetProps = BaseWidgetProps
@@ -38,16 +36,16 @@ export function ProposalPipelineWidget({
     const now = new Date()
     const daysUntilCFP = conference
       ? Math.ceil(
-        (new Date(conference.cfp_start_date).getTime() - now.getTime()) /
-        (1000 * 60 * 60 * 24),
-      )
+          (new Date(conference.cfp_start_date).getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : 0
     const cfpDuration = conference
       ? Math.ceil(
-        (new Date(conference.cfp_end_date).getTime() -
-          new Date(conference.cfp_start_date).getTime()) /
-        (1000 * 60 * 60 * 24),
-      )
+          (new Date(conference.cfp_end_date).getTime() -
+            new Date(conference.cfp_start_date).getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
       : 0
 
     return (

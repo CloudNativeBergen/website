@@ -63,9 +63,7 @@ export function ScheduleBuilderStatusWidget({
   // Post-conference phase: Archived schedule summary
   if (phase === 'post-conference') {
     if (!data || data.totalSlots === 0) {
-      return (
-        <WidgetEmptyState message="No schedule data available" />
-      )
+      return <WidgetEmptyState message="No schedule data available" />
     }
 
     const overallProgress = (data.filledSlots / data.totalSlots) * 100
