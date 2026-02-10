@@ -18,10 +18,6 @@ import { SponsorPipelineWidget } from '@/components/admin/dashboard/widgets/Spon
 import { WorkshopCapacityWidget } from '@/components/admin/dashboard/widgets/WorkshopCapacityWidget'
 import { TravelSupportQueueWidget } from '@/components/admin/dashboard/widgets/TravelSupportQueueWidget'
 import { RecentActivityFeedWidget } from '@/components/admin/dashboard/widgets/RecentActivityFeedWidget'
-import { ContentCalendarWidget } from '@/components/admin/dashboard/widgets/ContentCalendarWidget'
-import { GalleryManagementWidget } from '@/components/admin/dashboard/widgets/GalleryManagementWidget'
-import { TeamStatusWidget } from '@/components/admin/dashboard/widgets/TeamStatusWidget'
-import { VolunteerShiftsWidget } from '@/components/admin/dashboard/widgets/VolunteerShiftsWidget'
 import { WidgetPicker } from '@/components/admin/dashboard/WidgetPicker'
 import { getWidgetMetadata } from '@/lib/dashboard/widget-registry'
 import { findAvailablePosition } from '@/lib/dashboard/placement-utils'
@@ -213,28 +209,10 @@ const PRESET_CONFIGS: Record<string, PresetConfig> = {
         position: { row: 2, col: 0, rowSpan: 3, colSpan: 3 },
       },
       {
-        id: 'team-status',
-        type: 'team-status',
-        title: 'Team Status',
-        position: { row: 2, col: 9, rowSpan: 3, colSpan: 3 },
-      },
-      {
         id: 'workshop-capacity',
         type: 'workshop-capacity',
         title: 'Workshop Capacity',
-        position: { row: 4, col: 3, rowSpan: 3, colSpan: 4 },
-      },
-      {
-        id: 'volunteer-shifts',
-        type: 'volunteer-shifts',
-        title: 'Volunteer Shifts',
-        position: { row: 4, col: 7, rowSpan: 3, colSpan: 5 },
-      },
-      {
-        id: 'gallery-management',
-        type: 'gallery-management',
-        title: 'Gallery Management',
-        position: { row: 5, col: 0, rowSpan: 2, colSpan: 3 },
+        position: { row: 2, col: 9, rowSpan: 3, colSpan: 3 },
       },
       {
         id: 'recent-activity',
@@ -277,12 +255,6 @@ const PRESET_CONFIGS: Record<string, PresetConfig> = {
         type: 'upcoming-deadlines',
         title: 'Upcoming Deadlines',
         position: { row: 4, col: 3, rowSpan: 2, colSpan: 6 },
-      },
-      {
-        id: 'team-status',
-        type: 'team-status',
-        title: 'Team Status',
-        position: { row: 4, col: 9, rowSpan: 2, colSpan: 3 },
       },
       {
         id: 'recent-activity',
@@ -363,16 +335,10 @@ const PRESET_CONFIGS: Record<string, PresetConfig> = {
         position: { row: 12, col: 0, rowSpan: 4, colSpan: 6 },
       },
       {
-        id: 'team-status',
-        type: 'team-status',
-        title: 'Team Status',
-        position: { row: 12, col: 6, rowSpan: 4, colSpan: 3 },
-      },
-      {
         id: 'recent-activity',
         type: 'recent-activity',
         title: 'Recent Activity',
-        position: { row: 12, col: 9, rowSpan: 4, colSpan: 3 },
+        position: { row: 12, col: 6, rowSpan: 4, colSpan: 6 },
       },
     ],
   },
@@ -550,18 +516,6 @@ export default function DashboardDemoPage() {
         case 'recent-activity':
           content = <RecentActivityFeedWidget conference={mockConference} />
           break
-        case 'content-calendar':
-          content = <ContentCalendarWidget conference={mockConference} />
-          break
-        case 'gallery-management':
-          content = <GalleryManagementWidget conference={mockConference} />
-          break
-        case 'team-status':
-          content = <TeamStatusWidget conference={mockConference} />
-          break
-        case 'volunteer-shifts':
-          content = <VolunteerShiftsWidget conference={mockConference} />
-          break
         default:
           content = <div>Unknown widget type: {widget.type}</div>
       }
@@ -671,11 +625,10 @@ export default function DashboardDemoPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setEditMode(!editMode)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                editMode
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${editMode
                   ? 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600'
                   : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-              }`}
+                }`}
             >
               <PencilIcon className="h-3.5 w-3.5" />
               {editMode ? 'Exit Edit' : 'Edit'}

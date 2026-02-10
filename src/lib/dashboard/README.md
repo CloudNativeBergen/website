@@ -615,11 +615,7 @@ src/components/admin/dashboard/
     ├── SponsorPipelineWidget.tsx
     ├── WorkshopCapacityWidget.tsx
     ├── TravelSupportQueueWidget.tsx
-    ├── RecentActivityFeedWidget.tsx
-    ├── ContentCalendarWidget.tsx
-    ├── TeamStatusWidget.tsx
-    ├── GalleryManagementWidget.tsx
-    └── VolunteerShiftsWidget.tsx
+    └── RecentActivityFeedWidget.tsx
 
 src/lib/conference/
 ├── phase.ts                   # Phase detection utilities
