@@ -119,10 +119,11 @@ export function SwipeablePaginationWidget({
               <button
                 key={index}
                 onClick={() => goToPage(index)}
-                className={`h-1.5 w-1.5 rounded-full transition-all ${index === currentPage
+                className={`h-1.5 w-1.5 rounded-full transition-all ${
+                  index === currentPage
                     ? 'w-3 bg-blue-600 dark:bg-blue-500'
                     : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500'
-                  }`}
+                }`}
                 aria-label={`Go to page ${index + 1}`}
               />
             ))}
