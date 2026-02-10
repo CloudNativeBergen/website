@@ -7,7 +7,7 @@ import {
   pointerWithin,
   Modifier,
 } from '@dnd-kit/core'
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Widget } from '@/lib/dashboard/types'
 import { GRID_CONFIG } from '@/lib/dashboard/constants'
 import { checkCollision, snapToGrid } from '@/lib/dashboard/grid-utils'
@@ -43,20 +43,33 @@ export function DashboardGrid({
 }: DashboardGridProps) {
   const [activeWidgetId, setActiveWidgetId] = useState<string | null>(null)
   const [gridWidth, setGridWidth] = useState(0)
+  const gridNodeRef = useRef<HTMLDivElement | null>(null)
+  const observerRef = useRef<ResizeObserver | null>(null)
 
   const gridRef = useCallback((node: HTMLDivElement | null) => {
-    if (!node) return
-
-    const updateWidth = () => {
-      if (node) setGridWidth(node.offsetWidth)
+    // Clean up previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect()
+      observerRef.current = null
     }
 
-    updateWidth()
-    const resizeObserver = new ResizeObserver(updateWidth)
-    resizeObserver.observe(node)
+    gridNodeRef.current = node
 
+    if (!node) return
+
+    const updateWidth = () => setGridWidth(node.offsetWidth)
+    updateWidth()
+
+    observerRef.current = new ResizeObserver(updateWidth)
+    observerRef.current.observe(node)
+  }, [])
+
+  // Cleanup observer on unmount
+  useEffect(() => {
     return () => {
-      resizeObserver.disconnect()
+      if (observerRef.current) {
+        observerRef.current.disconnect()
+      }
     }
   }, [])
 

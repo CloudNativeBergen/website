@@ -14,20 +14,29 @@ import { type SpeakerEngagementData } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
-import { WidgetSkeleton, WidgetEmptyState } from './shared'
+import { WidgetSkeleton, WidgetEmptyState, WidgetErrorState } from './shared'
 
-type SpeakerEngagementWidgetProps = BaseWidgetProps
+interface SpeakerEngagementConfig {
+  showDiversityMetrics?: boolean
+  showGeography?: boolean
+  showFirstTimers?: boolean
+}
+
+type SpeakerEngagementWidgetProps = BaseWidgetProps<SpeakerEngagementConfig>
 
 export function SpeakerEngagementWidget({
   conference,
+  config,
 }: SpeakerEngagementWidgetProps) {
-  const { data, loading } = useWidgetData<SpeakerEngagementData>(
-    conference ? () => fetchSpeakerEngagement(conference._id) : null,
-    [conference],
-  )
+  const { data, loading, error, refetch } =
+    useWidgetData<SpeakerEngagementData>(
+      conference ? () => fetchSpeakerEngagement(conference._id) : null,
+      [conference],
+    )
   const phase = conference ? getCurrentPhase(conference) : null
 
   if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
 
   // Initialization phase: Featured speakers + early stats
   if (phase === 'initialization') {
@@ -198,6 +207,13 @@ export function SpeakerEngagementWidget({
     return <WidgetEmptyState message="No speaker data available" />
   }
 
+  const showFirstTimers = config?.showFirstTimers ?? true
+  const showDiversity = config?.showDiversityMetrics ?? true
+  const showGeo = config?.showGeography ?? true
+  const statColumns = [showFirstTimers, true, showDiversity, showGeo].filter(
+    Boolean,
+  ).length
+
   return (
     <div className="flex h-full flex-col">
       <div className="mb-1.5 flex shrink-0 items-center justify-between">
@@ -228,17 +244,24 @@ export function SpeakerEngagementWidget({
         )}
       </div>
 
-      {/* Bottom half: 4 columns */}
-      <div className="mt-1.5 grid min-h-0 flex-1 grid-cols-4 gap-1.5">
-        <div className="flex flex-col items-center justify-center rounded-lg bg-green-50 text-center dark:bg-green-900/20">
-          <SparklesIcon className="mb-0.5 h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-          <div className="text-[9px] text-green-600 dark:text-green-400">
-            New
+      {/* Bottom half: stat columns */}
+      <div
+        className={`mt-1.5 grid min-h-0 flex-1 gap-1.5`}
+        style={{
+          gridTemplateColumns: `repeat(${statColumns}, minmax(0, 1fr))`,
+        }}
+      >
+        {showFirstTimers && (
+          <div className="flex flex-col items-center justify-center rounded-lg bg-green-50 text-center dark:bg-green-900/20">
+            <SparklesIcon className="mb-0.5 h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+            <div className="text-[9px] text-green-600 dark:text-green-400">
+              New
+            </div>
+            <div className="text-lg font-bold text-green-900 dark:text-green-100">
+              {data.newSpeakers}
+            </div>
           </div>
-          <div className="text-lg font-bold text-green-900 dark:text-green-100">
-            {data.newSpeakers}
-          </div>
-        </div>
+        )}
 
         <div className="flex flex-col items-center justify-center rounded-lg bg-blue-50 text-center dark:bg-blue-900/20">
           <ArrowPathIcon className="mb-0.5 h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
@@ -250,25 +273,29 @@ export function SpeakerEngagementWidget({
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-lg bg-purple-50 text-center dark:bg-purple-900/20">
-          <UserGroupIcon className="mb-0.5 h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-          <div className="text-[9px] text-purple-600 dark:text-purple-400">
-            Diverse
+        {showDiversity && (
+          <div className="flex flex-col items-center justify-center rounded-lg bg-purple-50 text-center dark:bg-purple-900/20">
+            <UserGroupIcon className="mb-0.5 h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+            <div className="text-[9px] text-purple-600 dark:text-purple-400">
+              Diverse
+            </div>
+            <div className="text-lg font-bold text-purple-900 dark:text-purple-100">
+              {data.diverseSpeakers}
+            </div>
           </div>
-          <div className="text-lg font-bold text-purple-900 dark:text-purple-100">
-            {data.diverseSpeakers}
-          </div>
-        </div>
+        )}
 
-        <div className="flex flex-col items-center justify-center rounded-lg bg-cyan-50 text-center dark:bg-cyan-900/20">
-          <MapPinIcon className="mb-0.5 h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
-          <div className="text-[9px] text-cyan-600 dark:text-cyan-400">
-            Local
+        {showGeo && (
+          <div className="flex flex-col items-center justify-center rounded-lg bg-cyan-50 text-center dark:bg-cyan-900/20">
+            <MapPinIcon className="mb-0.5 h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
+            <div className="text-[9px] text-cyan-600 dark:text-cyan-400">
+              Local
+            </div>
+            <div className="text-lg font-bold text-cyan-900 dark:text-cyan-100">
+              {data.localSpeakers}
+            </div>
           </div>
-          <div className="text-lg font-bold text-cyan-900 dark:text-cyan-100">
-            {data.localSpeakers}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   )

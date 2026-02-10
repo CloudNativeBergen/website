@@ -20,7 +20,11 @@ import { TravelSupportStatus } from '@/lib/travel-support/types'
 import { getWorkshopStatistics } from '@/lib/workshop/sanity'
 import { getAuthSession } from '@/lib/auth'
 import { clientWrite } from '@/lib/sanity/client'
-import { formatRelativeTime, formatLabel } from '@/lib/time'
+import {
+  formatRelativeTime,
+  formatLabel,
+  formatConferenceDateShort,
+} from '@/lib/time'
 import type {
   SponsorPipelineWidgetData,
   DeadlineData,
@@ -244,9 +248,9 @@ export async function fetchCFPHealth(
   const now = new Date()
   const daysSinceOpen = cfpStart
     ? Math.max(
-        1,
-        Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
-      )
+      1,
+      Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
+    )
     : 1
   const averagePerDay =
     submitted.length > 0
@@ -868,7 +872,7 @@ export async function fetchTravelSupport(
   }, 0)
 
   const totalApproved = approved.reduce(
-    (sum, ts) => sum + (ts.approvedAmount || ts.totalAmount || 0),
+    (sum, ts) => sum + (ts.approvedAmount || 0),
     0,
   )
 
@@ -937,10 +941,7 @@ export async function fetchScheduleStatus(
       }
     }
 
-    const dayLabel = new Date(schedule.date + 'T12:00:00').toLocaleDateString(
-      'en-US',
-      { weekday: 'short', month: 'short', day: 'numeric' },
-    )
+    const dayLabel = formatConferenceDateShort(schedule.date)
     byDay.push({ day: dayLabel, filled: dayFilled, total: dayTotal })
   }
 
@@ -1034,7 +1035,14 @@ export async function loadDashboardConfig(
       rowSpan: w.row_span || 2,
       colSpan: w.col_span || 3,
     },
-    config: w.config ? JSON.parse(w.config) : undefined,
+    config: (() => {
+      if (!w.config) return undefined
+      try {
+        return JSON.parse(w.config)
+      } catch {
+        return undefined
+      }
+    })(),
   }))
 }
 

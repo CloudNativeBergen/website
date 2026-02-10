@@ -4,6 +4,7 @@
  * These small components eliminate duplicated markup across the 12 widget files.
  */
 import Link from 'next/link'
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
 
 /* ---------- Loading skeleton ---------- */
 
@@ -32,6 +33,37 @@ export function WidgetEmptyState({
         {icon && <div className="mx-auto mb-2">{icon}</div>}
         <p className="text-sm text-gray-500 dark:text-gray-400">{message}</p>
         {children}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Error state ---------- */
+
+interface WidgetErrorStateProps {
+  message?: string
+  onRetry?: () => void
+}
+
+export function WidgetErrorState({
+  message = 'Failed to load data',
+  onRetry,
+}: WidgetErrorStateProps) {
+  return (
+    <div className="flex h-full items-center justify-center rounded-lg bg-red-50 p-6 text-center dark:bg-red-900/20">
+      <div>
+        <ExclamationTriangleIcon className="mx-auto mb-2 h-8 w-8 text-red-400 dark:text-red-500" />
+        <p className="text-sm font-medium text-red-700 dark:text-red-300">
+          {message}
+        </p>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="mt-2 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+          >
+            Try again
+          </button>
+        )}
       </div>
     </div>
   )

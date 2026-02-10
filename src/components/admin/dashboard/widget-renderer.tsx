@@ -17,17 +17,19 @@ export function renderWidgetContent(
   widget: Widget,
   conference: Conference,
 ): React.ReactNode {
+  const config = widget.config as Record<string, unknown> | undefined
+
   switch (widget.type) {
     case 'quick-actions':
       return <QuickActionsWidget conference={conference} />
     case 'upcoming-deadlines':
-      return <UpcomingDeadlinesWidget conference={conference} />
+      return <UpcomingDeadlinesWidget conference={conference} config={config} />
     case 'cfp-health':
       return (
         <CFPHealthWidget
           conference={conference}
           config={
-            widget.config as {
+            config as {
               submissionTarget?: number
               showTrend?: boolean
               showFormatBreakdown?: boolean
@@ -36,19 +38,25 @@ export function renderWidgetContent(
         />
       )
     case 'ticket-sales':
-      return <TicketSalesDashboardWidget conference={conference} />
+      return (
+        <TicketSalesDashboardWidget conference={conference} config={config} />
+      )
     case 'speaker-engagement':
-      return <SpeakerEngagementWidget conference={conference} />
+      return <SpeakerEngagementWidget conference={conference} config={config} />
     case 'sponsor-pipeline':
-      return <SponsorPipelineWidget conference={conference} />
+      return <SponsorPipelineWidget conference={conference} config={config} />
     case 'recent-activity':
-      return <RecentActivityFeedWidget conference={conference} />
+      return (
+        <RecentActivityFeedWidget conference={conference} config={config} />
+      )
     case 'proposal-pipeline':
-      return <ProposalPipelineWidget conference={conference} />
+      return <ProposalPipelineWidget conference={conference} config={config} />
     case 'review-progress':
-      return <ReviewProgressWidget conference={conference} />
+      return <ReviewProgressWidget conference={conference} config={config} />
     case 'travel-support':
-      return <TravelSupportQueueWidget conference={conference} />
+      return (
+        <TravelSupportQueueWidget conference={conference} config={config} />
+      )
     case 'workshop-capacity':
       return <WorkshopCapacityWidget conference={conference} />
     case 'schedule-builder':

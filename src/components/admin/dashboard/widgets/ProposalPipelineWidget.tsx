@@ -14,22 +14,30 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
 } from './shared'
 
-type ProposalPipelineWidgetProps = BaseWidgetProps
+interface ProposalPipelineConfig {
+  targetAcceptanceRate?: number
+  showPercentages?: boolean
+}
+
+type ProposalPipelineWidgetProps = BaseWidgetProps<ProposalPipelineConfig>
 
 export function ProposalPipelineWidget({
   conference,
+  config,
 }: ProposalPipelineWidgetProps) {
-  const { data, loading } = useWidgetData<ProposalPipelineData>(
+  const { data, loading, error, refetch } = useWidgetData<ProposalPipelineData>(
     conference ? () => fetchProposalPipeline(conference._id) : null,
     [conference],
   )
   const phase = conference ? getCurrentPhase(conference) : null
 
   if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
 
   // Phase-specific: Initialization/Planning - Show CFP setup guidance
   if (phase === 'initialization' || phase === 'planning') {
@@ -127,7 +135,7 @@ export function ProposalPipelineWidget({
               Acceptance Rate
             </div>
             <div className="mt-1 text-3xl font-bold text-green-900 dark:text-green-100">
-              {data?.acceptanceRate.toFixed(0)}%
+              {(data?.acceptanceRate ?? 0).toFixed(0)}%
             </div>
           </div>
 
@@ -161,6 +169,7 @@ export function ProposalPipelineWidget({
   const acceptedPercentage = (data.accepted / data.total) * 100
   const rejectedPercentage = (data.rejected / data.total) * 100
   const confirmedPercentage = (data.confirmed / data.total) * 100
+  const showPercentages = config?.showPercentages ?? true
 
   return (
     <div className="flex h-full flex-col">
@@ -226,6 +235,7 @@ export function ProposalPipelineWidget({
               </div>
               <span className="text-xs font-bold text-gray-900 dark:text-gray-100">
                 {data.submitted}
+                {showPercentages && ' (100%)'}
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
@@ -247,6 +257,7 @@ export function ProposalPipelineWidget({
               </div>
               <span className="text-xs font-bold text-green-900 dark:text-green-100">
                 {data.accepted}
+                {showPercentages && ` (${acceptedPercentage.toFixed(0)}%)`}
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
@@ -268,6 +279,7 @@ export function ProposalPipelineWidget({
               </div>
               <span className="text-xs font-bold text-red-900 dark:text-red-100">
                 {data.rejected}
+                {showPercentages && ` (${rejectedPercentage.toFixed(0)}%)`}
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
@@ -289,6 +301,7 @@ export function ProposalPipelineWidget({
               </div>
               <span className="text-xs font-bold text-blue-900 dark:text-blue-100">
                 {data.confirmed}
+                {showPercentages && ` (${confirmedPercentage.toFixed(0)}%)`}
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">

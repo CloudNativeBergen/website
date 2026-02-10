@@ -10,6 +10,7 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
   ProgressBar,
@@ -21,13 +22,17 @@ export function ScheduleBuilderStatusWidget({
   conference,
 }: ScheduleBuilderStatusWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const { data, loading } = useWidgetData<ScheduleStatusData>(
+  const { data, loading, error, refetch } = useWidgetData<ScheduleStatusData>(
     conference ? () => fetchScheduleStatus(conference) : null,
     [conference],
   )
 
   if (loading) {
     return <WidgetSkeleton />
+  }
+
+  if (error) {
+    return <WidgetErrorState onRetry={refetch} />
   }
 
   // Initialization phase: Timeline planning guide

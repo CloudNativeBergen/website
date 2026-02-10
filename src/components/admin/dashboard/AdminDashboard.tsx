@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Widget } from '@/lib/dashboard/types'
 import { getColumnCountForWidth } from '@/lib/dashboard/grid-utils'
 import { DASHBOARD_SAVE_DEBOUNCE_MS } from '@/lib/dashboard/constants'
@@ -47,6 +47,17 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   const phaseName = getPhaseName(currentPhase)
   const phaseColor = getPhaseColor(currentPhase)
 
+  // Filter out widgets that should be hidden in the current phase
+  const visibleWidgets = useMemo(() => {
+    return widgets.filter((w) => {
+      const meta = getWidgetMetadata(w.type)
+      if (!meta?.phaseConfig) return true
+      const { hideInIrrelevantPhases, relevantPhases } = meta.phaseConfig
+      if (!hideInIrrelevantPhases) return true
+      return relevantPhases.includes(currentPhase)
+    })
+  }, [widgets, currentPhase])
+
   // Load saved config on mount
   useEffect(() => {
     loadDashboardConfig(conference._id)
@@ -91,6 +102,13 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
   useEffect(() => {
     persistWidgets(widgets)
   }, [widgets, persistWidgets])
+
+  // Clean up debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     const handleResize = () => {
@@ -170,7 +188,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
             isDragging={isDragging}
             columnCount={columnCount}
             cellWidth={cellWidth}
-            allWidgets={widgets}
+            allWidgets={visibleWidgets}
             onResize={handleResize}
             onRemove={handleRemoveWidget}
             onConfigChange={handleConfigChange}
@@ -183,7 +201,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
     [
       editMode,
       columnCount,
-      widgets,
+      visibleWidgets,
       handleResize,
       handleRemoveWidget,
       handleConfigChange,
@@ -207,7 +225,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {conference.title} &mdash;{' '}
-            <span style={{ color: phaseColor.text }}>{phaseName}</span>
+            <span className={phaseColor.text}>{phaseName}</span>
           </p>
         </div>
 
@@ -247,7 +265,7 @@ export function AdminDashboard({ conference }: AdminDashboardProps) {
       </div>
 
       <DashboardGrid
-        widgets={widgets}
+        widgets={visibleWidgets}
         onWidgetsChange={handleWidgetsChange}
         columnCount={columnCount}
         editMode={editMode}

@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  CurrencyDollarIcon,
+  BanknotesIcon,
   BuildingOffice2Icon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
@@ -13,29 +13,39 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
   ProgressBar,
 } from './shared'
 
-type SponsorPipelineWidgetProps = BaseWidgetProps
+interface SponsorPipelineConfig {
+  revenueTarget?: number
+  showPipeline?: boolean
+  showContractStatus?: boolean
+}
+
+type SponsorPipelineWidgetProps = BaseWidgetProps<SponsorPipelineConfig>
 
 export function SponsorPipelineWidget({
   conference,
+  config,
 }: SponsorPipelineWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const { data, loading } = useWidgetData<SponsorPipelineWidgetData>(
-    conference
-      ? () =>
-          fetchSponsorPipelineData(
-            conference._id,
-            conference.sponsor_revenue_goal || 0,
-          )
-      : null,
-    [conference],
-  )
+  const { data, loading, error, refetch } =
+    useWidgetData<SponsorPipelineWidgetData>(
+      conference
+        ? () =>
+            fetchSponsorPipelineData(
+              conference._id,
+              conference.sponsor_revenue_goal || 0,
+            )
+        : null,
+      [conference],
+    )
 
   if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
 
   // Check if there's any pipeline activity at all
   const totalDeals = data?.stages.reduce((sum, s) => sum + s.count, 0) ?? 0
@@ -69,7 +79,7 @@ export function SponsorPipelineWidget({
               Revenue Goal
             </div>
             <div className="mt-1 flex items-baseline gap-1">
-              <CurrencyDollarIcon className="h-4 w-4 text-gray-400" />
+              <BanknotesIcon className="h-4 w-4 text-gray-400" />
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 {data && data.revenueGoal > 0
                   ? `${(data.revenueGoal / 1000).toFixed(0)}k`
@@ -102,7 +112,7 @@ export function SponsorPipelineWidget({
               Total Revenue
             </div>
             <div className="mt-1 text-3xl font-bold text-green-900 dark:text-green-100">
-              ${(finalRevenue / 1000).toFixed(0)}k
+              kr {(finalRevenue / 1000).toFixed(0)}k
             </div>
           </div>
 
@@ -165,11 +175,11 @@ export function SponsorPipelineWidget({
             Total Value
           </div>
           <div className="mt-1 text-xl font-bold text-green-900 dark:text-green-100">
-            ${(data.totalValue / 1000).toFixed(0)}k
+            kr {(data.totalValue / 1000).toFixed(0)}k
           </div>
           {data.revenueGoal > 0 && (
             <div className="mt-1 text-xs text-green-600 dark:text-green-400">
-              of ${(data.revenueGoal / 1000).toFixed(0)}k
+              of kr {(data.revenueGoal / 1000).toFixed(0)}k
             </div>
           )}
         </div>
@@ -210,43 +220,45 @@ export function SponsorPipelineWidget({
         </div>
       )}
 
-      <div className="mb-3 shrink-0">
-        <h4 className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-          Pipeline Stages
-        </h4>
-        <div className="space-y-2">
-          {data.stages.map((stage, index) => {
-            const stageColors = [
-              'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600',
-              'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
-              'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
-              'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
-            ]
-            const color = stageColors[index] || stageColors[0]
+      {(config?.showPipeline ?? true) && (
+        <div className="mb-3 shrink-0">
+          <h4 className="mb-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+            Pipeline Stages
+          </h4>
+          <div className="space-y-2">
+            {data.stages.map((stage, index) => {
+              const stageColors = [
+                'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-300 dark:border-gray-600',
+                'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800',
+                'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+                'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
+              ]
+              const color = stageColors[index] || stageColors[0]
 
-            return (
-              <div
-                key={stage.name}
-                className={`flex items-center justify-between rounded-lg border p-2.5 ${color}`}
-              >
-                <div>
-                  <div className="text-xs leading-tight font-semibold">
-                    {stage.name}
+              return (
+                <div
+                  key={stage.name}
+                  className={`flex items-center justify-between rounded-lg border p-2.5 ${color}`}
+                >
+                  <div>
+                    <div className="text-xs leading-tight font-semibold">
+                      {stage.name}
+                    </div>
+                    <div className="text-[10px] opacity-75">
+                      {stage.count} deals
+                    </div>
                   </div>
-                  <div className="text-[10px] opacity-75">
-                    {stage.count} deals
+                  <div className="text-right">
+                    <div className="text-xs font-bold">
+                      kr {(stage.value / 1000).toFixed(0)}k
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs font-bold">
-                    ${(stage.value / 1000).toFixed(0)}k
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

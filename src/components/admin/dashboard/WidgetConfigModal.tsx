@@ -59,8 +59,8 @@ export function WidgetConfigModal({
   // Reset form data when modal opens or config changes
   useEffect(() => {
     if (isOpen && configSchema) {
-      // Check if currentConfig has changed
-      const configChanged = lastConfigRef.current !== currentConfig
+      const configChanged =
+        JSON.stringify(lastConfigRef.current) !== JSON.stringify(currentConfig)
 
       if (configChanged) {
         lastConfigRef.current = currentConfig
@@ -149,7 +149,7 @@ export function WidgetConfigModal({
     }
 
     setErrors({})
-    onSave(formData)
+    onSave(result.data)
     onClose()
   }
 
@@ -315,7 +315,7 @@ function ConfigField({
               max={field.max}
               step={field.step}
               value={value as number}
-              onChange={(e) => onChange(Number(e.target.value))}
+              onChange={(e) => onChange(e.target.valueAsNumber)}
               className="block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
             />
             {field.unit && (

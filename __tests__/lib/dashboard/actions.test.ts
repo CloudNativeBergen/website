@@ -120,6 +120,7 @@ jest.mock('@/lib/sanity/client', () => ({
 jest.mock('@/lib/time', () => ({
   formatRelativeTime: jest.fn((d: string) => d || 'unknown'),
   formatLabel: jest.fn((v: string) => v.charAt(0).toUpperCase() + v.slice(1)),
+  formatConferenceDateShort: jest.fn((d: string) => d || 'unknown'),
 }))
 
 import type { Conference } from '@/lib/conference/types'

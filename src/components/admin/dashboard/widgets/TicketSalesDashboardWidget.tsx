@@ -17,6 +17,7 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
   ProgressBar,
@@ -34,15 +35,23 @@ function getSnapshotDarkMode() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-type TicketSalesDashboardWidgetProps = BaseWidgetProps
+interface TicketSalesConfig {
+  capacityTarget?: number
+  revenueTarget?: number
+  showTrend?: boolean
+}
+
+type TicketSalesDashboardWidgetProps = BaseWidgetProps<TicketSalesConfig>
 
 export function TicketSalesDashboardWidget({
   conference,
+  config,
 }: TicketSalesDashboardWidgetProps) {
-  const { data, loading } = useWidgetData<TicketSalesData | null>(
-    conference ? () => fetchTicketSales(conference) : null,
-    [conference],
-  )
+  const { data, loading, error, refetch } =
+    useWidgetData<TicketSalesData | null>(
+      conference ? () => fetchTicketSales(conference) : null,
+      [conference],
+    )
 
   const isDark = useSyncExternalStore(
     subscribeDarkMode,
@@ -111,6 +120,10 @@ export function TicketSalesDashboardWidget({
     return <WidgetSkeleton />
   }
 
+  if (error) {
+    return <WidgetErrorState onRetry={refetch} />
+  }
+
   // Initialization phase: Setup guide
   if (phase === 'initialization') {
     return (
@@ -172,7 +185,7 @@ export function TicketSalesDashboardWidget({
                 Total Revenue
               </div>
               <div className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
-                ${(data.revenue / 1000).toFixed(0)}k
+                kr {(data.revenue / 1000).toFixed(0)}k
               </div>
             </div>
           </div>
@@ -307,7 +320,7 @@ export function TicketSalesDashboardWidget({
               Revenue
             </div>
             <div className="mt-0.5 text-lg font-bold text-green-900 dark:text-green-100">
-              ${(data.revenue / 1000).toFixed(0)}k
+              kr {(data.revenue / 1000).toFixed(0)}k
             </div>
           </div>
           <div className="rounded-lg bg-purple-50 p-2.5 dark:bg-purple-900/20">
@@ -366,19 +379,21 @@ export function TicketSalesDashboardWidget({
           </div>
         </div>
 
-        <div className="mt-3 shrink-0">
-          <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-            Sales vs Target
-          </h4>
-          <div className="h-24 @[400px]:h-28">
-            <Chart
-              options={trendOptions}
-              series={trendSeries}
-              type="line"
-              height="100%"
-            />
+        {(config?.showTrend ?? true) && (
+          <div className="mt-3 shrink-0">
+            <h4 className="mb-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+              Sales vs Target
+            </h4>
+            <div className="h-24 @[400px]:h-28">
+              <Chart
+                options={trendOptions}
+                series={trendSeries}
+                type="line"
+                height="100%"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-3 shrink-0 rounded-lg bg-blue-50 p-2.5 text-center dark:bg-blue-900/20">
           <div className="text-[11px] text-blue-600 dark:text-blue-400">

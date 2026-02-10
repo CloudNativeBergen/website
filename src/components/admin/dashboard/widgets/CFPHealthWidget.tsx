@@ -17,6 +17,7 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
 } from './shared'
@@ -32,7 +33,7 @@ type CFPHealthWidgetProps = BaseWidgetProps<CFPHealthConfig>
 export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
   const [now] = useState(() => Date.now())
-  const { data, loading } = useWidgetData<CFPHealthData>(
+  const { data, loading, error, refetch } = useWidgetData<CFPHealthData>(
     conference ? () => fetchCFPHealth(conference) : null,
     [conference],
   )
@@ -43,6 +44,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
   const showFormatBreakdown = config?.showFormatBreakdown ?? true
 
   if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
 
   // Phase-specific views
   if (phase === 'initialization' && conference) {
@@ -124,8 +126,7 @@ export function CFPHealthWidget({ conference, config }: CFPHealthWidgetProps) {
           <div className="rounded-xl bg-linear-to-br from-green-100 to-emerald-200 p-4 dark:from-green-900/40 dark:to-emerald-800/40">
             <CheckCircleIcon className="mb-2 h-6 w-6 text-green-600 dark:text-green-400" />
             <div className="text-3xl font-black text-green-900 dark:text-green-100">
-              {data?.formatDistribution.reduce((sum, f) => sum + f.count, 0) ??
-                0}
+              {data?.formatDistribution.length ?? 0}
             </div>
             <div className="text-[10px] text-green-700 dark:text-green-300">
               Unique Formats

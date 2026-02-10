@@ -15,7 +15,7 @@ import { SwipeablePaginationWidget } from './SwipeablePaginationWidget'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
-import { WidgetSkeleton, WidgetEmptyState } from './shared'
+import { WidgetSkeleton, WidgetEmptyState, WidgetErrorState } from './shared'
 
 const activityIcons: Record<
   string,
@@ -36,13 +36,25 @@ const activityColors: Record<string, string> = {
   speaker: 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400',
 }
 
-type RecentActivityFeedWidgetProps = BaseWidgetProps
+interface RecentActivityConfig {
+  maxActivities?: number
+  activityTypes?: 'all' | 'proposals' | 'reviews' | 'speakers'
+  showTimestamps?: boolean
+}
+
+type RecentActivityFeedWidgetProps = BaseWidgetProps<RecentActivityConfig>
 
 export function RecentActivityFeedWidget({
   conference,
+  config,
 }: RecentActivityFeedWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const { data: activities, loading } = useWidgetData<ActivityItem[]>(
+  const {
+    data: activities,
+    loading,
+    error,
+    refetch,
+  } = useWidgetData<ActivityItem[]>(
     conference ? () => fetchRecentActivity(conference._id) : null,
     [conference],
   )
@@ -80,12 +92,13 @@ export function RecentActivityFeedWidget({
   }
 
   if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
   if (!activities || activities.length === 0) {
     return <WidgetEmptyState message="No recent activity" />
   }
 
-  // Split activities into pages of 4 items each
-  const itemsPerPage = 6
+  // Split activities into pages
+  const itemsPerPage = config?.maxActivities ?? 6
   const pages = []
   for (let i = 0; i < activities.length; i += itemsPerPage) {
     const pageActivities = activities.slice(i, i + itemsPerPage)

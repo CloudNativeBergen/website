@@ -13,6 +13,7 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
 } from './shared'
@@ -23,7 +24,7 @@ export function WorkshopCapacityWidget({
   conference,
 }: WorkshopCapacityWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const { data, loading } = useWidgetData<WorkshopStatistics>(
+  const { data, loading, error, refetch } = useWidgetData<WorkshopStatistics>(
     conference ? () => fetchWorkshopCapacity(conference._id) : null,
     [conference],
   )
@@ -136,6 +137,10 @@ export function WorkshopCapacityWidget({
 
   if (loading) {
     return <WidgetSkeleton />
+  }
+
+  if (error) {
+    return <WidgetErrorState onRetry={refetch} />
   }
 
   if (!data || data.workshops.length === 0) {

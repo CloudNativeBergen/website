@@ -10,22 +10,32 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
 } from './shared'
 
-type ReviewProgressWidgetProps = BaseWidgetProps
+interface ReviewProgressConfig {
+  targetReviewsPerDay?: number
+  showAverageScore?: boolean
+}
+
+type ReviewProgressWidgetProps = BaseWidgetProps<ReviewProgressConfig>
 
 export function ReviewProgressWidget({
   conference,
+  config,
 }: ReviewProgressWidgetProps) {
-  const { data, loading } = useWidgetData<ReviewProgressData>(
+  const { data, loading, error, refetch } = useWidgetData<ReviewProgressData>(
     conference ? () => fetchReviewProgress(conference._id) : null,
     [conference],
   )
   const phase = conference ? getCurrentPhase(conference) : null
 
+  const showAverageScore = config?.showAverageScore ?? true
+
   if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
 
   // Initialization phase: Setup guide
   if (phase === 'initialization') {
@@ -157,17 +167,19 @@ export function ReviewProgressWidget({
         {/* Stats section - shows horizontally when widget is wide */}
         <div className="flex min-w-0 flex-col gap-2 text-center @[400px]:flex-1 @[400px]:text-left">
           {/* Average score */}
-          <div>
-            <div className="text-[10px] text-gray-500 @[200px]:text-xs dark:text-gray-400">
-              Average Score
+          {showAverageScore && (
+            <div>
+              <div className="text-[10px] text-gray-500 @[200px]:text-xs dark:text-gray-400">
+                Average Score
+              </div>
+              <div className="text-xl font-bold text-gray-900 @[280px]:text-2xl dark:text-gray-100">
+                {data.averageScore.toFixed(1)}
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  /10
+                </span>
+              </div>
             </div>
-            <div className="text-xl font-bold text-gray-900 @[280px]:text-2xl dark:text-gray-100">
-              {data.averageScore.toFixed(1)}
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                /10
-              </span>
-            </div>
-          </div>
+          )}
 
           {/* Additional stats when horizontal */}
           <div className="hidden grid-cols-2 gap-2 @[400px]:grid">

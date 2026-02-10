@@ -10,6 +10,7 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
 } from './shared'
@@ -33,13 +34,24 @@ function formatDaysRemaining(days: number): string {
   return `${Math.floor(days / 30)}m`
 }
 
-type UpcomingDeadlinesWidgetProps = BaseWidgetProps
+interface UpcomingDeadlinesConfig {
+  urgentThreshold?: number
+  maxDeadlines?: number
+}
+
+type UpcomingDeadlinesWidgetProps = BaseWidgetProps<UpcomingDeadlinesConfig>
 
 export function UpcomingDeadlinesWidget({
   conference,
+  config,
 }: UpcomingDeadlinesWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const { data: deadlines, loading } = useWidgetData<DeadlineData[]>(
+  const {
+    data: deadlines,
+    loading,
+    error,
+    refetch,
+  } = useWidgetData<DeadlineData[]>(
     conference ? () => fetchDeadlines(conference) : null,
     [conference],
   )
@@ -85,9 +97,12 @@ export function UpcomingDeadlinesWidget({
   }
 
   if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
   if (!deadlines || deadlines.length === 0) {
     return <WidgetEmptyState message="No upcoming deadlines" />
   }
+
+  const maxDeadlines = config?.maxDeadlines ?? 5
 
   return (
     <div className="flex h-full flex-col">
@@ -96,7 +111,7 @@ export function UpcomingDeadlinesWidget({
       </h3>
 
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
-        {deadlines.slice(0, 5).map((deadline) => {
+        {deadlines.slice(0, maxDeadlines).map((deadline) => {
           const urgencyClass = urgencyStyles[deadline.urgency]
           const badgeClass = urgencyBadgeStyles[deadline.urgency]
 

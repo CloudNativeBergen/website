@@ -55,6 +55,10 @@ export function WidgetContainer({
   )
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const pointerCaptureRef = useRef<{
+    element: HTMLElement
+    pointerId: number
+  } | null>(null)
 
   const metadata = getWidgetMetadata(widget.type)
 
@@ -95,6 +99,7 @@ export function WidgetContainer({
 
       const target = e.target as HTMLElement
       target.setPointerCapture(e.pointerId)
+      pointerCaptureRef.current = { element: target, pointerId: e.pointerId }
     },
     [editMode, widget.position],
   )
@@ -156,37 +161,44 @@ export function WidgetContainer({
     ],
   )
 
-  const handleResizeEnd = useCallback(
-    (e: PointerEvent) => {
-      if (!isResizing || !previewPosition) {
-        setIsResizing(false)
-        setResizeStart(null)
-        setPreviewPosition(null)
-        return
-      }
-
-      const hasCollision = checkCollision(
-        previewPosition,
-        allWidgets,
-        widget.id,
-        columnCount,
-      )
-
-      if (!hasCollision) {
-        onResize(widget.id, previewPosition)
-      }
-
+  const handleResizeEnd = useCallback(() => {
+    if (!isResizing || !previewPosition) {
       setIsResizing(false)
       setResizeStart(null)
       setPreviewPosition(null)
+      return
+    }
 
-      const target = e.target as HTMLElement
-      if (target.hasPointerCapture(e.pointerId)) {
-        target.releasePointerCapture(e.pointerId)
+    const hasCollision = checkCollision(
+      previewPosition,
+      allWidgets,
+      widget.id,
+      columnCount,
+    )
+
+    if (!hasCollision) {
+      onResize(widget.id, previewPosition)
+    }
+
+    setIsResizing(false)
+    setResizeStart(null)
+    setPreviewPosition(null)
+
+    if (pointerCaptureRef.current) {
+      const { element, pointerId } = pointerCaptureRef.current
+      if (element.hasPointerCapture(pointerId)) {
+        element.releasePointerCapture(pointerId)
       }
-    },
-    [isResizing, previewPosition, allWidgets, widget.id, columnCount, onResize],
-  )
+      pointerCaptureRef.current = null
+    }
+  }, [
+    isResizing,
+    previewPosition,
+    allWidgets,
+    widget.id,
+    columnCount,
+    onResize,
+  ])
 
   useEffect(() => {
     if (!isResizing) return

@@ -283,8 +283,7 @@ export function DashboardDemoClient({ conference }: DashboardDemoClientProps) {
               <ChevronLeftIcon className="h-3.5 w-3.5 text-gray-600 dark:text-gray-400" />
             </button>
             <span
-              className="min-w-30 px-2 text-center text-xs font-semibold"
-              style={{ color: phaseColor.text }}
+              className={`min-w-30 px-2 text-center text-xs font-semibold ${phaseColor.text}`}
             >
               {phaseName}
             </span>

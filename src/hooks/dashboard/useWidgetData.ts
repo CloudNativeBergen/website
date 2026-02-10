@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface WidgetDataResult<T> {
   data: T | null
   loading: boolean
   error: boolean
+  refetch: () => void
 }
 
 /**
@@ -22,8 +23,10 @@ export function useWidgetData<T>(
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
+    let isMounted = true
     if (!fetcher) {
       setLoading(false)
       return
@@ -32,15 +35,27 @@ export function useWidgetData<T>(
     setError(false)
     fetcher()
       .then((result) => {
-        setData(result)
-        setLoading(false)
+        if (isMounted) {
+          setData(result)
+          setLoading(false)
+        }
       })
       .catch(() => {
-        setError(true)
-        setLoading(false)
+        if (isMounted) {
+          setError(true)
+          setLoading(false)
+        }
       })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps)
 
-  return { data, loading, error }
+    return () => {
+      isMounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, retryCount])
+
+  const refetch = useCallback(() => {
+    setRetryCount((c) => c + 1)
+  }, [])
+
+  return { data, loading, error, refetch }
 }

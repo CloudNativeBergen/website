@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import {
-  CurrencyDollarIcon,
+  BanknotesIcon,
   GlobeAltIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline'
@@ -14,18 +14,26 @@ import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
 import {
   WidgetSkeleton,
   WidgetEmptyState,
+  WidgetErrorState,
   WidgetHeader,
   PhaseBadge,
   ProgressBar,
 } from './shared'
 
-type TravelSupportQueueWidgetProps = BaseWidgetProps
+interface TravelSupportConfig {
+  totalBudget?: number
+  showPendingRequests?: boolean
+  showBudgetUtilization?: boolean
+}
+
+type TravelSupportQueueWidgetProps = BaseWidgetProps<TravelSupportConfig>
 
 export function TravelSupportQueueWidget({
   conference,
+  config,
 }: TravelSupportQueueWidgetProps) {
   const phase = conference ? getCurrentPhase(conference) : null
-  const { data, loading } = useWidgetData<TravelSupportData>(
+  const { data, loading, error, refetch } = useWidgetData<TravelSupportData>(
     conference ? () => fetchTravelSupport(conference) : null,
     [conference],
   )
@@ -60,7 +68,7 @@ export function TravelSupportQueueWidget({
                 Budget Allocated
               </div>
               <div className="mt-1 flex items-baseline gap-1">
-                <CurrencyDollarIcon className="h-4 w-4 text-gray-400" />
+                <BanknotesIcon className="h-4 w-4 text-gray-400" />
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {(data.budgetAllocated / 1000).toFixed(0)}k
                 </div>
@@ -90,7 +98,7 @@ export function TravelSupportQueueWidget({
               Total Approved
             </div>
             <div className="mt-1 text-3xl font-bold text-green-900 dark:text-green-100">
-              ${(data.totalApproved / 1000).toFixed(0)}k
+              kr {(data.totalApproved / 1000).toFixed(0)}k
             </div>
           </div>
 
@@ -117,7 +125,7 @@ export function TravelSupportQueueWidget({
               Avg per Speaker
             </div>
             <div className="mt-1 text-3xl font-bold text-gray-900 dark:text-gray-100">
-              $
+              kr{' '}
               {data.requests.length > 0
                 ? Math.round(data.totalApproved / data.requests.length)
                 : 0}
@@ -130,6 +138,10 @@ export function TravelSupportQueueWidget({
 
   if (loading) {
     return <WidgetSkeleton />
+  }
+
+  if (error) {
+    return <WidgetErrorState onRetry={refetch} />
   }
 
   if (!data) {
@@ -147,7 +159,7 @@ export function TravelSupportQueueWidget({
         link={{ href: '/admin/travel-support', label: 'Review →' }}
       />
 
-      {data.pendingApprovals > 0 && (
+      {(config?.showPendingRequests ?? true) && data.pendingApprovals > 0 && (
         <div className="mb-3 rounded-lg bg-amber-50 p-2.5 text-center dark:bg-amber-900/20">
           <div className="text-[11px] text-amber-600 dark:text-amber-400">
             Pending Approvals
@@ -164,7 +176,7 @@ export function TravelSupportQueueWidget({
             Approved
           </div>
           <div className="mt-1 text-lg font-bold text-green-900 dark:text-green-100">
-            ${(data.totalApproved / 1000).toFixed(1)}k
+            kr {(data.totalApproved / 1000).toFixed(1)}k
           </div>
         </div>
         <div className="rounded-lg bg-gray-50 p-2.5 dark:bg-gray-800">
@@ -172,35 +184,37 @@ export function TravelSupportQueueWidget({
             Requested
           </div>
           <div className="mt-1 text-lg font-bold text-gray-900 dark:text-gray-100">
-            ${(data.totalRequested / 1000).toFixed(1)}k
+            kr {(data.totalRequested / 1000).toFixed(1)}k
           </div>
         </div>
       </div>
 
-      <div className="mb-3">
-        <div className="mb-1.5 flex items-center justify-between">
-          <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
-            Budget Usage
-          </h4>
-          <span className="text-[11px] text-gray-600 dark:text-gray-300">
-            ${(data.budgetAllocated / 1000).toFixed(0)}k total
-          </span>
+      {(config?.showBudgetUtilization ?? true) && (
+        <div className="mb-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">
+              Budget Usage
+            </h4>
+            <span className="text-[11px] text-gray-600 dark:text-gray-300">
+              kr {(data.budgetAllocated / 1000).toFixed(0)}k total
+            </span>
+          </div>
+          <ProgressBar
+            value={budgetUsed}
+            color={
+              budgetUsed > 90
+                ? 'bg-red-600 dark:bg-red-500'
+                : budgetUsed > 70
+                  ? 'bg-amber-600 dark:bg-amber-500'
+                  : 'bg-green-600 dark:bg-green-500'
+            }
+            className="h-1.5"
+          />
+          <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-300">
+            {budgetUsed.toFixed(0)}% used
+          </div>
         </div>
-        <ProgressBar
-          value={budgetUsed}
-          color={
-            budgetUsed > 90
-              ? 'bg-red-600 dark:bg-red-500'
-              : budgetUsed > 70
-                ? 'bg-amber-600 dark:bg-amber-500'
-                : 'bg-green-600 dark:bg-green-500'
-          }
-          className="h-1.5"
-        />
-        <div className="mt-1 text-[11px] text-gray-600 dark:text-gray-300">
-          {budgetUsed.toFixed(0)}% used
-        </div>
-      </div>
+      )}
 
       {data.requests.length > 0 && (
         <div className="flex-1">
@@ -219,7 +233,7 @@ export function TravelSupportQueueWidget({
                     {request.speaker}
                   </span>
                   <span className="ml-2 flex items-center gap-0.5 text-[11px] font-bold text-gray-900 dark:text-gray-100">
-                    <CurrencyDollarIcon className="h-3 w-3" />
+                    <BanknotesIcon className="h-3 w-3" />
                     {request.amount.toLocaleString()}
                   </span>
                 </div>

@@ -15,7 +15,7 @@ import { type QuickAction } from '@/lib/dashboard/data-types'
 import { getCurrentPhase } from '@/lib/conference/phase'
 import { BaseWidgetProps } from '@/lib/dashboard/types'
 import { useWidgetData } from '@/hooks/dashboard/useWidgetData'
-import { WidgetSkeleton, WidgetEmptyState } from './shared'
+import { WidgetSkeleton, WidgetEmptyState, WidgetErrorState } from './shared'
 
 const iconMap = {
   ClipboardDocumentCheckIcon,
@@ -45,12 +45,18 @@ export function QuickActionsWidget({ conference }: QuickActionsWidgetProps) {
     [conference],
   )
 
-  const { data: actions, loading } = useWidgetData<QuickAction[]>(
+  const {
+    data: actions,
+    loading,
+    error,
+    refetch,
+  } = useWidgetData<QuickAction[]>(
     conference ? () => fetchQuickActions(conference, currentPhase) : null,
     [conference, currentPhase],
   )
 
   if (loading) return <WidgetSkeleton />
+  if (error) return <WidgetErrorState onRetry={refetch} />
   if (!actions || actions.length === 0) {
     return <WidgetEmptyState message="No quick actions available" />
   }
