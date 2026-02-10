@@ -6,6 +6,22 @@
 
 This document provides a comprehensive breakdown of the codebase by analyzing different types of code: UI components, business logic, data access, tests, configuration, and more.
 
+## 🔄 Regenerating This Report
+
+To regenerate this analysis with current data, run:
+
+```bash
+pnpm run analyze-code
+```
+
+Or directly:
+
+```bash
+tsx scripts/analyze-code-lines.ts
+```
+
+The script is located at `scripts/analyze-code-lines.ts` and automatically categorizes all code files in the repository.
+
 ---
 
 ## 📊 Executive Summary

@@ -25,7 +25,8 @@
     "format": "prettier --write --list-different .",
     "typecheck": "tsc --noEmit",
     "sanity": "sanity",
-    "manage-orphaned-files": "tsx scripts/manage-orphaned-files.ts"
+    "manage-orphaned-files": "tsx scripts/manage-orphaned-files.ts",
+    "analyze-code": "tsx scripts/analyze-code-lines.ts"
   },
   "browserslist": "defaults, not ie <= 11",
   "dependencies": {
