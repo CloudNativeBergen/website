@@ -171,14 +171,14 @@ export default defineType({
   preview: {
     select: {
       speakerName: 'speaker.name',
-      conferenceName: 'conference.name',
+      conferenceName: 'conference.title',
       status: 'status',
       totalAmount: 'totalAmount',
     },
     prepare({ speakerName, conferenceName, status, totalAmount }) {
       return {
         title: `${speakerName || 'Unknown Speaker'} - ${conferenceName || 'Unknown Conference'}`,
-        subtitle: `Status: ${status || 'draft'} | Total: ${totalAmount ? `$${totalAmount}` : 'No amount'}`,
+        subtitle: `Status: ${status || 'draft'} | Total: ${totalAmount ?? 'No amount'}`,
       }
     },
   },

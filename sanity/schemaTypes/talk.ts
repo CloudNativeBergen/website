@@ -239,15 +239,15 @@ export default defineType({
   preview: {
     select: {
       title: 'title',
-      speakers: 'speakers',
+      speaker0: 'speakers.0.name',
+      speaker1: 'speakers.1.name',
+      speaker2: 'speakers.2.name',
+      speaker3: 'speakers.3.name',
     },
-    prepare(selection) {
-      const { title, speakers } = selection
-      const speakerNames =
-        speakers?.map((speaker: any) => speaker.name).join(', ') ||
-        'No speakers'
+    prepare({ title, speaker0, speaker1, speaker2, speaker3 }) {
+      const names = [speaker0, speaker1, speaker2, speaker3].filter(Boolean)
+      const speakerNames = names.length > 0 ? names.join(', ') : 'No speakers'
       return {
-        ...selection,
         title: `${title} (${speakerNames})`,
       }
     },

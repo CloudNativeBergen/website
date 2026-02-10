@@ -162,22 +162,17 @@ export default defineType({
   },
   orderings: [
     {
-      title: 'Conference',
-      name: 'conference',
+      title: 'Type and Title',
+      name: 'typeAndTitle',
       by: [
-        { field: 'conference.title', direction: 'desc' },
         { field: 'tier_type', direction: 'asc' },
         { field: 'title', direction: 'asc' },
       ],
     },
     {
-      title: 'Type and Order',
-      name: 'typeAndOrder',
-      by: [
-        { field: 'tier_type', direction: 'asc' },
-        { field: 'price.0.amount', direction: 'desc' },
-        { field: 'title', direction: 'asc' },
-      ],
+      title: 'Title',
+      name: 'title',
+      by: [{ field: 'title', direction: 'asc' }],
     },
   ],
 })

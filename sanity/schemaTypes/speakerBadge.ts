@@ -119,9 +119,9 @@ export default defineType({
       by: [{ field: 'issued_at', direction: 'desc' }],
     },
     {
-      title: 'Speaker Name',
-      name: 'speakerName',
-      by: [{ field: 'speaker.name', direction: 'asc' }],
+      title: 'Badge Type',
+      name: 'badgeType',
+      by: [{ field: 'badge_type', direction: 'asc' }],
     },
   ],
 })

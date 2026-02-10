@@ -175,7 +175,7 @@ export default defineType({
   preview: {
     select: {
       title: 'name',
-      subtitle: 'conference.name',
+      subtitle: 'conference.title',
       status: 'status',
     },
     prepare({ title, subtitle, status }) {

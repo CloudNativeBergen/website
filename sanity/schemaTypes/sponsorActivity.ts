@@ -89,9 +89,8 @@ export default defineType({
       description: 'description',
       createdBy: 'created_by.name',
       createdAt: 'created_at',
-      sponsorName: 'sponsor_for_conference.sponsor.name',
     },
-    prepare({ activityType, description, createdBy, createdAt, sponsorName }) {
+    prepare({ activityType, description, createdBy, createdAt }) {
       const typeLabel =
         activityType
           ?.split('_')
@@ -99,7 +98,7 @@ export default defineType({
           .join(' ') || 'Activity'
 
       return {
-        title: `${typeLabel} - ${sponsorName || 'Unknown Sponsor'}`,
+        title: typeLabel,
         subtitle: `${description || 'No description'} | By ${createdBy || 'Unknown'} on ${createdAt ? new Date(createdAt).toLocaleDateString() : 'Unknown date'}`,
       }
     },

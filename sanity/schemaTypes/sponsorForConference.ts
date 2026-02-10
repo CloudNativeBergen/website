@@ -351,12 +351,9 @@ export default defineType({
       by: [{ field: 'status', direction: 'asc' }],
     },
     {
-      title: 'Conference',
-      name: 'conference',
-      by: [
-        { field: 'conference.title', direction: 'desc' },
-        { field: 'status', direction: 'asc' },
-      ],
+      title: 'Status and Sponsor',
+      name: 'statusAndSponsor',
+      by: [{ field: 'status', direction: 'asc' }],
     },
   ],
 })
