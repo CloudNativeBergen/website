@@ -1,4 +1,5 @@
 import { defineField, defineType } from 'sanity'
+import { CURRENCY_OPTIONS } from './constants'
 
 export default defineType({
   name: 'sponsorTier',
@@ -51,7 +52,7 @@ export default defineType({
               name: 'currency',
               title: 'Currency',
               type: 'string',
-              options: { list: ['NOK', 'USD', 'EUR'] },
+              options: { list: [...CURRENCY_OPTIONS] },
             },
           ],
           preview: {

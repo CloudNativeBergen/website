@@ -1,5 +1,6 @@
 import { defineField, defineType } from 'sanity'
 import { CONTACT_ROLE_OPTIONS } from '../../src/lib/sponsor/types'
+import { CURRENCY_OPTIONS } from './constants'
 
 const SPONSOR_TAGS = [
   'warm-lead',
@@ -149,11 +150,7 @@ export default defineType({
       title: 'Contract Currency',
       type: 'string',
       options: {
-        list: [
-          { title: 'Norwegian Krone (NOK)', value: 'NOK' },
-          { title: 'US Dollar (USD)', value: 'USD' },
-          { title: 'Euro (EUR)', value: 'EUR' },
-        ],
+        list: [...CURRENCY_OPTIONS],
         layout: 'dropdown',
       },
       initialValue: 'NOK',

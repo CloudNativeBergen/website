@@ -9,6 +9,7 @@ import {
   TransitionChild,
 } from '@headlessui/react'
 import { useTheme } from 'next-themes'
+import { CURRENCY_VALUES } from '../../../../sanity/schemaTypes/constants'
 import {
   PlusIcon,
   PencilIcon,
@@ -41,7 +42,7 @@ interface SponsorTierModalProps {
   onDelete?: (tierId: string) => void
 }
 
-const CURRENCY_OPTIONS = ['NOK', 'USD', 'EUR', 'GBP'] as const
+const CURRENCY_OPTIONS = CURRENCY_VALUES
 
 function SponsorTierModal({
   isOpen,
@@ -158,7 +159,7 @@ function SponsorTierModal({
       } else {
         await createMutation.mutateAsync(formData)
       }
-    } catch { }
+    } catch {}
   }
 
   const handleDelete = async () => {
@@ -171,7 +172,7 @@ function SponsorTierModal({
     setShowDeleteConfirm(false)
     try {
       await deleteMutation.mutateAsync({ id: tier._id })
-    } catch { }
+    } catch {}
   }
 
   const addPrice = () => {

@@ -9,24 +9,33 @@ export default defineType({
       name: 'title',
       title: 'Title',
       type: 'string',
+      description: 'Display name of the topic',
       validation: (Rule) => Rule.required(),
     }),
     defineField({
       name: 'description',
       title: 'Description',
       type: 'text',
+      description: 'Brief explanation of what this topic covers',
     }),
     defineField({
       name: 'color',
       title: 'Color',
       description: 'Color used to visually identify this topic',
       type: 'string',
-      validation: (Rule) => Rule.required(),
+      validation: (Rule) =>
+        Rule.required()
+          .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, {
+            name: 'hex color',
+            invert: false,
+          })
+          .error('Must be a valid hex color (e.g., #FF5733 or #F00)'),
     }),
     defineField({
       name: 'slug',
       title: 'Slug',
       type: 'slug',
+      description: 'URL-friendly identifier, auto-generated from title',
       options: {
         source: 'title',
         maxLength: 96,

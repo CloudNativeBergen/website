@@ -5,6 +5,7 @@ import blockContent from './schemaTypes/blockContent'
 import conference from './schemaTypes/conference'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
+import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
 import imageGallery from './schemaTypes/imageGallery'
 import review from './schemaTypes/review'
 import schedule from './schemaTypes/schedule'
@@ -26,6 +27,7 @@ export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
     // Core content
     blockContent,
+    dataProcessingConsent,
     fileAttachment,
     urlAttachment,
 

@@ -184,8 +184,8 @@ export default async function SpeakerDashboard() {
   const talkTitle = primaryTalk?.title || 'Cloud Native Days Norway'
   const eventName = primaryTalk
     ? activeConferences.find((c) =>
-      c.proposals.some((p) => p._id === primaryTalk._id),
-    )?.conference.title || 'Cloud Native Days Norway'
+        c.proposals.some((p) => p._id === primaryTalk._id),
+      )?.conference.title || 'Cloud Native Days Norway'
     : 'Cloud Native Days Norway'
 
   // Determine what to show in sidebar: latest badge takes priority over confirmed talk
