@@ -20,6 +20,7 @@ export default defineType({
         list: [
           { title: 'Stage Change', value: 'stage_change' },
           { title: 'Invoice Status Change', value: 'invoice_status_change' },
+          { title: 'Contract Status Change', value: 'contract_status_change' },
           { title: 'Contract Signed', value: 'contract_signed' },
           { title: 'Note', value: 'note' },
           { title: 'Email', value: 'email' },
