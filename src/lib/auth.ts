@@ -57,6 +57,21 @@ const config = {
         return {}
       }
 
+      // Migrate legacy snake_case JWT tokens from before migration 028.
+      // Old tokens stored speaker.is_organizer; new code expects isOrganizer.
+      // This block can be removed once all active sessions have expired.
+      if (
+        !trigger &&
+        token.speaker &&
+        typeof token.speaker === 'object' &&
+        'is_organizer' in token.speaker &&
+        !('isOrganizer' in token.speaker)
+      ) {
+        const sp = token.speaker as Record<string, unknown>
+        sp.isOrganizer = sp.is_organizer
+        delete sp.is_organizer
+      }
+
       if (trigger === 'signIn') {
         if (!token || !token.email || !token.name) {
           console.error('Invalid auth token', token)
