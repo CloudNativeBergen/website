@@ -42,6 +42,7 @@ import { SponsorLogoEditor } from '../sponsor/SponsorLogoEditor'
 import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
+import { OnboardingLinkButton } from './OnboardingLinkButton'
 
 type FormView = 'pipeline' | 'contacts' | 'logo' | 'history'
 
@@ -278,6 +279,11 @@ export function SponsorCRMForm({
                       <div className="flex items-center gap-2">
                         {sponsor && (
                           <>
+                            <OnboardingLinkButton
+                              sponsorForConferenceId={sponsor._id}
+                              existingToken={sponsor.onboardingToken}
+                              onboardingComplete={sponsor.onboardingComplete}
+                            />
                             <button
                               type="button"
                               onClick={() => {
@@ -480,7 +486,7 @@ export function SponsorCRMForm({
                                   }
                                   helperText={
                                     !formData.contractValue ||
-                                    parseFloat(formData.contractValue) === 0
+                                      parseFloat(formData.contractValue) === 0
                                       ? '(No cost)'
                                       : undefined
                                   }

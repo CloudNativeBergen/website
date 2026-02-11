@@ -3,6 +3,7 @@ import type {
   InvoiceStatus,
   ContractStatus,
   SponsorTag,
+  SignatureStatus,
 } from '@/lib/sponsor-crm/types'
 import {
   UserGroupIcon,
@@ -15,6 +16,8 @@ import {
   ClockIcon,
   MinusCircleIcon,
   DocumentCheckIcon,
+  ShieldCheckIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
 export const STATUSES: Array<{
@@ -74,6 +77,38 @@ export const CONTRACT_STATUSES: Array<{
     value: 'contract-signed',
     label: 'Contract Signed',
     icon: DocumentCheckIcon,
+  },
+]
+
+export const SIGNATURE_STATUSES: Array<{
+  value: SignatureStatus
+  label: string
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+}> = [
+  {
+    value: 'not-started',
+    label: 'Not Started',
+    icon: MinusCircleIcon,
+  },
+  {
+    value: 'pending',
+    label: 'Pending',
+    icon: ClockIcon,
+  },
+  {
+    value: 'signed',
+    label: 'Signed',
+    icon: ShieldCheckIcon,
+  },
+  {
+    value: 'rejected',
+    label: 'Rejected',
+    icon: ExclamationTriangleIcon,
+  },
+  {
+    value: 'expired',
+    label: 'Expired',
+    icon: ClockIcon,
   },
 ]
 

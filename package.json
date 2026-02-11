@@ -38,6 +38,7 @@
     "@portabletext/to-html": "^5.0.1",
     "@portabletext/types": "^4.0.1",
     "@react-email/render": "^2.0.4",
+    "@react-pdf/renderer": "^4.3.2",
     "@sanity/image-url": "^2.0.3",
     "@sanity/types": "^5.8.1",
     "@tailwindcss/forms": "^0.5.11",

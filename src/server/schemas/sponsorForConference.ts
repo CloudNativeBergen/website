@@ -24,6 +24,14 @@ export const ContractStatusSchema = z.enum([
   'contract-signed',
 ])
 
+export const SignatureStatusSchema = z.enum([
+  'not-started',
+  'pending',
+  'signed',
+  'rejected',
+  'expired',
+])
+
 export const SponsorTagSchema = z.enum([
   'warm-lead',
   'returning-sponsor',
@@ -53,6 +61,9 @@ export const SponsorForConferenceInputSchema = z.object({
       { message: 'Addon IDs must be unique' },
     ),
   contractStatus: ContractStatusSchema,
+  signatureStatus: SignatureStatusSchema.optional(),
+  signerEmail: z.string().email().optional(),
+  contractTemplate: z.string().optional(),
   status: SponsorStatusSchema,
   assignedTo: z.string().nullable().optional(),
   contactInitiatedAt: z.string().optional(),
@@ -92,6 +103,9 @@ export const SponsorForConferenceUpdateSchema = z.object({
       { message: 'Addon IDs must be unique' },
     ),
   contractStatus: ContractStatusSchema.optional(),
+  signatureStatus: SignatureStatusSchema.optional(),
+  signerEmail: z.string().email().nullable().optional(),
+  contractTemplate: z.string().nullable().optional(),
   status: SponsorStatusSchema.optional(),
   assignedTo: z.string().nullable().optional(),
   contactInitiatedAt: z.string().nullable().optional(),
@@ -133,6 +147,11 @@ export const UpdateInvoiceStatusSchema = z.object({
 export const UpdateContractStatusSchema = z.object({
   id: z.string().min(1, 'ID is required'),
   newStatus: ContractStatusSchema,
+})
+
+export const UpdateSignatureStatusSchema = z.object({
+  id: z.string().min(1, 'ID is required'),
+  newStatus: SignatureStatusSchema,
 })
 
 export const CopySponsorsSchema = z.object({
