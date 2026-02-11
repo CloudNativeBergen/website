@@ -23,12 +23,12 @@ function DynamicIcon({
   return <IconComponent className={className} aria-hidden="true" />
 }
 
-function QuantityBadge({ max_quantity }: { max_quantity?: number }) {
-  if (!max_quantity || max_quantity === 1) return null
+function QuantityBadge({ maxQuantity }: { maxQuantity?: number }) {
+  if (!maxQuantity || maxQuantity === 1) return null
 
   return (
     <span className="inline-flex items-center rounded-md bg-yellow-400/10 px-2 py-1 text-xs font-medium whitespace-nowrap text-yellow-400 ring-1 ring-yellow-400/30 ring-inset">
-      Limited&nbsp;to&nbsp;{max_quantity}
+      Limited&nbsp;to&nbsp;{maxQuantity}
     </span>
   )
 }
@@ -147,13 +147,13 @@ export function SponsorProspectus({
                       className={clsx(
                         'h-1',
                         index === 0 &&
-                          'bg-linear-to-r from-blue-500 to-cyan-500',
+                        'bg-linear-to-r from-blue-500 to-cyan-500',
                         index === 1 &&
-                          'bg-linear-to-r from-cyan-500 to-emerald-500',
+                        'bg-linear-to-r from-cyan-500 to-emerald-500',
                         index === 2 &&
-                          'bg-linear-to-r from-indigo-500 to-purple-500',
+                        'bg-linear-to-r from-indigo-500 to-purple-500',
                         index > 2 &&
-                          'bg-linear-to-r from-blue-500 to-indigo-500',
+                        'bg-linear-to-r from-blue-500 to-indigo-500',
                       )}
                     />
                     <div className="p-8 sm:p-10">
@@ -162,11 +162,11 @@ export function SponsorProspectus({
                           className={clsx(
                             'mb-6 flex h-10 w-10 items-center justify-center rounded-lg text-white',
                             index === 0 &&
-                              'bg-linear-to-br from-blue-500 to-cyan-600',
+                            'bg-linear-to-br from-blue-500 to-cyan-600',
                             index === 1 &&
-                              'bg-linear-to-br from-cyan-500 to-emerald-600',
+                            'bg-linear-to-br from-cyan-500 to-emerald-600',
                             index === 2 &&
-                              'bg-linear-to-br from-indigo-500 to-purple-600',
+                            'bg-linear-to-br from-indigo-500 to-purple-600',
                             index > 2 && 'bg-blue-600',
                           )}
                         >
@@ -224,7 +224,7 @@ export function SponsorProspectus({
                 <div
                   className={clsx(
                     standardTiers.length <= 2 &&
-                      'flex flex-col justify-between',
+                    'flex flex-col justify-between',
                   )}
                 >
                   <div>
@@ -238,7 +238,7 @@ export function SponsorProspectus({
                             Recommended
                           </span>
                         ) : null}
-                        <QuantityBadge max_quantity={tier.maxQuantity} />
+                        <QuantityBadge maxQuantity={tier.maxQuantity} />
                       </div>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-gray-300">
@@ -364,11 +364,11 @@ export function SponsorProspectus({
                     className={clsx(
                       'h-1',
                       index % 3 === 0 &&
-                        'bg-linear-to-r from-cyan-500 to-blue-500',
+                      'bg-linear-to-r from-cyan-500 to-blue-500',
                       index % 3 === 1 &&
-                        'bg-linear-to-r from-blue-500 to-indigo-500',
+                      'bg-linear-to-r from-blue-500 to-indigo-500',
                       index % 3 === 2 &&
-                        'bg-linear-to-r from-indigo-500 to-purple-500',
+                      'bg-linear-to-r from-indigo-500 to-purple-500',
                     )}
                   />
                   {tier.maxQuantity === 1 && (
@@ -382,7 +382,7 @@ export function SponsorProspectus({
                         {tier.title}
                       </h3>
                       <div className="flex gap-2">
-                        <QuantityBadge max_quantity={tier.maxQuantity} />
+                        <QuantityBadge maxQuantity={tier.maxQuantity} />
                       </div>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-gray-700 dark:text-gray-200">

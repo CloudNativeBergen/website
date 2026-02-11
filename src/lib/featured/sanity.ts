@@ -96,7 +96,7 @@ export async function addFeaturedSpeaker(
     await clientWrite
       .patch(conferenceId)
       .setIfMissing({ featuredSpeakers: [] })
-      .append('featured_speakers', [{ _type: 'reference', _ref: speakerId }])
+      .append('featuredSpeakers', [{ _type: 'reference', _ref: speakerId }])
       .commit()
 
     return { success: true, error: null }
@@ -136,7 +136,7 @@ export async function addFeaturedTalk(
     await clientWrite
       .patch(conferenceId)
       .setIfMissing({ featuredTalks: [] })
-      .append('featured_talks', [{ _type: 'reference', _ref: talkId }])
+      .append('featuredTalks', [{ _type: 'reference', _ref: talkId }])
       .commit()
 
     return { success: true, error: null }

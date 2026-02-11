@@ -322,8 +322,8 @@ export async function getSpeakers(
         conference-> {
           _id,
           title,
-          start_date,
-          end_date
+          startDate,
+          endDate
         },
         topics[]-> {
           _id,

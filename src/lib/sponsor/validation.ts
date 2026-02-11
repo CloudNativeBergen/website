@@ -33,7 +33,7 @@ export function validateSponsorTier(
     !['standard', 'special', 'addon'].includes(data.tierType)
   ) {
     errors.push({
-      field: 'tier_type',
+      field: 'tierType',
       message: 'Tier type must be standard, special, or addon',
     })
   }

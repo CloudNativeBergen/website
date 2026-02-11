@@ -107,7 +107,7 @@ export function SponsorActionItems({
       {actionItems.length > 0 && (
         <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-700">
           <Link
-            href={`/admin/sponsors/crm${organizerId ? `?assigned_to=${organizerId}` : ''}`}
+            href={`/admin/sponsors/crm${organizerId ? `?assignedTo=${organizerId}` : ''}`}
             className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
           >
             View all in CRM →

@@ -39,22 +39,22 @@ export default async function SpeakerDashboard() {
       organizer,
       city,
       country,
-      venue_name,
-      venue_address,
+      venueName,
+      venueAddress,
       tagline,
       description,
-      start_date,
-      end_date,
-      cfp_start_date,
-      cfp_end_date,
-      cfp_notify_date,
-      cfp_email,
-      program_date,
-      registration_link,
-      registration_enabled,
-      workshop_registration_start,
-      workshop_registration_end,
-      contact_email,
+      startDate,
+      endDate,
+      cfpStartDate,
+      cfpEndDate,
+      cfpNotifyDate,
+      cfpEmail,
+      programDate,
+      registrationLink,
+      registrationEnabled,
+      workshopRegistrationStart,
+      workshopRegistrationEnd,
+      contactEmail,
       domains,
       formats,
       features
@@ -94,14 +94,14 @@ export default async function SpeakerDashboard() {
         ),
         getTravelSupport(speakerId, conference._id),
         clientReadCached.fetch<BadgeRecord[]>(
-          groq`*[_type == "speakerBadge" && speaker._ref == $speakerId && conference._ref == $conferenceId] | order(issued_at desc) {
+          groq`*[_type == "speakerBadge" && speaker._ref == $speakerId && conference._ref == $conferenceId] | order(issuedAt desc) {
             _id,
             _createdAt,
-            badge_id,
-            badge_type,
-            issued_at,
-            verification_url,
-            baked_svg{
+            badgeId,
+            badgeType,
+            issuedAt,
+            verificationUrl,
+            bakedSvg{
               asset->{
                 _id,
                 url
@@ -184,8 +184,8 @@ export default async function SpeakerDashboard() {
   const talkTitle = primaryTalk?.title || 'Cloud Native Days Norway'
   const eventName = primaryTalk
     ? activeConferences.find((c) =>
-        c.proposals.some((p) => p._id === primaryTalk._id),
-      )?.conference.title || 'Cloud Native Days Norway'
+      c.proposals.some((p) => p._id === primaryTalk._id),
+    )?.conference.title || 'Cloud Native Days Norway'
     : 'Cloud Native Days Norway'
 
   // Determine what to show in sidebar: latest badge takes priority over confirmed talk

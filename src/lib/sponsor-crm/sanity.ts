@@ -129,10 +129,10 @@ export async function createSponsorForConference(
       tier: data.tier ? { _type: 'reference', _ref: data.tier } : undefined,
       addons: data.addons?.length
         ? [...new Set(data.addons)].map((id) => ({
-            _type: 'reference',
-            _ref: id,
-            _key: id,
-          }))
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
         : undefined,
       status: data.status,
       assignedTo: data.assignedTo
@@ -189,10 +189,10 @@ export async function updateSponsorForConference(
     if (data.addons !== undefined) {
       updates.addons = data.addons.length
         ? [...new Set(data.addons)].map((id) => ({
-            _type: 'reference',
-            _ref: id,
-            _key: id,
-          }))
+          _type: 'reference',
+          _ref: id,
+          _key: id,
+        }))
         : []
     }
     if (data.status !== undefined) updates.status = data.status
@@ -282,7 +282,7 @@ export async function listSponsorsForConference(
     status?: string[]
     invoiceStatus?: string[]
     assignedTo?: string
-    unassigned_only?: boolean
+    unassignedOnly?: boolean
     tags?: string[]
     tiers?: string[]
   },
@@ -299,7 +299,7 @@ export async function listSponsorsForConference(
     if (filters?.invoiceStatus && filters.invoiceStatus.length > 0) {
       filterQuery += ` && invoiceStatus in $invoiceStatuses`
     }
-    if (filters?.unassigned_only) {
+    if (filters?.unassignedOnly) {
       filterQuery += ` && !defined(assignedTo)`
     } else if (filters?.assignedTo) {
       filterQuery += ` && assignedTo._ref == $assignedTo`
@@ -456,7 +456,7 @@ export async function importAllHistoricSponsors(
     }>(
       `*[_type == "conference" && _id == $conferenceId][0]{
         _id,
-        start_date
+        startDate
       }`,
       { conferenceId: targetConferenceId },
     )
@@ -467,7 +467,7 @@ export async function importAllHistoricSponsors(
 
     // Get all conferences before the target conference
     const previousConferences = await clientRead.fetch<Array<{ _id: string }>>(
-      `*[_type == "conference" && start_date < $targetStartDate] | order(start_date desc) {
+      `*[_type == "conference" && startDate < $targetStartDate] | order(startDate desc) {
         _id
       }`,
       { targetStartDate: targetConference.startDate },

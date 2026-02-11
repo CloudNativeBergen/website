@@ -158,7 +158,7 @@ function SponsorTierModal({
       } else {
         await createMutation.mutateAsync(formData)
       }
-    } catch {}
+    } catch { }
   }
 
   const handleDelete = async () => {
@@ -171,7 +171,7 @@ function SponsorTierModal({
     setShowDeleteConfirm(false)
     try {
       await deleteMutation.mutateAsync({ id: tier._id })
-    } catch {}
+    } catch { }
   }
 
   const addPrice = () => {
@@ -389,14 +389,14 @@ function SponsorTierModal({
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                       <div>
                         <label
-                          htmlFor="tier_type"
+                          htmlFor="tierType"
                           className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                         >
                           Tier Type
                         </label>
                         <div className="mt-2 grid grid-cols-1">
                           <select
-                            id="tier_type"
+                            id="tierType"
                             value={formData.tierType}
                             onChange={(e) =>
                               setFormData((prev) => ({
