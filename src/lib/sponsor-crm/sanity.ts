@@ -3,6 +3,7 @@ import {
   clientReadUncached as clientRead,
 } from '@/lib/sanity/client'
 import { prepareArrayWithKeys } from '@/lib/sanity/helpers'
+import type { ConferenceSponsor } from '@/lib/sponsor/types'
 import type {
   SponsorForConference,
   SponsorForConferenceExpanded,
@@ -83,6 +84,36 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     comments
   }
 `
+
+export async function getPublicSponsorsForConference(
+  conferenceId: string,
+): Promise<ConferenceSponsor[]> {
+  return clientRead.fetch<ConferenceSponsor[]>(
+    `*[_type == "sponsorForConference" && conference._ref == $conferenceId && status == "closed-won"]
+      | order(tier->tier_type asc, tier->price[0].amount desc, tier->title asc){
+      "_sfcId": _id,
+      sponsor->{
+        _id,
+        name,
+        website,
+        logo,
+        logo_bright,
+      },
+      tier->{
+        _id,
+        title,
+        tagline,
+        tier_type,
+        price[]{
+          _key,
+          amount,
+          currency
+        }
+      }
+    }`,
+    { conferenceId },
+  )
+}
 
 export async function createSponsorForConference(
   data: SponsorForConferenceInput,

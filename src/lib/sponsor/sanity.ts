@@ -6,12 +6,7 @@ import {
   SponsorExisting,
   SponsorEmailTemplate,
 } from './types'
-import {
-  prepareArrayWithKeys,
-  createReference,
-  addReferenceToArray,
-  removeReferenceFromArray,
-} from '@/lib/sanity/helpers'
+import { prepareArrayWithKeys, createReference } from '@/lib/sanity/helpers'
 
 export async function createSponsorTier(
   data: SponsorTierInput & { conference: string },
@@ -277,93 +272,6 @@ export async function getAllSponsors(): Promise<{
     )
 
     return { sponsors }
-  } catch (error) {
-    return { error: error as Error }
-  }
-}
-
-export async function addSponsorToConference(
-  conferenceId: string,
-  sponsorId: string,
-  tierId: string,
-): Promise<{ error?: Error }> {
-  return await addReferenceToArray(
-    conferenceId,
-    'sponsors',
-    sponsorId,
-    {
-      sponsor: createReference(sponsorId),
-      tier: createReference(tierId),
-    },
-    'sponsor',
-  )
-}
-
-export async function removeSponsorFromConference(
-  conferenceId: string,
-  sponsorId: string,
-): Promise<{ error?: Error }> {
-  return await removeReferenceFromArray(
-    conferenceId,
-    'sponsors',
-    sponsorId,
-    'sponsor',
-  )
-}
-
-export async function updateSponsorTierAssignment(
-  conferenceId: string,
-  sponsorName: string,
-  newTierId: string,
-): Promise<{ error?: Error }> {
-  try {
-    const sponsor = await clientWrite.fetch(
-      `*[_type == "sponsor" && name == $sponsorName][0]{
-        _id
-      }`,
-      { sponsorName },
-    )
-
-    if (!sponsor) {
-      return { error: new Error('Sponsor not found') }
-    }
-
-    const sponsorId = sponsor._id
-
-    const conference = await clientWrite.fetch(
-      `*[_type == "conference" && _id == $conferenceId][0]{
-        sponsors[sponsor._ref == $sponsorId]{
-          _key,
-          sponsor,
-          tier
-        }
-      }`,
-      { conferenceId, sponsorId },
-    )
-
-    if (
-      !conference ||
-      !conference.sponsors ||
-      conference.sponsors.length === 0
-    ) {
-      return { error: new Error('Sponsor not found in conference') }
-    }
-
-    const sponsorEntry = conference.sponsors[0]
-    const sponsorKey = sponsorEntry._key
-
-    if (!sponsorKey) {
-      return { error: new Error('Sponsor entry missing _key') }
-    }
-
-    await clientWrite
-      .patch(conferenceId)
-      .set({
-        [`sponsors[_key == "${sponsorKey}"].tier`]: createReference(newTierId),
-      })
-      .commit()
-
-    return {}
   } catch (error) {
     return { error: error as Error }
   }

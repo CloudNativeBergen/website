@@ -38,8 +38,6 @@ export default defineType({
         ],
         layout: 'radio',
       },
-      validation: (Rule) =>
-        Rule.required().error('Experience level is required'),
     }),
     defineField({
       name: 'operatingSystem',
@@ -53,8 +51,6 @@ export default defineType({
         ],
         layout: 'radio',
       },
-      validation: (Rule) =>
-        Rule.required().error('Operating system is required'),
     }),
 
     defineField({

@@ -33,6 +33,7 @@ import { SponsorLogoEditor } from './SponsorLogoEditor'
 interface SponsorAddModalProps {
   isOpen: boolean
   onClose: () => void
+  conferenceId: string
   sponsorTiers: SponsorTierExisting[]
   preselectedTierId?: string
   editingSponsor?: ConferenceSponsor | null
@@ -47,6 +48,7 @@ interface SponsorFormData extends SponsorInput {
 export function SponsorAddModal({
   isOpen,
   onClose,
+  conferenceId,
   sponsorTiers,
   preselectedTierId,
   editingSponsor,
@@ -84,11 +86,8 @@ export function SponsorAddModal({
       utils.sponsor.list.invalidate()
     },
   })
-  const addToConferenceMutation = api.sponsor.addToConference.useMutation({
-    onSuccess: () => {
-      utils.sponsor.list.invalidate()
-    },
-  })
+  const crmCreateMutation = api.sponsor.crm.create.useMutation()
+  const crmUpdateMutation = api.sponsor.crm.update.useMutation()
   const utils = api.useUtils()
 
   useEffect(() => {
@@ -161,31 +160,30 @@ export function SponsorAddModal({
           throw new Error('Could not find existing sponsor to update')
         }
 
+        const updatedSponsor = (await updateMutation.mutateAsync({
+          id: existingSponsor._id,
+          data: sponsorData,
+        })) as SponsorExisting
+
         const currentTierMatch = sponsorTiers.find(
           (tier) => tier.title === editingSponsor.tier?.title,
         )
-        const newTierMatch = sponsorTiers.find(
-          (tier) => tier._id === formData.tierId,
-        )
-
-        const sponsorUpdateData = {
-          ...sponsorData,
-
-          ...(currentTierMatch?._id !== newTierMatch?._id && {
-            tierId: formData.tierId,
-          }),
-        }
-
-        const updatedSponsor = (await updateMutation.mutateAsync({
-          id: existingSponsor._id,
-          data: sponsorUpdateData,
-        })) as SponsorExisting
-
         const selectedTier = sponsorTiers.find(
           (tier) => tier._id === formData.tierId,
         )
 
+        if (
+          editingSponsor._sfcId &&
+          currentTierMatch?._id !== selectedTier?._id
+        ) {
+          await crmUpdateMutation.mutateAsync({
+            id: editingSponsor._sfcId,
+            tier: selectedTier?._id,
+          })
+        }
+
         const updatedConferenceSponsor: ConferenceSponsor = {
+          _sfcId: editingSponsor._sfcId,
           sponsor: {
             _id: updatedSponsor._id,
             name: updatedSponsor.name,
@@ -194,6 +192,7 @@ export function SponsorAddModal({
             logo_bright: updatedSponsor.logo_bright,
           },
           tier: {
+            _id: selectedTier?._id,
             title: selectedTier?.title || '',
             tagline: selectedTier?.tagline || '',
             tier_type: selectedTier?.tier_type,
@@ -232,9 +231,13 @@ export function SponsorAddModal({
           finalSponsorId = selectedExistingSponsor._id
         }
 
-        await addToConferenceMutation.mutateAsync({
-          sponsorId: finalSponsorId,
-          tierId: formData.tierId,
+        const sfcResult = await crmCreateMutation.mutateAsync({
+          sponsor: finalSponsorId,
+          conference: conferenceId,
+          tier: formData.tierId,
+          status: 'closed-won',
+          contract_status: 'none',
+          invoice_status: 'not-sent',
         })
 
         const selectedTier = sponsorTiers.find(
@@ -242,6 +245,7 @@ export function SponsorAddModal({
         )
 
         const addedSponsor: ConferenceSponsor = {
+          _sfcId: sfcResult?._id,
           sponsor: {
             _id: finalSponsorId,
             name: formData.name,
@@ -250,6 +254,7 @@ export function SponsorAddModal({
             logo_bright: formData.logo_bright || undefined,
           },
           tier: {
+            _id: selectedTier?._id,
             title: selectedTier?.title || '',
             tagline: selectedTier?.tagline || '',
             tier_type: selectedTier?.tier_type,
@@ -642,13 +647,13 @@ export function SponsorAddModal({
                         !isFormValid() ||
                         createMutation.isPending ||
                         updateMutation.isPending ||
-                        addToConferenceMutation.isPending
+                        crmCreateMutation.isPending
                       }
                       className="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold whitespace-nowrap text-white shadow-xs hover:bg-indigo-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-500"
                     >
                       {createMutation.isPending ||
                       updateMutation.isPending ||
-                      addToConferenceMutation.isPending
+                      crmCreateMutation.isPending
                         ? 'Saving...'
                         : editingSponsor
                           ? 'Update Sponsor'

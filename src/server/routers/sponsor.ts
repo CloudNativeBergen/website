@@ -8,8 +8,6 @@ import {
   IdParamSchema,
   SponsorTierInputSchema,
   SponsorTierUpdateSchema,
-  ConferenceSponsorInputSchema,
-  SponsorTierAssignmentSchema,
   SponsorEmailTemplateInputSchema,
   SponsorEmailTemplateUpdateSchema,
   ReorderTemplatesSchema,
@@ -26,9 +24,6 @@ import {
   createSponsorTier,
   updateSponsorTier,
   deleteSponsorTier,
-  addSponsorToConference,
-  removeSponsorFromConference,
-  updateSponsorTierAssignment,
   getSponsorEmailTemplates,
   getSponsorEmailTemplate,
   createSponsorEmailTemplate,
@@ -458,95 +453,6 @@ export const sponsorRouter = router({
       return { success: true }
     }),
   }),
-
-  addToConference: adminProcedure
-    .input(ConferenceSponsorInputSchema)
-    .mutation(async ({ input }) => {
-      const { conference, error: confError } =
-        await getConferenceForCurrentDomain()
-      if (confError || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: confError,
-        })
-      }
-
-      const { error } = await addSponsorToConference(
-        conference._id,
-        input.sponsorId,
-        input.tierId,
-      )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to add sponsor to conference',
-          cause: error,
-        })
-      }
-
-      return { success: true }
-    }),
-
-  updateTierAssignment: adminProcedure
-    .input(SponsorTierAssignmentSchema)
-    .mutation(async ({ input }) => {
-      const { conference, error: confError } =
-        await getConferenceForCurrentDomain()
-      if (confError || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: confError,
-        })
-      }
-
-      const { error } = await updateSponsorTierAssignment(
-        conference._id,
-        input.sponsorName,
-        input.tierId,
-      )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to update sponsor tier assignment',
-          cause: error,
-        })
-      }
-
-      return { success: true }
-    }),
-
-  removeFromConference: adminProcedure
-    .input(IdParamSchema)
-    .mutation(async ({ input }) => {
-      const { conference, error: confError } =
-        await getConferenceForCurrentDomain()
-      if (confError || !conference) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to get current conference',
-          cause: confError,
-        })
-      }
-
-      const { error } = await removeSponsorFromConference(
-        conference._id,
-        input.id,
-      )
-
-      if (error) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to remove sponsor from conference',
-          cause: error,
-        })
-      }
-
-      return { success: true }
-    }),
 
   crm: router({
     listOrganizers: adminProcedure

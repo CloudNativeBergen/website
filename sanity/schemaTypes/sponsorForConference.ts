@@ -320,15 +320,6 @@ export default defineType({
         )
       },
     }),
-    defineField({
-      name: 'legacy_synced_at',
-      title: 'Legacy Sync Timestamp',
-      type: 'datetime',
-      description:
-        'Internal: Last sync to conference.sponsors[] array (read-only)',
-      readOnly: true,
-      hidden: true,
-    }),
   ],
   preview: {
     select: {

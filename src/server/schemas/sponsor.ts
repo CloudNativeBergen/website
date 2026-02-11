@@ -53,16 +53,6 @@ export const SponsorTierInputSchema = z.object({
   max_quantity: z.number().min(1).optional(),
 })
 
-export const ConferenceSponsorInputSchema = z.object({
-  sponsorId: z.string().min(1, 'Sponsor ID is required'),
-  tierId: z.string().min(1, 'Tier ID is required'),
-})
-
-export const SponsorTierAssignmentSchema = z.object({
-  sponsorName: z.string().min(1, 'Sponsor name is required'),
-  tierId: z.string().min(1, 'Tier ID is required'),
-})
-
 export const SponsorUpdateSchema = SponsorInputSchema.partial()
 export const SponsorTierUpdateSchema = SponsorTierInputSchema.partial()
 
