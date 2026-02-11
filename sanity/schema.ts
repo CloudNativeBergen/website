@@ -24,27 +24,36 @@ import workshopSignup from './schemaTypes/workshopSignup'
 
 export const schema: { types: SchemaTypeDefinition[] } = {
   types: [
+    // Core content
     blockContent,
     fileAttachment,
     urlAttachment,
+
+    // Conference
     conference,
-    coSpeakerInvitation,
+    schedule,
     dashboardConfig,
     imageGallery,
-    review,
-    schedule,
-    speaker,
-    speakerBadge,
-    sponsor,
-    sponsorActivity,
-    sponsorEmailTemplate,
-    sponsorForConference,
-    sponsorTier,
+    volunteer,
+
+    // Topics & Talks
     talk,
     topic,
+    review,
+    workshopSignup,
+
+    // Speakers
+    speaker,
+    speakerBadge,
+    coSpeakerInvitation,
     travelSupport,
     travelExpense,
-    volunteer,
-    workshopSignup,
+
+    // Sponsors
+    sponsor,
+    sponsorTier,
+    sponsorForConference,
+    sponsorActivity,
+    sponsorEmailTemplate,
   ],
 }
