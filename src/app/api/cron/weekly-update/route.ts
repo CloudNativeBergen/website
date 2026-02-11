@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    if (!conference.checkin_customer_id || !conference.checkin_event_id) {
+    if (!conference.checkinCustomerId || !conference.checkinEventId) {
       console.error('Conference missing checkin configuration')
       return NextResponse.json(
         { error: 'Conference not configured for ticket sales tracking' },
@@ -83,8 +83,8 @@ export async function GET(request: NextRequest) {
     }
 
     const allTickets = await fetchEventTickets(
-      conference.checkin_customer_id,
-      conference.checkin_event_id,
+      conference.checkinCustomerId,
+      conference.checkinEventId,
     )
 
     const paidTickets = allTickets.filter((t) => parseFloat(t.sum) > 0)
@@ -107,13 +107,13 @@ export async function GET(request: NextRequest) {
 
     let analysis: TicketAnalysisResult | null = null
 
-    const targetConfig = conference.ticket_targets
+    const targetConfig = conference.ticketTargets
     if (
       targetConfig &&
       targetConfig.enabled &&
-      conference.ticket_capacity &&
-      targetConfig.sales_start_date &&
-      targetConfig.target_curve &&
+      conference.ticketCapacity &&
+      targetConfig.salesStartDate &&
+      targetConfig.targetCurve &&
       paidTickets.length > 0
     ) {
       try {
@@ -125,11 +125,11 @@ export async function GET(request: NextRequest) {
             sum: t.sum,
           })),
           config: targetConfig,
-          capacity: conference.ticket_capacity,
+          capacity: conference.ticketCapacity,
           conference,
           conferenceDate:
-            conference.start_date ||
-            conference.program_date ||
+            conference.startDate ||
+            conference.programDate ||
             new Date().toISOString(),
           speakerCount: speakers.length,
         }

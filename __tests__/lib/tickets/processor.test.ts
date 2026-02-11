@@ -18,11 +18,11 @@ const createMockConfig = (
   overrides: Partial<SalesTargetConfig> = {},
 ): SalesTargetConfig => ({
   enabled: true,
-  sales_start_date: '2026-01-01',
-  target_curve: 'linear',
+  salesStartDate: '2026-01-01',
+  targetCurve: 'linear',
   milestones: [
-    { date: '2026-03-01', target_percentage: 30, label: 'Early Bird End' },
-    { date: '2026-05-01', target_percentage: 70, label: 'Regular End' },
+    { date: '2026-03-01', targetPercentage: 30, label: 'Early Bird End' },
+    { date: '2026-05-01', targetPercentage: 70, label: 'Regular End' },
   ],
   ...overrides,
 })
@@ -150,7 +150,7 @@ describe('TicketSalesProcessor', () => {
   describe('Target Curves', () => {
     it('should calculate linear progression correctly', () => {
       const input = createInput({
-        config: createMockConfig({ target_curve: 'linear' }),
+        config: createMockConfig({ targetCurve: 'linear' }),
         capacity: 100,
       })
 
@@ -167,7 +167,7 @@ describe('TicketSalesProcessor', () => {
 
     it('should calculate s_curve progression', () => {
       const input = createInput({
-        config: createMockConfig({ target_curve: 's_curve' }),
+        config: createMockConfig({ targetCurve: 's_curve' }),
         capacity: 100,
       })
 
@@ -185,7 +185,7 @@ describe('TicketSalesProcessor', () => {
 
     it('should calculate early_push progression', () => {
       const input = createInput({
-        config: createMockConfig({ target_curve: 'early_push' }),
+        config: createMockConfig({ targetCurve: 'early_push' }),
         capacity: 100,
       })
 
@@ -199,7 +199,7 @@ describe('TicketSalesProcessor', () => {
 
     it('should calculate late_push progression', () => {
       const input = createInput({
-        config: createMockConfig({ target_curve: 'late_push' }),
+        config: createMockConfig({ targetCurve: 'late_push' }),
         capacity: 100,
       })
 
@@ -250,13 +250,13 @@ describe('TicketSalesProcessor', () => {
           milestones: [
             {
               date: futureDateStr,
-              target_percentage: 50,
+              targetPercentage: 50,
               label: 'Future Milestone',
             },
           ],
         }),
         capacity: 100,
-        conference: createMockConference({ start_date: '2027-06-15' }),
+        conference: createMockConference({ startDate: '2027-06-15' }),
         conferenceDate: '2027-06-15',
       })
 
@@ -304,7 +304,7 @@ describe('TicketSalesProcessor', () => {
               tier: {
                 title: 'Ingress',
                 tagline: '',
-                tier_type: 'standard',
+                tierType: 'standard',
                 price: [{ _key: 'k', amount: 50000, currency: 'NOK' }],
               },
             },
@@ -313,7 +313,7 @@ describe('TicketSalesProcessor', () => {
               tier: {
                 title: 'Pod',
                 tagline: '',
-                tier_type: 'standard',
+                tierType: 'standard',
                 price: [{ _key: 'k', amount: 10000, currency: 'NOK' }],
               },
             },
@@ -350,7 +350,7 @@ describe('TicketSalesProcessor', () => {
               tier: {
                 title: 'Unknown',
                 tagline: '',
-                tier_type: 'standard',
+                tierType: 'standard',
                 price: [],
               },
             },

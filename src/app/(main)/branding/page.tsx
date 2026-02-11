@@ -94,8 +94,8 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
 
   // Use featured speakers if available, otherwise fall back to organizers
   const displaySpeakers =
-    conference?.featured_speakers && conference.featured_speakers.length > 0
-      ? conference.featured_speakers
+    conference?.featuredSpeakers && conference.featuredSpeakers.length > 0
+      ? conference.featuredSpeakers
       : (conference?.organizers ?? [])
 
   // Helper to create mock ProposalExisting objects for design examples
@@ -2990,7 +2990,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 description="Celebratory tone with clear next steps and confirmation requirements."
                 className="text-brand-fresh-green"
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="demo.speaker@example-demo.com"
                 emailSubject="🎉 Your proposal has been accepted!"
                 emailTime="Today 2:30 PM"
@@ -3004,7 +3004,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventUrl={`https://${domain}/`}
                   confirmUrl={`https://${domain}/confirm/abc123`}
                   comment="We were particularly impressed with your hands-on approach and real-world examples. We'd love to have you present in the main auditorium."
-                  socialLinks={conference.social_links}
+                  socialLinks={conference.socialLinks}
                 />
               </ExpandableEmailTemplate>
 
@@ -3014,7 +3014,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 description="Professional and encouraging tone while maintaining community connection."
                 className="text-brand-slate-gray"
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="test.speaker@demo-examples.com"
                 emailSubject="Thank you for your proposal submission"
                 emailTime="Today 10:15 AM"
@@ -3027,7 +3027,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventDate="June 15, 2025"
                   eventUrl={`https://${domain}/`}
                   comment="Your proposal showed great depth in security practices. While we couldn't include it this year due to similar topics already selected, we encourage you to submit for our next event."
-                  socialLinks={conference.social_links}
+                  socialLinks={conference.socialLinks}
                 />
               </ExpandableEmailTemplate>
             </div>
@@ -3050,7 +3050,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 description="Direct communication with speakers on their proposals, supporting both individual and multi-speaker conversations."
                 className="text-brand-cloud-blue"
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="All Speakers"
                 emailSubject="Collaboration guidelines for your presentation"
                 emailTime="Today 3:20 PM"
@@ -3060,7 +3060,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventLocation="Demo City, Sampleland"
                   eventDate="31st Demober 2099"
                   eventUrl={`https://${domain}/`}
-                  socialLinks={conference.social_links || []}
+                  socialLinks={conference.socialLinks || []}
                   customContent={{
                     heading: 'Collaboration guidelines for your presentation',
                     body: (
@@ -3327,7 +3327,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 description="Rich content broadcasts to all confirmed speakers with conference updates and announcements."
                 className="text-brand-fresh-green"
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="All Speakers"
                 emailSubject="Speaker Dinner & Conference Updates"
                 emailTime="Yesterday 9:00 AM"
@@ -3338,7 +3338,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventLocation="Sample City, Testlandia"
                   eventDate="32nd Mockuary 2099"
                   eventUrl={`https://${domain}/`}
-                  socialLinks={conference.social_links}
+                  socialLinks={conference.socialLinks}
                   content={
                     <div>
                       <div
@@ -3662,7 +3662,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 title="🎤 Co-Speaker Invitation Email"
                 description="Invites potential co-speakers to join presentations with clear next steps and secure token-based verification."
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="potential.cospeaker@example.com"
                 emailSubject='You&apos;ve been invited to co-present "Building Resilient Microservices"'
                 emailTime="Today 11:30 AM"
@@ -3679,7 +3679,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventUrl={`https://${domain}/`}
                   invitationUrl={`https://${domain}/invitation/abc123def456ghi789jkl012mno345pqr678stu901vwx234yz`}
                   expiresAt="August 13, 2025"
-                  socialLinks={conference.social_links || []}
+                  socialLinks={conference.socialLinks || []}
                 />
               </ExpandableEmailTemplate>
 
@@ -3688,7 +3688,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 title="✅ Co-Speaker Invitation Accepted"
                 description="Notifies the original speaker when their co-speaker invitation is accepted with next steps."
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="demo.speaker@example.com"
                 emailSubject="Co-speaker invitation accepted: Building Resilient Microservices"
                 emailTime="Today 2:15 PM"
@@ -3704,7 +3704,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventDate="June 15, 2025"
                   eventUrl={`https://${domain}/`}
                   accepted={true}
-                  socialLinks={conference.social_links || []}
+                  socialLinks={conference.socialLinks || []}
                 />
               </ExpandableEmailTemplate>
 
@@ -3713,7 +3713,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 title="❌ Co-Speaker Invitation Declined"
                 description="Professional notification when a co-speaker invitation is declined, maintaining positive relationships."
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="demo.speaker@example.com"
                 emailSubject="Co-speaker invitation declined: Building Resilient Microservices"
                 emailTime="Yesterday 4:45 PM"
@@ -3730,7 +3730,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventUrl={`https://${domain}/`}
                   accepted={false}
                   declineReason="Thank you for thinking of me! Unfortunately, I have a conflict with another commitment during that time period."
-                  socialLinks={conference.social_links || []}
+                  socialLinks={conference.socialLinks || []}
                 />
               </ExpandableEmailTemplate>
             </div>
@@ -3869,7 +3869,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 description="General audience communications with rich HTML content and unsubscribe management."
                 className="text-accent-purple"
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="Community Member"
                 emailSubject="Early Bird Tickets Now Available!"
                 emailTime="2 days ago 10:00 AM"
@@ -3878,7 +3878,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventName={conference.title}
                   subject="Early Bird Tickets Now Available!"
                   eventLocation={`${conference.city}, ${conference.country}`}
-                  eventDate={new Date(conference.start_date).toLocaleDateString(
+                  eventDate={new Date(conference.startDate).toLocaleDateString(
                     'en-US',
                     {
                       year: 'numeric',
@@ -3887,7 +3887,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                     },
                   )}
                   eventUrl={`https://${conference.domains[0]}`}
-                  socialLinks={conference.social_links || []}
+                  socialLinks={conference.socialLinks || []}
                   unsubscribeUrl="https://example.com/unsubscribe" // Example unsubscribe URL for demo
                   content={
                     <div>
@@ -3961,7 +3961,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                 description="Foundation template providing consistent structure, branding, and email client compatibility."
                 className="text-brand-slate-gray"
                 previewHeight={600}
-                emailFrom={conference.contact_email}
+                emailFrom={conference.contactEmail}
                 emailTo="recipient@example.com"
                 emailSubject={`Welcome to ${conference.title}`}
                 emailTime="1 week ago 3:15 PM"
@@ -3974,7 +3974,7 @@ async function CachedBrandingContent({ domain }: { domain: string }) {
                   eventLocation={`${conference.city}, ${conference.country}`}
                   eventDate="June 15, 2025"
                   eventUrl={`https://${domain}/`}
-                  socialLinks={conference.social_links || []}
+                  socialLinks={conference.socialLinks || []}
                 >
                   <p
                     style={{

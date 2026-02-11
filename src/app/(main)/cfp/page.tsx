@@ -40,19 +40,19 @@ async function CachedCFPContent({ domain }: { domain: string }) {
   const datesToRemember = [
     {
       name: 'CFP Close',
-      date: formatDate(conference.cfp_end_date),
+      date: formatDate(conference.cfpEndDate),
       icon: LockClosedIcon,
       bgColor: 'bg-pink-600',
     },
     {
       name: 'Speaker Notify',
-      date: formatDate(conference.cfp_notify_date),
+      date: formatDate(conference.cfpNotifyDate),
       icon: BellAlertIcon,
       bgColor: 'bg-purple-600',
     },
     {
       name: 'Program Final',
-      date: formatDate(conference.program_date),
+      date: formatDate(conference.programDate),
       icon: CalendarDaysIcon,
       bgColor: 'bg-yellow-500',
     },
@@ -271,11 +271,11 @@ async function CachedCFPContent({ domain }: { domain: string }) {
           })()}
         </div>
         <p>
-          The deadline for submissions is {formatDate(conference.cfp_end_date)},
+          The deadline for submissions is {formatDate(conference.cfpEndDate)},
           but <strong>we are reviewing proposals on a rolling basis</strong>, so
           we encourage you to submit early to increase your chances of being
           selected. We will review all remaining proposals and notify selected
-          speakers by {formatDate(conference.cfp_notify_date)}.
+          speakers by {formatDate(conference.cfpNotifyDate)}.
         </p>
       </div>
 

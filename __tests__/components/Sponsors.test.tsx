@@ -14,7 +14,7 @@ describe('Sponsors Sorting Logic', () => {
       tier: {
         title: 'Gold',
         tagline: 'Gold tier',
-        tier_type: 'standard',
+        tierType: 'standard',
         price: [{ _key: 'price1', amount: 50000, currency: 'NOK' }],
       },
     },
@@ -28,7 +28,7 @@ describe('Sponsors Sorting Logic', () => {
       tier: {
         title: 'Platinum',
         tagline: 'Platinum tier',
-        tier_type: 'standard',
+        tierType: 'standard',
         price: [{ _key: 'price2', amount: 100000, currency: 'NOK' }],
       },
     },
@@ -42,7 +42,7 @@ describe('Sponsors Sorting Logic', () => {
       tier: {
         title: 'Silver',
         tagline: 'Silver tier',
-        tier_type: 'standard',
+        tierType: 'standard',
         price: [{ _key: 'price3', amount: 25000, currency: 'NOK' }],
       },
     },
@@ -56,7 +56,7 @@ describe('Sponsors Sorting Logic', () => {
       tier: {
         title: 'Community',
         tagline: 'Community tier',
-        tier_type: 'special',
+        tierType: 'special',
       },
     },
   ]
@@ -66,7 +66,7 @@ describe('Sponsors Sorting Logic', () => {
     const groupedSponsors = mockSponsors.reduce(
       (acc, sponsor) => {
         const tierTitle =
-          sponsor.tier.tier_type === 'special' ? 'SPECIAL' : sponsor.tier.title
+          sponsor.tier.tierType === 'special' ? 'SPECIAL' : sponsor.tier.title
         if (!acc[tierTitle]) {
           acc[tierTitle] = []
         }
@@ -97,7 +97,7 @@ describe('Sponsors Sorting Logic', () => {
         tier: {
           title: 'Gold',
           tagline: 'Gold tier',
-          tier_type: 'standard',
+          tierType: 'standard',
           price: [{ _key: 'price1', amount: 30000, currency: 'NOK' }],
         },
       },
@@ -111,7 +111,7 @@ describe('Sponsors Sorting Logic', () => {
         tier: {
           title: 'Gold',
           tagline: 'Gold tier',
-          tier_type: 'standard',
+          tierType: 'standard',
           price: [{ _key: 'price2', amount: 60000, currency: 'NOK' }],
         },
       },
@@ -133,7 +133,7 @@ describe('Sponsors Sorting Logic', () => {
     const groupedSponsors = mockSponsors.reduce(
       (acc, sponsor) => {
         const tierTitle =
-          sponsor.tier.tier_type === 'special' ? 'SPECIAL' : sponsor.tier.title
+          sponsor.tier.tierType === 'special' ? 'SPECIAL' : sponsor.tier.title
         if (!acc[tierTitle]) {
           acc[tierTitle] = []
         }
@@ -184,7 +184,7 @@ describe('Sponsors Sorting Logic', () => {
       tier: {
         title: 'Bronze',
         tagline: 'Bronze tier',
-        tier_type: 'standard',
+        tierType: 'standard',
       },
     }
 
@@ -198,7 +198,7 @@ describe('Sponsors Sorting Logic', () => {
       tier: {
         title: 'Bronze',
         tagline: 'Bronze tier',
-        tier_type: 'standard',
+        tierType: 'standard',
         price: [{ _key: 'price1', amount: 10000, currency: 'NOK' }],
       },
     }

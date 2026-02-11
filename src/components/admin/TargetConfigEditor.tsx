@@ -41,10 +41,10 @@ export function TargetConfigEditor({
       ? currentConfig
       : {
           enabled: true,
-          sales_start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          salesStartDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0],
-          target_curve: 'late_push',
+          targetCurve: 'late_push',
           milestones: [],
         },
   )
@@ -52,12 +52,12 @@ export function TargetConfigEditor({
   const [editCapacity, setEditCapacity] = useState(capacity)
 
   const handleSave = async () => {
-    if (!config.sales_start_date) return
+    if (!config.salesStartDate) return
 
     updateSettings.mutate({
       conferenceId,
-      ticket_capacity: editCapacity,
-      ticket_targets: config,
+      ticketCapacity: editCapacity,
+      ticketTargets: config,
     })
   }
 
@@ -65,10 +65,10 @@ export function TargetConfigEditor({
     setConfig(
       currentConfig || {
         enabled: true,
-        sales_start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        salesStartDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
           .toISOString()
           .split('T')[0],
-        target_curve: 'late_push',
+        targetCurve: 'late_push',
         milestones: [],
       },
     )
@@ -89,7 +89,7 @@ export function TargetConfigEditor({
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Progress: {currentTicketsSold}/{capacity} tickets (
                 {Math.round((currentTicketsSold / capacity) * 100)}%) | Curve:{' '}
-                {getCurveMetadata(config.target_curve).name}
+                {getCurveMetadata(config.targetCurve).name}
                 {config.enabled ? ' | Tracking: ON' : ' | Tracking: OFF'}
               </p>
             </div>
@@ -135,9 +135,9 @@ export function TargetConfigEditor({
           </label>
           <input
             type="date"
-            value={config.sales_start_date}
+            value={config.salesStartDate}
             onChange={(e) =>
-              setConfig({ ...config, sales_start_date: e.target.value })
+              setConfig({ ...config, salesStartDate: e.target.value })
             }
             className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           />
@@ -148,8 +148,8 @@ export function TargetConfigEditor({
             Target Curve
           </label>
           <CurveSelectionGrid
-            selected={config.target_curve}
-            onSelect={(curve) => setConfig({ ...config, target_curve: curve })}
+            selected={config.targetCurve}
+            onSelect={(curve) => setConfig({ ...config, targetCurve: curve })}
             disabled={updateSettings.isPending}
           />
         </div>
@@ -179,7 +179,7 @@ export function TargetConfigEditor({
             onClick={handleSave}
             disabled={
               updateSettings.isPending ||
-              !config.sales_start_date ||
+              !config.salesStartDate ||
               editCapacity < 1
             }
             className="flex items-center gap-2"

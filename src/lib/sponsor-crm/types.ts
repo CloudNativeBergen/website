@@ -53,20 +53,20 @@ export interface SponsorForConference {
   tier?: {
     _ref: string
   }
-  contract_status: ContractStatus
+  contractStatus: ContractStatus
   status: SponsorStatus
-  assigned_to?: {
+  assignedTo?: {
     _ref: string
   }
-  contact_persons?: ContactPerson[]
+  contactPersons?: ContactPerson[]
   billing?: BillingInfo
-  contact_initiated_at?: string
-  contract_signed_at?: string
-  contract_value?: number
-  contract_currency: 'NOK' | 'USD' | 'EUR'
-  invoice_status: InvoiceStatus
-  invoice_sent_at?: string
-  invoice_paid_at?: string
+  contactInitiatedAt?: string
+  contractSignedAt?: string
+  contractValue?: number
+  contractCurrency: 'NOK' | 'USD' | 'EUR'
+  invoiceStatus: InvoiceStatus
+  invoiceSentAt?: string
+  invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
 }
@@ -80,8 +80,8 @@ export interface SponsorForConferenceExpanded {
     name: string
     website: string
     logo: string
-    logo_bright?: string
-    org_number?: string
+    logoBright?: string
+    orgNumber?: string
   }
   conference: {
     _id: string
@@ -91,7 +91,7 @@ export interface SponsorForConferenceExpanded {
     _id: string
     title: string
     tagline: string
-    tier_type: 'standard' | 'special'
+    tierType: 'standard' | 'special'
     price?: Array<{
       _key: string
       amount: number
@@ -101,31 +101,31 @@ export interface SponsorForConferenceExpanded {
   addons?: Array<{
     _id: string
     title: string
-    tier_type: 'addon'
+    tierType: 'addon'
     price?: Array<{
       _key: string
       amount: number
       currency: string
     }>
   }>
-  contract_status: ContractStatus
+  contractStatus: ContractStatus
   status: SponsorStatus
-  assigned_to?: {
+  assignedTo?: {
     _id: string
     name: string
     email: string
     image?: string
   }
-  contact_initiated_at?: string
-  contract_signed_at?: string
-  contract_value?: number
-  contract_currency: 'NOK' | 'USD' | 'EUR' | 'GBP'
-  invoice_status: InvoiceStatus
-  invoice_sent_at?: string
-  invoice_paid_at?: string
+  contactInitiatedAt?: string
+  contractSignedAt?: string
+  contractValue?: number
+  contractCurrency: 'NOK' | 'USD' | 'EUR' | 'GBP'
+  invoiceStatus: InvoiceStatus
+  invoiceSentAt?: string
+  invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
-  contact_persons?: ContactPerson[]
+  contactPersons?: ContactPerson[]
   billing?: BillingInfo
 }
 
@@ -133,28 +133,28 @@ export interface SponsorActivityExpanded {
   _id: string
   _createdAt: string
   _updatedAt: string
-  sponsor_for_conference: {
+  sponsorForConference: {
     _id: string
     sponsor: {
       _id: string
       name: string
     }
   }
-  activity_type: ActivityType
+  activityType: ActivityType
   description: string
   metadata?: {
-    old_value?: string
-    new_value?: string
+    oldValue?: string
+    newValue?: string
     timestamp?: string
-    additional_data?: string
+    additionalData?: string
   }
-  created_by: {
+  createdBy: {
     _id: string
     name: string
     email: string
     image?: string
   }
-  created_at: string
+  createdAt: string
 }
 
 export interface SponsorForConferenceInput {
@@ -162,34 +162,34 @@ export interface SponsorForConferenceInput {
   conference: string
   tier?: string
   addons?: string[]
-  contract_status: ContractStatus
+  contractStatus: ContractStatus
   status: SponsorStatus
-  assigned_to?: string | null
-  contact_persons?: ContactPerson[]
+  assignedTo?: string | null
+  contactPersons?: ContactPerson[]
   billing?: BillingInfo
-  contact_initiated_at?: string
-  contract_signed_at?: string
-  contract_value?: number
-  contract_currency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
-  invoice_status: InvoiceStatus
-  invoice_sent_at?: string
-  invoice_paid_at?: string
+  contactInitiatedAt?: string
+  contractSignedAt?: string
+  contractValue?: number
+  contractCurrency?: 'NOK' | 'USD' | 'EUR' | 'GBP'
+  invoiceStatus: InvoiceStatus
+  invoiceSentAt?: string
+  invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
 }
 
 export interface SponsorActivityInput {
-  sponsor_for_conference: string
-  activity_type: ActivityType
+  sponsorForConference: string
+  activityType: ActivityType
   description: string
   metadata?: {
-    old_value?: string
-    new_value?: string
+    oldValue?: string
+    newValue?: string
     timestamp?: string
-    additional_data?: string
+    additionalData?: string
   }
-  created_by: string
-  created_at?: string
+  createdBy: string
+  createdAt?: string
 }
 
 export interface CopySponsorsParams {

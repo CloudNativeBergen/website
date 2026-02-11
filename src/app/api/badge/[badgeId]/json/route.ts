@@ -30,8 +30,8 @@ export async function GET(
       })
     }
 
-    if (isJWTFormat(badge.badge_json)) {
-      return new NextResponse(badge.badge_json, {
+    if (isJWTFormat(badge.badgeJson)) {
+      return new NextResponse(badge.badgeJson, {
         status: 200,
         headers: {
           'Content-Type': 'text/plain',
@@ -44,7 +44,7 @@ export async function GET(
 
     // Legacy: Parse and return JSON (Data Integrity Proof format)
     try {
-      const assertion = JSON.parse(badge.badge_json)
+      const assertion = JSON.parse(badge.badgeJson)
       return new NextResponse(JSON.stringify(assertion, null, 2), {
         status: 200,
         headers: {

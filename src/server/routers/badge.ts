@@ -84,7 +84,7 @@ export const badgeRouter = router({
           }
         }
 
-        if (input.badgeType === 'organizer' && !speaker.is_organizer) {
+        if (input.badgeType === 'organizer' && !speaker.isOrganizer) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: `Cannot issue organizer badge to ${speaker.name}: only organizers are eligible for organizer badges.`,
@@ -127,12 +127,12 @@ export const badgeRouter = router({
           })
         }
 
-        const conferenceYear = conference.start_date
-          ? new Date(conference.start_date).getFullYear().toString()
+        const conferenceYear = conference.startDate
+          ? new Date(conference.startDate).getFullYear().toString()
           : new Date().getFullYear().toString()
 
-        const conferenceDate = conference.start_date
-          ? formatConferenceDateForBadge(conference.start_date)
+        const conferenceDate = conference.startDate
+          ? formatConferenceDateForBadge(conference.startDate)
           : 'TBD'
 
         // Create badge configuration with keys and URLs
@@ -302,7 +302,7 @@ export const badgeRouter = router({
             continue
           }
 
-          if (input.badgeType === 'organizer' && !speaker.is_organizer) {
+          if (input.badgeType === 'organizer' && !speaker.isOrganizer) {
             results.push({
               speakerId,
               success: false,
@@ -355,12 +355,12 @@ export const badgeRouter = router({
             continue
           }
 
-          const conferenceYear = conference.start_date
-            ? new Date(conference.start_date).getFullYear().toString()
+          const conferenceYear = conference.startDate
+            ? new Date(conference.startDate).getFullYear().toString()
             : new Date().getFullYear().toString()
 
-          const conferenceDate = conference.start_date
-            ? formatConferenceDateForBadge(conference.start_date)
+          const conferenceDate = conference.startDate
+            ? formatConferenceDateForBadge(conference.startDate)
             : 'TBD'
 
           // Create badge configuration with keys and URLs
@@ -623,7 +623,7 @@ export const badgeRouter = router({
           speakerEmail: speakerData.email,
           speakerName: speakerData.name,
           conferenceName: conferenceData.title,
-          conferenceYear: new Date(conferenceData.start_date)
+          conferenceYear: new Date(conferenceData.startDate)
             .getFullYear()
             .toString(),
           conference: conferenceData,
@@ -666,7 +666,7 @@ export const badgeRouter = router({
       }
 
       let badgeAssertion
-      if (isJWTFormat(badge.badge_json)) {
+      if (isJWTFormat(badge.badgeJson)) {
         // Decode JWT to get credential
         const { verifyCredentialJWT } = await import('@/lib/openbadges')
         const publicKeyHex = process.env.BADGE_ISSUER_PUBLIC_KEY
@@ -679,7 +679,7 @@ export const badgeRouter = router({
 
         try {
           badgeAssertion = await verifyCredentialJWT(
-            badge.badge_json,
+            badge.badgeJson,
             publicKeyHex,
           )
           // JWT verification succeeded
@@ -699,7 +699,7 @@ export const badgeRouter = router({
         }
       } else {
         // Legacy: Parse JSON (Data Integrity Proof format)
-        badgeAssertion = JSON.parse(badge.badge_json)
+        badgeAssertion = JSON.parse(badge.badgeJson)
 
         const { verifyCredential } = await import('@/lib/openbadges')
         let signatureValid = false

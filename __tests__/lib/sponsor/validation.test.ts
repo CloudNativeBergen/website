@@ -6,9 +6,9 @@ describe('validateSponsorTier', () => {
   const baseTier: SponsorTierInput = {
     title: 'Test Tier',
     tagline: 'Test Tagline',
-    tier_type: 'standard',
-    sold_out: false,
-    most_popular: false,
+    tierType: 'standard',
+    soldOut: false,
+    mostPopular: false,
     price: [{ amount: 1000, currency: 'NOK' }],
     perks: [{ label: 'Perk', description: 'Desc' }],
   }
@@ -35,7 +35,7 @@ describe('validateSponsorTier', () => {
   describe('Addon Tier', () => {
     const addonTier: SponsorTierInput = {
       ...baseTier,
-      tier_type: 'addon',
+      tierType: 'addon',
     }
 
     it('passes with valid data', () => {
@@ -68,7 +68,7 @@ describe('validateSponsorTier', () => {
   describe('Special Tier', () => {
     const specialTier: SponsorTierInput = {
       ...baseTier,
-      tier_type: 'special',
+      tierType: 'special',
       price: [],
       perks: [],
     }

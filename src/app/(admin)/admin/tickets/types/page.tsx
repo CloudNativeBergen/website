@@ -46,12 +46,12 @@ export default async function TicketTypesAdminPage() {
 
   if (
     conferenceError ||
-    !conference.checkin_customer_id ||
-    !conference.checkin_event_id
+    !conference.checkinCustomerId ||
+    !conference.checkinEventId
   ) {
     const missingFields = []
-    if (!conference.checkin_customer_id) missingFields.push('Customer ID')
-    if (!conference.checkin_event_id) missingFields.push('Event ID')
+    if (!conference.checkinCustomerId) missingFields.push('Customer ID')
+    if (!conference.checkinEventId) missingFields.push('Event ID')
 
     return (
       <ErrorDisplay
@@ -70,7 +70,7 @@ export default async function TicketTypesAdminPage() {
   let error: string | null = null
 
   try {
-    const data = await fetchTicketTypesFromCheckin(conference.checkin_event_id)
+    const data = await fetchTicketTypesFromCheckin(conference.checkinEventId)
     tickets = data.tickets.sort((a, b) => a.position - b.position)
   } catch (err) {
     error = (err as Error).message

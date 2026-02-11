@@ -18,36 +18,36 @@ export function ProposalGuidanceSidebar({
           Important Dates
         </h3>
         <dl className="mt-2 space-y-2 text-sm">
-          {conference.cfp_end_date && (
+          {conference.cfpEndDate && (
             <div>
               <dt className="font-medium text-gray-900 dark:text-white">
                 CFP Closes
               </dt>
               <dd className="text-gray-700 dark:text-gray-300">
-                {formatConferenceDateLong(conference.cfp_end_date)}
+                {formatConferenceDateLong(conference.cfpEndDate)}
               </dd>
             </div>
           )}
-          {conference.cfp_notify_date && (
+          {conference.cfpNotifyDate && (
             <div>
               <dt className="font-medium text-gray-900 dark:text-white">
                 Notifications
               </dt>
               <dd className="text-gray-700 dark:text-gray-300">
-                {formatConferenceDateLong(conference.cfp_notify_date)}
+                {formatConferenceDateLong(conference.cfpNotifyDate)}
               </dd>
             </div>
           )}
-          {conference.start_date && (
+          {conference.startDate && (
             <div>
               <dt className="font-medium text-gray-900 dark:text-white">
                 Conference
               </dt>
               <dd className="text-gray-700 dark:text-gray-300">
-                {formatConferenceDateLong(conference.start_date)}
-                {conference.end_date &&
-                  conference.end_date !== conference.start_date &&
-                  ` - ${formatConferenceDateLong(conference.end_date)}`}
+                {formatConferenceDateLong(conference.startDate)}
+                {conference.endDate &&
+                  conference.endDate !== conference.startDate &&
+                  ` - ${formatConferenceDateLong(conference.endDate)}`}
               </dd>
             </div>
           )}
@@ -128,7 +128,7 @@ export function ProposalGuidanceSidebar({
         </div>
       </div>
 
-      {conference.cfp_email && (
+      {conference.cfpEmail && (
         <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
             Need Help?
@@ -136,10 +136,10 @@ export function ProposalGuidanceSidebar({
           <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
             Have questions about your proposal? Reach out to our CFP team at{' '}
             <a
-              href={`mailto:${conference.cfp_email}`}
+              href={`mailto:${conference.cfpEmail}`}
               className="text-brand-cloud-blue hover:underline dark:text-blue-400"
             >
-              {conference.cfp_email}
+              {conference.cfpEmail}
             </a>
           </p>
         </div>

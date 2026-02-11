@@ -247,7 +247,7 @@ export function BadgeManagementClient({
         typeof badge.speaker === 'object' &&
         '_id' in badge.speaker &&
         badge.speaker._id === speakerId &&
-        badge.badge_type === badgeType,
+        badge.badgeType === badgeType,
     )
   }
 
@@ -259,7 +259,7 @@ export function BadgeManagementClient({
           typeof badge.speaker === 'object' &&
           '_id' in badge.speaker &&
           badge.speaker._id === speakerId &&
-          badge.badge_type === badgeType,
+          badge.badgeType === badgeType,
       ) || null
     )
   }
@@ -267,11 +267,11 @@ export function BadgeManagementClient({
   const eligibleSpeakers = useMemo(() => {
     let filtered = initialSpeakers.filter((speaker: SpeakerWithProposals) => {
       if (badgeType === 'organizer') {
-        return speaker.is_organizer === true
+        return speaker.isOrganizer === true
       } else {
         return (
-          !speaker.is_organizer ||
-          (speaker.is_organizer &&
+          !speaker.isOrganizer ||
+          (speaker.isOrganizer &&
             speaker.proposals &&
             speaker.proposals.length > 0)
         )
@@ -296,7 +296,7 @@ export function BadgeManagementClient({
             typeof badge.speaker === 'object' &&
             '_id' in badge.speaker &&
             badge.speaker._id === speaker._id &&
-            badge.badge_type === badgeType,
+            badge.badgeType === badgeType,
         )
       })
     }
@@ -616,7 +616,7 @@ export function BadgeManagementClient({
                       const hasBadge = hasExistingBadge(speaker._id)
                       const badge = getBadgeForSpeaker(speaker._id)
                       const hasEmailError =
-                        badge && !badge.email_sent && badge.email_error
+                        badge && !badge.emailSent && badge.emailError
 
                       return (
                         <tr
@@ -688,12 +688,12 @@ export function BadgeManagementClient({
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
                                   {new Date(
-                                    badge.issued_at,
+                                    badge.issuedAt,
                                   ).toLocaleDateString()}
                                 </div>
-                                {hasEmailError && badge.email_error && (
+                                {hasEmailError && badge.emailError && (
                                   <div className="text-xs text-red-600 dark:text-red-400">
-                                    {badge.email_error}
+                                    {badge.emailError}
                                   </div>
                                 )}
                               </div>
@@ -715,7 +715,7 @@ export function BadgeManagementClient({
                                 <ActionMenuItem
                                   onClick={() =>
                                     handleCopyBadgeUrl(
-                                      badge.badge_id,
+                                      badge.badgeId,
                                       speaker.name,
                                     )
                                   }
@@ -726,7 +726,7 @@ export function BadgeManagementClient({
                                 <ActionMenuItem
                                   onClick={() => {}}
                                   icon={ArrowDownTrayIcon}
-                                  href={`/api/badge/${badge.badge_id}/download`}
+                                  href={`/api/badge/${badge.badgeId}/download`}
                                   download
                                 >
                                   Download
@@ -737,7 +737,7 @@ export function BadgeManagementClient({
                                     <ActionMenuItem
                                       onClick={() =>
                                         handleDeleteBadge(
-                                          badge.badge_id,
+                                          badge.badgeId,
                                           speaker.name,
                                         )
                                       }

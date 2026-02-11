@@ -94,8 +94,8 @@ describe('Bulk Sponsor CRM Operations', () => {
       await bulkUpdateSponsors(
         {
           ids: ['s1'],
-          add_tags: ['high-priority'],
-          remove_tags: ['warm-lead'],
+          addTags: ['high-priority'],
+          removeTags: ['warm-lead'],
         },
         mockUserId,
       )

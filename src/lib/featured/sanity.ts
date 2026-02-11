@@ -22,7 +22,7 @@ export async function getFeaturedSpeakers(
 ): Promise<{ speakers: FeaturedSpeaker[]; error: Error | null }> {
   try {
     const speakers = await clientWrite.fetch(
-      `*[_type == "conference" && _id == $conferenceId][0].featured_speakers[]->{
+      `*[_type == "conference" && _id == $conferenceId][0].featuredSpeakers[]->{
         _id,
         name,
         title,
@@ -58,7 +58,7 @@ export async function getFeaturedTalks(
 ): Promise<{ talks: FeaturedTalk[]; error: Error | null }> {
   try {
     const talks = await clientWrite.fetch(
-      `*[_type == "conference" && _id == $conferenceId][0].featured_talks[]->{
+      `*[_type == "conference" && _id == $conferenceId][0].featuredTalks[]->{
         _id,
         title,
         description,
@@ -95,7 +95,7 @@ export async function addFeaturedSpeaker(
   try {
     await clientWrite
       .patch(conferenceId)
-      .setIfMissing({ featured_speakers: [] })
+      .setIfMissing({ featuredSpeakers: [] })
       .append('featured_speakers', [{ _type: 'reference', _ref: speakerId }])
       .commit()
 
@@ -119,7 +119,7 @@ export async function removeFeaturedSpeaker(
 
     await clientWrite
       .patch(conferenceId)
-      .set({ featured_speakers: updatedSpeakers })
+      .set({ featuredSpeakers: updatedSpeakers })
       .commit()
 
     return { success: true, error: null }
@@ -135,7 +135,7 @@ export async function addFeaturedTalk(
   try {
     await clientWrite
       .patch(conferenceId)
-      .setIfMissing({ featured_talks: [] })
+      .setIfMissing({ featuredTalks: [] })
       .append('featured_talks', [{ _type: 'reference', _ref: talkId }])
       .commit()
 
@@ -158,7 +158,7 @@ export async function removeFeaturedTalk(
 
     await clientWrite
       .patch(conferenceId)
-      .set({ featured_talks: updatedTalks })
+      .set({ featuredTalks: updatedTalks })
       .commit()
 
     return { success: true, error: null }
@@ -173,8 +173,8 @@ export async function getFeaturedContentSummary(
   try {
     const result = await clientWrite.fetch(
       `{
-        "featuredSpeakersCount": count(*[_type == "conference" && _id == $conferenceId][0].featured_speakers),
-        "featuredTalksCount": count(*[_type == "conference" && _id == $conferenceId][0].featured_talks),
+        "featuredSpeakersCount": count(*[_type == "conference" && _id == $conferenceId][0].featuredSpeakers),
+        "featuredTalksCount": count(*[_type == "conference" && _id == $conferenceId][0].featuredTalks),
         "availableSpeakersCount": count(*[_type == "speaker" && count(*[_type == "talk" && references(^._id) && conference._ref == $conferenceId && status in ["confirmed", "accepted"]]) > 0]),
         "availableTalksCount": count(*[_type == "talk" && conference._ref == $conferenceId && status in ["confirmed", "accepted"]])
       }`,

@@ -36,12 +36,12 @@ interface SponsorBulkActionsProps {
 
 interface BulkUpdateParams {
   status?: SponsorStatus
-  contract_status?: ContractStatus
-  invoice_status?: InvoiceStatus
-  assigned_to?: string | null
+  contractStatus?: ContractStatus
+  invoiceStatus?: InvoiceStatus
+  assignedTo?: string | null
   tags?: SponsorTag[]
-  add_tags?: SponsorTag[]
-  remove_tags?: SponsorTag[]
+  addTags?: SponsorTag[]
+  removeTags?: SponsorTag[]
 }
 
 export function SponsorBulkActions({
@@ -210,7 +210,7 @@ export function SponsorBulkActions({
                 <MenuItem>
                   {({ focus }) => (
                     <button
-                      onClick={() => handleUpdate({ assigned_to: null })}
+                      onClick={() => handleUpdate({ assignedTo: null })}
                       className={clsx(
                         'flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300',
                         focus && 'bg-gray-100 dark:bg-gray-700',
@@ -225,7 +225,7 @@ export function SponsorBulkActions({
                   <MenuItem key={org._id}>
                     {({ focus }) => (
                       <button
-                        onClick={() => handleUpdate({ assigned_to: org._id })}
+                        onClick={() => handleUpdate({ assignedTo: org._id })}
                         className={clsx(
                           'flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300',
                           focus && 'bg-gray-100 dark:bg-gray-700',
@@ -266,7 +266,7 @@ export function SponsorBulkActions({
                   <MenuItem key={tag.value}>
                     {({ focus }) => (
                       <button
-                        onClick={() => handleUpdate({ add_tags: [tag.value] })}
+                        onClick={() => handleUpdate({ addTags: [tag.value] })}
                         className={clsx(
                           'flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300',
                           focus && 'bg-gray-100 dark:bg-gray-700',

@@ -85,8 +85,8 @@ async function CachedProgramContent({ domain }: { domain: string }) {
         <ProgramClient
           schedules={conference.schedules}
           conferenceTopics={conference.topics || []}
-          conferenceStartDate={conference.start_date}
-          conferenceEndDate={conference.end_date}
+          conferenceStartDate={conference.startDate}
+          conferenceEndDate={conference.endDate}
         />
 
         <div className="print:hidden">

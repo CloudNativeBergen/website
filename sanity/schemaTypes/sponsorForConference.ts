@@ -62,7 +62,7 @@ export default defineType({
 
               return {
                 filter:
-                  'conference._ref == $conferenceId && tier_type == "addon"',
+                  'conference._ref == $conferenceId && tierType == "addon"',
                 params: { conferenceId: document.conference._ref },
               }
             },
@@ -71,7 +71,7 @@ export default defineType({
       ],
     }),
     defineField({
-      name: 'contract_status',
+      name: 'contractStatus',
       title: 'Contract Status',
       type: 'string',
       options: {
@@ -104,7 +104,7 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'assigned_to',
+      name: 'assignedTo',
       title: 'Assigned To',
       type: 'reference',
       to: [{ type: 'speaker' }],
@@ -113,7 +113,7 @@ export default defineType({
         filter: ({ document }: { document: any }) => {
           if (!document?.conference?._ref) {
             return {
-              filter: 'is_organizer == true',
+              filter: 'isOrganizer == true',
             }
           }
 
@@ -126,26 +126,26 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'contact_initiated_at',
+      name: 'contactInitiatedAt',
       title: 'Contact Initiated Date',
       type: 'datetime',
       description: 'When first contact was made with this sponsor',
     }),
     defineField({
-      name: 'contract_signed_at',
+      name: 'contractSignedAt',
       title: 'Contract Signed Date',
       type: 'datetime',
       description: 'When the sponsorship contract was signed',
     }),
     defineField({
-      name: 'contract_value',
+      name: 'contractValue',
       title: 'Contract Value',
       type: 'number',
       description: 'Actual contract value (defaults to tier price)',
       validation: (Rule) => Rule.min(0),
     }),
     defineField({
-      name: 'contract_currency',
+      name: 'contractCurrency',
       title: 'Contract Currency',
       type: 'string',
       options: {
@@ -159,7 +159,7 @@ export default defineType({
       initialValue: 'NOK',
     }),
     defineField({
-      name: 'invoice_status',
+      name: 'invoiceStatus',
       title: 'Invoice Status',
       type: 'string',
       options: {
@@ -176,14 +176,14 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'invoice_sent_at',
+      name: 'invoiceSentAt',
       title: 'Invoice Sent Date',
       type: 'datetime',
       description: 'When the invoice was sent (auto-populated)',
       readOnly: true,
     }),
     defineField({
-      name: 'invoice_paid_at',
+      name: 'invoicePaidAt',
       title: 'Invoice Paid Date',
       type: 'datetime',
       description: 'When the invoice was paid (auto-populated)',
@@ -219,7 +219,7 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'contact_persons',
+      name: 'contactPersons',
       title: 'Contact Persons',
       type: 'array',
       of: [
@@ -260,7 +260,7 @@ export default defineType({
               },
             },
             {
-              name: 'is_primary',
+              name: 'isPrimary',
               title: 'Primary Contact',
               type: 'boolean',
               description:

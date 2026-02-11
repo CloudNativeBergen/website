@@ -172,14 +172,14 @@ export function SponsorManagement() {
                     <div className="text-right">
                       <span
                         className={`inline-block rounded px-2 py-1 text-xs ${
-                          tier.tier_type === 'special'
+                          tier.tierType === 'special'
                             ? 'bg-purple-100 text-purple-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {tier.tier_type}
+                        {tier.tierType}
                       </span>
-                      {tier.sold_out && (
+                      {tier.soldOut && (
                         <div className="mt-1 text-xs text-red-600">
                           Sold Out
                         </div>

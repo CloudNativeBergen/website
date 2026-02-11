@@ -126,7 +126,7 @@ export async function createBadgeConfiguration(
 
   // Build issuer configuration
   const issuerEmail =
-    conference.contact_email ||
+    conference.contactEmail ||
     (conference.domains?.[0]
       ? `contact@${conference.domains[0]}`
       : 'contact@cloudnativedays.no')

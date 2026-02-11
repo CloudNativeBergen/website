@@ -50,7 +50,7 @@ export async function generateMetadata({
 
   const speakerName = speaker?.name || 'Speaker'
   const conferenceName = conference?.title || 'Cloud Native Days'
-  const badgeTypeName = badge.badge_type === 'speaker' ? 'Speaker' : 'Organizer'
+  const badgeTypeName = badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
   const title = `${badgeTypeName} Badge - ${speakerName}`
   const description = `Verified ${badgeTypeName} Badge for ${speakerName} at ${conferenceName}. OpenBadges 3.0 compliant digital credential.`
 

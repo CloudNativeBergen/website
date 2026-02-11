@@ -34,7 +34,7 @@ export async function GET(
     }
 
     let badgeAssertion
-    if (isJWTFormat(badge.badge_json)) {
+    if (isJWTFormat(badge.badgeJson)) {
       const publicKey = process.env.BADGE_ISSUER_RSA_PUBLIC_KEY
 
       if (!publicKey) {
@@ -45,7 +45,7 @@ export async function GET(
       }
 
       try {
-        badgeAssertion = await verifyCredentialJWT(badge.badge_json, publicKey)
+        badgeAssertion = await verifyCredentialJWT(badge.badgeJson, publicKey)
       } catch {
         return NextResponse.json(generateErrorResponse('Invalid JWT', 500), {
           status: 500,
@@ -54,7 +54,7 @@ export async function GET(
     } else {
       // Parse JSON (legacy Data Integrity Proof format)
       try {
-        badgeAssertion = JSON.parse(badge.badge_json)
+        badgeAssertion = JSON.parse(badge.badgeJson)
       } catch {
         return NextResponse.json(
           generateErrorResponse('Invalid badge JSON', 500),

@@ -15,7 +15,7 @@ async function sendSlackNotification(
 ) {
   try {
     await postSlackMessage(message, {
-      channel: conference.cfp_notification_channel,
+      channel: conference.cfpNotificationChannel,
     })
   } catch (error) {
     console.error('Error sending Slack notification:', error)

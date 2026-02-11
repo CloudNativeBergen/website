@@ -4,23 +4,23 @@ export const SalesMilestoneSchema = z.object({
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-  target_percentage: z.number().min(0).max(100),
+  targetPercentage: z.number().min(0).max(100),
   label: z.string(),
 })
 
 export const SalesTargetConfigSchema = z.object({
   enabled: z.boolean(),
-  sales_start_date: z
+  salesStartDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-  target_curve: z.enum(['linear', 'early_push', 'late_push', 's_curve']),
+  targetCurve: z.enum(['linear', 'early_push', 'late_push', 's_curve']),
   milestones: z.array(SalesMilestoneSchema),
 })
 
 export const TicketSettingsUpdateSchema = z.object({
   conferenceId: z.string().min(1, 'Conference ID is required'),
-  ticket_capacity: z.number().min(1, 'Capacity must be at least 1').optional(),
-  ticket_targets: SalesTargetConfigSchema.optional(),
+  ticketCapacity: z.number().min(1, 'Capacity must be at least 1').optional(),
+  ticketTargets: SalesTargetConfigSchema.optional(),
 })
 
 export const ConferenceIdSchema = z.object({
@@ -28,11 +28,11 @@ export const ConferenceIdSchema = z.object({
 })
 
 export const TicketCustomizationSchema = z.object({
-  hero_headline: z.string().optional(),
-  hero_subheadline: z.string().optional(),
-  show_vanity_metrics: z.boolean().optional(),
-  group_discount_info: z.string().optional(),
-  cta_button_text: z.string().optional(),
+  heroHeadline: z.string().optional(),
+  heroSubheadline: z.string().optional(),
+  showVanityMetrics: z.boolean().optional(),
+  groupDiscountInfo: z.string().optional(),
+  ctaButtonText: z.string().optional(),
 })
 
 export const TicketInclusionSchema = z.object({
@@ -50,9 +50,9 @@ export const TicketFaqSchema = z.object({
 
 export const UpdateTicketPageContentSchema = z.object({
   conferenceId: z.string().min(1, 'Conference ID is required'),
-  ticket_customization: TicketCustomizationSchema.optional(),
-  ticket_inclusions: z.array(TicketInclusionSchema).optional(),
-  ticket_faqs: z.array(TicketFaqSchema).optional(),
+  ticketCustomization: TicketCustomizationSchema.optional(),
+  ticketInclusions: z.array(TicketInclusionSchema).optional(),
+  ticketFaqs: z.array(TicketFaqSchema).optional(),
 })
 
 export const CreateDiscountCodeSchema = z.object({

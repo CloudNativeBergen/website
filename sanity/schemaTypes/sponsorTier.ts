@@ -18,7 +18,7 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'tier_type',
+      name: 'tierType',
       title: 'Tier Type',
       type: 'string',
       options: {
@@ -67,13 +67,13 @@ export default defineType({
       },
       validation: (Rule) =>
         Rule.custom((price, context) => {
-          const tierType = context.document?.tier_type
+          const tierType = context.document?.tierType
           if (tierType === 'standard' && (!price || price.length === 0)) {
             return 'Price is required for standard sponsor tiers'
           }
           return true
         }),
-      hidden: ({ document }) => document?.tier_type === 'special',
+      hidden: ({ document }) => document?.tierType === 'special',
     }),
     defineField({
       name: 'perks',
@@ -100,7 +100,7 @@ export default defineType({
       },
       validation: (Rule) =>
         Rule.custom((perks, context) => {
-          const tierType = context.document?.tier_type
+          const tierType = context.document?.tierType
           if (tierType === 'standard' && (!perks || perks.length === 0)) {
             return 'Perks are required for standard sponsor tiers'
           }
@@ -108,7 +108,7 @@ export default defineType({
         }),
     }),
     defineField({
-      name: 'max_quantity',
+      name: 'maxQuantity',
       title: 'Max Quantity',
       type: 'number',
       description:
@@ -123,7 +123,7 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
-      name: 'sold_out',
+      name: 'soldOut',
       title: 'Sold Out',
       type: 'boolean',
       initialValue: false,
@@ -133,7 +133,7 @@ export default defineType({
       },
     }),
     defineField({
-      name: 'most_popular',
+      name: 'mostPopular',
       title: 'Most Popular',
       type: 'boolean',
       initialValue: false,
@@ -146,7 +146,7 @@ export default defineType({
   preview: {
     select: {
       title: 'title',
-      tierType: 'tier_type',
+      tierType: 'tierType',
       price: 'price.0.amount',
       currency: 'price.0.currency',
       subtitle: 'conference.title',
@@ -165,7 +165,7 @@ export default defineType({
       title: 'Type and Title',
       name: 'typeAndTitle',
       by: [
-        { field: 'tier_type', direction: 'asc' },
+        { field: 'tierType', direction: 'asc' },
         { field: 'title', direction: 'asc' },
       ],
     },

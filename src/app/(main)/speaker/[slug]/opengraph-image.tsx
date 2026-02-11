@@ -245,8 +245,8 @@ export default async function Image({
 
   const conferenceData = {
     title: conference?.title || 'Cloud Native Days Norway',
-    startDate: conference?.start_date,
-    endDate: conference?.end_date,
+    startDate: conference?.startDate,
+    endDate: conference?.endDate,
     city: conference?.city,
     country: conference?.country,
     sponsors: (conference?.sponsors || []) as ConferenceSponsor[],
@@ -393,7 +393,7 @@ export default async function Image({
                 >
                   {renderSponsorLogo(
                     sponsor?.sponsor?.logo || null,
-                    sponsor?.sponsor?.logo_bright || null,
+                    sponsor?.sponsor?.logoBright || null,
                     sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
                     'small',
                   )}
@@ -596,7 +596,7 @@ export default async function Image({
                 >
                   {renderSponsorLogo(
                     sponsor?.sponsor?.logo || null,
-                    sponsor?.sponsor?.logo_bright || null,
+                    sponsor?.sponsor?.logoBright || null,
                     sponsor?.sponsor?.name || `Sponsor ${index + 1}`,
                     'small',
                   )}

@@ -86,21 +86,21 @@ function calculateMetrics(
   )
 
   const totalRevenueNOK = closedWon.reduce((sum, sponsor) => {
-    if (!sponsor.contract_value) return sum
+    if (!sponsor.contractValue) return sum
     const valueInNOK = convertCurrency(
-      sponsor.contract_value,
-      sponsor.contract_currency,
+      sponsor.contractValue,
+      sponsor.contractCurrency,
       'NOK',
     )
     return sum + valueInNOK
   }, 0)
 
-  const paidInvoices = closedWon.filter((s) => s.invoice_status === 'paid')
+  const paidInvoices = closedWon.filter((s) => s.invoiceStatus === 'paid')
   const paidRevenueNOK = paidInvoices.reduce((sum, sponsor) => {
-    if (!sponsor.contract_value) return sum
+    if (!sponsor.contractValue) return sum
     const valueInNOK = convertCurrency(
-      sponsor.contract_value,
-      sponsor.contract_currency,
+      sponsor.contractValue,
+      sponsor.contractCurrency,
       'NOK',
     )
     return sum + valueInNOK
@@ -118,7 +118,7 @@ function calculateMetrics(
   })
 
   const overdueInvoices = closedWon.filter(
-    (s) => s.invoice_status === 'overdue',
+    (s) => s.invoiceStatus === 'overdue',
   ).length
 
   return {

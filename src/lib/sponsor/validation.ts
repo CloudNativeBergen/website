@@ -29,8 +29,8 @@ export function validateSponsorTier(
   }
 
   if (
-    !data.tier_type ||
-    !['standard', 'special', 'addon'].includes(data.tier_type)
+    !data.tierType ||
+    !['standard', 'special', 'addon'].includes(data.tierType)
   ) {
     errors.push({
       field: 'tier_type',
@@ -38,7 +38,7 @@ export function validateSponsorTier(
     })
   }
 
-  if (data.tier_type === 'standard' || data.tier_type === 'addon') {
+  if (data.tierType === 'standard' || data.tierType === 'addon') {
     if (!data.price || data.price.length === 0) {
       errors.push({
         field: 'price',
@@ -69,7 +69,7 @@ export function validateSponsorTier(
     }
   }
 
-  if (data.tier_type === 'standard') {
+  if (data.tierType === 'standard') {
     if (!data.perks || data.perks.length === 0) {
       errors.push({
         field: 'perks',

@@ -274,14 +274,14 @@ Each conference can have:
 
 - **Custom domains:** `conference.domains[]`
 - **Organization name:** `conference.organizer`
-- **Contact email:** `conference.contact_email`
+- **Contact email:** `conference.contactEmail`
 - **Branding:** Conference-specific badge designs
 
 ### Dynamic Email Configuration
 
 Badges are sent from conference-specific addresses:
 
-- Format: `{organizer} <{contact_email}>`
+- Format: `{organizer} <{contactEmail}>`
 - Fallback: `{organizer} <noreply@{domain}>`
 - Default: `noreply@cloudnativedays.no`
 

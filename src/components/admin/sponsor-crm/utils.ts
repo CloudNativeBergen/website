@@ -153,9 +153,9 @@ export function calculateSponsorValue(sponsor: SponsorForConferenceExpanded): {
   let value = 0
   let currency = 'NOK'
 
-  if (sponsor.contract_value) {
-    value = sponsor.contract_value
-    currency = sponsor.contract_currency || 'NOK'
+  if (sponsor.contractValue) {
+    value = sponsor.contractValue
+    currency = sponsor.contractCurrency || 'NOK'
   } else if (sponsor.tier?.price?.[0]?.amount) {
     value = sponsor.tier.price[0].amount
     currency = sponsor.tier.price[0].currency || 'NOK'

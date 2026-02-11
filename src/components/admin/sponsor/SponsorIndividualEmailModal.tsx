@@ -23,11 +23,11 @@ interface SponsorIndividualEmailModalProps {
     title: string
     city: string
     country: string
-    start_date: string
+    startDate: string
     organizer?: string
     domains: string[]
-    social_links?: string[]
-    prospectus_url?: string
+    socialLinks?: string[]
+    prospectusUrl?: string
   }
 }
 
@@ -44,7 +44,7 @@ export function SponsorIndividualEmailModal({
   const { showNotification } = useNotification()
   const [initialMessage, setInitialMessage] = useState<PortableTextBlock[]>([])
 
-  const contacts = sponsorForConference.contact_persons || []
+  const contacts = sponsorForConference.contactPersons || []
 
   useEffect(() => {
     if (isOpen) {
@@ -57,8 +57,8 @@ export function SponsorIndividualEmailModal({
 
   const getDefaultSubject = () => {
     const status = sponsorForConference.status
-    const contractStatus = sponsorForConference.contract_status
-    const invoiceStatus = sponsorForConference.invoice_status
+    const contractStatus = sponsorForConference.contractStatus
+    const invoiceStatus = sponsorForConference.invoiceStatus
     const title = conference.title
 
     // Priority for transactional states if closed-won
@@ -151,9 +151,9 @@ export function SponsorIndividualEmailModal({
         subject={subject}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
-        eventDate={formatConferenceDateLong(conference.start_date)}
+        eventDate={formatConferenceDateLong(conference.startDate)}
         eventUrl={`https://${conference.domains[0]}`}
-        socialLinks={conference.social_links || []}
+        socialLinks={conference.socialLinks || []}
         content={<div dangerouslySetInnerHTML={{ __html: messageHTML }} />}
       />
     )
@@ -206,8 +206,8 @@ export function SponsorIndividualEmailModal({
           crmContext={{
             tags: sponsorForConference.tags,
             status: sponsorForConference.status,
-            currency: sponsorForConference.contract_currency,
-            orgNumber: sponsorForConference.sponsor.org_number,
+            currency: sponsorForConference.contractCurrency,
+            orgNumber: sponsorForConference.sponsor.orgNumber,
             website: sponsorForConference.sponsor.website,
           }}
         />

@@ -206,7 +206,7 @@ All email operations include production-ready safeguards:
 // Automatic retry with exponential backoff
 const emailResult = await retryWithBackoff(async () => {
   return await resend.emails.send({
-    from: `${conference.organizer} <${conference.cfp_email}>`,
+    from: `${conference.organizer} <${conference.cfpEmail}>`,
     to: [recipient],
     subject: subject,
     react: template,

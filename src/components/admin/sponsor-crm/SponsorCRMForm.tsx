@@ -74,21 +74,21 @@ export function SponsorCRMForm({
     name: sponsor?.sponsor.name || '',
     website: sponsor?.sponsor.website || '',
     logo: (sponsor?.sponsor.logo || null) as string | null,
-    logo_bright: (sponsor?.sponsor.logo_bright || null) as string | null,
+    logoBright: (sponsor?.sponsor.logoBright || null) as string | null,
     tierId: sponsor?.tier?._id || '',
     addonIds: sponsor?.addons?.map((a) => a._id) || ([] as string[]),
-    contractStatus: (sponsor?.contract_status || 'none') as ContractStatus,
+    contractStatus: (sponsor?.contractStatus || 'none') as ContractStatus,
     status: (sponsor?.status || 'prospect') as SponsorStatus,
-    invoiceStatus: (sponsor?.invoice_status || 'not-sent') as InvoiceStatus,
-    contractValue: sponsor?.contract_value?.toString() || '',
-    contractCurrency: (sponsor?.contract_currency || 'NOK') as
+    invoiceStatus: (sponsor?.invoiceStatus || 'not-sent') as InvoiceStatus,
+    contractValue: sponsor?.contractValue?.toString() || '',
+    contractCurrency: (sponsor?.contractCurrency || 'NOK') as
       | 'NOK'
       | 'USD'
       | 'EUR'
       | 'GBP',
     notes: sponsor?.notes || '',
     tags: sponsor?.tags || ([] as SponsorTag[]),
-    assignedTo: sponsor?.assigned_to?._id || '',
+    assignedTo: sponsor?.assignedTo?._id || '',
   })
 
   const { data: allSponsors = [] } = api.sponsor.list.useQuery()
@@ -111,14 +111,14 @@ export function SponsorCRMForm({
   const regularTiers = useMemo(
     () =>
       sortedSponsorTiers.filter(
-        (tier: SponsorTier) => tier.tier_type !== 'addon',
+        (tier: SponsorTier) => tier.tierType !== 'addon',
       ),
     [sortedSponsorTiers],
   )
   const addonTiers = useMemo(
     () =>
       sortedSponsorTiers.filter(
-        (tier: SponsorTier) => tier.tier_type === 'addon',
+        (tier: SponsorTier) => tier.tierType === 'addon',
       ),
     [sortedSponsorTiers],
   )
@@ -359,7 +359,7 @@ export function SponsorCRMForm({
                       ) : view === 'logo' ? (
                         <SponsorLogoEditor
                           logo={formData.logo}
-                          logoBright={formData.logo_bright}
+                          logoBright={formData.logoBright}
                           name={formData.name}
                           onChange={(updates) =>
                             setFormData((prev) => ({

@@ -33,12 +33,12 @@ export async function handleEmailNotification(
     comment: event.metadata.comment || '',
     event: {
       location: event.conference.city,
-      date: formatDate(event.conference.start_date),
+      date: formatDate(event.conference.startDate),
       name: event.conference.title,
       organizer: event.conference.organizer,
       url: `https://${event.metadata.domain}`,
-      socialLinks: event.conference.social_links,
-      contactEmail: event.conference.contact_email,
+      socialLinks: event.conference.socialLinks,
+      contactEmail: event.conference.contactEmail,
     },
   })
 

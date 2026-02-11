@@ -208,10 +208,10 @@ async function CachedConductContent({ domain }: { domain: string }) {
                   <li>
                     <strong>Email:</strong> Contact the organizers via{' '}
                     <a
-                      href={`mailto:${conference.contact_email}`}
+                      href={`mailto:${conference.contactEmail}`}
                       className="text-brand-cloud-blue underline hover:text-brand-cloud-blue-hover print:text-black print:underline"
                     >
-                      {conference.contact_email}
+                      {conference.contactEmail}
                     </a>
                   </li>
                   <li>

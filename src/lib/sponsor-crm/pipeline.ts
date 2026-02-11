@@ -27,16 +27,16 @@ export function aggregateSponsorPipeline(
   for (const s of sponsors) {
     byStatus[s.status] = (byStatus[s.status] || 0) + 1
     byStatusValue[s.status] =
-      (byStatusValue[s.status] || 0) + (s.contract_value || 0)
-    byContractStatus[s.contract_status] =
-      (byContractStatus[s.contract_status] || 0) + 1
-    byInvoiceStatus[s.invoice_status] =
-      (byInvoiceStatus[s.invoice_status] || 0) + 1
+      (byStatusValue[s.status] || 0) + (s.contractValue || 0)
+    byContractStatus[s.contractStatus] =
+      (byContractStatus[s.contractStatus] || 0) + 1
+    byInvoiceStatus[s.invoiceStatus] =
+      (byInvoiceStatus[s.invoiceStatus] || 0) + 1
 
     if (s.status === 'closed-won') {
       closedWonCount++
-      if (s.contract_value) {
-        totalContractValue += s.contract_value
+      if (s.contractValue) {
+        totalContractValue += s.contractValue
       }
     } else if (s.status === 'closed-lost') {
       closedLostCount++
@@ -54,7 +54,7 @@ export function aggregateSponsorPipeline(
     byContractStatus,
     byInvoiceStatus,
     totalContractValue,
-    contractCurrency: sponsors[0]?.contract_currency || 'NOK',
+    contractCurrency: sponsors[0]?.contractCurrency || 'NOK',
     totalSponsors: sponsors.length,
     closedWonCount,
     closedLostCount,

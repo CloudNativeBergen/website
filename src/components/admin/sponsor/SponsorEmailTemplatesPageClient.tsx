@@ -323,12 +323,12 @@ function SortableTemplateRow({
         disabled={isSettingDefault}
         className="shrink-0 disabled:opacity-50"
         title={
-          template.is_default
+          template.isDefault
             ? 'Remove as category default'
             : 'Set as category default'
         }
       >
-        {template.is_default ? (
+        {template.isDefault ? (
           <StarIconSolid className="h-5 w-5 text-amber-500 transition-colors hover:text-amber-400" />
         ) : (
           <StarIconOutline className="h-5 w-5 text-gray-300 transition-colors hover:text-amber-400 dark:text-gray-600 dark:hover:text-amber-400" />

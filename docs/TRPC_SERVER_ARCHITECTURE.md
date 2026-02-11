@@ -56,7 +56,7 @@ const SponsorInputSchema = z.object({
   name: z.string().min(1).max(100),
   website: z.string().url(),
   logo: z.string(),
-  org_number: z.string().optional(),
+  orgNumber: z.string().optional(),
 })
 
 // Extend base schemas for updates
@@ -179,7 +179,7 @@ const { data: tiers } = api.sponsor.tiers.list.useQuery(
 ```typescript
 // Protected procedures
 const adminProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.session?.user?.is_organizer) {
+  if (!ctx.session?.user?.isOrganizer) {
     throw new TRPCError({ code: 'UNAUTHORIZED' })
   }
   return next()

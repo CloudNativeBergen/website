@@ -48,30 +48,30 @@ export function SponsorProspectus({
   addonTiers,
   pastSponsors,
 }: SponsorProspectusProps) {
-  const sponsorBenefits = conference.sponsor_benefits || []
+  const sponsorBenefits = conference.sponsorBenefits || []
   const galleryImages = conference.featuredGalleryImages || []
-  const customization = conference.sponsorship_customization
+  const customization = conference.sponsorshipCustomization
 
   const heroHeadline =
-    customization?.hero_headline || 'No Sales Pitches. Just Code & Culture.'
+    customization?.heroHeadline || 'No Sales Pitches. Just Code & Culture.'
   const heroSubheadline =
-    customization?.hero_subheadline ||
+    customization?.heroSubheadline ||
     'We prioritize engineering value over marketing fluff. Our audience builds the platforms Norway runs on. Join us in powering the voyage.'
-  const packageTitle = customization?.package_section_title || 'The Base Image'
+  const packageTitle = customization?.packageSectionTitle || 'The Base Image'
   const addonTitle =
-    customization?.addon_section_title || 'Custom Resource Definitions (CRDs)'
+    customization?.addonSectionTitle || 'Custom Resource Definitions (CRDs)'
   const philosophyTitle =
-    customization?.philosophy_title ||
+    customization?.philosophyTitle ||
     "We Don't Sell Booths. We Build Credibility."
   const philosophyDescription =
-    customization?.philosophy_description ||
+    customization?.philosophyDescription ||
     "We intentionally do not have a traditional Expo Hall. Why? Because the best engineers don't like being sold to in a booth. Instead, we integrate your brand into the fabric of the event through digital hype, on-site signage, and our curated 'Wall of Opportunities'."
   const closingQuote =
-    customization?.closing_quote ||
+    customization?.closingQuote ||
     "The best engineers don't apply to job ads; they work for companies they respect."
   const closingCta =
-    customization?.closing_cta_text || 'git commit -m "Support the Community"'
-  const prospectusUrl = customization?.prospectus_url
+    customization?.closingCtaText || 'git commit -m "Support the Community"'
+  const prospectusUrl = customization?.prospectusUrl
 
   return (
     <>
@@ -97,11 +97,11 @@ export function SponsorProspectus({
         </Container>
 
         {/* Scaling Stats (v3.0 Production Grade) */}
-        {conference.vanity_metrics && conference.vanity_metrics.length > 0 && (
+        {conference.vanityMetrics && conference.vanityMetrics.length > 0 && (
           <Container className="relative z-10 mt-16">
             <div className="rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">
               <div className="grid grid-cols-3 gap-1">
-                {conference.vanity_metrics.map((metric, index) => (
+                {conference.vanityMetrics.map((metric, index) => (
                   <div
                     key={metric.label}
                     className={clsx(
@@ -215,7 +215,7 @@ export function SponsorProspectus({
                 key={tier._id}
                 className={clsx(
                   'rounded-3xl bg-gray-900 p-8 ring-1 ring-gray-800 xl:p-10',
-                  tier.most_popular ? 'ring-2 ring-blue-500' : '',
+                  tier.mostPopular ? 'ring-2 ring-blue-500' : '',
                   standardTiers.length <= 2
                     ? 'md:grid md:grid-cols-2 md:gap-x-8'
                     : 'flex flex-col justify-between',
@@ -233,12 +233,12 @@ export function SponsorProspectus({
                         {tier.title}
                       </h3>
                       <div className="flex gap-2">
-                        {tier.most_popular ? (
+                        {tier.mostPopular ? (
                           <span className="inline-flex items-center rounded-md bg-blue-400/10 px-2 py-1 text-xs font-medium text-blue-400 ring-1 ring-blue-400/30 ring-inset">
                             Recommended
                           </span>
                         ) : null}
-                        <QuantityBadge max_quantity={tier.max_quantity} />
+                        <QuantityBadge max_quantity={tier.maxQuantity} />
                       </div>
                     </div>
                     <p className="mt-4 text-sm leading-6 text-gray-300">
@@ -262,11 +262,11 @@ export function SponsorProspectus({
                   </div>
 
                   {/* CTA Button moved to left column for wide layout */}
-                  {standardTiers.length <= 2 && !tier.sold_out && (
+                  {standardTiers.length <= 2 && !tier.soldOut && (
                     <a
-                      href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} package`}
+                      href={`mailto:${conference.sponsorEmail}?subject=Interested in ${tier.title} package`}
                       className={clsx(
-                        tier.most_popular
+                        tier.mostPopular
                           ? 'bg-blue-500 text-white hover:bg-blue-400 focus-visible:outline-blue-500'
                           : 'bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white',
                         'mt-8 block w-full rounded-md px-3 py-3 text-center font-mono text-sm font-semibold shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2',
@@ -275,7 +275,7 @@ export function SponsorProspectus({
                       Deploy {tier.title}
                     </a>
                   )}
-                  {standardTiers.length <= 2 && tier.sold_out && (
+                  {standardTiers.length <= 2 && tier.soldOut && (
                     <p className="mt-8 text-center font-mono text-sm leading-6 font-semibold text-gray-500">
                       // Sold out
                     </p>
@@ -311,11 +311,11 @@ export function SponsorProspectus({
                 </div>
 
                 {/* Mobile/Narrow CTA (hidden on desktop if wide) */}
-                {standardTiers.length > 2 && !tier.sold_out && (
+                {standardTiers.length > 2 && !tier.soldOut && (
                   <a
-                    href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} package`}
+                    href={`mailto:${conference.sponsorEmail}?subject=Interested in ${tier.title} package`}
                     className={clsx(
-                      tier.most_popular
+                      tier.mostPopular
                         ? 'bg-blue-500 text-white hover:bg-blue-400 focus-visible:outline-blue-500'
                         : 'bg-white/10 text-white hover:bg-white/20 focus-visible:outline-white',
                       'mt-8 block rounded-md px-3 py-2 text-center font-mono text-sm font-semibold shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2',
@@ -324,7 +324,7 @@ export function SponsorProspectus({
                     Deploy {tier.title}
                   </a>
                 )}
-                {standardTiers.length > 2 && tier.sold_out && (
+                {standardTiers.length > 2 && tier.soldOut && (
                   <p className="mt-8 text-center font-mono text-sm leading-6 font-semibold text-gray-500">
                     // Sold out
                   </p>
@@ -371,7 +371,7 @@ export function SponsorProspectus({
                         'bg-linear-to-r from-indigo-500 to-purple-500',
                     )}
                   />
-                  {tier.max_quantity === 1 && (
+                  {tier.maxQuantity === 1 && (
                     <div className="absolute top-4 -right-8 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
                       Exclusive
                     </div>
@@ -382,7 +382,7 @@ export function SponsorProspectus({
                         {tier.title}
                       </h3>
                       <div className="flex gap-2">
-                        <QuantityBadge max_quantity={tier.max_quantity} />
+                        <QuantityBadge max_quantity={tier.maxQuantity} />
                       </div>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-gray-700 dark:text-gray-200">
@@ -419,9 +419,9 @@ export function SponsorProspectus({
                       </ul>
                     )}
 
-                    {!tier.sold_out ? (
+                    {!tier.soldOut ? (
                       <a
-                        href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} add-on`}
+                        href={`mailto:${conference.sponsorEmail}?subject=Interested in ${tier.title} add-on`}
                         className="mt-8 block rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-center font-mono text-sm font-semibold text-gray-900 hover:border-cyan-500 hover:bg-cyan-50 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:hover:border-cyan-400 dark:hover:bg-gray-600"
                       >
                         git add {tier.title}
@@ -482,7 +482,7 @@ export function SponsorProspectus({
                   </p>
                   <div className="mt-6">
                     <Button
-                      href={`mailto:${conference.sponsor_email}?subject=Interested in ${tier.title} partnership`}
+                      href={`mailto:${conference.sponsorEmail}?subject=Interested in ${tier.title} partnership`}
                       variant="outline"
                       className="w-full"
                     >
@@ -548,7 +548,7 @@ export function SponsorProspectus({
               <div className="group relative inline-flex">
                 <div className="animate-tilt absolute -inset-0.5 rounded-lg bg-linear-to-r from-pink-600 to-purple-600 opacity-75 blur-sm filter transition-all duration-1000 group-hover:-inset-1 group-hover:duration-200"></div>
                 <a
-                  href={`mailto:${conference.sponsor_email}`}
+                  href={`mailto:${conference.sponsorEmail}`}
                   className="relative inline-flex items-center justify-center rounded-lg bg-black px-8 py-4 font-mono text-lg font-bold text-white transition-all duration-200 focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:outline-none"
                 >
                   <span className="mr-2">&gt;</span> {closingCta}

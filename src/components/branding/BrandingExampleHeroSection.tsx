@@ -14,7 +14,7 @@ export function BrandingExampleHeroSection({
 }: BrandingExampleHeroSectionProps) {
   const title = conference?.title || 'Cloud Native Days'
   const dateText = conference
-    ? formatDatesSafe(conference.start_date, conference.end_date)
+    ? formatDatesSafe(conference.startDate, conference.endDate)
     : 'Coming Soon'
   const location =
     conference?.city && conference?.country

@@ -91,12 +91,12 @@ export default async function WorkshopPage() {
     )
   }
 
-  if (conference.checkin_customer_id && conference.checkin_event_id) {
+  if (conference.checkinCustomerId && conference.checkinEventId) {
     const eligibility = await checkWorkshopEligibility({
       userEmail: user.email,
-      customerId: conference.checkin_customer_id,
-      eventId: conference.checkin_event_id,
-      contactEmail: conference.contact_email,
+      customerId: conference.checkinCustomerId,
+      eventId: conference.checkinEventId,
+      contactEmail: conference.contactEmail,
     })
 
     if (!eligibility.isEligible) {
@@ -152,7 +152,7 @@ export default async function WorkshopPage() {
 
               <div className="mt-8">
                 <Button
-                  href={`mailto:${conference.contact_email || 'contact@cloudnativedays.no'}`}
+                  href={`mailto:${conference.contactEmail || 'contact@cloudnativedays.no'}`}
                   variant="outline"
                 >
                   <EnvelopeIcon className="mr-2 h-5 w-5" />
@@ -168,11 +168,11 @@ export default async function WorkshopPage() {
 
   const now = new Date()
   const registrationNotYetOpen =
-    conference.workshop_registration_start &&
-    new Date(conference.workshop_registration_start) > now
+    conference.workshopRegistrationStart &&
+    new Date(conference.workshopRegistrationStart) > now
   const registrationClosed =
-    conference.workshop_registration_end &&
-    new Date(conference.workshop_registration_end) < now
+    conference.workshopRegistrationEnd &&
+    new Date(conference.workshopRegistrationEnd) < now
 
   return (
     <div className="relative py-20 sm:pt-36 sm:pb-24">
@@ -224,7 +224,7 @@ export default async function WorkshopPage() {
                     <p>
                       Registration will open on{' '}
                       {new Date(
-                        conference.workshop_registration_start!,
+                        conference.workshopRegistrationStart!,
                       ).toLocaleString('en-US', {
                         dateStyle: 'full',
                         timeStyle: 'short',
@@ -260,7 +260,7 @@ export default async function WorkshopPage() {
                     <p>
                       Registration closed on{' '}
                       {new Date(
-                        conference.workshop_registration_end!,
+                        conference.workshopRegistrationEnd!,
                       ).toLocaleString('en-US', {
                         dateStyle: 'full',
                         timeStyle: 'short',
@@ -282,8 +282,8 @@ export default async function WorkshopPage() {
                   ? `${user.firstName} ${user.lastName}`
                   : user.email
               }
-              workshopRegistrationStart={conference.workshop_registration_start}
-              workshopRegistrationEnd={conference.workshop_registration_end}
+              workshopRegistrationStart={conference.workshopRegistrationStart}
+              workshopRegistrationEnd={conference.workshopRegistrationEnd}
             />
           </div>
         </div>

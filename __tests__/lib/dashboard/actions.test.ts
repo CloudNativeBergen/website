@@ -197,16 +197,16 @@ const baseConference: Conference = {
   city: 'Bergen',
   country: 'Norway',
   tagline: 'Test',
-  start_date: '2025-06-01',
-  end_date: '2025-06-02',
-  cfp_start_date: '2025-01-01',
-  cfp_end_date: '2025-03-31',
-  cfp_notify_date: '2025-04-15',
-  cfp_email: 'cfp@test.com',
-  sponsor_email: 'sponsor@test.com',
-  program_date: '2025-05-01',
-  registration_enabled: true,
-  contact_email: 'info@test.com',
+  startDate: '2025-06-01',
+  endDate: '2025-06-02',
+  cfpStartDate: '2025-01-01',
+  cfpEndDate: '2025-03-31',
+  cfpNotifyDate: '2025-04-15',
+  cfpEmail: 'cfp@test.com',
+  sponsorEmail: 'sponsor@test.com',
+  programDate: '2025-05-01',
+  registrationEnabled: true,
+  contactEmail: 'info@test.com',
   organizers: [],
   domains: ['test.dev'],
   formats: [],
@@ -245,7 +245,7 @@ describe('Dashboard Server Actions', () => {
     getAuthSession.mockResolvedValue({
       user: { name: 'Admin', email: 'admin@test.com' },
       expires: '2099-01-01T00:00:00Z',
-      speaker: { is_organizer: true },
+      speaker: { isOrganizer: true },
     })
   })
 
@@ -263,10 +263,10 @@ describe('Dashboard Server Actions', () => {
     it('assigns urgency levels based on days remaining', async () => {
       const confSoon: Conference = {
         ...baseConference,
-        cfp_end_date: '2025-02-20', // 5 days → high
-        cfp_notify_date: '2025-03-10', // 23 days → medium
-        program_date: '2025-04-20', // 64 days → low
-        start_date: '2025-06-01', // 106 days → low
+        cfpEndDate: '2025-02-20', // 5 days → high
+        cfpNotifyDate: '2025-03-10', // 23 days → medium
+        programDate: '2025-04-20', // 64 days → low
+        startDate: '2025-06-01', // 106 days → low
       }
       const deadlines = await fetchDeadlines(confSoon)
       const urgencyMap = Object.fromEntries(
@@ -288,12 +288,12 @@ describe('Dashboard Server Actions', () => {
     it('returns empty array when all dates are in the past', async () => {
       const pastConf: Conference = {
         ...baseConference,
-        cfp_start_date: '2024-01-01',
-        cfp_end_date: '2024-03-31',
-        cfp_notify_date: '2024-04-15',
-        program_date: '2024-05-01',
-        start_date: '2024-06-01',
-        end_date: '2024-06-02',
+        cfpStartDate: '2024-01-01',
+        cfpEndDate: '2024-03-31',
+        cfpNotifyDate: '2024-04-15',
+        programDate: '2024-05-01',
+        startDate: '2024-06-01',
+        endDate: '2024-06-02',
       }
       const deadlines = await fetchDeadlines(pastConf)
       expect(deadlines).toHaveLength(0)
@@ -540,7 +540,7 @@ describe('Dashboard Server Actions', () => {
 
   describe('fetchTravelSupport', () => {
     it('aggregates travel support budgets and counts', async () => {
-      const confWithBudget = { ...baseConference, travel_support_budget: 50000 }
+      const confWithBudget = { ...baseConference, travelSupportBudget: 50000 }
 
       mockGetAllTravelSupport.mockResolvedValue({
         travelSupports: [
@@ -644,10 +644,10 @@ describe('Dashboard Server Actions', () => {
           {
             _id: 'a1',
             description: 'Sent proposal',
-            created_at: '2025-02-14T10:00:00Z',
+            createdAt: '2025-02-14T10:00:00Z',
             _createdAt: '2025-02-14T10:00:00Z',
-            sponsor_for_conference: { sponsor: { name: 'Acme Corp' } },
-            created_by: { name: 'Admin' },
+            sponsorForConference: { sponsor: { name: 'Acme Corp' } },
+            createdBy: { name: 'Admin' },
           },
         ],
         error: null,
@@ -742,10 +742,10 @@ describe('Dashboard Server Actions', () => {
           {
             _id: 'a1',
             description: 'Contacted sponsor',
-            created_at: '2025-02-14T10:00:00Z',
+            createdAt: '2025-02-14T10:00:00Z',
             _createdAt: '2025-02-14T10:00:00Z',
-            sponsor_for_conference: { sponsor: { name: 'Acme' } },
-            created_by: { name: 'Admin' },
+            sponsorForConference: { sponsor: { name: 'Acme' } },
+            createdBy: { name: 'Admin' },
           },
         ],
         error: null,
@@ -775,10 +775,10 @@ describe('Dashboard Server Actions', () => {
         activities: Array.from({ length: 10 }, (_, i) => ({
           _id: `a${i}`,
           description: `Activity ${i}`,
-          created_at: `2025-02-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
+          createdAt: `2025-02-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
           _createdAt: `2025-02-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
-          sponsor_for_conference: { sponsor: { name: 'Sponsor' } },
-          created_by: { name: 'Admin' },
+          sponsorForConference: { sponsor: { name: 'Sponsor' } },
+          createdBy: { name: 'Admin' },
         })),
         error: null,
       })
@@ -853,9 +853,9 @@ describe('Dashboard Server Actions', () => {
     it('returns ticket data when conference has checkin IDs', async () => {
       const confWithTickets: Conference = {
         ...baseConference,
-        checkin_customer_id: 123,
-        checkin_event_id: 456,
-        ticket_capacity: 500,
+        checkinCustomerId: 123,
+        checkinEventId: 456,
+        ticketCapacity: 500,
       }
 
       const result = await fetchTicketSales(confWithTickets)

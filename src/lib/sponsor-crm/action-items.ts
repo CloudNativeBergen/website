@@ -32,12 +32,12 @@ export function generateActionItems(
 
   sponsors.forEach((sponsor) => {
     // Filter by organizer if specified
-    if (organizerId && sponsor.assigned_to?._id !== organizerId) {
+    if (organizerId && sponsor.assignedTo?._id !== organizerId) {
       return
     }
 
     // Priority 1: Overdue invoices
-    if (sponsor.invoice_status === 'overdue') {
+    if (sponsor.invoiceStatus === 'overdue') {
       actions.push({
         id: `${sponsor._id}-overdue`,
         type: 'overdue',
@@ -91,8 +91,8 @@ export function generateActionItems(
     // Priority 2: Invoice not sent for closed deals with value
     if (
       sponsor.status === 'closed-won' &&
-      sponsor.contract_value &&
-      sponsor.invoice_status === 'not-sent'
+      sponsor.contractValue &&
+      sponsor.invoiceStatus === 'not-sent'
     ) {
       actions.push({
         id: `${sponsor._id}-needs-invoice`,
@@ -109,7 +109,7 @@ export function generateActionItems(
     }
 
     // Priority 3: Closed deal without contract status set
-    if (sponsor.status === 'closed-won' && sponsor.contract_status === 'none') {
+    if (sponsor.status === 'closed-won' && sponsor.contractStatus === 'none') {
       actions.push({
         id: `${sponsor._id}-needs-contract`,
         type: 'needs-contract',
@@ -127,14 +127,14 @@ export function generateActionItems(
     // Priority 4: Contract in progress (not signed yet)
     if (
       sponsor.status === 'closed-won' &&
-      sponsor.contract_status !== 'contract-signed' &&
-      sponsor.contract_status !== 'none'
+      sponsor.contractStatus !== 'contract-signed' &&
+      sponsor.contractStatus !== 'none'
     ) {
       actions.push({
         id: `${sponsor._id}-missing-contract`,
         type: 'missing-contract',
         title:
-          sponsor.contract_status === 'contract-sent'
+          sponsor.contractStatus === 'contract-sent'
             ? 'Awaiting Signature'
             : 'Contract In Progress',
         sponsor: {
@@ -142,9 +142,9 @@ export function generateActionItems(
           name: sponsor.sponsor.name,
         },
         description:
-          sponsor.contract_status === 'contract-sent'
+          sponsor.contractStatus === 'contract-sent'
             ? `Contract sent, awaiting signature from ${sponsor.sponsor.name}`
-            : `Contract status: ${sponsor.contract_status.replace('-', ' ')} for ${sponsor.sponsor.name}`,
+            : `Contract status: ${sponsor.contractStatus.replace('-', ' ')} for ${sponsor.sponsor.name}`,
         priority: 4,
         link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
       })

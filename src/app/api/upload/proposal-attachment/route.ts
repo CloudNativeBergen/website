@@ -87,7 +87,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
         const proposalId = match[1]
 
         const speakerId = req.auth?.speaker?._id
-        const isOrganizer = req.auth?.speaker?.is_organizer === true
+        const isOrganizer = req.auth?.speaker?.isOrganizer === true
 
         console.log('Upload token request:', {
           proposalId,

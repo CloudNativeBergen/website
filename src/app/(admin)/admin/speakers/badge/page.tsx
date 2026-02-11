@@ -60,8 +60,8 @@ export default async function AdminBadgePage() {
   // Sort speakers: organizers first, then speakers from current conference, then others
   const sortedSpeakers = allSpeakers.sort((a, b) => {
     // Prioritize organizers
-    if (a.is_organizer && !b.is_organizer) return -1
-    if (!a.is_organizer && b.is_organizer) return 1
+    if (a.isOrganizer && !b.isOrganizer) return -1
+    if (!a.isOrganizer && b.isOrganizer) return 1
 
     // Then prioritize speakers with talks in the current conference
     const aHasCurrentConference =
@@ -149,7 +149,7 @@ export default async function AdminBadgePage() {
       <BadgeManagementClient
         conferenceId={conference._id}
         conferenceTitle={conference.title}
-        conferenceStartDate={conference.start_date}
+        conferenceStartDate={conference.startDate}
         domain={conference.domains?.[0]}
         initialSpeakers={sortedSpeakers}
         initialBadges={badges || []}

@@ -6,10 +6,10 @@ import { Conference } from './types'
  */
 
 /**
- * Check if the conference has ended (day after end_date has passed)
+ * Check if the conference has ended (day after endDate has passed)
  */
 export function isConferenceOver(conference: Conference): boolean {
-  const endDate = new Date(conference.end_date)
+  const endDate = new Date(conference.endDate)
   const dayAfterEnd = new Date(endDate)
   dayAfterEnd.setDate(dayAfterEnd.getDate() + 1)
   return new Date() >= dayAfterEnd
@@ -19,12 +19,12 @@ export function isConferenceOver(conference: Conference): boolean {
  * Check if the Call for Papers is currently open
  */
 export function isCfpOpen(conference: Conference): boolean {
-  if (!conference.cfp_start_date || !conference.cfp_end_date) {
+  if (!conference.cfpStartDate || !conference.cfpEndDate) {
     return false
   }
   const now = new Date()
-  const startDate = new Date(conference.cfp_start_date + 'T00:00:00Z')
-  const endDate = new Date(conference.cfp_end_date + 'T23:59:59.999Z')
+  const startDate = new Date(conference.cfpStartDate + 'T00:00:00Z')
+  const endDate = new Date(conference.cfpEndDate + 'T23:59:59.999Z')
   return now >= startDate && now <= endDate
 }
 
@@ -32,10 +32,10 @@ export function isCfpOpen(conference: Conference): boolean {
  * Check if the program has been published
  */
 export function isProgramPublished(conference: Conference): boolean {
-  if (!conference.program_date) {
+  if (!conference.programDate) {
     return false
   }
-  return new Date() >= new Date(conference.program_date)
+  return new Date() >= new Date(conference.programDate)
 }
 
 /**
@@ -47,8 +47,8 @@ export function isProgramPublished(conference: Conference): boolean {
  */
 export function isRegistrationAvailable(conference: Conference): boolean {
   return (
-    conference.registration_enabled &&
-    !!conference.registration_link &&
+    conference.registrationEnabled &&
+    !!conference.registrationLink &&
     !isConferenceOver(conference)
   )
 }
@@ -58,17 +58,17 @@ export function isRegistrationAvailable(conference: Conference): boolean {
  */
 export function isWorkshopRegistrationOpen(conference: Conference): boolean {
   if (
-    !conference.workshop_registration_start ||
-    !conference.workshop_registration_end
+    !conference.workshopRegistrationStart ||
+    !conference.workshopRegistrationEnd
   ) {
     return false
   }
   const now = new Date()
   const startDate = new Date(
-    conference.workshop_registration_start + 'T00:00:00Z',
+    conference.workshopRegistrationStart + 'T00:00:00Z',
   )
   const endDate = new Date(
-    conference.workshop_registration_end + 'T23:59:59.999Z',
+    conference.workshopRegistrationEnd + 'T23:59:59.999Z',
   )
   return now >= startDate && now <= endDate
 }
@@ -77,11 +77,11 @@ export function isWorkshopRegistrationOpen(conference: Conference): boolean {
  * Check if we should be seeking sponsors (more than 4 weeks before conference)
  */
 export function isSeekingSponsors(conference: Conference): boolean {
-  if (!conference.start_date) {
+  if (!conference.startDate) {
     return false
   }
   const timeUntilConference =
-    new Date(conference.start_date).getTime() - new Date().getTime()
+    new Date(conference.startDate).getTime() - new Date().getTime()
   const fourWeeks = 4 * 7 * 24 * 60 * 60 * 1000
   return timeUntilConference > fourWeeks
 }

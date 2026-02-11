@@ -33,7 +33,7 @@ export default async function SpeakerDashboard() {
 
   // Fetch all conferences where speaker has activity (server-side)
   const conferencesQuery = groq`
-    *[_type == "conference"] | order(start_date desc) {
+    *[_type == "conference"] | order(startDate desc) {
       _id,
       title,
       organizer,
@@ -169,8 +169,7 @@ export default async function SpeakerDashboard() {
   const allBadges = activeConferences
     .flatMap((c) => c.badges)
     .sort(
-      (a, b) =>
-        new Date(b.issued_at).getTime() - new Date(a.issued_at).getTime(),
+      (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime(),
     )
 
   const latestBadge = allBadges[0]

@@ -7,8 +7,8 @@ export function sortSponsorTiers(tiers: SponsorTier[]): SponsorTier[] {
   const typeOrder = { standard: 0, special: 1, addon: 2 }
 
   return [...tiers].sort((a, b) => {
-    const aOrder = typeOrder[a.tier_type as keyof typeof typeOrder] ?? 99
-    const bOrder = typeOrder[b.tier_type as keyof typeof typeOrder] ?? 99
+    const aOrder = typeOrder[a.tierType as keyof typeof typeOrder] ?? 99
+    const bOrder = typeOrder[b.tierType as keyof typeof typeOrder] ?? 99
 
     if (aOrder !== bOrder) return aOrder - bOrder
 
@@ -27,9 +27,9 @@ export function sortSponsorTiers(tiers: SponsorTier[]): SponsorTier[] {
  * Formats a tier label, appending "(addon)" for addon tiers
  */
 export function formatTierLabel(
-  tier: SponsorTier | { title: string; tier_type?: string },
+  tier: SponsorTier | { title: string; tierType?: string },
 ): string {
-  if (tier.tier_type === 'addon') {
+  if (tier.tierType === 'addon') {
     return `${tier.title} (addon)`
   }
   return tier.title
@@ -44,7 +44,7 @@ export function groupSponsorsByTier<T extends ConferenceSponsor>(
   return sponsors.reduce(
     (acc, sponsor) => {
       const tierTitle =
-        sponsor.tier.tier_type === 'special' ? 'SPECIAL' : sponsor.tier.title
+        sponsor.tier.tierType === 'special' ? 'SPECIAL' : sponsor.tier.title
       if (!acc[tierTitle]) {
         acc[tierTitle] = []
       }
@@ -110,10 +110,10 @@ export function sortTierNamesByValue(
     const tierB = sponsorTiers.find((tier) => tier.title === b)
 
     const aOrder = tierA
-      ? (typeOrder[tierA.tier_type as keyof typeof typeOrder] ?? 99)
+      ? (typeOrder[tierA.tierType as keyof typeof typeOrder] ?? 99)
       : 99
     const bOrder = tierB
-      ? (typeOrder[tierB.tier_type as keyof typeof typeOrder] ?? 99)
+      ? (typeOrder[tierB.tierType as keyof typeof typeOrder] ?? 99)
       : 99
 
     if (aOrder !== bOrder) return aOrder - bOrder

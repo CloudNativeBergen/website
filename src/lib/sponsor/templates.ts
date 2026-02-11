@@ -197,11 +197,11 @@ export function buildTemplateVariables(opts: {
   contactNames?: string
   conference: {
     title: string
-    start_date?: string
+    startDate?: string
     city?: string
     organizer?: string
     domains?: string[]
-    prospectus_url?: string
+    prospectusUrl?: string
   }
   senderName?: string
   tierName?: string
@@ -221,13 +221,13 @@ export function buildTemplateVariables(opts: {
     vars.ORG_NAME = conference.organizer
   }
 
-  if (conference.start_date) {
+  if (conference.startDate) {
     // Format as DD/MM-YY from YYYY-MM-DD
-    const [y, m, d] = conference.start_date.split('-')
+    const [y, m, d] = conference.startDate.split('-')
     if (y && m && d) {
       vars.CONFERENCE_DATE = `${d}/${m}-${y.slice(2)}`
     }
-    const year = conference.start_date.slice(0, 4)
+    const year = conference.startDate.slice(0, 4)
     if (year) vars.CONFERENCE_YEAR = year
   }
 
@@ -240,8 +240,8 @@ export function buildTemplateVariables(opts: {
     vars.SPONSOR_PAGE_URL = `https://${conference.domains[0]}/sponsor`
   }
 
-  if (conference.prospectus_url) {
-    vars.PROSPECTUS_URL = conference.prospectus_url
+  if (conference.prospectusUrl) {
+    vars.PROSPECTUS_URL = conference.prospectusUrl
   }
 
   if (senderName) {
@@ -319,7 +319,7 @@ export function findBestTemplate(
     let score = 0
     if (t.category === category) score += 4
     if (t.language === language) score += 2
-    if (t.is_default) score += 1
+    if (t.isDefault) score += 1
     if (score > bestScore) {
       bestScore = score
       best = t

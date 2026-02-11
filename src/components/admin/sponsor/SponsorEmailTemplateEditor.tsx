@@ -166,11 +166,11 @@ export function SponsorEmailTemplateEditor({
         contactNames: 'Tonje, Marius og Torjus',
         conference: {
           title: conference.title,
-          start_date: conference.start_date,
+          startDate: conference.startDate,
           city: conference.city,
           organizer: conference.organizer,
           domains: conference.domains,
-          prospectus_url: conference.sponsorship_customization?.prospectus_url,
+          prospectusUrl: conference.sponsorshipCustomization?.prospectusUrl,
         },
         senderName: 'Hans Kristian',
         tierName: 'Community Partner',

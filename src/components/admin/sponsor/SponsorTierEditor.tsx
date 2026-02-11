@@ -55,11 +55,11 @@ function SponsorTierModal({
   const [formData, setFormData] = useState<SponsorTierInput>({
     title: '',
     tagline: '',
-    tier_type: 'standard',
+    tierType: 'standard',
     price: [{ amount: 0, currency: 'NOK' }],
     perks: [{ label: '', description: '' }],
-    sold_out: false,
-    most_popular: false,
+    soldOut: false,
+    mostPopular: false,
   })
 
   const createMutation = api.sponsor.tiers.create.useMutation({
@@ -69,12 +69,12 @@ function SponsorTierModal({
         setFormData({
           title: '',
           tagline: '',
-          tier_type: 'standard',
+          tierType: 'standard',
           price: [{ amount: 0, currency: 'NOK' }],
           perks: [{ label: '', description: '' }],
-          sold_out: false,
-          most_popular: false,
-          max_quantity: undefined,
+          soldOut: false,
+          mostPopular: false,
+          maxQuantity: undefined,
         })
         onClose()
       }
@@ -117,7 +117,7 @@ function SponsorTierModal({
       setFormData({
         title: tier.title,
         tagline: tier.tagline,
-        tier_type: tier.tier_type,
+        tierType: tier.tierType,
         price: tier.price?.map((p) => ({
           _key: p._key,
           amount: p.amount,
@@ -128,20 +128,20 @@ function SponsorTierModal({
           label: p.label,
           description: p.description,
         })) || [{ label: '', description: '' }],
-        sold_out: tier.sold_out,
-        most_popular: tier.most_popular,
-        max_quantity: tier.max_quantity,
+        soldOut: tier.soldOut,
+        mostPopular: tier.mostPopular,
+        maxQuantity: tier.maxQuantity,
       })
     } else {
       setFormData({
         title: '',
         tagline: '',
-        tier_type: 'standard',
+        tierType: 'standard',
         price: [{ amount: 0, currency: 'NOK' }],
         perks: [{ label: '', description: '' }],
-        sold_out: false,
-        most_popular: false,
-        max_quantity: undefined,
+        soldOut: false,
+        mostPopular: false,
+        maxQuantity: undefined,
       })
     }
   }, [tier])
@@ -397,11 +397,11 @@ function SponsorTierModal({
                         <div className="mt-2 grid grid-cols-1">
                           <select
                             id="tier_type"
-                            value={formData.tier_type}
+                            value={formData.tierType}
                             onChange={(e) =>
                               setFormData((prev) => ({
                                 ...prev,
-                                tier_type: e.target.value as
+                                tierType: e.target.value as
                                   | 'standard'
                                   | 'special'
                                   | 'addon',
@@ -432,11 +432,11 @@ function SponsorTierModal({
                           <input
                             type="number"
                             id="max_quantity"
-                            value={formData.max_quantity ?? ''}
+                            value={formData.maxQuantity ?? ''}
                             onChange={(e) =>
                               setFormData((prev) => ({
                                 ...prev,
-                                max_quantity: e.target.value
+                                maxQuantity: e.target.value
                                   ? parseInt(e.target.value)
                                   : undefined,
                               }))
@@ -456,11 +456,11 @@ function SponsorTierModal({
                               <input
                                 id="sold_out"
                                 type="checkbox"
-                                checked={formData.sold_out}
+                                checked={formData.soldOut}
                                 onChange={(e) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    sold_out: e.target.checked,
+                                    soldOut: e.target.checked,
                                   }))
                                 }
                                 disabled={isLoading}
@@ -499,11 +499,11 @@ function SponsorTierModal({
                               <input
                                 id="most_popular"
                                 type="checkbox"
-                                checked={formData.most_popular}
+                                checked={formData.mostPopular}
                                 onChange={(e) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    most_popular: e.target.checked,
+                                    mostPopular: e.target.checked,
                                   }))
                                 }
                                 disabled={isLoading}
@@ -826,15 +826,15 @@ export function SponsorTierEditor({
               key={tier._id}
               className={clsx(
                 'group relative overflow-hidden rounded-lg border border-gray-300 bg-white p-6 shadow-sm hover:border-gray-400 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20',
-                tier.most_popular && 'ring-2 ring-indigo-500',
+                tier.mostPopular && 'ring-2 ring-indigo-500',
               )}
             >
-              {tier.max_quantity === 1 && (
+              {tier.maxQuantity === 1 && (
                 <div className="absolute top-4 -right-8 rotate-45 bg-linear-to-r from-amber-500 to-yellow-500 px-8 py-1 text-xs font-bold text-white shadow-sm">
                   Exclusive
                 </div>
               )}
-              {tier.most_popular && (
+              {tier.mostPopular && (
                 <div className="absolute -top-2 left-1/2 -translate-x-1/2">
                   <span className="inline-flex items-center rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-medium text-white">
                     <StarIcon className="mr-1 h-3 w-3" />
@@ -885,21 +885,21 @@ export function SponsorTierEditor({
                 <span
                   className={clsx(
                     'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                    tier.tier_type === 'standard'
+                    tier.tierType === 'standard'
                       ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                      : tier.tier_type === 'special'
+                      : tier.tierType === 'special'
                         ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
                         : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
                   )}
                 >
-                  {tier.tier_type}
+                  {tier.tierType}
                 </span>
-                {tier.max_quantity && tier.max_quantity > 1 && (
+                {tier.maxQuantity && tier.maxQuantity > 1 && (
                   <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                    Limit: {tier.max_quantity}
+                    Limit: {tier.maxQuantity}
                   </span>
                 )}
-                {tier.sold_out && (
+                {tier.soldOut && (
                   <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-400">
                     Sold Out
                   </span>

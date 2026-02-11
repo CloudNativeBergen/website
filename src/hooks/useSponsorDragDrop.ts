@@ -31,14 +31,14 @@ function applyOptimisticMove(
       case 'contract':
         return {
           ...s,
-          contract_status:
-            targetColumnKey as SponsorForConferenceExpanded['contract_status'],
+          contractStatus:
+            targetColumnKey as SponsorForConferenceExpanded['contractStatus'],
         }
       case 'invoice':
         return {
           ...s,
-          invoice_status:
-            targetColumnKey as SponsorForConferenceExpanded['invoice_status'],
+          invoiceStatus:
+            targetColumnKey as SponsorForConferenceExpanded['invoiceStatus'],
         }
     }
   })

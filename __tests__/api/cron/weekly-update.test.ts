@@ -11,14 +11,14 @@ describe('api/cron/weekly-update', () => {
   describe('Conference State', () => {
     it('should detect conference has ended', () => {
       const conference = createMockConference({
-        end_date: '2025-01-01',
+        endDate: '2025-01-01',
       })
       expect(isConferenceOver(conference)).toBe(true)
     })
 
     it('should detect conference is upcoming', () => {
       const conference = createMockConference({
-        end_date: '2099-06-15',
+        endDate: '2099-06-15',
       })
       expect(isConferenceOver(conference)).toBe(false)
     })
@@ -83,9 +83,9 @@ describe('api/cron/weekly-update', () => {
         sponsor: { _id: 's1', name: 'Sponsor', website: '', logo: '' },
         conference: { _id: 'c1', title: 'Conf' },
         status: 'prospect',
-        contract_status: 'none',
-        invoice_status: 'not-sent',
-        contract_currency: 'NOK',
+        contractStatus: 'none',
+        invoiceStatus: 'not-sent',
+        contractCurrency: 'NOK',
         ...overrides,
       } as SponsorForConferenceExpanded
     }
@@ -94,35 +94,35 @@ describe('api/cron/weekly-update', () => {
       const sponsors = [
         createSponsor({
           status: 'prospect',
-          contract_status: 'none',
-          invoice_status: 'not-sent',
+          contractStatus: 'none',
+          invoiceStatus: 'not-sent',
         }),
         createSponsor({
           status: 'contacted',
-          contract_status: 'none',
-          invoice_status: 'not-sent',
+          contractStatus: 'none',
+          invoiceStatus: 'not-sent',
         }),
         createSponsor({
           status: 'negotiating',
-          contract_status: 'verbal-agreement',
-          invoice_status: 'not-sent',
+          contractStatus: 'verbal-agreement',
+          invoiceStatus: 'not-sent',
         }),
         createSponsor({
           status: 'closed-won',
-          contract_status: 'contract-signed',
-          invoice_status: 'paid',
-          contract_value: 50000,
+          contractStatus: 'contract-signed',
+          invoiceStatus: 'paid',
+          contractValue: 50000,
         }),
         createSponsor({
           status: 'closed-won',
-          contract_status: 'contract-signed',
-          invoice_status: 'sent',
-          contract_value: 75000,
+          contractStatus: 'contract-signed',
+          invoiceStatus: 'sent',
+          contractValue: 75000,
         }),
         createSponsor({
           status: 'closed-lost',
-          contract_status: 'none',
-          invoice_status: 'not-sent',
+          contractStatus: 'none',
+          invoiceStatus: 'not-sent',
         }),
       ]
 
@@ -142,8 +142,8 @@ describe('api/cron/weekly-update', () => {
 
     it('should handle sponsors without contract values', () => {
       const sponsors = [
-        createSponsor({ status: 'closed-won', contract_value: undefined }),
-        createSponsor({ status: 'closed-won', contract_value: 0 }),
+        createSponsor({ status: 'closed-won', contractValue: undefined }),
+        createSponsor({ status: 'closed-won', contractValue: 0 }),
       ]
 
       const result = aggregateSponsorPipeline(sponsors)
@@ -159,7 +159,7 @@ describe('api/cron/weekly-update', () => {
         createSponsor({ status: 'contacted' }),
         createSponsor({ status: 'negotiating' }),
         createSponsor({ status: 'negotiating' }),
-        createSponsor({ status: 'closed-won', contract_value: 50000 }),
+        createSponsor({ status: 'closed-won', contractValue: 50000 }),
         createSponsor({ status: 'closed-lost' }),
       ]
 
@@ -170,7 +170,7 @@ describe('api/cron/weekly-update', () => {
     })
 
     it('should derive currency from first sponsor', () => {
-      const sponsors = [createSponsor({ contract_currency: 'EUR' })]
+      const sponsors = [createSponsor({ contractCurrency: 'EUR' })]
 
       const result = aggregateSponsorPipeline(sponsors)
 

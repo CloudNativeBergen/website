@@ -46,15 +46,15 @@ const mockConference = {
   _id: 'conf-1',
   title: 'Test Conference',
   city: 'Bergen',
-  sponsor_email: 'sponsor@test.com',
-  sponsor_benefits: [
+  sponsorEmail: 'sponsor@test.com',
+  sponsorBenefits: [
     {
       title: 'Benefit 1',
       description: 'Desc 1',
       icon: 'UserGroupIcon',
     },
   ],
-  vanity_metrics: [
+  vanityMetrics: [
     {
       label: 'Attendees',
       value: '500+',
@@ -74,12 +74,12 @@ const mockStandardTiers = [
   {
     _id: 't1',
     title: 'Gold',
-    tier_type: 'standard',
+    tierType: 'standard',
     tagline: 'Best tier',
     price: [{ amount: 10000, currency: 'NOK' }],
     perks: [{ label: 'Perk 1', description: 'Desc P1' }],
-    sold_out: false,
-    most_popular: true,
+    soldOut: false,
+    mostPopular: true,
   },
 ] as unknown as SponsorTier[]
 
@@ -87,10 +87,10 @@ const mockAddonTiers = [
   {
     _id: 'a1',
     title: 'Booth',
-    tier_type: 'addon',
+    tierType: 'addon',
     tagline: 'Extra booth',
     price: [{ amount: 5000, currency: 'NOK' }],
-    sold_out: false,
+    soldOut: false,
   },
 ] as unknown as SponsorTier[]
 
@@ -98,9 +98,9 @@ const mockSpecialTiers = [
   {
     _id: 's1',
     title: 'Media',
-    tier_type: 'special',
+    tierType: 'special',
     tagline: 'Media partner',
-    sold_out: false,
+    soldOut: false,
   },
 ] as unknown as SponsorTier[]
 
@@ -163,8 +163,8 @@ describe('SponsorProspectus', () => {
       <SponsorProspectus
         conference={{
           ...mockConference,
-          sponsor_benefits: [],
-          vanity_metrics: [],
+          sponsorBenefits: [],
+          vanityMetrics: [],
           featuredGalleryImages: [],
         }}
         standardTiers={[]}

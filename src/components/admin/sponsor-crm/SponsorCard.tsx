@@ -162,7 +162,7 @@ export function SponsorCard({
           {sponsor.sponsor.logo ? (
             <SponsorLogo
               logo={sponsor.sponsor.logo}
-              logoBright={sponsor.sponsor.logo_bright}
+              logoBright={sponsor.sponsor.logoBright}
               name={sponsor.sponsor.name}
               className="max-h-full w-auto max-w-14 object-contain"
             />
@@ -173,14 +173,14 @@ export function SponsorCard({
           )}
         </div>
         {/* Assignee */}
-        {sponsor.assigned_to && (
+        {sponsor.assignedTo && (
           <div className="scale-[0.8] transform">
             <SpeakerAvatars
               speakers={[
                 {
-                  _id: sponsor.assigned_to._id,
-                  name: sponsor.assigned_to.name,
-                  image: sponsor.assigned_to.image,
+                  _id: sponsor.assignedTo._id,
+                  name: sponsor.assignedTo.name,
+                  image: sponsor.assignedTo.image,
                 } as Speaker,
               ]}
               size="sm"
@@ -225,10 +225,10 @@ export function SponsorCard({
             <span
               className={clsx(
                 'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] leading-none font-medium',
-                getInvoiceStatusColor(sponsor.invoice_status),
+                getInvoiceStatusColor(sponsor.invoiceStatus),
               )}
             >
-              {formatInvoiceStatusLabel(sponsor.invoice_status)}
+              {formatInvoiceStatusLabel(sponsor.invoiceStatus)}
             </span>
           )}
         </div>

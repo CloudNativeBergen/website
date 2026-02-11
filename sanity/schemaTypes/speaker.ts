@@ -98,12 +98,12 @@ export default defineType({
       type: 'text',
     }),
     defineField({
-      name: 'is_organizer',
+      name: 'isOrganizer',
       title: 'Is this a organizer?',
       type: 'boolean',
     }),
     defineField({
-      name: 'is_featured',
+      name: 'isFeatured',
       title: 'Is this as featured speaker?',
       type: 'boolean',
       deprecated: {

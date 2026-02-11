@@ -61,9 +61,9 @@ export function SponsorAddModal({
     name: '',
     website: '',
     logo: null,
-    logo_bright: null,
+    logoBright: null,
     tierId: preselectedTierId || '',
-    org_number: '',
+    orgNumber: '',
   })
 
   const [availableSponsors, setAvailableSponsors] = useState<SponsorExisting[]>(
@@ -109,9 +109,9 @@ export function SponsorAddModal({
           name: editingSponsor.sponsor.name,
           website: editingSponsor.sponsor.website || '',
           logo: editingSponsor.sponsor.logo || null,
-          logo_bright: editingSponsor.sponsor.logo_bright || null,
+          logoBright: editingSponsor.sponsor.logoBright || null,
           tierId: tierMatch?._id || '',
-          org_number: '',
+          orgNumber: '',
         }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
@@ -121,9 +121,9 @@ export function SponsorAddModal({
           name: '',
           website: '',
           logo: null,
-          logo_bright: null,
+          logoBright: null,
           tierId: preselectedTierId || '',
-          org_number: '',
+          orgNumber: '',
         }))
         setIsCreatingNew(false)
         setSelectedExistingSponsor(null)
@@ -146,8 +146,8 @@ export function SponsorAddModal({
         name: formData.name,
         website: formData.website,
         logo: formData.logo || null,
-        logo_bright: formData.logo_bright || null,
-        org_number: formData.org_number || undefined,
+        logoBright: formData.logoBright || null,
+        orgNumber: formData.orgNumber || undefined,
       }
 
       if (editingSponsor) {
@@ -189,13 +189,13 @@ export function SponsorAddModal({
             name: updatedSponsor.name,
             website: updatedSponsor.website,
             logo: updatedSponsor.logo,
-            logo_bright: updatedSponsor.logo_bright,
+            logoBright: updatedSponsor.logoBright,
           },
           tier: {
             _id: selectedTier?._id,
             title: selectedTier?.title || '',
             tagline: selectedTier?.tagline || '',
-            tier_type: selectedTier?.tier_type,
+            tierType: selectedTier?.tierType,
           },
         }
 
@@ -209,7 +209,7 @@ export function SponsorAddModal({
                     ...sponsor,
                     name: updatedSponsor.name,
                     logo: updatedSponsor.logo,
-                    logo_bright: updatedSponsor.logo_bright,
+                    logoBright: updatedSponsor.logoBright,
                     website: updatedSponsor.website,
                   }
                 : sponsor,
@@ -236,8 +236,8 @@ export function SponsorAddModal({
           conference: conferenceId,
           tier: formData.tierId,
           status: 'closed-won',
-          contract_status: 'none',
-          invoice_status: 'not-sent',
+          contractStatus: 'none',
+          invoiceStatus: 'not-sent',
         })
 
         const selectedTier = sponsorTiers.find(
@@ -251,13 +251,13 @@ export function SponsorAddModal({
             name: formData.name,
             website: formData.website,
             logo: formData.logo,
-            logo_bright: formData.logo_bright || undefined,
+            logoBright: formData.logoBright || undefined,
           },
           tier: {
             _id: selectedTier?._id,
             title: selectedTier?.title || '',
             tagline: selectedTier?.tagline || '',
-            tier_type: selectedTier?.tier_type,
+            tierType: selectedTier?.tierType,
           },
         }
 
@@ -271,7 +271,7 @@ export function SponsorAddModal({
             name: formData.name,
             website: formData.website,
             logo: formData.logo,
-            logo_bright: formData.logo_bright,
+            logoBright: formData.logoBright,
           }
           setAvailableSponsors((prev) =>
             [...prev, newSponsor].sort((a, b) => a.name.localeCompare(b.name)),
@@ -298,9 +298,9 @@ export function SponsorAddModal({
         name: sponsor.name,
         website: sponsor.website || '',
         logo: sponsor.logo || '',
-        logo_bright: sponsor.logo_bright || '',
+        logoBright: sponsor.logoBright || '',
         tierId: formData.tierId,
-        org_number: '',
+        orgNumber: '',
       })
       setSponsorId(sponsor._id)
       setIsCreatingNew(false)
@@ -315,8 +315,8 @@ export function SponsorAddModal({
       name: query,
       website: '',
       logo: null,
-      logo_bright: null,
-      org_number: '',
+      logoBright: null,
+      orgNumber: '',
     }))
     setSponsorId('')
 
@@ -596,7 +596,7 @@ export function SponsorAddModal({
 
                           <div className="sm:col-span-2">
                             <label
-                              htmlFor="org_number"
+                              htmlFor="orgNumber"
                               className="block text-sm/6 font-medium text-gray-900 dark:text-white"
                             >
                               Organization Number
@@ -604,12 +604,12 @@ export function SponsorAddModal({
                             <div className="mt-2">
                               <input
                                 type="text"
-                                id="org_number"
-                                value={formData.org_number}
+                                id="orgNumber"
+                                value={formData.orgNumber}
                                 onChange={(e) =>
                                   setFormData((prev) => ({
                                     ...prev,
-                                    org_number: e.target.value,
+                                    orgNumber: e.target.value,
                                   }))
                                 }
                                 className="block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10 dark:placeholder:text-gray-500 dark:focus:outline-indigo-500"
@@ -621,7 +621,7 @@ export function SponsorAddModal({
                           <div className="sm:col-span-2">
                             <SponsorLogoEditor
                               logo={formData.logo || null}
-                              logoBright={formData.logo_bright || null}
+                              logoBright={formData.logoBright || null}
                               name={formData.name}
                               onChange={(updates) =>
                                 setFormData((prev) => ({ ...prev, ...updates }))

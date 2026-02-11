@@ -319,7 +319,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                                       c: unknown,
                                     ): c is {
                                       title: string
-                                      start_date: string
+                                      startDate: string
                                     } =>
                                       c !== null &&
                                       typeof c === 'object' &&
@@ -327,7 +327,7 @@ export function ProposalDetail({ proposal }: ProposalDetailProps) {
                                       'start_date' in c
 
                                     if (isConferenceObject(talk.conference)) {
-                                      return `${talk.conference.title} (${formatDateSafe(talk.conference.start_date)})`
+                                      return `${talk.conference.title} (${formatDateSafe(talk.conference.startDate)})`
                                     }
                                     return 'Conference'
                                   })()}

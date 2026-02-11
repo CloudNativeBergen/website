@@ -36,23 +36,23 @@ export interface SponsorBenefit {
 }
 
 export interface SponsorshipCustomization {
-  hero_headline?: string
-  hero_subheadline?: string
-  package_section_title?: string
-  addon_section_title?: string
-  philosophy_title?: string
-  philosophy_description?: string
-  closing_quote?: string
-  closing_cta_text?: string
-  prospectus_url?: string
+  heroHeadline?: string
+  heroSubheadline?: string
+  packageSectionTitle?: string
+  addonSectionTitle?: string
+  philosophyTitle?: string
+  philosophyDescription?: string
+  closingQuote?: string
+  closingCtaText?: string
+  prospectusUrl?: string
 }
 
 export interface TicketCustomization {
-  hero_headline?: string
-  hero_subheadline?: string
-  show_vanity_metrics?: boolean
-  group_discount_info?: string
-  cta_button_text?: string
+  heroHeadline?: string
+  heroSubheadline?: string
+  showVanityMetrics?: boolean
+  groupDiscountInfo?: string
+  ctaButtonText?: string
 }
 
 export interface TicketInclusion {
@@ -74,56 +74,56 @@ export interface Conference {
   organizer: string
   city: string
   country: string
-  venue_name?: string
-  venue_address?: string
+  venueName?: string
+  venueAddress?: string
   tagline?: string
   description?: string
-  logo_bright?: string
-  logo_dark?: string
-  logomark_bright?: string
-  logomark_dark?: string
+  logoBright?: string
+  logoDark?: string
+  logomarkBright?: string
+  logomarkDark?: string
   announcement?: TypedObject[]
-  start_date: string
-  end_date: string
-  cfp_start_date: string
-  cfp_end_date: string
-  cfp_notify_date: string
-  cfp_email: string
-  sponsor_email: string
-  program_date: string
-  registration_link?: string
-  registration_enabled: boolean
-  workshop_registration_start?: string
-  workshop_registration_end?: string
-  contact_email: string
-  checkin_customer_id?: number
-  checkin_event_id?: number
-  ticket_capacity?: number
-  ticket_targets?: SalesTargetConfig
-  travel_support_budget?: number
-  cfp_submission_goal?: number
-  cfp_lightning_goal?: number
-  cfp_presentation_goal?: number
-  cfp_workshop_goal?: number
-  sponsor_revenue_goal?: number
-  sales_notification_channel?: string
-  cfp_notification_channel?: string
-  social_links?: string[]
+  startDate: string
+  endDate: string
+  cfpStartDate: string
+  cfpEndDate: string
+  cfpNotifyDate: string
+  cfpEmail: string
+  sponsorEmail: string
+  programDate: string
+  registrationLink?: string
+  registrationEnabled: boolean
+  workshopRegistrationStart?: string
+  workshopRegistrationEnd?: string
+  contactEmail: string
+  checkinCustomerId?: number
+  checkinEventId?: number
+  ticketCapacity?: number
+  ticketTargets?: SalesTargetConfig
+  travelSupportBudget?: number
+  cfpSubmissionGoal?: number
+  cfpLightningGoal?: number
+  cfpPresentationGoal?: number
+  cfpWorkshopGoal?: number
+  sponsorRevenueGoal?: number
+  salesNotificationChannel?: string
+  cfpNotificationChannel?: string
+  socialLinks?: string[]
   organizers: Speaker[]
-  featured_speakers?: SpeakerWithTalks[]
-  featured_talks?: ProposalExisting[]
+  featuredSpeakers?: SpeakerWithTalks[]
+  featuredTalks?: ProposalExisting[]
   domains: string[]
   formats: Format[]
   topics: Topic[]
   sponsors?: ConferenceSponsor[]
-  sponsor_tiers?: SponsorTier[]
-  sponsor_benefits?: SponsorBenefit[]
-  sponsorship_customization?: SponsorshipCustomization
-  ticket_customization?: TicketCustomization
-  ticket_inclusions?: TicketInclusion[]
-  ticket_faqs?: TicketFaq[]
+  sponsorTiers?: SponsorTier[]
+  sponsorBenefits?: SponsorBenefit[]
+  sponsorshipCustomization?: SponsorshipCustomization
+  ticketCustomization?: TicketCustomization
+  ticketInclusions?: TicketInclusion[]
+  ticketFaqs?: TicketFaq[]
   schedules?: ConferenceSchedule[]
-  vanity_metrics?: ConferenceVanityMetric[]
+  vanityMetrics?: ConferenceVanityMetric[]
   features?: string[]
   featuredGalleryImages?: GalleryImageWithSpeakers[]
   galleryImages?: GalleryImageWithSpeakers[]

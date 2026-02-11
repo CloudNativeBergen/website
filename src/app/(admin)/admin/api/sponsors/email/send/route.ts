@@ -34,12 +34,12 @@ export const POST = auth(async (req: NextAuthRequest) => {
     const sfc = await clientRead.fetch<{
       _id: string
       status: string
-      contact_persons?: Array<{ name: string; email: string }>
+      contactPersons?: Array<{ name: string; email: string }>
     }>(
       `*[_type == "sponsorForConference" && sponsor._ref == $sponsorId && conference._ref == $conferenceId][0]{
         _id,
         status,
-        contact_persons[]{ name, email }
+        contactPersons[]{ name, email }
       }`,
       { sponsorId, conferenceId: conference._id },
     )
@@ -51,7 +51,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
       )
     }
 
-    const contacts = sfc.contact_persons || []
+    const contacts = sfc.contactPersons || []
     const recipients = contacts
       .filter((c) => c.email)
       .map((c) => ({ email: c.email, name: c.name }))
@@ -73,16 +73,16 @@ export const POST = auth(async (req: NextAuthRequest) => {
       htmlContent: htmlContent!,
     })
 
-    if (!conference.sponsor_email) {
+    if (!conference.sponsorEmail) {
       return createEmailErrorResponse(
-        'Missing sponsor_email in conference configuration',
+        'Missing sponsorEmail in conference configuration',
         500,
       )
     }
 
     const result = await retryWithBackoff(async () => {
       return await resend.emails.send({
-        from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsor_email}>`,
+        from: `${conference.organizer || 'Cloud Native Days'} <${conference.sponsorEmail}>`,
         to: recipients.map((r) => r.email),
         subject,
         react: emailTemplate,

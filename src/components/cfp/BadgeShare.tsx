@@ -29,11 +29,11 @@ export function BadgeShare({
   domain,
   className = '',
 }: BadgeShareProps) {
-  const badgeTypeName = badge.badge_type === 'speaker' ? 'Speaker' : 'Organizer'
-  const badgeSvgUrl = badge.baked_svg?.asset?.url
-  const badgeUrl = `/badge/${badge.badge_id}`
-  const downloadUrl = `/api/badge/${badge.badge_id}/download`
-  const jsonUrl = `/api/badge/${badge.badge_id}/json`
+  const badgeTypeName = badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
+  const badgeSvgUrl = badge.bakedSvg?.asset?.url
+  const badgeUrl = `/badge/${badge.badgeId}`
+  const downloadUrl = `/api/badge/${badge.badgeId}/download`
+  const jsonUrl = `/api/badge/${badge.badgeId}/json`
   const fullBadgeUrl = buildFullUrl(domain, badgeUrl)
   const fullJsonUrl = buildFullUrl(domain, jsonUrl)
 
@@ -43,7 +43,7 @@ export function BadgeShare({
   }
 
   const handleAddToLinkedIn = () => {
-    const issueDate = new Date(badge.issued_at)
+    const issueDate = new Date(badge.issuedAt)
     // Extract organization name from badge or use default
     const organizationName =
       typeof badge.conference === 'object' &&
@@ -58,7 +58,7 @@ export function BadgeShare({
       issueYear: issueDate.getFullYear(),
       issueMonth: issueDate.getMonth() + 1,
       certUrl: fullBadgeUrl,
-      certId: badge.badge_id,
+      certId: badge.badgeId,
     })
   }
 

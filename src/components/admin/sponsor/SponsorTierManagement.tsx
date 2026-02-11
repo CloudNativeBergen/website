@@ -336,7 +336,7 @@ export function SponsorTierManagement({
                             {sponsor.logo ? (
                               <SponsorLogo
                                 logo={sponsor.logo}
-                                logoBright={sponsor.logo_bright}
+                                logoBright={sponsor.logoBright}
                                 name={sponsor.name}
                                 style={ADMIN_LOGO_SIZE}
                                 className="flex h-12 w-12 items-center justify-center"

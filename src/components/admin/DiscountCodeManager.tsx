@@ -30,7 +30,7 @@ interface SponsorWithTierInfo {
   tier: {
     title: string
     tagline: string
-    tier_type: 'standard' | 'special'
+    tierType: 'standard' | 'special'
   }
   ticketEntitlement: number
 }
@@ -42,10 +42,10 @@ interface DiscountCodeManagerProps {
     title: string
     city: string
     country: string
-    start_date: string
+    startDate: string
     domains: string[]
-    social_links?: string[]
-    contact_email: string
+    socialLinks?: string[]
+    contactEmail: string
     domain: string
   }
 }
@@ -822,7 +822,7 @@ export function DiscountCodeManager({
           sponsor={emailModal.sponsor}
           discountCode={emailModal.discountCode}
           domain={conference.domain}
-          fromEmail={conference.contact_email}
+          fromEmail={conference.contactEmail}
           conference={conference}
         />
       )}

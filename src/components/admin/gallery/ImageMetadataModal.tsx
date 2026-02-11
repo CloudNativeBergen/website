@@ -571,7 +571,7 @@ export function ImageMetadataModal({
                                             >
                                               {speaker.name}
                                             </span>
-                                            {speaker.is_organizer && (
+                                            {speaker.isOrganizer && (
                                               <span
                                                 className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ${active ? 'bg-indigo-700 text-indigo-100' : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400'}`}
                                               >

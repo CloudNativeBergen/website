@@ -97,7 +97,7 @@ const config = {
           name: speaker.name,
           email: speaker.email,
           image: speaker.image,
-          is_organizer: speaker.is_organizer,
+          isOrganizer: speaker.isOrganizer,
           flags: speaker.flags,
         }
       }
@@ -166,7 +166,7 @@ export async function getAuthSession(req?: {
   }
 
   // SECURITY: Only organizers can impersonate
-  if (!session?.speaker?.is_organizer) {
+  if (!session?.speaker?.isOrganizer) {
     return session
   }
 
@@ -195,7 +195,7 @@ export async function getAuthSession(req?: {
       const { getSpeaker } = await import('@/lib/speaker/sanity')
       const { speaker: impersonatedSpeaker } = await getSpeaker(impersonateId)
 
-      if (impersonatedSpeaker && !impersonatedSpeaker.is_organizer) {
+      if (impersonatedSpeaker && !impersonatedSpeaker.isOrganizer) {
         // SECURITY: Log impersonation for audit trail
         console.log(
           `[AUDIT] Admin ${session.speaker.email} (${session.speaker._id}) impersonating ${impersonatedSpeaker.email} (${impersonatedSpeaker._id})`,
@@ -207,7 +207,7 @@ export async function getAuthSession(req?: {
           isImpersonating: true,
           realAdmin: session.speaker,
         }
-      } else if (impersonatedSpeaker?.is_organizer) {
+      } else if (impersonatedSpeaker?.isOrganizer) {
         // SECURITY: Log attempted organizer impersonation
         console.error(
           `[SECURITY] Admin ${session.speaker.email} attempted to impersonate another organizer: ${impersonatedSpeaker.email}`,

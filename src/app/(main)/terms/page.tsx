@@ -42,7 +42,7 @@ async function CachedTermsContent({ domain }: { domain: string }) {
   }
 
   const lastUpdated = 'October 31, 2025'
-  const contactEmail = conference.contact_email || 'contact@cloudnativedays.no'
+  const contactEmail = conference.contactEmail || 'contact@cloudnativedays.no'
   const organizationName = conference.organizer || 'Cloud Native Days'
 
   return (

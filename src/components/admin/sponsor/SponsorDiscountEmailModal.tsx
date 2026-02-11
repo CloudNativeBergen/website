@@ -17,7 +17,7 @@ interface SponsorWithTierInfo {
   tier: {
     title: string
     tagline: string
-    tier_type: 'standard' | 'special'
+    tierType: 'standard' | 'special'
   }
   ticketEntitlement: number
 }
@@ -33,9 +33,9 @@ interface SponsorDiscountEmailModalProps {
     title: string
     city: string
     country: string
-    start_date: string
+    startDate: string
     domains: string[]
-    social_links?: string[]
+    socialLinks?: string[]
   }
 }
 
@@ -237,9 +237,9 @@ As a {{{SPONSOR_TIER}}} sponsor, you're entitled to {{{TICKET_COUNT}}} complimen
         subject={processedSubject}
         eventName={conference.title}
         eventLocation={`${conference.city}, ${conference.country}`}
-        eventDate={formatConferenceDateLong(conference.start_date)}
+        eventDate={formatConferenceDateLong(conference.startDate)}
         eventUrl={`https://${conference.domains[0]}`}
-        socialLinks={conference.social_links || []}
+        socialLinks={conference.socialLinks || []}
         content={<div dangerouslySetInnerHTML={{ __html: fullContent }} />}
       />
     )

@@ -168,7 +168,7 @@ export const volunteerRouter = router({
 
         let conferenceForEmail: typeof volunteer.conference =
           volunteer.conference
-        if (!conferenceForEmail || !conferenceForEmail.contact_email) {
+        if (!conferenceForEmail || !conferenceForEmail.contactEmail) {
           const { conference: currentConf, error: confError } =
             await getConferenceForCurrentDomain()
           if (confError || !currentConf) {
@@ -181,18 +181,18 @@ export const volunteerRouter = router({
           conferenceForEmail = {
             _id: volunteer.conference?._id || currentConf._id,
             title: volunteer.conference?.title || currentConf.title,
-            contact_email: currentConf.contact_email,
-            cfp_email: currentConf.cfp_email,
+            contactEmail: currentConf.contactEmail,
+            cfpEmail: currentConf.cfpEmail,
             city: currentConf.city,
             country: currentConf.country,
-            start_date: currentConf.start_date,
+            startDate: currentConf.startDate,
             domains: currentConf.domains,
             organizer: currentConf.organizer,
-            social_links:
-              Array.isArray(currentConf.social_links) &&
-              currentConf.social_links.length > 0 &&
-              typeof currentConf.social_links[0] === 'object'
-                ? (currentConf.social_links as unknown as Array<{
+            socialLinks:
+              Array.isArray(currentConf.socialLinks) &&
+              currentConf.socialLinks.length > 0 &&
+              typeof currentConf.socialLinks[0] === 'object'
+                ? (currentConf.socialLinks as unknown as Array<{
                     platform: string
                     url: string
                   }>)

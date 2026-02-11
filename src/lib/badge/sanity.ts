@@ -8,7 +8,7 @@ const BADGE_FIELDS = `
   _id,
   _createdAt,
   _updatedAt,
-  badge_id,
+  badgeId,
   speaker->{
     _id,
     name,
@@ -28,13 +28,13 @@ const BADGE_FIELDS = `
     city,
     country,
     tagline,
-    start_date,
-    end_date
+    startDate,
+    endDate
   },
-  badge_type,
-  issued_at,
-  badge_json,
-  baked_svg{
+  badgeType,
+  issuedAt,
+  badgeJson,
+  bakedSvg{
     _type,
     asset->{
       _id,
@@ -42,11 +42,11 @@ const BADGE_FIELDS = `
       originalFilename
     }
   },
-  verification_url,
-  email_sent,
-  email_sent_at,
-  email_id,
-  email_error
+  verificationUrl,
+  emailSent,
+  emailSentAt,
+  emailId,
+  emailError
 `
 
 export async function uploadBadgeSVGAsset(
@@ -82,7 +82,7 @@ export async function createBadge(params: {
   try {
     const doc = {
       _type: 'speakerBadge',
-      badge_id: params.badgeId,
+      badgeId: params.badgeId,
       speaker: {
         _type: 'reference',
         _ref: params.speakerId,
@@ -91,18 +91,18 @@ export async function createBadge(params: {
         _type: 'reference',
         _ref: params.conferenceId,
       },
-      badge_type: params.badgeType,
-      issued_at: params.issuedAt,
-      badge_json: params.badgeJson,
-      baked_svg: {
+      badgeType: params.badgeType,
+      issuedAt: params.issuedAt,
+      badgeJson: params.badgeJson,
+      bakedSvg: {
         _type: 'file',
         asset: {
           _type: 'reference',
           _ref: params.bakedSvgAssetId,
         },
       },
-      verification_url: params.verificationUrl,
-      email_sent: false,
+      verificationUrl: params.verificationUrl,
+      emailSent: false,
     }
 
     const created = await clientWrite.create(doc)
@@ -128,7 +128,7 @@ export async function getBadgeById(
 ): Promise<{ badge?: BadgeRecord; error?: Error }> {
   try {
     const badge = await clientRead.fetch<BadgeRecord>(
-      `*[_type == "speakerBadge" && badge_id == $badgeId][0]{${BADGE_FIELDS}}`,
+      `*[_type == "speakerBadge" && badgeId == $badgeId][0]{${BADGE_FIELDS}}`,
       { badgeId },
     )
 
@@ -148,7 +148,7 @@ export async function listBadgesForConference(
 ): Promise<{ badges?: BadgeRecord[]; error?: Error }> {
   try {
     const badges = await clientRead.fetch<BadgeRecord[]>(
-      `*[_type == "speakerBadge" && conference._ref == $conferenceId] | order(issued_at desc) {${BADGE_FIELDS}}`,
+      `*[_type == "speakerBadge" && conference._ref == $conferenceId] | order(issuedAt desc) {${BADGE_FIELDS}}`,
       { conferenceId },
     )
 
@@ -164,7 +164,7 @@ export async function listBadgesForSpeaker(
 ): Promise<{ badges?: BadgeRecord[]; error?: Error }> {
   try {
     const badges = await clientRead.fetch<BadgeRecord[]>(
-      `*[_type == "speakerBadge" && speaker._ref == $speakerId] | order(issued_at desc) {${BADGE_FIELDS}}`,
+      `*[_type == "speakerBadge" && speaker._ref == $speakerId] | order(issuedAt desc) {${BADGE_FIELDS}}`,
       { speakerId },
     )
 
@@ -183,7 +183,7 @@ export async function updateBadgeEmailStatus(
 ): Promise<{ badge?: BadgeRecord; error?: Error }> {
   try {
     const badge = await clientRead.fetch<{ _id: string }>(
-      `*[_type == "speakerBadge" && badge_id == $badgeId][0]{ _id }`,
+      `*[_type == "speakerBadge" && badgeId == $badgeId][0]{ _id }`,
       { badgeId },
     )
 
@@ -192,18 +192,18 @@ export async function updateBadgeEmailStatus(
     }
 
     const updates: Record<string, unknown> = {
-      email_sent: status === 'sent',
+      emailSent: status === 'sent',
     }
 
     if (status === 'sent') {
-      updates.email_sent_at = new Date().toISOString()
+      updates.emailSentAt = new Date().toISOString()
       if (emailId) {
-        updates.email_id = emailId
+        updates.emailId = emailId
       }
     }
 
     if (status === 'failed' && errorMessage) {
-      updates.email_error = errorMessage
+      updates.emailError = errorMessage
     }
 
     const updated = await clientWrite.patch(badge._id).set(updates).commit()
@@ -227,7 +227,7 @@ export async function checkBadgeExists(
 ): Promise<{ exists: boolean; badge?: BadgeRecord; error?: Error }> {
   try {
     const badge = await clientRead.fetch<BadgeRecord>(
-      `*[_type == "speakerBadge" && speaker._ref == $speakerId && conference._ref == $conferenceId && badge_type == $badgeType][0]{${BADGE_FIELDS}}`,
+      `*[_type == "speakerBadge" && speaker._ref == $speakerId && conference._ref == $conferenceId && badgeType == $badgeType][0]{${BADGE_FIELDS}}`,
       { speakerId, conferenceId, badgeType },
     )
 
@@ -239,11 +239,11 @@ export async function checkBadgeExists(
 }
 
 export function getBadgeSVGUrl(badge: BadgeRecord): string | null {
-  if (!badge.baked_svg?.asset) {
+  if (!badge.bakedSvg?.asset) {
     return null
   }
 
-  const asset = badge.baked_svg.asset
+  const asset = badge.bakedSvg.asset
   if ('url' in asset && typeof asset.url === 'string') {
     return asset.url
   }
@@ -261,22 +261,21 @@ export async function getBadgeStats(conferenceId: string): Promise<{
   try {
     const badges = await clientRead.fetch<
       {
-        badge_type: BadgeType
-        email_sent: boolean
-        email_error?: string
+        badgeType: BadgeType
+        emailSent: boolean
+        emailError?: string
       }[]
     >(
-      `*[_type == "speakerBadge" && conference._ref == $conferenceId]{badge_type, email_sent, email_error}`,
+      `*[_type == "speakerBadge" && conference._ref == $conferenceId]{badgeType, emailSent, emailError}`,
       { conferenceId },
     )
 
     const stats = {
       totalBadges: badges.length,
-      speakerBadges: badges.filter((b) => b.badge_type === 'speaker').length,
-      organizerBadges: badges.filter((b) => b.badge_type === 'organizer')
-        .length,
-      emailsSent: badges.filter((b) => b.email_sent).length,
-      emailsFailed: badges.filter((b) => !b.email_sent && b.email_error).length,
+      speakerBadges: badges.filter((b) => b.badgeType === 'speaker').length,
+      organizerBadges: badges.filter((b) => b.badgeType === 'organizer').length,
+      emailsSent: badges.filter((b) => b.emailSent).length,
+      emailsFailed: badges.filter((b) => !b.emailSent && b.emailError).length,
     }
 
     return stats
@@ -298,9 +297,9 @@ export async function deleteBadge(
   try {
     const badge = await clientRead.fetch<{
       _id: string
-      baked_svg?: { asset?: { _ref?: string } }
+      bakedSvg?: { asset?: { _ref?: string } }
     }>(
-      `*[_type == "speakerBadge" && badge_id == $badgeId][0]{ _id, baked_svg }`,
+      `*[_type == "speakerBadge" && badgeId == $badgeId][0]{ _id, bakedSvg }`,
       { badgeId },
     )
 
@@ -308,7 +307,7 @@ export async function deleteBadge(
       return { success: false, error: new Error('Badge not found') }
     }
 
-    const assetId = badge.baked_svg?.asset?._ref
+    const assetId = badge.bakedSvg?.asset?._ref
     if (assetId) {
       try {
         await clientWrite.delete(assetId)

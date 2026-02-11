@@ -218,10 +218,10 @@ describe('buildTemplateVariables', () => {
       conference: {
         title: 'Conf',
         city: 'Bergen',
-        start_date: '2026-06-10',
+        startDate: '2026-06-10',
         organizer: 'Cloud Native Bergen',
         domains: ['conf.example.com'],
-        prospectus_url: 'https://slides.example.com/sponsor',
+        prospectusUrl: 'https://slides.example.com/sponsor',
       },
       senderName: 'Alice',
       tierName: 'Gold',
@@ -241,7 +241,7 @@ describe('buildTemplateVariables', () => {
   it('formats date as DD/MM-YY', () => {
     const vars = buildTemplateVariables({
       sponsorName: 'Acme',
-      conference: { title: 'Conf', start_date: '2026-06-10' },
+      conference: { title: 'Conf', startDate: '2026-06-10' },
     })
     expect(vars.CONFERENCE_DATE).toBe('10/06-26')
     expect(vars.CONFERENCE_YEAR).toBe('2026')
@@ -394,7 +394,7 @@ describe('findBestTemplate', () => {
         _id: '2',
         category: 'cold-outreach',
         language: 'no',
-        is_default: true,
+        isDefault: true,
       }),
     ]
     expect(findBestTemplate(templates, 'cold-outreach', 'no')?._id).toBe('2')

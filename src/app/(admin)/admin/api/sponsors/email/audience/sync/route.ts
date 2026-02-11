@@ -56,9 +56,9 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     const eligibleSponsors = crmSponsors.filter(
       (s: SponsorForConferenceExpanded) =>
-        s.contact_persons &&
-        s.contact_persons.length > 0 &&
-        s.contact_persons.some((contact) => contact.email),
+        s.contactPersons &&
+        s.contactPersons.length > 0 &&
+        s.contactPersons.some((contact) => contact.email),
     )
 
     if (eligibleSponsors.length === 0) {
@@ -76,7 +76,7 @@ export const POST = auth(async (req: NextAuthRequest) => {
 
     const sponsorContacts: Contact[] = eligibleSponsors.flatMap(
       (s: SponsorForConferenceExpanded) =>
-        s.contact_persons
+        s.contactPersons
           ?.filter((contact) => contact.email)
           .map((contact) => ({
             email: contact.email,

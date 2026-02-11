@@ -93,7 +93,7 @@ async function getAllSponsorTiers(conferenceId?: string): Promise<{
         _updatedAt,
         title,
         tagline,
-        tier_type,
+        tierType,
         price[]{
           _key,
           amount,
@@ -104,9 +104,9 @@ async function getAllSponsorTiers(conferenceId?: string): Promise<{
           label,
           description
         },
-        sold_out,
-        most_popular,
-        max_quantity
+        soldOut,
+        mostPopular,
+        maxQuantity
       }`,
       params,
     )
@@ -488,8 +488,8 @@ export const sponsorRouter = router({
         z.object({
           conferenceId: z.string().min(1),
           status: z.array(z.string()).optional(),
-          invoice_status: z.array(z.string()).optional(),
-          assigned_to: z.string().optional(),
+          invoiceStatus: z.array(z.string()).optional(),
+          assignedTo: z.string().optional(),
           unassigned_only: z.boolean().optional(),
           tags: z.array(z.string()).optional(),
           tiers: z.array(z.string()).optional(),
@@ -500,8 +500,8 @@ export const sponsorRouter = router({
           input.conferenceId,
           {
             status: input.status,
-            invoice_status: input.invoice_status,
-            assigned_to: input.assigned_to,
+            invoiceStatus: input.invoiceStatus,
+            assignedTo: input.assignedTo,
             unassigned_only: input.unassigned_only,
             tags: input.tags,
             tiers: input.tiers,
@@ -545,14 +545,13 @@ export const sponsorRouter = router({
         const userId = ctx.speaker._id
         const data = {
           ...input,
-          assigned_to:
-            input.assigned_to === null ? undefined : input.assigned_to,
+          assignedTo: input.assignedTo === null ? undefined : input.assignedTo,
           tags: input.tags as SponsorTag[] | undefined,
         }
 
         // Auto-assign to current user if not provided
-        if (!data.assigned_to && userId) {
-          data.assigned_to = userId
+        if (!data.assignedTo && userId) {
+          data.assignedTo = userId
         }
 
         const { sponsorForConference, error } =
@@ -596,32 +595,32 @@ export const sponsorRouter = router({
         const { sponsorForConference, error } =
           await updateSponsorForConference(id, {
             ...updateData,
-            assigned_to:
-              updateData.assigned_to === null
+            assignedTo:
+              updateData.assignedTo === null
                 ? undefined
-                : updateData.assigned_to,
+                : updateData.assignedTo,
             billing:
               updateData.billing === null ? undefined : updateData.billing,
-            contact_initiated_at:
-              updateData.contact_initiated_at === null
+            contactInitiatedAt:
+              updateData.contactInitiatedAt === null
                 ? undefined
-                : updateData.contact_initiated_at,
-            contract_signed_at:
-              updateData.contract_signed_at === null
+                : updateData.contactInitiatedAt,
+            contractSignedAt:
+              updateData.contractSignedAt === null
                 ? undefined
-                : updateData.contract_signed_at,
-            contract_value:
-              updateData.contract_value === null
+                : updateData.contractSignedAt,
+            contractValue:
+              updateData.contractValue === null
                 ? undefined
-                : updateData.contract_value,
-            invoice_sent_at:
-              updateData.invoice_sent_at === null
+                : updateData.contractValue,
+            invoiceSentAt:
+              updateData.invoiceSentAt === null
                 ? undefined
-                : updateData.invoice_sent_at,
-            invoice_paid_at:
-              updateData.invoice_paid_at === null
+                : updateData.invoiceSentAt,
+            invoicePaidAt:
+              updateData.invoicePaidAt === null
                 ? undefined
-                : updateData.invoice_paid_at,
+                : updateData.invoicePaidAt,
             notes: updateData.notes === null ? undefined : updateData.notes,
             tags: updateData.tags as SponsorTag[] | undefined,
           })
@@ -648,42 +647,42 @@ export const sponsorRouter = router({
             }
 
             if (
-              updateData.invoice_status &&
-              updateData.invoice_status !== existing.invoice_status
+              updateData.invoiceStatus &&
+              updateData.invoiceStatus !== existing.invoiceStatus
             ) {
               await logInvoiceStatusChange(
                 id,
-                existing.invoice_status,
-                updateData.invoice_status,
+                existing.invoiceStatus,
+                updateData.invoiceStatus,
                 userId,
               )
             }
 
             if (
-              updateData.contract_status &&
-              updateData.contract_status !== existing.contract_status
+              updateData.contractStatus &&
+              updateData.contractStatus !== existing.contractStatus
             ) {
               await logContractStatusChange(
                 id,
-                existing.contract_status,
-                updateData.contract_status,
+                existing.contractStatus,
+                updateData.contractStatus,
                 userId,
               )
             }
 
             if (
-              updateData.assigned_to !== undefined &&
-              updateData.assigned_to !== (existing.assigned_to?._id || null)
+              updateData.assignedTo !== undefined &&
+              updateData.assignedTo !== (existing.assignedTo?._id || null)
             ) {
               let assigneeName: string | null = null
-              if (updateData.assigned_to) {
+              if (updateData.assignedTo) {
                 try {
                   const { getSpeaker } = await import('@/lib/speaker/sanity')
-                  const { speaker } = await getSpeaker(updateData.assigned_to)
-                  assigneeName = speaker?.name || updateData.assigned_to
+                  const { speaker } = await getSpeaker(updateData.assignedTo)
+                  assigneeName = speaker?.name || updateData.assignedTo
                 } catch (lookupError) {
                   console.error('Failed to lookup assignee name:', lookupError)
-                  assigneeName = updateData.assigned_to
+                  assigneeName = updateData.assignedTo
                 }
               }
               await logAssignmentChange(id, assigneeName, userId)
@@ -749,21 +748,21 @@ export const sponsorRouter = router({
           })
         }
 
-        const oldStatus = existing.invoice_status
+        const oldStatus = existing.invoiceStatus
         const updateData: Partial<{
-          invoice_status: string
-          invoice_sent_at: string | null
-          invoice_paid_at: string | null
+          invoiceStatus: string
+          invoiceSentAt: string | null
+          invoicePaidAt: string | null
         }> = {
-          invoice_status: input.newStatus,
+          invoiceStatus: input.newStatus,
         }
 
-        if (input.newStatus === 'sent' && !existing.invoice_sent_at) {
-          updateData.invoice_sent_at = getCurrentDateTime()
+        if (input.newStatus === 'sent' && !existing.invoiceSentAt) {
+          updateData.invoiceSentAt = getCurrentDateTime()
         }
 
-        if (input.newStatus === 'paid' && !existing.invoice_paid_at) {
-          updateData.invoice_paid_at = getCurrentDateTime()
+        if (input.newStatus === 'paid' && !existing.invoicePaidAt) {
+          updateData.invoicePaidAt = getCurrentDateTime()
         }
 
         const { sponsorForConference, error } =
@@ -813,19 +812,19 @@ export const sponsorRouter = router({
           })
         }
 
-        const oldStatus = existing.contract_status
+        const oldStatus = existing.contractStatus
         const updateData: Partial<{
-          contract_status: string
-          contract_signed_at: string | null
+          contractStatus: string
+          contractSignedAt: string | null
         }> = {
-          contract_status: input.newStatus,
+          contractStatus: input.newStatus,
         }
 
         if (
           input.newStatus === 'contract-signed' &&
-          !existing.contract_signed_at
+          !existing.contractSignedAt
         ) {
-          updateData.contract_signed_at = getCurrentDateTime()
+          updateData.contractSignedAt = getCurrentDateTime()
         }
 
         const { sponsorForConference, error } =

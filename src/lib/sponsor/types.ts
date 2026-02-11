@@ -12,7 +12,7 @@ export interface SponsorTier {
   _updatedAt: string
   title: string
   tagline: string
-  tier_type: 'standard' | 'special' | 'addon'
+  tierType: 'standard' | 'special' | 'addon'
   price?: Array<{
     _key: string
     amount: number
@@ -23,15 +23,15 @@ export interface SponsorTier {
     label: string
     description: string
   }>
-  sold_out: boolean
-  most_popular: boolean
-  max_quantity?: number
+  soldOut: boolean
+  mostPopular: boolean
+  maxQuantity?: number
 }
 
 export interface SponsorTierInput {
   title: string
   tagline: string
-  tier_type: 'standard' | 'special' | 'addon'
+  tierType: 'standard' | 'special' | 'addon'
   price?: Array<{
     _key?: string
     amount: number
@@ -42,9 +42,9 @@ export interface SponsorTierInput {
     label: string
     description: string
   }>
-  sold_out: boolean
-  most_popular: boolean
-  max_quantity?: number
+  soldOut: boolean
+  mostPopular: boolean
+  maxQuantity?: number
 }
 
 export type SponsorTierExisting = SponsorTier
@@ -56,13 +56,13 @@ export interface ConferenceSponsor {
     name: string
     website: string
     logo?: string | null
-    logo_bright?: string | null
+    logoBright?: string | null
   }
   tier: {
     _id?: string
     title: string
     tagline: string
-    tier_type?: 'standard' | 'special' | 'addon'
+    tierType?: 'standard' | 'special' | 'addon'
     price?: Array<{
       _key: string
       amount: number
@@ -77,7 +77,7 @@ export interface ContactPerson extends Record<string, unknown> {
   email: string
   phone?: string
   role?: string
-  is_primary?: boolean
+  isPrimary?: boolean
 }
 
 export interface BillingInfo {
@@ -90,8 +90,8 @@ export interface SponsorInput {
   name: string
   website: string
   logo?: string | null
-  logo_bright?: string | null
-  org_number?: string
+  logoBright?: string | null
+  orgNumber?: string
   tierId?: string
 }
 
@@ -102,7 +102,7 @@ export interface SponsorExisting {
   name: string
   website: string
   logo?: string | null
-  logo_bright?: string | null
+  logoBright?: string | null
 }
 
 export type TemplateCategory =
@@ -126,8 +126,8 @@ export interface SponsorEmailTemplate {
   subject: string
   body?: PortableTextBlock[]
   description?: string
-  is_default?: boolean
-  sort_order?: number
+  isDefault?: boolean
+  sortOrder?: number
 }
 
 export interface PortableTextBlock {

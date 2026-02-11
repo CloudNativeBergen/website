@@ -74,7 +74,7 @@ export default async function ProposalDetailPage({
               <AdminActionBar
                 proposal={proposal}
                 domain={domain}
-                fromEmail={conference.cfp_email}
+                fromEmail={conference.cfpEmail}
                 conference={conference}
               />
             </div>
@@ -90,13 +90,13 @@ export default async function ProposalDetailPage({
               currentVideoUrl={getProposalVideoUrl(proposal)}
               currentAttachments={proposal.attachments}
               status={proposal.status}
-              conferenceEndDate={conference.end_date}
+              conferenceEndDate={conference.endDate}
             />
             <AudienceFeedbackPanel
               proposalId={proposal._id}
               currentFeedback={proposal.audienceFeedback}
               status={proposal.status}
-              conferenceStartDate={conference.start_date}
+              conferenceStartDate={conference.startDate}
             />
           </div>
           <ProposalReviewPanel

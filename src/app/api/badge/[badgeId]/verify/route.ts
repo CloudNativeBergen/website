@@ -43,12 +43,9 @@ export async function GET(
       )
     }
 
-    if (isJWTFormat(badge.badge_json)) {
+    if (isJWTFormat(badge.badgeJson)) {
       try {
-        const credential = await verifyCredentialJWT(
-          badge.badge_json,
-          publicKey,
-        )
+        const credential = await verifyCredentialJWT(badge.badgeJson, publicKey)
 
         const validation = validateCredential(
           credential as Parameters<typeof validateCredential>[0],
@@ -94,7 +91,7 @@ export async function GET(
     // Legacy: Verify Data Integrity Proof format
     let assertion
     try {
-      assertion = JSON.parse(badge.badge_json)
+      assertion = JSON.parse(badge.badgeJson)
     } catch {
       return NextResponse.json({ error: 'Invalid badge JSON' }, { status: 500 })
     }

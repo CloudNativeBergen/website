@@ -23,10 +23,10 @@ export function CompactBadges({ badges }: CompactBadgesProps) {
   }
 
   const handleCopyUrl = async (badge: BadgeRecord) => {
-    if (!badge.verification_url) return
+    if (!badge.verificationUrl) return
 
     try {
-      await navigator.clipboard.writeText(badge.verification_url)
+      await navigator.clipboard.writeText(badge.verificationUrl)
       setCopiedId(badge._id)
       setTimeout(() => setCopiedId(null), 2000)
     } catch (error) {
@@ -35,12 +35,12 @@ export function CompactBadges({ badges }: CompactBadgesProps) {
   }
 
   const handleDownload = (badge: BadgeRecord) => {
-    const svgUrl = badge.baked_svg?.asset?.url
+    const svgUrl = badge.bakedSvg?.asset?.url
     if (!svgUrl) return
 
     const link = document.createElement('a')
     link.href = svgUrl
-    link.download = `badge-${badge.badge_type}-${badge.badge_id}.svg`
+    link.download = `badge-${badge.badgeType}-${badge.badgeId}.svg`
     link.click()
   }
 
@@ -56,8 +56,8 @@ export function CompactBadges({ badges }: CompactBadgesProps) {
       <div className="space-y-2">
         {badges.map((badge) => {
           const badgeTypeName =
-            badge.badge_type === 'speaker' ? 'Speaker' : 'Organizer'
-          const issuedDate = new Date(badge.issued_at).toLocaleDateString(
+            badge.badgeType === 'speaker' ? 'Speaker' : 'Organizer'
+          const issuedDate = new Date(badge.issuedAt).toLocaleDateString(
             'en-US',
             {
               year: 'numeric',
@@ -82,7 +82,7 @@ export function CompactBadges({ badges }: CompactBadgesProps) {
 
               <div className="flex gap-1">
                 <Link
-                  href={`/badge/${badge.badge_id}`}
+                  href={`/badge/${badge.badgeId}`}
                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   title="View badge"
                 >
@@ -93,7 +93,7 @@ export function CompactBadges({ badges }: CompactBadgesProps) {
                   onClick={() => handleDownload(badge)}
                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   title="Download badge"
-                  disabled={!badge.baked_svg?.asset?.url}
+                  disabled={!badge.bakedSvg?.asset?.url}
                 >
                   <ArrowDownTrayIcon className="h-4 w-4" />
                 </button>
@@ -102,7 +102,7 @@ export function CompactBadges({ badges }: CompactBadgesProps) {
                   onClick={() => handleCopyUrl(badge)}
                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                   title="Copy verification URL"
-                  disabled={!badge.verification_url}
+                  disabled={!badge.verificationUrl}
                 >
                   {copiedId === badge._id ? (
                     <CheckIcon className="h-4 w-4 text-green-600 dark:text-green-400" />

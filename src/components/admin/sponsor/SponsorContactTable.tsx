@@ -98,8 +98,8 @@ export function SponsorContactTable({
   const contactRows: ContactRow[] = []
 
   sponsors.forEach((sfc) => {
-    if (sfc.contact_persons && sfc.contact_persons.length > 0) {
-      sfc.contact_persons.forEach((contact, index) => {
+    if (sfc.contactPersons && sfc.contactPersons.length > 0) {
+      sfc.contactPersons.forEach((contact, index) => {
         contactRows.push({
           sfc,
           contact,
@@ -253,9 +253,9 @@ export function SponsorContactTable({
                       <div className="text-sm font-medium text-gray-900 dark:text-white">
                         {row.sfc.sponsor.name}
                       </div>
-                      {row.sfc.sponsor.org_number && (
+                      {row.sfc.sponsor.orgNumber && (
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          Org: {row.sfc.sponsor.org_number}
+                          Org: {row.sfc.sponsor.orgNumber}
                         </div>
                       )}
                     </div>

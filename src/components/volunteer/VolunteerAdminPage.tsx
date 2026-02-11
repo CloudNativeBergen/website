@@ -538,8 +538,8 @@ export default function VolunteerAdminPage() {
           title="Send Approval Email"
           recipientInfo={emailModalVolunteer.email}
           fromAddress={
-            emailModalVolunteer.conference?.contact_email ||
-            emailModalVolunteer.conference?.cfp_email ||
+            emailModalVolunteer.conference?.contactEmail ||
+            emailModalVolunteer.conference?.cfpEmail ||
             ''
           }
           onSend={handleSendEmail}
