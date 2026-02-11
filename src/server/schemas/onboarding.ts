@@ -27,6 +27,8 @@ export const OnboardingSubmissionSchema = z.object({
   billing: OnboardingBillingSchema,
   logo: z.string().nullable().optional(),
   logoBright: z.string().nullable().optional(),
+  orgNumber: z.string().optional(),
+  address: z.string().optional(),
 })
 
 export const GenerateOnboardingTokenSchema = z.object({

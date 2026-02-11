@@ -13,6 +13,8 @@ export interface OnboardingSponsorInfo {
   sponsorWebsite: string
   sponsorLogo: string | null
   sponsorLogoBright: string | null
+  sponsorOrgNumber: string | null
+  sponsorAddress: string | null
   tierTitle: string | null
   conferenceName: string
   conferenceStartDate: string | null
@@ -26,6 +28,8 @@ export interface OnboardingSubmission {
   billing: BillingInfo
   logo?: string | null
   logoBright?: string | null
+  orgNumber?: string
+  address?: string
 }
 
 export async function generateOnboardingToken(
@@ -59,6 +63,8 @@ export async function validateOnboardingToken(
         "sponsorWebsite": sponsor->website,
         "sponsorLogo": sponsor->logo,
         "sponsorLogoBright": sponsor->logoBright,
+        "sponsorOrgNumber": sponsor->orgNumber,
+        "sponsorAddress": sponsor->address,
         "tierTitle": tier->title,
         "conferenceName": conference->title,
         "conferenceStartDate": conference->startDate,
@@ -111,18 +117,23 @@ export async function completeOnboarding(
       })
       .commit()
 
-    if (data.logo || data.logoBright) {
+    if (data.logo || data.logoBright || data.orgNumber || data.address) {
       const sfcDoc = await clientRead.fetch<{ sponsor: { _ref: string } }>(
         `*[_type == "sponsorForConference" && _id == $id][0]{ sponsor }`,
         { id: sponsor._id },
       )
 
       if (sfcDoc?.sponsor?._ref) {
-        const logoUpdates: Record<string, unknown> = {}
-        if (data.logo) logoUpdates.logo = data.logo
-        if (data.logoBright) logoUpdates.logoBright = data.logoBright
+        const sponsorUpdates: Record<string, unknown> = {}
+        if (data.logo) sponsorUpdates.logo = data.logo
+        if (data.logoBright) sponsorUpdates.logoBright = data.logoBright
+        if (data.orgNumber) sponsorUpdates.orgNumber = data.orgNumber
+        if (data.address) sponsorUpdates.address = data.address
 
-        await clientWrite.patch(sfcDoc.sponsor._ref).set(logoUpdates).commit()
+        await clientWrite
+          .patch(sfcDoc.sponsor._ref)
+          .set(sponsorUpdates)
+          .commit()
       }
     }
 

@@ -25,6 +25,11 @@ interface BillingForm {
   comments: string
 }
 
+interface CompanyForm {
+  orgNumber: string
+  address: string
+}
+
 export function SponsorOnboardingForm({ token }: { token: string }) {
   const {
     data: sponsor,
@@ -44,6 +49,10 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
     email: '',
     reference: '',
     comments: '',
+  })
+  const [company, setCompany] = useState<CompanyForm>({
+    orgNumber: '',
+    address: '',
   })
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
@@ -68,6 +77,10 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
         comments: sponsor.billing.comments || '',
       })
     }
+    setCompany({
+      orgNumber: sponsor.sponsorOrgNumber || '',
+      address: sponsor.sponsorAddress || '',
+    })
     setInitialized(true)
   }
 
@@ -180,6 +193,8 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
         reference: billing.reference.trim() || undefined,
         comments: billing.comments.trim() || undefined,
       },
+      orgNumber: company.orgNumber.trim() || undefined,
+      address: company.address.trim() || undefined,
     })
   }
 
@@ -210,6 +225,49 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
             </div>
           </div>
         )}
+
+        <section>
+          <h2 className="mb-4 text-xl font-semibold text-gray-900">
+            Company Information
+          </h2>
+          <p className="mb-4 text-sm text-gray-500">
+            Provide your company&apos;s registration details for the sponsorship
+            contract.
+          </p>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Organization Number
+                </label>
+                <input
+                  type="text"
+                  value={company.orgNumber}
+                  onChange={(e) =>
+                    setCompany({ ...company, orgNumber: e.target.value })
+                  }
+                  placeholder="e.g. 123 456 789"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Company Address
+                </label>
+                <input
+                  type="text"
+                  value={company.address}
+                  onChange={(e) =>
+                    setCompany({ ...company, address: e.target.value })
+                  }
+                  placeholder="Street, City, Country"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section>
           <div className="mb-4 flex items-center justify-between">

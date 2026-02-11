@@ -240,9 +240,7 @@ export async function findBestContractTemplate(
   }
 }
 
-export async function getTermsForConference(
-  conferenceId: string,
-): Promise<{
+export async function getTermsForConference(conferenceId: string): Promise<{
   terms?: PortableTextBlock[]
   conferenceName?: string
   error?: Error

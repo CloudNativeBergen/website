@@ -91,6 +91,7 @@ import {
   FindBestContractTemplateSchema,
 } from '@/server/schemas/contractTemplate'
 import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
+import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
 import { logSignatureStatusChange } from '@/lib/sponsor-crm/activity'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 
@@ -1273,6 +1274,22 @@ export const sponsorRouter = router({
         return template
       }),
 
+    contractReadiness: adminProcedure
+      .input(SponsorForConferenceIdSchema)
+      .query(async ({ input }) => {
+        const { sponsorForConference, error } = await getSponsorForConference(
+          input.id,
+        )
+        if (error || !sponsorForConference) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+            cause: error,
+          })
+        }
+        return checkContractReadiness(sponsorForConference)
+      }),
+
     generatePdf: adminProcedure
       .input(GenerateContractPdfSchema)
       .mutation(async ({ input }) => {
@@ -1314,9 +1331,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                title: sponsorForConference.tier.title,
-                tagline: sponsorForConference.tier.tagline,
-              }
+                  title: sponsorForConference.tier.title,
+                  tagline: sponsorForConference.tier.tagline,
+                }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
