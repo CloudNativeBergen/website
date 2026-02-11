@@ -259,9 +259,9 @@ export async function fetchCFPHealth(
   const now = new Date()
   const daysSinceOpen = cfpStart
     ? Math.max(
-        1,
-        Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
-      )
+      1,
+      Math.ceil((now.getTime() - cfpStart.getTime()) / (1000 * 60 * 60 * 24)),
+    )
     : 1
   const averagePerDay =
     submitted.length > 0
@@ -998,13 +998,13 @@ export async function fetchScheduleStatus(
 
 interface DashboardConfigWidget {
   _key: string
-  widget_id: string
-  widget_type: string
+  widgetId: string
+  widgetType: string
   title: string
   row: number
   col: number
-  row_span: number
-  col_span: number
+  rowSpan: number
+  colSpan: number
   config?: string
 }
 
@@ -1037,14 +1037,14 @@ export async function loadDashboardConfig(
   if (!doc?.widgets?.length) return null
 
   return doc.widgets.map((w) => ({
-    id: w.widget_id,
-    type: w.widget_type,
-    title: w.title || w.widget_type,
+    id: w.widgetId,
+    type: w.widgetType,
+    title: w.title || w.widgetType,
     position: {
       row: w.row || 0,
       col: w.col || 0,
-      rowSpan: w.row_span || 2,
-      colSpan: w.col_span || 3,
+      rowSpan: w.rowSpan || 2,
+      colSpan: w.colSpan || 3,
     },
     config: (() => {
       if (!w.config) return undefined
@@ -1070,13 +1070,13 @@ export async function saveDashboardConfig(
 
   const widgetDocs: DashboardConfigWidget[] = widgets.map((w, i) => ({
     _key: `widget-${i}`,
-    widget_id: w.id,
-    widget_type: w.type,
+    widgetId: w.id,
+    widgetType: w.type,
     title: w.title,
     row: w.position.row,
     col: w.position.col,
-    row_span: w.position.rowSpan,
-    col_span: w.position.colSpan,
+    rowSpan: w.position.rowSpan,
+    colSpan: w.position.colSpan,
     config: w.config ? JSON.stringify(w.config) : undefined,
   }))
 
