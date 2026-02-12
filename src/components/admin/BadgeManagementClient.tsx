@@ -25,6 +25,7 @@ import {
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline'
 import { BadgePreviewModal } from '@/components/admin/BadgePreviewModal'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import BadgeValidator from '@/components/admin/BadgeValidator'
 import type { BadgeRecord } from '@/lib/badge/types'
 import { createLocalhostWarning } from '@/lib/localhost-warning'
@@ -34,7 +35,7 @@ import {
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
-} from '@/components/admin/ActionMenu'
+} from '@/components/ActionMenu'
 import type { Speaker } from '@/lib/speaker/types'
 import type { ProposalExisting } from '@/lib/proposal/types'
 
@@ -75,6 +76,10 @@ export function BadgeManagementClient({
   const [showBadgePreview, setShowBadgePreview] = useState(false)
   const [filterAlreadyIssued, setFilterAlreadyIssued] = useState(false)
   const [sendEmail, setSendEmail] = useState(true)
+  const [deleteBadgeInfo, setDeleteBadgeInfo] = useState<{
+    badgeId: string
+    speakerName: string
+  } | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -336,19 +341,17 @@ export function BadgeManagementClient({
   }
 
   const handleDeleteBadge = async (badgeId: string, speakerName: string) => {
-    if (
-      !confirm(
-        `Are you sure you want to delete the badge for ${speakerName}? This action cannot be undone.`,
-      )
-    ) {
-      return
-    }
+    setDeleteBadgeInfo({ badgeId, speakerName })
+  }
 
+  const confirmDeleteBadge = async () => {
+    if (!deleteBadgeInfo) return
     try {
-      await deleteMutation.mutateAsync({ badgeId })
+      await deleteMutation.mutateAsync({ badgeId: deleteBadgeInfo.badgeId })
     } catch (error) {
       console.error('Error deleting badge:', error)
     }
+    setDeleteBadgeInfo(null)
   }
 
   const isDevelopment =
@@ -883,6 +886,16 @@ export function BadgeManagementClient({
               badge={selectedBadge}
             />
           )}
+
+          <ConfirmationModal
+            isOpen={!!deleteBadgeInfo}
+            onClose={() => setDeleteBadgeInfo(null)}
+            onConfirm={confirmDeleteBadge}
+            title="Delete Badge"
+            message={`Are you sure you want to delete the badge for ${deleteBadgeInfo?.speakerName}? This action cannot be undone.`}
+            confirmButtonText="Delete"
+            variant="danger"
+          />
         </>
       )}
     </div>

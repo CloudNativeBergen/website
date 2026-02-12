@@ -21,14 +21,13 @@ import {
 import { AppEnvironment } from '@/lib/environment/config'
 import { CheckBadgeIcon, ClockIcon, CheckIcon } from '@heroicons/react/24/solid'
 import { SpeakerIndicators } from '@/lib/proposal'
-import { getStatusBadgeConfig } from '@/lib/proposal/ui'
+import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
+import { FilterDropdown, FilterOption } from '@/components/admin'
 import {
-  FilterDropdown,
-  FilterOption,
   ActionMenu,
   ActionMenuItem,
   ActionMenuDivider,
-} from '@/components/admin'
+} from '@/components/ActionMenu'
 import { useState, useMemo } from 'react'
 import { iconForLink, titleForLink } from '@/components/SocialIcons'
 import { hasBlueskySocial, extractHandleFromUrl } from '@/lib/bluesky/utils'
@@ -106,18 +105,21 @@ const getProposalConferenceId = (proposal: ProposalExisting): string | null => {
   return null
 }
 
-const StatusBadge = ({ status }: { status: Status }) => {
-  const Icon = status === Status.confirmed ? CheckBadgeIcon : ClockIcon
-  const config = getStatusBadgeConfig(status)
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${config.bgColor} ${config.textColor}`}
-    >
-      <Icon className="h-3 w-3" />
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  )
+function getProposalBadgeColor(status: Status): BadgeColor {
+  switch (status) {
+    case Status.confirmed:
+    case Status.accepted:
+      return 'green'
+    case Status.submitted:
+      return 'blue'
+    case Status.draft:
+      return 'yellow'
+    case Status.rejected:
+      return 'red'
+    case Status.withdrawn:
+    default:
+      return 'gray'
+  }
 }
 
 const CopyEmailButton = ({ email }: { email: string }) => {
@@ -636,7 +638,18 @@ export function SpeakerTable({
                               key={`${speaker._id}-${proposal._id}`}
                               className="flex items-center gap-2 text-xs"
                             >
-                              <StatusBadge status={proposal.status} />
+                              <StatusBadge
+                                label={
+                                  proposal.status.charAt(0).toUpperCase() +
+                                  proposal.status.slice(1)
+                                }
+                                color={getProposalBadgeColor(proposal.status)}
+                                icon={
+                                  proposal.status === Status.confirmed
+                                    ? CheckBadgeIcon
+                                    : ClockIcon
+                                }
+                              />
                               <span
                                 className="min-w-0 flex-1 truncate text-gray-900 dark:text-white"
                                 title={proposal.title}

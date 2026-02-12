@@ -6,10 +6,10 @@ import {
   UserIcon,
   XMarkIcon,
   ChevronDownIcon,
-  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import { SpeakerAvatars } from '@/components/SpeakerAvatars'
 import type { Speaker } from '@/lib/speaker/types'
+import { SearchInput } from '@/components/SearchInput'
 
 // Define minimal speaker type for admin selection
 type AdminSpeakerPick = {
@@ -216,14 +216,12 @@ export function SpeakerMultiSelect({
             <div className="absolute z-10 mt-2 w-full rounded-md bg-white shadow-lg dark:bg-gray-800">
               <div className="p-2">
                 <div className="relative">
-                  <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
+                  <SearchInput
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={setSearchQuery}
                     placeholder="Search speakers..."
-                    className="w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-10 text-sm focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                     autoFocus
+                    inputClassName="w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-10 text-sm focus:border-brand-cloud-blue focus:ring-1 focus:ring-brand-cloud-blue focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   />
                 </div>
               </div>

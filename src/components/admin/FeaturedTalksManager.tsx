@@ -4,13 +4,13 @@ import { useState } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
   ChatBubbleLeftRightIcon,
-  MagnifyingGlassIcon,
   PlusIcon,
   XMarkIcon,
   StarIcon,
   UserIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
+import { SearchInput } from '@/components/SearchInput'
 
 interface FeaturedTalksManagerProps {
   className?: string
@@ -151,14 +151,11 @@ export function FeaturedTalksManager({
                 Search talks
               </label>
               <div className="relative">
-                <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform text-gray-400 dark:text-gray-500" />
-                <input
+                <SearchInput
                   id="talk-search"
-                  type="text"
-                  placeholder="Search talks by title or description..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="block w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-10 leading-5 placeholder-gray-500 focus:border-blue-500 focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400"
+                  onChange={setSearchQuery}
+                  placeholder="Search talks by title or description..."
                 />
               </div>
             </div>

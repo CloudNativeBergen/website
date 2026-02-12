@@ -16,37 +16,21 @@ import {
 import { FilterDropdown, FilterOption } from '@/components/admin/FilterDropdown'
 import { AdminPageHeader } from '@/components/admin'
 import { EmailModal } from '@/components/admin/EmailModal'
+import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
 import { PortableTextBlock } from '@sanity/types'
 import { portableTextToHTML } from '@/lib/email/portableTextToHTML'
+import { StatusBadge, type BadgeColor } from '@/components/StatusBadge'
 
-function StatusBadge({ status }: { status: VolunteerStatus }) {
-  const config = {
-    [VolunteerStatus.PENDING]: {
-      icon: ClockIcon,
-      className:
-        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-    },
-    [VolunteerStatus.APPROVED]: {
-      icon: CheckCircleIcon,
-      className:
-        'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    },
-    [VolunteerStatus.REJECTED]: {
-      icon: XCircleIcon,
-      className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
-    },
+const volunteerStatusConfig: Record<
+  VolunteerStatus,
+  {
+    color: BadgeColor
+    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
   }
-
-  const { icon: Icon, className } = config[status]
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {status}
-    </span>
-  )
+> = {
+  [VolunteerStatus.PENDING]: { color: 'yellow', icon: ClockIcon },
+  [VolunteerStatus.APPROVED]: { color: 'green', icon: CheckCircleIcon },
+  [VolunteerStatus.REJECTED]: { color: 'red', icon: XCircleIcon },
 }
 
 export default function VolunteerAdminPage() {
@@ -60,6 +44,9 @@ export default function VolunteerAdminPage() {
   const [emailModalVolunteer, setEmailModalVolunteer] =
     useState<VolunteerWithConference | null>(null)
   const [reviewNotes, setReviewNotes] = useState('')
+  const [deleteVolunteerId, setDeleteVolunteerId] = useState<string | null>(
+    null,
+  )
 
   const {
     data: volunteers,
@@ -149,14 +136,13 @@ export default function VolunteerAdminPage() {
   }
 
   const handleDelete = async (volunteerId: string) => {
-    if (
-      !confirm(
-        'Are you sure you want to delete this volunteer? This action cannot be undone.',
-      )
-    ) {
-      return
-    }
-    await deleteVolunteer.mutateAsync({ volunteerId })
+    setDeleteVolunteerId(volunteerId)
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteVolunteerId) return
+    await deleteVolunteer.mutateAsync({ volunteerId: deleteVolunteerId })
+    setDeleteVolunteerId(null)
   }
 
   return (
@@ -288,7 +274,11 @@ export default function VolunteerAdminPage() {
                           )}
                         </div>
                       </div>
-                      <StatusBadge status={volunteer.status} />
+                      <StatusBadge
+                        label={volunteer.status}
+                        color={volunteerStatusConfig[volunteer.status].color}
+                        icon={volunteerStatusConfig[volunteer.status].icon}
+                      />
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">
                       {volunteer.occupation && (
@@ -436,7 +426,11 @@ export default function VolunteerAdminPage() {
                 <h3 className="mb-2 font-semibold text-gray-900 dark:text-white">
                   Status
                 </h3>
-                <StatusBadge status={selectedVolunteer.status} />
+                <StatusBadge
+                  label={selectedVolunteer.status}
+                  color={volunteerStatusConfig[selectedVolunteer.status].color}
+                  icon={volunteerStatusConfig[selectedVolunteer.status].icon}
+                />
               </div>
 
               {selectedVolunteer.status === VolunteerStatus.PENDING && (
@@ -549,6 +543,16 @@ export default function VolunteerAdminPage() {
           }}
         />
       )}
+
+      <ConfirmationModal
+        isOpen={!!deleteVolunteerId}
+        onClose={() => setDeleteVolunteerId(null)}
+        onConfirm={confirmDelete}
+        title="Delete Volunteer"
+        message="Are you sure you want to delete this volunteer? This action cannot be undone."
+        confirmButtonText="Delete"
+        variant="danger"
+      />
     </div>
   )
 }
