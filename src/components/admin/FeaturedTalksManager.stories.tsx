@@ -81,7 +81,7 @@ const handlers = [
 ]
 
 const meta: Meta<typeof FeaturedTalksManager> = {
-  title: 'Systems/Proposals/FeaturedTalksManager',
+  title: 'Systems/Proposals/Admin/FeaturedTalksManager',
   component: FeaturedTalksManager,
   tags: ['autodocs'],
   parameters: {

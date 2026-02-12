@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { SponsorEmailTemplateEditor } from './SponsorEmailTemplateEditor'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { fn } from 'storybook/test'
 import type { SponsorEmailTemplate } from '@/lib/sponsor/types'
 import type { Conference } from '@/lib/conference/types'
@@ -139,9 +140,11 @@ const meta = {
   tags: ['autodocs'],
   decorators: [
     (Story: React.ComponentType) => (
-      <div className="max-w-7xl p-6">
-        <Story />
-      </div>
+      <NotificationProvider>
+        <div className="max-w-7xl p-6">
+          <Story />
+        </div>
+      </NotificationProvider>
     ),
   ],
 } satisfies Meta<typeof SponsorEmailTemplateEditor>

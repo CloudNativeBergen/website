@@ -100,7 +100,7 @@ const createMockProposal = (
 })
 
 const meta: Meta<typeof ProposalPreview> = {
-  title: 'Systems/Proposals/ProposalPreview',
+  title: 'Systems/Proposals/Admin/ProposalPreview',
   component: ProposalPreview,
   tags: ['autodocs'],
   parameters: {

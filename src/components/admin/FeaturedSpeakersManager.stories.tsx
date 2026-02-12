@@ -61,7 +61,7 @@ const handlers = [
 ]
 
 const meta: Meta<typeof FeaturedSpeakersManager> = {
-  title: 'Systems/Speakers/FeaturedSpeakersManager',
+  title: 'Systems/Speakers/Admin/FeaturedSpeakersManager',
   component: FeaturedSpeakersManager,
   tags: ['autodocs'],
   parameters: {

@@ -42,7 +42,7 @@ const ComponentCard = ({
   </div>
 )
 
-export const Documentation: Story = {
+export const Overview: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-5xl">

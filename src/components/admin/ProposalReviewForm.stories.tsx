@@ -16,7 +16,7 @@ const mockExistingReview: Review = {
 }
 
 const meta: Meta<typeof ProposalReviewForm> = {
-  title: 'Systems/Proposals/ProposalReviewForm',
+  title: 'Systems/Proposals/Admin/ProposalReviewForm',
   component: ProposalReviewForm,
   tags: ['autodocs'],
   parameters: {

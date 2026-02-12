@@ -138,7 +138,8 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const Empty: Story = {
+export const ProgramAgendaView_: Story = {
+  name: 'ProgramAgendaView',
   args: {
     data: mockData,
   },

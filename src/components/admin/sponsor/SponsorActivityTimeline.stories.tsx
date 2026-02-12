@@ -66,7 +66,7 @@ function ActivityIcon({ type }: { type: string }) {
   )
 }
 
-export const Documentation: Story = {
+export const ActivityTimeline: Story = {
   render: () => (
     <div className="w-full max-w-3xl space-y-8 p-6">
       <div>

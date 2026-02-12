@@ -35,7 +35,7 @@ const mockReviews: Review[] = [
 ]
 
 const meta: Meta<typeof ProposalReviewSummary> = {
-  title: 'Systems/Proposals/ProposalReviewSummary',
+  title: 'Systems/Proposals/Admin/ProposalReviewSummary',
   component: ProposalReviewSummary,
   tags: ['autodocs'],
   parameters: {

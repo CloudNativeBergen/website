@@ -28,7 +28,8 @@ const meta: Meta<typeof BoardViewSwitcher> = {
 export default meta
 type Story = StoryObj<typeof BoardViewSwitcher>
 
-export const Interactive: Story = {
+export const BoardViewSwitcher_: Story = {
+  name: 'BoardViewSwitcher',
   render: () => {
     const [view, setView] = useState<BoardView>('pipeline')
     return (

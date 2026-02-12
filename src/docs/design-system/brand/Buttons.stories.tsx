@@ -14,7 +14,7 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-export const ButtonSystem: Story = {
+export const Buttons: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-5xl">

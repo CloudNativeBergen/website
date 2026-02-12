@@ -57,7 +57,7 @@ function MetricCard({
   )
 }
 
-export const Documentation: Story = {
+export const Metrics: Story = {
   render: () => (
     <div className="w-full max-w-6xl space-y-8 p-6">
       <div>

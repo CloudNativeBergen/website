@@ -33,7 +33,7 @@ const mockConference: Conference = {
 }
 
 const meta: Meta<typeof SpeakerActions> = {
-  title: 'Systems/Speakers/SpeakerActions',
+  title: 'Systems/Speakers/Admin/SpeakerActions',
   component: SpeakerActions,
   tags: ['autodocs'],
   parameters: {

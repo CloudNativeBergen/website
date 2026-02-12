@@ -47,7 +47,7 @@ const mockSpeakers = [
 ]
 
 const meta: Meta<typeof SpeakerMultiSelect> = {
-  title: 'Systems/Speakers/SpeakerMultiSelect',
+  title: 'Systems/Speakers/Admin/SpeakerMultiSelect',
   component: SpeakerMultiSelect,
   tags: ['autodocs'],
   parameters: {
