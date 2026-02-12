@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Systems/Email/Overview',
+  title: 'Components/Data Display/Email Templates',
   parameters: {
     layout: 'fullscreen',
     options: {
