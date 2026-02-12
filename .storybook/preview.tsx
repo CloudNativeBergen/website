@@ -65,6 +65,8 @@ const preview: Preview = {
             [
               'Architecture',
               'Workflow Diagram',
+              'Onboarding',
+              ['SponsorOnboardingForm'],
               'SponsorLogo',
               'Sponsors',
               'SponsorThankYou',
