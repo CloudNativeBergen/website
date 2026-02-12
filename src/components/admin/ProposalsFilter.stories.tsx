@@ -19,7 +19,7 @@ const defaultFilters: FilterState = {
 }
 
 const meta = {
-  title: 'Admin/Proposals/ProposalsFilter',
+  title: 'Systems/Proposals/Admin/ProposalsFilter',
   component: ProposalsFilter,
   parameters: {
     layout: 'padded',

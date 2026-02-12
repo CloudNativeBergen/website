@@ -3,7 +3,7 @@ import { XMarkIcon, PhotoIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 
 const meta = {
-  title: 'Admin/Sponsors/Tiers/SponsorAddModal',
+  title: 'Systems/Sponsors/Admin/Tiers/SponsorAddModal',
   parameters: {
     layout: 'centered',
     options: { showPanel: false },

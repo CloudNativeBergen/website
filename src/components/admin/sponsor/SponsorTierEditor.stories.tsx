@@ -10,7 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Admin/Sponsors/Tiers/SponsorTierEditor',
+  title: 'Systems/Sponsors/Admin/Tiers/SponsorTierEditor',
   parameters: {
     layout: 'centered',
     options: { showPanel: false },

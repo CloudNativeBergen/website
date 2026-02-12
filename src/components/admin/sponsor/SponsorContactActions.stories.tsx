@@ -5,7 +5,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Admin/Sponsors/Contacts/SponsorContactActions',
+  title: 'Systems/Sponsors/Admin/Contacts/SponsorContactActions',
   parameters: {
     layout: 'padded',
     options: { showPanel: false },

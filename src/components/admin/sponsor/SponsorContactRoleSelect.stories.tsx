@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 
 const meta = {
-  title: 'Admin/Sponsors/Utility/ContactRoleSelect',
+  title: 'Systems/Sponsors/Admin/SponsorContactRoleSelect',
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },
@@ -13,7 +14,7 @@ const meta = {
 export default meta
 type Story = StoryObj<typeof meta>
 
-function ContactRoleSelectDemo() {
+function SponsorContactRoleSelectDemo() {
   const [value, setValue] = useState('')
 
   return (
@@ -38,7 +39,7 @@ function ContactRoleSelectDemo() {
 }
 
 export const Default: Story = {
-  render: () => <ContactRoleSelectDemo />,
+  render: () => <SponsorContactRoleSelectDemo />,
 }
 
 export const WithSelection: Story = {
@@ -88,7 +89,7 @@ export const Documentation: Story = {
     <div className="max-w-lg space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          ContactRoleSelect
+          SponsorContactRoleSelect
         </h1>
         <p className="mt-2 text-gray-600 dark:text-gray-400">
           Simple dropdown for selecting contact person roles. Used in sponsor

@@ -3,7 +3,7 @@ import { OnboardingLinkButton } from './OnboardingLinkButton'
 import { http, HttpResponse } from 'msw'
 
 const meta: Meta<typeof OnboardingLinkButton> = {
-  title: 'Admin/Sponsors/Pipeline/OnboardingLinkButton',
+  title: 'Systems/Sponsors/Admin/Pipeline/OnboardingLinkButton',
   component: OnboardingLinkButton,
   tags: ['autodocs'],
   parameters: {

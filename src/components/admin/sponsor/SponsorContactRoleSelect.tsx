@@ -1,6 +1,6 @@
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 
-interface ContactRoleSelectProps {
+interface SponsorContactRoleSelectProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
@@ -8,13 +8,13 @@ interface ContactRoleSelectProps {
   disabled?: boolean
 }
 
-export function ContactRoleSelect({
+export function SponsorContactRoleSelect({
   value,
   onChange,
   placeholder = 'Select role...',
   className = '',
   disabled = false,
-}: ContactRoleSelectProps) {
+}: SponsorContactRoleSelectProps) {
   return (
     <select
       value={value}

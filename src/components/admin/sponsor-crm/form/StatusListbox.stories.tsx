@@ -5,7 +5,7 @@ import { STATUSES, INVOICE_STATUSES, CONTRACT_STATUSES } from './constants'
 import { useState } from 'react'
 
 const meta: Meta<typeof StatusListbox> = {
-  title: 'Admin/Sponsors/Form/StatusListbox',
+  title: 'Systems/Sponsors/Admin/Form/StatusListbox',
   component: StatusListbox,
   tags: ['autodocs'],
   parameters: {

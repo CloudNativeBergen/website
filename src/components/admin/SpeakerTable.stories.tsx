@@ -129,7 +129,7 @@ const mockSpeakers: SpeakerWithProposals[] = [
 ]
 
 const meta = {
-  title: 'Admin/Speakers/SpeakerTable',
+  title: 'Systems/Speakers/Admin/SpeakerTable',
   component: SpeakerTable,
   parameters: {
     layout: 'fullscreen',

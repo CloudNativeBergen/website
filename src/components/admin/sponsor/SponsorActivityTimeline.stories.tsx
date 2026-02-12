@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 
 const meta = {
-  title: 'Admin/Sponsors/Dashboard/Activity Timeline',
+  title: 'Systems/Sponsors/Admin/Dashboard/Activity Timeline',
   parameters: {
     layout: 'centered',
     options: { showPanel: false },

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { VideoEmbed } from './VideoEmbed'
 
 const meta = {
-  title: 'Components/VideoEmbed',
+  title: 'Components/Data Display/VideoEmbed',
   component: VideoEmbed,
   parameters: {
     layout: 'padded',

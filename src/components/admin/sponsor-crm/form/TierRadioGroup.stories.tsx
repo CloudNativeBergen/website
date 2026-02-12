@@ -5,7 +5,7 @@ import { mockSponsorTier } from '@/__mocks__/sponsor-data'
 import { useState } from 'react'
 
 const meta: Meta<typeof TierRadioGroup> = {
-  title: 'Admin/Sponsors/Form/TierRadioGroup',
+  title: 'Systems/Sponsors/Admin/Form/TierRadioGroup',
   component: TierRadioGroup,
   tags: ['autodocs'],
   parameters: {

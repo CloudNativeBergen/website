@@ -9,7 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Admin/Sponsors/Pipeline/SponsorCRMPipeline',
+  title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMPipeline',
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },

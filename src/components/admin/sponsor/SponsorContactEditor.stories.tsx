@@ -13,7 +13,7 @@ import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 import { CONTACT_ROLE_OPTIONS } from '@/lib/sponsor/types'
 
 const meta = {
-  title: 'Admin/Sponsors/Contacts/SponsorContactEditor',
+  title: 'Systems/Sponsors/Admin/Contacts/SponsorContactEditor',
   parameters: {
     layout: 'padded',
     options: { showPanel: false },

@@ -8,7 +8,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Admin/Sponsors/Tiers/SponsorTierManagement',
+  title: 'Systems/Sponsors/Admin/Tiers/SponsorTierManagement',
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },

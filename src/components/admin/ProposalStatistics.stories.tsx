@@ -138,7 +138,7 @@ const mockProposals: ProposalExisting[] = [
 ]
 
 const meta: Meta<typeof ProposalStatistics> = {
-  title: 'Admin/Proposals/ProposalStatistics',
+  title: 'Systems/Proposals/Admin/ProposalStatistics',
   component: ProposalStatistics,
   tags: ['autodocs'],
   parameters: {

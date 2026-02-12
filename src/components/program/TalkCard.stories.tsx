@@ -99,7 +99,7 @@ const createServiceSession = (
 })
 
 const meta = {
-  title: 'Systems/Speakers/Program/TalkCard',
+  title: 'Systems/Program/TalkCard',
   component: TalkCard,
   parameters: {
     layout: 'padded',

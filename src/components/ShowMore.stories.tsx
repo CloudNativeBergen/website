@@ -3,7 +3,7 @@ import { expect, userEvent, within } from 'storybook/test'
 import { ShowMore } from './ShowMore'
 
 const meta = {
-  title: 'Components/ShowMore',
+  title: 'Components/Data Display/ShowMore',
   component: ShowMore,
   parameters: {
     layout: 'padded',

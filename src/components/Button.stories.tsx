@@ -4,7 +4,7 @@ import { Button } from './Button'
 import { CalendarIcon, UserIcon } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Components/Button',
+  title: 'Components/Layout/Button',
   component: Button,
   parameters: {
     layout: 'padded',

@@ -15,7 +15,7 @@ import {
   StarIcon,
 } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
-import { ContactRoleSelect } from '@/components/common/ContactRoleSelect'
+import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
 import { nanoid } from 'nanoid'
 import { api } from '@/lib/trpc/client'
 import { useNotification } from '../NotificationProvider'
@@ -264,7 +264,7 @@ export function SponsorContactEditor({
                       Role / Position
                     </label>
                     <div className="mt-1">
-                      <ContactRoleSelect
+                      <SponsorContactRoleSelect
                         value={contact.role || ''}
                         onChange={(value) =>
                           handleUpdateContact(index, { role: value })

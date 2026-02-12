@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { BackLink } from './BackButton'
 
 const meta = {
-  title: 'Components/BackLink',
+  title: 'Components/Layout/BackLink',
   component: BackLink,
   parameters: {
     layout: 'padded',

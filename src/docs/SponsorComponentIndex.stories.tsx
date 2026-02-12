@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 
 const meta = {
-  title: 'Admin/Sponsors/Component Index',
+  title: 'Systems/Sponsors/Admin/Overview',
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
@@ -361,9 +361,9 @@ export const Documentation: Story = {
               hasStory
             />
             <ComponentCard
-              name="ContactRoleSelect"
-              path="@/components/common/ContactRoleSelect"
-              description="Reusable dropdown for selecting contact person roles."
+              name="SponsorContactRoleSelect"
+              path="@/components/admin/sponsor/SponsorContactRoleSelect"
+              description="Dropdown for selecting sponsor contact person roles."
               hasStory
             />
           </div>

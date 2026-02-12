@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { Logo, Logomark } from './Logo'
 
 const logoMeta = {
-  title: 'Components/Logo',
+  title: 'Components/Layout/Logo',
   component: Logo,
   parameters: {
     layout: 'centered',

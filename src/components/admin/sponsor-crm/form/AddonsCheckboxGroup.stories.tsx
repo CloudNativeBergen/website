@@ -5,7 +5,7 @@ import { mockSponsorTier } from '@/__mocks__/sponsor-data'
 import { useState } from 'react'
 
 const meta: Meta<typeof AddonsCheckboxGroup> = {
-  title: 'Admin/Sponsors/Form/AddonsCheckboxGroup',
+  title: 'Systems/Sponsors/Admin/Form/AddonsCheckboxGroup',
   component: AddonsCheckboxGroup,
   tags: ['autodocs'],
   parameters: {

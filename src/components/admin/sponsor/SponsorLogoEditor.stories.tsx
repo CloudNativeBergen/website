@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Admin/Sponsors/Form/SponsorLogoEditor',
+  title: 'Systems/Sponsors/Admin/Form/SponsorLogoEditor',
   parameters: {
     layout: 'padded',
     options: { showPanel: false },

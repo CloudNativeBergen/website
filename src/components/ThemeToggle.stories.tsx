@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { ThemeToggle } from './ThemeToggle'
 
 const meta = {
-  title: 'Components/ThemeToggle',
+  title: 'Components/Layout/ThemeToggle',
   component: ThemeToggle,
   parameters: {
     layout: 'centered',

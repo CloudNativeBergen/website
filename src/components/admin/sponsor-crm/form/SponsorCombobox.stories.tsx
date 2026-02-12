@@ -7,7 +7,7 @@ import {
 } from '@heroicons/react/20/solid'
 
 const meta = {
-  title: 'Admin/Sponsors/Form/SponsorCombobox',
+  title: 'Systems/Sponsors/Admin/Form/SponsorCombobox',
   parameters: {
     layout: 'padded',
     options: { showPanel: false },

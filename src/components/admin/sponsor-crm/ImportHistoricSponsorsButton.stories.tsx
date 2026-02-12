@@ -7,7 +7,7 @@ import {
 import { useState } from 'react'
 
 const meta = {
-  title: 'Admin/Sponsors/Pipeline/ImportHistoricSponsorsButton',
+  title: 'Systems/Sponsors/Admin/Pipeline/ImportHistoricSponsorsButton',
   parameters: {
     layout: 'centered',
     options: { showPanel: false },

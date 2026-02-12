@@ -5,7 +5,7 @@ import { useState } from 'react'
 import type { SponsorTag } from '@/lib/sponsor-crm/types'
 
 const meta: Meta<typeof TagCombobox> = {
-  title: 'Admin/Sponsors/Form/TagCombobox',
+  title: 'Systems/Sponsors/Admin/Form/TagCombobox',
   component: TagCombobox,
   tags: ['autodocs'],
   parameters: {

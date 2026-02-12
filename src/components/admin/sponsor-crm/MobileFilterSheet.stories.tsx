@@ -3,7 +3,7 @@ import { XMarkIcon, FunnelIcon, CheckIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 
 const meta = {
-  title: 'Admin/Sponsors/Pipeline/MobileFilterSheet',
+  title: 'Systems/Sponsors/Admin/Pipeline/MobileFilterSheet',
   parameters: {
     layout: 'centered',
     options: { showPanel: false },

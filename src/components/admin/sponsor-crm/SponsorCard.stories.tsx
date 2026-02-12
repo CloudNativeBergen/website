@@ -4,7 +4,7 @@ import { mockSponsors, mockSponsor } from '@/__mocks__/sponsor-data'
 import { DndContext } from '@dnd-kit/core'
 
 const meta: Meta<typeof SponsorCard> = {
-  title: 'Admin/Sponsors/Pipeline/SponsorCard',
+  title: 'Systems/Sponsors/Admin/Pipeline/SponsorCard',
   component: SponsorCard,
   tags: ['autodocs'],
   parameters: {

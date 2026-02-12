@@ -8,7 +8,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Admin/Sponsors/Dashboard/Action Items',
+  title: 'Systems/Sponsors/Admin/Dashboard/Action Items',
   parameters: {
     layout: 'padded',
     options: { showPanel: false },

@@ -4,7 +4,7 @@ import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import { http, HttpResponse } from 'msw'
 
 const meta: Meta<typeof SponsorBulkActions> = {
-  title: 'Admin/Sponsors/Pipeline/SponsorBulkActions',
+  title: 'Systems/Sponsors/Admin/Pipeline/SponsorBulkActions',
   component: SponsorBulkActions,
   tags: ['autodocs'],
   decorators: [

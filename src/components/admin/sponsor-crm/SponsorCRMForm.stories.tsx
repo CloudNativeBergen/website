@@ -6,7 +6,7 @@ import {
 } from '@heroicons/react/24/outline'
 
 const meta = {
-  title: 'Admin/Sponsors/Pipeline/SponsorCRMForm',
+  title: 'Systems/Sponsors/Admin/Pipeline/SponsorCRMForm',
   parameters: {
     layout: 'centered',
     options: { showPanel: false },

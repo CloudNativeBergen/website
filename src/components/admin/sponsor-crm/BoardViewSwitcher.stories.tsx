@@ -5,7 +5,7 @@ import { useState } from 'react'
 import type { BoardView } from './BoardViewSwitcher'
 
 const meta: Meta<typeof BoardViewSwitcher> = {
-  title: 'Admin/Sponsors/Pipeline/BoardViewSwitcher',
+  title: 'Systems/Sponsors/Admin/Pipeline/BoardViewSwitcher',
   component: BoardViewSwitcher,
   tags: ['autodocs'],
   parameters: {

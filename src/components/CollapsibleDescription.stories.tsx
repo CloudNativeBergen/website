@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { CollapsibleDescription } from './CollapsibleDescription'
 
 const meta = {
-  title: 'Components/CollapsibleDescription',
+  title: 'Components/Data Display/CollapsibleDescription',
   component: CollapsibleDescription,
   parameters: {
     layout: 'padded',

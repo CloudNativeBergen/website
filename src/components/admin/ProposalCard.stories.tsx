@@ -103,7 +103,7 @@ const createMockProposal = (
 })
 
 const meta: Meta<typeof ProposalCard> = {
-  title: 'Admin/Proposals/ProposalCard',
+  title: 'Systems/Proposals/Admin/ProposalCard',
   component: ProposalCard,
   tags: ['autodocs'],
   parameters: {

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { MissingAvatar } from './MissingAvatar'
 
 const meta = {
-  title: 'Components/MissingAvatar',
+  title: 'Components/Layout/MissingAvatar',
   component: MissingAvatar,
   parameters: {
     layout: 'centered',

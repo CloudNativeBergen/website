@@ -4,7 +4,7 @@ import { ContractValueInput } from './ContractValueInput'
 import { useState } from 'react'
 
 const meta: Meta<typeof ContractValueInput> = {
-  title: 'Admin/Sponsors/Form/ContractValueInput',
+  title: 'Systems/Sponsors/Admin/Form/ContractValueInput',
   component: ContractValueInput,
   tags: ['autodocs'],
   parameters: {
