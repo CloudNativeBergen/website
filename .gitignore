@@ -38,3 +38,7 @@ dist/
 
 # backups
 *.tar.gz
+storybook-static/*
+
+# msw
+public/mockServiceWorker.js

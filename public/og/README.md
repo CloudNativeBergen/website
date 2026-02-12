@@ -33,7 +33,7 @@ These dynamic images:
 
 - Automatically update when conference data changes in Sanity CMS
 - Support multi-tenant architecture (different images per domain/conference)
-- Use consistent branding from [/docs/BRANDING.md](../../docs/BRANDING.md)
+- Use consistent branding from Storybook design system (`pnpm storybook` → Design System/Brand/)
 - Include conference-specific logos, dates, locations, and content
 
 ## Implementation

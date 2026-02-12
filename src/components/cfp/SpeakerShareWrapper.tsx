@@ -1,6 +1,6 @@
 'use client'
 
-import { SpeakerSharingActions } from '@/components/branding/SpeakerSharingActions'
+import { SpeakerSharingActions } from '@/components/speaker/SpeakerSharingActions'
 import { MissingAvatar } from '@/components/common/MissingAvatar'
 import { QrCodeIcon } from '@heroicons/react/24/outline'
 import { MicrophoneIcon, StarIcon } from '@heroicons/react/24/solid'
