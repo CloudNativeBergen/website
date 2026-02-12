@@ -99,10 +99,10 @@ export function OnboardingLinkButton({
       onClick={
         existingToken
           ? () => {
-            const baseUrl = window.location.origin
-            setGeneratedUrl(`${baseUrl}/sponsor/onboarding/${existingToken}`)
-            setShowLink(true)
-          }
+              const baseUrl = window.location.origin
+              setGeneratedUrl(`${baseUrl}/sponsor/onboarding/${existingToken}`)
+              setShowLink(true)
+            }
           : handleGenerate
       }
       disabled={generateMutation.isPending}

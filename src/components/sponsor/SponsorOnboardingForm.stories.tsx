@@ -98,15 +98,10 @@ export const Default: Story = {
         http.get('/api/trpc/onboarding.validate', () => {
           return HttpResponse.json(createTRPCBatchResponse([mockSponsorData]))
         }),
-        http.post(
-          '/api/trpc/onboarding.complete',
-          async () => {
-            await delay(1000)
-            return HttpResponse.json(
-              createTRPCBatchResponse([{ success: true }]),
-            )
-          },
-        ),
+        http.post('/api/trpc/onboarding.complete', async () => {
+          await delay(1000)
+          return HttpResponse.json(createTRPCBatchResponse([{ success: true }]))
+        }),
       ],
     },
   },
@@ -127,15 +122,10 @@ export const WithExistingData: Story = {
             createTRPCBatchResponse([mockSponsorWithExistingData]),
           )
         }),
-        http.post(
-          '/api/trpc/onboarding.complete',
-          async () => {
-            await delay(1000)
-            return HttpResponse.json(
-              createTRPCBatchResponse([{ success: true }]),
-            )
-          },
-        ),
+        http.post('/api/trpc/onboarding.complete', async () => {
+          await delay(1000)
+          return HttpResponse.json(createTRPCBatchResponse([{ success: true }]))
+        }),
       ],
     },
   },
@@ -151,13 +141,10 @@ export const Loading: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(
-          '/api/trpc/onboarding.validate',
-          async () => {
-            await delay(999999)
-            return HttpResponse.json(createTRPCBatchResponse([mockSponsorData]))
-          },
-        ),
+        http.get('/api/trpc/onboarding.validate', async () => {
+          await delay(999999)
+          return HttpResponse.json(createTRPCBatchResponse([mockSponsorData]))
+        }),
       ],
     },
   },
@@ -227,15 +214,10 @@ export const CommunityPartner: Story = {
             ]),
           )
         }),
-        http.post(
-          '/api/trpc/onboarding.complete',
-          async () => {
-            await delay(1000)
-            return HttpResponse.json(
-              createTRPCBatchResponse([{ success: true }]),
-            )
-          },
-        ),
+        http.post('/api/trpc/onboarding.complete', async () => {
+          await delay(1000)
+          return HttpResponse.json(createTRPCBatchResponse([{ success: true }]))
+        }),
       ],
     },
   },

@@ -34,19 +34,16 @@ export const Interactive: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(
-          '/api/trpc/onboarding.generateToken',
-          () => {
-            return HttpResponse.json({
-              result: {
-                data: {
-                  url: 'http://localhost:3000/sponsor/onboarding/tok_abc123xyz',
-                  token: 'tok_abc123xyz',
-                },
+        http.get('/api/trpc/onboarding.generateToken', () => {
+          return HttpResponse.json({
+            result: {
+              data: {
+                url: 'http://localhost:3000/sponsor/onboarding/tok_abc123xyz',
+                token: 'tok_abc123xyz',
               },
-            })
-          },
-        ),
+            },
+          })
+        }),
       ],
     },
   },
@@ -60,19 +57,16 @@ export const NotOnboarded: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(
-          '/api/trpc/onboarding.generateToken',
-          () => {
-            return HttpResponse.json({
-              result: {
-                data: {
-                  url: 'http://localhost:3000/sponsor/onboarding/tok_abc123xyz',
-                  token: 'tok_abc123xyz',
-                },
+        http.get('/api/trpc/onboarding.generateToken', () => {
+          return HttpResponse.json({
+            result: {
+              data: {
+                url: 'http://localhost:3000/sponsor/onboarding/tok_abc123xyz',
+                token: 'tok_abc123xyz',
               },
-            })
-          },
-        ),
+            },
+          })
+        }),
       ],
     },
   },
@@ -87,19 +81,16 @@ export const WithExistingToken: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(
-          '/api/trpc/onboarding.generateToken',
-          () => {
-            return HttpResponse.json({
-              result: {
-                data: {
-                  url: 'http://localhost:3000/sponsor/onboarding/tok_abc123xyz',
-                  token: 'tok_abc123xyz',
-                },
+        http.get('/api/trpc/onboarding.generateToken', () => {
+          return HttpResponse.json({
+            result: {
+              data: {
+                url: 'http://localhost:3000/sponsor/onboarding/tok_abc123xyz',
+                token: 'tok_abc123xyz',
               },
-            })
-          },
-        ),
+            },
+          })
+        }),
       ],
     },
   },
@@ -113,19 +104,16 @@ export const OnboardingComplete: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get(
-          '/api/trpc/onboarding.generateToken',
-          () => {
-            return HttpResponse.json({
-              result: {
-                data: {
-                  url: 'http://localhost:3000/sponsor/onboarding/tok_abc123xyz',
-                  token: 'tok_abc123xyz',
-                },
+        http.get('/api/trpc/onboarding.generateToken', () => {
+          return HttpResponse.json({
+            result: {
+              data: {
+                url: 'http://localhost:3000/sponsor/onboarding/tok_abc123xyz',
+                token: 'tok_abc123xyz',
               },
-            })
-          },
-        ),
+            },
+          })
+        }),
       ],
     },
   },

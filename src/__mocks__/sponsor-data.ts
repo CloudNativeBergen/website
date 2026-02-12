@@ -6,7 +6,11 @@ import type {
   InvoiceStatus,
   SignatureStatus,
 } from '@/lib/sponsor-crm/types'
-import type { ContactPerson, BillingInfo, SponsorTier } from '@/lib/sponsor/types'
+import type {
+  ContactPerson,
+  BillingInfo,
+  SponsorTier,
+} from '@/lib/sponsor/types'
 import type {
   ContractReadiness,
   MissingField,

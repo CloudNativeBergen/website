@@ -1328,9 +1328,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                title: sponsorForConference.tier.title,
-                tagline: sponsorForConference.tier.tagline,
-              }
+                  title: sponsorForConference.tier.title,
+                  tagline: sponsorForConference.tier.tagline,
+                }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
