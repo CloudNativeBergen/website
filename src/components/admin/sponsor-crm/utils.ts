@@ -2,7 +2,6 @@ import type {
   InvoiceStatus,
   SponsorForConferenceExpanded,
   ActivityType,
-  SignatureStatus,
 } from '@/lib/sponsor-crm/types'
 export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
 import {
@@ -173,22 +172,6 @@ export function getActionItemColor(type: ActionItemType): string {
       return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20'
     case 'onboarding-pending':
       return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20'
-  }
-}
-
-// Signature Status Utilities
-export function getSignatureStatusColor(status: SignatureStatus): string {
-  switch (status) {
-    case 'not-started':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
-    case 'pending':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
-    case 'signed':
-      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-    case 'rejected':
-      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-    case 'expired':
-      return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
   }
 }
 

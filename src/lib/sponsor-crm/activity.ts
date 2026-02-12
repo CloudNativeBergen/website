@@ -176,23 +176,6 @@ export async function logSignatureStatusChange(
   )
 }
 
-export async function logContractReminderSent(
-  sponsorForConferenceId: string,
-  reminderCount: number,
-  createdBy: string,
-): Promise<{ activityId?: string; error?: Error }> {
-  return createSponsorActivity(
-    sponsorForConferenceId,
-    'contract_reminder_sent',
-    `Contract signing reminder #${reminderCount} sent`,
-    createdBy,
-    {
-      additionalData: String(reminderCount),
-      timestamp: getCurrentDateTime(),
-    },
-  )
-}
-
 export async function logOnboardingComplete(
   sponsorForConferenceId: string,
   createdBy: string,

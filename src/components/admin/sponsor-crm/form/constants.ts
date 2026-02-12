@@ -3,7 +3,6 @@ import type {
   InvoiceStatus,
   ContractStatus,
   SponsorTag,
-  SignatureStatus,
 } from '@/lib/sponsor-crm/types'
 import {
   UserGroupIcon,
@@ -16,8 +15,6 @@ import {
   ClockIcon,
   MinusCircleIcon,
   DocumentCheckIcon,
-  ShieldCheckIcon,
-  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 
 export const STATUSES: Array<{
@@ -26,34 +23,34 @@ export const STATUSES: Array<{
   columnLabel?: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }> = [
-  { value: 'prospect', label: 'Prospect', icon: UserGroupIcon },
-  { value: 'contacted', label: 'Contacted', icon: ChatBubbleLeftRightIcon },
-  { value: 'negotiating', label: 'Negotiating', icon: ArrowsRightLeftIcon },
-  {
-    value: 'closed-won',
-    label: 'Won',
-    columnLabel: 'Closed - Won',
-    icon: CheckCircleIcon,
-  },
-  {
-    value: 'closed-lost',
-    label: 'Lost',
-    columnLabel: 'Closed - Lost',
-    icon: XCircleIcon,
-  },
-]
+    { value: 'prospect', label: 'Prospect', icon: UserGroupIcon },
+    { value: 'contacted', label: 'Contacted', icon: ChatBubbleLeftRightIcon },
+    { value: 'negotiating', label: 'Negotiating', icon: ArrowsRightLeftIcon },
+    {
+      value: 'closed-won',
+      label: 'Won',
+      columnLabel: 'Closed - Won',
+      icon: CheckCircleIcon,
+    },
+    {
+      value: 'closed-lost',
+      label: 'Lost',
+      columnLabel: 'Closed - Lost',
+      icon: XCircleIcon,
+    },
+  ]
 
 export const INVOICE_STATUSES: Array<{
   value: InvoiceStatus
   label: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }> = [
-  { value: 'not-sent', label: 'Not Sent', icon: MinusCircleIcon },
-  { value: 'sent', label: 'Sent', icon: PaperAirplaneIcon },
-  { value: 'paid', label: 'Paid', icon: BanknotesIcon },
-  { value: 'overdue', label: 'Overdue', icon: ClockIcon },
-  { value: 'cancelled', label: 'Cancelled', icon: XCircleIcon },
-]
+    { value: 'not-sent', label: 'Not Sent', icon: MinusCircleIcon },
+    { value: 'sent', label: 'Sent', icon: PaperAirplaneIcon },
+    { value: 'paid', label: 'Paid', icon: BanknotesIcon },
+    { value: 'overdue', label: 'Overdue', icon: ClockIcon },
+    { value: 'cancelled', label: 'Cancelled', icon: XCircleIcon },
+  ]
 
 export const CONTRACT_STATUSES: Array<{
   value: ContractStatus
@@ -61,56 +58,24 @@ export const CONTRACT_STATUSES: Array<{
   columnLabel?: string
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }> = [
-  {
-    value: 'none',
-    label: 'None',
-    columnLabel: 'No Contract',
-    icon: MinusCircleIcon,
-  },
-  {
-    value: 'verbal-agreement',
-    label: 'Verbal Agreement',
-    icon: ArrowsRightLeftIcon,
-  },
-  { value: 'contract-sent', label: 'Contract Sent', icon: PaperAirplaneIcon },
-  {
-    value: 'contract-signed',
-    label: 'Contract Signed',
-    icon: DocumentCheckIcon,
-  },
-]
-
-export const SIGNATURE_STATUSES: Array<{
-  value: SignatureStatus
-  label: string
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
-}> = [
-  {
-    value: 'not-started',
-    label: 'Not Started',
-    icon: MinusCircleIcon,
-  },
-  {
-    value: 'pending',
-    label: 'Pending',
-    icon: ClockIcon,
-  },
-  {
-    value: 'signed',
-    label: 'Signed',
-    icon: ShieldCheckIcon,
-  },
-  {
-    value: 'rejected',
-    label: 'Rejected',
-    icon: ExclamationTriangleIcon,
-  },
-  {
-    value: 'expired',
-    label: 'Expired',
-    icon: ClockIcon,
-  },
-]
+    {
+      value: 'none',
+      label: 'None',
+      columnLabel: 'No Contract',
+      icon: MinusCircleIcon,
+    },
+    {
+      value: 'verbal-agreement',
+      label: 'Verbal Agreement',
+      icon: ArrowsRightLeftIcon,
+    },
+    { value: 'contract-sent', label: 'Contract Sent', icon: PaperAirplaneIcon },
+    {
+      value: 'contract-signed',
+      label: 'Contract Signed',
+      icon: DocumentCheckIcon,
+    },
+  ]
 
 export const TAGS: Array<{ value: SponsorTag; label: string }> = [
   { value: 'warm-lead', label: 'Warm Lead' },

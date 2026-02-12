@@ -5,9 +5,10 @@ import {
   CheckCircleIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
-import type {
-  MissingField,
-  ReadinessSource,
+import {
+  groupMissingBySource,
+  type MissingField,
+  type ReadinessSource,
 } from '@/lib/sponsor-crm/contract-readiness'
 
 const SOURCE_LABELS: Record<ReadinessSource, string> = {
@@ -58,17 +59,7 @@ export function ContractReadinessIndicator({
     )
   }
 
-  const grouped: Record<ReadinessSource, MissingField[]> = {
-    organizer: readiness.missing.filter(
-      (m: MissingField) => m.source === 'organizer',
-    ),
-    sponsor: readiness.missing.filter(
-      (m: MissingField) => m.source === 'sponsor',
-    ),
-    pipeline: readiness.missing.filter(
-      (m: MissingField) => m.source === 'pipeline',
-    ),
-  }
+  const grouped = groupMissingBySource(readiness.missing)
 
   return (
     <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
