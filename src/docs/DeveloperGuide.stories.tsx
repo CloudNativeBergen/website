@@ -57,10 +57,11 @@ const Tip = ({
   const isWarning = variant === 'warning'
   return (
     <div
-      className={`flex gap-3 rounded-lg border p-4 ${isWarning
+      className={`flex gap-3 rounded-lg border p-4 ${
+        isWarning
           ? 'border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/5'
           : 'border-brand-cloud-blue/20 bg-brand-cloud-blue/5 dark:border-blue-500/20 dark:bg-blue-500/5'
-        }`}
+      }`}
     >
       {isWarning ? (
         <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
