@@ -49,7 +49,7 @@ const filledSpeaker: SpeakerInput = {
 }
 
 const meta = {
-  title: 'Systems/Speakers/CFP/SpeakerDetailsForm',
+  title: 'Systems/Speakers/SpeakerDetailsForm',
   component: SpeakerDetailsForm,
   parameters: {
     layout: 'padded',

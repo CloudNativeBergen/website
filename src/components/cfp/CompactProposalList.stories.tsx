@@ -110,7 +110,7 @@ const allSubmittedProposals: ProposalExisting[] = [
 ]
 
 const meta = {
-  title: 'Systems/Speakers/CFP/CompactProposalList',
+  title: 'Systems/Proposals/CompactProposalList',
   component: CompactProposalList,
   parameters: {
     layout: 'padded',
