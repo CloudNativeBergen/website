@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse } from 'msw'
 import { ContractReadinessIndicator } from './ContractReadinessIndicator'
-import { mockReadinessReady, mockReadinessMissing } from '@/__mocks__/sponsor-data'
+import {
+  mockReadinessReady,
+  mockReadinessMissing,
+} from '@/__mocks__/sponsor-data'
 
 const meta = {
   title: 'Admin/Sponsors/Pipeline/ContractReadinessIndicator',
@@ -28,13 +31,16 @@ export const Interactive: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/sponsor.contractTemplates.contractReadiness', () => {
-          return HttpResponse.json({
-            result: {
-              data: mockReadinessReady(),
-            },
-          })
-        }),
+        http.get(
+          '/api/trpc/sponsor.contractTemplates.contractReadiness',
+          () => {
+            return HttpResponse.json({
+              result: {
+                data: mockReadinessReady(),
+              },
+            })
+          },
+        ),
       ],
     },
   },
@@ -47,13 +53,16 @@ export const ReadyForContract: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/sponsor.contractTemplates.contractReadiness', () => {
-          return HttpResponse.json({
-            result: {
-              data: mockReadinessReady(),
-            },
-          })
-        }),
+        http.get(
+          '/api/trpc/sponsor.contractTemplates.contractReadiness',
+          () => {
+            return HttpResponse.json({
+              result: {
+                data: mockReadinessReady(),
+              },
+            })
+          },
+        ),
       ],
     },
   },
@@ -66,13 +75,16 @@ export const MissingFields: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/sponsor.contractTemplates.contractReadiness', () => {
-          return HttpResponse.json({
-            result: {
-              data: mockReadinessMissing(),
-            },
-          })
-        }),
+        http.get(
+          '/api/trpc/sponsor.contractTemplates.contractReadiness',
+          () => {
+            return HttpResponse.json({
+              result: {
+                data: mockReadinessMissing(),
+              },
+            })
+          },
+        ),
       ],
     },
   },
@@ -85,21 +97,32 @@ export const MissingSponsorDataOnly: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/sponsor.contractTemplates.contractReadiness', () => {
-          return HttpResponse.json({
-            result: {
-              data: mockReadinessMissing([
-                { field: 'sponsor.orgNumber', label: 'Organization number', source: 'sponsor' },
-                { field: 'sponsor.address', label: 'Address', source: 'sponsor' },
-                {
-                  field: 'contactPersons.primary',
-                  label: 'Primary contact person',
-                  source: 'sponsor',
-                },
-              ]),
-            },
-          })
-        }),
+        http.get(
+          '/api/trpc/sponsor.contractTemplates.contractReadiness',
+          () => {
+            return HttpResponse.json({
+              result: {
+                data: mockReadinessMissing([
+                  {
+                    field: 'sponsor.orgNumber',
+                    label: 'Organization number',
+                    source: 'sponsor',
+                  },
+                  {
+                    field: 'sponsor.address',
+                    label: 'Address',
+                    source: 'sponsor',
+                  },
+                  {
+                    field: 'contactPersons.primary',
+                    label: 'Primary contact person',
+                    source: 'sponsor',
+                  },
+                ]),
+              },
+            })
+          },
+        ),
       ],
     },
   },
@@ -112,30 +135,37 @@ export const MissingOrganizerDataOnly: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('/api/trpc/sponsor.contractTemplates.contractReadiness', () => {
-          return HttpResponse.json({
-            result: {
-              data: mockReadinessMissing([
-                { field: 'conference.name', label: 'Conference name', source: 'organizer' },
-                {
-                  field: 'conference.organizerOrgNumber',
-                  label: 'Organizer org number',
-                  source: 'organizer',
-                },
-                {
-                  field: 'conference.organizerAddress',
-                  label: 'Organizer address',
-                  source: 'organizer',
-                },
-                {
-                  field: 'conference.sponsorEmail',
-                  label: 'Sponsor contact email',
-                  source: 'organizer',
-                },
-              ]),
-            },
-          })
-        }),
+        http.get(
+          '/api/trpc/sponsor.contractTemplates.contractReadiness',
+          () => {
+            return HttpResponse.json({
+              result: {
+                data: mockReadinessMissing([
+                  {
+                    field: 'conference.name',
+                    label: 'Conference name',
+                    source: 'organizer',
+                  },
+                  {
+                    field: 'conference.organizerOrgNumber',
+                    label: 'Organizer org number',
+                    source: 'organizer',
+                  },
+                  {
+                    field: 'conference.organizerAddress',
+                    label: 'Organizer address',
+                    source: 'organizer',
+                  },
+                  {
+                    field: 'conference.sponsorEmail',
+                    label: 'Sponsor contact email',
+                    source: 'organizer',
+                  },
+                ]),
+              },
+            })
+          },
+        ),
       ],
     },
   },

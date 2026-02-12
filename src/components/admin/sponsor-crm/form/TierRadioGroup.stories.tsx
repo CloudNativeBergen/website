@@ -49,21 +49,27 @@ const mockTiers = [
 export const Interactive: Story = {
   render: () => {
     const [value, setValue] = useState<string>('tier-ingress')
-    return <TierRadioGroup tiers={mockTiers} value={value} onChange={setValue} />
+    return (
+      <TierRadioGroup tiers={mockTiers} value={value} onChange={setValue} />
+    )
   },
 }
 
 export const MultipleTiers: Story = {
   render: () => {
     const [value, setValue] = useState<string>('tier-ingress')
-    return <TierRadioGroup tiers={mockTiers} value={value} onChange={setValue} />
+    return (
+      <TierRadioGroup tiers={mockTiers} value={value} onChange={setValue} />
+    )
   },
 }
 
 export const NoTier: Story = {
   render: () => {
     const [value, setValue] = useState<string>('')
-    return <TierRadioGroup tiers={mockTiers} value={value} onChange={setValue} />
+    return (
+      <TierRadioGroup tiers={mockTiers} value={value} onChange={setValue} />
+    )
   },
 }
 
@@ -88,6 +94,8 @@ export const ManyTiers: Story = {
       mockSponsorTier({ _id: 'tier-deployment', title: 'Deployment' }),
       mockSponsorTier({ _id: 'tier-namespace', title: 'Namespace' }),
     ]
-    return <TierRadioGroup tiers={manyTiers} value={value} onChange={setValue} />
+    return (
+      <TierRadioGroup tiers={manyTiers} value={value} onChange={setValue} />
+    )
   },
 }

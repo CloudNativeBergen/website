@@ -7,13 +7,18 @@ import type {
   SignatureStatus,
 } from '@/lib/sponsor-crm/types'
 import type { ContactPerson, BillingInfo } from '@/lib/sponsor/types'
-import type { ContractReadiness, MissingField } from '@/lib/sponsor-crm/contract-readiness'
+import type {
+  ContractReadiness,
+  MissingField,
+} from '@/lib/sponsor-crm/contract-readiness'
 
 /**
  * Mock data factories for sponsor-related components in Storybook
  */
 
-export function mockContactPerson(overrides: Partial<ContactPerson> = {}): ContactPerson {
+export function mockContactPerson(
+  overrides: Partial<ContactPerson> = {},
+): ContactPerson {
   return {
     _key: `contact-${Math.random().toString(36).substr(2, 9)}`,
     name: 'Jane Smith',
@@ -25,7 +30,9 @@ export function mockContactPerson(overrides: Partial<ContactPerson> = {}): Conta
   }
 }
 
-export function mockBillingInfo(overrides: Partial<BillingInfo> = {}): BillingInfo {
+export function mockBillingInfo(
+  overrides: Partial<BillingInfo> = {},
+): BillingInfo {
   return {
     email: 'billing@example.com',
     reference: 'PO-2026-001',
@@ -36,7 +43,9 @@ export function mockBillingInfo(overrides: Partial<BillingInfo> = {}): BillingIn
 
 import type { SponsorTier } from '@/lib/sponsor/types'
 
-export function mockSponsorTier(overrides: Partial<SponsorTier> = {}): SponsorTier {
+export function mockSponsorTier(
+  overrides: Partial<SponsorTier> = {},
+): SponsorTier {
   return {
     _id: 'tier-ingress',
     _createdAt: '2026-01-01T00:00:00Z',
@@ -116,9 +125,17 @@ export function mockReadinessMissing(
   fields?: MissingField[],
 ): ContractReadiness {
   const defaultMissing: MissingField[] = fields || [
-    { field: 'sponsor.orgNumber', label: 'Organization number', source: 'sponsor' },
+    {
+      field: 'sponsor.orgNumber',
+      label: 'Organization number',
+      source: 'sponsor',
+    },
     { field: 'sponsor.address', label: 'Address', source: 'sponsor' },
-    { field: 'conference.organizerOrgNumber', label: 'Organizer org number', source: 'organizer' },
+    {
+      field: 'conference.organizerOrgNumber',
+      label: 'Organizer org number',
+      source: 'organizer',
+    },
     { field: 'tier', label: 'Sponsor tier', source: 'pipeline' },
   ]
 

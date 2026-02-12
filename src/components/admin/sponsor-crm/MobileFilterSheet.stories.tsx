@@ -37,7 +37,10 @@ const mockTags = [
 
 function MobileFilterSheetDemo() {
   const [isOpen, setIsOpen] = useState(true)
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['prospect', 'contacted'])
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
+    'prospect',
+    'contacted',
+  ])
   const [selectedTiers, setSelectedTiers] = useState<string[]>(['gold'])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
 
@@ -74,7 +77,7 @@ function MobileFilterSheetDemo() {
         <FunnelIcon className="h-4 w-4" />
         Filters
         {activeFilterCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-xs text-white">
+          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-xs text-white">
             {activeFilterCount}
           </span>
         )}
@@ -96,7 +99,7 @@ function MobileFilterSheetDemo() {
             </div>
 
             {/* Header */}
-            <div className="sticky top-4 flex items-center justify-between border-b border-gray-200 bg-white px-4 pb-4 pt-2 dark:border-gray-700 dark:bg-gray-800">
+            <div className="sticky top-4 flex items-center justify-between border-b border-gray-200 bg-white px-4 pt-2 pb-4 dark:border-gray-700 dark:bg-gray-800">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Filters
               </h2>
@@ -131,16 +134,19 @@ function MobileFilterSheetDemo() {
                     <button
                       key={status.value}
                       onClick={() => toggleStatus(status.value)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${selectedStatuses.includes(status.value)
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                        selectedStatuses.includes(status.value)
                           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`}
+                      }`}
                     >
                       {selectedStatuses.includes(status.value) && (
                         <CheckIcon className="h-3.5 w-3.5" />
                       )}
                       {status.label}
-                      <span className="text-xs opacity-60">({status.count})</span>
+                      <span className="text-xs opacity-60">
+                        ({status.count})
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -156,10 +162,11 @@ function MobileFilterSheetDemo() {
                     <button
                       key={tier.value}
                       onClick={() => toggleTier(tier.value)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${selectedTiers.includes(tier.value)
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                        selectedTiers.includes(tier.value)
                           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`}
+                      }`}
                     >
                       {selectedTiers.includes(tier.value) && (
                         <CheckIcon className="h-3.5 w-3.5" />
@@ -180,10 +187,11 @@ function MobileFilterSheetDemo() {
                     <button
                       key={tag.value}
                       onClick={() => toggleTag(tag.value)}
-                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${selectedTags.includes(tag.value)
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                        selectedTags.includes(tag.value)
                           ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`}
+                      }`}
                     >
                       {selectedTags.includes(tag.value) && (
                         <CheckIcon className="h-3.5 w-3.5" />
@@ -226,7 +234,7 @@ export const TriggerOnly: Story = {
       <button className="relative flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
         <FunnelIcon className="h-4 w-4" />
         Filters
-        <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-xs text-white">
+        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-xs text-white">
           3
         </span>
       </button>
@@ -290,7 +298,9 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Features</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Features
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>• Touch-friendly pill-style filter toggles</li>
           <li>• Swipe-down to close gesture (via drag handle)</li>
@@ -307,8 +317,8 @@ export const Documentation: Story = {
         </h3>
         <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
           This component is only rendered on mobile viewports. On desktop,
-          filters are displayed in a sidebar or dropdown instead. Use
-          responsive utilities to conditionally render.
+          filters are displayed in a sidebar or dropdown instead. Use responsive
+          utilities to conditionally render.
         </p>
       </div>
     </div>

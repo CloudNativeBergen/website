@@ -72,7 +72,7 @@ export const Documentation: Story = {
 
       {/* Live Example */}
       <div>
-        <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Live Example
         </h2>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -165,7 +165,7 @@ export const Documentation: Story = {
 
       {/* Usage */}
       <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800/50">
-        <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Usage
         </h2>
         <pre className="overflow-x-auto rounded-md bg-gray-900 p-4 text-sm text-gray-100">
@@ -179,7 +179,7 @@ function DashboardPage({ conferenceId }: { conferenceId: string }) {
 
       {/* Props */}
       <div>
-        <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Props
         </h2>
         <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
@@ -216,7 +216,7 @@ function DashboardPage({ conferenceId }: { conferenceId: string }) {
 
       {/* Features */}
       <div>
-        <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Features
         </h2>
         <ul className="grid gap-3 text-gray-600 dark:text-gray-400">

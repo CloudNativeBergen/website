@@ -53,7 +53,11 @@ export const Interactive: Story = {
   render: () => {
     const [value, setValue] = useState<string[]>(['addon-booth'])
     return (
-      <AddonsCheckboxGroup addons={mockAddons} value={value} onChange={setValue} />
+      <AddonsCheckboxGroup
+        addons={mockAddons}
+        value={value}
+        onChange={setValue}
+      />
     )
   },
 }
@@ -61,14 +65,26 @@ export const Interactive: Story = {
 export const NoAddons: Story = {
   render: () => {
     const [value, setValue] = useState<string[]>([])
-    return <AddonsCheckboxGroup addons={mockAddons} value={value} onChange={setValue} />
+    return (
+      <AddonsCheckboxGroup
+        addons={mockAddons}
+        value={value}
+        onChange={setValue}
+      />
+    )
   },
 }
 
 export const SomeSelected: Story = {
   render: () => {
     const [value, setValue] = useState<string[]>(['addon-booth', 'addon-swag'])
-    return <AddonsCheckboxGroup addons={mockAddons} value={value} onChange={setValue} />
+    return (
+      <AddonsCheckboxGroup
+        addons={mockAddons}
+        value={value}
+        onChange={setValue}
+      />
+    )
   },
 }
 
@@ -79,7 +95,13 @@ export const AllSelected: Story = {
       'addon-workshop',
       'addon-swag',
     ])
-    return <AddonsCheckboxGroup addons={mockAddons} value={value} onChange={setValue} />
+    return (
+      <AddonsCheckboxGroup
+        addons={mockAddons}
+        value={value}
+        onChange={setValue}
+      />
+    )
   },
 }
 
@@ -104,6 +126,12 @@ export const ManyAddons: Story = {
         tierType: 'addon',
       }),
     ]
-    return <AddonsCheckboxGroup addons={manyAddons} value={value} onChange={setValue} />
+    return (
+      <AddonsCheckboxGroup
+        addons={manyAddons}
+        value={value}
+        onChange={setValue}
+      />
+    )
   },
 }

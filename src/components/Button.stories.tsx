@@ -1,10 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { expect, fn, userEvent, within } from 'storybook/test'
 import { Button } from './Button'
-import {
-  CalendarIcon,
-  UserIcon,
-} from '@heroicons/react/24/outline'
+import { CalendarIcon, UserIcon } from '@heroicons/react/24/outline'
 
 const meta = {
   title: 'Components/Button',
@@ -22,7 +19,15 @@ const meta = {
   argTypes: {
     variant: {
       control: 'select',
-      options: ['primary', 'secondary', 'success', 'warning', 'info', 'outline', 'icon'],
+      options: [
+        'primary',
+        'secondary',
+        'success',
+        'warning',
+        'info',
+        'outline',
+        'icon',
+      ],
       description: 'Visual style variant following brand color system',
     },
     size: {

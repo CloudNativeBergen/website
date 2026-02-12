@@ -82,7 +82,10 @@ function TierEditorModal() {
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  tierType: e.target.value as 'standard' | 'community' | 'media',
+                  tierType: e.target.value as
+                    | 'standard'
+                    | 'community'
+                    | 'media',
                 })
               }
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
@@ -320,10 +323,10 @@ export const TierCards: Story = {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {tier.price > 0
                     ? new Intl.NumberFormat('nb-NO', {
-                      style: 'currency',
-                      currency: 'NOK',
-                      maximumFractionDigits: 0,
-                    }).format(tier.price)
+                        style: 'currency',
+                        currency: 'NOK',
+                        maximumFractionDigits: 0,
+                      }).format(tier.price)
                     : 'Free'}
                   {tier.max && (
                     <span className="ml-2">

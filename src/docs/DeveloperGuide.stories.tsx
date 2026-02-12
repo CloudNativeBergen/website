@@ -24,42 +24,42 @@ export const DeveloperGuide: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-4xl">
-        <h1 className="mb-4 font-space-grotesk text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
+        <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
           Developer Guide
         </h1>
-        <p className="mb-12 font-inter text-lg text-brand-slate-gray dark:text-gray-300">
+        <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
           Everything you need to start building with the Cloud Native Days
           Norway component library.
         </p>
 
         {/* Quick Start */}
         <section className="mb-16">
-          <h2 className="mb-6 flex items-center gap-3 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 flex items-center gap-3 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             <CommandLineIcon className="h-7 w-7 text-brand-cloud-blue" />
             Quick Start
           </h2>
           <div className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-              <p className="mb-2 font-inter text-sm text-gray-600 dark:text-gray-400">
+              <p className="font-inter mb-2 text-sm text-gray-600 dark:text-gray-400">
                 Clone the repository
               </p>
-              <code className="block font-jetbrains text-sm text-brand-slate-gray dark:text-gray-200">
+              <code className="font-jetbrains block text-sm text-brand-slate-gray dark:text-gray-200">
                 git clone https://github.com/cloudnativebergen/website.git
               </code>
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-              <p className="mb-2 font-inter text-sm text-gray-600 dark:text-gray-400">
+              <p className="font-inter mb-2 text-sm text-gray-600 dark:text-gray-400">
                 Install dependencies
               </p>
-              <code className="block font-jetbrains text-sm text-brand-slate-gray dark:text-gray-200">
+              <code className="font-jetbrains block text-sm text-brand-slate-gray dark:text-gray-200">
                 pnpm install
               </code>
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-              <p className="mb-2 font-inter text-sm text-gray-600 dark:text-gray-400">
+              <p className="font-inter mb-2 text-sm text-gray-600 dark:text-gray-400">
                 Start Storybook
               </p>
-              <code className="block font-jetbrains text-sm text-brand-slate-gray dark:text-gray-200">
+              <code className="font-jetbrains block text-sm text-brand-slate-gray dark:text-gray-200">
                 pnpm storybook
               </code>
             </div>
@@ -68,7 +68,7 @@ export const DeveloperGuide: Story = {
 
         {/* Project Structure */}
         <section className="mb-16">
-          <h2 className="mb-6 flex items-center gap-3 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 flex items-center gap-3 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             <FolderIcon className="h-7 w-7 text-brand-fresh-green" />
             Project Structure
           </h2>
@@ -90,13 +90,13 @@ export const DeveloperGuide: Story = {
 
         {/* Component Guidelines */}
         <section className="mb-16">
-          <h2 className="mb-6 flex items-center gap-3 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 flex items-center gap-3 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             <DocumentTextIcon className="h-7 w-7 text-brand-nordic-purple" />
             Component Guidelines
           </h2>
           <div className="space-y-6">
             <div className="rounded-lg border border-brand-cloud-blue/20 bg-brand-sky-mist p-6 dark:border-blue-500/20 dark:bg-gray-800">
-              <h3 className="mb-3 font-space-grotesk text-lg font-semibold text-brand-cloud-blue dark:text-blue-400">
+              <h3 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-cloud-blue dark:text-blue-400">
                 TypeScript First
               </h3>
               <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
@@ -106,7 +106,7 @@ export const DeveloperGuide: Story = {
             </div>
 
             <div className="rounded-lg border border-brand-fresh-green/20 bg-brand-fresh-green/10 p-6 dark:border-green-500/20 dark:bg-gray-800">
-              <h3 className="mb-3 font-space-grotesk text-lg font-semibold text-brand-fresh-green dark:text-green-400">
+              <h3 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-fresh-green dark:text-green-400">
                 Tailwind CSS
               </h3>
               <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
@@ -116,7 +116,7 @@ export const DeveloperGuide: Story = {
             </div>
 
             <div className="rounded-lg border border-brand-nordic-purple/20 bg-brand-nordic-purple/10 p-6 dark:border-purple-500/20 dark:bg-gray-800">
-              <h3 className="mb-3 font-space-grotesk text-lg font-semibold text-brand-nordic-purple dark:text-purple-400">
+              <h3 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-nordic-purple dark:text-purple-400">
                 Heroicons
               </h3>
               <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
@@ -129,12 +129,12 @@ export const DeveloperGuide: Story = {
 
         {/* Writing Stories */}
         <section className="mb-16">
-          <h2 className="mb-6 flex items-center gap-3 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 flex items-center gap-3 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             <BeakerIcon className="h-7 w-7 text-brand-sunbeam-yellow" />
             Writing Stories
           </h2>
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
-            <pre className="overflow-x-auto font-jetbrains text-sm text-brand-slate-gray dark:text-gray-200">
+            <pre className="font-jetbrains overflow-x-auto text-sm text-brand-slate-gray dark:text-gray-200">
               {`import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { MyComponent } from './MyComponent'
 
@@ -166,7 +166,7 @@ export const Default: Story = {
 
         {/* Best Practices */}
         <section>
-          <h2 className="mb-6 flex items-center gap-3 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 flex items-center gap-3 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             <CheckCircleIcon className="h-7 w-7 text-brand-fresh-green" />
             Best Practices
           </h2>
@@ -181,7 +181,7 @@ export const Default: Story = {
             ].map((practice, index) => (
               <li
                 key={index}
-                className="flex items-start gap-3 font-inter text-brand-slate-gray dark:text-gray-300"
+                className="font-inter flex items-start gap-3 text-brand-slate-gray dark:text-gray-300"
               >
                 <CheckCircleIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-fresh-green" />
                 {practice}

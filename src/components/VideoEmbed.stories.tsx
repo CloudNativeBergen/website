@@ -72,7 +72,7 @@ export const PrivacyFeatures: Story = {
   render: () => (
     <div className="space-y-6">
       <div className="rounded-lg border border-brand-cloud-blue/20 bg-brand-sky-mist p-6">
-        <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-cloud-blue">
+        <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
           Privacy-First Video Embedding
         </h3>
         <div className="grid gap-4 md:grid-cols-2">

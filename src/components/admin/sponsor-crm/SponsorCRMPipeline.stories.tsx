@@ -198,11 +198,11 @@ export const Default: Story = {
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <MagnifyingGlassIcon className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search sponsors..."
-                className="w-64 rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="w-64 rounded-lg border border-gray-300 bg-white py-2 pr-4 pl-10 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
             <button className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:text-gray-300">
@@ -250,10 +250,10 @@ export const Default: Story = {
               ))}
               {(!mockSponsors[status.id] ||
                 mockSponsors[status.id].length === 0) && (
-                  <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
-                    No sponsors
-                  </div>
-                )}
+                <div className="rounded-lg border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-500 dark:border-gray-600 dark:text-gray-400">
+                  No sponsors
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -325,7 +325,9 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Features</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Features
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>• Drag-and-drop between columns</li>
           <li>• Quick search by sponsor name</li>
@@ -338,9 +340,7 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-        <h3 className="font-semibold text-blue-800 dark:text-blue-200">
-          Note
-        </h3>
+        <h3 className="font-semibold text-blue-800 dark:text-blue-200">Note</h3>
         <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
           This component has complex dependencies including tRPC queries,
           drag-and-drop context, and URL state management. The story above shows

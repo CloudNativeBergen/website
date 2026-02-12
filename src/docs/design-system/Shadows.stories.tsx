@@ -26,7 +26,7 @@ const ShadowCard = ({
     <div
       className={`mx-auto mb-4 h-24 w-24 rounded-lg bg-white dark:bg-gray-800 ${className}`}
     />
-    <h3 className="mb-1 font-space-grotesk text-sm font-semibold text-brand-slate-gray dark:text-white">
+    <h3 className="font-space-grotesk mb-1 text-sm font-semibold text-brand-slate-gray dark:text-white">
       {name}
     </h3>
     <code className="font-jetbrains text-xs text-gray-500 dark:text-gray-400">
@@ -39,16 +39,16 @@ export const Shadows: Story = {
   render: () => (
     <div className="min-h-screen bg-gray-100 p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-5xl">
-        <h1 className="mb-4 font-space-grotesk text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
+        <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
           Shadows
         </h1>
-        <p className="mb-12 font-inter text-lg text-brand-slate-gray dark:text-gray-300">
+        <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
           Elevation system for creating visual hierarchy and depth.
         </p>
 
         {/* Box Shadows */}
         <section className="mb-16">
-          <h2 className="mb-8 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Box Shadows
           </h2>
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-6">
@@ -63,26 +63,26 @@ export const Shadows: Story = {
 
         {/* Usage Guidelines */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Usage Guidelines
           </h2>
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-3 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+              <h3 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray dark:text-white">
                 Elevation Levels
               </h3>
-              <ul className="space-y-2 font-inter text-sm text-gray-600 dark:text-gray-400">
+              <ul className="font-inter space-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <li>
-                  <code className="text-brand-cloud-blue">shadow-sm</code> — Cards
-                  at rest, subtle separation
+                  <code className="text-brand-cloud-blue">shadow-sm</code> —
+                  Cards at rest, subtle separation
                 </li>
                 <li>
-                  <code className="text-brand-cloud-blue">shadow</code> — Default
-                  card elevation
+                  <code className="text-brand-cloud-blue">shadow</code> —
+                  Default card elevation
                 </li>
                 <li>
-                  <code className="text-brand-cloud-blue">shadow-md</code> — Hover
-                  states, dropdowns
+                  <code className="text-brand-cloud-blue">shadow-md</code> —
+                  Hover states, dropdowns
                 </li>
                 <li>
                   <code className="text-brand-cloud-blue">shadow-lg</code> —
@@ -96,13 +96,13 @@ export const Shadows: Story = {
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-3 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+              <h3 className="font-space-grotesk mb-3 text-lg font-semibold text-brand-slate-gray dark:text-white">
                 Interactive Shadows
               </h3>
-              <p className="mb-4 font-inter text-sm text-gray-600 dark:text-gray-400">
+              <p className="font-inter mb-4 text-sm text-gray-600 dark:text-gray-400">
                 Use transition utilities for smooth hover effects:
               </p>
-              <code className="block rounded bg-gray-100 p-3 font-jetbrains text-xs text-brand-slate-gray dark:bg-gray-700 dark:text-gray-200">
+              <code className="font-jetbrains block rounded bg-gray-100 p-3 text-xs text-brand-slate-gray dark:bg-gray-700 dark:text-gray-200">
                 hover:shadow-lg transition-shadow
               </code>
             </div>
@@ -111,12 +111,12 @@ export const Shadows: Story = {
 
         {/* Interactive Example */}
         <section>
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Interactive Example
           </h2>
           <div className="grid gap-6 md:grid-cols-3">
             <div className="cursor-pointer rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-lg dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-2 font-space-grotesk font-semibold text-brand-slate-gray dark:text-white">
+              <h3 className="font-space-grotesk mb-2 font-semibold text-brand-slate-gray dark:text-white">
                 Card Hover
               </h3>
               <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
@@ -125,7 +125,7 @@ export const Shadows: Story = {
             </div>
 
             <div className="cursor-pointer rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-2 font-space-grotesk font-semibold text-brand-slate-gray dark:text-white">
+              <h3 className="font-space-grotesk mb-2 font-semibold text-brand-slate-gray dark:text-white">
                 Lift Effect
               </h3>
               <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
@@ -133,8 +133,8 @@ export const Shadows: Story = {
               </p>
             </div>
 
-            <div className="cursor-pointer rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-brand-cloud-blue hover:shadow-brand-cloud-blue/20 hover:shadow-lg dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-2 font-space-grotesk font-semibold text-brand-slate-gray dark:text-white">
+            <div className="cursor-pointer rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-brand-cloud-blue hover:shadow-lg hover:shadow-brand-cloud-blue/20 dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="font-space-grotesk mb-2 font-semibold text-brand-slate-gray dark:text-white">
                 Colored Shadow
               </h3>
               <p className="font-inter text-sm text-gray-600 dark:text-gray-400">

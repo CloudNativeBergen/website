@@ -217,6 +217,3 @@ export function DownloadableImage({
     </div>
   )
 }
-
-/** @deprecated Use DownloadableImage instead */
-export const DownloadSpeakerImage = DownloadableImage

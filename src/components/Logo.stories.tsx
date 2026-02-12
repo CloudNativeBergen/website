@@ -155,10 +155,7 @@ export const Documentation: LogoStory = {
           <div className="rounded-lg bg-gray-900 p-6 shadow">
             <p className="mb-4 text-xs text-gray-400">Monochrome on Dark</p>
             <div className="flex justify-center">
-              <Logomark
-                variant="monochrome"
-                className="h-20 w-20 text-white"
-              />
+              <Logomark variant="monochrome" className="h-20 w-20 text-white" />
             </div>
           </div>
         </div>

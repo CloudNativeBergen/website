@@ -64,12 +64,14 @@ export const AllStates: Story = {
       <div className="space-y-8">
         {/* Status Types */}
         <div>
-          <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+          <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
             Status Types
           </h3>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-600">Sponsor Status</h4>
+              <h4 className="text-sm font-medium text-gray-600">
+                Sponsor Status
+              </h4>
               <StatusListbox
                 label="Sponsor Status"
                 value={sponsorValue}
@@ -78,7 +80,9 @@ export const AllStates: Story = {
               />
             </div>
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-600">Contract Status</h4>
+              <h4 className="text-sm font-medium text-gray-600">
+                Contract Status
+              </h4>
               <StatusListbox
                 label="Contract Status"
                 value={contractValue}
@@ -87,7 +91,9 @@ export const AllStates: Story = {
               />
             </div>
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-600">Invoice Status</h4>
+              <h4 className="text-sm font-medium text-gray-600">
+                Invoice Status
+              </h4>
               <StatusListbox
                 label="Invoice Status"
                 value={invoiceValue}
@@ -100,17 +106,19 @@ export const AllStates: Story = {
 
         {/* All Sponsor Statuses */}
         <div>
-          <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+          <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
             All Sponsor Statuses
           </h3>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {STATUSES.map((status) => (
               <div key={status.value} className="space-y-2">
-                <h4 className="text-sm font-medium text-gray-600">{status.label}</h4>
+                <h4 className="text-sm font-medium text-gray-600">
+                  {status.label}
+                </h4>
                 <StatusListbox
                   label="Sponsor Status"
                   value={status.value}
-                  onChange={() => { }}
+                  onChange={() => {}}
                   options={STATUSES}
                 />
               </div>
@@ -120,17 +128,19 @@ export const AllStates: Story = {
 
         {/* All Contract Statuses */}
         <div>
-          <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+          <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
             All Contract Statuses
           </h3>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {CONTRACT_STATUSES.map((status) => (
               <div key={status.value} className="space-y-2">
-                <h4 className="text-sm font-medium text-gray-600">{status.label}</h4>
+                <h4 className="text-sm font-medium text-gray-600">
+                  {status.label}
+                </h4>
                 <StatusListbox
                   label="Contract Status"
                   value={status.value}
-                  onChange={() => { }}
+                  onChange={() => {}}
                   options={CONTRACT_STATUSES}
                 />
               </div>
@@ -140,17 +150,19 @@ export const AllStates: Story = {
 
         {/* All Invoice Statuses */}
         <div>
-          <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+          <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
             All Invoice Statuses
           </h3>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {INVOICE_STATUSES.map((status) => (
               <div key={status.value} className="space-y-2">
-                <h4 className="text-sm font-medium text-gray-600">{status.label}</h4>
+                <h4 className="text-sm font-medium text-gray-600">
+                  {status.label}
+                </h4>
                 <StatusListbox
                   label="Invoice Status"
                   value={status.value}
-                  onChange={() => { }}
+                  onChange={() => {}}
                   options={INVOICE_STATUSES}
                 />
               </div>
@@ -160,12 +172,14 @@ export const AllStates: Story = {
 
         {/* Special States */}
         <div>
-          <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray">
+          <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray">
             Special States
           </h3>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-600">With Helper Text</h4>
+              <h4 className="text-sm font-medium text-gray-600">
+                With Helper Text
+              </h4>
               <StatusListbox
                 label="Sponsor Status"
                 value={helpValue}

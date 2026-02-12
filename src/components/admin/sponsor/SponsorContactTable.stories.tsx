@@ -122,22 +122,22 @@ export const Default: Story = {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-900/50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
                 Sponsor
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
                 Contact
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
                 Email
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
                 Role
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
                 Phone
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+              <th className="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-400">
                 Actions
               </th>
             </tr>
@@ -151,7 +151,7 @@ export const Default: Story = {
                 >
                   {contactIdx === 0 ? (
                     <td
-                      className="whitespace-nowrap px-4 py-3"
+                      className="px-4 py-3 whitespace-nowrap"
                       rowSpan={sfc.contactPersons.length}
                     >
                       <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export const Default: Story = {
                       </div>
                     </td>
                   ) : null}
-                  <td className="whitespace-nowrap px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-gray-900 dark:text-white">
                         {contact.name}
@@ -183,7 +183,7 @@ export const Default: Story = {
                       )}
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-1">
                       <a
                         href={`mailto:${contact.email}`}
@@ -199,15 +199,15 @@ export const Default: Story = {
                       </button>
                     </div>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                  <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-600 dark:text-gray-400">
                     {contact.role}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                  <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-600 dark:text-gray-400">
                     {contact.phone || '—'}
                   </td>
                   {contactIdx === 0 ? (
                     <td
-                      className="whitespace-nowrap px-4 py-3 text-right"
+                      className="px-4 py-3 text-right whitespace-nowrap"
                       rowSpan={sfc.contactPersons.length}
                     >
                       <button className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300">
@@ -232,22 +232,22 @@ export const Empty: Story = {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-900/50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                 Sponsor
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                 Contact
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                 Email
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                 Role
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                 Phone
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">
+              <th className="px-4 py-3 text-right text-xs font-medium tracking-wider text-gray-500 uppercase">
                 Actions
               </th>
             </tr>
@@ -285,7 +285,9 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Features</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Features
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>• Row spanning groups contacts by sponsor</li>
           <li>• Primary contact badge indicator</li>

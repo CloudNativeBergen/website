@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
-import { ChevronUpDownIcon, CheckIcon, PlusIcon } from '@heroicons/react/20/solid'
+import {
+  ChevronUpDownIcon,
+  CheckIcon,
+  PlusIcon,
+} from '@heroicons/react/20/solid'
 
 const meta = {
   title: 'Admin/Sponsors/Form/SponsorCombobox',
@@ -39,8 +43,8 @@ function SponsorComboboxDemo() {
     query === ''
       ? mockSponsors
       : mockSponsors.filter((s) =>
-        s.name.toLowerCase().includes(query.toLowerCase()),
-      )
+          s.name.toLowerCase().includes(query.toLowerCase()),
+        )
 
   const showCreateOption = query.length > 0 && filtered.length === 0
 
@@ -51,7 +55,7 @@ function SponsorComboboxDemo() {
       </label>
       <div className="relative mt-2">
         <div
-          className="relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-left shadow-sm focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
+          className="relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pr-10 pl-3 text-left shadow-sm focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
           onClick={() => setIsOpen(!isOpen)}
         >
           {selected && !isOpen ? (
@@ -80,7 +84,7 @@ function SponsorComboboxDemo() {
             {/* Create new option */}
             {showCreateOption && (
               <div
-                className="relative cursor-pointer bg-indigo-50 py-2 pl-3 pr-9 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400"
+                className="relative cursor-pointer bg-indigo-50 py-2 pr-9 pl-3 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400"
                 onClick={() => {
                   setIsCreatingNew(true)
                   setIsOpen(false)
@@ -88,9 +92,7 @@ function SponsorComboboxDemo() {
               >
                 <div className="flex items-center gap-2">
                   <PlusIcon className="h-5 w-5" />
-                  <span>
-                    Create &ldquo;{query}&rdquo;
-                  </span>
+                  <span>Create &ldquo;{query}&rdquo;</span>
                 </div>
               </div>
             )}
@@ -98,7 +100,7 @@ function SponsorComboboxDemo() {
             {filtered.map((sponsor) => (
               <div
                 key={sponsor._id}
-                className="relative cursor-pointer py-2 pl-3 pr-9 text-gray-900 hover:bg-indigo-50 dark:text-white dark:hover:bg-indigo-900/20"
+                className="relative cursor-pointer py-2 pr-9 pl-3 text-gray-900 hover:bg-indigo-50 dark:text-white dark:hover:bg-indigo-900/20"
                 onClick={() => {
                   setSelectedId(sponsor._id)
                   setIsOpen(false)
@@ -115,7 +117,7 @@ function SponsorComboboxDemo() {
             ))}
 
             {filtered.length === 0 && !showCreateOption && (
-              <div className="py-2 pl-3 pr-9 text-gray-500">
+              <div className="py-2 pr-9 pl-3 text-gray-500">
                 No sponsors found
               </div>
             )}
@@ -175,7 +177,7 @@ export const WithSelection: Story = {
           Select Sponsor
         </label>
         <div className="relative mt-2">
-          <div className="relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-left shadow-sm dark:border-gray-600 dark:bg-gray-800">
+          <div className="relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pr-10 pl-3 text-left shadow-sm dark:border-gray-600 dark:bg-gray-800">
             <span className="block truncate text-gray-900 dark:text-white">
               {selected.name}
             </span>
@@ -240,7 +242,9 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Features</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Features
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>• Type-ahead search filtering</li>
           <li>• Create new sponsor inline when not found</li>

@@ -243,7 +243,9 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Features</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Features
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>• Optional template selection</li>
           <li>• Variable substitution (contact name, sponsor, etc.)</li>

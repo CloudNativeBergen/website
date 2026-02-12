@@ -30,7 +30,10 @@ type Story = StoryObj<typeof TagCombobox>
 
 export const Interactive: Story = {
   render: () => {
-    const [value, setValue] = useState<SponsorTag[]>(['warm-lead', 'returning-sponsor'])
+    const [value, setValue] = useState<SponsorTag[]>([
+      'warm-lead',
+      'returning-sponsor',
+    ])
     return <TagCombobox value={value} onChange={setValue} />
   },
 }

@@ -19,19 +19,20 @@ export const ColorPalette: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-6xl">
-        <h1 className="mb-4 font-space-grotesk text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
+        <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
           Color Palette
         </h1>
-        <p className="mb-12 font-inter text-lg text-brand-slate-gray dark:text-gray-300">
-          Complete color system with usage guidelines and Tailwind class references.
+        <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
+          Complete color system with usage guidelines and Tailwind class
+          references.
         </p>
 
         {/* Primary Colors */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Primary Colors
           </h2>
-          <p className="mb-6 font-inter text-brand-slate-gray dark:text-gray-400">
+          <p className="font-inter mb-6 text-brand-slate-gray dark:text-gray-400">
             Core brand colors used for headlines, CTAs, and key UI elements.
           </p>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -43,10 +44,10 @@ export const ColorPalette: Story = {
 
         {/* Secondary Colors */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Secondary Colors
           </h2>
-          <p className="mb-6 font-inter text-brand-slate-gray dark:text-gray-400">
+          <p className="font-inter mb-6 text-brand-slate-gray dark:text-gray-400">
             Supporting colors for backgrounds, cards, and subtle UI accents.
           </p>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -58,10 +59,10 @@ export const ColorPalette: Story = {
 
         {/* Accent Colors */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Accent Colors
           </h2>
-          <p className="mb-6 font-inter text-brand-slate-gray dark:text-gray-400">
+          <p className="font-inter mb-6 text-brand-slate-gray dark:text-gray-400">
             Highlights for emphasis, alerts, and special call-to-actions.
           </p>
           <div className="grid gap-6 sm:grid-cols-2">
@@ -73,10 +74,10 @@ export const ColorPalette: Story = {
 
         {/* Neutral Colors */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Neutral Colors
           </h2>
-          <p className="mb-6 font-inter text-brand-slate-gray dark:text-gray-400">
+          <p className="font-inter mb-6 text-brand-slate-gray dark:text-gray-400">
             Text, borders, and background colors for body content.
           </p>
           <div className="grid gap-6 sm:grid-cols-2">
@@ -88,54 +89,70 @@ export const ColorPalette: Story = {
 
         {/* Quick Reference */}
         <section>
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Quick Reference
           </h2>
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
             <div className="grid gap-6 md:grid-cols-2">
               <div>
-                <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+                <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-white">
                   Background Colors
                 </h3>
-                <div className="space-y-2 font-jetbrains text-sm">
+                <div className="font-jetbrains space-y-2 text-sm">
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded bg-brand-cloud-blue" />
-                    <code className="text-gray-600 dark:text-gray-400">bg-brand-cloud-blue</code>
+                    <code className="text-gray-600 dark:text-gray-400">
+                      bg-brand-cloud-blue
+                    </code>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded bg-brand-fresh-green" />
-                    <code className="text-gray-600 dark:text-gray-400">bg-brand-fresh-green</code>
+                    <code className="text-gray-600 dark:text-gray-400">
+                      bg-brand-fresh-green
+                    </code>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded bg-brand-nordic-purple" />
-                    <code className="text-gray-600 dark:text-gray-400">bg-brand-nordic-purple</code>
+                    <code className="text-gray-600 dark:text-gray-400">
+                      bg-brand-nordic-purple
+                    </code>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded bg-brand-sunbeam-yellow" />
-                    <code className="text-gray-600 dark:text-gray-400">bg-brand-sunbeam-yellow</code>
+                    <code className="text-gray-600 dark:text-gray-400">
+                      bg-brand-sunbeam-yellow
+                    </code>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded bg-brand-sky-mist" />
-                    <code className="text-gray-600 dark:text-gray-400">bg-brand-sky-mist</code>
+                    <code className="text-gray-600 dark:text-gray-400">
+                      bg-brand-sky-mist
+                    </code>
                   </div>
                 </div>
               </div>
               <div>
-                <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+                <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-white">
                   Gradient Backgrounds
                 </h3>
-                <div className="space-y-2 font-jetbrains text-sm">
+                <div className="font-jetbrains space-y-2 text-sm">
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded bg-aqua-gradient" />
-                    <code className="text-gray-600 dark:text-gray-400">bg-aqua-gradient</code>
+                    <code className="text-gray-600 dark:text-gray-400">
+                      bg-aqua-gradient
+                    </code>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded bg-brand-gradient" />
-                    <code className="text-gray-600 dark:text-gray-400">bg-brand-gradient</code>
+                    <code className="text-gray-600 dark:text-gray-400">
+                      bg-brand-gradient
+                    </code>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="h-6 w-6 rounded bg-nordic-gradient" />
-                    <code className="text-gray-600 dark:text-gray-400">bg-nordic-gradient</code>
+                    <code className="text-gray-600 dark:text-gray-400">
+                      bg-nordic-gradient
+                    </code>
                   </div>
                 </div>
               </div>

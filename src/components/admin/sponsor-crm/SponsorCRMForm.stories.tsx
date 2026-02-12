@@ -1,5 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { XMarkIcon, ClockIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
+import {
+  XMarkIcon,
+  ClockIcon,
+  InformationCircleIcon,
+} from '@heroicons/react/24/outline'
 
 const meta = {
   title: 'Admin/Sponsors/Pipeline/SponsorCRMForm',
@@ -118,10 +122,11 @@ function CRMFormPreview() {
             {TIERS.slice(0, 3).map((tier) => (
               <label
                 key={tier.id}
-                className={`cursor-pointer rounded-lg border p-3 transition-colors ${tier.id === 'gold'
+                className={`cursor-pointer rounded-lg border p-3 transition-colors ${
+                  tier.id === 'gold'
                     ? 'border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-900/20'
                     : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                  }`}
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <input
@@ -138,10 +143,10 @@ function CRMFormPreview() {
                     <p className="text-xs text-gray-500">
                       {tier.value > 0
                         ? new Intl.NumberFormat('nb-NO', {
-                          style: 'currency',
-                          currency: 'NOK',
-                          maximumFractionDigits: 0,
-                        }).format(tier.value)
+                            style: 'currency',
+                            currency: 'NOK',
+                            maximumFractionDigits: 0,
+                          }).format(tier.value)
                         : 'Free'}
                     </p>
                   </div>

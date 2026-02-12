@@ -52,7 +52,7 @@ async function validateStories() {
 
       // Count stories (exports that aren't default or Meta)
       const storyExports = Object.keys(storyModule).filter(
-        (key) => key !== 'default' && key !== '__esModule'
+        (key) => key !== 'default' && key !== '__esModule',
       )
 
       if (storyExports.length === 0) {
@@ -80,7 +80,9 @@ async function validateStories() {
   console.log('='.repeat(60) + '\n')
 
   console.log(`Total files: ${storyFiles.length}`)
-  console.log(`✅ Passed: ${storyFiles.length - errors.length - warnings.length}`)
+  console.log(
+    `✅ Passed: ${storyFiles.length - errors.length - warnings.length}`,
+  )
   console.log(`⚠️  Warnings: ${warnings.length}`)
   console.log(`❌ Errors: ${errors.length}`)
 

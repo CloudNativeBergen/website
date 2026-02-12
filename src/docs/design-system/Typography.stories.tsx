@@ -29,14 +29,16 @@ const FontSample = ({
       <span className="font-inter text-sm font-semibold text-brand-slate-gray dark:text-gray-400">
         {name}
       </span>
-      <code className="rounded bg-gray-200 px-2 py-1 font-jetbrains text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+      <code className="font-jetbrains rounded bg-gray-200 px-2 py-1 text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-400">
         {className}
       </code>
     </div>
-    <p className={`mb-4 text-3xl text-brand-cloud-blue dark:text-blue-400 ${className}`}>
+    <p
+      className={`mb-4 text-3xl text-brand-cloud-blue dark:text-blue-400 ${className}`}
+    >
       Cloud Native Days Norway
     </p>
-    <p className="mb-2 font-inter text-sm text-brand-slate-gray dark:text-gray-300">
+    <p className="font-inter mb-2 text-sm text-brand-slate-gray dark:text-gray-300">
       {description}
     </p>
     <p className="font-inter text-xs text-gray-500 dark:text-gray-500">
@@ -49,16 +51,16 @@ export const Typography: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-5xl">
-        <h1 className="mb-4 font-space-grotesk text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
+        <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
           Typography
         </h1>
-        <p className="mb-12 font-inter text-lg text-brand-slate-gray dark:text-gray-300">
+        <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
           Font families and type scale designed for developer-focused content.
         </p>
 
         {/* Display Fonts */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Display Fonts
           </h2>
           <div className="space-y-6">
@@ -85,7 +87,7 @@ export const Typography: Story = {
 
         {/* Body Fonts */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Body Fonts
           </h2>
           <div className="space-y-6">
@@ -112,7 +114,7 @@ export const Typography: Story = {
 
         {/* Type Scale */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Type Scale
           </h2>
           <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
@@ -120,94 +122,108 @@ export const Typography: Story = {
               <span className="font-space-grotesk text-5xl text-brand-slate-gray dark:text-white">
                 Heading 1
               </span>
-              <code className="font-jetbrains text-xs text-gray-500">text-5xl</code>
+              <code className="font-jetbrains text-xs text-gray-500">
+                text-5xl
+              </code>
             </div>
             <div className="flex items-baseline justify-between border-b border-gray-200 pb-3 dark:border-gray-700">
               <span className="font-space-grotesk text-4xl text-brand-slate-gray dark:text-white">
                 Heading 2
               </span>
-              <code className="font-jetbrains text-xs text-gray-500">text-4xl</code>
+              <code className="font-jetbrains text-xs text-gray-500">
+                text-4xl
+              </code>
             </div>
             <div className="flex items-baseline justify-between border-b border-gray-200 pb-3 dark:border-gray-700">
               <span className="font-space-grotesk text-3xl text-brand-slate-gray dark:text-white">
                 Heading 3
               </span>
-              <code className="font-jetbrains text-xs text-gray-500">text-3xl</code>
+              <code className="font-jetbrains text-xs text-gray-500">
+                text-3xl
+              </code>
             </div>
             <div className="flex items-baseline justify-between border-b border-gray-200 pb-3 dark:border-gray-700">
               <span className="font-space-grotesk text-2xl text-brand-slate-gray dark:text-white">
                 Heading 4
               </span>
-              <code className="font-jetbrains text-xs text-gray-500">text-2xl</code>
+              <code className="font-jetbrains text-xs text-gray-500">
+                text-2xl
+              </code>
             </div>
             <div className="flex items-baseline justify-between border-b border-gray-200 pb-3 dark:border-gray-700">
               <span className="font-inter text-lg text-brand-slate-gray dark:text-white">
                 Body Large
               </span>
-              <code className="font-jetbrains text-xs text-gray-500">text-lg</code>
+              <code className="font-jetbrains text-xs text-gray-500">
+                text-lg
+              </code>
             </div>
             <div className="flex items-baseline justify-between border-b border-gray-200 pb-3 dark:border-gray-700">
               <span className="font-inter text-base text-brand-slate-gray dark:text-white">
                 Body
               </span>
-              <code className="font-jetbrains text-xs text-gray-500">text-base</code>
+              <code className="font-jetbrains text-xs text-gray-500">
+                text-base
+              </code>
             </div>
             <div className="flex items-baseline justify-between">
               <span className="font-inter text-sm text-brand-slate-gray dark:text-white">
                 Small
               </span>
-              <code className="font-jetbrains text-xs text-gray-500">text-sm</code>
+              <code className="font-jetbrains text-xs text-gray-500">
+                text-sm
+              </code>
             </div>
           </div>
         </section>
 
         {/* Font Pairings */}
         <section>
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Recommended Pairings
           </h2>
           <div className="grid gap-6 md:grid-cols-3">
             <div className="rounded-xl border border-brand-cloud-blue/20 bg-brand-sky-mist p-6 dark:border-blue-500/20 dark:bg-gray-800">
-              <span className="mb-2 inline-block rounded bg-brand-cloud-blue px-2 py-1 font-inter text-xs text-white">
+              <span className="font-inter mb-2 inline-block rounded bg-brand-cloud-blue px-2 py-1 text-xs text-white">
                 Primary
               </span>
-              <h3 className="mb-1 font-jetbrains text-xl text-brand-cloud-blue dark:text-blue-400">
+              <h3 className="font-jetbrains mb-1 text-xl text-brand-cloud-blue dark:text-blue-400">
                 JetBrains Mono
               </h3>
               <p className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">
                 + Inter
               </p>
-              <p className="mt-3 font-inter text-xs text-gray-500 dark:text-gray-500">
+              <p className="font-inter mt-3 text-xs text-gray-500 dark:text-gray-500">
                 Dev terminal meets clean UI
               </p>
             </div>
 
             <div className="rounded-xl border border-brand-fresh-green/20 bg-brand-fresh-green/10 p-6 dark:border-green-500/20 dark:bg-gray-800">
-              <span className="mb-2 inline-block rounded bg-brand-fresh-green px-2 py-1 font-inter text-xs text-white">
+              <span className="font-inter mb-2 inline-block rounded bg-brand-fresh-green px-2 py-1 text-xs text-white">
                 Modern
               </span>
-              <h3 className="mb-1 font-space-grotesk text-xl text-brand-fresh-green dark:text-green-400">
+              <h3 className="font-space-grotesk mb-1 text-xl text-brand-fresh-green dark:text-green-400">
                 Space Grotesk
               </h3>
               <p className="font-ibm-plex-sans text-sm text-brand-slate-gray dark:text-gray-300">
                 + IBM Plex Sans
               </p>
-              <p className="mt-3 font-inter text-xs text-gray-500 dark:text-gray-500">
+              <p className="font-inter mt-3 text-xs text-gray-500 dark:text-gray-500">
                 Playful headings with structured body
               </p>
             </div>
 
             <div className="rounded-xl border border-brand-nordic-purple/20 bg-brand-nordic-purple/10 p-6 dark:border-purple-500/20 dark:bg-gray-800">
-              <span className="mb-2 inline-block rounded bg-brand-nordic-purple px-2 py-1 font-inter text-xs text-white">
+              <span className="font-inter mb-2 inline-block rounded bg-brand-nordic-purple px-2 py-1 text-xs text-white">
                 Accessible
               </span>
-              <h3 className="mb-1 font-bricolage text-xl text-brand-nordic-purple dark:text-purple-400">
+              <h3 className="font-bricolage mb-1 text-xl text-brand-nordic-purple dark:text-purple-400">
                 Bricolage Grotesque
               </h3>
               <p className="font-atkinson text-sm text-brand-slate-gray dark:text-gray-300">
                 + Atkinson Hyperlegible
               </p>
-              <p className="mt-3 font-inter text-xs text-gray-500 dark:text-gray-500">
+              <p className="font-inter mt-3 text-xs text-gray-500 dark:text-gray-500">
                 Edgy but accessible
               </p>
             </div>

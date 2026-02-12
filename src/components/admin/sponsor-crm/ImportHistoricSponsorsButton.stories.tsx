@@ -1,5 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
-import { ArrowDownTrayIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import {
+  ArrowDownTrayIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+} from '@heroicons/react/24/outline'
 import { useState } from 'react'
 
 const meta = {
@@ -189,8 +193,10 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Workflow</h3>
-        <ol className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400 list-decimal list-inside">
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Workflow
+        </h3>
+        <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>Click button to open confirmation modal</li>
           <li>Review import notice and warning about duplicates</li>
           <li>Confirm to start import process</li>

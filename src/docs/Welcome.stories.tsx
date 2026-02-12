@@ -31,8 +31,8 @@ export const Introduction: Story = {
       {/* Hero Section */}
       <div className="relative overflow-hidden bg-linear-to-br from-brand-cloud-blue via-brand-nordic-purple to-brand-cloud-blue">
         <div className="absolute inset-0 opacity-20">
-          <div className="absolute left-10 top-10 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute bottom-10 right-10 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute top-10 left-10 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute right-10 bottom-10 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
         </div>
         <div className="relative mx-auto max-w-6xl px-8 py-20">
           <div className="flex items-center gap-4 text-white/80">
@@ -41,11 +41,13 @@ export const Introduction: Story = {
               Cloud Native Days Norway
             </span>
           </div>
-          <h1 className="mt-6 font-space-grotesk text-6xl font-bold text-white">
+          <h1 className="font-space-grotesk mt-6 text-6xl font-bold text-white">
             Component Library
           </h1>
-          <p className="mt-2 font-jetbrains text-xl text-white/70">v{version}</p>
-          <p className="mt-6 max-w-2xl font-inter text-xl text-white/90">
+          <p className="font-jetbrains mt-2 text-xl text-white/70">
+            v{version}
+          </p>
+          <p className="font-inter mt-6 max-w-2xl text-xl text-white/90">
             Interactive documentation for the Cloud Native Days Norway design
             system. Build consistent, accessible interfaces with our curated
             component collection.
@@ -55,7 +57,7 @@ export const Introduction: Story = {
 
       {/* What&apos;s New Section */}
       <div className="mx-auto max-w-6xl px-8 py-16">
-        <h2 className="mb-8 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+        <h2 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray dark:text-white">
           What&apos;s new
         </h2>
         <div className="grid gap-6 md:grid-cols-3">
@@ -63,7 +65,7 @@ export const Introduction: Story = {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-linear-to-br from-brand-cloud-blue to-brand-nordic-purple">
               <CubeIcon className="h-8 w-8 text-white" />
             </div>
-            <h3 className="mb-2 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+            <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray dark:text-white">
               Sponsor CRM Components
             </h3>
             <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
@@ -76,7 +78,7 @@ export const Introduction: Story = {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-linear-to-br from-brand-fresh-green to-teal-500">
               <SparklesIcon className="h-8 w-8 text-white" />
             </div>
-            <h3 className="mb-2 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+            <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray dark:text-white">
               Design System Tokens
             </h3>
             <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
@@ -89,7 +91,7 @@ export const Introduction: Story = {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-linear-to-br from-brand-nordic-purple to-violet-500">
               <ShieldCheckIcon className="h-8 w-8 text-white" />
             </div>
-            <h3 className="mb-2 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+            <h3 className="font-space-grotesk mb-2 text-lg font-semibold text-brand-slate-gray dark:text-white">
               Accessibility First
             </h3>
             <p className="font-inter text-sm text-gray-600 dark:text-gray-400">
@@ -103,10 +105,10 @@ export const Introduction: Story = {
       {/* Overview Section */}
       <div className="border-t border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-800/50">
         <div className="mx-auto max-w-6xl px-8 py-16">
-          <h2 className="mb-4 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Overview
           </h2>
-          <p className="mb-12 max-w-3xl font-inter text-lg text-gray-600 dark:text-gray-300">
+          <p className="font-inter mb-12 max-w-3xl text-lg text-gray-600 dark:text-gray-300">
             Cloud Native Days Norway Component Library is a collection of React
             components and design tokens built with Next.js 15, Tailwind CSS 4,
             and TypeScript. It powers the conference website, sponsor portal,
@@ -180,7 +182,7 @@ export const Introduction: Story = {
 
       {/* Tech Stack */}
       <div className="mx-auto max-w-6xl px-8 py-16">
-        <h2 className="mb-8 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+        <h2 className="font-space-grotesk mb-8 text-2xl font-semibold text-brand-slate-gray dark:text-white">
           Built with
         </h2>
         <div className="flex flex-wrap gap-3">
@@ -196,7 +198,7 @@ export const Introduction: Story = {
           ].map((tech) => (
             <span
               key={tech}
-              className="rounded-full bg-gray-100 px-4 py-2 font-jetbrains text-sm text-brand-slate-gray dark:bg-gray-800 dark:text-gray-300"
+              className="font-jetbrains rounded-full bg-gray-100 px-4 py-2 text-sm text-brand-slate-gray dark:bg-gray-800 dark:text-gray-300"
             >
               {tech}
             </span>

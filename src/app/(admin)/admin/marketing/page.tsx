@@ -164,12 +164,12 @@ export default async function MarketingPage() {
     const speakers =
       proposal.speakers && Array.isArray(proposal.speakers)
         ? proposal.speakers.filter(
-          (speaker) =>
-            typeof speaker === 'object' &&
-            speaker &&
-            'name' in speaker &&
-            '_id' in speaker,
-        )
+            (speaker) =>
+              typeof speaker === 'object' &&
+              speaker &&
+              'name' in speaker &&
+              '_id' in speaker,
+          )
         : []
 
     speakers.forEach((speaker) => {

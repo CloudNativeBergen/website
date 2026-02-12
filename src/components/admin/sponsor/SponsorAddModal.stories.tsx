@@ -58,19 +58,21 @@ function AddSponsorModal({ preselectedTier }: { preselectedTier?: string }) {
         <div className="flex rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
           <button
             onClick={() => setMode('select')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === 'select'
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              mode === 'select'
                 ? 'bg-white text-gray-900 shadow dark:bg-gray-600 dark:text-white'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
-              }`}
+            }`}
           >
             Select Existing
           </button>
           <button
             onClick={() => setMode('create')}
-            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${mode === 'create'
+            className={`flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              mode === 'create'
                 ? 'bg-white text-gray-900 shadow dark:bg-gray-600 dark:text-white'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
-              }`}
+            }`}
           >
             Create New
           </button>
@@ -84,7 +86,7 @@ function AddSponsorModal({ preselectedTier }: { preselectedTier?: string }) {
           <select
             value={selectedTier}
             onChange={(e) => setSelectedTier(e.target.value)}
-            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           >
             <option value="">Select a tier...</option>
             {mockTiers.map((tier) => (
@@ -104,7 +106,7 @@ function AddSponsorModal({ preselectedTier }: { preselectedTier?: string }) {
             <select
               value={selectedSponsor}
               onChange={(e) => setSelectedSponsor(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             >
               <option value="">Select a sponsor...</option>
               {mockExistingSponsors.map((sponsor) => (
@@ -129,7 +131,7 @@ function AddSponsorModal({ preselectedTier }: { preselectedTier?: string }) {
                 value={newSponsorName}
                 onChange={(e) => setNewSponsorName(e.target.value)}
                 placeholder="e.g. Acme Corporation"
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
 
@@ -142,7 +144,7 @@ function AddSponsorModal({ preselectedTier }: { preselectedTier?: string }) {
                 value={newSponsorWebsite}
                 onChange={(e) => setNewSponsorWebsite(e.target.value)}
                 placeholder="https://example.com"
-                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
               />
             </div>
 
@@ -172,7 +174,10 @@ function AddSponsorModal({ preselectedTier }: { preselectedTier?: string }) {
           Cancel
         </button>
         <button
-          disabled={!selectedTier || (mode === 'select' ? !selectedSponsor : !newSponsorName)}
+          disabled={
+            !selectedTier ||
+            (mode === 'select' ? !selectedSponsor : !newSponsorName)
+          }
           className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <span className="flex items-center gap-1.5">
@@ -258,7 +263,9 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Features</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Features
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>• Two modes: select existing or create new</li>
           <li>• Tier selection with value display</li>
@@ -274,8 +281,9 @@ export const Documentation: Story = {
           Integration
         </h3>
         <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
-          Opened from SponsorTierManagement when clicking &quot;Add Sponsor&quot;
-          button on a tier row. The tier ID is passed as preselectedTierId.
+          Opened from SponsorTierManagement when clicking &quot;Add
+          Sponsor&quot; button on a tier row. The tier ID is passed as
+          preselectedTierId.
         </p>
       </div>
     </div>

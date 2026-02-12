@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
-import { ChevronUpDownIcon, CheckIcon, XMarkIcon } from '@heroicons/react/20/solid'
+import {
+  ChevronUpDownIcon,
+  CheckIcon,
+  XMarkIcon,
+} from '@heroicons/react/20/solid'
 
 const meta = {
   title: 'Admin/Sponsors/Form/OrganizerCombobox',
@@ -73,10 +77,10 @@ function OrganizerComboboxDemo() {
     query === ''
       ? mockOrganizers
       : mockOrganizers.filter(
-        (o) =>
-          o.name.toLowerCase().includes(query.toLowerCase()) ||
-          o.email?.toLowerCase().includes(query.toLowerCase()),
-      )
+          (o) =>
+            o.name.toLowerCase().includes(query.toLowerCase()) ||
+            o.email?.toLowerCase().includes(query.toLowerCase()),
+        )
 
   return (
     <div className="max-w-sm">
@@ -85,7 +89,7 @@ function OrganizerComboboxDemo() {
       </label>
       <div className="relative mt-2">
         <div
-          className="relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-left shadow-sm focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
+          className="relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pr-10 pl-3 text-left shadow-sm focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800"
           onClick={() => setIsOpen(!isOpen)}
         >
           {selected ? (
@@ -112,7 +116,7 @@ function OrganizerComboboxDemo() {
           <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-gray-700">
             {/* Unassigned option */}
             <div
-              className="relative cursor-pointer py-2 pl-3 pr-9 text-gray-500 hover:bg-indigo-50 dark:text-gray-400 dark:hover:bg-indigo-900/20"
+              className="relative cursor-pointer py-2 pr-9 pl-3 text-gray-500 hover:bg-indigo-50 dark:text-gray-400 dark:hover:bg-indigo-900/20"
               onClick={() => {
                 setSelectedId('')
                 setIsOpen(false)
@@ -129,7 +133,7 @@ function OrganizerComboboxDemo() {
             {filtered.map((organizer) => (
               <div
                 key={organizer._id}
-                className="relative cursor-pointer py-2 pl-3 pr-9 text-gray-900 hover:bg-indigo-50 dark:text-white dark:hover:bg-indigo-900/20"
+                className="relative cursor-pointer py-2 pr-9 pl-3 text-gray-900 hover:bg-indigo-50 dark:text-white dark:hover:bg-indigo-900/20"
                 onClick={() => {
                   setSelectedId(organizer._id)
                   setIsOpen(false)
@@ -184,7 +188,7 @@ export const WithSelection: Story = {
           Assigned To
         </label>
         <div className="relative mt-2">
-          <div className="relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pl-3 pr-10 text-left shadow-sm dark:border-gray-600 dark:bg-gray-800">
+          <div className="relative w-full cursor-pointer rounded-md border border-gray-300 bg-white py-2 pr-10 pl-3 text-left shadow-sm dark:border-gray-600 dark:bg-gray-800">
             <div className="flex items-center gap-2">
               <OrganizerAvatar name={selected.name} />
               <span className="block truncate text-gray-900 dark:text-white">

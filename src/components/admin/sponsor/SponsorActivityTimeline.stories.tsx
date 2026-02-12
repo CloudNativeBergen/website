@@ -81,7 +81,7 @@ export const Documentation: Story = {
 
       {/* Live Example */}
       <div>
-        <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Live Example
         </h2>
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -200,7 +200,7 @@ export const Documentation: Story = {
 
       {/* Activity Types */}
       <div>
-        <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Activity Types
         </h2>
         <div className="grid gap-3">
@@ -210,9 +210,7 @@ export const Documentation: Story = {
               <p className="font-medium text-gray-900 dark:text-white">
                 Created
               </p>
-              <p className="text-sm text-gray-500">
-                Sponsor added to pipeline
-              </p>
+              <p className="text-sm text-gray-500">Sponsor added to pipeline</p>
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
@@ -221,9 +219,7 @@ export const Documentation: Story = {
               <p className="font-medium text-gray-900 dark:text-white">
                 Status Change
               </p>
-              <p className="text-sm text-gray-500">
-                Pipeline stage transition
-              </p>
+              <p className="text-sm text-gray-500">Pipeline stage transition</p>
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
@@ -232,9 +228,7 @@ export const Documentation: Story = {
               <p className="font-medium text-gray-900 dark:text-white">
                 Contract Change
               </p>
-              <p className="text-sm text-gray-500">
-                Contract status updated
-              </p>
+              <p className="text-sm text-gray-500">Contract status updated</p>
             </div>
           </div>
         </div>
@@ -242,7 +236,7 @@ export const Documentation: Story = {
 
       {/* Usage */}
       <div className="rounded-lg bg-gray-50 p-6 dark:bg-gray-800/50">
-        <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+        <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
           Usage
         </h2>
         <pre className="overflow-x-auto rounded-md bg-gray-900 p-4 text-sm text-gray-100">

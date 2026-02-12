@@ -46,7 +46,7 @@ export const Documentation: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-5xl">
-        <h1 className="mb-4 font-space-grotesk text-3xl font-bold text-gray-900 dark:text-white">
+        <h1 className="font-space-grotesk mb-4 text-3xl font-bold text-gray-900 dark:text-white">
           Sponsor Components
         </h1>
         <p className="mb-8 text-gray-600 dark:text-gray-400">
@@ -55,7 +55,7 @@ export const Documentation: Story = {
 
         {/* Public Display Components */}
         <section className="mb-12">
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Public Display Components
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -86,7 +86,7 @@ export const Documentation: Story = {
 
         {/* Dashboard Components */}
         <section className="mb-12">
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Dashboard Components
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -116,7 +116,7 @@ export const Documentation: Story = {
 
         {/* CRM Pipeline Components */}
         <section className="mb-12">
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             CRM Pipeline Components
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -164,7 +164,7 @@ export const Documentation: Story = {
 
         {/* Form Components */}
         <section className="mb-12">
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Form Components
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -224,7 +224,7 @@ export const Documentation: Story = {
 
         {/* Contact Management */}
         <section className="mb-12">
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Contact Management
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -254,7 +254,7 @@ export const Documentation: Story = {
 
         {/* Email & Communication */}
         <section className="mb-12">
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Email &amp; Communication
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -287,7 +287,7 @@ export const Documentation: Story = {
 
         {/* Tier Management */}
         <section className="mb-12">
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Tier Management
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -317,7 +317,7 @@ export const Documentation: Story = {
 
         {/* Onboarding & Contract */}
         <section className="mb-12">
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Onboarding &amp; Contract
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -347,7 +347,7 @@ export const Documentation: Story = {
 
         {/* Utility Components */}
         <section>
-          <h2 className="mb-4 font-space-grotesk text-xl font-semibold text-gray-900 dark:text-white">
+          <h2 className="font-space-grotesk mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Utility Components
           </h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">

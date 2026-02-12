@@ -15,7 +15,7 @@ type Story = StoryObj<typeof meta>
 
 const SpacingBlock = ({ size, pixels }: { size: string; pixels: string }) => (
   <div className="flex items-center gap-4">
-    <code className="w-12 font-jetbrains text-sm text-gray-500">{size}</code>
+    <code className="font-jetbrains w-12 text-sm text-gray-500">{size}</code>
     <div
       className="h-6 rounded bg-brand-cloud-blue"
       style={{ width: pixels }}
@@ -30,16 +30,17 @@ export const Spacing: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-4xl">
-        <h1 className="mb-4 font-space-grotesk text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
+        <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
           Spacing
         </h1>
-        <p className="mb-12 font-inter text-lg text-brand-slate-gray dark:text-gray-300">
-          Consistent spacing scale based on Tailwind CSS defaults for harmonious layouts.
+        <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
+          Consistent spacing scale based on Tailwind CSS defaults for harmonious
+          layouts.
         </p>
 
         {/* Base Scale */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Base Scale
           </h2>
           <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
@@ -59,12 +60,12 @@ export const Spacing: Story = {
 
         {/* Common Patterns */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Common Patterns
           </h2>
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+              <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-white">
                 Component Padding
               </h3>
               <div className="space-y-3">
@@ -104,7 +105,7 @@ export const Spacing: Story = {
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+              <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-white">
                 Layout Gaps
               </h3>
               <div className="space-y-3">
@@ -147,7 +148,7 @@ export const Spacing: Story = {
 
         {/* Breakpoints */}
         <section>
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Breakpoints
           </h2>
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
@@ -164,7 +165,7 @@ export const Spacing: Story = {
                   className="flex items-center justify-between border-b border-gray-200 pb-3 last:border-0 last:pb-0 dark:border-gray-700"
                 >
                   <div className="flex items-center gap-4">
-                    <code className="rounded bg-brand-cloud-blue/10 px-2 py-1 font-jetbrains text-sm text-brand-cloud-blue dark:bg-blue-900/30 dark:text-blue-400">
+                    <code className="font-jetbrains rounded bg-brand-cloud-blue/10 px-2 py-1 text-sm text-brand-cloud-blue dark:bg-blue-900/30 dark:text-blue-400">
                       {bp.name}:
                     </code>
                     <span className="font-inter text-sm text-brand-slate-gray dark:text-gray-300">

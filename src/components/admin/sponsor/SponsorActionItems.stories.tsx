@@ -127,7 +127,9 @@ export const Default: Story = {
                 className="cursor-pointer rounded-lg border border-gray-200 p-4 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
               >
                 <div className="flex items-start gap-3">
-                  <div className={`rounded-lg p-2 ${getActionColor(item.type)}`}>
+                  <div
+                    className={`rounded-lg p-2 ${getActionColor(item.type)}`}
+                  >
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">

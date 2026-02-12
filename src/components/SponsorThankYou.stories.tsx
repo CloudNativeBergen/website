@@ -16,7 +16,8 @@ const mockSponsor = {
   name: 'Acme Corporation',
   website: 'https://acme.example.com',
   logo: '<svg width="200" height="80"><text x="10" y="50" font-size="40" fill="white">ACME</text></svg>',
-  logoBright: '<svg width="200" height="80"><text x="10" y="50" font-size="40" fill="white">ACME</text></svg>',
+  logoBright:
+    '<svg width="200" height="80"><text x="10" y="50" font-size="40" fill="white">ACME</text></svg>',
 }
 
 const mockTier = {
@@ -50,21 +51,24 @@ const variantConfig: Record<SponsorVariant, VariantConfig> = {
     accentColor: 'text-white',
     icon: CodeBracketIcon,
     headerText: 'Code Heroes',
-    footerText: 'Your support powers our community of cloud native developers and innovators',
+    footerText:
+      'Your support powers our community of cloud native developers and innovators',
   },
   'cloud-wizards': {
     gradient: 'from-brand-cloud-blue to-brand-sunbeam-yellow',
     accentColor: 'text-white',
     icon: RocketLaunchIcon,
     headerText: 'Cloud Wizards',
-    footerText: 'Casting spells in the cloud and making distributed systems magic happen',
+    footerText:
+      'Casting spells in the cloud and making distributed systems magic happen',
   },
   'tech-ninjas': {
     gradient: 'from-purple-600 to-brand-fresh-green',
     accentColor: 'text-white',
     icon: CommandLineIcon,
     headerText: 'Tech Ninjas',
-    footerText: 'Stealthily deploying awesome tech and enabling developer superpowers',
+    footerText:
+      'Stealthily deploying awesome tech and enabling developer superpowers',
   },
   'deploy-legends': {
     gradient: 'from-brand-nordic-purple to-brand-cloud-blue',
@@ -127,15 +131,15 @@ function SponsorThankYouStorybook({
           <header className="shrink-0">
             <div className="mb-[1cqw] flex items-center gap-[2cqw] @xs:mb-[1.5cqw] @xs:gap-[2.5cqw] @md:mb-[2cqw] @md:gap-[3cqw]">
               <Icon className="h-[5cqw] w-[5cqw] @xs:h-[5.5cqw] @xs:w-[5.5cqw] @md:h-[6cqw] @md:w-[6cqw] @xl:h-[7cqw] @xl:w-[7cqw]" />
-              <span className="font-inter text-[3.5cqw] font-bold leading-tight @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]">
+              <span className="font-inter text-[3.5cqw] leading-tight font-bold @xs:text-[4cqw] @md:text-[4.5cqw] @xl:text-[5cqw]">
                 {config.headerText}
               </span>
             </div>
-            <h1 className="font-space-grotesk text-[5cqw] font-bold leading-tight @xs:text-[5.5cqw] @md:text-[6.5cqw] @xl:text-[7.5cqw]">
+            <h1 className="font-space-grotesk text-[5cqw] leading-tight font-bold @xs:text-[5.5cqw] @md:text-[6.5cqw] @xl:text-[7.5cqw]">
               {eventName}
             </h1>
             {eventDate && (
-              <p className="mt-[0.5cqw] font-inter text-[2.5cqw] opacity-90 @xs:text-[3cqw] @md:text-[3.5cqw]">
+              <p className="font-inter mt-[0.5cqw] text-[2.5cqw] opacity-90 @xs:text-[3cqw] @md:text-[3.5cqw]">
                 {eventDate}
               </p>
             )}
@@ -143,7 +147,7 @@ function SponsorThankYouStorybook({
 
           <div className="flex flex-1 flex-col justify-center py-[2cqw]">
             <div className="mb-[1.5cqw] @xs:mb-[2cqw] @md:mb-[2.5cqw]">
-              <p className="mb-[1cqw] font-space-grotesk text-[3cqw] font-semibold @xs:mb-[1.5cqw] @xs:text-[3.5cqw] @md:text-[4cqw] @xl:text-[4.5cqw]">
+              <p className="font-space-grotesk mb-[1cqw] text-[3cqw] font-semibold @xs:mb-[1.5cqw] @xs:text-[3.5cqw] @md:text-[4cqw] @xl:text-[4.5cqw]">
                 Thank you
               </p>
               <div className="flex items-center gap-[2cqw] @xs:gap-[2.5cqw] @md:gap-[3cqw]">

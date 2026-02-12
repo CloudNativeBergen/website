@@ -19,7 +19,8 @@ const meta: Meta<typeof SponsorCard> = {
     currentView: {
       control: 'select',
       options: ['pipeline', 'contract', 'invoice'],
-      description: 'Current board view affects card layout and displayed information',
+      description:
+        'Current board view affects card layout and displayed information',
     },
     isSelected: {
       control: 'boolean',
@@ -144,7 +145,6 @@ export const WithAssignee: Story = {
         _id: 'speaker-1',
         name: 'John Doe',
         email: 'john@example.com',
-        image: 'https://i.pravatar.cc/150?img=12',
       },
     }),
     currentView: 'pipeline',
@@ -181,7 +181,8 @@ export const NoLogo: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Edge case: Sponsor without logo displays fallback name initials.',
+        story:
+          'Edge case: Sponsor without logo displays fallback name initials.',
       },
     },
   },
@@ -202,7 +203,8 @@ export const HighValue: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Edge case: High-value sponsor with large contract value and priority tags.',
+        story:
+          'Edge case: High-value sponsor with large contract value and priority tags.',
       },
     },
   },

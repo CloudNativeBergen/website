@@ -158,7 +158,7 @@ export const ExpandCollapseInteraction: Story = {
 
     // Button should be back to "Show more"
     await expect(
-      canvas.getByRole('button', { name: /show more/i })
+      canvas.getByRole('button', { name: /show more/i }),
     ).toBeVisible()
   },
 }
@@ -195,7 +195,7 @@ export const KeyboardToggle: Story = {
 
     // Should now show "Show less"
     await expect(
-      canvas.getByRole('button', { name: /show less/i })
+      canvas.getByRole('button', { name: /show less/i }),
     ).toBeVisible()
   },
 }

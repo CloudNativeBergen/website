@@ -24,7 +24,8 @@ export const Interactive: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Interactive playground - use controls to experiment with different variants, sizes, and states.',
+        story:
+          'Interactive playground - use controls to experiment with different variants, sizes, and states.',
       },
     },
   },

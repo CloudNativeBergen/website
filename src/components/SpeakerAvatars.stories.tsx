@@ -129,7 +129,8 @@ export const ManySpeakers: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'When there are more speakers than maxVisible, shows a +N indicator.',
+        story:
+          'When there are more speakers than maxVisible, shows a +N indicator.',
       },
     },
   },
@@ -188,7 +189,8 @@ export const AllSizes: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'Comparison of all available avatar sizes. Hover over avatars to see the spread animation.',
+        story:
+          'Comparison of all available avatar sizes. Hover over avatars to see the spread animation.',
       },
     },
   },
@@ -220,7 +222,8 @@ export const WithNames: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'SpeakerAvatarsWithNames displays the avatar stack alongside formatted speaker names.',
+        story:
+          'SpeakerAvatarsWithNames displays the avatar stack alongside formatted speaker names.',
       },
     },
   },

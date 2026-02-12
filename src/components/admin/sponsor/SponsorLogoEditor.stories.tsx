@@ -32,10 +32,11 @@ function LogoPreview({
         {label}
       </p>
       <div
-        className={`flex h-24 items-center justify-center rounded-lg border ${background === 'dark'
+        className={`flex h-24 items-center justify-center rounded-lg border ${
+          background === 'dark'
             ? 'border-gray-600 bg-gray-900'
             : 'border-gray-200 bg-white'
-          }`}
+        }`}
       >
         {svg ? (
           <div
@@ -227,7 +228,9 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Features</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Features
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>• SVG-only file validation</li>
           <li>• Automatic SVG sanitization (removes scripts, unsafe attrs)</li>

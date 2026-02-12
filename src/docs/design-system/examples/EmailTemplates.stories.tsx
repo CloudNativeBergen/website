@@ -90,14 +90,14 @@ const EmailCategoryCard = ({
         {title}
       </h3>
     </div>
-    <p className="mb-4 font-inter text-sm text-gray-600 dark:text-gray-400">
+    <p className="font-inter mb-4 text-sm text-gray-600 dark:text-gray-400">
       {description}
     </p>
     <ul className="space-y-2">
       {templates.map((template) => (
         <li
           key={template}
-          className="flex items-center space-x-2 font-inter text-sm text-gray-700 dark:text-gray-300"
+          className="font-inter flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
           <span>{template}</span>
@@ -111,10 +111,10 @@ export const EmailSystem: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-5xl">
-        <h1 className="mb-4 font-space-grotesk text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
+        <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
           Email Template System
         </h1>
-        <p className="mb-12 font-inter text-lg text-brand-slate-gray dark:text-gray-300">
+        <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
           Professional email templates for all conference communications.
           Templates follow brand guidelines with consistent styling and clear
           hierarchy.
@@ -122,10 +122,10 @@ export const EmailSystem: Story = {
 
         {/* Live Acceptance Email */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Proposal Accepted Email
           </h2>
-          <p className="mb-6 font-inter text-gray-600 dark:text-gray-400">
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
             Sent when a speaker&apos;s proposal is accepted for the conference.
           </p>
           <EmailPreviewFrame
@@ -153,11 +153,12 @@ export const EmailSystem: Story = {
 
         {/* Live Rejection Email */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Proposal Not Selected Email
           </h2>
-          <p className="mb-6 font-inter text-gray-600 dark:text-gray-400">
-            Sent when a speaker&apos;s proposal is not selected, with constructive feedback.
+          <p className="font-inter mb-6 text-gray-600 dark:text-gray-400">
+            Sent when a speaker&apos;s proposal is not selected, with
+            constructive feedback.
           </p>
           <EmailPreviewFrame
             from="Cloud Native Days Norway <hello@cloudnativedays.no>"
@@ -183,7 +184,7 @@ export const EmailSystem: Story = {
 
         {/* Template Categories */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             All Template Categories
           </h2>
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -269,21 +270,21 @@ export const EmailSystem: Story = {
 
         {/* Implementation */}
         <section>
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Implementation
           </h2>
           <div className="rounded-xl border border-brand-cloud-blue/20 bg-brand-sky-mist p-6">
-            <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-cloud-blue">
+            <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
               Using Email Templates
             </h3>
-            <p className="mb-4 font-inter text-sm text-brand-slate-gray">
+            <p className="font-inter mb-4 text-sm text-brand-slate-gray">
               Email templates are React components in{' '}
               <code className="rounded bg-white px-1 text-xs">
                 /src/components/email/
               </code>{' '}
               sent via Resend.
             </p>
-            <pre className="overflow-x-auto rounded-lg bg-white p-4 font-jetbrains text-sm text-gray-700">
+            <pre className="font-jetbrains overflow-x-auto rounded-lg bg-white p-4 text-sm text-gray-700">
               {`import { ProposalAcceptTemplate } from '@/components/email/ProposalAcceptTemplate'
 import { sendEmail } from '@/lib/email'
 
@@ -307,24 +308,37 @@ await sendEmail({
 
           <div className="mt-6 grid gap-6 md:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-cloud-blue">
+              <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-cloud-blue">
                 Email Structure
               </h3>
-              <ul className="space-y-2 font-inter text-sm text-gray-600 dark:text-gray-400">
-                <li>• <strong>Header:</strong> Title with brand color</li>
-                <li>• <strong>Greeting:</strong> Personalized &ldquo;Dear Name&rdquo;</li>
-                <li>• <strong>Body:</strong> Clear message hierarchy</li>
-                <li>• <strong>Event Details:</strong> Blue info box</li>
-                <li>• <strong>CTA:</strong> Action button when needed</li>
-                <li>• <strong>Footer:</strong> Social links + contact info</li>
+              <ul className="font-inter space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                <li>
+                  • <strong>Header:</strong> Title with brand color
+                </li>
+                <li>
+                  • <strong>Greeting:</strong> Personalized &ldquo;Dear
+                  Name&rdquo;
+                </li>
+                <li>
+                  • <strong>Body:</strong> Clear message hierarchy
+                </li>
+                <li>
+                  • <strong>Event Details:</strong> Blue info box
+                </li>
+                <li>
+                  • <strong>CTA:</strong> Action button when needed
+                </li>
+                <li>
+                  • <strong>Footer:</strong> Social links + contact info
+                </li>
               </ul>
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-fresh-green">
+              <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-fresh-green">
                 Best Practices
               </h3>
-              <ul className="space-y-2 font-inter text-sm text-gray-600 dark:text-gray-400">
+              <ul className="font-inter space-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <li>• Max width: 600px for email clients</li>
                 <li>• Use system fonts for compatibility</li>
                 <li>• Single clear CTA per email</li>

@@ -37,7 +37,10 @@ export const Interactive: Story = {
       mockSponsors.negotiating,
       mockSponsor({
         _id: 'sfc-5',
-        sponsor: { ...mockSponsors.negotiating.sponsor, name: 'Container Platform AS' },
+        sponsor: {
+          ...mockSponsors.negotiating.sponsor,
+          name: 'Container Platform AS',
+        },
         status: 'negotiating',
         contractValue: 150000,
         tags: ['high-priority', 'multi-year-potential'],
@@ -78,7 +81,10 @@ export const ContactedColumn: Story = {
       mockSponsors.contacted,
       mockSponsor({
         _id: 'sfc-4',
-        sponsor: { ...mockSponsors.contacted.sponsor, name: 'DevOps Solutions' },
+        sponsor: {
+          ...mockSponsors.contacted.sponsor,
+          name: 'DevOps Solutions',
+        },
         status: 'contacted',
         tags: ['warm-lead'],
       }),
@@ -99,7 +105,10 @@ export const NegotiatingColumn: Story = {
       mockSponsors.negotiating,
       mockSponsor({
         _id: 'sfc-5',
-        sponsor: { ...mockSponsors.negotiating.sponsor, name: 'Container Platform' },
+        sponsor: {
+          ...mockSponsors.negotiating.sponsor,
+          name: 'Container Platform',
+        },
         status: 'negotiating',
         contractValue: 150000,
       }),

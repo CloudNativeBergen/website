@@ -430,7 +430,7 @@ export function EmailModal({
                           <label className="font-space-grotesk w-16 text-sm font-medium text-gray-600 dark:text-gray-300">
                             To:
                           </label>
-                          <div className="flex min-h-[32px] flex-1 items-center">
+                          <div className="flex min-h-8 flex-1 items-center">
                             {typeof recipientInfo === 'string' ? (
                               <span className="font-inter rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-600 dark:bg-gray-700 dark:text-gray-300">
                                 {recipientInfo}
@@ -526,7 +526,7 @@ export function EmailModal({
                       </div>
 
                       <div className="px-6 pt-2 pb-6">
-                        <div className="min-h-[200px] rounded-lg">
+                        <div className="min-h-50 rounded-lg">
                           <PortableTextEditor
                             label=""
                             value={richTextValue}

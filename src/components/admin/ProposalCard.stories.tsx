@@ -39,8 +39,20 @@ const mockSpeakers: Speaker[] = [
 import { Topic } from '@/lib/topic/types'
 
 const mockTopics: Topic[] = [
-  { _id: 'topic-1', _type: 'topic', title: 'Kubernetes', color: '326CE5', slug: { current: 'kubernetes' } },
-  { _id: 'topic-2', _type: 'topic', title: 'DevOps', color: 'FF6B35', slug: { current: 'devops' } },
+  {
+    _id: 'topic-1',
+    _type: 'topic',
+    title: 'Kubernetes',
+    color: '326CE5',
+    slug: { current: 'kubernetes' },
+  },
+  {
+    _id: 'topic-2',
+    _type: 'topic',
+    title: 'DevOps',
+    color: 'FF6B35',
+    slug: { current: 'devops' },
+  },
 ]
 
 const createMockProposal = (

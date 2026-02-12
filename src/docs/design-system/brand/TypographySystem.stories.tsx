@@ -19,20 +19,20 @@ export const TypographySystem: Story = {
   render: () => (
     <div className="min-h-screen bg-white p-8 dark:bg-gray-900">
       <div className="mx-auto max-w-5xl">
-        <h1 className="mb-4 font-space-grotesk text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
+        <h1 className="font-space-grotesk mb-4 text-4xl font-bold text-brand-cloud-blue dark:text-blue-400">
           Typography System
         </h1>
-        <p className="mb-12 font-inter text-lg text-brand-slate-gray dark:text-gray-300">
+        <p className="font-inter mb-12 text-lg text-brand-slate-gray dark:text-gray-300">
           Font families carefully selected for developer-focused content with
           personality and readability.
         </p>
 
         {/* Primary Fonts */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Primary Fonts (Headings &amp; Branding)
           </h2>
-          <p className="mb-8 font-inter text-brand-slate-gray dark:text-gray-400">
+          <p className="font-inter mb-8 text-brand-slate-gray dark:text-gray-400">
             Display fonts with personality for headlines, hero text, and brand
             moments.
           </p>
@@ -45,10 +45,10 @@ export const TypographySystem: Story = {
 
         {/* Secondary Fonts */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Secondary Fonts (Body &amp; UI)
           </h2>
-          <p className="mb-8 font-inter text-brand-slate-gray dark:text-gray-400">
+          <p className="font-inter mb-8 text-brand-slate-gray dark:text-gray-400">
             Highly legible fonts optimized for body text, descriptions, and
             interface elements.
           </p>
@@ -61,51 +61,51 @@ export const TypographySystem: Story = {
 
         {/* Font Pairings */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Recommended Font Pairings
           </h2>
           <div className="grid gap-6 md:grid-cols-3">
             <div className="rounded-xl border border-brand-cloud-blue/20 bg-brand-sky-mist p-6 dark:border-blue-500/20 dark:bg-gray-800">
-              <span className="mb-3 inline-block rounded bg-brand-cloud-blue px-2 py-1 font-inter text-xs text-white">
+              <span className="font-inter mb-3 inline-block rounded bg-brand-cloud-blue px-2 py-1 text-xs text-white">
                 Primary
               </span>
               <p className="font-jetbrains text-2xl text-brand-cloud-blue dark:text-blue-400">
                 JetBrains Mono
               </p>
-              <p className="mt-2 font-inter text-brand-slate-gray dark:text-gray-300">
+              <p className="font-inter mt-2 text-brand-slate-gray dark:text-gray-300">
                 + Inter
               </p>
-              <p className="mt-4 font-inter text-sm text-gray-500 dark:text-gray-500">
+              <p className="font-inter mt-4 text-sm text-gray-500 dark:text-gray-500">
                 &ldquo;Dev terminal meets clean UI&rdquo;
               </p>
             </div>
 
             <div className="rounded-xl border border-brand-fresh-green/20 bg-brand-fresh-green/10 p-6 dark:border-green-500/20 dark:bg-gray-800">
-              <span className="mb-3 inline-block rounded bg-brand-fresh-green px-2 py-1 font-inter text-xs text-white">
+              <span className="font-inter mb-3 inline-block rounded bg-brand-fresh-green px-2 py-1 text-xs text-white">
                 Modern
               </span>
               <p className="font-space-grotesk text-2xl text-brand-fresh-green dark:text-green-400">
                 Space Grotesk
               </p>
-              <p className="mt-2 font-ibm-plex-sans text-brand-slate-gray dark:text-gray-300">
+              <p className="font-ibm-plex-sans mt-2 text-brand-slate-gray dark:text-gray-300">
                 + IBM Plex Sans
               </p>
-              <p className="mt-4 font-inter text-sm text-gray-500 dark:text-gray-500">
+              <p className="font-inter mt-4 text-sm text-gray-500 dark:text-gray-500">
                 &ldquo;Playful headings with structured body&rdquo;
               </p>
             </div>
 
             <div className="rounded-xl border border-brand-nordic-purple/20 bg-brand-nordic-purple/10 p-6 dark:border-purple-500/20 dark:bg-gray-800">
-              <span className="mb-3 inline-block rounded bg-brand-nordic-purple px-2 py-1 font-inter text-xs text-white">
+              <span className="font-inter mb-3 inline-block rounded bg-brand-nordic-purple px-2 py-1 text-xs text-white">
                 Accessible
               </span>
               <p className="font-bricolage text-2xl text-brand-nordic-purple dark:text-purple-400">
                 Bricolage Grotesque
               </p>
-              <p className="mt-2 font-atkinson text-brand-slate-gray dark:text-gray-300">
+              <p className="font-atkinson mt-2 text-brand-slate-gray dark:text-gray-300">
                 + Atkinson Hyperlegible
               </p>
-              <p className="mt-4 font-inter text-sm text-gray-500 dark:text-gray-500">
+              <p className="font-inter mt-4 text-sm text-gray-500 dark:text-gray-500">
                 &ldquo;Edgy but accessible&rdquo;
               </p>
             </div>
@@ -114,12 +114,16 @@ export const TypographySystem: Story = {
 
         {/* Type Scale */}
         <section className="mb-16">
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Type Scale
           </h2>
           <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-6 dark:border-gray-700 dark:bg-gray-800">
             {[
-              { label: 'Display', size: 'text-5xl', font: 'font-space-grotesk' },
+              {
+                label: 'Display',
+                size: 'text-5xl',
+                font: 'font-space-grotesk',
+              },
               { label: 'H1', size: 'text-4xl', font: 'font-space-grotesk' },
               { label: 'H2', size: 'text-3xl', font: 'font-space-grotesk' },
               { label: 'H3', size: 'text-2xl', font: 'font-space-grotesk' },
@@ -133,7 +137,9 @@ export const TypographySystem: Story = {
                 key={i}
                 className="flex items-baseline justify-between border-b border-gray-200 pb-3 last:border-0 last:pb-0 dark:border-gray-700"
               >
-                <span className={`${item.size} ${item.font} text-brand-slate-gray dark:text-white`}>
+                <span
+                  className={`${item.size} ${item.font} text-brand-slate-gray dark:text-white`}
+                >
                   {item.label}
                 </span>
                 <code className="font-jetbrains text-xs text-gray-500">
@@ -146,40 +152,58 @@ export const TypographySystem: Story = {
 
         {/* Usage Guidelines */}
         <section>
-          <h2 className="mb-6 font-space-grotesk text-2xl font-semibold text-brand-slate-gray dark:text-white">
+          <h2 className="font-space-grotesk mb-6 text-2xl font-semibold text-brand-slate-gray dark:text-white">
             Usage Guidelines
           </h2>
           <div className="grid gap-6 md:grid-cols-2">
             <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+              <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-white">
                 When to Use Each Font
               </h3>
-              <ul className="space-y-2 font-inter text-sm text-gray-600 dark:text-gray-400">
+              <ul className="font-inter space-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <li>
-                  <strong className="text-brand-cloud-blue">JetBrains Mono</strong> — Hero text, code blocks, technical headings
+                  <strong className="text-brand-cloud-blue">
+                    JetBrains Mono
+                  </strong>{' '}
+                  — Hero text, code blocks, technical headings
                 </li>
                 <li>
-                  <strong className="text-brand-fresh-green">Space Grotesk</strong> — Section headers, card titles, navigation
+                  <strong className="text-brand-fresh-green">
+                    Space Grotesk
+                  </strong>{' '}
+                  — Section headers, card titles, navigation
                 </li>
                 <li>
-                  <strong className="text-brand-nordic-purple">Bricolage Grotesque</strong> — Special headings, speaker names
+                  <strong className="text-brand-nordic-purple">
+                    Bricolage Grotesque
+                  </strong>{' '}
+                  — Special headings, speaker names
                 </li>
                 <li>
-                  <strong className="text-brand-slate-gray dark:text-gray-300">Inter</strong> — Body text, descriptions, form labels
+                  <strong className="text-brand-slate-gray dark:text-gray-300">
+                    Inter
+                  </strong>{' '}
+                  — Body text, descriptions, form labels
                 </li>
                 <li>
-                  <strong className="text-brand-slate-gray dark:text-gray-300">IBM Plex Sans</strong> — Technical documentation
+                  <strong className="text-brand-slate-gray dark:text-gray-300">
+                    IBM Plex Sans
+                  </strong>{' '}
+                  — Technical documentation
                 </li>
                 <li>
-                  <strong className="text-brand-slate-gray dark:text-gray-300">Atkinson</strong> — Accessibility-focused content
+                  <strong className="text-brand-slate-gray dark:text-gray-300">
+                    Atkinson
+                  </strong>{' '}
+                  — Accessibility-focused content
                 </li>
               </ul>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 font-space-grotesk text-lg font-semibold text-brand-slate-gray dark:text-white">
+              <h3 className="font-space-grotesk mb-4 text-lg font-semibold text-brand-slate-gray dark:text-white">
                 Best Practices
               </h3>
-              <ul className="space-y-2 font-inter text-sm text-gray-600 dark:text-gray-400">
+              <ul className="font-inter space-y-2 text-sm text-gray-600 dark:text-gray-400">
                 <li>✓ Limit to 2-3 fonts per page for cohesion</li>
                 <li>✓ Use font weights for hierarchy, not just size</li>
                 <li>✓ Maintain consistent line heights (1.5-1.75 for body)</li>

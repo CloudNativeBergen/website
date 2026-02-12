@@ -37,13 +37,15 @@
     "**/middleware.ts",
     "src/lib/empty-module.ts",
     "scripts/strip-comments.ts",
-    "storybook-static/**"
+    "storybook-static/**",
+    "src/components/email/CoSpeakerResponseTemplate.tsx"
   ],
   "ignoreDependencies": [
     "eslint-config-next",
     "postcss",
     "jest-environment-jsdom",
-    "ts-node"
+    "ts-node",
+    "chromatic"
   ],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": true

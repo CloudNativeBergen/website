@@ -13,11 +13,41 @@ import { convertStringToPortableTextBlocks } from '@/lib/proposal'
 import { Topic } from '@/lib/topic/types'
 
 const mockTopics: Topic[] = [
-  { _id: 'topic-1', _type: 'topic', title: 'Kubernetes', color: '326CE5', slug: { current: 'kubernetes' } },
-  { _id: 'topic-2', _type: 'topic', title: 'DevOps', color: 'FF6B35', slug: { current: 'devops' } },
-  { _id: 'topic-3', _type: 'topic', title: 'AI/ML', color: '4CAF50', slug: { current: 'ai-ml' } },
-  { _id: 'topic-4', _type: 'topic', title: 'Security', color: 'E91E63', slug: { current: 'security' } },
-  { _id: 'topic-5', _type: 'topic', title: 'Observability', color: '9C27B0', slug: { current: 'observability' } },
+  {
+    _id: 'topic-1',
+    _type: 'topic',
+    title: 'Kubernetes',
+    color: '326CE5',
+    slug: { current: 'kubernetes' },
+  },
+  {
+    _id: 'topic-2',
+    _type: 'topic',
+    title: 'DevOps',
+    color: 'FF6B35',
+    slug: { current: 'devops' },
+  },
+  {
+    _id: 'topic-3',
+    _type: 'topic',
+    title: 'AI/ML',
+    color: '4CAF50',
+    slug: { current: 'ai-ml' },
+  },
+  {
+    _id: 'topic-4',
+    _type: 'topic',
+    title: 'Security',
+    color: 'E91E63',
+    slug: { current: 'security' },
+  },
+  {
+    _id: 'topic-5',
+    _type: 'topic',
+    title: 'Observability',
+    color: '9C27B0',
+    slug: { current: 'observability' },
+  },
 ]
 
 const createMockProposal = (
@@ -185,24 +215,31 @@ export const ManyTopics: Story = {
   args: {
     proposals: [
       ...mockProposals,
-      createMockProposal('11', Level.beginner, [Audience.developer], [
-        mockTopics[0],
-        mockTopics[1],
-        mockTopics[2],
-      ]),
-      createMockProposal('12', Level.intermediate, [Audience.architect], [
-        mockTopics[3],
-        mockTopics[4],
-      ]),
-      createMockProposal('13', Level.advanced, [Audience.securityEngineer], [
-        mockTopics[3],
-      ]),
+      createMockProposal(
+        '11',
+        Level.beginner,
+        [Audience.developer],
+        [mockTopics[0], mockTopics[1], mockTopics[2]],
+      ),
+      createMockProposal(
+        '12',
+        Level.intermediate,
+        [Audience.architect],
+        [mockTopics[3], mockTopics[4]],
+      ),
+      createMockProposal(
+        '13',
+        Level.advanced,
+        [Audience.securityEngineer],
+        [mockTopics[3]],
+      ),
     ],
   },
   parameters: {
     docs: {
       description: {
-        story: 'With many proposals across multiple topics showing diverse distribution.',
+        story:
+          'With many proposals across multiple topics showing diverse distribution.',
       },
     },
   },

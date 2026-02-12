@@ -60,12 +60,20 @@ const mockTiers: MockTier[] = [
 const mockSponsors: MockSponsor[] = [
   {
     _id: 'sfc-1',
-    sponsor: { name: 'TechGiant Corp', website: 'https://techgiant.com', logo: null },
+    sponsor: {
+      name: 'TechGiant Corp',
+      website: 'https://techgiant.com',
+      logo: null,
+    },
     tier: { title: 'Platinum' },
   },
   {
     _id: 'sfc-2',
-    sponsor: { name: 'CloudPro Inc', website: 'https://cloudpro.io', logo: null },
+    sponsor: {
+      name: 'CloudPro Inc',
+      website: 'https://cloudpro.io',
+      logo: null,
+    },
     tier: { title: 'Gold' },
   },
   {
@@ -80,7 +88,11 @@ const mockSponsors: MockSponsor[] = [
   },
   {
     _id: 'sfc-5',
-    sponsor: { name: 'DevTools Ltd', website: 'https://devtools.io', logo: null },
+    sponsor: {
+      name: 'DevTools Ltd',
+      website: 'https://devtools.io',
+      logo: null,
+    },
     tier: { title: 'Silver' },
   },
   {
@@ -229,9 +241,7 @@ export const SingleTier: Story = {
 
     return (
       <div className="p-6">
-        <div
-          className={`rounded-xl border-2 p-6 ${getTierColor(tier.title)}`}
-        >
+        <div className={`rounded-xl border-2 p-6 ${getTierColor(tier.title)}`}>
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span
@@ -311,7 +321,9 @@ export const Documentation: Story = {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Features</h3>
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          Features
+        </h3>
         <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
           <li>• Tier sections sorted by value (highest first)</li>
           <li>• Color-coded tier badges and backgrounds</li>

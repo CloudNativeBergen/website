@@ -31,17 +31,28 @@ const meta: Meta<typeof SponsorBulkActions> = {
     },
     msw: {
       handlers: [
-        http.get('http://localhost:6006/api/trpc/sponsor.crm.listOrganizers', () => {
-          return HttpResponse.json({
-            result: {
-              data: [
-                { _id: 'org-1', name: 'John Doe', email: 'john@example.com' },
-                { _id: 'org-2', name: 'Jane Smith', email: 'jane@example.com' },
-                { _id: 'org-3', name: 'Bob Johnson', email: 'bob@example.com' },
-              ],
-            },
-          })
-        }),
+        http.get(
+          'http://localhost:6006/api/trpc/sponsor.crm.listOrganizers',
+          () => {
+            return HttpResponse.json({
+              result: {
+                data: [
+                  { _id: 'org-1', name: 'John Doe', email: 'john@example.com' },
+                  {
+                    _id: 'org-2',
+                    name: 'Jane Smith',
+                    email: 'jane@example.com',
+                  },
+                  {
+                    _id: 'org-3',
+                    name: 'Bob Johnson',
+                    email: 'bob@example.com',
+                  },
+                ],
+              },
+            })
+          },
+        ),
       ],
     },
   },

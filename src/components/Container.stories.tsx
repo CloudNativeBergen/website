@@ -37,7 +37,9 @@ export const WithMultipleSections: Story = {
       <div className="space-y-4">
         <div className="rounded-lg bg-brand-cloud-blue/10 p-4">Section 1</div>
         <div className="rounded-lg bg-brand-fresh-green/10 p-4">Section 2</div>
-        <div className="rounded-lg bg-brand-nordic-purple/10 p-4">Section 3</div>
+        <div className="rounded-lg bg-brand-nordic-purple/10 p-4">
+          Section 3
+        </div>
       </div>
     ),
   },
