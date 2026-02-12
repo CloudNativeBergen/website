@@ -63,8 +63,8 @@ export const Prospect: Story = {
   args: {
     sponsor: mockSponsors.prospect,
     currentView: 'pipeline',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -72,8 +72,8 @@ export const Contacted: Story = {
   args: {
     sponsor: mockSponsors.contacted,
     currentView: 'pipeline',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -81,8 +81,8 @@ export const Negotiating: Story = {
   args: {
     sponsor: mockSponsors.negotiating,
     currentView: 'pipeline',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -90,8 +90,8 @@ export const ClosedWon: Story = {
   args: {
     sponsor: mockSponsors.closedWon,
     currentView: 'pipeline',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -99,8 +99,8 @@ export const ClosedLost: Story = {
   args: {
     sponsor: mockSponsors.closedLost,
     currentView: 'pipeline',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -108,8 +108,8 @@ export const PipelineView: Story = {
   args: {
     sponsor: mockSponsors.negotiating,
     currentView: 'pipeline',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -120,8 +120,8 @@ export const ContractView: Story = {
       contractStatus: 'contract-sent',
     }),
     currentView: 'contract',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -133,8 +133,8 @@ export const InvoiceView: Story = {
       invoiceStatus: 'sent',
     }),
     currentView: 'invoice',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -148,8 +148,8 @@ export const WithAssignee: Story = {
       },
     }),
     currentView: 'pipeline',
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
@@ -160,8 +160,8 @@ export const Selected: Story = {
     isSelected: true,
     isSelectionMode: true,
     onToggleSelect: (e) => console.log('Toggle', e),
-    onEdit: () => { },
-    onDelete: () => { },
+    onEdit: () => {},
+    onDelete: () => {},
   },
 }
 
