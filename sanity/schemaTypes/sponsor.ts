@@ -43,6 +43,20 @@ export default defineType({
         )
       },
     }),
+    defineField({
+      name: 'address',
+      title: 'Address',
+      type: 'string',
+      description: 'Registered company address (used in contracts)',
+      hidden: ({ currentUser }) => {
+        return !(
+          currentUser != null &&
+          currentUser.roles.find(
+            ({ name }) => name === 'administrator' || name === 'editor',
+          )
+        )
+      },
+    }),
   ],
   preview: {
     select: {

@@ -20,6 +20,10 @@
     "format:check": "prettier --check .",
     "format": "prettier --write --list-different .",
     "typecheck": "tsc --noEmit",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "storybook:test": "test-storybook --maxWorkers=2",
+    "storybook:test-ci": "concurrently -k -s first -n \"SB,TEST\" -c \"magenta,blue\" \"pnpm build-storybook --quiet && npx http-server storybook-static --port 6006 --silent\" \"wait-on tcp:127.0.0.1:6006 && pnpm storybook:test\"",
     "sanity": "sanity",
     "manage-orphaned-files": "tsx scripts/manage-orphaned-files.ts"
   },
@@ -38,6 +42,7 @@
     "@portabletext/to-html": "^5.0.1",
     "@portabletext/types": "^4.0.1",
     "@react-email/render": "^2.0.4",
+    "@react-pdf/renderer": "^4.3.2",
     "@sanity/image-url": "^2.0.3",
     "@sanity/types": "^5.8.1",
     "@tailwindcss/forms": "^0.5.11",
@@ -86,6 +91,9 @@
     "@sanity/migrate": "^5.2.3",
     "@sanity/vision": "^5.8.1",
     "@starefossen/sanity-plugin-inline-svg-input": "^1.3.7",
+    "@storybook/addon-docs": "^10.2.8",
+    "@storybook/nextjs-vite": "^10.2.8",
+    "@storybook/test-runner": "^0.24.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -97,18 +105,33 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "autoprefixer": "^10.4.24",
+    "chromatic": "^12.0.0",
+    "concurrently": "^9.1.2",
     "eslint": "^10.0.0",
     "eslint-config-next": "^16.1.6",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-storybook": "^10.2.8",
+    "glob": "^13.0.2",
+    "http-server": "^14.1.1",
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
     "knip": "^5.83.1",
+    "msw": "^2.12.10",
+    "msw-storybook-addon": "^2.0.6",
+    "playwright": "^1.58.2",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
+    "storybook": "^10.2.8",
     "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
-    "typescript-eslint": "^8.54.0"
+    "typescript-eslint": "^8.54.0",
+    "wait-on": "^8.0.3"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

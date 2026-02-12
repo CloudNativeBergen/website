@@ -18,6 +18,9 @@ import {
   CalendarIcon,
   FireIcon,
   ArrowPathRoundedSquareIcon,
+  PaperAirplaneIcon,
+  ShieldCheckIcon,
+  BellAlertIcon,
 } from '@heroicons/react/24/outline'
 
 // Invoice Status Utilities
@@ -70,6 +73,12 @@ export function getActivityIcon(type: ActivityType) {
       return PhoneIcon
     case 'meeting':
       return CalendarIcon
+    case 'signature_status_change':
+      return ShieldCheckIcon
+    case 'onboarding_complete':
+      return CheckCircleIcon
+    case 'contract_reminder_sent':
+      return BellAlertIcon
   }
 }
 
@@ -91,6 +100,12 @@ export function getActivityColor(type: ActivityType): string {
       return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20'
     case 'meeting':
       return 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-900/20'
+    case 'signature_status_change':
+      return 'text-cyan-600 bg-cyan-100 dark:text-cyan-400 dark:bg-cyan-900/20'
+    case 'onboarding_complete':
+      return 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/20'
+    case 'contract_reminder_sent':
+      return 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/20'
   }
 }
 
@@ -104,6 +119,9 @@ export type ActionItemType =
   | 'stale'
   | 'high-priority'
   | 'follow-up'
+  | 'signature-rejected'
+  | 'signature-expired'
+  | 'onboarding-pending'
 
 export function getActionItemIcon(type: ActionItemType) {
   switch (type) {
@@ -122,6 +140,12 @@ export function getActionItemIcon(type: ActionItemType) {
       return FireIcon
     case 'follow-up':
       return ArrowPathRoundedSquareIcon
+    case 'signature-rejected':
+      return ExclamationTriangleIcon
+    case 'signature-expired':
+      return ClockIcon
+    case 'onboarding-pending':
+      return PaperAirplaneIcon
   }
 }
 
@@ -142,6 +166,12 @@ export function getActionItemColor(type: ActionItemType): string {
       return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
     case 'follow-up':
       return 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-900/20'
+    case 'signature-rejected':
+      return 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/20'
+    case 'signature-expired':
+      return 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/20'
+    case 'onboarding-pending':
+      return 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20'
   }
 }
 

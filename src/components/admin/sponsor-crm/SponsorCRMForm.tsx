@@ -42,6 +42,8 @@ import { SponsorLogoEditor } from '../sponsor/SponsorLogoEditor'
 import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
+import { OnboardingLinkButton } from './OnboardingLinkButton'
+import { ContractReadinessIndicator } from './ContractReadinessIndicator'
 
 type FormView = 'pipeline' | 'contacts' | 'logo' | 'history'
 
@@ -278,6 +280,11 @@ export function SponsorCRMForm({
                       <div className="flex items-center gap-2">
                         {sponsor && (
                           <>
+                            <OnboardingLinkButton
+                              sponsorForConferenceId={sponsor._id}
+                              existingToken={sponsor.onboardingToken}
+                              onboardingComplete={sponsor.onboardingComplete}
+                            />
                             <button
                               type="button"
                               onClick={() => {
@@ -553,6 +560,13 @@ export function SponsorCRMForm({
                                 className="mt-1.5 block w-full rounded-md bg-white px-3 py-1.5 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 placeholder:text-gray-400 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6 dark:bg-white/5 dark:text-white dark:outline-white/10"
                               />
                             </div>
+
+                            {/* Contract Readiness */}
+                            {sponsor && (
+                              <ContractReadinessIndicator
+                                sponsorForConferenceId={sponsor._id}
+                              />
+                            )}
                           </div>
 
                           <div className="mt-4 flex flex-row-reverse gap-3">

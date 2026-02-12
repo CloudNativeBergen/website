@@ -1,7 +1,7 @@
 'use client'
 
 import { MemeGenerator } from './MemeGenerator'
-import { DownloadSpeakerImage } from '../branding/DownloadSpeakerImage'
+import { DownloadableImage } from '../common/DownloadableImage'
 import type { ConferenceLogos } from '../common/DashboardLayout'
 
 interface MemeGeneratorWithDownloadProps {
@@ -19,7 +19,7 @@ export function MemeGeneratorWithDownload({
     <MemeGenerator
       conferenceLogos={conferenceLogos}
       wrapPreview={(node) => (
-        <DownloadSpeakerImage filename={filename}>{node}</DownloadSpeakerImage>
+        <DownloadableImage filename={filename}>{node}</DownloadableImage>
       )}
     />
   )

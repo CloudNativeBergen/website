@@ -74,6 +74,26 @@ import {
   listActivitiesForConference,
 } from '@/lib/sponsor-crm/activities'
 import { bulkUpdateSponsors, bulkDeleteSponsors } from '@/lib/sponsor-crm/bulk'
+import {
+  listContractTemplates,
+  getContractTemplate,
+  createContractTemplate,
+  updateContractTemplate,
+  deleteContractTemplate,
+  findBestContractTemplate,
+} from '@/lib/sponsor-crm/contract-templates'
+import {
+  ContractTemplateInputSchema,
+  ContractTemplateUpdateSchema,
+  ContractTemplateIdSchema,
+  ContractTemplateListSchema,
+  GenerateContractPdfSchema,
+  FindBestContractTemplateSchema,
+} from '@/server/schemas/contractTemplate'
+import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
+import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
+import { logSignatureStatusChange } from '@/lib/sponsor-crm/activity'
+import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
   sponsorTiers?: SponsorTierExisting[]
@@ -623,6 +643,14 @@ export const sponsorRouter = router({
                 : updateData.invoicePaidAt,
             notes: updateData.notes === null ? undefined : updateData.notes,
             tags: updateData.tags as SponsorTag[] | undefined,
+            signerEmail:
+              updateData.signerEmail === null
+                ? undefined
+                : updateData.signerEmail,
+            contractTemplate:
+              updateData.contractTemplate === null
+                ? undefined
+                : updateData.contractTemplate,
           })
 
         if (error) {
@@ -994,6 +1022,51 @@ export const sponsorRouter = router({
           return []
         }),
     }),
+
+    updateSignatureStatus: adminProcedure
+      .input(UpdateSignatureStatusSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { sponsorForConference: existing } =
+          await getSponsorForConference(input.id)
+
+        if (!existing) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+          })
+        }
+
+        const oldStatus = existing.signatureStatus || 'not-started'
+
+        // Atomic update: set signatureStatus and conditionally set contract fields
+        await clientWrite
+          .patch(input.id)
+          .set({
+            signatureStatus: input.newStatus,
+            ...(input.newStatus === 'signed' && {
+              contractStatus: 'contract-signed',
+              contractSignedAt: getCurrentDateTime(),
+            }),
+          })
+          .commit()
+
+        const userId = ctx.speaker._id
+        if (userId && oldStatus !== input.newStatus) {
+          try {
+            await logSignatureStatusChange(
+              input.id,
+              oldStatus,
+              input.newStatus,
+              userId,
+            )
+          } catch (logError) {
+            console.error('Failed to log signature status change:', logError)
+          }
+        }
+
+        const { sponsorForConference } = await getSponsorForConference(input.id)
+        return sponsorForConference
+      }),
   }),
 
   emailTemplates: router({
@@ -1094,6 +1167,204 @@ export const sponsorRouter = router({
           })
         }
         return { success: true }
+      }),
+  }),
+
+  contractTemplates: router({
+    list: adminProcedure
+      .input(ContractTemplateListSchema)
+      .query(async ({ input }) => {
+        const { templates, error } = await listContractTemplates(
+          input.conferenceId,
+        )
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to list contract templates',
+            cause: error,
+          })
+        }
+        return templates || []
+      }),
+
+    get: adminProcedure
+      .input(ContractTemplateIdSchema)
+      .query(async ({ input }) => {
+        const { template, error } = await getContractTemplate(input.id)
+        if (error) {
+          throw new TRPCError({
+            code: error.message.includes('not found')
+              ? 'NOT_FOUND'
+              : 'INTERNAL_SERVER_ERROR',
+            message: error.message,
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    create: adminProcedure
+      .input(ContractTemplateInputSchema)
+      .mutation(async ({ input }) => {
+        const { template, error } = await createContractTemplate(input)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to create contract template',
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    update: adminProcedure
+      .input(ContractTemplateUpdateSchema)
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input
+        const { template, error } = await updateContractTemplate(id, {
+          ...data,
+          tier: data.tier === null ? undefined : data.tier,
+          currency: data.currency === null ? undefined : data.currency,
+          headerText: data.headerText === null ? undefined : data.headerText,
+          footerText: data.footerText === null ? undefined : data.footerText,
+          terms: data.terms === null ? undefined : data.terms,
+        })
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to update contract template',
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    delete: adminProcedure
+      .input(ContractTemplateIdSchema)
+      .mutation(async ({ input }) => {
+        const { error } = await deleteContractTemplate(input.id)
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to delete contract template',
+            cause: error,
+          })
+        }
+        return { success: true }
+      }),
+
+    findBest: adminProcedure
+      .input(FindBestContractTemplateSchema)
+      .query(async ({ input }) => {
+        const { template, error } = await findBestContractTemplate(
+          input.conferenceId,
+          input.tierId,
+          input.language,
+        )
+        if (error) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: error.message,
+            cause: error,
+          })
+        }
+        return template
+      }),
+
+    contractReadiness: adminProcedure
+      .input(SponsorForConferenceIdSchema)
+      .query(async ({ input }) => {
+        const { sponsorForConference, error } = await getSponsorForConference(
+          input.id,
+        )
+        if (error || !sponsorForConference) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+            cause: error,
+          })
+        }
+        return checkContractReadiness(sponsorForConference)
+      }),
+
+    generatePdf: adminProcedure
+      .input(GenerateContractPdfSchema)
+      .mutation(async ({ input }) => {
+        const { template, error: templateError } = await getContractTemplate(
+          input.templateId,
+        )
+        if (templateError || !template) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Contract template not found',
+            cause: templateError,
+          })
+        }
+
+        const { sponsorForConference, error: sfcError } =
+          await getSponsorForConference(input.sponsorForConferenceId)
+        if (sfcError || !sponsorForConference) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+            cause: sfcError,
+          })
+        }
+
+        const primaryContact =
+          sponsorForConference.contactPersons?.find((c) => c.isPrimary) ||
+          sponsorForConference.contactPersons?.[0]
+
+        try {
+          const pdfBuffer = await generateContractPdf(template, {
+            sponsor: {
+              name: sponsorForConference.sponsor.name,
+              orgNumber: sponsorForConference.sponsor.orgNumber,
+              address: sponsorForConference.sponsor.address,
+              website: sponsorForConference.sponsor.website,
+            },
+            contactPerson: primaryContact
+              ? { name: primaryContact.name, email: primaryContact.email }
+              : undefined,
+            tier: sponsorForConference.tier
+              ? {
+                  title: sponsorForConference.tier.title,
+                  tagline: sponsorForConference.tier.tagline,
+                }
+              : undefined,
+            addons: sponsorForConference.addons?.map((a) => ({
+              title: a.title,
+            })),
+            contractValue: sponsorForConference.contractValue,
+            contractCurrency: sponsorForConference.contractCurrency,
+            conference: {
+              title: sponsorForConference.conference.title,
+              startDate: sponsorForConference.conference.startDate,
+              endDate: sponsorForConference.conference.endDate,
+              city: sponsorForConference.conference.city,
+              organizer: sponsorForConference.conference.organizer,
+              organizerOrgNumber:
+                sponsorForConference.conference.organizerOrgNumber,
+              organizerAddress:
+                sponsorForConference.conference.organizerAddress,
+              venueName: sponsorForConference.conference.venueName,
+              venueAddress: sponsorForConference.conference.venueAddress,
+              sponsorEmail: sponsorForConference.conference.sponsorEmail,
+            },
+          })
+
+          const base64 = pdfBuffer.toString('base64')
+          return {
+            pdf: base64,
+            filename: `contract-${sponsorForConference.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`,
+          }
+        } catch (pdfError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to generate contract PDF',
+            cause: pdfError,
+          })
+        }
       }),
   }),
 })

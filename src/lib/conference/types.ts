@@ -72,6 +72,8 @@ export interface Conference {
   _id: string
   title: string
   organizer: string
+  organizerOrgNumber?: string
+  organizerAddress?: string
   city: string
   country: string
   venueName?: string

@@ -73,11 +73,11 @@ export function DraggableProposal({
 
       const speaker =
         proposal.speakers &&
-        Array.isArray(proposal.speakers) &&
-        proposal.speakers.length > 0 &&
-        proposal.speakers[0] &&
-        typeof proposal.speakers[0] === 'object' &&
-        'name' in proposal.speakers[0]
+          Array.isArray(proposal.speakers) &&
+          proposal.speakers.length > 0 &&
+          proposal.speakers[0] &&
+          typeof proposal.speakers[0] === 'object' &&
+          'name' in proposal.speakers[0]
           ? proposal.speakers[0].name
           : null
 
@@ -266,9 +266,8 @@ export function DraggableProposal({
         <UserGroupIcon className="h-3 w-3 shrink-0 text-gray-500 dark:text-gray-400" />
         <span
           className="text-xs font-medium text-gray-600 dark:text-gray-400"
-          title={`Primary: ${audiences.get(proposal.audiences?.[0])}${
-            audienceCount > 1 ? ` (${audienceCount} total)` : ''
-          }`}
+          title={`Primary: ${audiences.get(proposal.audiences?.[0])}${audienceCount > 1 ? ` (${audienceCount} total)` : ''
+            }`}
         >
           {primaryAudience.abbr}
           {countText}
@@ -321,7 +320,7 @@ export function DraggableProposal({
 
     const statusEmoji =
       proposal.status === Status.withdrawn ||
-      proposal.status === Status.rejected
+        proposal.status === Status.rejected
         ? '🚫'
         : proposal.status === Status.accepted
           ? '⚠️'
@@ -378,7 +377,7 @@ export function DraggableProposal({
         title={tooltipContent}
         {...attributes}
       >
-        <div className="flex min-h-[16px] items-center gap-1">
+        <div className="flex min-h-4 items-center gap-1">
           <div
             className="shrink-0 cursor-grab rounded p-0.5 transition-colors hover:cursor-grabbing hover:bg-gray-100 dark:hover:bg-gray-700"
             {...listeners}

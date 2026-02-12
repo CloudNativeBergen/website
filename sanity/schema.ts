@@ -3,6 +3,7 @@ import { type SchemaTypeDefinition } from 'sanity'
 import { fileAttachment, urlAttachment } from './schemaTypes/attachment'
 import blockContent from './schemaTypes/blockContent'
 import conference from './schemaTypes/conference'
+import contractTemplate from './schemaTypes/contractTemplate'
 import coSpeakerInvitation from './schemaTypes/coSpeakerInvitation'
 import dashboardConfig from './schemaTypes/dashboardConfig'
 import dataProcessingConsent from './schemaTypes/dataProcessingConsent'
@@ -57,5 +58,6 @@ export const schema: { types: SchemaTypeDefinition[] } = {
     sponsorForConference,
     sponsorActivity,
     sponsorEmailTemplate,
+    contractTemplate,
   ],
 }

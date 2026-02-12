@@ -166,6 +166,58 @@ export function generateActionItems(
       })
     }
 
+    // Priority 2.5: Rejected digital signature
+    if (sponsor.signatureStatus === 'rejected') {
+      actions.push({
+        id: `${sponsor._id}-sig-rejected`,
+        type: 'signature-rejected',
+        title: 'Signature Rejected',
+        sponsor: {
+          id: sponsor._id,
+          name: sponsor.sponsor.name,
+        },
+        description: `${sponsor.sponsor.name} rejected the contract signature`,
+        priority: 2.5,
+        link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
+      })
+    }
+
+    // Priority 3.5: Expired digital signature
+    if (sponsor.signatureStatus === 'expired') {
+      actions.push({
+        id: `${sponsor._id}-sig-expired`,
+        type: 'signature-expired',
+        title: 'Signature Expired',
+        sponsor: {
+          id: sponsor._id,
+          name: sponsor.sponsor.name,
+        },
+        description: `Contract signature expired for ${sponsor.sponsor.name}`,
+        priority: 3.5,
+        link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
+      })
+    }
+
+    // Priority 6: Onboarding not completed for closed-won sponsors
+    if (
+      sponsor.status === 'closed-won' &&
+      sponsor.onboardingToken &&
+      !sponsor.onboardingComplete
+    ) {
+      actions.push({
+        id: `${sponsor._id}-onboarding`,
+        type: 'onboarding-pending',
+        title: 'Onboarding Pending',
+        sponsor: {
+          id: sponsor._id,
+          name: sponsor.sponsor.name,
+        },
+        description: `${sponsor.sponsor.name} has not completed onboarding`,
+        priority: 6,
+        link: `/admin/sponsors/crm?sponsor=${sponsor._id}`,
+      })
+    }
+
     // Priority 5: Stale negotiations (no activity in 7+ days)
     if (
       ['contacted', 'negotiating'].includes(sponsor.status) &&

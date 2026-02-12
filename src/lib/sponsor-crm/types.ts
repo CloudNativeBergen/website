@@ -20,6 +20,13 @@ export type ContractStatus =
   | 'contract-sent'
   | 'contract-signed'
 
+export type SignatureStatus =
+  | 'not-started'
+  | 'pending'
+  | 'signed'
+  | 'rejected'
+  | 'expired'
+
 export type ActivityType =
   | 'stage_change'
   | 'invoice_status_change'
@@ -29,6 +36,9 @@ export type ActivityType =
   | 'email'
   | 'call'
   | 'meeting'
+  | 'signature_status_change'
+  | 'onboarding_complete'
+  | 'contract_reminder_sent'
 
 export type SponsorTag =
   | 'warm-lead'
@@ -54,6 +64,17 @@ export interface SponsorForConference {
     _ref: string
   }
   contractStatus: ContractStatus
+  signatureStatus?: SignatureStatus
+  signatureId?: string
+  signerEmail?: string
+  contractSentAt?: string
+  contractDocument?: {
+    asset: { _ref: string }
+  }
+  reminderCount?: number
+  contractTemplate?: {
+    _ref: string
+  }
   status: SponsorStatus
   assignedTo?: {
     _ref: string
@@ -69,6 +90,9 @@ export interface SponsorForConference {
   invoicePaidAt?: string
   notes?: string
   tags?: SponsorTag[]
+  onboardingToken?: string
+  onboardingComplete?: boolean
+  onboardingCompletedAt?: string
 }
 
 export interface SponsorForConferenceExpanded {
@@ -82,10 +106,20 @@ export interface SponsorForConferenceExpanded {
     logo: string
     logoBright?: string
     orgNumber?: string
+    address?: string
   }
   conference: {
     _id: string
     title: string
+    organizer?: string
+    organizerOrgNumber?: string
+    organizerAddress?: string
+    city?: string
+    venueName?: string
+    venueAddress?: string
+    startDate?: string
+    endDate?: string
+    sponsorEmail?: string
   }
   tier?: {
     _id: string
@@ -109,6 +143,21 @@ export interface SponsorForConferenceExpanded {
     }>
   }>
   contractStatus: ContractStatus
+  signatureStatus?: SignatureStatus
+  signatureId?: string
+  signerEmail?: string
+  contractSentAt?: string
+  contractDocument?: {
+    asset: {
+      _ref: string
+      url: string
+    }
+  }
+  reminderCount?: number
+  contractTemplate?: {
+    _id: string
+    title: string
+  }
   status: SponsorStatus
   assignedTo?: {
     _id: string
@@ -127,6 +176,9 @@ export interface SponsorForConferenceExpanded {
   tags?: SponsorTag[]
   contactPersons?: ContactPerson[]
   billing?: BillingInfo
+  onboardingToken?: string
+  onboardingComplete?: boolean
+  onboardingCompletedAt?: string
 }
 
 export interface SponsorActivityExpanded {
@@ -163,6 +215,9 @@ export interface SponsorForConferenceInput {
   tier?: string
   addons?: string[]
   contractStatus: ContractStatus
+  signatureStatus?: SignatureStatus
+  signerEmail?: string
+  contractTemplate?: string
   status: SponsorStatus
   assignedTo?: string | null
   contactPersons?: ContactPerson[]

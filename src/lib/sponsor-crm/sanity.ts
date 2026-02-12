@@ -26,11 +26,21 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     website,
     logo,
     logoBright,
-    orgNumber
+    orgNumber,
+    address
   },
   conference->{
     _id,
-    title
+    title,
+    organizer,
+    organizerOrgNumber,
+    organizerAddress,
+    city,
+    venueName,
+    venueAddress,
+    startDate,
+    endDate,
+    sponsorEmail
   },
   tier->{
     _id,
@@ -55,6 +65,21 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
   },
   status,
   contractStatus,
+  signatureStatus,
+  signatureId,
+  signerEmail,
+  contractSentAt,
+  contractDocument{
+    asset->{
+      _ref,
+      url
+    }
+  },
+  reminderCount,
+  contractTemplate->{
+    _id,
+    title
+  },
   assignedTo->{
     _id,
     name,
@@ -82,7 +107,10 @@ const SPONSOR_FOR_CONFERENCE_FIELDS = `
     email,
     reference,
     comments
-  }
+  },
+  onboardingToken,
+  onboardingComplete,
+  onboardingCompletedAt
 `
 
 export async function getPublicSponsorsForConference(
@@ -137,6 +165,10 @@ export async function createSponsorForConference(
       status: data.status,
       assignedTo: data.assignedTo
         ? { _type: 'reference', _ref: data.assignedTo }
+        : undefined,
+      signerEmail: data.signerEmail,
+      contractTemplate: data.contractTemplate
+        ? { _type: 'reference', _ref: data.contractTemplate }
         : undefined,
       contactInitiatedAt: data.contactInitiatedAt,
       contractSignedAt: data.contractSignedAt,
@@ -198,6 +230,12 @@ export async function updateSponsorForConference(
     if (data.status !== undefined) updates.status = data.status
     if (data.contractStatus !== undefined)
       updates.contractStatus = data.contractStatus
+    if (data.signerEmail !== undefined) updates.signerEmail = data.signerEmail
+    if (data.contractTemplate !== undefined) {
+      updates.contractTemplate = data.contractTemplate
+        ? { _type: 'reference', _ref: data.contractTemplate }
+        : null
+    }
     if (data.assignedTo !== undefined) {
       updates.assignedTo = data.assignedTo
         ? { _type: 'reference', _ref: data.assignedTo }

@@ -157,6 +157,40 @@ export async function logSponsorCreated(
   )
 }
 
+export async function logSignatureStatusChange(
+  sponsorForConferenceId: string,
+  oldStatus: string,
+  newStatus: string,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'signature_status_change',
+    `Signature status changed from ${formatStatusName(oldStatus ?? 'Not Started')} to ${formatStatusName(newStatus ?? 'Not Started')}`,
+    createdBy,
+    {
+      oldValue: oldStatus,
+      newValue: newStatus,
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}
+
+export async function logOnboardingComplete(
+  sponsorForConferenceId: string,
+  createdBy: string,
+): Promise<{ activityId?: string; error?: Error }> {
+  return createSponsorActivity(
+    sponsorForConferenceId,
+    'onboarding_complete',
+    'Sponsor completed self-service onboarding',
+    createdBy,
+    {
+      timestamp: getCurrentDateTime(),
+    },
+  )
+}
+
 export async function logBulkEmailSent(
   sponsorForConferenceIds: string[],
   subject: string,

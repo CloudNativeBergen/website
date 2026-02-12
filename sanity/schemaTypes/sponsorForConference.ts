@@ -88,6 +88,68 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'signatureStatus',
+      title: 'Signature Status',
+      type: 'string',
+      description: 'Digital signature status from e-signing provider',
+      options: {
+        list: [
+          { title: 'Not Started', value: 'not-started' },
+          { title: 'Pending', value: 'pending' },
+          { title: 'Signed', value: 'signed' },
+          { title: 'Rejected', value: 'rejected' },
+          { title: 'Expired', value: 'expired' },
+        ],
+        layout: 'dropdown',
+      },
+      initialValue: 'not-started',
+    }),
+    defineField({
+      name: 'signatureId',
+      title: 'Signature ID',
+      type: 'string',
+      description: 'External ID from e-signing provider (e.g. Posten.no)',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'signerEmail',
+      title: 'Signer Email',
+      type: 'string',
+      description: 'Email of the person who should sign the contract',
+    }),
+    defineField({
+      name: 'contractSentAt',
+      title: 'Contract Sent Date',
+      type: 'datetime',
+      description: 'When the contract was sent for signing',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'contractDocument',
+      title: 'Contract Document',
+      type: 'file',
+      description: 'Generated PDF contract document',
+      options: {
+        accept: 'application/pdf',
+      },
+    }),
+    defineField({
+      name: 'reminderCount',
+      title: 'Reminder Count',
+      type: 'number',
+      description: 'Number of contract signing reminders sent',
+      initialValue: 0,
+      readOnly: true,
+      validation: (Rule) => Rule.min(0),
+    }),
+    defineField({
+      name: 'contractTemplate',
+      title: 'Contract Template',
+      type: 'reference',
+      to: [{ type: 'contractTemplate' }],
+      description: 'Template used to generate the contract',
+    }),
+    defineField({
       name: 'status',
       title: 'Status',
       type: 'string',
@@ -316,6 +378,28 @@ export default defineType({
           )
         )
       },
+    }),
+    defineField({
+      name: 'onboardingToken',
+      title: 'Onboarding Token',
+      type: 'string',
+      description: 'Unique token for sponsor self-service onboarding portal',
+      readOnly: true,
+    }),
+    defineField({
+      name: 'onboardingComplete',
+      title: 'Onboarding Complete',
+      type: 'boolean',
+      description: 'Whether the sponsor has completed onboarding',
+      initialValue: false,
+      readOnly: true,
+    }),
+    defineField({
+      name: 'onboardingCompletedAt',
+      title: 'Onboarding Completed At',
+      type: 'datetime',
+      description: 'When the sponsor completed onboarding',
+      readOnly: true,
     }),
   ],
   preview: {

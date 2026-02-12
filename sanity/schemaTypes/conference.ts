@@ -82,6 +82,22 @@ export default defineType({
       validation: (Rule) => Rule.required(),
     }),
     defineField({
+      name: 'organizerOrgNumber',
+      title: 'Organizer Org Number',
+      type: 'string',
+      fieldset: 'basicInfo',
+      description:
+        'Organization number of the organizer (used in contracts and invoices)',
+    }),
+    defineField({
+      name: 'organizerAddress',
+      title: 'Organizer Address',
+      type: 'string',
+      fieldset: 'basicInfo',
+      description:
+        'Registered address of the organizer (used in contracts and invoices)',
+    }),
+    defineField({
       name: 'city',
       title: 'City',
       type: 'string',

@@ -333,7 +333,7 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
                 return (
                   <div
                     key={`${timeSlot}-track-${trackIndex}-${track.trackTitle}`}
-                    className="min-h-[60px]"
+                    className="min-h-15"
                     ref={isScrollTarget ? scrollTargetRef : undefined}
                   >
                     {talk ? (
@@ -357,7 +357,7 @@ const ScheduleStatic = React.memo(function ScheduleStatic({
                         fixedHeight={true}
                       />
                     ) : (
-                      <div className="h-full min-h-[60px]" />
+                      <div className="h-full min-h-15" />
                     )}
                   </div>
                 )
