@@ -50,6 +50,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Initialize MSW
+        run: pnpm msw init public --save=false
+
       - name: Build Storybook
         run: pnpm build-storybook
 
