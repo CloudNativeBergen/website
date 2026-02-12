@@ -197,7 +197,7 @@ export const ProgramFilters = React.memo(function ProgramFilters({
             )}
             <button
               onClick={handleToggleExpanded}
-              className="flex min-w-[60px] items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-sky-mist @sm:min-w-[unset] dark:text-gray-300 dark:hover:bg-gray-700"
+              className="flex min-w-15 items-center justify-center gap-1 rounded-md px-2 py-1 text-xs text-brand-slate-gray transition-colors hover:bg-brand-sky-mist @sm:min-w-[unset] dark:text-gray-300 dark:hover:bg-gray-700"
             >
               {isExpanded ? (
                 <>
