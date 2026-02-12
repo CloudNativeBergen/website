@@ -98,7 +98,6 @@ function SponsorThankYouStorybook({
   eventName = 'Cloud Native Days',
   eventDate,
   showCloudNativePattern = false,
-  ctaUrl,
 }: {
   sponsor: typeof mockSponsor
   tier: typeof mockTier
@@ -107,7 +106,6 @@ function SponsorThankYouStorybook({
   eventName?: string
   eventDate?: string
   showCloudNativePattern?: boolean
-  ctaUrl?: string
 }) {
   const config = variantConfig[variant]
   const Icon = config.icon
@@ -245,7 +243,6 @@ export const CodeHeroes: Story = {
     variant: 'code-heroes',
     eventName: 'Cloud Native Days Norway',
     eventDate: 'June 10-11, 2026 • Bergen',
-    ctaUrl: '/sponsor',
   },
 }
 
@@ -256,7 +253,6 @@ export const CloudWizards: Story = {
     variant: 'cloud-wizards',
     eventName: 'Cloud Native Days Norway',
     eventDate: 'June 10-11, 2026 • Bergen',
-    ctaUrl: '/sponsor',
   },
 }
 
@@ -267,7 +263,6 @@ export const TechNinjas: Story = {
     variant: 'tech-ninjas',
     eventName: 'Cloud Native Days Norway',
     eventDate: 'June 10-11, 2026 • Bergen',
-    ctaUrl: '/sponsor',
   },
 }
 
@@ -278,7 +273,6 @@ export const DeployLegends: Story = {
     variant: 'deploy-legends',
     eventName: 'Cloud Native Days Norway',
     eventDate: 'June 10-11, 2026 • Bergen',
-    ctaUrl: '/sponsor',
   },
 }
 
@@ -289,7 +283,6 @@ export const KubernetesMasters: Story = {
     variant: 'kubernetes-masters',
     eventName: 'Cloud Native Days Norway',
     eventDate: 'June 10-11, 2026 • Bergen',
-    ctaUrl: '/sponsor',
   },
 }
 
@@ -300,7 +293,6 @@ export const DevOpsRockstars: Story = {
     variant: 'devops-rockstars',
     eventName: 'Cloud Native Days Norway',
     eventDate: 'June 10-11, 2026 • Bergen',
-    ctaUrl: '/sponsor',
   },
 }
 
@@ -312,6 +304,5 @@ export const WithCloudNativePattern: Story = {
     eventName: 'Cloud Native Days Norway',
     eventDate: 'June 10-11, 2026 • Bergen',
     showCloudNativePattern: true,
-    ctaUrl: '/sponsor',
   },
 }

@@ -27,10 +27,10 @@ async function validateStories() {
     try {
       // Import the story file
       const fileUrl = pathToFileURL(file).href
-      const module = await import(fileUrl)
+      const storyModule = await import(fileUrl)
 
       // Check if it has a default export (meta)
-      if (!module.default) {
+      if (!storyModule.default) {
         warnings.push({
           file: relativePath,
           message: 'Missing default export (story meta)',
@@ -40,7 +40,7 @@ async function validateStories() {
       }
 
       // Check if meta has required properties
-      const meta = module.default
+      const meta = storyModule.default
       if (!meta.title) {
         warnings.push({
           file: relativePath,
@@ -51,7 +51,7 @@ async function validateStories() {
       }
 
       // Count stories (exports that aren't default or Meta)
-      const storyExports = Object.keys(module).filter(
+      const storyExports = Object.keys(storyModule).filter(
         (key) => key !== 'default' && key !== '__esModule'
       )
 

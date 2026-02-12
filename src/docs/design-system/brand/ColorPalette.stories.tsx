@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react'
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { colorPalette } from '@/docs/design-system/data'
 import { ColorSwatch } from '@/docs/components/ColorSwatch'
 
