@@ -526,7 +526,7 @@ export function EmailModal({
                       </div>
 
                       <div className="px-6 pt-2 pb-6">
-                        <div className="min-h-50 rounded-lg">
+                        <div className="min-h-[200px] rounded-lg">
                           <PortableTextEditor
                             label=""
                             value={richTextValue}

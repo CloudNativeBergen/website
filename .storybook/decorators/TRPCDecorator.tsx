@@ -18,8 +18,8 @@ const queryClient = new QueryClient({
 const trpcClient = api.createClient({
   links: [
     httpBatchLink({
-      url: 'http://localhost:6006/api/trpc',
-      // MSW will intercept these requests
+      url: '/api/trpc',
+      // MSW will intercept these requests (relative URL for cross-origin compatibility)
     }),
   ],
 })

@@ -1038,20 +1038,17 @@ export const sponsorRouter = router({
 
         const oldStatus = existing.signatureStatus || 'not-started'
 
+        // Atomic update: set signatureStatus and conditionally set contract fields
         await clientWrite
           .patch(input.id)
-          .set({ signatureStatus: input.newStatus })
-          .commit()
-
-        if (input.newStatus === 'signed') {
-          await clientWrite
-            .patch(input.id)
-            .set({
+          .set({
+            signatureStatus: input.newStatus,
+            ...(input.newStatus === 'signed' && {
               contractStatus: 'contract-signed',
               contractSignedAt: getCurrentDateTime(),
-            })
-            .commit()
-        }
+            }),
+          })
+          .commit()
 
         const userId = ctx.speaker._id
         if (userId && oldStatus !== input.newStatus) {
@@ -1331,9 +1328,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,

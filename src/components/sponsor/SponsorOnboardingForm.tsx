@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '@/lib/trpc/client'
 import {
   CheckCircleIcon,
@@ -56,9 +56,13 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
   })
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
-  const [initialized, setInitialized] = useState(false)
 
-  if (sponsor && !initialized) {
+  // Initialize form state from sponsor data when it becomes available
+  // This is intentional - we need to populate the form when async data arrives
+  useEffect(() => {
+    if (!sponsor) return
+
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (sponsor.contactPersons?.length) {
       setContacts(
         sponsor.contactPersons.map((c) => ({
@@ -81,8 +85,8 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
       orgNumber: sponsor.sponsorOrgNumber || '',
       address: sponsor.sponsorAddress || '',
     })
-    setInitialized(true)
-  }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [sponsor])
 
   if (isLoading) {
     return (
@@ -176,8 +180,8 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
 
     const validContacts = contacts
       .filter((c) => c.name.trim() && c.email.trim())
-      .map((c) => ({
-        _key: '',
+      .map((c, index) => ({
+        _key: `contact-${Date.now()}-${index}`,
         name: c.name.trim(),
         email: c.email.trim(),
         phone: c.phone.trim() || undefined,

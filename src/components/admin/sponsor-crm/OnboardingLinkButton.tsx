@@ -36,9 +36,20 @@ export function OnboardingLinkButton({
 
   const handleCopy = async () => {
     if (!generatedUrl) return
-    await navigator.clipboard.writeText(generatedUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(generatedUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback: select the input text for manual copy
+      const input = document.querySelector<HTMLInputElement>(
+        'input[readonly][value="' + generatedUrl + '"]',
+      )
+      if (input) {
+        input.select()
+        input.setSelectionRange(0, input.value.length)
+      }
+    }
   }
 
   if (onboardingComplete) {
@@ -88,10 +99,10 @@ export function OnboardingLinkButton({
       onClick={
         existingToken
           ? () => {
-              const baseUrl = window.location.origin
-              setGeneratedUrl(`${baseUrl}/sponsor/onboarding/${existingToken}`)
-              setShowLink(true)
-            }
+            const baseUrl = window.location.origin
+            setGeneratedUrl(`${baseUrl}/sponsor/onboarding/${existingToken}`)
+            setShowLink(true)
+          }
           : handleGenerate
       }
       disabled={generateMutation.isPending}

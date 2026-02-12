@@ -6,7 +6,7 @@ import type {
   InvoiceStatus,
   SignatureStatus,
 } from '@/lib/sponsor-crm/types'
-import type { ContactPerson, BillingInfo } from '@/lib/sponsor/types'
+import type { ContactPerson, BillingInfo, SponsorTier } from '@/lib/sponsor/types'
 import type {
   ContractReadiness,
   MissingField,
@@ -40,8 +40,6 @@ export function mockBillingInfo(
     ...overrides,
   }
 }
-
-import type { SponsorTier } from '@/lib/sponsor/types'
 
 export function mockSponsorTier(
   overrides: Partial<SponsorTier> = {},

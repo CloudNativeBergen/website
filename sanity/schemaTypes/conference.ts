@@ -83,19 +83,19 @@ export default defineType({
     }),
     defineField({
       name: 'organizerOrgNumber',
-      title: 'Organiser Org Number',
+      title: 'Organizer Org Number',
       type: 'string',
       fieldset: 'basicInfo',
       description:
-        'Organization number of the organiser (used in contracts and invoices)',
+        'Organization number of the organizer (used in contracts and invoices)',
     }),
     defineField({
       name: 'organizerAddress',
-      title: 'Organiser Address',
+      title: 'Organizer Address',
       type: 'string',
       fieldset: 'basicInfo',
       description:
-        'Registered address of the organiser (used in contracts and invoices)',
+        'Registered address of the organizer (used in contracts and invoices)',
     }),
     defineField({
       name: 'city',

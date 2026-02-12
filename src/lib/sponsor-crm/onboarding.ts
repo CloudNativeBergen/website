@@ -107,35 +107,41 @@ export async function completeOnboarding(
 
     const contactPersons = prepareArrayWithKeys(data.contactPersons, 'contact')
 
-    await clientWrite
-      .patch(sponsor._id)
-      .set({
+    // Build sponsor updates if any company info was provided
+    const sponsorUpdates: Record<string, unknown> = {}
+    if (data.logo) sponsorUpdates.logo = data.logo
+    if (data.logoBright) sponsorUpdates.logoBright = data.logoBright
+    if (data.orgNumber) sponsorUpdates.orgNumber = data.orgNumber
+    if (data.address) sponsorUpdates.address = data.address
+
+    // Use transaction for atomic updates to both documents
+    const transaction = clientWrite.transaction()
+
+    // Always update the sponsorForConference document
+    transaction.patch(sponsor._id, {
+      set: {
         contactPersons,
         billing: data.billing,
         onboardingComplete: true,
         onboardingCompletedAt: getCurrentDateTime(),
-      })
-      .commit()
+      },
+    })
 
-    if (data.logo || data.logoBright || data.orgNumber || data.address) {
+    // Conditionally update the sponsor document if there are updates
+    if (Object.keys(sponsorUpdates).length > 0) {
       const sfcDoc = await clientRead.fetch<{ sponsor: { _ref: string } }>(
         `*[_type == "sponsorForConference" && _id == $id][0]{ sponsor }`,
         { id: sponsor._id },
       )
 
       if (sfcDoc?.sponsor?._ref) {
-        const sponsorUpdates: Record<string, unknown> = {}
-        if (data.logo) sponsorUpdates.logo = data.logo
-        if (data.logoBright) sponsorUpdates.logoBright = data.logoBright
-        if (data.orgNumber) sponsorUpdates.orgNumber = data.orgNumber
-        if (data.address) sponsorUpdates.address = data.address
-
-        await clientWrite
-          .patch(sfcDoc.sponsor._ref)
-          .set(sponsorUpdates)
-          .commit()
+        transaction.patch(sfcDoc.sponsor._ref, {
+          set: sponsorUpdates,
+        })
       }
     }
+
+    await transaction.commit()
 
     return { success: true, sponsorForConferenceId: sponsor._id }
   } catch (error) {

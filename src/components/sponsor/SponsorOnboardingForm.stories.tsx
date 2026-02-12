@@ -95,11 +95,11 @@ export const Default: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('http://localhost:6006/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/onboarding.validate', () => {
           return HttpResponse.json(createTRPCBatchResponse([mockSponsorData]))
         }),
         http.post(
-          'http://localhost:6006/api/trpc/onboarding.complete',
+          '/api/trpc/onboarding.complete',
           async () => {
             await delay(1000)
             return HttpResponse.json(
@@ -122,13 +122,13 @@ export const WithExistingData: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('http://localhost:6006/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/onboarding.validate', () => {
           return HttpResponse.json(
             createTRPCBatchResponse([mockSponsorWithExistingData]),
           )
         }),
         http.post(
-          'http://localhost:6006/api/trpc/onboarding.complete',
+          '/api/trpc/onboarding.complete',
           async () => {
             await delay(1000)
             return HttpResponse.json(
@@ -152,7 +152,7 @@ export const Loading: Story = {
     msw: {
       handlers: [
         http.get(
-          'http://localhost:6006/api/trpc/onboarding.validate',
+          '/api/trpc/onboarding.validate',
           async () => {
             await delay(999999)
             return HttpResponse.json(createTRPCBatchResponse([mockSponsorData]))
@@ -173,7 +173,7 @@ export const InvalidToken: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('http://localhost:6006/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/onboarding.validate', () => {
           return HttpResponse.json(
             createTRPCBatchError(
               'Invalid or expired onboarding token',
@@ -196,7 +196,7 @@ export const AlreadyCompleted: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('http://localhost:6006/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/onboarding.validate', () => {
           return HttpResponse.json(
             createTRPCBatchResponse([mockCompletedSponsor]),
           )
@@ -216,7 +216,7 @@ export const CommunityPartner: Story = {
   parameters: {
     msw: {
       handlers: [
-        http.get('http://localhost:6006/api/trpc/onboarding.validate', () => {
+        http.get('/api/trpc/onboarding.validate', () => {
           return HttpResponse.json(
             createTRPCBatchResponse([
               {
@@ -228,7 +228,7 @@ export const CommunityPartner: Story = {
           )
         }),
         http.post(
-          'http://localhost:6006/api/trpc/onboarding.complete',
+          '/api/trpc/onboarding.complete',
           async () => {
             await delay(1000)
             return HttpResponse.json(

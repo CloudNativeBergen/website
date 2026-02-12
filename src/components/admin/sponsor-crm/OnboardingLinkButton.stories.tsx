@@ -35,7 +35,7 @@ export const Interactive: Story = {
     msw: {
       handlers: [
         http.get(
-          'http://localhost:6006/api/trpc/onboarding.generateToken',
+          '/api/trpc/onboarding.generateToken',
           () => {
             return HttpResponse.json({
               result: {
@@ -61,7 +61,7 @@ export const NotOnboarded: Story = {
     msw: {
       handlers: [
         http.get(
-          'http://localhost:6006/api/trpc/onboarding.generateToken',
+          '/api/trpc/onboarding.generateToken',
           () => {
             return HttpResponse.json({
               result: {
@@ -88,7 +88,7 @@ export const WithExistingToken: Story = {
     msw: {
       handlers: [
         http.get(
-          'http://localhost:6006/api/trpc/onboarding.generateToken',
+          '/api/trpc/onboarding.generateToken',
           () => {
             return HttpResponse.json({
               result: {
@@ -114,7 +114,7 @@ export const OnboardingComplete: Story = {
     msw: {
       handlers: [
         http.get(
-          'http://localhost:6006/api/trpc/onboarding.generateToken',
+          '/api/trpc/onboarding.generateToken',
           () => {
             return HttpResponse.json({
               result: {

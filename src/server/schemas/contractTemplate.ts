@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const ContractTemplateSectionSchema = z.object({
+  _key: z.string().optional(),
   heading: z.string().min(1, 'Section heading is required'),
   body: z.array(z.any()).optional(),
 })

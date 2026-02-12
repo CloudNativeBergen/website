@@ -40,6 +40,7 @@ export interface ContractTemplateInput {
   language: 'nb' | 'en'
   currency?: string
   sections: Array<{
+    _key?: string
     heading: string
     body?: PortableTextBlock[]
   }>
@@ -164,9 +165,9 @@ export async function updateContractTemplate(
     if (data.language !== undefined) updates.language = data.language
     if (data.currency !== undefined) updates.currency = data.currency
     if (data.sections !== undefined) {
-      let keyCounter = 0
-      updates.sections = data.sections.map((s) => ({
-        _key: `section-${++keyCounter}`,
+      // Preserve existing keys when provided, generate unique keys for new sections
+      updates.sections = data.sections.map((s, index) => ({
+        _key: s._key || `section-${Date.now()}-${index}`,
         heading: s.heading,
         body: s.body,
       }))

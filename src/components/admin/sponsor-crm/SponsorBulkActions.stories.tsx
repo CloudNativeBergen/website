@@ -32,7 +32,7 @@ const meta: Meta<typeof SponsorBulkActions> = {
     msw: {
       handlers: [
         http.get(
-          'http://localhost:6006/api/trpc/sponsor.crm.listOrganizers',
+          '/api/trpc/sponsor.crm.listOrganizers',
           () => {
             return HttpResponse.json({
               result: {
