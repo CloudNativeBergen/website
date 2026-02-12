@@ -84,35 +84,21 @@ Keep dedicated stories for:
 
 ## Hierarchy Structure
 
-Our Storybook uses a three-level hierarchy:
+Our Storybook uses a multi-level hierarchy. Refer to the `AGENTS.md` Storybook &amp; Design System section for the canonical, up-to-date structure. The top-level categories are:
 
 ```text
-Domain / Component / Story
+Getting Started/        - Introduction and developer guides
+Design System/          - Brand, Foundation, Examples
+Components/{Category}/  - Generic reusable components (Data Display, Feedback, Forms, Icons, Layout)
+Systems/{SystemName}/   - Domain-specific components (Program, Proposals, Speakers, Sponsors)
 ```
 
-### Current Structure
+### Placing New Stories
 
-#### Admin/
-
-- `Admin/Sponsor CRM/` - Admin-specific sponsor management components
-  - `SponsorCard`, `SponsorBoardColumn`, `OnboardingLinkButton`, etc.
-- `Admin/Sponsor CRM/Form/` - Form components used in admin interfaces
-  - `StatusListbox`, `TierRadioGroup`, `TagCombobox`, etc.
-
-#### Public/
-
-- `Public/` - Public-facing website components
-  - `Sponsors`, `SponsorThankYou`, `SponsorLogo`
-
-#### Shared/
-
-- `Shared/` - Reusable components used across the application
-  - `Button`, `ContractReadinessIndicator`
-
-#### Documentation/
-
-- `Documentation/` - Project documentation pages
-  - `Introduction`, `Design System`, `Sponsor System`
+- **Generic reusable components** → `Components/{Category}/ComponentName` (e.g., `Components/Layout/Button`)
+- **Domain-specific components** → `Systems/{SystemName}/ComponentName` (e.g., `Systems/Program/TalkCard`)
+- **Admin components for a system** → `Systems/{SystemName}/Admin/ComponentName` (e.g., `Systems/Sponsors/Admin/Pipeline/SponsorCard`)
+- **Integration examples** → `Design System/Examples/ExampleName`
 
 ## ArgTypes Configuration
 
@@ -233,7 +219,8 @@ render: () => (
 When creating Storybook stories for a new component:
 
 - [ ] Create `ComponentName.stories.tsx` next to the component file
-- [ ] Add component to appropriate hierarchy (`Admin/`, `Public/`, `Shared/`)
+- [ ] Add component to appropriate hierarchy (`Components/{Category}/` or `Systems/{SystemName}/`)
+- [ ] Add `tags: ['autodocs']` to meta for automatic documentation
 - [ ] Configure `argTypes` for all important props
 - [ ] Add component-level description
 - [ ] Create **Interactive** story with controls

@@ -61,12 +61,18 @@ The Storybook (`pnpm storybook`) is the single source of truth for all UI/UX doc
 - **Getting Started/** - Introduction and developer guides
 - **Design System/Foundation/** - Colors, Typography, Spacing, Shadows, Icons
 - **Design System/Brand/** - Brand story, color palette, typography system, buttons, cloud native patterns
-- **Design System/Examples/** - Integration patterns showing how components work together (hero sections, speaker displays, email templates)
-- **Components/** - General-purpose reusable components (Button, etc.)
+- **Design System/Examples/** - Integration patterns showing how components work together (hero sections, conference landing page, admin pages)
+- **Components/** - General-purpose reusable components organized by category:
+  - **Data Display/** - CollapsibleDescription, CollapsibleSection, DownloadableImage, Email Templates, ShowMore, TypewriterEffect, VideoEmbed
+  - **Feedback/** - ConfirmationModal, ErrorDisplay, LoadingSkeleton
+  - **Forms/** - Form Elements, FilterDropdown, PortableTextEditor
+  - **Icons/** - OSIcons, SocialIcons
+  - **Layout/** - BackLink, Button, Container, Logo, MissingAvatar, ThemeToggle
 - **Systems/** - Domain-specific feature documentation organized by system:
-  - **Speakers/** - Speaker-related components and documentation
-  - **Sponsors/** - Sponsor system architecture, workflows, and components
-- **Admin/** - Admin interface components and documentation
+  - **Program/** - Schedule views (grid, list, agenda, schedule), filters, talk cards
+  - **Proposals/** - Proposal submission, review, and admin management components
+  - **Speakers/** - Speaker profiles, forms, and admin management components
+  - **Sponsors/** - Sponsor system (CRM pipeline, contacts, email, tiers, onboarding, dashboard)
 
 **Story Types & Organization:**
 
@@ -103,12 +109,13 @@ There are two distinct types of stories with different purposes:
 
 ```typescript
 // Component story (lives next to component file)
-import type { Meta, StoryObj } from '@storybook/react'
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { MyComponent } from './MyComponent'
 
 const meta = {
-  title: 'Components/MyComponent', // or 'Systems/Speakers/MyComponent' for domain-specific
+  title: 'Components/Layout/MyComponent', // or 'Systems/Speakers/MyComponent' for domain-specific
   component: MyComponent,
+  tags: ['autodocs'],
 } satisfies Meta<typeof MyComponent>
 
 export default meta
@@ -123,7 +130,7 @@ export const Default: Story = {
 
 ```typescript
 // Documentation story (in /src/docs/)
-import type { Meta, StoryObj } from '@storybook/react'
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 
 const meta = {
   title: 'Design System/Foundation/NewCategory',
