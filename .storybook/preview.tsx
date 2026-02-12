@@ -43,7 +43,7 @@ const preview: Preview = {
           'Design System',
           [
             'Foundation',
-            ['Colors', 'Typography', 'Spacing', 'Shadows', 'Icons'],
+            ['Spacing', 'Shadows', 'Icons'],
             'Brand',
             [
               'Brand Story',
