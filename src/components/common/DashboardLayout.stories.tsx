@@ -143,15 +143,15 @@ function MockDashboard({
             <ul role="list" className="flex-1 space-y-1">
               {isNavigationSections(navigation)
                 ? navigation.map((section, i) => (
-                  <li key={section.label}>
-                    {i > 0 && (
-                      <div className="mx-1 my-2 border-t border-white/10" />
-                    )}
-                    <ul role="list" className="space-y-1">
-                      {renderNavItems(section.items)}
-                    </ul>
-                  </li>
-                ))
+                    <li key={section.label}>
+                      {i > 0 && (
+                        <div className="mx-1 my-2 border-t border-white/10" />
+                      )}
+                      <ul role="list" className="space-y-1">
+                        {renderNavItems(section.items)}
+                      </ul>
+                    </li>
+                  ))
                 : renderNavItems(navigation)}
             </ul>
           </nav>

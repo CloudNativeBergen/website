@@ -92,12 +92,12 @@ export function NotificationToast({
               className={clsx(
                 'absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white shadow-lg',
                 notification.type === 'success' &&
-                'bg-brand-fresh-green dark:bg-green-500',
+                  'bg-brand-fresh-green dark:bg-green-500',
                 notification.type === 'error' && 'bg-red-500',
                 notification.type === 'warning' &&
-                'bg-brand-sunbeam-yellow dark:bg-yellow-500',
+                  'bg-brand-sunbeam-yellow dark:bg-yellow-500',
                 notification.type === 'info' &&
-                'bg-brand-cloud-blue dark:bg-blue-500',
+                  'bg-brand-cloud-blue dark:bg-blue-500',
               )}
             >
               {notification.count}

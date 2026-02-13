@@ -41,7 +41,7 @@ interface NavSection {
     href: string
     icon: React.ForwardRefExoticComponent<
       Omit<React.SVGProps<SVGSVGElement>, 'ref'> &
-      React.RefAttributes<SVGSVGElement>
+        React.RefAttributes<SVGSVGElement>
     >
   }[]
 }
