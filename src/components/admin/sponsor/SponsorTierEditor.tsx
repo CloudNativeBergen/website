@@ -158,7 +158,7 @@ function SponsorTierModal({
       } else {
         await createMutation.mutateAsync(formData)
       }
-    } catch { }
+    } catch {}
   }
 
   const handleDelete = async () => {
@@ -171,7 +171,7 @@ function SponsorTierModal({
     setShowDeleteConfirm(false)
     try {
       await deleteMutation.mutateAsync({ id: tier._id })
-    } catch { }
+    } catch {}
   }
 
   const addPrice = () => {

@@ -187,10 +187,10 @@ export function ContractTemplateEditorPage({
     const newIndex = direction === 'up' ? index - 1 : index + 1
     if (newIndex < 0 || newIndex >= sections.length) return
     const newSections = [...sections]
-      ;[newSections[index], newSections[newIndex]] = [
-        newSections[newIndex],
-        newSections[index],
-      ]
+    ;[newSections[index], newSections[newIndex]] = [
+      newSections[newIndex],
+      newSections[index],
+    ]
     setSections(newSections)
   }
 
