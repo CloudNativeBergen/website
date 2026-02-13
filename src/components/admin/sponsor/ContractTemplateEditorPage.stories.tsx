@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { http, HttpResponse, delay } from 'msw'
 import { ContractTemplateEditorPage } from './ContractTemplateEditorPage'
+import { NotificationProvider } from '@/components/admin/NotificationProvider'
 import type { Conference } from '@/lib/conference/types'
 
 const mockConference = {
@@ -115,9 +116,11 @@ const meta: Meta<typeof ContractTemplateEditorPage> = {
   },
   decorators: [
     (Story) => (
-      <div className="mx-auto max-w-5xl">
-        <Story />
-      </div>
+      <NotificationProvider>
+        <div className="mx-auto max-w-5xl">
+          <Story />
+        </div>
+      </NotificationProvider>
     ),
   ],
 }

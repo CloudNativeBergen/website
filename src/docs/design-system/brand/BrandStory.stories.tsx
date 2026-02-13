@@ -8,6 +8,7 @@ import {
 
 const meta = {
   title: 'Design System/Brand/Brand Story',
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     options: {
