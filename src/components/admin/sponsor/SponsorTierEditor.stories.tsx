@@ -332,10 +332,10 @@ export const TierCards: Story = {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {tier.price > 0
                     ? new Intl.NumberFormat('nb-NO', {
-                      style: 'currency',
-                      currency: 'NOK',
-                      maximumFractionDigits: 0,
-                    }).format(tier.price)
+                        style: 'currency',
+                        currency: 'NOK',
+                        maximumFractionDigits: 0,
+                      }).format(tier.price)
                     : 'Free'}
                   {tier.max && (
                     <span className="ml-2">
