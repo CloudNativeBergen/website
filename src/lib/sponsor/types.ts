@@ -25,7 +25,7 @@ export interface SponsorTier {
   }>
   soldOut: boolean
   mostPopular: boolean
-  maxQuantity?: number
+  maxQuantity?: number | null
 }
 
 export interface SponsorTierInput {
@@ -44,7 +44,7 @@ export interface SponsorTierInput {
   }>
   soldOut: boolean
   mostPopular: boolean
-  maxQuantity?: number
+  maxQuantity?: number | null
 }
 
 export type SponsorTierExisting = SponsorTier

@@ -410,7 +410,14 @@ export const sponsorRouter = router({
             })
           }
 
-          const mergedData = { ...existingTier, ...input.data }
+          const mergedData = {
+            ...existingTier,
+            ...input.data,
+            maxQuantity:
+              input.data.maxQuantity === null
+                ? undefined
+                : (input.data.maxQuantity ?? existingTier.maxQuantity),
+          }
           const validationErrors = validateSponsorTier(mergedData)
           if (validationErrors.length > 0) {
             console.error('Sponsor tier validation errors:', validationErrors)
@@ -1432,9 +1439,9 @@ export const sponsorRouter = router({
               : undefined,
             tier: sponsorForConference.tier
               ? {
-                  title: sponsorForConference.tier.title,
-                  tagline: sponsorForConference.tier.tagline,
-                }
+                title: sponsorForConference.tier.title,
+                tagline: sponsorForConference.tier.tagline,
+              }
               : undefined,
             addons: sponsorForConference.addons?.map((a) => ({
               title: a.title,
