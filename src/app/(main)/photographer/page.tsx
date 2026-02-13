@@ -16,7 +16,7 @@ async function CachedPhotographerContent({ }) {
                     Photographers
                 </h1>
                 {photographers.staff.map(photographer => {
-                    return <div key={Math.random()} className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:max-w-4xl lg:px-8">
+                    return <div key={photographer.name} className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:max-w-4xl lg:px-8">
                         <h3 className="font-jetbrains text-3xl font-bold tracking-tighter text-brand-cloud-blue sm:text-5xl dark:text-blue-400">
                             {photographer.name}
                         </h3>
