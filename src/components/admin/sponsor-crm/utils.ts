@@ -205,7 +205,7 @@ export function getSignatureStatusBadgeProps(status: SignatureStatus): {
     case 'not-started':
       return { label: 'Not Started', color: 'gray' }
     case 'pending':
-      return { label: 'Awaiting Signature', color: 'yellow' }
+      return { label: 'Pending', color: 'yellow' }
     case 'signed':
       return { label: 'Signed', color: 'green' }
     case 'rejected':
@@ -219,5 +219,8 @@ export function getDaysPending(contractSentAt?: string): number | null {
   if (!contractSentAt) return null
   const sent = new Date(contractSentAt)
   const now = new Date()
-  return Math.floor((now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24))
+  const days = Math.floor(
+    (now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24),
+  )
+  return Math.max(0, days)
 }

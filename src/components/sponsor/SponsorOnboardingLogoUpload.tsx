@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { InlineSvg } from '@/components/InlineSvg'
 import {
   ArrowDownTrayIcon,
@@ -40,14 +40,16 @@ function LogoUploadField({
   onChange: (svg: string | null) => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
     if (file.type !== 'image/svg+xml') {
-      alert('Please select an SVG file.')
+      setError('Please select an SVG file.')
       return
     }
+    setError(null)
     const reader = new FileReader()
     reader.onload = (e) => {
       const svgContent = e.target?.result as string
@@ -120,6 +122,9 @@ function LogoUploadField({
           onChange={handleFileUpload}
           className="hidden"
         />
+        {error && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
+        )}
         {value && (
           <button
             type="button"

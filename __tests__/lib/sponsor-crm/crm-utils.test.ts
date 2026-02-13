@@ -169,7 +169,7 @@ describe('CRM Utils', () => {
 
     it('returns correct props for pending', () => {
       const { label, color } = getSignatureStatusBadgeProps('pending')
-      expect(label).toBe('Awaiting Signature')
+      expect(label).toBe('Pending')
       expect(color).toBe('yellow')
     })
 
@@ -232,6 +232,14 @@ describe('CRM Utils', () => {
       const days = getDaysPending(fiveDaysAgo)
       expect(days).toBeGreaterThanOrEqual(4)
       expect(days).toBeLessThanOrEqual(6)
+    })
+
+    it('clamps negative values to 0 for future dates', () => {
+      const tomorrow = new Date(
+        Date.now() + 2 * 24 * 60 * 60 * 1000,
+      ).toISOString()
+      const days = getDaysPending(tomorrow)
+      expect(days).toBe(0)
     })
   })
 

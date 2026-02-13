@@ -86,6 +86,67 @@ describe('sanitizeSvg', () => {
     expect(result).toContain('<rect')
   })
 
+  it('removes xlink:href with javascript: protocol', () => {
+    const svg =
+      '<svg><a xlink:href="javascript:alert(1)"><text>Click</text></a></svg>'
+    const result = sanitizeSvg(svg)
+    expect(result).not.toContain('javascript:')
+    expect(result).toContain('href="#"')
+  })
+
+  it('removes href with data: protocol', () => {
+    const svg =
+      '<svg><a href="data:text/html,<script>alert(1)</script>"><text>link</text></a></svg>'
+    const result = sanitizeSvg(svg)
+    expect(result).not.toContain('data:')
+  })
+
+  it('removes xlink:href with data: protocol', () => {
+    const svg =
+      '<svg><use xlink:href="data:image/svg+xml,<svg onload=alert(1)>"/></svg>'
+    const result = sanitizeSvg(svg)
+    expect(result).not.toContain('data:')
+  })
+
+  it('removes iframe, embed, and object tags', () => {
+    const svg =
+      '<svg><iframe src="evil.html"></iframe><embed src="evil.swf"/><object data="evil.html"></object><rect width="10" height="10"/></svg>'
+    const result = sanitizeSvg(svg)
+    expect(result).not.toContain('iframe')
+    expect(result).not.toContain('embed')
+    expect(result).not.toContain('object')
+    expect(result).toContain('<rect')
+  })
+
+  it('removes style attributes containing url()', () => {
+    const svg =
+      '<svg><rect style="background:url(javascript:alert(1))" width="10" height="10"/></svg>'
+    const result = sanitizeSvg(svg)
+    expect(result).not.toContain('url(')
+    expect(result).toContain('width="10"')
+  })
+
+  it('preserves safe style attributes without url()', () => {
+    const svg =
+      '<svg><rect style="fill: red; stroke: blue" width="10" height="10"/></svg>'
+    const result = sanitizeSvg(svg)
+    expect(result).toContain('style="fill: red; stroke: blue"')
+  })
+
+  it('removes <use> elements with external references', () => {
+    const svg =
+      '<svg><use href="https://evil.com/sprite.svg#icon"/><rect width="10" height="10"/></svg>'
+    const result = sanitizeSvg(svg)
+    expect(result).not.toContain('evil.com')
+    expect(result).toContain('<rect')
+  })
+
+  it('preserves <use> elements with internal fragment references', () => {
+    const svg = '<svg><defs><circle id="c" r="5"/></defs><use href="#c"/></svg>'
+    const result = sanitizeSvg(svg)
+    expect(result).toContain('href="#c"')
+  })
+
   it('preserves SVG attributes like viewBox and xmlns', () => {
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none"><path d="M10 10" stroke="black"/></svg>'

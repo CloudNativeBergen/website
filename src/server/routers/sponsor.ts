@@ -1100,6 +1100,17 @@ export const sponsorRouter = router({
           })
         }
 
+        if (
+          !sfc.conference?.title ||
+          !sfc.conference.startDate ||
+          !sfc.conference.endDate
+        ) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Conference data is incomplete for contract generation',
+          })
+        }
+
         const primaryContact =
           sfc.contactPersons?.find((c) => c.isPrimary) ||
           sfc.contactPersons?.[0]
@@ -1140,11 +1151,11 @@ export const sponsorRouter = router({
         const updateFields: Record<string, unknown> = {
           contractStatus: 'contract-sent',
           contractSentAt: now,
-          signatureStatus: 'pending',
           contractTemplate: { _type: 'reference', _ref: input.templateId },
         }
         if (input.signerEmail) {
           updateFields.signerEmail = input.signerEmail
+          updateFields.signatureStatus = 'pending'
         }
 
         await clientWrite
@@ -1159,16 +1170,30 @@ export const sponsorRouter = router({
         // Log activity
         const userId = ctx.speaker._id
         if (userId) {
-          const oldStatus = sfc.contractStatus
+          const oldContractStatus = sfc.contractStatus
           try {
             await logContractStatusChange(
               input.sponsorForConferenceId,
-              oldStatus,
+              oldContractStatus,
               'contract-sent',
               userId,
             )
           } catch (logError) {
             console.error('Failed to log contract send activity:', logError)
+          }
+
+          if (input.signerEmail) {
+            const oldSignatureStatus = sfc.signatureStatus ?? 'not-started'
+            try {
+              await logSignatureStatusChange(
+                input.sponsorForConferenceId,
+                oldSignatureStatus,
+                'pending',
+                userId,
+              )
+            } catch (logError) {
+              console.error('Failed to log signature status change:', logError)
+            }
           }
         }
 
