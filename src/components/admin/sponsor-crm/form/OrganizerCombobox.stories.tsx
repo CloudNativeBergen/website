@@ -5,26 +5,32 @@ import {
   CheckIcon,
   XMarkIcon,
 } from '@heroicons/react/20/solid'
-
 const meta = {
   title: 'Systems/Sponsors/Admin/Form/OrganizerCombobox',
+  tags: ['autodocs'],
   parameters: {
     layout: 'padded',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Searchable dropdown for assigning sponsors to team members. Shows avatars, names, and emails with type-ahead filtering. Supports clearing selection to unassign.',
+      },
+    },
   },
 } satisfies Meta
 
 export default meta
 type Story = StoryObj<typeof meta>
 
-interface Organizer {
+interface MockOrganizer {
   _id: string
   name: string
   email?: string
   avatar?: string
 }
 
-const mockOrganizers: Organizer[] = [
+const mockOrganizers: MockOrganizer[] = [
   {
     _id: 'org-1',
     name: 'Hans Kristian',
@@ -207,58 +213,4 @@ export const WithSelection: Story = {
       </div>
     )
   },
-}
-
-export const Documentation: Story = {
-  render: () => (
-    <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          OrganizerCombobox
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Searchable dropdown for assigning sponsors to team members. Shows
-          avatars, names, and emails. Supports filtering and clearing selection.
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Props</h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              value
-            </code>{' '}
-            - Selected organizer ID
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              onChange
-            </code>{' '}
-            - Callback when selection changes
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              organizers
-            </code>{' '}
-            - Array of Organizer objects
-          </li>
-        </ul>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          Organizer Object
-        </h3>
-        <pre className="mt-2 overflow-x-auto rounded bg-gray-900 p-3 text-sm text-gray-100">
-          {`interface Organizer {
-  _id: string
-  name: string
-  email?: string
-  avatar?: string
-}`}
-        </pre>
-      </div>
-    </div>
-  ),
 }

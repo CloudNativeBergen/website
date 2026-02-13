@@ -50,19 +50,23 @@ export async function updateSponsorTier(
   data: SponsorTierInput,
 ): Promise<{ sponsorTier?: SponsorTierExisting; error?: Error }> {
   try {
-    const sponsorTier = await clientWrite
-      .patch(id)
-      .set({
-        title: data.title,
-        tagline: data.tagline,
-        tierType: data.tierType,
-        price: prepareArrayWithKeys(data.price, 'price'),
-        perks: prepareArrayWithKeys(data.perks, 'perk'),
-        soldOut: data.soldOut,
-        mostPopular: data.mostPopular,
-        maxQuantity: data.maxQuantity,
-      })
-      .commit()
+    let patch = clientWrite.patch(id).set({
+      title: data.title,
+      tagline: data.tagline,
+      tierType: data.tierType,
+      price: prepareArrayWithKeys(data.price, 'price'),
+      perks: prepareArrayWithKeys(data.perks, 'perk'),
+      soldOut: data.soldOut,
+      mostPopular: data.mostPopular,
+    })
+
+    if (data.maxQuantity != null) {
+      patch = patch.set({ maxQuantity: data.maxQuantity })
+    } else {
+      patch = patch.unset(['maxQuantity'])
+    }
+
+    const sponsorTier = await patch.commit()
 
     const result: SponsorTierExisting = {
       _id: sponsorTier._id,

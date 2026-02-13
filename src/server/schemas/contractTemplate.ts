@@ -59,3 +59,11 @@ export const FindBestContractTemplateSchema = z.object({
   tierId: z.string().optional(),
   language: z.enum(['nb', 'en']).optional(),
 })
+
+export const SendContractSchema = z.object({
+  sponsorForConferenceId: z
+    .string()
+    .min(1, 'Sponsor relationship ID is required'),
+  templateId: z.string().min(1, 'Template ID is required'),
+  signerEmail: z.string().email().optional(),
+})

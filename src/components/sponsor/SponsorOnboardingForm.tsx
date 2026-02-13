@@ -10,6 +10,7 @@ import {
   UserIcon,
 } from '@heroicons/react/24/outline'
 import { SponsorContactRoleSelect } from '@/components/admin/sponsor/SponsorContactRoleSelect'
+import { SponsorOnboardingLogoUpload } from '@/components/sponsor/SponsorOnboardingLogoUpload'
 
 interface ContactPersonForm {
   name: string
@@ -54,6 +55,8 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
     orgNumber: '',
     address: '',
   })
+  const [logo, setLogo] = useState<string | null>(null)
+  const [logoBright, setLogoBright] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
 
@@ -85,6 +88,8 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
       orgNumber: sponsor.sponsorOrgNumber || '',
       address: sponsor.sponsorAddress || '',
     })
+    if (sponsor.sponsorLogo) setLogo(sponsor.sponsorLogo)
+    if (sponsor.sponsorLogoBright) setLogoBright(sponsor.sponsorLogoBright)
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [sponsor])
 
@@ -93,7 +98,9 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
       <div className="flex min-h-100 items-center justify-center">
         <div className="text-center">
           <div className="border-oslo-blue mx-auto h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
-          <p className="mt-4 text-gray-600">Loading onboarding form&hellip;</p>
+          <p className="mt-4 text-gray-600 dark:text-gray-300">
+            Loading onboarding form&hellip;
+          </p>
         </div>
       </div>
     )
@@ -101,12 +108,12 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
 
   if (fetchError) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center">
+      <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center dark:border-red-800 dark:bg-red-950">
         <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-400" />
-        <h2 className="mt-4 text-xl font-semibold text-red-800">
+        <h2 className="mt-4 text-xl font-semibold text-red-800 dark:text-red-300">
           Invalid Onboarding Link
         </h2>
-        <p className="mt-2 text-red-600">
+        <p className="mt-2 text-red-600 dark:text-red-400">
           This onboarding link is invalid or has expired. Please contact the
           event organizers for a new link.
         </p>
@@ -116,12 +123,12 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
 
   if (submitted || sponsor?.onboardingComplete) {
     return (
-      <div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center">
+      <div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center dark:border-green-800 dark:bg-green-950">
         <CheckCircleIcon className="mx-auto h-12 w-12 text-green-500" />
-        <h2 className="mt-4 text-xl font-semibold text-green-800">
+        <h2 className="mt-4 text-xl font-semibold text-green-800 dark:text-green-300">
           Onboarding Complete
         </h2>
-        <p className="mt-2 text-green-600">
+        <p className="mt-2 text-green-600 dark:text-green-400">
           Thank you for completing the sponsor onboarding for{' '}
           <strong>{sponsor?.conferenceName}</strong>. The event organizers will
           be in touch with next steps.
@@ -197,6 +204,8 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
         reference: billing.reference.trim() || undefined,
         comments: billing.comments.trim() || undefined,
       },
+      logo: logo || undefined,
+      logoBright: logoBright || undefined,
       orgNumber: company.orgNumber.trim() || undefined,
       address: company.address.trim() || undefined,
     })
@@ -205,8 +214,10 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Sponsor Onboarding</h1>
-        <p className="mt-2 text-lg text-gray-600">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Sponsor Onboarding
+        </h1>
+        <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">
           Welcome, <strong>{sponsor?.sponsorName}</strong>! Please complete the
           form below to finalize your sponsorship for{' '}
           <strong>{sponsor?.conferenceName}</strong>
@@ -222,27 +233,29 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
 
       <form onSubmit={handleSubmit} className="space-y-8">
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-4">
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
             <div className="flex">
               <ExclamationTriangleIcon className="h-5 w-5 text-red-400" />
-              <p className="ml-3 text-sm text-red-700">{error}</p>
+              <p className="ml-3 text-sm text-red-700 dark:text-red-300">
+                {error}
+              </p>
             </div>
           </div>
         )}
 
         <section>
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">
+          <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Company Information
           </h2>
-          <p className="mb-4 text-sm text-gray-500">
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
             Provide your company&apos;s registration details for the sponsorship
             contract.
           </p>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   Organization Number
                 </label>
                 <input
@@ -252,11 +265,11 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                     setCompany({ ...company, orgNumber: e.target.value })
                   }
                   placeholder="e.g. 123 456 789"
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   Company Address
                 </label>
                 <input
@@ -266,7 +279,7 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                     setCompany({ ...company, address: e.target.value })
                   }
                   placeholder="Street, City, Country"
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 />
               </div>
             </div>
@@ -274,20 +287,40 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
         </section>
 
         <section>
+          <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
+            Company Logo
+          </h2>
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            Upload your company logo in SVG format. This will be used on the
+            conference website and printed materials.
+          </p>
+          <SponsorOnboardingLogoUpload
+            logo={logo}
+            logoBright={logoBright}
+            sponsorName={sponsor?.sponsorName ?? ''}
+            onChange={(updates) => {
+              if ('logo' in updates) setLogo(updates.logo ?? null)
+              if ('logoBright' in updates)
+                setLogoBright(updates.logoBright ?? null)
+            }}
+          />
+        </section>
+
+        <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               Contact Persons
             </h2>
             <button
               type="button"
               onClick={addContact}
-              className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
+              className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
             >
               <PlusIcon className="h-4 w-4" />
               Add Contact
             </button>
           </div>
-          <p className="mb-4 text-sm text-gray-500">
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
             Provide contact details for people involved in the sponsorship. Mark
             one person as the primary contact.
           </p>
@@ -296,16 +329,16 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
             {contacts.map((contact, index) => (
               <div
                 key={index}
-                className="rounded-lg border border-gray-200 bg-white p-4"
+                className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"
               >
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <UserIcon className="h-5 w-5 text-gray-400" />
-                    <span className="text-sm font-medium text-gray-700">
+                    <UserIcon className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
                       Contact {index + 1}
                     </span>
                     {contact.isPrimary && (
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                         Primary
                       </span>
                     )}
@@ -334,7 +367,7 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -343,12 +376,12 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                       onChange={(e) =>
                         updateContact(index, 'name', e.target.value)
                       }
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Email <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -357,12 +390,12 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                       onChange={(e) =>
                         updateContact(index, 'email', e.target.value)
                       }
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Phone
                     </label>
                     <input
@@ -371,18 +404,18 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                       onChange={(e) =>
                         updateContact(index, 'phone', e.target.value)
                       }
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Role
                     </label>
                     <SponsorContactRoleSelect
                       value={contact.role}
                       onChange={(val) => updateContact(index, 'role', val)}
                       placeholder="Select role..."
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                     />
                   </div>
                 </div>
@@ -392,17 +425,17 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
         </section>
 
         <section>
-          <h2 className="mb-4 text-xl font-semibold text-gray-900">
+          <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-white">
             Billing Information
           </h2>
-          <p className="mb-4 text-sm text-gray-500">
+          <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
             Provide billing details for invoicing purposes.
           </p>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   Billing Email <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -411,12 +444,12 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                   onChange={(e) =>
                     setBilling({ ...billing, email: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   Invoice Reference
                 </label>
                 <input
@@ -426,11 +459,11 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                     setBilling({ ...billing, reference: e.target.value })
                   }
                   placeholder="PO number, cost center, etc."
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                   Comments
                 </label>
                 <input
@@ -440,14 +473,14 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                     setBilling({ ...billing, comments: e.target.value })
                   }
                   placeholder="Special billing instructions"
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 />
               </div>
             </div>
           </div>
         </section>
 
-        <div className="flex justify-end border-t border-gray-200 pt-6">
+        <div className="flex justify-end border-t border-gray-200 pt-6 dark:border-gray-700">
           <button
             type="submit"
             disabled={completeMutation.isPending}

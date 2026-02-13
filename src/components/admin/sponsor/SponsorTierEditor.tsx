@@ -27,6 +27,7 @@ import { formatCurrency } from '@/lib/format'
 import { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
 import { api } from '@/lib/trpc/client'
 import { ConfirmationModal } from '@/components/admin/ConfirmationModal'
+import { useNotification } from '@/components/admin'
 
 interface SponsorTierProps {
   conferenceId: string
@@ -51,6 +52,7 @@ function SponsorTierModal({
   onDelete,
 }: SponsorTierModalProps) {
   const { theme } = useTheme()
+  const { showNotification } = useNotification()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [formData, setFormData] = useState<SponsorTierInput>({
     title: '',
@@ -80,8 +82,11 @@ function SponsorTierModal({
       }
     },
     onError: (error) => {
-      console.error('Error creating sponsor tier:', error)
-      alert('Failed to create sponsor tier. Please try again.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to create tier',
+        message: error.message,
+      })
     },
   })
 
@@ -93,8 +98,11 @@ function SponsorTierModal({
       }
     },
     onError: (error) => {
-      console.error('Error updating sponsor tier:', error)
-      alert('Failed to update sponsor tier. Please try again.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to update tier',
+        message: error.message,
+      })
     },
   })
 
@@ -106,8 +114,11 @@ function SponsorTierModal({
       onClose()
     },
     onError: (error) => {
-      console.error('Error deleting sponsor tier:', error)
-      alert('Failed to delete sponsor tier. Please try again.')
+      showNotification({
+        type: 'error',
+        title: 'Failed to delete tier',
+        message: error.message,
+      })
     },
   })
 
@@ -153,7 +164,10 @@ function SponsorTierModal({
       if (tier) {
         await updateMutation.mutateAsync({
           id: tier._id,
-          data: formData,
+          data: {
+            ...formData,
+            maxQuantity: formData.maxQuantity ?? null,
+          },
         })
       } else {
         await createMutation.mutateAsync(formData)

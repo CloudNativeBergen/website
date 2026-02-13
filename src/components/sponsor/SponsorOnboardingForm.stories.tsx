@@ -62,27 +62,21 @@ const mockCompletedSponsor = {
   onboardingComplete: true,
 }
 
-function createTRPCBatchResponse(results: unknown[]) {
-  return results.map((result) => ({
-    result: {
-      data: result,
-    },
-  }))
+function trpcResponse(data: unknown) {
+  return { result: { data } }
 }
 
-function createTRPCBatchError(message: string, code: string) {
-  return [
-    {
-      error: {
-        message,
-        code: -32600,
-        data: {
-          code,
-          httpStatus: code === 'NOT_FOUND' ? 404 : 500,
-        },
+function trpcError(message: string, code: string) {
+  return {
+    error: {
+      message,
+      code: -32600,
+      data: {
+        code,
+        httpStatus: code === 'NOT_FOUND' ? 404 : 500,
       },
     },
-  ]
+  }
 }
 
 /**
@@ -96,11 +90,11 @@ export const Default: Story = {
     msw: {
       handlers: [
         http.get('/api/trpc/onboarding.validate', () => {
-          return HttpResponse.json(createTRPCBatchResponse([mockSponsorData]))
+          return HttpResponse.json(trpcResponse(mockSponsorData))
         }),
         http.post('/api/trpc/onboarding.complete', async () => {
           await delay(1000)
-          return HttpResponse.json(createTRPCBatchResponse([{ success: true }]))
+          return HttpResponse.json(trpcResponse({ success: true }))
         }),
       ],
     },
@@ -118,13 +112,11 @@ export const WithExistingData: Story = {
     msw: {
       handlers: [
         http.get('/api/trpc/onboarding.validate', () => {
-          return HttpResponse.json(
-            createTRPCBatchResponse([mockSponsorWithExistingData]),
-          )
+          return HttpResponse.json(trpcResponse(mockSponsorWithExistingData))
         }),
         http.post('/api/trpc/onboarding.complete', async () => {
           await delay(1000)
-          return HttpResponse.json(createTRPCBatchResponse([{ success: true }]))
+          return HttpResponse.json(trpcResponse({ success: true }))
         }),
       ],
     },
@@ -143,7 +135,7 @@ export const Loading: Story = {
       handlers: [
         http.get('/api/trpc/onboarding.validate', async () => {
           await delay(999999)
-          return HttpResponse.json(createTRPCBatchResponse([mockSponsorData]))
+          return HttpResponse.json(trpcResponse(mockSponsorData))
         }),
       ],
     },
@@ -162,10 +154,7 @@ export const InvalidToken: Story = {
       handlers: [
         http.get('/api/trpc/onboarding.validate', () => {
           return HttpResponse.json(
-            createTRPCBatchError(
-              'Invalid or expired onboarding token',
-              'NOT_FOUND',
-            ),
+            trpcError('Invalid or expired onboarding token', 'NOT_FOUND'),
           )
         }),
       ],
@@ -184,9 +173,7 @@ export const AlreadyCompleted: Story = {
     msw: {
       handlers: [
         http.get('/api/trpc/onboarding.validate', () => {
-          return HttpResponse.json(
-            createTRPCBatchResponse([mockCompletedSponsor]),
-          )
+          return HttpResponse.json(trpcResponse(mockCompletedSponsor))
         }),
       ],
     },
@@ -205,18 +192,16 @@ export const CommunityPartner: Story = {
       handlers: [
         http.get('/api/trpc/onboarding.validate', () => {
           return HttpResponse.json(
-            createTRPCBatchResponse([
-              {
-                ...mockSponsorData,
-                tierTitle: null,
-                sponsorName: 'Local Tech Meetup',
-              },
-            ]),
+            trpcResponse({
+              ...mockSponsorData,
+              tierTitle: null,
+              sponsorName: 'Local Tech Meetup',
+            }),
           )
         }),
         http.post('/api/trpc/onboarding.complete', async () => {
           await delay(1000)
-          return HttpResponse.json(createTRPCBatchResponse([{ success: true }]))
+          return HttpResponse.json(trpcResponse({ success: true }))
         }),
       ],
     },

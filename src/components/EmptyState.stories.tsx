@@ -82,7 +82,7 @@ export const AllVariants: Story = {
   args: { title: '' },
   render: () => (
     <div className="max-w-2xl space-y-8">
-      <div className="rounded-lg bg-gray-50 p-8">
+      <div className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800">
         <EmptyState
           icon={UserIcon}
           title="No speakers found"
@@ -90,7 +90,7 @@ export const AllVariants: Story = {
         />
       </div>
 
-      <div className="rounded-lg bg-white p-12 shadow">
+      <div className="rounded-lg bg-white p-12 shadow dark:bg-gray-900">
         <EmptyState
           icon={TicketIcon}
           title="No ticket types found"
@@ -98,7 +98,7 @@ export const AllVariants: Story = {
         />
       </div>
 
-      <div className="rounded-lg bg-gray-50 p-8">
+      <div className="rounded-lg bg-gray-50 p-8 dark:bg-gray-800">
         <EmptyState
           icon={UserGroupIcon}
           title="No volunteers match your filters"

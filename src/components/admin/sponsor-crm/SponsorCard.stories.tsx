@@ -188,6 +188,56 @@ export const NoLogo: Story = {
   },
 }
 
+export const ContractViewWithSignaturePending: Story = {
+  args: {
+    sponsor: mockSponsor({
+      status: 'closed-won',
+      contractStatus: 'contract-sent',
+      signatureStatus: 'pending',
+      contractSentAt: '2026-02-01T10:00:00Z',
+    }),
+    currentView: 'contract',
+    onEdit: () => {},
+    onDelete: () => {},
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Contract board view with signature pending badge showing days elapsed.',
+      },
+    },
+  },
+}
+
+export const ContractViewWithSignatureSigned: Story = {
+  args: {
+    sponsor: mockSponsor({
+      status: 'closed-won',
+      contractStatus: 'contract-signed',
+      signatureStatus: 'signed',
+      contractSignedAt: '2026-02-10T14:00:00Z',
+    }),
+    currentView: 'contract',
+    onEdit: () => {},
+    onDelete: () => {},
+  },
+}
+
+export const ContractViewWithSignatureRejected: Story = {
+  args: {
+    sponsor: mockSponsor({
+      status: 'closed-won',
+      contractStatus: 'contract-sent',
+      signatureStatus: 'rejected',
+      contractSentAt: '2026-02-05T10:00:00Z',
+    }),
+    currentView: 'contract',
+    onEdit: () => {},
+    onDelete: () => {},
+  },
+}
+
 export const HighValue: Story = {
   args: {
     sponsor: mockSponsor({

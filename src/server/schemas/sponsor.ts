@@ -50,7 +50,7 @@ export const SponsorTierInputSchema = z.object({
   perks: z.array(SponsorTierPerkSchema).optional(),
   soldOut: z.boolean(),
   mostPopular: z.boolean(),
-  maxQuantity: z.number().min(1).optional(),
+  maxQuantity: z.number().min(1).nullable().optional(),
 })
 
 export const SponsorUpdateSchema = SponsorInputSchema.partial()

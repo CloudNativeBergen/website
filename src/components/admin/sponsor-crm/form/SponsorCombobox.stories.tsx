@@ -5,24 +5,30 @@ import {
   CheckIcon,
   PlusIcon,
 } from '@heroicons/react/20/solid'
-
 const meta = {
   title: 'Systems/Sponsors/Admin/Form/SponsorCombobox',
+  tags: ['autodocs'],
   parameters: {
     layout: 'padded',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Searchable sponsor selector with inline creation capability. When no matching sponsor is found, offers a "Create new sponsor" form with name and website fields. Uses tRPC for sponsor creation and auto-invalidates the sponsor list cache.',
+      },
+    },
   },
 } satisfies Meta
 
 export default meta
 type Story = StoryObj<typeof meta>
 
-interface Sponsor {
+interface MockSponsor {
   _id: string
   name: string
 }
 
-const mockSponsors: Sponsor[] = [
+const mockSponsors: MockSponsor[] = [
   { _id: 'sp-1', name: 'Acme Corporation' },
   { _id: 'sp-2', name: 'TechStart Inc' },
   { _id: 'sp-3', name: 'CloudCo' },
@@ -189,69 +195,4 @@ export const WithSelection: Story = {
       </div>
     )
   },
-}
-
-export const Documentation: Story = {
-  render: () => (
-    <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          SponsorCombobox
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Searchable sponsor selector with inline creation capability. When no
-          matching sponsor is found, offers to create a new one with the search
-          query as the initial name.
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Props</h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              value
-            </code>{' '}
-            - Selected sponsor ID
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              onChange
-            </code>{' '}
-            - Callback when selection changes
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              availableSponsors
-            </code>{' '}
-            - Array of Sponsor objects
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              disabled?
-            </code>{' '}
-            - Disable the combobox
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              onSponsorCreated?
-            </code>{' '}
-            - Callback after new sponsor creation
-          </li>
-        </ul>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          Features
-        </h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>• Type-ahead search filtering</li>
-          <li>• Create new sponsor inline when not found</li>
-          <li>• Uses tRPC mutation for sponsor creation</li>
-          <li>• Auto-invalidates sponsor list cache on creation</li>
-        </ul>
-      </div>
-    </div>
-  ),
 }

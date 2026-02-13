@@ -1,9 +1,11 @@
 import type {
   InvoiceStatus,
+  SignatureStatus,
   SponsorForConferenceExpanded,
   ActivityType,
 } from '@/lib/sponsor-crm/types'
 export { sortSponsorTiers, formatTierLabel } from '@/lib/sponsor/utils'
+import type { BadgeColor } from '@/components/StatusBadge'
 import {
   ExclamationTriangleIcon,
   ClockIcon,
@@ -192,4 +194,33 @@ export function calculateSponsorValue(sponsor: SponsorForConferenceExpanded): {
   }
 
   return { value, currency }
+}
+
+// Signature Status Badge Utilities
+export function getSignatureStatusBadgeProps(status: SignatureStatus): {
+  label: string
+  color: BadgeColor
+} {
+  switch (status) {
+    case 'not-started':
+      return { label: 'Not Started', color: 'gray' }
+    case 'pending':
+      return { label: 'Pending', color: 'yellow' }
+    case 'signed':
+      return { label: 'Signed', color: 'green' }
+    case 'rejected':
+      return { label: 'Rejected', color: 'red' }
+    case 'expired':
+      return { label: 'Expired', color: 'orange' }
+  }
+}
+
+export function getDaysPending(contractSentAt?: string): number | null {
+  if (!contractSentAt) return null
+  const sent = new Date(contractSentAt)
+  const now = new Date()
+  const days = Math.floor(
+    (now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24),
+  )
+  return Math.max(0, days)
 }

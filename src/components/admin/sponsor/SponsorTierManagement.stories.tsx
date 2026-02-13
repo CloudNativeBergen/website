@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { SponsorTierManagement } from './SponsorTierManagement'
 import {
   PlusIcon,
   TrashIcon,
@@ -9,11 +10,19 @@ import {
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Tiers/SponsorTierManagement',
+  component: SponsorTierManagement,
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Displays sponsors organized by tier with color-coded sections. Supports adding, editing, and removing sponsors from conference tiers. Each tier section shows sponsor count, pricing, and individual sponsor cards with logo download, edit, and remove actions.',
+      },
+    },
   },
-} satisfies Meta
+} as Meta
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -268,72 +277,4 @@ export const SingleTier: Story = {
       </div>
     )
   },
-}
-
-export const Documentation: Story = {
-  render: () => (
-    <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          SponsorTierManagement
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Displays sponsors organized by tier with add, edit, and remove
-          functionality. Supports drag-and-drop tier reassignment (not shown in
-          static demo).
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Props</h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              conferenceId
-            </code>{' '}
-            - Conference to manage sponsors for
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              sponsors
-            </code>{' '}
-            - Array of ConferenceSponsor objects
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              sponsorTiers
-            </code>{' '}
-            - Available tier definitions
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              sponsorsByTier
-            </code>{' '}
-            - Pre-grouped sponsors by tier name
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              sortedTierNames
-            </code>{' '}
-            - Tier names sorted by value (highest first)
-          </li>
-        </ul>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          Features
-        </h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>• Tier sections sorted by value (highest first)</li>
-          <li>• Color-coded tier badges and backgrounds</li>
-          <li>• Add sponsor to specific tier via modal</li>
-          <li>• Edit existing sponsor assignments</li>
-          <li>• Download sponsor logos (SVG)</li>
-          <li>• Remove sponsor from conference</li>
-          <li>• Real-time state updates</li>
-        </ul>
-      </div>
-    </div>
-  ),
 }

@@ -7,9 +7,11 @@ import { AdminPageHeader } from '@/components/admin'
 import { useNotification } from '@/components/admin'
 import type { Conference } from '@/lib/conference/types'
 import type { PortableTextBlock } from '@/lib/sponsor/types'
+import type { PortableTextBlock as EditorBlock } from '@portabletext/editor'
 import { CONTRACT_VARIABLE_DESCRIPTIONS } from '@/lib/sponsor-crm/contract-variables'
 import { Dropdown } from '@/components/Form'
 import { CurrencySelect } from '@/components/CurrencySelect'
+import { PortableTextEditor } from '@/components/PortableTextEditor'
 import {
   DocumentTextIcon,
   PlusIcon,
@@ -17,6 +19,7 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   InformationCircleIcon,
+  ClipboardDocumentIcon,
 } from '@heroicons/react/24/outline'
 
 interface ContractSection {
@@ -47,6 +50,7 @@ export function ContractTemplateEditorPage({
   const [sections, setSections] = useState<ContractSection[]>([{ heading: '' }])
   const [terms, setTerms] = useState<PortableTextBlock[]>([])
   const [showVariables, setShowVariables] = useState(false)
+  const [sectionEditorKeys, setSectionEditorKeys] = useState<number[]>([0])
 
   const isEditing = !!templateId
 
@@ -71,12 +75,12 @@ export function ContractTemplateEditorPage({
       setFooterText(existingTemplate.footerText || '')
       setIsDefault(existingTemplate.isDefault)
       setIsActive(existingTemplate.isActive)
-      setSections(
-        existingTemplate.sections.map((s) => ({
-          heading: s.heading,
-          body: s.body,
-        })),
-      )
+      const newSections = existingTemplate.sections.map((s) => ({
+        heading: s.heading,
+        body: s.body,
+      }))
+      setSections(newSections)
+      setSectionEditorKeys(newSections.map((_, i) => Date.now() + i))
       if (existingTemplate.terms) {
         setTerms(existingTemplate.terms)
       }
@@ -176,11 +180,13 @@ export function ContractTemplateEditorPage({
 
   const addSection = () => {
     setSections([...sections, { heading: '' }])
+    setSectionEditorKeys([...sectionEditorKeys, Date.now()])
   }
 
   const removeSection = (index: number) => {
     if (sections.length <= 1) return
     setSections(sections.filter((_, i) => i !== index))
+    setSectionEditorKeys(sectionEditorKeys.filter((_, i) => i !== index))
   }
 
   const moveSection = (index: number, direction: 'up' | 'down') => {
@@ -192,6 +198,9 @@ export function ContractTemplateEditorPage({
       newSections[index],
     ]
     setSections(newSections)
+    const newKeys = [...sectionEditorKeys]
+    ;[newKeys[index], newKeys[newIndex]] = [newKeys[newIndex], newKeys[index]]
+    setSectionEditorKeys(newKeys)
   }
 
   const updateSection = (
@@ -203,6 +212,18 @@ export function ContractTemplateEditorPage({
     newSections[index] = { ...newSections[index], [field]: value }
     setSections(newSections)
   }
+
+  const handleCopyVariable = useCallback(
+    (varName: string) => {
+      navigator.clipboard?.writeText(`{{{${varName}}}}`)
+      showNotification({
+        type: 'info',
+        title: 'Variable copied',
+        message: `{{{${varName}}}} copied to clipboard. Paste it into the editor.`,
+      })
+    },
+    [showNotification],
+  )
 
   const isPending = createMutation.isPending || updateMutation.isPending
 
@@ -366,19 +387,22 @@ export function ContractTemplateEditorPage({
                 <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">
                   {'{{{VARIABLE_NAME}}}'}
                 </code>{' '}
-                syntax in section headings and body text.
+                syntax in section headings, body text, and terms. Click a
+                variable to copy it.
               </p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="flex flex-wrap gap-2">
                 {Object.entries(CONTRACT_VARIABLE_DESCRIPTIONS).map(
                   ([key, desc]) => (
-                    <div key={key} className="flex items-start gap-2 text-xs">
-                      <code className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-blue-600 dark:bg-gray-800 dark:text-blue-400">
-                        {key}
-                      </code>
-                      <span className="text-gray-500 dark:text-gray-400">
-                        {desc}
-                      </span>
-                    </div>
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleCopyVariable(key)}
+                      title={desc}
+                      className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 font-mono text-xs text-gray-700 transition-colors hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:border-indigo-500 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-300"
+                    >
+                      <ClipboardDocumentIcon className="h-3 w-3" />
+                      {`{{{${key}}}}`}
+                    </button>
                   ),
                 )}
               </div>
@@ -455,42 +479,18 @@ export function ContractTemplateEditorPage({
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Body
-                    </label>
-                    <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
-                      Rich text editing is available through the Sanity Studio.
-                      Enter plain text here for initial setup.
-                    </p>
-                    <textarea
-                      value={
-                        section.body
-                          ?.map((block: PortableTextBlock) =>
-                            block.children?.map((c) => c.text || '').join(''),
-                          )
-                          .join('\n') || ''
+                    <PortableTextEditor
+                      label="Body"
+                      value={(section.body as unknown as EditorBlock[]) || []}
+                      onChange={(val) =>
+                        updateSection(
+                          index,
+                          'body',
+                          val as unknown as PortableTextBlock[],
+                        )
                       }
-                      onChange={(e) => {
-                        const lines = e.target.value.split('\n')
-                        const blocks = lines.map((line, i) => ({
-                          _type: 'block',
-                          _key: `p-${i}`,
-                          style: 'normal',
-                          children: [
-                            {
-                              _type: 'span',
-                              _key: `s-${i}`,
-                              text: line,
-                              marks: [],
-                            },
-                          ],
-                          markDefs: [],
-                        }))
-                        updateSection(index, 'body', blocks)
-                      }}
-                      rows={4}
-                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-                      placeholder="Section body text. Use {{{VARIABLE_NAME}}} for dynamic values."
+                      forceRemountKey={sectionEditorKeys[index]}
+                      helpText="Use {{{VARIABLE_NAME}}} syntax for dynamic values."
                     />
                   </div>
                 </div>
@@ -510,38 +510,20 @@ export function ContractTemplateEditorPage({
             <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-800">
               /sponsor/terms
             </code>{' '}
-            page. Use headings (h2/h3) in Sanity Studio for numbered sections.
-            Plain text editing is available here for initial setup.
+            page. Use headings for numbered sections and{' '}
+            <code className="rounded bg-gray-100 px-1 text-xs dark:bg-gray-800">
+              {'{{{VARIABLE_NAME}}}'}
+            </code>{' '}
+            syntax for dynamic values.
           </p>
-          <textarea
-            value={
-              terms
-                .map((block: PortableTextBlock) =>
-                  block.children?.map((c) => c.text || '').join(''),
-                )
-                .join('\n') || ''
+          <PortableTextEditor
+            label="Terms &amp; Conditions"
+            value={(terms as unknown as EditorBlock[]) || []}
+            onChange={(val) => setTerms(val as unknown as PortableTextBlock[])}
+            forceRemountKey={
+              existingTemplate ? `terms-${existingTemplate._id}` : 'terms-new'
             }
-            onChange={(e) => {
-              const lines = e.target.value.split('\n')
-              const blocks = lines.map((line, i) => ({
-                _type: 'block',
-                _key: `terms-${i}`,
-                style: 'normal',
-                children: [
-                  {
-                    _type: 'span',
-                    _key: `ts-${i}`,
-                    text: line,
-                    marks: [],
-                  },
-                ],
-                markDefs: [],
-              }))
-              setTerms(blocks)
-            }}
-            rows={10}
-            className="block w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
-            placeholder="Enter the general terms and conditions here. For rich text formatting (headings, bold, lists), use Sanity Studio after creating the template."
+            helpText="Use {{{VARIABLE_NAME}}} syntax for dynamic values. Variables are substituted in the contract PDF."
           />
         </div>
 

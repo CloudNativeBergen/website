@@ -1,14 +1,23 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { SponsorAddModal } from './SponsorAddModal'
 import { XMarkIcon, PhotoIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { useState } from 'react'
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Tiers/SponsorAddModal',
+  component: SponsorAddModal,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Modal dialog for adding a sponsor to a conference. Supports two modes: selecting an existing sponsor from the database or creating a new sponsor inline with logo upload. Tier selection with pricing display and form validation.',
+      },
+    },
   },
-} satisfies Meta
+} as Meta
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -202,90 +211,6 @@ export const WithPreselectedTier: Story = {
   render: () => (
     <div className="p-6">
       <AddSponsorModal preselectedTier="tier-2" />
-    </div>
-  ),
-}
-
-export const Documentation: Story = {
-  render: () => (
-    <div className="max-w-lg space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          SponsorAddModal
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Modal dialog for adding a sponsor to a conference. Supports both
-          selecting an existing sponsor from the database or creating a new
-          sponsor inline.
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Props</h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              open
-            </code>{' '}
-            - Whether modal is visible
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              onClose
-            </code>{' '}
-            - Callback when modal closes
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              conferenceId
-            </code>{' '}
-            - Target conference for assignment
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              preselectedTierId
-            </code>{' '}
-            - Optional tier to pre-select
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              availableTiers
-            </code>{' '}
-            - Conference tier options
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              existingSponsors
-            </code>{' '}
-            - Sponsors not yet added
-          </li>
-        </ul>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          Features
-        </h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>• Two modes: select existing or create new</li>
-          <li>• Tier selection with value display</li>
-          <li>• Filters out sponsors already in conference</li>
-          <li>• Logo upload for new sponsors</li>
-          <li>• Form validation before submit</li>
-          <li>• Creates SponsorForConference document on submit</li>
-        </ul>
-      </div>
-
-      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
-        <h3 className="font-semibold text-blue-800 dark:text-blue-200">
-          Integration
-        </h3>
-        <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
-          Opened from SponsorTierManagement when clicking &quot;Add
-          Sponsor&quot; button on a tier row. The tier ID is passed as
-          preselectedTierId.
-        </p>
-      </div>
     </div>
   ),
 }

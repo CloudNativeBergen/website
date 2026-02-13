@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { SponsorTierEditor } from './SponsorTierEditor'
 import { useState } from 'react'
 import {
   PlusIcon,
@@ -11,11 +12,19 @@ import {
 
 const meta = {
   title: 'Systems/Sponsors/Admin/Tiers/SponsorTierEditor',
+  component: SponsorTierEditor,
+  tags: ['autodocs'],
   parameters: {
     layout: 'centered',
     options: { showPanel: false },
+    docs: {
+      description: {
+        component:
+          'Modal form for creating and editing sponsor tier definitions. Includes title, tagline, tier type, pricing with multi-currency support, capacity limits, sold out and most popular flags, and perks with bulk paste support.',
+      },
+    },
   },
-} satisfies Meta
+} as Meta
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -348,81 +357,4 @@ export const TierCards: Story = {
       </div>
     )
   },
-}
-
-export const Documentation: Story = {
-  render: () => (
-    <div className="max-w-lg space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          SponsorTierEditor
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Modal form for creating and editing sponsor tier definitions. Includes
-          pricing, quantity limits, perks, and display flags.
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">Props</h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              isOpen
-            </code>{' '}
-            - Whether modal is visible
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              onClose
-            </code>{' '}
-            - Callback when modal closes
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              tier
-            </code>{' '}
-            - Existing tier to edit (optional)
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              conferenceId
-            </code>{' '}
-            - Target conference
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              onSave
-            </code>{' '}
-            - Callback with saved tier
-          </li>
-          <li>
-            <code className="rounded bg-gray-200 px-1 dark:bg-gray-700">
-              onDelete
-            </code>{' '}
-            - Callback when tier is deleted
-          </li>
-        </ul>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          Tier Types
-        </h3>
-        <ul className="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
-          <li>
-            <strong>Standard</strong> - Commercial sponsor tiers (Platinum,
-            Gold, etc.)
-          </li>
-          <li>
-            <strong>Community</strong> - Free/reduced tiers for community
-            projects
-          </li>
-          <li>
-            <strong>Media</strong> - Media partner arrangements
-          </li>
-        </ul>
-      </div>
-    </div>
-  ),
 }

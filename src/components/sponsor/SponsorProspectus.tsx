@@ -23,7 +23,7 @@ function DynamicIcon({
   return <IconComponent className={className} aria-hidden="true" />
 }
 
-function QuantityBadge({ maxQuantity }: { maxQuantity?: number }) {
+function QuantityBadge({ maxQuantity }: { maxQuantity?: number | null }) {
   if (!maxQuantity || maxQuantity === 1) return null
 
   return (
