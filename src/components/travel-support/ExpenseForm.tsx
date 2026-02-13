@@ -503,10 +503,11 @@ export function ExpenseForm({
               )}
 
               <div
-                className={`mt-2 flex justify-center rounded-lg border border-dashed px-6 py-10 transition-colors ${isDragOver
+                className={`mt-2 flex justify-center rounded-lg border border-dashed px-6 py-10 transition-colors ${
+                  isDragOver
                     ? 'border-indigo-400 bg-indigo-50 dark:border-indigo-500 dark:bg-indigo-900/20'
                     : 'border-gray-900/25 dark:border-white/25'
-                  } dark:bg-white/5`}
+                } dark:bg-white/5`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}

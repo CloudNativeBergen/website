@@ -381,7 +381,7 @@ export function SponsorOnboardingForm({ token }: { token: string }) {
                     <SponsorContactRoleSelect
                       value={contact.role}
                       onChange={(val) => updateContact(index, 'role', val)}
-                      placeholder="Select role\u2026"
+                      placeholder="Select role..."
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>

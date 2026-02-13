@@ -148,16 +148,16 @@ export function ProposalPublishedContent({
 
     const updatedAttachments = videoUrl
       ? [
-        ...nonRecordingAttachments,
-        {
-          _type: 'urlAttachment' as const,
-          _key: uuidv4(),
-          url: videoUrl,
-          attachmentType: 'recording' as const,
-          title: 'Session Recording',
-          uploadedAt: new Date().toISOString(),
-        },
-      ]
+          ...nonRecordingAttachments,
+          {
+            _type: 'urlAttachment' as const,
+            _key: uuidv4(),
+            url: videoUrl,
+            attachmentType: 'recording' as const,
+            title: 'Session Recording',
+            uploadedAt: new Date().toISOString(),
+          },
+        ]
       : nonRecordingAttachments
 
     updateVideoUrlMutation.mutate({
