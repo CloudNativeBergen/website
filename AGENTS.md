@@ -208,6 +208,7 @@ The project uses Chromatic for visual regression testing. PRs automatically trig
 - Prefer working code over lengthy examples.
 - Do not provide lengthy summaries.
 - Always run `pnpm run check` before committing changes.
+- A pre-commit hook runs `pnpm run check && pnpm run test` automatically. After cloning, run `pnpm exec simple-git-hooks` to activate it.
 
 ### Date and Time Handling
 
