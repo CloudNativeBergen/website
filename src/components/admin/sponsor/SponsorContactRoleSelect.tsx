@@ -24,9 +24,11 @@ export function SponsorContactRoleSelect({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className={clsx(className || defaultClassName)}
+      className={clsx(className || defaultClassName, !value && 'text-gray-400')}
     >
-      <option value="">{placeholder}</option>
+      <option value="" className="text-gray-400">
+        {placeholder}
+      </option>
       {CONTACT_ROLE_OPTIONS.map((role) => (
         <option key={role} value={role}>
           {role}

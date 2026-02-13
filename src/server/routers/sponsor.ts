@@ -56,6 +56,7 @@ import {
   logContractStatusChange,
   logSponsorCreated,
   logAssignmentChange,
+  logSignatureStatusChange,
 } from '@/lib/sponsor-crm/activity'
 import {
   SponsorForConferenceInputSchema,
@@ -89,10 +90,10 @@ import {
   ContractTemplateListSchema,
   GenerateContractPdfSchema,
   FindBestContractTemplateSchema,
+  SendContractSchema,
 } from '@/server/schemas/contractTemplate'
 import { generateContractPdf } from '@/lib/sponsor-crm/contract-pdf'
 import { checkContractReadiness } from '@/lib/sponsor-crm/contract-readiness'
-import { logSignatureStatusChange } from '@/lib/sponsor-crm/activity'
 import { UpdateSignatureStatusSchema } from '@/server/schemas/sponsorForConference'
 
 async function getAllSponsorTiers(conferenceId?: string): Promise<{
@@ -1066,6 +1067,109 @@ export const sponsorRouter = router({
 
         const { sponsorForConference } = await getSponsorForConference(input.id)
         return sponsorForConference
+      }),
+
+    sendContract: adminProcedure
+      .input(SendContractSchema)
+      .mutation(async ({ input, ctx }) => {
+        const { sponsorForConference: sfc, error: sfcError } =
+          await getSponsorForConference(input.sponsorForConferenceId)
+        if (sfcError || !sfc) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Sponsor relationship not found',
+            cause: sfcError,
+          })
+        }
+
+        const { template, error: templateError } = await getContractTemplate(
+          input.templateId,
+        )
+        if (templateError || !template) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Contract template not found',
+            cause: templateError,
+          })
+        }
+
+        const primaryContact =
+          sfc.contactPersons?.find((c) => c.isPrimary) ||
+          sfc.contactPersons?.[0]
+
+        // Generate the PDF
+        const pdfBuffer = await generateContractPdf(template, {
+          sponsor: {
+            name: sfc.sponsor.name,
+            orgNumber: sfc.sponsor.orgNumber,
+            address: sfc.sponsor.address,
+            website: sfc.sponsor.website,
+          },
+          contactPerson: primaryContact
+            ? { name: primaryContact.name, email: primaryContact.email }
+            : undefined,
+          tier: sfc.tier
+            ? { title: sfc.tier.title, tagline: sfc.tier.tagline }
+            : undefined,
+          addons: sfc.addons?.map((a) => ({ title: a.title })),
+          contractValue: sfc.contractValue,
+          contractCurrency: sfc.contractCurrency,
+          conference: {
+            title: sfc.conference.title,
+            startDate: sfc.conference.startDate,
+            endDate: sfc.conference.endDate,
+            city: sfc.conference.city,
+            organizer: sfc.conference.organizer,
+            organizerOrgNumber: sfc.conference.organizerOrgNumber,
+            organizerAddress: sfc.conference.organizerAddress,
+            venueName: sfc.conference.venueName,
+            venueAddress: sfc.conference.venueAddress,
+            sponsorEmail: sfc.conference.sponsorEmail,
+          },
+        })
+
+        // Update CRM record: contract status, signer email, sent timestamp
+        const now = getCurrentDateTime()
+        const updateFields: Record<string, unknown> = {
+          contractStatus: 'contract-sent',
+          contractSentAt: now,
+          signatureStatus: 'pending',
+          contractTemplate: { _type: 'reference', _ref: input.templateId },
+        }
+        if (input.signerEmail) {
+          updateFields.signerEmail = input.signerEmail
+        }
+
+        await clientWrite
+          .patch(input.sponsorForConferenceId)
+          .set(updateFields)
+          .commit()
+
+        // TODO: Send contract email via Resend with PDF attachment
+        // When Posten signering (#303) is integrated, this is where the
+        // signing flow should be initiated instead of manual email.
+
+        // Log activity
+        const userId = ctx.speaker._id
+        if (userId) {
+          const oldStatus = sfc.contractStatus
+          try {
+            await logContractStatusChange(
+              input.sponsorForConferenceId,
+              oldStatus,
+              'contract-sent',
+              userId,
+            )
+          } catch (logError) {
+            console.error('Failed to log contract send activity:', logError)
+          }
+        }
+
+        return {
+          success: true,
+          pdf: pdfBuffer.toString('base64'),
+          filename: `contract-${sfc.sponsor.name.toLowerCase().replace(/\s+/g, '-')}.pdf`,
+        }
       }),
   }),
 

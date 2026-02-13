@@ -43,6 +43,7 @@ import { SponsorActivityTimeline } from '../sponsor/SponsorActivityTimeline'
 import { SponsorTier } from '@/lib/sponsor/types'
 import { useSponsorCRMFormMutations } from '@/hooks/useSponsorCRMFormMutations'
 import { OnboardingLinkButton } from './OnboardingLinkButton'
+import { SendContractButton } from './SendContractButton'
 import { ContractReadinessIndicator } from './ContractReadinessIndicator'
 import { Textarea } from '@/components/Form'
 
@@ -285,6 +286,13 @@ export function SponsorCRMForm({
                               sponsorForConferenceId={sponsor._id}
                               existingToken={sponsor.onboardingToken}
                               onboardingComplete={sponsor.onboardingComplete}
+                            />
+                            <SendContractButton
+                              conferenceId={conferenceId}
+                              sponsor={sponsor}
+                              onSuccess={() => {
+                                utils.sponsor.crm.list.invalidate()
+                              }}
                             />
                             <button
                               type="button"
